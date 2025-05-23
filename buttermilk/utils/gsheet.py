@@ -8,19 +8,19 @@ such as converting complex data types to JSON/YAML strings and truncating
 long text cells.
 """
 
-from functools import cached_property # For lazy-loading properties
-from typing import Any, Optional, Type # For type hinting
+from functools import cached_property  # For lazy-loading properties
+from typing import Any, Optional  # For type hinting
 
-import google.auth # For Google Cloud authentication
-import googleapiclient.discovery # For Google API client discovery (though less used with gspread directly)
-import googleapiclient.errors # For Google API errors
-import gspread # The primary library for Google Sheets interaction
+import google.auth  # For Google Cloud authentication
+import googleapiclient.discovery  # For Google API client discovery (though less used with gspread directly)
+import googleapiclient.errors  # For Google API errors
+import gspread  # The primary library for Google Sheets interaction
 import pandas as pd
-import yaml # For converting complex Python objects to YAML strings
-from pydantic import BaseModel, ConfigDict # Pydantic components
+import yaml  # For converting complex Python objects to YAML strings
+from pydantic import BaseModel, ConfigDict  # Pydantic components
 
-from buttermilk._core.log import logger # Centralized logger
-from buttermilk.utils.utils import make_serialisable, reset_index_and_dedup_columns # Utility functions
+from buttermilk._core.log import logger  # Centralized logger
+from buttermilk.utils.utils import make_serialisable, reset_index_and_dedup_columns  # Utility functions
 
 
 class GSheet(BaseModel):
@@ -152,7 +152,7 @@ class GSheet(BaseModel):
             logger.warning("Input DataFrame is empty. No data will be saved to Google Sheet.")
             # Depending on desired behavior, could return None or raise error,
             # or create an empty sheet. For now, let's try to get/create the sheet.
-        
+
         # Ensure DataFrame index is suitable for saving (e.g., no complex multi-index)
         df_to_save = reset_index_and_dedup_columns(df.copy())
 
@@ -176,7 +176,7 @@ class GSheet(BaseModel):
                 worksheet = spreadsheet.get_worksheet(0) # Get the first sheet
                 logger.info(f"Using existing first worksheet '{worksheet.title}' in spreadsheet '{spreadsheet.title}'.")
                  # Clear existing content and append new headers + data
-                worksheet.clear() 
+                worksheet.clear()
                 worksheet.append_rows(values=[df_to_save.columns.values.tolist()], table_range="A1")
                 if header_format: worksheet.format("A1:Z1", header_format) # Format header
             except gspread.exceptions.WorksheetNotFound: # Should not happen for index 0 unless sheet is truly empty
@@ -207,29 +207,29 @@ class GSheet(BaseModel):
                             logger.info("Deleted default 'Sheet1' after creating new named worksheet.")
                         except Exception as e_del:
                             logger.warning(f"Unable to delete default worksheet 'Sheet1': {e_del!s}")
-        
+
         # Prepare data for appending: convert objects to strings, handle complex types
         # This loop attempts to convert all object columns to string, which might be too aggressive.
         # The `format_strings` function (called later if used) is more targeted.
         # Consider removing this generic loop if `format_strings` is always sufficient.
         for col in df_to_save.columns:
-            if df_to_save[col].dtype == 'object': # Check for object dtype
+            if df_to_save[col].dtype == "object": # Check for object dtype
                 try:
                     # Attempt conversion to string, handling potential errors for mixed types
                     df_to_save[col] = df_to_save[col].astype(str)
                 except Exception as e_astype:
                     logger.warning(f"Could not convert column '{col}' to string type directly: {e_astype!s}. Values might be mixed.")
                     # Fallback: apply str() element-wise for complex objects within the column
-                    df_to_save[col] = df_to_save[col].apply(lambda x: str(x) if pd.notnull(x) else '')
+                    df_to_save[col] = df_to_save[col].apply(lambda x: str(x) if pd.notnull(x) else "")
 
 
         # Use make_serialisable to handle complex types (like dicts/lists in cells) for gspread
         # gspread expects a list of lists for append_rows.
-        serialisable_rows = make_serialisable(rows=df_to_save.to_dict(orient='records'))
+        serialisable_rows = make_serialisable(rows=df_to_save.to_dict(orient="records"))
         if isinstance(serialisable_rows, list) and all(isinstance(r, dict) for r in serialisable_rows):
             rows_to_append = [list(r.values()) for r in serialisable_rows]
             if rows_to_append: # Only append if there's data
-                 worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+                 worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
                  logger.info(f"Appended {len(rows_to_append)} rows to worksheet '{worksheet.title}'.")
             else:
                  logger.info(f"No rows to append to worksheet '{worksheet.title}' after serialization.")
@@ -269,14 +269,14 @@ def format_strings(df: pd.DataFrame, convert_json_columns: list[str] | None = No
                 try:
                     # Convert column to YAML string representation for readability in sheets
                     df_formatted[col_name] = df_formatted[col_name].apply(
-                        lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False, allow_unicode=True) 
+                        lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False, allow_unicode=True)
                         if pd.notnull(x) else "" # Handle NaNs gracefully
                     )
                 except Exception as e_yaml:
                     logger.warning(f"Could not convert column '{col_name}' to YAML/JSON string: {e_yaml!s}. Column skipped for this conversion.")
 
     # Truncate all object (likely string) columns to Google Sheets cell character limit
-    for col_name in df_formatted.select_dtypes(include=['object']).columns:
+    for col_name in df_formatted.select_dtypes(include=["object"]).columns:
         try:
             # Ensure column is string type before attempting string operations
             df_formatted[col_name] = df_formatted[col_name].astype(str).str.slice(0, 49999) # Leave a little buffer

@@ -1,9 +1,11 @@
 import importlib
 import pkgutil
 
+from autogen_core import RoutedAgent
+
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from autogen_core import RoutedAgent
+
 
 class AgentRegistry:
     """

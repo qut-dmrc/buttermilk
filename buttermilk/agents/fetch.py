@@ -7,19 +7,21 @@ autonomously to fetch records based on incoming messages.
 """
 
 import asyncio
-from collections.abc import Callable # For typing callables
+from collections.abc import (
+    Awaitable,
+    Callable,  # For typing callables
+)
 from datetime import UTC, datetime  # For timestamping fetched records
 from typing import Any
 
-import pydantic # Pydantic core
-import regex as re # Regular expression operations
-from autogen_core.tools import FunctionTool # Autogen's FunctionTool for LLM integration
-from shortuuid import uuid # For generating short unique IDs
+import pydantic  # Pydantic core
+import regex as re  # Regular expression operations
+from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
+from shortuuid import uuid  # For generating short unique IDs
 
-from buttermilk._core.agent import Agent, AgentOutput, CancellationToken # Buttermilk base agent and types
-from buttermilk._core.config import ToolConfig # Base class for tool configurations
-from buttermilk._core.constants import COMMAND_SYMBOL # Symbol for commands
-from buttermilk._core.contract import ( # Buttermilk message contracts
+from buttermilk._core.agent import Agent, AgentOutput, CancellationToken  # Buttermilk base agent and types
+from buttermilk._core.config import ToolConfig  # Base class for tool configurations
+from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
     ErrorEvent,
     GroupchatMessageTypes,
@@ -59,9 +61,11 @@ class FetchRecord(ToolConfig):
             used for parsing inputs.
         _fns (list[FunctionTool]): Private attribute caching the list of Autogen
             `FunctionTool` definitions generated for this tool.
+
     """
+
     _data_sources: dict[str, Any] = pydantic.PrivateAttr(default_factory=dict)
-    _data_task: asyncio.Task[Any] = pydantic.PrivateAttr() # type: ignore # Needs default or factory
+    _data_task: asyncio.Task[Any] = pydantic.PrivateAttr()  # type: ignore # Needs default or factory
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default_factory=list)
 
@@ -72,10 +76,10 @@ class FetchRecord(ToolConfig):
         typically Pandas DataFrames, making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
         """
-        if self.data: # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
+        if self.data:  # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
             self._data_sources = await prepare_step_df(self.data)
 
-    def get_functions(self) -> list[FunctionTool]: # Return type changed to list[FunctionTool]
+    def get_functions(self) -> list[FunctionTool]:  # Return type changed to list[FunctionTool]
         """Creates and returns Autogen `FunctionTool` definitions for this tool.
 
         This method makes the `_run` method callable by an LLM agent (e.g.,
@@ -86,14 +90,15 @@ class FetchRecord(ToolConfig):
         Returns:
             list[FunctionTool]: A list containing the `FunctionTool` definition(s)
             for this record fetching tool.
+
         """
         if not self._fns:
             # self.role is from AgentConfig, inherited via Agent -> ToolConfig (if FetchRecord used as Agent)
             # If FetchRecord is used purely as ToolConfig, 'role' might not be standard.
             # Assuming 'name' or a dedicated tool_name field might be more appropriate from ToolConfig.
             # For now, using self.role, assuming it's set appropriately in the config.
-            tool_name = getattr(self, 'role', 'fetch_record_tool') # Fallback name
-            if not self.description: # Ensure description is set for the tool
+            tool_name = getattr(self, "role", "fetch_record_tool")  # Fallback name
+            if not self.description:  # Ensure description is set for the tool
                 tool_description = "Fetches a record by its ID from a dataset or by its URI."
             else:
                 tool_description = self.description
@@ -136,12 +141,11 @@ class FetchRecord(ToolConfig):
         Raises:
             AssertionError: If it cannot resolve to either a `record_id` or a `uri`,
                             or if both are somehow provided.
+
         """
         # Determine original lookup type for error messaging, before uri might be set from prompt
         original_uri = uri
-            else:  # uri was extracted from prompt
-                original_uri = uri  # update original_uri to reflect that it came from prompt
-                original_record_id = None  # ensure original_record_id is None if uri is from prompt
+        original_record_id = None  # ensure original_record_id is None if uri is from prompt
 
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
 
@@ -200,21 +204,23 @@ class FetchAgent(FetchRecord, Agent):
     Attributes:
         id (str): A unique identifier for the agent instance, typically prefixed
             with "fetch_record_". Defaults to a generated ID.
+
     """
+
     id: str = pydantic.Field(
         default_factory=lambda: f"fetch_record_{uuid()[:4]}",
-        description="Unique identifier for the FetchAgent instance."
+        description="Unique identifier for the FetchAgent instance.",
     )
 
     async def _listen(
         self,
-        message: AgentInput | GroupchatMessageTypes, # More specific input type
+        message: AgentInput | GroupchatMessageTypes,  # More specific input type
         *,
-        cancellation_token: CancellationToken | None = None, # Standard arg
-        source: str = "", # Standard arg
-        public_callback: Callable[[Any], Awaitable[None]] | None = None, # Made optional
-        message_callback: Callable[[Any], Awaitable[None]] | None = None, # Made optional
-        **kwargs: Any, # Standard arg
+        cancellation_token: CancellationToken | None = None,  # Standard arg
+        source: str = "",  # Standard arg
+        public_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
+        message_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
+        **kwargs: Any,  # Standard arg
     ) -> None:
         """Listens for `AgentInput` messages and attempts to fetch a record if URI/ID is provided.
 
@@ -236,6 +242,7 @@ class FetchAgent(FetchRecord, Agent):
                 the fetched `Record` wrapped in `AgentOutput`).
             message_callback: Optional callback (typically not used by `_listen`).
             **kwargs: Additional keyword arguments.
+
         """
         result = None
         if isinstance(message, ManagerMessage):

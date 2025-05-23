@@ -7,8 +7,8 @@ import hydra
 import pytest
 
 from buttermilk._core import BM  # Removed logger import here
+from buttermilk._core.dmrc import get_bm  # Import get_bm
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.dmrc import get_bm # Import get_bm
 
 
 def test_conf(conf):
@@ -85,7 +85,7 @@ def test_singleton_between_modules(bm):
     # We'll use a function for simplicity
     def second_module_access():
         """Function simulating another module accessing BM."""
-        from buttermilk._core.dmrc import get_bm # Correct import
+        from buttermilk._core.dmrc import get_bm  # Correct import
         from buttermilk._core.log import logger  # noqa
         return get_bm() # Use get_bm()
 

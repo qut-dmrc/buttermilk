@@ -33,7 +33,6 @@ from buttermilk._core import (
     # dmrc as DMRC,
     logger,  # Centralized logger
 )
-from buttermilk._core.contract import OmegaConf
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 

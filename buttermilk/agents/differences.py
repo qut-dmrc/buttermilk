@@ -9,9 +9,9 @@ The `Differentiator` agent, also defined here, leverages these models to structu
 its output when performing such difference analysis.
 """
 
-from typing import Type # For type hinting a class type
+from typing import Type  # For type hinting a class type
 
-from pydantic import BaseModel, Field # Pydantic components for data validation
+from pydantic import BaseModel, Field  # Pydantic components for data validation
 
 # Buttermilk core imports
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
@@ -115,9 +115,9 @@ class DifferencesOutput(Differences):
             divergences_str_parts.append(
                 f"### Divergence on Topic: {divergence_item.topic}\n{positions_str}"
             )
-        
+
         final_divergences_str = "\n\n".join(divergences_str_parts)
-        
+
         return (
             f"## Overall Conclusion:\n{self.conclusion}\n\n"
             f"## Detailed Divergences:\n{final_divergences_str if final_divergences_str else 'No specific divergences listed.'}"

@@ -1,6 +1,5 @@
 """Utilities for lazy loading and caching resources."""
 
-import functools
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -21,7 +20,7 @@ def cached_property(initialize_func: Callable[[Any], T]) -> property:
         A property that lazily initializes and caches the value
     """
     attr_name = f"_{initialize_func.__name__}_cached"
-    
+
     def getter(self: Any) -> T:
         # Get the cached value using getattr with default None
         cached_value = getattr(self, attr_name, None)
@@ -30,10 +29,10 @@ def cached_property(initialize_func: Callable[[Any], T]) -> property:
             cached_value = initialize_func(self)
             setattr(self, attr_name, cached_value)
         return cached_value
-    
+
     # Use the original function's docstring
     getter.__doc__ = initialize_func.__doc__
-    
+
     return property(getter)
 
 
@@ -56,19 +55,19 @@ def refreshable_cached_property(
         A property that lazily initializes, caches, and refreshes the value as needed
     """
     attr_name = f"_{initialize_func.__name__}_cached"
-    
+
     def getter(self: Any) -> T:
         # Get the cached value using getattr with default None
         cached_value = getattr(self, attr_name, None)
-        
+
         # Initialize if not yet initialized or refresh if needed
         if cached_value is None or (should_refresh and should_refresh(self, cached_value)):
             cached_value = initialize_func(self)
             setattr(self, attr_name, cached_value)
-            
+
         return cached_value
-    
+
     # Use the original function's docstring
     getter.__doc__ = initialize_func.__doc__
-    
+
     return property(getter)

@@ -4,6 +4,7 @@ from hydra import compose, initialize
 from omegaconf import OmegaConf
 from pytest import MarkDecorator
 
+
 # Use deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""

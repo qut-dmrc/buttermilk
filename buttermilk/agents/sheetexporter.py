@@ -5,15 +5,15 @@ formats it into a tabular structure (Pandas DataFrame), and then uploads it
 to a specified Google Sheet using the `GSheet` utility.
 """
 
-from typing import Any # For type hinting
+from typing import Any  # For type hinting
 
 import pandas as pd
-from pydantic import ConfigDict, Field, PrivateAttr # Pydantic components
+from pydantic import ConfigDict, Field, PrivateAttr  # Pydantic components
 
-from buttermilk import logger # Centralized logger
-from buttermilk._core.agent import Agent # Buttermilk base Agent class
-from buttermilk._core.contract import AgentInput, AgentTrace # Buttermilk message contracts
-from buttermilk.utils.gsheet import GSheet # Utility for Google Sheets interaction
+from buttermilk import logger  # Centralized logger
+from buttermilk._core.agent import Agent  # Buttermilk base Agent class
+from buttermilk._core.contract import AgentInput, AgentTrace  # Buttermilk message contracts
+from buttermilk.utils.gsheet import GSheet  # Utility for Google Sheets interaction
 
 
 class GSheetExporter(Agent):
@@ -50,7 +50,7 @@ class GSheetExporter(Agent):
     # class variables or intended to be set post-initialization, not via constructor.
     # Their usage pattern might need clarification if they are meant for dynamic config.
     name: str = Field(
-        default="gsheetexporter", 
+        default="gsheetexporter",
         init=False, # Not initialized via __init__ args, treated as class var or set later
         description="Default name of the GSheetExporter agent."
     )
@@ -69,7 +69,7 @@ class GSheetExporter(Agent):
     """Private attribute for the `GSheet` utility instance used for interacting
     with the Google Sheets API. Initialized on first use.
     """
-    
+
     model_config = ConfigDict(extra="allow") # Allow extra fields if passed in config
 
     async def _process( # Renamed from process_job to align with Agent base class
@@ -99,7 +99,7 @@ class GSheetExporter(Agent):
             If `self.save` is not configured, it might log an error or behave
             unexpectedly depending on `_gsheet.save_gsheet` implementation.
         """
-        from buttermilk.utils.gsheet import format_strings # Local import for utility
+        from buttermilk.utils.gsheet import format_strings  # Local import for utility
 
         if not message.inputs:
             logger.warning(f"GSheetExporter '{self.agent_id}': Received message with no inputs to export.")
@@ -152,7 +152,7 @@ class GSheetExporter(Agent):
                 inputs=message,
                 outputs={"status": "Empty dataset, nothing exported."},
             )
-            
+
         formatted_contents_df = format_strings(
             dataset_df,
             convert_json_columns=self.convert_json_columns,

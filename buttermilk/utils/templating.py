@@ -11,23 +11,23 @@ This module provides functionalities for:
   `make_messages`).
 """
 from pathlib import Path
-from typing import Any, Mapping, Sequence # For type hinting
+from typing import Any, Mapping, Sequence  # For type hinting
 
-import jmespath # For JMESPath queries, used in _resolve_mappings
-import regex as re # For regular expression operations, used in _parse_prompty
-from jinja2 import ( # Jinja2 templating components
+import jmespath  # For JMESPath queries, used in _resolve_mappings
+import regex as re  # For regular expression operations, used in _parse_prompty
+from autogen_core.models import AssistantMessage, LLMMessage, SystemMessage, UserMessage  # Autogen message types
+from jinja2 import (  # Jinja2 templating components
     FileSystemLoader,
     Undefined,
     sandbox,
 )
-from pydantic import BaseModel, PrivateAttr # Pydantic components
+from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
-from buttermilk import logger # Centralized logger
-from autogen_core.models import AssistantMessage, UserMessage, LLMMessage, SystemMessage # Autogen message types
-from buttermilk._core.defaults import TEMPLATES_PATH # Default path for templates
-from buttermilk._core.exceptions import FatalError, ProcessingError # Custom exceptions
-from buttermilk._core.types import Record # Core Buttermilk Record type
-from buttermilk.utils.utils import list_files, list_files_with_content # Utilities for file listing
+from buttermilk import logger  # Centralized logger
+from buttermilk._core.defaults import TEMPLATES_PATH  # Default path for templates
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
+from buttermilk._core.types import Record  # Core Buttermilk Record type
+from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
 
 
 class KeyValueCollector(BaseModel):
@@ -74,7 +74,7 @@ class KeyValueCollector(BaseModel):
         """
         # Ensure that value is treated as a list of items to be added
         items_to_add = value if isinstance(value, list) and not isinstance(value, str) else [value]
-        
+
         if key in self._data:
             self._data[key].extend(items_to_add)
         else:
@@ -201,7 +201,7 @@ class KeyValueCollector(BaseModel):
             else: # Simple JMESPath string
                 resolved_value = self._resolve_simple_path(str(source_spec), data_dict)
                 if resolved_value is not None: resolved[target_key] = resolved_value
-        
+
         # Remove keys where value is None, or an empty dict/list
         return {k: v for k, v in resolved.items() if v is not None and v != {} and v != []}
 
@@ -248,7 +248,7 @@ def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2
     effective_extension = extension
     if extension and not extension.startswith("."):
         effective_extension = "." + extension
-    
+
     templates_with_content = list_files_with_content(
         TEMPLATES_PATH,
         filename_pattern=pattern, # Assuming list_files_with_content takes filename_pattern
@@ -342,7 +342,7 @@ def load_template(
         FatalError: If the specified template file cannot be loaded.
     """
     effective_untrusted_inputs = untrusted_inputs or {}
-    
+
     # Define search paths for templates: TEMPLATES_PATH and all its subdirectories
     recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
     file_system_loader = FileSystemLoader(searchpath=recursive_search_paths)
@@ -374,9 +374,9 @@ def load_template(
         if isinstance(s, str):
             return s.strip()
         return s # Return non-strings as is
-        
-    sandboxed_env.filters['strip_all'] = strip_all_whitespace
-    
+
+    sandboxed_env.filters["strip_all"] = strip_all_whitespace
+
     template_filename = f"{template}.jinja2"
     try:
         jinja_template = sandboxed_env.get_template(template_filename)
@@ -452,10 +452,10 @@ def make_messages(
         raise ValueError(err_msg) from e
 
     # Use PromptFlow's utility to parse chat messages from the Prompty content
-    from promptflow.core._prompty_utils import parse_chat # Local import as it's a specific utility
+    from promptflow.core._prompty_utils import parse_chat  # Local import as it's a specific utility
 
     parsed_chat_messages = parse_chat(
-        prompty_content_str, 
+        prompty_content_str,
         valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"] # Allowed roles in Prompty
     )
 
@@ -463,7 +463,7 @@ def make_messages(
     for msg_dict in parsed_chat_messages:
         role_lower = msg_dict.get("role", "").lower()
         content_str = msg_dict.get("content", "")
-        
+
         # Normalize content for placeholder matching: lowercase, alphanumeric only
         normalized_placeholder_key = re.sub(r"[^\w\d_]+", "", content_str).lower()
 

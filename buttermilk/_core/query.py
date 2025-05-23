@@ -7,14 +7,13 @@ results as Pandas DataFrames.
 """
 
 import datetime
-from typing import Any
 
-import humanfriendly # For human-readable data sizes and numbers
+import humanfriendly  # For human-readable data sizes and numbers
 import pandas as pd
-from google.cloud import bigquery # Google Cloud BigQuery client library
-from pydantic import BaseModel, ConfigDict # Pydantic for model validation
+from google.cloud import bigquery  # Google Cloud BigQuery client library
+from pydantic import BaseModel, ConfigDict  # Pydantic for model validation
 
-from buttermilk._core.log import logger # Centralized logger
+from buttermilk._core.log import logger  # Centralized logger
 
 # Pricing reference: https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / (10**12)  # $5 per Terabyte (1 TB = 10^12 bytes)
@@ -103,10 +102,10 @@ class QueryRunner(BaseModel):
             if not save_dir:
                 logger.error("`save_dir` must be provided when `save_to_gcs` is True.")
                 return None # Indicate failure due to missing configuration
-            
-            import shortuuid # For unique filenames
+
+            import shortuuid  # For unique filenames
             # Ensure save_dir ends with a slash for proper GCS path construction
-            gcs_path_prefix = save_dir if save_dir.endswith('/') else save_dir + '/'
+            gcs_path_prefix = save_dir if save_dir.endswith("/") else save_dir + "/"
             gcs_results_uri = f"{gcs_path_prefix}query_results_{shortuuid.uuid()}/results-*.json"
             job_config.destination_uris = [gcs_results_uri]
             # For GCS, typically WRITE_TRUNCATE is used to ensure clean output directory
@@ -126,7 +125,7 @@ class QueryRunner(BaseModel):
         try:
             query_job = self._bq_client.query(sql, job_config=job_config)
             logger.info(f"BigQuery job submitted: {query_job.job_id}")
-            
+
             # Wait for the job to complete to get statistics
             query_job.result() # This blocks until the query completes
 
@@ -138,7 +137,7 @@ class QueryRunner(BaseModel):
         bytes_billed = query_job.total_bytes_billed or 0 # Ensure not None
         cache_hit = query_job.cache_hit
         approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
-        
+
         bytes_billed_str = humanfriendly.format_size(bytes_billed)
         approx_cost_str = f"${approx_cost:.2f}" # Format cost to 2 decimal places
 
@@ -185,7 +184,7 @@ class QueryRunner(BaseModel):
         try:
             job_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
             # use_query_cache=False ensures it estimates actual processing cost
-            
+
             query_job = self._bq_client.query(sql, job_config=job_config) # Perform dry run
 
             bytes_processed = query_job.total_bytes_processed # This is the key metric from dry run

@@ -4,7 +4,7 @@ This can be imported and used directly without waiting for the main BM setup_log
 """
 
 import logging
-import sys
+
 
 def silence_task_logs():
     """
@@ -91,10 +91,10 @@ def silence_task_logs():
     # Weave warnings
     logging.getLogger("weave.trace").setLevel(logging.ERROR)
 
-    # Silence fsspec logs 
+    # Silence fsspec logs
     logging.getLogger("fsspec").setLevel(logging.ERROR)
     logging.getLogger("fsspec.asyn").setLevel(logging.ERROR)
-    
+
     # Silence autogen_core logs
     logging.getLogger("autogen_core").setLevel(logging.WARNING)
     logging.getLogger("autogen_core._single_threaded_agent_runtime").setLevel(logging.ERROR)

@@ -16,24 +16,22 @@ T = TypeVar("T")
 def lowercase_validator(v: Any) -> str:
     if isinstance(v, str):
         return v.lower()
-    else:
-        return str(v).lower()
+    return str(v).lower()
 
 
 def uppercase_validator(v: Any) -> str:
     if isinstance(v, str):
         return v.upper()
-    else:
-        return str(v).upper()
+    return str(v).upper()
 
-def make_case_validator(style: Literal["upper","lower","sentence"] = "upper") -> Callable[[Any], str]:
+
+def make_case_validator(style: Literal["upper", "lower", "sentence"] = "upper") -> Callable[[Any], str]:
     """Convert input to lowercase string if possible"""
     if style == "upper":
         return uppercase_validator
-    elif style == "lower":
+    if style == "lower":
         return lowercase_validator
-    else:
-        raise NotImplementedError
+    raise NotImplementedError
     return lowercase_validator
 
 
@@ -53,20 +51,16 @@ def make_list_validator() -> Callable[[Any], list]:
     return validator
 
 
-def convert_omegaconf_objects_recursive(v):
+def convert_omegaconf_objects(v):
     """Recursively convert OmegaConf objects to standard Python types."""
     if isinstance(v, (DictConfig, ListConfig)):
         return OmegaConf.to_container(v, resolve=True)
-    elif isinstance(v, dict):
-        return {k: convert_omegaconf_objects_recursive(v) for k, v in v.items()}
-    elif isinstance(v, list):
-        return [convert_omegaconf_objects_recursive(item) for item in v]
+    if isinstance(v, dict):
+        return {k: convert_omegaconf_objects(v) for k, v in v.items()}
+    if isinstance(v, list):
+        return [convert_omegaconf_objects(item) for item in v]
     return v
 
-def convert_omegaconf_objects() -> Callable[[Any], dict | list]:
-    """Convert OmegaConf items to python objects"""
-
-    return convert_omegaconf_objects_recursive
 
 def make_uri_validator() -> Callable[[Any], str]:
     """Convert input to string URI if possible"""

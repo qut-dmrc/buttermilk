@@ -9,23 +9,23 @@ implemented for cloud operations using the `tenacity` library.
 """
 
 import asyncio
-import io # For in-memory binary streams (BytesIO)
+import io  # For in-memory binary streams (BytesIO)
 import json
-import pickle # For serializing Python objects
-import tempfile # For creating temporary files/directories
-from collections.abc import Hashable, Mapping # For type hinting
-from pathlib import Path # For local path manipulation
+import pickle  # For serializing Python objects
+import tempfile  # For creating temporary files/directories
+from collections.abc import Hashable, Mapping  # For type hinting
+from pathlib import Path  # For local path manipulation
 from typing import Any
 
-import google.cloud.storage # For GCS interactions (though client often from bm)
+import google.cloud.storage  # For GCS interactions (though client often from bm)
 import pandas as pd
-import shortuuid # For generating short unique IDs
-from cloudpathlib import AnyPath, CloudPath, GSPath # For handling local and cloud paths
-from cloudpathlib.exceptions import InvalidPrefixError # Specific CloudPathlib exception
-from google.api_core.exceptions import ClientError, GoogleAPICallError # Google Cloud exceptions
-from google.cloud import bigquery, storage # Google Cloud clients
-from pydantic import BaseModel # For type checking if data is a Pydantic model
-from tenacity import ( # Retry library components
+import shortuuid  # For generating short unique IDs
+from cloudpathlib import AnyPath, CloudPath, GSPath  # For handling local and cloud paths
+from cloudpathlib.exceptions import InvalidPrefixError  # Specific CloudPathlib exception
+from google.api_core.exceptions import ClientError, GoogleAPICallError  # Google Cloud exceptions
+from google.cloud import bigquery, storage  # Google Cloud clients
+from pydantic import BaseModel  # For type checking if data is a Pydantic model
+from tenacity import (  # Retry library components
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -43,14 +43,14 @@ def get_bm() -> Any: # Return type should be 'BM' from bm_init.py if type hint i
     Returns:
         Any: The Buttermilk global instance (`bm`).
     """
-    from buttermilk._core.bm_init import get_bm as _get_bm # Actual import of get_bm
+    from buttermilk._core.bm_init import get_bm as _get_bm  # Actual import of get_bm
     return _get_bm()
 
 
-from buttermilk._core.config import SaveInfo # Configuration model for save operations
+from buttermilk._core.config import SaveInfo  # Configuration model for save operations
 
-from .._core.log import logger # Centralized logger
-from .utils import ( # Other utility functions from the same package
+from .._core.log import logger  # Centralized logger
+from .utils import (  # Other utility functions from the same package
     chunks,
     make_serialisable,
     reset_index_and_dedup_columns,
@@ -147,7 +147,7 @@ def save(
             base_path = AnyPath(final_save_dir_str)
             file_id = parameters.get("uuid", shortuuid.uuid())
             effective_basename = "_".join(filter(None, [basename, file_id])) or f"data_{file_id}"
-            
+
             target_path = base_path / effective_basename
             if extension:
                 # Ensure extension starts with a dot
@@ -176,7 +176,7 @@ def save(
     # List of upload methods to try for file-based saving
     # These are ordered from more specific/cloud-preferred to general/local fallbacks.
     file_upload_methods: list[Callable[..., str | None]] = []
-    
+
     if final_uri_str and AnyPath(final_uri_str).is_cloud: # Prioritize cloud methods if URI is cloud
         if isinstance(data, pd.DataFrame):
             # Add DataFrame-specific cloud upload first if applicable
@@ -272,18 +272,18 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
     # Ensure unique column names; reset index if it's complex
     if any(data.columns.duplicated()):
         data = reset_index_and_dedup_columns(data) # Assumes this handles multi-index too
-    
+
     try:
         gcs_client = storage.Client()
         # Serialize DataFrame to newline-delimited JSON string
         rows_dict = data.to_dict(orient="records")
         scrubbed_rows = scrub_serializable(rows_dict) # Ensure all data is JSON serializable
-        
+
         json_data_str = "\n".join([json.dumps(row) for row in scrubbed_rows])
         json_data_bytes = json_data_str.encode("utf-8")
-        
+
         blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs_client)
-        
+
         # Upload from an in-memory bytes buffer
         with io.BytesIO(json_data_bytes) as buffer:
             blob.upload_from_file(file_obj=buffer, content_type="application/jsonl")
@@ -329,7 +329,7 @@ def data_to_export_rows(
         list[Mapping[Hashable, Any]]: A list of dictionaries, where each dictionary
         represents a row ready for BigQuery insertion.
     """
-    from .bq import construct_dict_from_schema # Deferred import
+    from .bq import construct_dict_from_schema  # Deferred import
 
     bq_rows: list[Mapping[str, Any]] | Mapping[str,Any] # Adjusted type hint
 
@@ -337,7 +337,7 @@ def data_to_export_rows(
         # Deduplicate columns if necessary
         if any(data.columns.duplicated()):
              data.columns = [ # type: ignore
-                x[1] if x[1] not in data.columns[: x[0]] else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}" 
+                x[1] if x[1] not in data.columns[: x[0]] else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}"
                 for x in enumerate(data.columns)
             ]
         bq_rows = data.to_dict(orient="records")
@@ -354,7 +354,7 @@ def data_to_export_rows(
     # Apply schema transformations and ensure serializability
     # Ensure bq_rows is a list before list comprehension
     rows_as_list = bq_rows if isinstance(bq_rows, list) else [bq_rows]
-    
+
     # Ensure schema is a list of SchemaField objects for construct_dict_from_schema
     if not (isinstance(schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in schema)):
         raise TypeError(f"Schema must be a list of bigquery.SchemaField objects. Got: {type(schema)}")
@@ -366,10 +366,10 @@ def data_to_export_rows(
 
 
 async def upload_rows_async(
-    rows: Any, 
-    *, 
-    schema: list[bigquery.SchemaField] | str | None = None, 
-    dataset: str | None = None, 
+    rows: Any,
+    *,
+    schema: list[bigquery.SchemaField] | str | None = None,
+    dataset: str | None = None,
     save_dest: SaveInfo | None = None
 ) -> str | None:
     """Uploads rows to a Google BigQuery table asynchronously.
@@ -416,7 +416,7 @@ async def upload_rows_async(
             final_schema = bq_client.schema_from_json(final_schema) # This is a sync call
         except Exception as e:
             raise TypeError(f"Failed to load schema from JSON path '{final_schema}': {e!s}") from e
-    
+
     if not (isinstance(final_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in final_schema)):
         raise TypeError(f"Resolved schema is not a list of bigquery.SchemaField. Type: {type(final_schema)}")
 
@@ -461,11 +461,11 @@ async def upload_rows_async(
 
 
 def upload_rows(
-    rows: Any, 
-    *, 
-    schema: list[bigquery.SchemaField] | str | None = None, 
-    dataset: str | None = None, 
-    save_dest: SaveInfo | None = None, 
+    rows: Any,
+    *,
+    schema: list[bigquery.SchemaField] | str | None = None,
+    dataset: str | None = None,
+    save_dest: SaveInfo | None = None,
     create_if_not_exists: bool = False, # Parameter not used in current implementation
     **parameters: Any # Catch-all for other params, not used directly here
 ) -> str | None:
@@ -508,7 +508,7 @@ def upload_rows(
             final_schema = bq_client.schema_from_json(final_schema)
         except Exception as e:
             raise TypeError(f"Failed to load schema from JSON path '{final_schema}': {e!s}") from e
-            
+
     if not (isinstance(final_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in final_schema)):
         raise TypeError(f"Resolved schema is not a list of bigquery.SchemaField. Type: {type(final_schema)}")
 
@@ -589,7 +589,7 @@ def upload_binary(data: bytes | io.BufferedIOBase, *, uri: str) -> str:
             blob.upload_from_file(file_obj=buffer)
     else:
         raise TypeError(f"Unsupported data type for upload_binary: {type(data)}. Expected bytes or BufferedIOBase.")
-    
+
     logger.info(f"Successfully uploaded binary data to {uri}.")
     return uri
 
@@ -629,7 +629,7 @@ def dump_to_disk(data: Any, *, save_dir: str, extension: str = ".json", **kwargs
                 logger.error(f"Data is not JSON serializable for dump_to_disk: {e!s}. Data type: {type(data)}", exc_info=True)
                 # Fallback or re-raise, depending on desired behavior. For now, log and continue.
                 # This might leave an empty temp file.
-        
+
         saved_filepath = out_file.name
     logger.info(f"Successfully dumped data to local disk (JSON): {saved_filepath}.")
     return saved_filepath
@@ -717,7 +717,7 @@ def upload_text(data: str, *, uri: str, **kwargs: Any) -> str:
     logger.debug(f"Uploading text data to GCS URI: {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs_client)
     blob.upload_from_string(data, content_type=kwargs.get("content_type", "text/plain"))
-    
+
     # blob.size might not be populated immediately after upload_from_string without a reload.
     # For logging, len(data) is more direct for uncompressed text.
     logger.info(
@@ -761,7 +761,7 @@ def upload_json(data: Any, *, uri: str, **kwargs: Any) -> str:
         scrubbed_rows_list = [scrubbed_rows]
     else:
         scrubbed_rows_list = scrubbed_rows
-        
+
     json_string_payload = "\n".join([json.dumps(row_item) for row_item in scrubbed_rows_list])
 
     # Set content_type to application/jsonl for newline-delimited JSON

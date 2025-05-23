@@ -6,11 +6,10 @@ submission, and tracking in the Buttermilk system.
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
-import pydantic
 import shortuuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class BatchJobStatus(str, Enum):

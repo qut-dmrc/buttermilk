@@ -4,8 +4,8 @@ import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentTrace, ErrorEvent
-from buttermilk._core.exceptions import ProcessingError # Added ProcessingError
+from buttermilk._core.contract import AgentInput, AgentTrace
+from buttermilk._core.exceptions import ProcessingError  # Added ProcessingError
 from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
@@ -245,11 +245,11 @@ class TestFetch:
     async def test_fetch_nonexistent_uri_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
         """Test fetch raises ProcessingError when a URI is not found."""
         mock_download_and_convert.return_value = None
-        
+
         uri_to_test = "http://example.com/nonexistentpage"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {uri_to_test}"):
             await fetch.fetch(uri=uri_to_test)
-        
+
         mock_download_and_convert.assert_called_once_with(uri=uri_to_test)
 
     @pytest.mark.anyio
@@ -257,11 +257,11 @@ class TestFetch:
     async def test_fetch_specific_url_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
         """Test fetch raises ProcessingError for a specific URI when not found."""
         mock_download_and_convert.return_value = None
-        
+
         specific_uri = "https://www.abc.net.au/religion/catherine-llewellyn-gender-affirming-healthcare-for-trans-youth"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {specific_uri}"):
             await fetch.fetch(uri=specific_uri)
-            
+
         mock_download_and_convert.assert_called_once_with(uri=specific_uri)
 
     @pytest.mark.anyio
@@ -361,13 +361,13 @@ async def test_run_record_agent(
                 expected_match = "Record not found for URI: https://example.com"
             elif "Get `#record123`" in prompt_str:
                 expected_match = "Record not found for ID: record123"
-            
+
             with pytest.raises(ProcessingError, match=expected_match):
                 await runtime.send_message(
                     agent_input,
                     await runtime.get("default"),  # topic
                 )
-            
+
             # Verify mocks were called if applicable
             if "https://example.com" in prompt_str:
                 mock_d_and_c.assert_any_call(uri="https://example.com")
@@ -383,5 +383,5 @@ async def test_run_record_agent(
             )
             await runtime.stop_when_idle()
             assert result == expected
-            
+
     await runtime.stop_when_idle() # Ensure runtime is stopped in all cases

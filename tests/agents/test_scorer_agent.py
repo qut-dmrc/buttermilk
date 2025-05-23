@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch  # Import patch
 
 import pytest
-import weave # Import weave for type hints and potential use
+import weave  # Import weave for type hints and potential use
+
+from buttermilk._core.config import AgentConfig  # Import AgentConfig
 
 # Global Buttermilk instance (for mocking weave)
 # Autogen types (optional, for context if needed)
@@ -9,7 +11,6 @@ import weave # Import weave for type hints and potential use
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.types import Record
-from buttermilk._core.config import AgentConfig # Import AgentConfig
 
 # Agent classes and models being tested/used
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA

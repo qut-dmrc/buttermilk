@@ -15,30 +15,30 @@ using a selection of these clients asynchronously.
 
 import asyncio
 import json
-import os # For accessing environment variables (e.g., API keys)
+import os  # For accessing environment variables (e.g., API keys)
 import random
-import uuid # For generating unique IDs for save paths
-from collections.abc import Sequence # For type hinting sequences
-from io import BytesIO # For handling image data in memory
-from pathlib import Path # For local path manipulation
-from typing import Any, Literal, Type # For type hinting
+import uuid  # For generating unique IDs for save paths
+from collections.abc import Sequence  # For type hinting sequences
+from io import BytesIO  # For handling image data in memory
+from pathlib import Path  # For local path manipulation
+from typing import Any, Literal, Type  # For type hinting
 
-import aiohttp # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
-import httpx # Asynchronous HTTP client (used by SD35Large, DALLE)
-import replicate # Client for Replicate API
-from cloudpathlib import CloudPath # For handling cloud storage paths
-from google import genai # Google Generative AI client
-from google.genai import types as google_genai_types # Specific types from google.genai
-from huggingface_hub import AsyncInferenceClient, login # HuggingFace Hub client
-from openai import AsyncOpenAI # OpenAI client
-from PIL import Image # Pillow library for image manipulation
-from pydantic import BaseModel, Field, PrivateAttr, field_validator # Pydantic components
-from shortuuid import ShortUUID # For generating short unique IDs
+import aiohttp  # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
+import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE)
+import replicate  # Client for Replicate API
+from cloudpathlib import CloudPath  # For handling cloud storage paths
+from google import genai  # Google Generative AI client
+from google.genai import types as google_genai_types  # Specific types from google.genai
+from huggingface_hub import AsyncInferenceClient, login  # HuggingFace Hub client
+from openai import AsyncOpenAI  # OpenAI client
+from PIL import Image  # Pillow library for image manipulation
+from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
+from shortuuid import ShortUUID  # For generating short unique IDs
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance for accessing config/credentials
-from buttermilk._core.image import ImageRecord, read_image # Buttermilk ImageRecord model
-from buttermilk._core.log import logger # Centralized logger
-from buttermilk._core.retry import RetryWrapper # Base class for retry logic
+from buttermilk._core.image import ImageRecord, read_image  # Buttermilk ImageRecord model
+from buttermilk._core.log import logger  # Centralized logger
+from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
 
 
 class TextToImageClient(RetryWrapper):
@@ -111,7 +111,7 @@ class TextToImageClient(RetryWrapper):
                 final_save_path = f"{temp_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
             else:
                 final_save_path = f"{bm.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
-        
+
         log_msg_parts = [
             f"Generating image with {self.model} using prompt: ```{text}```"
         ]
@@ -132,7 +132,7 @@ class TextToImageClient(RetryWrapper):
                 self.generate_image, # The method to call with retry
                 **parameters_for_generation, # Arguments for generate_image
             )
-            
+
             # Ensure generated_image_record is an ImageRecord and has an image
             if not isinstance(generated_image_record, ImageRecord) or not generated_image_record.image:
                 raise ValueError("generate_image implementation did not return a valid ImageRecord with an image.")
@@ -140,7 +140,7 @@ class TextToImageClient(RetryWrapper):
             # Save the image and update the URI in the record
             # The save method is part of ImageRecord
             generated_image_record.uri = generated_image_record.save(final_save_path)
-            
+
             # Ensure prompt, negative_prompt, and other relevant params are in the final record
             generated_image_record.prompt = text
             generated_image_record.negative_prompt = negative_prompt
@@ -152,7 +152,7 @@ class TextToImageClient(RetryWrapper):
         except Exception as e:
             error_message = f"Error generating image for prompt '{text[:100]}...' using {self.model}: {type(e).__name__} - {e!s}"
             logger.error(error_message, exc_info=True) # Log with stack trace
-            
+
             error_details = {
                 "prompt": text,
                 "model": self.model,
@@ -263,7 +263,7 @@ class Imagegen3(TextToImageClient):
             "negative_prompt": negative_prompt or "", # Ensure empty string if None
             **kwargs, # Allow overrides and additional params
         }
-        
+
         # Ensure client is initialized with correct project and location for Vertex AI
         # This might be better handled in a root_validator or __init__ if bm is always available
         # For now, assuming bm.credentials are accessible as in original.
@@ -284,7 +284,7 @@ class Imagegen3(TextToImageClient):
         # If an async version is available, it should be used.
         # For now, assuming a blocking call or that the client handles async internally.
         # If client.generate_images is not async, it should be wrapped with asyncio.to_thread
-        
+
         # Simulating async call if client.generate_images is sync
         loop = asyncio.get_event_loop()
         api_response = await loop.run_in_executor(
@@ -296,7 +296,7 @@ class Imagegen3(TextToImageClient):
 
         if not api_response.generated_images:
             raise ValueError(f"No image generated by Imagen 3. Response: {api_response}") # Or handle differently
-        
+
         first_generated_image = api_response.generated_images[0]
         pil_image = first_generated_image.image._pil_image # Accessing private member, might be fragile
         enhanced_prompt = first_generated_image.enhanced_prompt
@@ -366,7 +366,7 @@ class SD35Large(TextToImageClient):
             "Accept": "application/json", # Or "image/png" etc. if API supports direct image response
             "Authorization": f"Bearer {azure_api_key}",
         }
-        
+
         async with httpx.AsyncClient() as http_client: # Renamed to avoid conflict
             response = await http_client.post(
                 azure_url,
@@ -375,7 +375,7 @@ class SD35Large(TextToImageClient):
                 timeout=600.0, # Increased timeout
             )
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        
+
         # Assuming API returns JSON with base64 image data under "image" key
         response_json = response.json()
         image_b64 = response_json.get("image")
@@ -466,7 +466,7 @@ class SD3(TextToImageClient):
             ) as response:
                 response.raise_for_status() # Raise HTTPError for bad responses
                 image_data = await response.read()
-        
+
         pil_image = Image.open(BytesIO(image_data))
 
         return ImageRecord(
@@ -500,7 +500,7 @@ class SDXL(TextToImageClient):
     model: str = "stabilityai/stable-diffusion-xl-base-1.0" # Changed to base model
     prefix: str = "sdxl_"
     image_params: dict[str, Any] = Field(default_factory=lambda: {"num_inference_steps": 50})
-    
+
     # client is inherited from TextToImageClient for the base model
     # refiner client needs to be initialized
     _refiner_client: AsyncInferenceClient | None = PrivateAttr(default=None) # For async refiner
@@ -522,12 +522,12 @@ class SDXL(TextToImageClient):
                 token=hf_token, # Pass token explicitly
                 timeout=600.0,
             )
-        
+
         # Initialize refiner client (example uses sync, should ideally be async)
         # The original code mixed sync and async refiner client initialization.
         # Sticking to async for consistency if possible, or noting the sync usage.
         if self._sync_refiner_client is None: # Using the sync client as per original code's refine step
-            from huggingface_hub import InferenceClient as SyncInferenceClient # Local import for clarity
+            from huggingface_hub import InferenceClient as SyncInferenceClient  # Local import for clarity
             hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN") # Get token again just in case
             self._sync_refiner_client = SyncInferenceClient(
                  "stabilityai/stable-diffusion-xl-refiner-1.0",
@@ -589,7 +589,7 @@ class SDXL(TextToImageClient):
         except Exception as e:
             logger.error(f"Error during SDXL image refinement: {e!s}")
             raise RuntimeError(f"SDXL image refinement failed: {e!s}") from e
-            
+
         if not isinstance(refined_image_pil, Image.Image):
             raise RuntimeError(f"SDXL refiner did not return a PIL Image. Got: {type(refined_image_pil)}")
 
@@ -661,7 +661,7 @@ class SDXLReplicate(TextToImageClient):
 
         if not replicate_response or not isinstance(replicate_response, list) or not replicate_response[0]:
             raise RuntimeError(f"Replicate API for SDXL returned an unexpected response: {replicate_response}")
-        
+
         output_image_url = replicate_response[0] # Assuming the first item is the image URL
 
         # Fetch the image from the URL
@@ -670,7 +670,7 @@ class SDXLReplicate(TextToImageClient):
             async with session.get(output_image_url) as image_response:
                 image_response.raise_for_status() # Ensure download was successful
                 image_data = await image_response.read()
-        
+
         pil_image = Image.open(BytesIO(image_data))
 
         return ImageRecord(
@@ -746,7 +746,7 @@ class SD(TextToImageClient):
             async with session.get(output_image_url) as image_response:
                 image_response.raise_for_status()
                 image_data = await image_response.read()
-        
+
         pil_image = Image.open(BytesIO(image_data))
 
         return ImageRecord(
@@ -810,7 +810,7 @@ class DALLE(TextToImageClient):
                 api_key=openai_api_key,
                 timeout=600.0, # httpx.Timeout
             )
-        
+
         prompt_for_api = text
         if negative_prompt: # Simulate negative prompt by instruction
             prompt_for_api = f"{text} \n\nIMPORTANT: DO NOT INCLUDE the following elements: {negative_prompt}"
@@ -838,7 +838,7 @@ class DALLE(TextToImageClient):
 
         output_image_url = response.data[0].url
         revised_prompt_from_api = response.data[0].revised_prompt
-        
+
         # Store the actual prompt sent and any revised prompt
         api_parameters["prompt_sent_to_api"] = prompt_for_api # Store the exact prompt sent
         if revised_prompt_from_api:
@@ -848,7 +848,7 @@ class DALLE(TextToImageClient):
         async with httpx.AsyncClient() as http_client: # Renamed to avoid conflict
             image_http_response = await http_client.get(output_image_url, timeout=300.0)
         image_http_response.raise_for_status() # Ensure download was successful
-        
+
         pil_image = Image.open(BytesIO(image_http_response.content))
 
         return ImageRecord(
@@ -945,7 +945,7 @@ class BatchImageGenerator(BaseModel):
         logger.info(f"Initialized image generator clients: {list(self._clients.keys())}")
 
     async def abatch(
-        self, 
+        self,
         inputs: Sequence[str | dict[str, str]], # Changed 'input' to 'inputs' to avoid builtin clash
         n: int = 1
     ) -> AsyncGenerator[ImageRecord, None]:
@@ -980,7 +980,7 @@ class BatchImageGenerator(BaseModel):
         batch_save_path = self.save_path / f"batch_{ShortUUID().uuid()[:8]}" # type: ignore
         batch_save_path.mkdir(parents=True, exist_ok=True)
         info_json_path = batch_save_path / "info.json"
-        
+
         generated_records_summary: list[dict[str, Any]] = []
         self._tasks = [] # Reset tasks for this batch
 
@@ -1037,7 +1037,7 @@ class BatchImageGenerator(BaseModel):
                 # await asyncio.sleep(0.01) # Small sleep to allow other tasks, might not be necessary
                 image_result: ImageRecord = await task
                 yield image_result # Yield the successful ImageRecord
-                
+
                 # Collect summary information for info.json
                 if image_result and image_result.image and image_result.uri: # Successfully generated and saved
                     generated_records_summary.append({

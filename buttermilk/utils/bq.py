@@ -13,23 +13,22 @@ It uses the `google-cloud-bigquery` and `google-cloud-bigquery-storage` client l
 """
 
 import datetime
-from collections.abc import Sequence # For type hinting sequences
-from typing import Any, Mapping # For type hinting
+from collections.abc import Sequence  # For type hinting sequences
+from typing import Any, Mapping  # For type hinting
 
 import pandas as pd
-import pydantic # Pydantic core, though less used directly in this file now
-from google.cloud import bigquery, bigquery_storage_v1beta2 # BigQuery client libraries
-from google.cloud.bigquery_storage import ( # Storage Write API client
+import pydantic  # Pydantic core, though less used directly in this file now
+from google.cloud import bigquery, bigquery_storage_v1beta2  # BigQuery client libraries
+from google.cloud.bigquery_storage import (  # Storage Write API client
     BigQueryWriteAsyncClient,
 )
-from google.cloud.bigquery_storage_v1.types import ( # Types for Storage Write API
+from google.cloud.bigquery_storage_v1.types import (  # Types for Storage Write API
     ProtoRows,
 )
-from pydantic import BaseModel, ConfigDict, Field, model_validator # Pydantic components
+from pydantic import BaseModel, ConfigDict, Field, model_validator  # Pydantic components
 
-from .._core.log import logger # Centralized logger
-from .utils import make_serialisable, remove_punctuation # Utility functions
-
+from .._core.log import logger  # Centralized logger
+from .utils import make_serialisable, remove_punctuation  # Utility functions
 
 # This constant is also in _core/constants.py. Define here if specific to bq utils,
 # or ensure single source of truth. For now, keeping as it was in original.
@@ -39,7 +38,7 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / (10**12)  # $5 per Terabyte (1 TB = 10^12 bytes)
 
 def construct_dict_from_schema(
     schema: list[bigquery.SchemaField | dict[str, Any]], # Schema can be list of SchemaField or dicts
-    data_dict: dict[str, Any], 
+    data_dict: dict[str, Any],
     remove_extra_fields: bool = True
 ) -> dict[str, Any]:
     """Recursively constructs a dictionary that conforms to a BigQuery schema.
@@ -75,7 +74,7 @@ def construct_dict_from_schema(
             is not a valid number).
     """
     transformed_dict: dict[str, Any] = {}
-    
+
     # Create a set of schema field names for efficient lookup if removing extra fields
     schema_field_names = {
         (field.name if isinstance(field, bigquery.SchemaField) else field["name"])
@@ -94,7 +93,7 @@ def construct_dict_from_schema(
             if current_field_name == key:
                 field_schema = f_schema.to_api_repr() if isinstance(f_schema, bigquery.SchemaField) else f_schema
                 break
-        
+
         if not field_schema: # Should not happen if remove_extra_fields is False and key is present
             if not remove_extra_fields: # Pass through if not removing extra and no schema found (should be rare)
                  transformed_dict[key] = value
@@ -115,7 +114,7 @@ def construct_dict_from_schema(
             if not isinstance(value, list):
                 logger.warning(f"Field '{key}' is REPEATED in schema but value is not a list (type: {type(value)}). Skipping.")
                 continue
-            
+
             transformed_array_items = []
             nested_schema_fields = field_schema.get("fields")
             for item in value:
@@ -141,7 +140,7 @@ def construct_dict_from_schema(
             else: # Value is not a dict for a STRUCT field
                 logger.warning(f"Field '{key}' is STRUCT but value is not a dict (type: {type(value)}). Skipping.")
                 continue
-        
+
         # Handle simple data type conversions for non-repeated, non-STRUCT fields
         elif field_type_upper in ("TIMESTAMP", "DATETIME", "DATE"):
             if isinstance(value, datetime.datetime):
@@ -164,7 +163,7 @@ def construct_dict_from_schema(
             else:
                 logger.warning(f"Unsupported type '{type(value)}' for datetime conversion for field '{key}'. Skipping.")
                 continue
-            
+
             if field_type_upper == "DATE" and isinstance(converted_value, datetime.datetime):
                 transformed_dict[key] = converted_value.date()
             else:
@@ -184,7 +183,7 @@ def construct_dict_from_schema(
             except ValueError as e_num:
                 logger.warning(f"Could not convert '{value}' to numeric for field '{key}': {e_num!s}. Skipping.")
                 continue
-        
+
         elif field_type_upper == "BOOLEAN":
             if isinstance(value, str):
                 val_lower = value.strip().lower()
@@ -207,7 +206,7 @@ def construct_dict_from_schema(
                 continue
         else: # STRING, BYTES, GEOGRAPHY, JSON - pass through as is, BigQuery client handles these
             transformed_dict[key] = value
-            
+
     return transformed_dict
 
 
@@ -246,22 +245,22 @@ class TableWriter(BaseModel):
 
     write_client: BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
     destination: str | None = Field(
-        default=None, 
+        default=None,
         description="Optional. Fully qualified table ID (project.dataset.table). Used if component IDs not set."
     )
     bq_schema: list[bigquery.SchemaField] | None = Field( # Changed from str to list[SchemaField] for clarity post-validation
-        default=None, 
+        default=None,
         description="BigQuery table schema as list of SchemaFields or path to JSON schema file."
     )
     stream: str | None = Field(
-        default="_default", 
+        default="_default",
         description="BigQuery Storage Write API stream name. Defaults to '_default'."
     )
     project_id: str | None = Field(default=None, description="Google Cloud project ID.")
     dataset_id: str | None = Field(default=None, description="BigQuery dataset ID.")
     table_id: str | None = Field(default=None, description="BigQuery table ID.")
     table_path: str | None = Field(
-        default=None, 
+        default=None,
         description="Fully qualified table path for Storage Write API (projects/.../datasets/.../tables/...). Auto-constructed if not set."
     )
 
@@ -316,7 +315,7 @@ class TableWriter(BaseModel):
         # In Pydantic v2, for model_validator(mode="after"), 'values' is the model instance itself.
         # For model_validator(mode="before"), 'values' is a dict.
         # Assuming this runs *after* individual field validation.
-        
+
         # Get current values from the model instance
         table_path = values.table_path
         project_id = values.project_id
@@ -327,7 +326,7 @@ class TableWriter(BaseModel):
         if table_path: # If table_path is already set, prioritize it.
             # Optionally, parse project_id, dataset_id, table_id from table_path if they are None
             if not (project_id and dataset_id and table_id) and isinstance(table_path, str):
-                parts = table_path.split('/')
+                parts = table_path.split("/")
                 if len(parts) == 6 and parts[0] == "projects" and parts[2] == "datasets" and parts[4] == "tables":
                     values.project_id = parts[1]
                     values.dataset_id = parts[3]
@@ -348,14 +347,14 @@ class TableWriter(BaseModel):
                     raise ValueError("`destination` must be in 'project.dataset.table' or 'dataset.table' format.")
             except Exception as e:
                 raise ValueError(f"Invalid `destination` format ('{destination}'). Expected 'project.dataset.table' or 'dataset.table'. Error: {e!s}") from e
-        
+
         # Now, ensure all components are present to build table_path
         # project_id can be None if using default project for BigQuery client
         final_project_id = values.project_id or bigquery.Client().project # Use default project if None
 
         if not (final_project_id and values.dataset_id and values.table_id):
             raise ValueError("Cannot construct table_path: Missing project_id, dataset_id, or table_id, and destination was not sufficient.")
-        
+
         values.table_path = f"projects/{final_project_id}/datasets/{values.dataset_id}/tables/{values.table_id}"
         return values
 
@@ -384,7 +383,7 @@ class TableWriter(BaseModel):
         """
         if not self.table_path: # Should be set by validator
             raise ValueError("TableWriter.table_path is not set. Cannot append rows.")
-            
+
         write_stream_path = f"{self.table_path}/streams/{self.stream or '_default'}"
 
         prepared_batch: list[Mapping[str, Any]]
@@ -393,7 +392,7 @@ class TableWriter(BaseModel):
             df_to_process = rows.copy() # Work on a copy
             if any(df_to_process.columns.duplicated()):
                 df_to_process.columns = [ # type: ignore
-                    x[1] if x[1] not in df_to_process.columns[: x[0]] else f"{x[1]}_{list(df_to_process.columns[: x[0]]).count(x[1])}" 
+                    x[1] if x[1] not in df_to_process.columns[: x[0]] else f"{x[1]}_{list(df_to_process.columns[: x[0]]).count(x[1])}"
                     for x in enumerate(df_to_process.columns)
                 ]
             prepared_batch = df_to_process.to_dict(orient="records")
@@ -409,7 +408,7 @@ class TableWriter(BaseModel):
             if not (isinstance(self.bq_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in self.bq_schema)):
                  raise TypeError(f"TableWriter.bq_schema must be a list of bigquery.SchemaField. Got: {type(self.bq_schema)}")
             prepared_batch = [construct_dict_from_schema(self.bq_schema, row) for row in prepared_batch]
-        
+
         serializable_batch = make_serialisable(prepared_batch)
 
         if not serializable_batch:
@@ -422,7 +421,7 @@ class TableWriter(BaseModel):
         # For google-cloud-bigquery-storage >= 2.0, client handles dicts.
         # If using older versions or custom protobufs, this step is more complex.
         # Assuming current client handles list of dicts for proto_rows.
-        
+
         # The ProtoRows constructor itself does not take serialized_rows directly.
         # It expects a `rows` argument which should be a sequence of serialized protobuf messages.
         # For sending Python dicts, they are typically wrapped in a structure that the client
@@ -441,12 +440,12 @@ class TableWriter(BaseModel):
         # However, the type hint here is ProtoRows.
         # Let's assume the `append_rows` client method can handle this structure
         # for a default stream (which implies JSON compatible).
-        
+
         # If the stream expects JSON, sending dicts might be fine if client handles serialization.
         # If it expects actual protobufs, each dict in `serializable_batch` needs to be
         # serialized into its specific protobuf message type first.
         # Given no explicit proto schema definition here for rows, it's likely JSON mode.
-        
+
         proto_rows_payload = ProtoRows() # Create an empty ProtoRows
         # Add serialized rows (assuming JSON compatible dicts which client serializes)
         # This part is tricky as ProtoRows expects serialized protobuf bytes.
@@ -456,14 +455,14 @@ class TableWriter(BaseModel):
         # A common pattern is to use `google.protobuf.json_format.ParseDict` if you have a .proto schema.
         # Without it, this is ambiguous. Let's pass the dicts and assume client does the work.
         # This is likely where original code's `batch` was used directly.
-        
+
         # Correct usage for sending Python dicts (JSON compatible) with Storage Write API
         # usually involves setting the `rows` field of `AppendRowsRequest.ProtoData`
         # if a `writer_schema` (as `ProtoSchema`) is also provided.
         # If `ProtoRows` is used directly, it implies pre-serialized protobuf bytes.
         # Given `make_serialisable` output is list of dicts, this needs clarification
         # on how `BigQueryWriteAsyncClient.append_rows` handles `ProtoRows(serialized_rows=list_of_dicts)`.
-        
+
         # Assuming `serializable_batch` is a list of dicts to be sent.
         # The client's `append_rows` method will take an iterable of requests.
         # Each request contains a batch of rows.
@@ -474,16 +473,16 @@ class TableWriter(BaseModel):
         # The `append_rows` method of `BigQueryWriteAsyncClient` is an asynchronous generator
         # that itself takes an iterable/generator of `AppendRowsRequest` objects.
         # We need to create these requests.
-        
+
         async def request_generator():
             for chunk_of_rows in chunks(serializable_batch, 100): # Example chunk size
                 proto_data = bigquery_storage_v1beta2.types.ProtoData()
                 proto_data.rows.serialized_rows.extend(
-                     [json.dumps(row).encode('utf-8') for row in chunk_of_rows] # Serialize each dict to JSON bytes
+                     [json.dumps(row).encode("utf-8") for row in chunk_of_rows] # Serialize each dict to JSON bytes
                 )
                 # If you have a .proto schema, you'd define writer_schema here.
                 # For schemaless JSON append (default stream), this might be okay or need adjustment.
-                # proto_data.writer_schema = ... 
+                # proto_data.writer_schema = ...
 
                 yield bigquery_storage_v1beta2.types.AppendRowsRequest(
                     write_stream=write_stream_path,
@@ -494,19 +493,19 @@ class TableWriter(BaseModel):
             # The append_rows method is an async generator itself.
             # We need to iterate over it to process responses.
             response_stream = self.write_client.append_rows(request_generator()) # type: ignore
-            
+
             async for response_item in response_stream: # type: ignore
                 # Each response_item could be an AppendRowsResponse
                 # Check for errors in the response
-                if hasattr(response_item, 'error') and response_item.error:
+                if hasattr(response_item, "error") and response_item.error:
                     logger.error(f"Error appending rows to {self.table_path}: {response_item.error.message}")
                     all_response_errors.append(response_item.error)
-                elif hasattr(response_item, 'row_errors') and response_item.row_errors:
+                elif hasattr(response_item, "row_errors") and response_item.row_errors:
                     logger.error(f"Row errors appending to {self.table_path}: {response_item.row_errors}")
                     all_response_errors.extend(response_item.row_errors)
                 else:
                     logger.debug(f"Successfully appended a chunk to {self.table_path}. Response offset: {getattr(response_item, 'append_result', {}).get('offset', {}).get('value', 'N/A')}")
-        
+
         except Exception as e:
             logger.error(f"Exception during append_rows stream processing for {self.table_path}: {e!s}", exc_info=True)
             all_response_errors.append(str(e)) # Add exception as an error string

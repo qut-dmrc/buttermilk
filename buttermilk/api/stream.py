@@ -5,15 +5,9 @@ This module handles streaming API requests to flows, using the unified RunReques
 
 from collections.abc import AsyncGenerator
 
-from pydantic import (
-    BaseModel,
-    Field,
-)
-
 from buttermilk._core import logger
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record, RunRequest # Import RunRequest
-from buttermilk.utils.media import download_and_convert
+from buttermilk._core.types import RunRequest  # Import RunRequest
 
 
 async def flow_stream(
@@ -38,8 +32,8 @@ async def flow_stream(
     async for result in flow.run_flows(run_request=run_request): # Pass run_request directly
         if result:
             # Assuming result is AgentTrace or similar with outputs and agent_info
-            agent_name = getattr(getattr(result, 'agent_info', None), 'name', 'unknown')
-            if not getattr(result, 'outputs', None):
+            agent_name = getattr(getattr(result, "agent_info", None), "name", "unknown")
+            if not getattr(result, "outputs", None):
                  logger.info(
                     f"No data to return from flow step {agent_name} (completed successfully).",
                 )
@@ -52,6 +46,6 @@ async def flow_stream(
                 yield result
 
     # Assuming flow object has a source attribute
-    flow_source = getattr(flow, 'source', 'unknown')
+    flow_source = getattr(flow, "source", "unknown")
     logger.info(f"Finished flow {flow_source}.") # Access source from flow object
     return

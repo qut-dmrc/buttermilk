@@ -6,13 +6,13 @@ and generate a textual description (often an alt text or caption) using a
 configured Language Model.
 """
 
-from typing import Any # For type hinting
+from typing import Any  # For type hinting
 
-from buttermilk import logger # Buttermilk's centralized logger
-from buttermilk._core.agent import AgentInput # Buttermilk AgentInput type
-from buttermilk._core.contract import AgentTrace, ErrorEvent # Buttermilk contract types
-from buttermilk.agents.llm import LLMAgent # Base LLM Agent
-from buttermilk.utils.media import download_and_convert # Utility for media handling
+from buttermilk import logger  # Buttermilk's centralized logger
+from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
+from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk contract types
+from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
+from buttermilk.utils.media import download_and_convert  # Utility for media handling
 
 
 class Describer(LLMAgent):
@@ -170,7 +170,7 @@ class Describer(LLMAgent):
                 generated_description = output_data.get("description", output_data.get("alt_text", output_data.get("text")))
                 if generated_description and isinstance(generated_description, str):
                     record_to_process.alt_text = generated_description
-                
+
                 # update_from expects a Pydantic model or dict.
                 # It might be too broad here if outputs contains many things.
                 # Consider more targeted updates to record_to_process.metadata if needed.

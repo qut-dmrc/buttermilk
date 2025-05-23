@@ -1,8 +1,10 @@
 import pytest
 
 from buttermilk._core.llms import MULTIMODAL_MODELS
-from buttermilk._core.types import Record
-from buttermilk._core.types import RunRequest # Import RunRequest
+from buttermilk._core.types import (
+    Record,
+    RunRequest,  # Import RunRequest
+)
 from buttermilk.agents.describer import Describer
 from buttermilk.utils.media import download_and_convert
 

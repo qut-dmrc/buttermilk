@@ -3,9 +3,9 @@ import pytest
 from buttermilk._core import BM, logger
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
-from buttermilk._core.types import MediaObj, Record, RunRequest # Import RunRequest
+from buttermilk._core.types import MediaObj, Record, RunRequest  # Import RunRequest
 from buttermilk.agents.llm import LLMAgent as LC
-from buttermilk.runner.flowrunner import Flow # Import Flow
+from buttermilk.runner.flowrunner import Flow  # Import Flow
 
 
 def param_model(request):

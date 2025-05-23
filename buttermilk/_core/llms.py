@@ -17,42 +17,41 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from anthropic import (
-    AnthropicVertex, # Client for Anthropic models on Vertex AI
+    AnthropicVertex,  # Client for Anthropic models on Vertex AI
     AsyncAnthropicVertex,
 )
-from autogen_core import CancellationToken, FunctionCall # Autogen core types
+from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
-from autogen_core.tools import Tool, ToolSchema # Autogen tool handling
-from autogen_ext.models.anthropic import AnthropicChatCompletionClient # Autogen Anthropic client
-from autogen_ext.models.openai import ( # Autogen OpenAI clients
+from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
+from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
 from autogen_ext.models.openai._transformation.registry import (
-    _find_model_family, # Helper for model family detection
+    _find_model_family,  # Helper for model family detection
 )
-from autogen_openaiext_client import GeminiChatCompletionClient # Autogen Gemini client
-from langfuse.openai import openai  # OpenAI integration for Langfuse # noqa
-from pydantic import BaseModel, ConfigDict, Field # Pydantic models for configuration
+from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
+from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configuration
 
 
 # Use a function for deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk._core.dmrc import get_bm as _get_bm # Actual import of get_bm
+    from buttermilk._core.dmrc import get_bm as _get_bm  # Actual import of get_bm
     return _get_bm()
 
 
-from buttermilk._core.contract import ToolOutput # Buttermilk contract for tool output
-from buttermilk._core.exceptions import ProcessingError # Custom Buttermilk exceptions
+from buttermilk._core.contract import ToolOutput  # Buttermilk contract for tool output
+from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 
-from .retry import RetryWrapper # Retry logic wrapper
+from .retry import RetryWrapper  # Retry logic wrapper
 
-_ = "ChatCompletionClient" # Placeholder for type checking if needed
+_ = "ChatCompletionClient"  # Placeholder for type checking if needed
 
 
 if TYPE_CHECKING:
-    _: list[Any] = [ # List of clients for type checking purposes
+    _: list[Any] = [  # List of clients for type checking purposes
         AzureOpenAIChatCompletionClient,
         OpenAIChatCompletionClient,
         GeminiChatCompletionClient,
@@ -86,7 +85,9 @@ class LLMConfig(BaseModel):
             support for structured output, etc.
         configs (dict): A dictionary for additional options or configurations
             to pass directly to the constructor of the LLM client.
+
     """
+
     connection: str = Field(
         ...,
         description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)",
@@ -118,7 +119,9 @@ class MLPlatformTypes(Enum):
         anthropic: Anthropic platform (e.g., Claude models).
         llama: Llama models (often self-hosted or via specific providers).
         azure: Microsoft Azure AI platform (e.g., Azure OpenAI).
+
     """
+
     openai = "openai"
     google_genai = "google-genai"
     google_vertexai = "google-vertexai"
@@ -152,7 +155,7 @@ CHEAP_CHAT_MODELS = [
     "o3mini",
     "gpt41mini",
     "llama31_8b",
-    "haiku", # Note: "haiku" is duplicated, consider removing one.
+    "haiku",  # Note: "haiku" is duplicated, consider removing one.
 ]
 """A predefined list of identifiers for cost-effective chat models."""
 
@@ -173,10 +176,12 @@ class LLMClient(BaseModel):
         parameters (dict): A dictionary of parameters that were used to configure
             this client instance, or default parameters for its use.
             Defaults to an empty dict.
+
     """
-    client: Any # The actual LLM client object (e.g., OpenAIChatCompletionClient)
-    connection: str # Identifier for the connection type (e.g., "azure_gpt4")
-    parameters: dict = Field(default_factory=dict) # Parameters for this client
+
+    client: Any  # The actual LLM client object (e.g., OpenAIChatCompletionClient)
+    connection: str  # Identifier for the connection type (e.g., "azure_gpt4")
+    parameters: dict = Field(default_factory=dict)  # Parameters for this client
 
 
 T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
@@ -193,10 +198,12 @@ class ModelOutput(CreateResult):
         object (BaseModel | None): The Pydantic model instance hydrated from
             the LLM's JSON or structured output. Defaults to None if no structured
             output was requested or parsing failed.
+
     """
+
     object: BaseModel | None = Field(
         default=None,
-        description="The Pydantic model instance hydrated from LLM's JSON or structured output."
+        description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
 
 
@@ -216,6 +223,7 @@ class AutoGenWrapper(RetryWrapper):
         client (ChatCompletionClient): The underlying Autogen chat completion client instance.
         model_info (ModelInfo): Metadata about the model being wrapped, used to
             determine capabilities like structured output support.
+
     """
 
     client: ChatCompletionClient
@@ -259,18 +267,19 @@ class AutoGenWrapper(RetryWrapper):
             ProcessingError: If the LLM returns an empty response or an unexpected
                 tool response, or if any other error occurs during the LLM call
                 after retries are exhausted.
+
         """
         try:
             is_valid_schema_type = (
                 schema is not None
                 and inspect.isclass(schema)
                 and issubclass(schema, BaseModel)
-                and schema is not BaseModel # Ensure it's a specific subclass, not BaseModel itself
+                and schema is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
             )
-            
-            json_output_requested: bool | type[BaseModel] = False # Default to no JSON mode
+
+            json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
             if is_valid_schema_type and self.model_info.get("structured_output", False):
-                json_output_requested = schema # type: ignore # Pass the schema for structured output
+                json_output_requested = schema  # type: ignore # Pass the schema for structured output
             elif self.model_info.get("json_output", False):
                 # If schema not provided for structured output, but model supports generic JSON mode
                 json_output_requested = True
@@ -283,12 +292,12 @@ class AutoGenWrapper(RetryWrapper):
             # langfuse_context.update_current_observation(input=messages)
 
             create_result = await self._execute_with_retry(
-                self.client.create, # The method to call
+                self.client.create,  # The method to call
                 messages,          # Positional arguments for self.client.create
                 tools=tools,
                 json_output=json_output_requested,
                 cancellation_token=cancellation_token,
-                extra_create_args=kwargs, # Keyword arguments for self.client.create
+                extra_create_args=kwargs,  # Keyword arguments for self.client.create
             )
 
             if not create_result.content:
@@ -299,18 +308,18 @@ class AutoGenWrapper(RetryWrapper):
             if isinstance(create_result.content, list) and \
                not all(isinstance(item, FunctionCall) for item in create_result.content):
                 raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
-        
-        except ProcessingError: # Re-raise known ProcessingErrors
+
+        except ProcessingError:  # Re-raise known ProcessingErrors
             raise
-        except Exception as e: # Wrap other exceptions
+        except Exception as e:  # Wrap other exceptions
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
-        
-        return create_result # type: ignore # Expect CreateResult or compatible
+
+        return create_result  # type: ignore # Expect CreateResult or compatible
 
     async def call_chat(
         self,
-        messages: list[LLMMessage], # Made mutable for extending with tool results
+        messages: list[LLMMessage],  # Made mutable for extending with tool results
         cancellation_token: CancellationToken | None,
         tools_list: Sequence[Tool | ToolSchema] = [],
         schema: type[BaseModel] | None = None,
@@ -334,51 +343,51 @@ class AutoGenWrapper(RetryWrapper):
         Returns:
             CreateResult: The final chat completion result from the LLM after
                 any tool call cycles.
+
         """
         create_result = await self.create(
             messages=messages,
             tools=tools_list,
             cancellation_token=cancellation_token,
-            schema=schema
+            schema=schema,
         )
 
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
-            
+
             tool_outputs = await self._execute_tools(
                 calls=tool_calls,
                 tools_list=tools_list,
                 cancellation_token=cancellation_token,
             )
             # Append tool results to the message history
-            for tool_result_group in tool_outputs: # _execute_tools returns list of lists
-                for tool_result in tool_result_group: # Each actual ToolOutput
-                    if tool_result.messages: # If ToolOutput itself provides messages (e.g. formatted result)
+            for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
+                for tool_result in tool_result_group:  # Each actual ToolOutput
+                    if tool_result.messages:  # If ToolOutput itself provides messages (e.g. formatted result)
                         messages.extend(tool_result.messages)
-                    else: # Create a standard tool message if not provided by ToolOutput
+                    else:  # Create a standard tool message if not provided by ToolOutput
                         # This part might need adjustment based on how ToolOutput is structured
                         # Assuming ToolOutput has content and tool_call_id
                         messages.append(LLMMessage(
                             role="tool",
-                            content=tool_result.content or "", # Ensure content is not None
-                            tool_call_id=tool_result.call_id # Ensure call_id is the tool_call_id
+                            content=tool_result.content or "",  # Ensure content is not None
+                            tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
                         ))
-
 
             # Call the LLM again with the tool results included in the history
             create_result = await self.create(
                 messages=messages,
-                cancellation_token=cancellation_token
+                cancellation_token=cancellation_token,
                 # No tools or schema passed here, assuming final response after tools
             )
 
-        return create_result # type: ignore # Expect CreateResult
+        return create_result  # type: ignore # Expect CreateResult
 
     async def _call_tool(
         self,
         call: FunctionCall,
-        tool: Tool, # Assuming 'tool' is an instance of Autogen's Tool
+        tool: Tool,  # Assuming 'tool' is an instance of Autogen's Tool
         cancellation_token: CancellationToken | None,
     ) -> list[ToolOutput]:
         """Executes a single tool call and formats its result.
@@ -392,6 +401,7 @@ class AutoGenWrapper(RetryWrapper):
         Returns:
             list[ToolOutput]: A list containing one or more `ToolOutput` objects.
                 A single tool execution might produce multiple outputs.
+
         """
         arguments = json.loads(call.arguments)
         # Autogen's Tool.run_json is expected to return a JSON-serializable result.
@@ -401,13 +411,13 @@ class AutoGenWrapper(RetryWrapper):
         # Ensure results is a list, as a tool might conceptually return multiple outputs
         if not isinstance(tool_run_results, list):
             tool_run_results = [tool_run_results]
-        
+
         outputs: list[ToolOutput] = []
         for single_result in tool_run_results:
             # Adapt the result to the ToolOutput schema
             # ToolOutput expects 'content' (stringified result) and 'call_id'
             # It also has 'results' (Any), 'messages' (list[LLMMessage]), 'args'.
-            
+
             # Default content is stringified result
             content_str = json.dumps(single_result) if not isinstance(single_result, str) else single_result
 
@@ -415,11 +425,11 @@ class AutoGenWrapper(RetryWrapper):
             # Note: `call.id` is the `tool_call_id` needed by OpenAI API for tool messages.
             # `ToolOutput.call_id` should store this.
             tool_output_instance = ToolOutput(
-                call_id=call.id, # This is the crucial tool_call_id
-                function_name=tool.name, # From the tool definition
-                content=content_str, # Stringified result
-                results=single_result, # Raw result
-                args=arguments, # Arguments passed to the tool
+                call_id=call.id,  # This is the crucial tool_call_id
+                function_name=tool.name,  # From the tool definition
+                content=content_str,  # Stringified result
+                results=single_result,  # Raw result
+                args=arguments,  # Arguments passed to the tool
                 # messages: if the tool itself wants to craft specific LLMMessages
             )
             outputs.append(tool_output_instance)
@@ -428,9 +438,9 @@ class AutoGenWrapper(RetryWrapper):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[Tool | ToolSchema], # Changed to Sequence and allow ToolSchema
+        tools_list: Sequence[Tool | ToolSchema],  # Changed to Sequence and allow ToolSchema
         cancellation_token: CancellationToken | None,
-    ) -> list[list[ToolOutput]]: # Return type is list of lists, as one call might yield multiple outputs
+    ) -> list[list[ToolOutput]]:  # Return type is list of lists, as one call might yield multiple outputs
         """Executes a list of tool calls concurrently.
 
         Args:
@@ -441,13 +451,14 @@ class AutoGenWrapper(RetryWrapper):
         Returns:
             list[list[ToolOutput]]: A list where each inner list contains the
                 `ToolOutput`(s) from one corresponding tool call.
+
         """
         tasks = []
         for call in calls:
             # Find the tool by name from the tools_list.
             # tools_list can contain Tool or ToolSchema, ensure we find a runnable Tool.
             tool_definition = next((t for t in tools_list if t.name == call.name), None)
-            
+
             if tool_definition is None:
                 # Handle case where tool is not found (e.g., log error, return error ToolOutput)
                 # For now, assert, but a more robust error handling might be needed.
@@ -463,7 +474,7 @@ class AutoGenWrapper(RetryWrapper):
 
         # Execute all scheduled tool calls concurrently.
         results_list_of_lists: list[list[ToolOutput]] = await asyncio.gather(*tasks)
-        
+
         return results_list_of_lists
 
 
@@ -487,15 +498,17 @@ class LLMs(BaseModel):
             is first requested. Not meant to be set directly by users.
         model_config (ConfigDict): Pydantic model configuration.
             - `use_enum_values`: True - Ensures enum members are used for validation/serialization.
+
     """
+
     connections: dict[str, LLMConfig] = Field(
-        default_factory=dict, # Changed from list to dict factory
+        default_factory=dict,  # Changed from list to dict factory
         description="A dictionary where keys are connection names and values are LLMConfig objects.",
     )
     autogen_models: dict[str, AutoGenWrapper] = Field(
-        default_factory=dict, # For caching instantiated clients
+        default_factory=dict,  # For caching instantiated clients
         description="Cache for instantiated AutoGenWrapper clients. Populated on demand.",
-        exclude=True, # Exclude from model dump as it's runtime state
+        exclude=True,  # Exclude from model dump as it's runtime state
     )
 
     model_config = ConfigDict(use_enum_values=True)
@@ -506,6 +519,7 @@ class LLMs(BaseModel):
 
         Returns:
             Enum: An Enum where members are the keys from the `connections` dictionary.
+
         """
         return Enum("AllModelNames", {name: name for name in self.connections.keys()})
 
@@ -530,6 +544,7 @@ class LLMs(BaseModel):
                 are not available.
             ValueError: If essential configuration like GCP credentials for Vertex
                 are missing.
+
         """
         # Check cache first (though current implementation always creates new, which might be intended for some reason)
         # if name in self.autogen_models:
@@ -539,56 +554,56 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-        client: ChatCompletionClient | None = None # Initialize client as None
+        client: ChatCompletionClient | None = None  # Initialize client as None
 
         client_params: dict[str, Any] = {
             "base_url": config.base_url,
-            "model_info": config.model_info.model_copy(deep=True), # Use a copy to avoid modifying original
+            "model_info": config.model_info.model_copy(deep=True),  # Use a copy to avoid modifying original
             "api_key": config.api_key,
-            **config.configs, # Add other configs from LLMConfig.configs
+            **config.configs,  # Add other configs from LLMConfig.configs
         }
-        
+
         family = client_params["model_info"].get("family", ModelFamily.UNKNOWN)
         # Ensure model family is correctly registered or handled for Autogen
-        if _find_model_family("openai", family) == ModelFamily.UNKNOWN: # Check against openai as it's a common base
+        if _find_model_family("openai", family) == ModelFamily.UNKNOWN:  # Check against openai as it's a common base
             # This logic might need adjustment based on how Autogen handles various families.
             # For non-OpenAI models, Autogen might require specific client types or family settings.
-            client_params["model_info"]["family"] = ModelFamily.UNKNOWN # Or a specific family if known
+            client_params["model_info"]["family"] = ModelFamily.UNKNOWN  # Or a specific family if known
 
-        api_type = config.api_type.lower() # Normalize api_type
+        api_type = config.api_type.lower()  # Normalize api_type
 
         if api_type == "azure":
-            client_params["azure_endpoint"] = client_params.pop("base_url", None) # Rename field for Azure client
+            client_params["azure_endpoint"] = client_params.pop("base_url", None)  # Rename field for Azure client
             client = AzureOpenAIChatCompletionClient(**client_params)
-        elif api_type == "google" or api_type == "google_genai": # Assuming "google" might mean Gemini API
+        elif api_type == "google" or api_type == "google_genai":  # Assuming "google" might mean Gemini API
             # For GeminiChatCompletionClient, specific setup might be needed.
             # Current Autogen might use OpenAIChatCompletionClient as a wrapper for some non-OpenAI models if configured.
             # This part needs to align with how GeminiChatCompletionClient is expected to be used.
             # If GeminiChatCompletionClient is a direct wrapper:
-            # client = GeminiChatCompletionClient(**client_params) 
+            # client = GeminiChatCompletionClient(**client_params)
             # Or if it's accessed via OpenAIChatCompletionClient with specific base_url/api_type:
             client = OpenAIChatCompletionClient(**client_params)
         elif api_type == "vertex" or api_type == "google_vertexai":
             # Vertex AI often uses application default credentials or specific service account keys.
             # API key might be a token for Vertex.
-            bm_instance = get_bm() # Get Buttermilk global instance
+            bm_instance = get_bm()  # Get Buttermilk global instance
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available in Buttermilk instance for Vertex AI.")
-            client_params["api_key"] = bm_instance.gcp_credentials.token # Use token for Vertex
-            
+            client_params["api_key"] = bm_instance.gcp_credentials.token  # Use token for Vertex
+
             # Depending on the actual model (e.g., Gemini on Vertex, Claude on Vertex)
             # The client instantiation will differ.
             # For Gemini on Vertex via Autogen's OpenAI client compatibility:
             # client = OpenAIChatCompletionClient(**client_params)
             # For Anthropic Claude on Vertex:
-            if "claude" in config.obj.lower(): # Simple check for Claude model name
+            if "claude" in config.obj.lower():  # Simple check for Claude model name
                 _vertex_params = {
-                    "region": client_params.pop("region", None) or bm_instance.gcp_project_region, # Get region
-                    "project_id": client_params.pop("project_id", None) or bm_instance.gcp_project_id, # Get project_id
+                    "region": client_params.pop("region", None) or bm_instance.gcp_project_region,  # Get region
+                    "project_id": client_params.pop("project_id", None) or bm_instance.gcp_project_id,  # Get project_id
                     "credentials": bm_instance.gcp_credentials,
                 }
                 # Remove None values to avoid passing them to AsyncAnthropicVertex
-                _vertex_params = {k:v for k,v in _vertex_params.items() if v is not None}
+                _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
 
                 try:
                     _vertex_client = AsyncAnthropicVertex(**_vertex_params)
@@ -598,28 +613,28 @@ class LLMs(BaseModel):
                     # Ensure 'model' is passed for Anthropic client
                     anthropic_client_params.setdefault("model", config.obj)
                     client = AnthropicChatCompletionClient(**anthropic_client_params)
-                    client._client = _vertex_client # type: ignore # Replace internal client
+                    client._client = _vertex_client  # type: ignore # Replace internal client
                 except Exception as e:
                     logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                     raise
-            else: # Default to OpenAI compatible client for other Vertex models (e.g., Gemini)
+            else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini)
                  client = OpenAIChatCompletionClient(**client_params)
 
-        elif api_type == "anthropic": # Direct Anthropic API (not via Vertex)
+        elif api_type == "anthropic":  # Direct Anthropic API (not via Vertex)
             # This would use autogen_ext.models.anthropic.AnthropicChatCompletionClient directly
             # Ensure 'model' parameter is correctly passed from config.obj or client_params
             client_params.setdefault("model", config.obj)
             client = AnthropicChatCompletionClient(**client_params)
-        else: # Default to OpenAIChatCompletionClient for "openai" or unknown types
+        else:  # Default to OpenAIChatCompletionClient for "openai" or unknown types
             client = OpenAIChatCompletionClient(**client_params)
-        
-        if client is None: # Should not happen if logic is correct
+
+        if client is None:  # Should not happen if logic is correct
             raise ProcessingError(f"Could not instantiate LLM client for '{name}' with api_type '{api_type}'.")
 
         # Wrap with AutoGenWrapper
         wrapped_client = AutoGenWrapper(client=client, model_info=client_params["model_info"])
         # self.autogen_models[name] = wrapped_client # Cache the client
-        return wrapped_client # Return a new instance as per original logic (or cached if uncommented)
+        return wrapped_client  # Return a new instance as per original logic (or cached if uncommented)
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
@@ -630,24 +645,21 @@ class LLMs(BaseModel):
     def __getitem__(self, __name: str) -> AutoGenWrapper:
         """Provides item-style access to LLM clients (e.g., `llms["my_model"]`)."""
         return self.__getattr__(__name)
+
+
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from anthropic import (
     AnthropicVertex,
-    AsyncAnthropicVertex,
 )
 from autogen_core import CancellationToken, FunctionCall
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
+from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelInfo
 from autogen_core.tools import Tool, ToolSchema
-from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
-)
-from autogen_ext.models.openai._transformation.registry import (
-    _find_model_family,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -663,7 +675,6 @@ def get_bm():
 
 
 from buttermilk._core.contract import ToolOutput
-from buttermilk._core.exceptions import ProcessingError
 
 from .retry import RetryWrapper
 

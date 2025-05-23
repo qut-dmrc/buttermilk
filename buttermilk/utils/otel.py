@@ -22,12 +22,13 @@ Note:
     The `os.environ` import was missing; it's added for completeness as
     `os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]` is used.
 """
-import os # Added for os.environ usage
 import base64
+import os  # Added for os.environ usage
 
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
 # Import trace_sdk at the top level for clarity, though original was inline
-from opentelemetry.sdk import trace as trace_sdk 
+from opentelemetry.sdk import trace as trace_sdk
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core.log import logger
@@ -54,7 +55,7 @@ try:
     # The AUTH string is typically "api:<YOUR_WANDB_API_KEY>".
     auth_string = f"api:{creds['WANDB_API_KEY']}"
     auth_header_value = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
-    
+
     OTEL_EXPORTER_OTLP_HEADERS = {
         "Authorization": f"Basic {auth_header_value}", # Basic authentication header
         "project_id": creds["WANDB_PROJECT"],          # W&B Project ID for trace grouping

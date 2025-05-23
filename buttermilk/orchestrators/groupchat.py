@@ -385,7 +385,7 @@ class AutogenOrchestrator(Orchestrator):
         return publish_callback
 
     def get_agent_config(self, agent_id: str) -> AgentConfig | None:
-        '''
+        """
         Retrieves the AgentConfig for a given agent_id from the registry.
 
         Args:
@@ -393,7 +393,7 @@ class AutogenOrchestrator(Orchestrator):
 
         Returns:
             The AgentConfig of the agent if found, otherwise None.
-        '''
+        """
         agent_instance = self._agent_registry.get(agent_id)
         if agent_instance:
             # The Agent class inherits from AgentConfig.
