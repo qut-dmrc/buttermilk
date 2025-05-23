@@ -254,7 +254,7 @@ class LLMScorer(LLMAgent):
         )
 
         # Ignore messages that don't have ground truth in the input record
-        record = extracted.pop("records", [])
+        record = extracted_data.pop("records", [])
         if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
             logger.debug(f"Scorer {self.agent_name} received message from agent {source} without ground truth.")
             return
@@ -272,7 +272,7 @@ class LLMScorer(LLMAgent):
         record = record[0]
 
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=[record], inputs=extracted)
+        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=[record], inputs=extracted_data)
 
         # Construct the AgentInput for this Scorer's _process method.
         # parent_call_id links this scoring trace back to the Judge's trace.
