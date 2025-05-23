@@ -281,10 +281,7 @@ class Agent(AgentConfig, ABC):
             parent_call = weave.get_current_call()
 
         child_call: Call | None = None
-        # Define the operation for Weave tracing. Using self._process directly.
-        # `weave.op` can be used to register it globally if needed, but for local
-        # tracing, creating a call with the function reference is sufficient.
-        # op = weave.op(self._process, call_display_name=self.agent_name) # Example if op registration is desired
+        op = weave.op(self._process, call_display_name=self.agent_name)
 
         # --- Execute Core Logic ---
         try:
@@ -301,7 +298,7 @@ class Agent(AgentConfig, ABC):
             if child_call:
                 # Mark the child call as complete, regardless of success or failure.
                 # Output is passed to bm.weave.finish_call if result is not None
-                bm.weave.finish_call(child_call, output=result or None, op=self._process)
+                bm.weave.finish_call(child_call, output=result or None, op=op)
 
     async def invoke(
         self,
@@ -311,7 +308,7 @@ class Agent(AgentConfig, ABC):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentTrace:
-        """Prepares input, calls the agent's core logic, and handles callbacks.
+        """Prepare input, calls the agent's core logic, and handles callbacks.
 
         This method provides a more complete interaction pattern than `__call__`.
         It performs the following steps:
@@ -368,8 +365,8 @@ class Agent(AgentConfig, ABC):
             )
 
         except Exception as e:
-            logger.error(f"Agent {self.agent_name} error during __call__: {e!s}")
-            ErrorEvent(source=self.agent_name, content=f"Agent failed during execution: {e!s}")
+            logger.error(f"Agent {self.agent_name} error during __call__: {e}")
+            result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
             is_error = True
             trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
                 agent_info=self._cfg,
@@ -436,7 +433,7 @@ class Agent(AgentConfig, ABC):
         message_callback: Callable[[Any], Awaitable[None]],
         **kwargs: Any,
     ) -> None:
-        """Handles passively received messages from other agents or sources.
+        """Handle passively received messages from other agents or sources.
 
         This method is called when the agent receives a message that is not a
         direct request for it to perform an action (i.e., not via `invoke` or
@@ -468,9 +465,6 @@ class Agent(AgentConfig, ABC):
         if isinstance(message, Record):
             self._records.append(message)
             logger.debug(f"Agent {self.agent_name} added Record {message.record_id} to internal state.")
-            # Optionally add Record content to history if it's textual and relevant
-            # For example, if message.data is a string:
-            # await self._model_context.add_message(UserMessage(content=str(message.data), source=source))
 
         # Handle AgentOutput or AgentTrace containing a Record in its 'outputs'
         elif isinstance(message, (AgentOutput, AgentTrace)) and isinstance(getattr(message, "outputs", None), Record):

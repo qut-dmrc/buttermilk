@@ -590,6 +590,7 @@ class HostAgent(Agent):
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
+        logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
         # Rerun initialization to set up the group chat
         await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
@@ -606,10 +607,12 @@ class HostAgent(Agent):
                 # If the wait failed (timeout or error), stop the flow
                 # break
                 pass
-            if self.human_in_loop and not await self._wait_for_user(next_step):
+            if self.human_in_loop and not await self._wait_for_user(next_step_request):
                 # If user rejected or timed out, stop the flow
                 continue
                 # break
+            # Execute the current step
+            await self._execute_step(next_step_request)
 
         logger.info(f"Host '{self.agent_name}': Flow execution loop finished.")
         # Final check for any outstanding tasks if loop finished due to reasons other than explicit END step from generator

@@ -264,12 +264,12 @@ class LLMAgent(Agent):
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             model_client = bm.llms.get_autogen_chat_client(self._model)
             chat_result: CreateResult = await model_client.call_chat(
-                messages=llm_messages,
+                messages=llm_messages_to_send,
                 tools_list=self._tools_list,
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected Pydantic schema for structured output
             )
-            llm_messages.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
+            llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
             logger.debug(f"Agent {self.agent_name}: Received response from model '{self._model}'. Finish reason: {chat_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call
@@ -332,7 +332,7 @@ class LLMAgent(Agent):
         return response
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """Resets any LLM-specific state for the agent.
+        """Reset any LLM-specific state for the agent.
 
         Calls the `super().on_reset()` from the base `Agent` class to clear
         common state like records, model context, and data. Subclasses of
