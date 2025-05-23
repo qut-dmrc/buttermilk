@@ -375,7 +375,6 @@ class AssistantAgentWrapper(Agent):
         # it should be explicitly passed here to the AgentTrace constructor.
         return AgentTrace(
             agent_id=self.agent_id,  # From Buttermilk Agent
-            session_id=self.session_id,  # From Buttermilk Agent
             agent_info=self._cfg,  # Buttermilk AgentConfig
             inputs=message,  # The original AgentInput that triggered this
             outputs=output_data_dict or output_content_str,  # Primary output; prefer dict if available
