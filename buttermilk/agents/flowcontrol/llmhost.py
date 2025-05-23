@@ -7,7 +7,7 @@ from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
-from buttermilk._core import StepRequest
+from buttermilk._core import AgentTrace, StepRequest
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, MANAGER
 from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
@@ -60,7 +60,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
 
     _output_model: type[BaseModel] | None = CallOnAgent
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
-
+    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
     max_user_confirmation_time: int = Field(
         default=7200,
         description="Maximum time to wait for agent responses in seconds",
@@ -100,8 +100,10 @@ class LLMHostAgent(LLMAgent, HostAgent):
             content="Hi! What would you like to do?",
         )
         while True:
-            # do nothing; we'll handle steps through the _listen method
-            await asyncio.sleep(5)
+            # wait for the _listen method to add a proposed step to the queue
+            # This is a blocking call, so it will wait until a message is received
+            task = await self._proposed_step.get()
+            yield task
             continue
 
     async def _listen(
@@ -130,18 +132,20 @@ class LLMHostAgent(LLMAgent, HostAgent):
             if message.content and str(message.content).startswith(COMMAND_SYMBOL):
                 return
 
-            # With user feedback, call the LLM to get the next step
-            result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
+            # Call the LLM to get the next step. Include the user feedback and participants in the input.
+            result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "prompt": str(message.content), "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
 
             if result:
                 # If the result is not None, we have a response from the LLM
                 # Check if the result is a CallOnAgent object -- and convert it to StepRequest
-                if isinstance(result, CallOnAgent):
+                if isinstance(result, AgentTrace) and isinstance(result.outputs, CallOnAgent):
                     # Create a new message for the agent
-                    choice = StepRequest(role=result.role, inputs={"prompt": result.prompt})
-                    logger.info(f"Host {self.agent_name} calling on agent: {result.role} with prompt: {result.prompt}")
-                    # Send the message to the agent
-                    await self.callback_to_groupchat(choice)
+                    choice = StepRequest(role=result.outputs.role, inputs={"prompt": result.outputs.prompt})
+                    logger.info(f"Host {self.agent_name} calling on agent: {result.outputs.role} with prompt: {result.outputs.prompt}")
+                    # add to our queue
+                    await self._proposed_step.put(choice)
+                elif isinstance(result, StepRequest):
+                    await self._proposed_step.put(result)
                 else:
-                    # If the result is not a CallOnAgent object, we can just send it to the group chat
+                    # If the result is not a step request of some kind, we can just send it to the group chat
                     await self.callback_to_groupchat(result)

@@ -23,8 +23,8 @@ from buttermilk._core.contract import (
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
 )
-from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
+from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import CreateResult, ModelOutput  # LLM client wrapper and results
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record  # Data record type
 from buttermilk.utils._tools import create_tool_functions  # Tool handling utility
@@ -58,7 +58,6 @@ class LLMAgent(Agent):
         fail_on_unfilled_parameters: If True, raise error if template vars aren't filled.
         _tools_list: List of tools available to the LLM.
         _model: Name of the LLM model to use.
-        _model_client: Instance of the LLM client wrapper (AutoGenWrapper).
         _output_model: Optional Pydantic model to validate/parse the LLM output against.
         _json_parser: Utility for parsing JSON strings.
 
@@ -72,25 +71,17 @@ class LLMAgent(Agent):
     _model: str = PrivateAttr(default="")  # Populated by init_model validator
     # name_components is inherited from Agent, used for generating agent ID/name.
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
-    _model_client: AutoGenWrapper = PrivateAttr(default=None)  # Populated by init_model validator
     # Subclasses should override this if they expect specific structured output
     _output_model: type[BaseModel] | None = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
-        """Initializes the LLM model client based on agent parameters."""
+        """Stores the LLM model client name from agent parameters."""
         # Retrieves model name from 'parameters' section of agent config.
         self._model = self.parameters.get("model")
         if not self._model:
             # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
             raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
-
-        logger.debug(f"Agent {self.agent_name}: Initializing model client for '{self._model}'.")
-        try:
-            # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-            self._model_client = bm.llms.get_autogen_chat_client(self._model)
-        except Exception as e:
-            raise FatalError(f"Agent {self.agent_id}: Failed to initialize model client for '{self._model}': {e}") from e
 
         return self
 
@@ -217,7 +208,9 @@ class LLMAgent(Agent):
         # 2. Call the LLM
         logger.debug(f"Agent {self.agent_name}: Sending {len(llm_messages)} messages to model '{self._model}'.")
         try:
-            chat_result: CreateResult = await self._model_client.call_chat(
+            # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
+            model_client = bm.llms.get_autogen_chat_client(self._model)
+            chat_result: CreateResult = await model_client.call_chat(
                 messages=llm_messages,
                 tools_list=self._tools_list,
                 cancellation_token=cancellation_token,

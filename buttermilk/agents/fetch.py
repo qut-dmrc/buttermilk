@@ -15,6 +15,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ErrorEvent,
     GroupchatMessageTypes,
+    ManagerMessage,
 )
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
@@ -94,16 +95,11 @@ class FetchAgent(FetchRecord, Agent):
     ) -> None:
         """Entry point when running this as an agent.
 
-        If running as an agent, watch for URLs or record ids and inject them
-        into the chat.
+        If running as an agent, watch for URLs or record ids from the
+        user and inject them into the chat.
         """
         result = None
-        if isinstance(message, AgentInput):
-            uri = message.inputs.get("uri")
-            record_id = message.inputs.get("record_id")
-            if uri or record_id:
-                result = await self.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
-        elif isinstance(message, GroupchatMessageTypes):
+        if isinstance(message, ManagerMessage):
             if message.content:
                 # Check if the message is a command
                 match = self._pat.search(message.content)
