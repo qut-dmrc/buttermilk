@@ -69,8 +69,13 @@ class CLIUserAgent(UIAgent):
     # Background task for polling user input.
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
 
-    async def callback_to_ui(self, *args, **kwargs):
-        return self._console.print(*args, **kwargs)
+    async def callback_to_ui(self, message, source: str = "system", **kwargs):
+        if msg_markdown := self._fmt_msg(message, source=source):
+            # If formatting is successful, print the message to the console.
+            self._console.print(msg_markdown)
+        else:
+            # Fallback if formatting fails or returns None
+            self._console.print(Markdown(f"## Unable to format message:\n{pretty_repr(message)}"))
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
@@ -233,8 +238,7 @@ class CLIUserAgent(UIAgent):
         """Displays messages received from other agents on the console."""
         logger.debug(f"{self.agent_name} received message from {source} via _listen.")
         # Format and display the message using the helper function.
-        if msg_markdown := self._fmt_msg(message, source=source):
-            self._console.print(msg_markdown)
+        self.callback_to_ui(message)
 
     async def _handle_events(
         self,
@@ -398,3 +402,12 @@ class CLIUserAgent(UIAgent):
             # Note: The input task will be restarted by `initialize` if called again after reset.
             # Call base class reset if needed
             # await super().on_reset(cancellation_token)
+
+    def make_callback(self) -> Callable[..., Awaitable[None]]:
+        """Create a callback function for the UI agent.
+
+        Returns:
+            A callable that can be used as a callback function
+
+        """
+        return self.callback_to_ui

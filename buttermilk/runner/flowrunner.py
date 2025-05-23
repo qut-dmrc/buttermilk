@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import logging
 import random
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 import shortuuid
@@ -368,4 +368,69 @@ class FlowRunner(BaseModel):
             logger.info(f"Limited to {max_records} record IDs, returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
         else:
             logger.info(f"Returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
+
+        random.shuffle(job_definitions)
+
+        try:
+            # Enqueue the batch for processing
+            job_queue = JobQueueClient()
+
+            for request in job_definitions:
+                job_queue.publish_job(request)
+
+        except Exception as e:
+            msg = f"Failed to publish job to queue: {e}"
+            raise FatalError(msg) from e
+
         return job_definitions
+
+    async def run_batch_job(self, callback_to_ui: Callable, max_jobs: int = 1, wait_for_completion: bool = True) -> None:
+        """Pull and run jobs from the queue, ensuring fresh state for each job.
+        
+        Args:
+            max_jobs: Maximum number of jobs to process in this batch run
+            
+        Raises:
+            FatalError: If no run requests are found in the queue
+            Exception: If there's an error running a job
+
+        """
+        try:
+            worker = JobQueueClient(
+                max_concurrent_jobs=1,  # Process one job at a time to maintain isolation
+            )
+
+            jobs_processed = 0
+
+            while jobs_processed < max_jobs:
+                # Pull a job from the queue
+                run_request = await worker.pull_single_task()
+                if not run_request:
+                    if jobs_processed == 0:
+                        # Only raise an error if we didn't process any jobs
+                        raise FatalError("No run request found in the queue.")
+                    break  # No more jobs to process
+
+                run_request.callback_to_ui = callback_to_ui
+
+                logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
+                try:
+                    await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
+                    if wait_for_completion:
+                        logger.info(f"Successfully completed job {run_request.job_id}")
+                    else:
+                        logger.info(f"Job {run_request.job_id} started in the background")
+                except Exception as job_error:
+                    logger.error(f"Error running job {run_request.job_id}: {job_error}")
+                    # Continue processing other jobs even if one fails
+
+                jobs_processed += 1
+
+            logger.info(f"Batch processing complete. Processed {jobs_processed} jobs.")
+
+        except FatalError:
+            # Re-raise FatalError to be handled by the caller
+            raise
+        except Exception as e:
+            logger.error(f"Fatal error during batch processing: {e}")
+            raise

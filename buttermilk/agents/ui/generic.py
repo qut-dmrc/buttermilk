@@ -145,3 +145,15 @@ class UIAgent(Agent):
                 await self._input_task
             except asyncio.CancelledError:
                 pass
+
+    def make_callback(self) -> Callable[..., Awaitable[None]]:
+        """Create a callback function for the UI agent.
+        
+        This method is a placeholder and should be implemented by concrete UI classes
+        to provide the actual callback logic.
+
+        Returns:
+            A callable that can be used as a callback function
+
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement make_callback")

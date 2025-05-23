@@ -14,7 +14,6 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus, BatchMetadata
-from buttermilk._core.log import logger
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.runner.flowrunner import FlowRunner
