@@ -365,7 +365,7 @@ class Agent(AgentConfig, ABC):
             )
 
         except Exception as e:
-            logger.error(f"Agent {self.agent_name} error during __call__: {e}")
+            logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
             is_error = True
             trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,

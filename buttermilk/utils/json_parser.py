@@ -119,12 +119,10 @@ class ChatParser(BaseModel):
 
         except JSONDecodeError as e:
             raise ProcessingError from e
-
-        if not isinstance(output, dict):
+        
+        if not isinstance(parsed_output, dict):
             logger.warning(f"Unable to decode JSON in result: {text}")
-            output = dict(response=output)
-
-        output = convert_dict_types(output)
+            parsed_output = dict(response=text)
 
         # Recursively convert stringified bools/numbers to actual types
         return convert_dict_types(parsed_output)
