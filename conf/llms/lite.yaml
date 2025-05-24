@@ -10,12 +10,10 @@ general:
   - o4mini
 
 judgers:
-  - gemini2flashlite
+  - gemini25flash
   - o4mini
-  
 
 synthesisers:
-  - gemini2flashlite
+  - gemini25flash
   - o4mini
-  - gemini2flash
 

@@ -10,8 +10,9 @@ This module provides functionalities for:
   injecting context and records into specified placeholders (`_parse_prompty`,
   `make_messages`).
 """
+from collections.abc import Mapping, Sequence  # For type hinting
 from pathlib import Path
-from typing import Any, Mapping, Sequence  # For type hinting
+from typing import Any
 
 import jmespath  # For JMESPath queries, used in _resolve_mappings
 import regex as re  # For regular expression operations, used in _parse_prompty
@@ -25,7 +26,7 @@ from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.defaults import TEMPLATES_PATH  # Default path for templates
-from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError  # Custom exceptions
 from buttermilk._core.types import Record  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
 
@@ -46,9 +47,10 @@ class KeyValueCollector(BaseModel):
         _data (dict[str, Any | list[Any]]): A private dictionary storing the
             collected key-value pairs. Values are often lists to accumulate multiple
             items under the same key.
+
     """
 
-    _data: dict[str, list[Any]] = PrivateAttr(default_factory=dict) # Values are always lists
+    _data: dict[str, list[Any]] = PrivateAttr(default_factory=dict)  # Values are always lists
 
     def update(self, incoming: dict[str, Any]) -> None:
         """Updates the collector with key-value pairs from an incoming dictionary.
@@ -57,6 +59,7 @@ class KeyValueCollector(BaseModel):
 
         Args:
             incoming (dict[str, Any]): A dictionary of items to add.
+
         """
         for key, value in incoming.items():
             self.add(key, value)
@@ -71,6 +74,7 @@ class KeyValueCollector(BaseModel):
         Args:
             key (str): The key under which to store the value.
             value (Any): The value to add. Can be a single item or a list of items.
+
         """
         # Ensure that value is treated as a list of items to be added
         items_to_add = value if isinstance(value, list) and not isinstance(value, str) else [value]
@@ -78,7 +82,7 @@ class KeyValueCollector(BaseModel):
         if key in self._data:
             self._data[key].extend(items_to_add)
         else:
-            self._data[key] = items_to_add # Initialize with the list of items
+            self._data[key] = items_to_add  # Initialize with the list of items
 
     def set(self, key: str, value: Any) -> None:
         """Sets or replaces the value for a given key.
@@ -90,20 +94,22 @@ class KeyValueCollector(BaseModel):
         Args:
             key (str): The key whose value is to be set.
             value (Any): The new value for the key.
+
         """
         if value is not None and value not in ([], {}, "None"):
-            self._data[key] = [value] # Store as a list with one item
+            self._data[key] = [value]  # Store as a list with one item
 
-    def get_dict(self) -> dict[str, list[Any]]: # Return type updated
+    def get_dict(self) -> dict[str, list[Any]]:  # Return type updated
         """Returns a copy of the internal data dictionary.
 
         Returns:
             dict[str, list[Any]]: A dictionary where keys are strings and values
             are lists of collected items.
+
         """
         return dict(self._data)
 
-    def get(self, key: str, default: Any = None) -> list[Any] | Any: # Return type updated
+    def get(self, key: str, default: Any = None) -> list[Any] | Any:  # Return type updated
         """Retrieves the list of values for a key, or a default if the key is not found.
 
         Args:
@@ -114,10 +120,11 @@ class KeyValueCollector(BaseModel):
         Returns:
             list[Any] | Any: The list of values associated with the key, or the
             `default` value if the key does not exist.
+
         """
         return self._data.get(key, default)
 
-    def __getitem__(self, key: str) -> list[Any]: # Return type updated
+    def __getitem__(self, key: str) -> list[Any]:  # Return type updated
         """Allows dictionary-style access to the collected values for a key.
 
         Args:
@@ -128,6 +135,7 @@ class KeyValueCollector(BaseModel):
 
         Raises:
             KeyError: If the key is not found.
+
         """
         return self._data[key]
 
@@ -138,6 +146,7 @@ class KeyValueCollector(BaseModel):
 
         Args:
             keys (list[str]): A list of key names to initialize.
+
         """
         for key in keys:
             self._data[key] = []
@@ -172,33 +181,34 @@ class KeyValueCollector(BaseModel):
             dict[str, Any]: A dictionary where keys are the target variable names
             from `mappings` and values are the results of their resolved JMESPath
             queries against `data`. Empty values or containers are removed.
+
         """
         logger.warning("_resolve_mappings is under review and might be deprecated. Current caller should be checked.")
         resolved: dict[str, Any] = {}
 
-        data_dict = data.model_dump() if hasattr(data, "model_dump") else dict(data) # Ensure it's a dict
+        data_dict = data.model_dump() if hasattr(data, "model_dump") else dict(data)  # Ensure it's a dict
 
-        if isinstance(mappings, str): # Base case for recursion: a single JMESPath string
+        if isinstance(mappings, str):  # Base case for recursion: a single JMESPath string
             # This path seems unlikely given the top-level 'mappings' type hint is dict.
             # It implies this function might be called recursively with a string mapping.
             # However, the loop below processes dict items. This branch needs clarification.
-            return self._resolve_simple_path(mappings, data_dict) or {} # Ensure dict return
+            return self._resolve_simple_path(mappings, data_dict) or {}  # Ensure dict return
 
         for target_key, source_spec in mappings.items():
-            if isinstance(source_spec, Sequence) and not isinstance(source_spec, str): # List of paths for aggregation
+            if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):  # List of paths for aggregation
                 aggregated_results = []
                 for src_path in source_spec:
                     # Recursive call for each path in the list
-                    result = self._resolve_mappings(src_path, data_dict) # type: ignore # src_path is str, expects dict
-                    if result: # Append if result is not empty/None
+                    result = self._resolve_mappings(src_path, data_dict)  # type: ignore # src_path is str, expects dict
+                    if result:  # Append if result is not empty/None
                         if isinstance(result, list):
                             aggregated_results.extend(result)
                         else:
                             aggregated_results.append(result)
                 if aggregated_results: resolved[target_key] = aggregated_results
-            elif isinstance(source_spec, Mapping): # Nested mapping dictionary
-                resolved[target_key] = self._resolve_mappings(source_spec, data_dict) # type: ignore # source_spec is Mapping
-            else: # Simple JMESPath string
+            elif isinstance(source_spec, Mapping):  # Nested mapping dictionary
+                resolved[target_key] = self._resolve_mappings(source_spec, data_dict)  # type: ignore # source_spec is Mapping
+            else:  # Simple JMESPath string
                 resolved_value = self._resolve_simple_path(str(source_spec), data_dict)
                 if resolved_value is not None: resolved[target_key] = resolved_value
 
@@ -215,20 +225,21 @@ class KeyValueCollector(BaseModel):
         Returns:
             Any: The result of the JMESPath search, or `None` if the path is empty,
                  invalid, or yields no result.
+
         """
         if not path:
             return None
         try:
             return jmespath.search(path, data)
-        except jmespath.exceptions.JMESPathError as e: # Catch specific JMESPath errors
+        except jmespath.exceptions.JMESPathError as e:  # Catch specific JMESPath errors
             logger.warning(f"JMESPath search failed for path '{path}': {e!s}. Returning None.")
             return None
-        except Exception as e: # Catch any other unexpected errors
+        except Exception as e:  # Catch any other unexpected errors
             logger.error(f"Unexpected error during JMESPath search for path '{path}': {e!s}", exc_info=True)
             return None
 
 
-def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2") -> list[tuple[str, str]]: # Added default extension
+def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2") -> list[tuple[str, str]]:  # Added default extension
     """Lists template files and their content from the configured `TEMPLATES_PATH`.
 
     Args:
@@ -243,6 +254,7 @@ def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2
         list[tuple[str, str]]: A list of tuples, where each tuple contains:
             - The template name (filename without the .jinja2 extension).
             - The content of the template file as a string.
+
     """
     # Ensure extension starts with a dot, or add it if only chars are provided.
     effective_extension = extension
@@ -251,7 +263,7 @@ def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2
 
     templates_with_content = list_files_with_content(
         TEMPLATES_PATH,
-        filename_pattern=pattern, # Assuming list_files_with_content takes filename_pattern
+        filename_pattern=pattern,  # Assuming list_files_with_content takes filename_pattern
         parent_dir=parent,
         extension=effective_extension,
     )
@@ -270,14 +282,15 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
 
     Returns:
         list[str]: A list of template names (filenames without the extension).
+
     """
     return [
-        file_path.stem # .stem gives filename without final suffix
+        file_path.stem  # .stem gives filename without final suffix
         for file_path in list_files(
             TEMPLATES_PATH,
-            filename_pattern=pattern, # Assuming list_files takes filename_pattern
+            filename_pattern=pattern,  # Assuming list_files takes filename_pattern
             parent_dir=parent,
-            extension=extension, # list_files might expect with or without dot
+            extension=extension,  # list_files might expect with or without dot
         )
     ]
 
@@ -295,20 +308,21 @@ def _parse_prompty(string_template: str) -> str:
     Returns:
         str: The main content of the Prompty template (after the frontmatter),
              or the original string if no frontmatter is found.
+
     """
     # Regex to find frontmatter (e.g., --- \n frontmatter \n --- \n content)
     # It captures the frontmatter in group 1 and the main content in group 2.
     pattern = r"^-{3,}\s*?\n(.*?)^-{3,}\s*?\n(.*)"
     match = re.search(pattern, string_template, re.DOTALL | re.MULTILINE)
     if not match:
-        return string_template # No frontmatter found, return original string
-    return match.group(2).strip() # Return the content part, stripped
+        return string_template  # No frontmatter found, return original string
+    return match.group(2).strip()  # Return the content part, stripped
 
 
 def load_template(
-    template: str, # Name of the template file (without .jinja2 extension)
-    parameters: dict[str, Any], # Parameters for template rendering (trusted)
-    untrusted_inputs: dict[str, Any] | None = None, # User inputs (less trusted)
+    template: str,  # Name of the template file (without .jinja2 extension)
+    parameters: dict[str, Any],  # Parameters for template rendering (trusted)
+    untrusted_inputs: dict[str, Any] | None = None,  # User inputs (less trusted)
 ) -> tuple[str, set[str]]:
     """Renders a Jinja2 template with hierarchical includes and security considerations.
 
@@ -340,6 +354,7 @@ def load_template(
 
     Raises:
         FatalError: If the specified template file cannot be loaded.
+
     """
     effective_untrusted_inputs = untrusted_inputs or {}
 
@@ -353,6 +368,7 @@ def load_template(
         """Custom Undefined type to keep undefined variables in the template
         and collect their names.
         """
+
         def __str__(self) -> str:
             # Add the undefined variable name to our list
             collected_undefined_vars.append(self._undefined_name)
@@ -362,10 +378,10 @@ def load_template(
     # Create a sandboxed Jinja2 environment
     sandboxed_env = sandbox.SandboxedEnvironment(
         loader=file_system_loader,
-        trim_blocks=True, # Removes first newline after a block
-        lstrip_blocks=True, # Strips leading whitespace from line to block
-        undefined=KeepUndefinedAndCollect, # Custom handler for undefined variables
-        keep_trailing_newline=False, # Removes newline at the end of the template output
+        trim_blocks=True,  # Removes first newline after a block
+        lstrip_blocks=True,  # Strips leading whitespace from line to block
+        undefined=KeepUndefinedAndCollect,  # Custom handler for undefined variables
+        keep_trailing_newline=False,  # Removes newline at the end of the template output
     )
 
     # Custom filter to strip all leading/trailing whitespace from a string
@@ -373,14 +389,14 @@ def load_template(
         """Jinja filter to strip whitespace if input is a string."""
         if isinstance(s, str):
             return s.strip()
-        return s # Return non-strings as is
+        return s  # Return non-strings as is
 
     sandboxed_env.filters["strip_all"] = strip_all_whitespace
 
     template_filename = f"{template}.jinja2"
     try:
         jinja_template = sandboxed_env.get_template(template_filename)
-    except Exception as err: # Catch Jinja2 specific TemplateNotFound or general errors
+    except Exception as err:  # Catch Jinja2 specific TemplateNotFound or general errors
         logger.error(f"Failed to load Jinja2 template '{template_filename}': {err!s}", exc_info=True)
         raise FatalError(f"Template '{template}' (file: '{template_filename}') could not be loaded.") from err
 
@@ -394,10 +410,10 @@ def load_template(
 
 
 def make_messages(
-    local_template: str, # Rendered template string, potentially in Prompty format
-    context: list[LLMMessage] | None = None, # Optional conversation history
-    records: list[Record] | None = None,   # Optional list of records
-    fail_on_missing_placeholders: bool = False
+    local_template: str,  # Rendered template string, potentially in Prompty format
+    context: list[LLMMessage] | None = None,  # Optional conversation history
+    records: list[Record] | None = None,  # Optional list of records
+    fail_on_missing_placeholders: bool = False,
 ) -> list[LLMMessage]:
     """Constructs a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
@@ -438,15 +454,16 @@ def make_messages(
             (e.g., due to issues in `_parse_prompty`).
         ProcessingError: If `fail_on_missing_placeholders` is True and an unknown
             placeholder is encountered.
+
     """
     output_messages: list[LLMMessage] = []
-    active_context = context or [] # Ensure list
-    active_records = records or [] # Ensure list
+    active_context = context or []  # Ensure list
+    active_records = records or []  # Ensure list
 
     try:
         # Parse main content from Prompty string (strips frontmatter)
         prompty_content_str = _parse_prompty(local_template)
-    except Exception as e: # Broad catch if _parse_prompty itself fails
+    except Exception as e:  # Broad catch if _parse_prompty itself fails
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
         logger.error(err_msg, exc_info=True)
         raise ValueError(err_msg) from e
@@ -456,7 +473,7 @@ def make_messages(
 
     parsed_chat_messages = parse_chat(
         prompty_content_str,
-        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"] # Allowed roles in Prompty
+        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"],  # Allowed roles in Prompty
     )
 
     # Convert parsed message dictionaries to LLMMessage objects
@@ -467,28 +484,24 @@ def make_messages(
         # Normalize content for placeholder matching: lowercase, alphanumeric only
         normalized_placeholder_key = re.sub(r"[^\w\d_]+", "", content_str).lower()
 
-        if not content_str and role_lower != "placeholder": # Skip empty non-placeholder messages
+        if not content_str and role_lower != "placeholder":  # Skip empty non-placeholder messages
             logger.debug(f"Skipping message with empty content for role '{role_lower}'.")
             continue
 
         if role_lower in ("developer", "system"):
             output_messages.append(SystemMessage(content=content_str))
         elif role_lower in ("user", "human"):
-            output_messages.append(UserMessage(content=content_str, source="template_user")) # Add source
+            output_messages.append(UserMessage(content=content_str, source="template_user"))  # Add source
         elif role_lower == "assistant":
-            output_messages.append(AssistantMessage(content=content_str, source="template_assistant")) # Add source
+            output_messages.append(AssistantMessage(content=content_str, source="template_assistant"))  # Add source
         elif role_lower == "placeholder":
             if normalized_placeholder_key == "context":
                 output_messages.extend(active_context)
             elif normalized_placeholder_key == "records":
                 output_messages.extend([rec.as_message() for rec in active_records if isinstance(rec, Record)])
-            else: # Unknown placeholder
-                err_msg = f"Unknown placeholder '{{{{{content_str}}}}}' (normalized: '{normalized_placeholder_key}') in Prompty template."
-                if fail_on_missing_placeholders:
-                    logger.error(err_msg)
-                    raise ProcessingError(err_msg)
-                logger.warning(f"{err_msg} Placeholder will be ignored.")
-        else: # Unrecognized role
+            else:  # empty placeholder
+                pass
+        else:  # Unrecognized role
             logger.warning(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message. Content: '{content_str[:100]}...' Message ignored.")
 
     return output_messages

@@ -1,0 +1,234 @@
+// Main application SCSS file
+
+// 1. Import Vapor variables from node_modules
+@import 'bootswatch/dist/vapor/variables';
+
+// 2. Import Bootstrap core SCSS (ensure bootstrap is also installed: npm install bootstrap)
+@import 'bootstrap/scss/bootstrap'; 
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+// 3. Import Vapor theme overrides from node_modules
+@import 'bootswatch/dist/vapor/bootswatch'; 
+
+// 4. Import custom styles
+@import './custom.scss';
+
+// Add any additional global styles needed specifically for the Svelte app below
+// For example:
+body {
+  // Ensure body takes full height if needed for layout
+  min-height: 100vh;
+}
+
+/* Common styles for all terminal themes */
+.terminal-container {
+  display: flex;
+  width: 100%;
+  position: relative;
+  font-family: monospace;
+  border: 1px solid #333;
+}
+
+.with-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 100%;
+}
+
+.header-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #444;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.connected .status-indicator {
+  background-color: #00aa00;
+}
+
+.disconnected .status-indicator {
+  background-color: #aa0000;
+}
+
+.console {
+  padding: 10px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.input-area {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-top: 1px solid #444;
+}
+
+.theme-select {
+  background-color: #333;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 8px;
+  font-size: 0.9em;
+}
+
+ /* === Cyberpunk Theme ==== */
+:global(body.theme-cyberpunk) .terminal-container {
+  display: flex;
+  flex-direction: column;
+  background-color: #0a001a; /* Deep purple/blue background */
+  color: #ff00ff; /* Magenta text */
+  font-family: 'Orbitron', 'Consolas', monospace; /* Futuristic font */
+  border-radius: 0;
+  border: 2px solid #00ffff; /* Cyan border */
+  box-shadow: 0 0 15px #00ffff, inset 0 0 10px rgba(0, 255, 255, 0.3); /* Neon glow */
+  padding: 2px;
+  overflow-y: auto;
+  font-size: 0.8em;
+}
+
+:global(body.theme-cyberpunk) .header-controls {
+  padding: 8px 12px;
+  background-color: #15002a;
+  color: #00ffff;
+  border-bottom: 1px solid #ff00ff;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+:global(body.theme-cyberpunk) .console {
+  padding: 8px;
+  overflow-y: auto;
+  flex-grow: 1;
+  background: linear-gradient(rgba(10, 0, 26, 0.9), rgba(30, 0, 50, 0.8));
+}
+
+
+:global(body.theme-cyberpunk) .console::-webkit-scrollbar {
+  width: 6px;
+}
+
+:global(body.theme-cyberpunk) .console::-webkit-scrollbar-track {
+  background: #15002a;
+}
+
+:global(body.theme-cyberpunk) .console::-webkit-scrollbar-thumb {
+  background: #ff00ff;
+  border-radius: 0;
+}
+
+:global(body.theme-cyberpunk) .input-area-terminal {
+  display: flex;
+  align-items: center;
+  background-color: #15002a;
+  padding: 5px 10px;
+  border-top: 1px solid #ff00ff;
+}
+
+:global(body.theme-cyberpunk) .terminal-input {
+  flex-grow: 1;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid #00ffff;
+  color: #00ffff;
+  outline: none;
+  font-family: 'Orbitron', 'Consolas', monospace;
+  font-size: 0.95em;
+  padding: 5px;
+}
+
+:global(body.theme-cyberpunk) .terminal-button {
+  background: #15002a;
+  border: 1px solid #00ffff;
+  color: #00ffff;
+  font-family: 'Orbitron', 'Consolas', monospace;
+  font-size: 0.9em;
+  cursor: pointer;
+  padding: 5px 10px;
+  margin: 0 3px;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+:global(body.theme-cyberpunk) .terminal-button:hover:not(:disabled) {
+  color: #000000;
+  background-color: #00ffff;
+  text-shadow: 0 0 5px #00ffff;
+  box-shadow: 0 0 10px #00ffff;
+}
+
+:global(body.theme-cyberpunk) .terminal-button:disabled {
+  color: #333333;
+  border-color: #333333;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:global(body.theme-cyberpunk) .submit-button:hover:not(:disabled) { 
+  background-color: #00ffaa; 
+  border-color: #00ffaa;
+  box-shadow: 0 0 10px #00ffaa;
+}
+
+:global(body.theme-cyberpunk) .confirm-button:hover:not(:disabled) { 
+  background-color: #aaff00; 
+  border-color: #aaff00;
+  box-shadow: 0 0 10px #aaff00;
+}
+
+:global(body.theme-cyberpunk) .interrupt-button:hover:not(:disabled) { 
+  background-color: #ff0066; 
+  border-color: #ff0066;
+  box-shadow: 0 0 10px #ff0066;
+}
+
+:global(body.theme-cyberpunk) .connection-status {
+  display: flex;
+  align-items: center;
+}
+
+:global(body.theme-cyberpunk) .status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+:global(body.theme-cyberpunk) .connected .status-indicator {
+  background-color: #00ffaa;
+  box-shadow: 0 0 10px #00ffaa;
+}
+
+:global(body.theme-cyberpunk) .disconnected .status-indicator {
+  background-color: #ff0066;
+  box-shadow: 0 0 10px #ff0066;
+}
+
+:global(body.theme-cyberpunk) .theme-select {
+  background-color: #15002a;
+  color: #00ffff;
+  border: 1px solid #ff00ff;
+  font-family: 'Orbitron', 'Consolas', monospace;
+}

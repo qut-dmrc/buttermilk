@@ -79,7 +79,9 @@ class FlowEvent(BaseModel):
     @field_validator("agent_info", mode="before")
     @classmethod
     def _validate_agent_info(cls, value) -> AgentConfig | None:
-        if not value:
+        if not isinstance(value, AgentConfig):
+            # if agent_config := get_agent_config():
+            #     return agent_config
             # Attempt to get the agent info from the current session context.
             # get_agent_info = agent_id_var.get()
             # if get_agent_info:

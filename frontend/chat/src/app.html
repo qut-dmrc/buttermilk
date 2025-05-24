@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+	<svelte:head>
+	<title>automod.cc</title>
+	<meta name="description" content="This is where the description goes for SEO" />
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script src="https://unpkg.com/htmx.org@1.9.12"></script> <!-- Keeping htmx for now -->
+		<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script> <!-- Keeping htmx ws extension -->
+
+		<!-- Added from demo/templates/base.html -->
+		<script src="https://kit.fontawesome.com/170e913b37.js" crossorigin="anonymous"></script>
+		<style>
+			@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@800&family=Roboto:wght@400;500&family=Roboto+Mono:ital,wght@1,500&display=swap');
+		</style>
+		<!-- Google tag (gtag.js) -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-E406180709"></script>
+		<script>
+			window.dataLayer = window.dataLayer || [];
+			function gtag(){dataLayer.push(arguments);}
+			gtag('js', new Date());
+			gtag('config', 'G-E406180709');
+		</script>
+		<!-- End Added -->
+
+		%sveltekit.head%
+	</head>
+	</svelte:head>
+
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

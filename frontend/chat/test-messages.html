@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Message Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    .button-container {
+      margin: 20px 0;
+    }
+    button {
+      padding: 8px 16px;
+      margin-right: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+      overflow: auto;
+      max-height: 300px;
+    }
+    .log-container {
+      margin-top: 20px;
+    }
+    .log-entry {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-left: 4px solid #007bff;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebSocket Message Test</h1>
+  
+  <div class="button-container">
+    <button id="testJudge">Test Judge Message</button>
+    <button id="testAssessment">Test Assessment Message</button>
+    <button id="clearLogs">Clear Logs</button>
+  </div>
+  
+  <div class="log-container">
+    <h2>Test Results:</h2>
+    <div id="logs"></div>
+  </div>
+
+  <script>
+    // Sample Judge message (similar to the problematic one)
+    const judgeMessage = {
+      "content": {
+        "type": "chat_message",
+        "preview": "**Conclusion:** The article does not violate the guidelines on reporting about transgender individuals.\n**Violates Policy:** No\n**uncertainty:** High\n**Reasoning:**\n\t- Unnecessary Identification: The piece identifies Kerri Colby and other Drag Race contestants as transgender only where it's essential to understanding the context of the debate over gender-affirming care for minors.\n\n\t- Incorrect Names/Pronouns: All individuals are referred to by their chosen names and pronouns, with no deadnaming or misgendering.\n\n\t- Inaccurate Phrases/Descriptors: The language—'gender-affirming care,' 'puberty blockers,' 'hormone replacement therapy'—is respectful and accurate, with no outdated or delegitimizing terms.\n\n\t- Politicised Phrases: While the article quotes sources using political framing (e.g. 'right-wing talking points'), it does not itself employ disallowed buzzwords like 'gender ideology' or 'social contagion.' It neutrally reports those quotes to illustrate the debate.\n\n\t- Harmful Narratives: The story reports both the initial misinformation and corrective viewpoints; it does not itself spread myths or harmful stereotypes about transgender people.\n\n\t- Assumes Gender Identity: The article labels only those whose gender identities are publicly confirmed, and it treats all other details neutrally without assumption.\n\n\t- Inappropriate Medicalisation: Medical details are provided solely to correct misconceptions about what procedures minors actually receive. The focus remains on policy and personal perspectives, not sensationalized body details.\n\n\t- Systemic Framing: The piece explicitly situates Colby's remarks and the backlash within broader political and legislative pressures on trans youth, acknowledging systemic challenges rather than isolating the incident.    ",
+        "outputs": {
+          "conclusion": "The article does not violate the guidelines on reporting about transgender individuals.",
+          "reasons": [
+            "Unnecessary Identification: The piece identifies Kerri Colby and other Drag Race contestants as transgender only where it's essential to understanding the context of the debate over gender-affirming care for minors.",
+            "Incorrect Names/Pronouns: All individuals are referred to by their chosen names and pronouns, with no deadnaming or misgendering.",
+            "Inaccurate Phrases/Descriptors: The language—'gender-affirming care,' 'puberty blockers,' 'hormone replacement therapy'—is respectful and accurate, with no outdated or delegitimizing terms.",
+            "Politicised Phrases: While the article quotes sources using political framing (e.g. 'right-wing talking points'), it does not itself employ disallowed buzzwords like 'gender ideology' or 'social contagion.' It neutrally reports those quotes to illustrate the debate.",
+            "Harmful Narratives: The story reports both the initial misinformation and corrective viewpoints; it does not itself spread myths or harmful stereotypes about transgender people.",
+            "Assumes Gender Identity: The article labels only those whose gender identities are publicly confirmed, and it treats all other details neutrally without assumption.",
+            "Inappropriate Medicalisation: Medical details are provided solely to correct misconceptions about what procedures minors actually receive. The focus remains on policy and personal perspectives, not sensationalized body details.",
+            "Systemic Framing: The piece explicitly situates Colby's remarks and the backlash within broader political and legislative pressures on trans youth, acknowledging systemic challenges rather than isolating the incident.    "
+          ],
+          "prediction": false,
+          "uncertainty": "high"
+        },
+        "timestamp": "2025-05-07T16:44:19.824413",
+      },
+      "type": "chat_message"
+    };
+
+    // Sample Assessment/Scorer message
+    const assessmentMessage = {
+      "content": {
+        "type": "chat_message",
+        "preview": "**Answer**: nD7QoCtnf9sMDeP8sHEgfa\t\t**Score**: 1.00\n\n\t- **✔️**: The analysis correctly identifies the key aspects of the article's compliance with guidelines, including respectful language, accurate representation of gender-affirming care, and avoidance of harmful stereotypes.\n\n\t- **✔️**: The explanation effectively highlights the article's neutral stance and focus on policy and personal perspectives rather than sensationalizing medical details or perpetuating misinformation.\n\n\t- **✔️**: The assessment accurately notes that the article addresses systemic challenges, specifically the political context surrounding the debate, which contributes to its overall responsible reporting.",
+        "outputs": {
+          "assessments": [
+            {"correct": true, "feedback": "The analysis correctly identifies the key aspects of the article's compliance with guidelines, including respectful language, accurate representation of gender-affirming care, and avoidance of harmful stereotypes."},
+            {"correct": true, "feedback": "The explanation effectively highlights the article's neutral stance and focus on policy and personal perspectives rather than sensationalizing medical details or perpetuating misinformation."},
+            {"correct": true, "feedback": "The assessment accurately notes that the article addresses systemic challenges, specifically the political context surrounding the debate, which contributes to its overall responsible reporting."}
+          ],
+          "assessed_agent_id": "SYNTHESISER-6JG2Kz",
+          "assessed_call_id": "nD7QoCtnf9sMDeP8sHEgfa",
+          "correctness": 1.0
+        },
+        "timestamp": "2025-05-07T16:44:27.792481",
+      },
+      "type": "chat_message"
+    };
+
+    // Function to test message normalization via the API
+    async function testMessageNormalization(data) {
+      try {
+        const response = await fetch('/test/messageUtils', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Unknown error');
+        }
+        
+        return result.result;
+      } catch (error) {
+        logMessage(`Error: ${error.message}`);
+        return null;
+      }
+    }
+
+    // UI Functions
+    function logMessage(message) {
+      const logContainer = document.getElementById('logs');
+      const logEntry = document.createElement('div');
+      logEntry.className = 'log-entry';
+      
+      if (typeof message === 'object') {
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(message, null, 2);
+        logEntry.appendChild(pre);
+      } else {
+        logEntry.textContent = message;
+      }
+      
+      logContainer.appendChild(logEntry);
+    }
+
+    // Event Listeners
+    document.getElementById('testJudge').addEventListener('click', async () => {
+      logMessage("Testing Judge Message...");
+      
+      // Display the input message
+      logMessage("Original Judge Message:");
+      logMessage(judgeMessage);
+      
+      // Process the message through our API endpoint
+      const result = await testMessageNormalization(judgeMessage);
+      if (result) {
+        logMessage("Normalized Judge Message:");
+        logMessage(result);
+        
+        if (result.type === 'judge') {
+          logMessage("SUCCESS: Message correctly identified as 'judge' type!");
+        } else {
+          logMessage(`FAILURE: Message identified as '${result.type}' instead of 'judge'`);
+        }
+      }
+    });
+
+    document.getElementById('testAssessment').addEventListener('click', async () => {
+      logMessage("Testing Assessment Message...");
+      
+      // Display the input message
+      logMessage("Original Assessment Message:");
+      logMessage(assessmentMessage);
+      
+      // Process the message through our API endpoint
+      const result = await testMessageNormalization(assessmentMessage);
+      if (result) {
+        logMessage("Normalized Assessment Message:");
+        logMessage(result);
+        
+        if (result.type === 'assessment') {
+          logMessage("SUCCESS: Message correctly identified as 'assessment' type!");
+        } else {
+          logMessage(`FAILURE: Message identified as '${result.type}' instead of 'assessment'`);
+        }
+      }
+    });
+
+    document.getElementById('clearLogs').addEventListener('click', () => {
+      document.getElementById('logs').innerHTML = '';
+      logMessage("Logs cleared");
+    });
+  </script>
+</body>
+</html>

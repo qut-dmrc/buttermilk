@@ -1,6 +1,6 @@
 differentiator:
   role: DIFFERENTIATOR
-  name: "📊 Differentiator"
+  name_components: ["📊", "role", "model", "criteria", "unique_identifier"]
   agent_obj: Differentiator
   num_runs: 1
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).

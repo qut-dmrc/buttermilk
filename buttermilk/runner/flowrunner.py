@@ -3,6 +3,8 @@ import importlib
 import logging
 import random
 from collections.abc import AsyncGenerator, Callable
+from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 import shortuuid
@@ -10,6 +12,17 @@ from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+
+class SessionStatus(str, Enum):
+    """Session status enumeration."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    EXPIRED = "expired"
+    FAILED = "failed"
+
 
 from buttermilk import logger
 from buttermilk._core import (
@@ -36,18 +49,67 @@ from buttermilk.utils.utils import expand_dict
 
 
 class FlowRunContext(BaseModel):
-    """Encapsulates all state for a single flow run."""
+    """Encapsulates all state for a single flow run with session management."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     flow_name: str = ""
     flow_task: Any | None = None
     orchestrator: Orchestrator | None = None
-    status: str = "pending"
+    status: SessionStatus = SessionStatus.ACTIVE
     session_id: str
     callback_to_groupchat: Any = None
     messages: list = []
     progress: dict = Field(default_factory=dict)
 
+    # Session management fields
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    background_tasks: set[asyncio.Task] = Field(default_factory=set)
+    session_timeout: int = 3600  # 1 hour default timeout in seconds
+
     websocket: Any = None
+
+    def update_activity(self) -> None:
+        """Update the last activity timestamp."""
+        self.last_activity = datetime.now(UTC)
+
+    def is_expired(self) -> bool:
+        """Check if the session has expired based on timeout."""
+        return (datetime.now(UTC) - self.last_activity).total_seconds() > self.session_timeout
+
+    async def cleanup(self) -> None:
+        """Clean up session resources."""
+        # Cancel background tasks
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self.background_tasks.clear()
+
+        # Close WebSocket if connected
+        if self.websocket and not self.websocket.client_state == WebSocketState.DISCONNECTED:
+            try:
+                await self.websocket.close()
+            except Exception as e:
+                logger.warning(f"Error closing WebSocket for session {self.session_id}: {e}")
+
+        # Clean up orchestrator
+        if self.orchestrator:
+            cleanup_method = getattr(self.orchestrator, "cleanup", None)
+            if cleanup_method and callable(cleanup_method):
+                try:
+                    result = cleanup_method()
+                    if asyncio.iscoroutine(result):
+                        await result
+                except Exception as e:
+                    logger.warning(f"Error during orchestrator cleanup for session {self.session_id}: {e}")
+
+        self.status = SessionStatus.COMPLETED
+        logger.info(f"Session {self.session_id} cleaned up successfully")
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
@@ -61,6 +123,8 @@ class FlowRunContext(BaseModel):
 
             try:
                 data = await self.websocket.receive_json()
+                self.update_activity()  # Update activity timestamp on message
+
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
                     continue
@@ -147,6 +211,163 @@ class FlowRunContext(BaseModel):
                 logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected.")
 
 
+class OrchestratorFactory:
+    """Factory for creating and managing orchestrator instances with proper lifecycle."""
+
+    @staticmethod
+    def create_orchestrator(flow_config: OrchestratorProtocol, flow_name: str) -> Orchestrator:
+        """Create a completely fresh orchestrator instance.
+
+        Args:
+            flow_config: The flow configuration to use
+            flow_name: The name of the flow (for error reporting)
+
+        Returns:
+            A new orchestrator instance with fresh state
+
+        Raises:
+            ValueError: If orchestrator class cannot be found or instantiated
+
+        """
+        try:
+            # Extract orchestrator class path
+            orchestrator_path = flow_config.orchestrator
+            module_name, class_name = orchestrator_path.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            orchestrator_cls = getattr(module, class_name)
+
+            # Create a fresh config copy to avoid shared state
+            config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
+
+            # Create and return a fresh instance
+            orchestrator = orchestrator_cls(**config)
+
+            logger.debug(f"Created fresh orchestrator for flow '{flow_name}': {orchestrator_cls.__name__}")
+            return orchestrator
+
+        except Exception as e:
+            raise ValueError(f"Failed to create orchestrator for flow '{flow_name}': {e}") from e
+
+    @staticmethod
+    async def cleanup_orchestrator(orchestrator: Orchestrator) -> None:
+        """Clean up an orchestrator instance and its resources.
+
+        Args:
+            orchestrator: The orchestrator to clean up
+
+        """
+        cleanup_method = getattr(orchestrator, "cleanup", None)
+        if cleanup_method and callable(cleanup_method):
+            try:
+                result = cleanup_method()
+                if asyncio.iscoroutine(result):
+                    await result
+                logger.debug(f"Orchestrator cleanup completed: {orchestrator.__class__.__name__}")
+            except Exception as e:
+                logger.warning(f"Error during orchestrator cleanup: {e}")
+
+
+class SessionManager:
+    """Manages session lifecycle, timeouts, and cleanup."""
+
+    def __init__(self, session_timeout: int = 3600):
+        self.sessions: dict[str, FlowRunContext] = {}
+        self.session_timeout = session_timeout
+        self._cleanup_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        """Start the session manager and background cleanup task."""
+        if not self._running:
+            self._running = True
+            self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+            logger.info("Session manager started with background cleanup")
+
+    async def stop(self) -> None:
+        """Stop the session manager and cleanup all sessions."""
+        self._running = False
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+
+        # Clean up all remaining sessions
+        for session_id in list(self.sessions.keys()):
+            await self.cleanup_session(session_id)
+
+        logger.info("Session manager stopped and all sessions cleaned up")
+
+    async def get_or_create_session(self, session_id: str, websocket: Any = None) -> FlowRunContext:
+        """Get existing session or create a new one.
+
+        Args:
+            session_id: Unique identifier for the session
+            websocket: Optional WebSocket connection
+
+        Returns:
+            The session context
+
+        """
+        if session_id in self.sessions:
+            session = self.sessions[session_id]
+            if websocket:
+                session.websocket = websocket
+                session.update_activity()
+                logger.debug(f"Updated WebSocket for existing session {session_id}")
+            return session
+
+        # Create new session
+        session = FlowRunContext(
+            session_id=session_id,
+            websocket=websocket,
+            session_timeout=self.session_timeout,
+        )
+        self.sessions[session_id] = session
+        logger.info(f"Created new session {session_id}")
+        return session
+
+    async def cleanup_session(self, session_id: str) -> bool:
+        """Clean up and remove a session.
+
+        Args:
+            session_id: The session to clean up
+
+        Returns:
+            True if session was found and cleaned up, False otherwise
+
+        """
+        if session_id not in self.sessions:
+            return False
+
+        session = self.sessions[session_id]
+        await session.cleanup()
+        del self.sessions[session_id]
+        logger.info(f"Session {session_id} removed and cleaned up")
+        return True
+
+    async def _periodic_cleanup(self) -> None:
+        """Background task that periodically cleans up expired sessions."""
+        while self._running:
+            try:
+                await asyncio.sleep(300)  # Check every 5 minutes
+
+                expired_sessions = []
+                for session_id, session in self.sessions.items():
+                    if session.is_expired():
+                        expired_sessions.append(session_id)
+
+                for session_id in expired_sessions:
+                    logger.info(f"Cleaning up expired session: {session_id}")
+                    await self.cleanup_session(session_id)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in session cleanup task: {e}")
+
+
 class FlowRunner(BaseModel):
     """Centralized service for running flows across different entry points.
 
@@ -154,18 +375,29 @@ class FlowRunner(BaseModel):
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
     """
 
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
     flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
 
     save: SaveInfo
     tasks: list = Field(default=[])
-    model_config = ConfigDict(extra="allow")
     mode: str = Field(default="api")
     ui: str = Field(default="console")
     human_in_loop: bool = False
-    sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions
+    sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions (DEPRECATED)
 
-    def get_websocket_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
-        """Get or create a session for the given session ID.
+    # New session management
+    session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
+    _session_manager_started: bool = False
+
+    async def _ensure_session_manager_started(self) -> None:
+        """Ensure the session manager is started."""
+        if not self._session_manager_started:
+            await self.session_manager.start()
+            self._session_manager_started = True
+
+    async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
+        """Get or create a session for the given session ID (async version).
 
         Args:
             session_id: Unique identifier for the session
@@ -175,16 +407,23 @@ class FlowRunner(BaseModel):
             A FlowRunContext object representing the session
 
         """
-        if session_id not in self.sessions and not websocket:
+        await self._ensure_session_manager_started()
+
+        if session_id not in self.session_manager.sessions and not websocket:
             return None
-        if session_id not in self.sessions:
-            logger.info(f"Creating new session for {session_id} with WebSocket")
-            self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
-        elif websocket is not None:
-            # Replace the existing WebSocket connection
-            logger.info(f"Updating WebSocket for existing session {session_id} ({websocket.client_state})")
-            self.sessions[session_id].websocket = websocket
-        return self.sessions[session_id]
+
+        session = await self.session_manager.get_or_create_session(session_id, websocket)
+
+        # Backward compatibility: also store in the old sessions dict
+        self.sessions[session_id] = session
+
+        return session
+
+    async def cleanup(self) -> None:
+        """Clean up the FlowRunner and all its sessions."""
+        if self._session_manager_started:
+            await self.session_manager.stop()
+            self._session_manager_started = False
 
     async def pull_and_run_task(self) -> None:
         """Pull tasks from the queue and run them."""
@@ -204,12 +443,11 @@ class FlowRunner(BaseModel):
         else:
             logger.debug("No tasks available in the queue")
 
-    def _create_fresh_orchestrator(self, flow_name: str) -> OrchestratorProtocol:
-        """Create a completely fresh orchestrator instance.
+    def _create_fresh_orchestrator(self, flow_name: str) -> Orchestrator:
+        """Create a completely fresh orchestrator instance using the factory.
 
         Args:
             flow_name: The name of the flow to create an orchestrator for
-            session_id: The session ID for the flow
 
         Returns:
             A new orchestrator instance with fresh state
@@ -222,18 +460,7 @@ class FlowRunner(BaseModel):
             raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}")
 
         flow_config = self.flows[flow_name]
-
-        # Extract orchestrator class path
-        orchestrator_path = flow_config.orchestrator
-        module_name, class_name = orchestrator_path.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-        orchestrator_cls = getattr(module, class_name)
-
-        # Create a fresh config copy to avoid shared state
-        config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
-
-        # Create and return a fresh instance
-        return orchestrator_cls(**config)
+        return OrchestratorFactory.create_orchestrator(flow_config, flow_name)
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
         """Clean up resources associated with a flow run.
@@ -242,19 +469,8 @@ class FlowRunner(BaseModel):
             context: The flow run context to clean up
 
         """
-        # Implement cleanup logic for the orchestrator if available
-        cleanup_method = getattr(context.orchestrator, "cleanup", None)
-        if cleanup_method is not None and callable(cleanup_method):
-            try:
-                result = cleanup_method()
-                # Handle case where cleanup might be async or not
-                if asyncio.iscoroutine(result):
-                    await result
-            except Exception as e:
-                logger.warning(f"Error during orchestrator cleanup: {e}")
-
-        # Set status to completed
-        context.status = "completed"
+        # Use the enhanced cleanup from FlowRunContext
+        await context.cleanup()
 
     async def run_flow(self,
                       run_request: RunRequest,
@@ -278,22 +494,26 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # Ensure session manager is started
+        await self._ensure_session_manager_started()
+
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
 
         # set a high max callback duration when dealing with LLMs
         asyncio.get_event_loop().slow_callback_duration = 120
 
-        # Type safety: The orchestrator will be an Orchestrator instance at runtime,
-        # even though the flows dict is typed with the more general OrchestratorProtocol
-        if run_request.session_id not in self.sessions:
-            # Create a new session if it doesn't exist
-            self.sessions[run_request.session_id] = FlowRunContext(session_id=run_request.session_id)
+        # Get or create session using the session manager
+        _session = await self.session_manager.get_or_create_session(run_request.session_id)
+
+        # Backward compatibility: also store in old sessions dict
+        self.sessions[run_request.session_id] = _session
+
         set_logging_context(run_request.session_id)
-        _session = self.sessions[run_request.session_id]
         _session.flow_name = run_request.flow
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
+        _session.update_activity()  # Update activity timestamp
 
         # Create the task
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore

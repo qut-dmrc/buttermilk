@@ -1,0 +1,204 @@
+
+// Your variable overrides can go here, e.g.:
+// $h1-font-size: 3rem;
+$font-family-base:  'Roboto', sans-serif;
+$navbar-nav-link-padding-x:         3rem;
+$navbar-brand-font-size:            1.5rem;
+$nav-link-font-size: 1.7rem;
+
+body {
+  text-shadow: none;
+}
+
+h1, h1 a {
+  font-family: 'Orbitron', sans-serif;
+  color:rgba(243,229,0,1);
+  text-shadow: 2px -2px 0.1rem rgba(214, 51, 132, 0.921),   -4px 4px 3rem rgba(214, 51, 132,.8);
+  a {
+    text-decoration:underline rgba(0,184,255, 1) solid 3px;
+  }
+} 
+
+h2, h2 a, h3, h3 a, h4, h4 a, h5, h5 a, h6, h6 a {
+  font-family: 'Orbitron', sans-serif;
+  text-shadow: 1px -1px .4rem rgba(214, 51, 132, 0.321), 1px -1px 0.15rem rgba(243, 229, 0, 0.4);
+  a {
+    text-decoration:underline rgba(0,184,255, 1) solid 3px;
+  }
+}
+
+.incorrect {
+  color: rgba(214, 51, 132, 0.921);
+}
+
+.correct { 
+    color:rgba(243,229,0,1);
+}
+
+.navbar.navbar-light {
+  font-family: 'Roboto Mono', monospace;
+  font-family: 'Orbitron', sans-serif;
+  // make the text lowercase
+  text-transform: lowercase;
+  .nav-item .nav-link {
+    font-family: 'Orbitron', sans-serif;
+    color:rgba(243,229,0,1);
+    text-shadow: 1px -1px 1px rgba(214, 51, 132, 0.921), -2px 2px 2px  rgba(243,229,0,0.3), -2px 2px 1rem rgba(214, 51, 132,.6);
+  }
+  .glitch {
+    text-decoration: line-through rgba(26, 11, 53, 0.709) solid 0.1rem;
+    
+    &:hover {
+      //transform: translate(.4rem, -.2rem);
+    } 
+  }
+}
+
+.incorrect {
+  color: rgba(214, 51, 132, 0.921);
+}
+
+.correct { 
+    color:rgba(243,229,0,1);
+}
+
+
+
+/* Make icons align properly */
+:global(.bi) {
+  vertical-align: -0.125em;
+  margin-right: 2px;
+}
+ /* === Cyberpunk Theme ==== */
+// :global(body.theme-cyberpunk) .terminal-container {
+//   display: flex;
+//   flex-direction: column;
+//   height: 100%;
+//   background-color: #0a001a; /* Deep purple/blue background */
+//   color: #ff00ff; /* Magenta text */
+//   font-family: 'Orbitron', 'Consolas', monospace; /* Futuristic font */
+//   border-radius: 0;
+//   border: 2px solid #00ffff; /* Cyan border */
+//   box-shadow: 0 0 15px #00ffff, inset 0 0 10px rgba(0, 255, 255, 0.3); /* Neon glow */
+//   padding: 10px;
+//   height: 70vh;
+//   overflow-y: auto;
+//   margin-bottom: 2px;
+// }
+
+// :global(body.theme-cyberpunk) .header-controls {
+//   padding: 8px 12px;
+//   background-color: #15002a;
+//   color: #00ffff;
+//   border-bottom: 1px solid #ff00ff;
+//   flex-shrink: 0;
+//   text-transform: uppercase;
+//   letter-spacing: 1px;
+// }
+
+// :global(body.theme-cyberpunk) .console {
+//   padding: 8px;
+//   overflow-y: auto;
+//   flex-grow: 1;
+//   background: linear-gradient(rgba(10, 0, 26, 0.9), rgba(30, 0, 50, 0.8));
+// }
+
+// :global(body.theme-cyberpunk) .console::-webkit-scrollbar {
+//   width: 6px;
+// }
+
+// :global(body.theme-cyberpunk) .console::-webkit-scrollbar-track {
+//   background: #15002a;
+// }
+
+// :global(body.theme-cyberpunk) .console::-webkit-scrollbar-thumb {
+//   background: #ff00ff;
+//   border-radius: 0;
+// }
+
+// :global(body.theme-cyberpunk) .input-area-terminal {
+//   display: flex;
+//   align-items: center;
+//   background-color: #15002a;
+//   padding: 5px 10px;
+//   border-top: 1px solid #ff00ff;
+// }
+
+// :global(body.theme-cyberpunk) .terminal-input {
+//   flex-grow: 1;
+//   background-color: rgba(0, 0, 0, 0.5);
+//   border: 1px solid #00ffff;
+//   color: #00ffff;
+//   outline: none;
+//   font-family: 'Orbitron', 'Consolas', monospace;
+//   font-size: 0.95em;
+//   padding: 5px;
+// }
+
+// :global(body.theme-cyberpunk) .terminal-button {
+//   background: #15002a;
+//   border: 1px solid #00ffff;
+//   color: #00ffff;
+//   font-family: 'Orbitron', 'Consolas', monospace;
+//   font-size: 0.9em;
+//   cursor: pointer;
+//   padding: 5px 10px;
+//   margin: 0 3px;
+//   transition: all 0.2s ease;
+//   text-transform: uppercase;
+//   letter-spacing: 1px;
+// }
+
+// :global(body.theme-cyberpunk) .terminal-button:hover:not(:disabled) {
+//   color: #000000;
+//   background-color: #00ffff;
+//   text-shadow: 0 0 5px #00ffff;
+//   box-shadow: 0 0 10px #00ffff;
+// }
+
+// :global(body.theme-cyberpunk) .terminal-button:disabled {
+//   color: #333333;
+//   border-color: #333333;
+//   cursor: not-allowed;
+//   opacity: 0.5;
+// }
+
+// :global(body.theme-cyberpunk) .submit-button:hover:not(:disabled) { 
+//   background-color: #00ffaa; 
+//   border-color: #00ffaa;
+//   box-shadow: 0 0 10px #00ffaa;
+// }
+
+// :global(body.theme-cyberpunk) .confirm-button:hover:not(:disabled) { 
+//   background-color: #aaff00; 
+//   border-color: #aaff00;
+//   box-shadow: 0 0 10px #aaff00;
+// }
+
+// :global(body.theme-cyberpunk) .interrupt-button:hover:not(:disabled) { 
+//   background-color: #ff0066; 
+//   border-color: #ff0066;
+//   box-shadow: 0 0 10px #ff0066;
+// }
+
+// :global(body.theme-cyberpunk) .connection-status {
+//   display: flex;
+//   align-items: center;
+// }
+
+// :global(body.theme-cyberpunk) .status-indicator {
+//   width: 12px;
+//   height: 12px;
+//   border-radius: 50%;
+//   margin-right: 8px;
+// }
+
+// :global(body.theme-cyberpunk) .connected .status-indicator {
+//   background-color: #00ffaa;
+//   box-shadow: 0 0 10px #00ffaa;
+// }
+
+// :global(body.theme-cyberpunk) .disconnected .status-indicator {
+//   background-color: #ff0066;
+//   box-shadow: 0 0 10px #ff0066;
+// }

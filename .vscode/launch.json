@@ -89,7 +89,7 @@
   "console": "integratedTerminal"
 },
 {
-      "name": "zot",
+      "name": "cli",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -102,7 +102,7 @@
       "args": [
         "+run=console",
         "flows=[trans,simple,z]",
-        "+flow=zot",
+        "+flow=${input:flow}",
         "llms=full",
         "human_in_loop=${input:human_in_loop}",
         "ui=console"

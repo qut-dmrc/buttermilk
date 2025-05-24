@@ -1,8 +1,11 @@
 # Batch execution configuration
 defaults:
+  - /local
+  - _self_
   # ... other defaults
-  - /flows/criteria@batch.parameters.criteria:
-      - trans
+
+name: bm_console
+job: development
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner

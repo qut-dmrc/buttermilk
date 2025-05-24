@@ -115,8 +115,6 @@ curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg 
 
 ## Installation
 
-
-
 Create a new environment and install using uv:
 
 ```shell
@@ -136,17 +134,4 @@ gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
 
 ## Instructions for bots
-```md
-- Simple, elegant code, always.
-- Use libraries, don't reinvent the wheel.
-- Follow existing patterns, unless they're stupid. If they're stupid, talk to the User and offer suggestions before proceeding.
-- Don't add defensive coding; ask the User for input when you get stuck with unexpected behavior.
-- Document for posterity, not for just this task.
-- Unit tests are good. They're in `tests/`. Look at `conftest.py` for major fixtures and follow existing patterns.
-
-Project info:
-- all configuration uses Hydra, with files in `conf/`. Main config is `testing.yaml`.
-- Main entry point is `cli.py`, using RunRequest() for the job and FlowRunner() for the executor. 
-- Python command is `uv run python`. Dependencies managed by `uv`.
-- Test command is `uv run python -m pytest`
-```
+Read [CLAUDE.md](CLAUDE.md)

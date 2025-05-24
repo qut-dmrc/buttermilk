@@ -1,0 +1,40 @@
+/* === Modern Terminal Theme ==== */
+/* Styles for this theme are primarily in the global CSS file */
+/* Add overrides here if needed */
+
+:global(body.theme-modern-terminal) .terminal-container {
+   /* Uses global .theme-modern-terminal .terminal-container */
+}
+ :global(body.theme-modern-terminal) .header-controls {
+   /* Uses global .theme-modern-terminal .header-controls */
+ }
+ :global(body.theme-modern-terminal) .connection-status {
+   /* Uses global .theme-modern-terminal .connection-status */
+ }
+ :global(body.theme-modern-terminal) .console {
+   /* Uses global .theme-modern-terminal .console */
+   height: auto; /* Override fixed height from old style */
+   flex-grow: 1; /* Allow console to grow */
+ }
+ :global(body.theme-modern-terminal) .input-area-terminal {
+   /* Uses global .theme-modern-terminal .input-area */
+ }
+ :global(body.theme-modern-terminal) .terminal-input {
+   /* Uses global .theme-modern-terminal .terminal-input */
+   flex-grow: 1;
+   margin-right: 10px;
+ }
+ :global(body.theme-modern-terminal) .terminal-button {
+   /* Uses global .theme-modern-terminal .terminal-button */
+ }
+ :global(body.theme-modern-terminal) .interrupt-button {
+   /* Uses global .theme-modern-terminal .interrupt-button */
+ }
+ :global(body.theme-modern-terminal) .interrupt-button.active {
+   /* Uses global .theme-modern-terminal .interrupt-button.active */
+ }
+ :global(body.theme-modern-terminal) .terminal-button i.bi {
+   color: inherit;
+   font-size: 1.1em;
+   vertical-align: middle;
+}

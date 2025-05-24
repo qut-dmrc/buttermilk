@@ -49,6 +49,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             if hasattr(app.state, "job_worker"):
                 await app.state.job_worker.stop()
                 logger.info("Stopped job worker")
+            
+            # Clean up FlowRunner sessions
+            if hasattr(app.state, "flow_runner"):
+                try:
+                    await app.state.flow_runner.cleanup()
+                    logger.info("Cleaned up FlowRunner sessions")
+                except Exception as e:
+                    logger.error(f"Error cleaning up FlowRunner: {e}")
 
     # Create the FastAPI app with the lifespan
     app = FastAPI(lifespan=lifespan)
@@ -139,7 +147,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             logger.debug(f"Accepting WebSocket connection for session {session_id}")
             await websocket.accept()
         flow_runner: FlowRunner = websocket.app.state.flow_runner
-        if not (session := flow_runner.get_websocket_session(session_id=session_id, websocket=websocket)):
+        if not (session := await flow_runner.get_websocket_session_async(session_id=session_id, websocket=websocket)):
             logger.error(f"Session {session_id} not found.")
             await websocket.close()
             raise HTTPException(status_code=404, detail="Session not found")
@@ -169,6 +177,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         if task:
             await task
+        
+        # Clean up the session when WebSocket disconnects
+        try:
+            if hasattr(flow_runner, 'session_manager') and session_id in flow_runner.session_manager.sessions:
+                await flow_runner.session_manager.cleanup_session(session_id)
+                logger.info(f"Cleaned up session {session_id} after WebSocket disconnect")
+        except Exception as e:
+            logger.warning(f"Error cleaning up session {session_id}: {e}")
+        
         with contextlib.suppress(Exception):
             await websocket.close()
 
@@ -179,9 +196,73 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         Returns:
             Dict with new session ID
-
         """
         return {"session_id": str(uuid.uuid4())}
+
+    # Session management endpoints
+    @app.get("/api/session/{session_id}/status")
+    async def get_session_status(session_id: str, request: Request):
+        """Get the status of a specific session.
+        
+        Returns:
+            Dict with session status information
+        """
+        flow_runner: FlowRunner = request.app.state.flow_runner
+        
+        if hasattr(flow_runner, 'session_manager') and session_id in flow_runner.session_manager.sessions:
+            session = flow_runner.session_manager.sessions[session_id]
+            return {
+                "session_id": session_id,
+                "status": session.status,
+                "flow_name": session.flow_name,
+                "created_at": session.created_at.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+                "is_expired": session.is_expired()
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    @app.delete("/api/session/{session_id}")
+    async def cleanup_session(session_id: str, request: Request):
+        """Manually clean up a specific session.
+        
+        Returns:
+            Dict confirming cleanup
+        """
+        flow_runner: FlowRunner = request.app.state.flow_runner
+        
+        if hasattr(flow_runner, 'session_manager'):
+            success = await flow_runner.session_manager.cleanup_session(session_id)
+            if success:
+                return {"message": f"Session {session_id} cleaned up successfully"}
+            else:
+                raise HTTPException(status_code=404, detail="Session not found")
+        else:
+            raise HTTPException(status_code=500, detail="Session manager not available")
+
+    @app.get("/api/sessions")
+    async def list_sessions(request: Request):
+        """List all active sessions.
+        
+        Returns:
+            Dict with list of session information
+        """
+        flow_runner: FlowRunner = request.app.state.flow_runner
+        
+        if hasattr(flow_runner, 'session_manager'):
+            sessions_info = []
+            for session_id, session in flow_runner.session_manager.sessions.items():
+                sessions_info.append({
+                    "session_id": session_id,
+                    "status": session.status,
+                    "flow_name": session.flow_name,
+                    "created_at": session.created_at.isoformat(),
+                    "last_activity": session.last_activity.isoformat(),
+                    "is_expired": session.is_expired()
+                })
+            return {"sessions": sessions_info, "total": len(sessions_info)}
+        else:
+            return {"sessions": [], "total": 0}
 
     # --- Add API data routes ---
     # Set up templates

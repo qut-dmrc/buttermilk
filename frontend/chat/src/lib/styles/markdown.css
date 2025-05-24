@@ -1,0 +1,83 @@
+
+  /* Markdown content styling */
+  .markdown-content {
+    /* Basic reset for markdown elements */
+    & :global(h1), & :global(h2), & :global(h3), & :global(h4), & :global(h5), & :global(h6) {
+      font-weight: bold;
+      line-height: 1.2;
+    }
+
+    & :global(h1) { font-size: 1.6em; }
+    & :global(h2) { font-size: 1.4em; }
+    & :global(h3) { font-size: 1.2em; }
+    & :global(h4) { font-size: 1.1em; }
+    & :global(h5), & :global(h6) { font-size: 1em; }
+
+
+    & :global(ul), & :global(ol) {
+      padding-left: 1.5em;
+    }
+
+    & :global(li) {
+      margin: 0.2em 0;
+    }
+
+    & :global(blockquote) {
+      border-left: 3px solid #5fad4e;
+      padding-left: 0.8em;
+      color: #cccccc;
+    }
+
+    & :global(code) {
+      font-family: monospace;
+      background-color: rgba(0, 0, 0, 0.2);
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    & :global(pre) {
+      background-color: rgba(0, 0, 0, 0.3);
+      padding: 0.2em;
+      border-radius: 3px;
+      overflow-x: auto;
+    }
+
+    & :global(pre code) {
+      background-color: transparent;
+      padding: 0;
+      font-size: 0.9em;
+    }
+
+    & :global(a) {
+      color: #2a9fd6;
+      text-decoration: none;
+    }
+
+    & :global(a:hover) {
+      text-decoration: underline;
+    }
+
+    & :global(img) {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0.5em 0;
+    }
+
+    & :global(table) {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.5em 0;
+    }
+
+    & :global(th), & :global(td) {
+      border: 1px solid #444;
+      padding: 0.4em 0.6em;
+      text-align: left;
+    }
+
+    & :global(tr:nth-child(even)) {
+      background-color: rgba(0, 0, 0, 0.1);
+    }
+  }

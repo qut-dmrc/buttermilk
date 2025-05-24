@@ -39,6 +39,18 @@ __pycache__/
 
 node_modules
 
+# SvelteKit
+.svelte-kit/
+/build
+/package
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
 # Distribution / packaging
 .Python
 build/

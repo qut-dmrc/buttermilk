@@ -1,0 +1,50 @@
+/* === Classic Retro Theme ==== */
+:global(body.theme-classic-retro) .terminal-container {
+   /* Uses global .theme-classic-retro .terminal-container */
+}
+ :global(body.theme-classic-retro) .header-controls {
+   /* Uses global .theme-classic-retro .header-controls */
+ }
+ :global(body.theme-classic-retro) .connection-status {
+   /* Uses global .theme-classic-retro .connection-status */
+ }
+ :global(body.theme-classic-retro) .status-indicator {
+   /* Uses global .theme-classic-retro .status-indicator */
+ }
+ :global(body.theme-classic-retro) .connected .status-indicator {
+   /* Uses global .theme-classic-retro .connected .status-indicator */
+ }
+ :global(body.theme-classic-retro) .disconnected .status-indicator {
+   /* Uses global .theme-classic-retro .disconnected .status-indicator */
+ }
+ :global(body.theme-classic-retro) .error-text {
+   color: #FF0000; /* Red error text */
+   margin-left: 5px;
+ }
+ :global(body.theme-classic-retro) .console {
+   /* Uses global .theme-classic-retro .console */
+   height: auto; 
+   flex-grow: 1; 
+ }
+ :global(body.theme-classic-retro) .input-area-terminal {
+   /* Uses global .theme-classic-retro .input-area */
+ }
+ :global(body.theme-classic-retro) .terminal-input {
+   /* Uses global .theme-classic-retro .terminal-input */
+   flex-grow: 1;
+   margin-right: 10px;
+ }
+ :global(body.theme-classic-retro) .terminal-button {
+   /* Uses global .theme-classic-retro .terminal-button */
+ }
+ :global(body.theme-classic-retro) .interrupt-button {
+   /* Uses global .theme-classic-retro .interrupt-button */
+ }
+ :global(body.theme-classic-retro) .interrupt-button.active {
+   /* Uses global .theme-classic-retro .interrupt-button.active */
+ }
+ :global(body.theme-classic-retro) .terminal-button i.bi {
+   color: inherit;
+   font-size: 1.1em;
+   vertical-align: middle;
+}

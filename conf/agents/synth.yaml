@@ -1,6 +1,7 @@
 synthesiser:
   role: SYNTHESISER
   name: "🎨 Synthesiser"
+  name_components: ["🎨", "role", "model", "criteria", "unique_identifier"]
   agent_obj: Judge
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
   num_runs: 1

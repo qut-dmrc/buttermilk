@@ -1,0 +1,464 @@
+/* Terminal Themes - Main import file terminal theme */
+
+/* ============================== */
+/* === Cyberpunk Retro Theme  === */
+
+.terminal-container {
+  display: flex;
+  min-height: 400px;
+  height: 80vh;
+  width: 100%;
+  position: relative;
+  flex-direction: column;
+  border: 1px solid #333;
+  background-color: #0D0D0D; /* Very dark background */
+  color: #00dd00; /* Lime green default text */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; /* Prioritize clearer mono fonts */
+  font-size: 0.7em;
+  border-radius: 0; /* Sharp corners */
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.header-controls {
+  padding: 8px 12px;
+  background-color: #2a2a2a;
+  color: #ccc;
+  border-bottom: 1px solid #444;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Status container for connection and system status */
+.status-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Connection status styles */
+.connection-status {
+  display: flex;
+  align-items: center;
+  font-size: 0.85em;
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
+/* System status styles */
+.system-status {
+  display: flex;
+  align-items: center;
+  font-size: 0.85em;
+  padding: 4px 8px;
+  border-radius: 3px;
+  border-left: 1px solid #444;
+  padding-left: 10px;
+  gap: 6px;
+}
+
+.system-step {
+  font-weight: bold;
+}
+
+.waiting-on {
+  font-style: italic;
+  font-size: 0.9em;
+  color: #aaa;
+}
+
+.system-status.pending {
+  color: #ffaa33;
+}
+
+.system-status.error {
+  color: #ff6666;
+}
+
+.system-status.completed {
+  color: #33ff33;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.connected .status-indicator {
+  background-color: #00cc00; /* Green for connected */
+  box-shadow: 0 0 5px #00cc00;
+}
+
+.disconnected .status-indicator {
+  background-color: #cc0000; /* Red for disconnected */
+  box-shadow: 0 0 5px #cc0000;
+}
+
+.reconnecting .status-indicator {
+  background-color: #ff9900; /* Orange for reconnecting */
+}
+
+.error-text {
+  color: #ff6666;
+  margin-left: 4px;
+}
+
+/* Spinner animation for reconnecting state */
+.status-indicator.spinner {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Modify the status indicator to show spinner shape when reconnecting */
+.status-indicator.spinner {
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  border-top: 2px solid #ff9900;
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+}
+
+/* State-specific text colors */
+.connected {
+  color: #33ff33;
+}
+
+.disconnected {
+  color: #ff6666;
+}
+
+.reconnecting {
+  color: #ffaa33;
+}
+
+.console::-webkit-scrollbar {
+  width: 6px;
+}
+
+.console::-webkit-scrollbar-track {
+  background: #1a1a1a; /* Darker track */
+}
+
+.console::-webkit-scrollbar-thumb {
+  background: #008800; /* Green scrollbar thumb */
+  border-radius: 0; /* Sharp corners */
+}
+
+.console .input-area-terminal {
+  display: flex;
+  align-items: center;
+  background-color: #1A1A1A; /* Slightly lighter dark for input */
+  border-top: 1px solid #333;
+}
+
+.console .terminal-input {
+  flex-grow: 1;
+  background-color: transparent;
+  border: none;
+  color: #00FF00; /* Lime green input text */
+  outline: none;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.95em;
+}
+
+.terminal-buttons {
+  background: none;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.terminal-button {
+  background: none;
+  border: none;
+  color: #888888; /* Dimmer grey buttons */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  cursor: pointer;
+  transition: color 0.1s ease, background-color 0.1s ease; /* Faster transition */
+}
+
+.terminal-button:hover:not(:disabled) {
+  color: #ffffff; /* White on hover */
+  background-color: #2a2a2a; /* Slightly lighter dark bg */
+}
+
+.terminal-button:disabled {
+  color: #444; /* Darker disabled color */
+  cursor: not-allowed;
+}
+
+.submit-button:hover:not(:disabled) { color: #76c7ff; } /* Light Blue */
+.confirm-button:hover:not(:disabled) { color: #7fdd8e; } /* Light Green */
+.reject-button:hover:not(:disabled) { color: #ff7b7b; } /* Light Red */
+.halt-button:hover:not(:disabled) { color: #ff5555; } /* Bright Red */
+.interrupt-button:hover:not(:disabled) { color: #ffa500; } /* Orange */
+.option-button:hover:not(:disabled) { color: #d8d8d8; } /* Light Gray */
+
+.selection-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+
+.message-terminal {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  margin-bottom: 0px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #e0fbfc;
+  // display: flex;
+  padding: 0px;
+  word-wrap: break-word;
+  line-height: 1.2em;
+}
+
+.message-line {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  align-items: flex-start;
+}
+
+/* Container for nick and metadata */
+.nick-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  max-width: 150px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+}
+
+/* Nickname styling */
+.agent-nick {
+  color: inherit;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: bold;
+  width: 100%;
+}
+
+
+.timestamp {
+  color:#00aa00;
+}
+  
+  
+
+/* Keep metadata compact and under nick */
+.agent-metadata {
+  font-size: 0.85em;
+  white-space: normal; /* Allow wrapping */
+  width: 100%;
+  text-align: right;
+  margin-top: 2px;
+  opacity: 0.7;
+  word-wrap: break-word;
+}
+
+/* The actual message content */
+.message-text {
+  flex: 1;
+  // color: #fff;
+  color: #00dd00; /* Lime green default text */
+  word-wrap: break-word;
+  padding-left: 5px;
+  border-left: 1px solid #333;
+
+}
+
+// Expanded content container
+.expanded-content {
+  margin-left: 24px;
+  margin-bottom: 0px;
+  padding: 0px 2px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-left: 2px solid #5fad4e;
+  white-space: pre-wrap;
+  
+  p  {
+    margin-bottom: 0px;
+    padding-bottom: 0px;
+    line-height: 1.1em;
+    color: #cfd5db;
+    font-size: 0.7rem;
+  }
+  li {
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    line-height: 1.1em;
+    font-size: 0.7rem;
+    color: #cfd5db;
+  }
+}
+.message-text a {
+  color: #00ffff;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.message-text a:hover {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+
+.icon {
+  font-size: 0.8em;
+  margin-right: 2px;
+  vertical-align: middle;
+  color: #00ffff;
+}
+
+// inline text
+.content-inline {
+  margin-left: 12px;
+  font-size: 0.7rem;
+}
+
+
+// Toggle button styling
+.content-toggle-inline {
+  background: transparent;
+  border: none;
+  color: #00aaff;
+  cursor: pointer;
+  padding: 0 0px;
+  margin-left: 6px;
+  text-transform: lowercase;
+  
+  &:hover {
+    color: #66ccff;
+  }
+}
+
+.truncated-content {
+  /*max-height: 120px; */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4; /* Show x lines */
+}
+
+.tiny-text {
+  font-size: 0.7rem;
+  line-height: 0.9;
+}
+
+
+/* Different users with distinct colors */
+[class*="agent-prefix"] {
+  font-weight: bold;
+}
+
+
+.with-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 100%;
+}
+
+.header-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #444;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.connected .status-indicator {
+  background-color: #00aa00;
+}
+
+.disconnected .status-indicator {
+  background-color: #aa0000;
+}
+
+.console {
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.input-area {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-top: 1px solid #444;
+}
+
+/* Manager Request Area Styling */
+.manager-request-area {
+  background-color: #1f1f1f;
+  border-top: 1px solid #333;
+  padding: 8px 12px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.manager-request-content {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.request-tag {
+  color: #5bc0de;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.agent-name {
+  font-weight: bold;
+  color: #5bc0de;
+  margin-right: 8px;
+}
+
+.request-description {
+  color: #bbbbbb;
+  display: block;
+  margin-top: 2px;
+  margin-left: 24px;
+}
+
+.request-text {
+  font-weight: bold;
+  color: #f0f0f0;
+  display: block;
+  margin-top: 2px;
+  margin-left: 24px;
+}
+

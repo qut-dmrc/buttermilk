@@ -78,7 +78,8 @@ def main(conf: DictConfig) -> None:
         case "console":
             ui = CLIUserAgent()
             # Prepare the RunRequest with command-line parameters
-            run_request = RunRequest(ui_type=conf.ui,
+            run_request = RunRequest(
+                ui_type=conf.ui,
                 flow=conf.get("flow"),
                 record_id=conf.get("record_id", ""),
                 prompt=conf.get("prompt", ""),
@@ -92,7 +93,6 @@ def main(conf: DictConfig) -> None:
             logger.info(f"Flow '{run_request.flow}' finished.")
 
         case "batch":
-
             logger.info("Creating batch jobs...")
             asyncio.run(flow_runner.create_batch(flow_name=conf.get("flow"), max_records=conf.get("max_records", None)))
 
