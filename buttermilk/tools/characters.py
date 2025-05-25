@@ -27,7 +27,7 @@ from typing import Literal, TypeAlias, get_type_hints
 
 from pydantic import BaseModel
 
-from buttermilk._core.defaults import TEMPLATES_PATH
+from buttermilk._core.constants import TEMPLATES_PATH
 
 CHARACTERISTICS_FILE = TEMPLATES_PATH / "image_prompt_limited_identities.json"
 

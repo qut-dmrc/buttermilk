@@ -7,7 +7,7 @@ silence_task_logs()
 from buttermilk._core.dmrc import get_bm, set_bm
 
 from ._core.bm_init import BM
-from ._core.defaults import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
+from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.log import logger
 
 get_buttermilk_instance = get_bm

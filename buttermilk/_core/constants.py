@@ -6,20 +6,34 @@ for these values. Constants include paths, configuration keys, pricing informati
 standardized agent roles, and special symbols or states recognized by the framework.
 """
 
-CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
+from pathlib import Path
+
+"""The absolute directory of the package."""
+BASE_DIR = Path(__file__).parent.parent.parent.absolute()
+
+"""Configuration directory for Buttermilk.
+This directory contains configuration files and settings used by the Buttermilk framework."""
+CONFIG_PATH = (BASE_DIR / "conf").as_posix()
+
+TEMPLATES_PATH = BASE_DIR / "templates"
+
+"""Directory containing BigQuery schema files for data validation and structure."""
+BQ_SCHEMA_DIR = BASE_DIR / "schemas"
+
 """Path to the local cache file for storing LLM (Language Model) configurations.
 This cache helps in faster startup by avoiding repeated fetching of configurations.
 """
+CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 
-MODELS_CFG_KEY = "models_secret"
 """Key used to retrieve LLM (Language Model) configurations from a secret manager.
 This allows sensitive or complex model configurations to be stored securely.
 """
+MODELS_CFG_KEY = "models_secret"
 
-SHARED_CREDENTIALS_KEY = "credentials_secret"
 """Key used to retrieve shared system credentials (e.g., API keys for various
 services) from a secret manager.
 """
+SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # Reference for pricing: https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12
@@ -27,6 +41,12 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12
 Based on a rate of $5 per Terabyte (TB). Used for cost estimation purposes.
 1 TB = 10^12 bytes.
 """
+
+"""Column name used to store predictions in data processing tasks."""
+COL_PREDICTION = "prediction"
+
+"""Maximum length for messages sent to Slack."""
+SLACK_MAX_MESSAGE_LENGTH = 3000
 
 # --- Standard Agent Roles ---
 # These constants define conventional role names used within Buttermilk flows,

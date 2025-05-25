@@ -5,8 +5,8 @@ from typing import Any
 import regex as re
 from pydantic import BaseModel
 
+from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk._core.contract import AgentTrace
-from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk.agents.evaluators.scorer import QualScore
 
 

@@ -6,7 +6,9 @@ defaults:
 
 
 ui: console
-human_in_loop: true
+
+run:
+  human_in_loop: true
 
 bm:
   _target_: buttermilk._core.bm_init.BM

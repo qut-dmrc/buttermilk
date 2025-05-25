@@ -1190,6 +1190,11 @@ ml = [
     { name = "torch" },
     { name = "transformers" },
 ]
+ui = [
+    { name = "altair" },
+    { name = "plotly" },
+    { name = "streamlit" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1312,6 +1317,11 @@ ml = [
     { name = "peft", specifier = ">=0.12.0,<1.0.0" },
     { name = "torch", specifier = ">=2.5.1,<3.0.0" },
     { name = "transformers", specifier = ">=4.44.2,<5.0.0" },
+]
+ui = [
+    { name = "altair", specifier = ">=5.0.0" },
+    { name = "plotly", specifier = ">=5.17.0" },
+    { name = "streamlit", specifier = ">=1.28.0" },
 ]
 
 [[package]]

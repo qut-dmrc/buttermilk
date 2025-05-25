@@ -11,7 +11,7 @@ run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: api
   ui: web
-  human_in_loop: ${human_in_loop}
+  human_in_loop: false
   save: ${save}
   flows: {}
   

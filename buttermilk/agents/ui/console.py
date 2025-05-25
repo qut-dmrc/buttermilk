@@ -2,7 +2,6 @@
 """
 
 import asyncio
-import json
 from collections.abc import Awaitable, Callable  # Added List, Union, Optional
 from typing import Union
 
@@ -30,6 +29,7 @@ from buttermilk._core.contract import (
     UIMessage,  # Requests sent *to* the manager (this agent)
 )
 from buttermilk._core.types import Record  # For displaying record data
+from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
 from buttermilk.agents.rag.ragzot import ResearchResult
@@ -73,9 +73,6 @@ class CLIUserAgent(UIAgent):
         if msg_markdown := self._fmt_msg(message, source=source):
             # If formatting is successful, print the message to the console.
             self._console.print(msg_markdown)
-        else:
-            # Fallback if formatting fails or returns None
-            self._console.print(Markdown(f"## Unable to format message:\n{pretty_repr(message)}"))
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
@@ -135,63 +132,18 @@ class CLIUserAgent(UIAgent):
                     output_lines.append(str(outputs))  # Use QualResults's __str__
                 elif isinstance(outputs, JudgeReasons):
                     output_lines.append("### Conclusion")
-                    output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.uncertainty}")
+                    output_lines.append(f"**Prediction**: {outputs.prediction}")
                     output_lines.append(f"**Conclusion**: {outputs.conclusion}")
                     if outputs.reasons:
                         output_lines.append("### Reasons:")
                         output_lines.extend([f"- {reason}" for reason in outputs.reasons])
-                # Handle list output (potentially records?)
-                elif isinstance(outputs, list):
-                    # Check if it's a list of Records - needs better type checking maybe
-                    if outputs and isinstance(outputs[0], dict) and "record_id" in outputs[0]:
-                        for i, rec_dict in enumerate(outputs):
-                            output_lines.append(f"### Record {i + 1}: {rec_dict.get('record_id', 'N/A')}")
-                            # Display limited fields for brevity
-                            output_lines.append(f"```\n{pretty_repr(rec_dict, max_string=500)}\n```")
-                    else:  # Generic list
-                        output_lines.append("### Output:")
-                        output_lines.append(f"```\n{pretty_repr(outputs, max_string=8000)}\n```")
-
-                # Handle dictionary output (generic JSON/dict)
-                elif isinstance(outputs, dict):
-                    # Look for common patterns like 'reasons' list
-                    if reasons := outputs.get("reasons"):
-                        if isinstance(reasons, list):
-                            output_lines.append("### Reasons:")
-                            output_lines.extend([f"- {reason}" for reason in reasons])
-                        else:  # If reasons is not a list, print raw dict
-                            output_lines.append("### Output:")
-                            output_lines.append(f"```json\n{json.dumps(outputs, indent=2)}\n```")
-                    else:  # Generic dictionary
-                        output_lines.append("### Output:")
-                        output_lines.append(f"```json\n{json.dumps(outputs, indent=2)}\n```")
-
-                # Handle raw string content if outputs is just a string
-                elif isinstance(outputs, str):
-                    output_lines.append("### Output:")
-                    output_lines.append(outputs)
-
-                # Display raw content if available and not handled above
-                elif hasattr(message, "contents") and message.content and not outputs:
-                    output_lines.append(message.content)
-
-                # Optionally display inputs that led to this output
-                # if inputs:
-                #    output_lines.append("### (Triggering Input Parameters):")
-                #    output_lines.append(f"```\n{pretty_repr(inputs.parameters if hasattr(inputs, 'parameters') else inputs, max_string=400)}\n```")
-
-                # Display metadata (like token usage)
-                if metadata:
-                    output_lines.append(f"### Metadata:\n\n{metadata!s}")
-                    # syntax = Syntax(str(metadata), "python", theme="default", line_numbers=False, word_wrap=False)
-
-            elif isinstance(message, AgentInput):
-                output_lines.append("### Input Request:")
-                if message.inputs:
-                    output_lines.append("**Inputs:**")
-                    output_lines.append(f"```json\n{json.dumps(message.inputs, indent=2)}\n```")
-                # Could add context/records display here if needed
-
+                elif isinstance(outputs, Differences):
+                    output_lines.append("### Differences:")
+                    output_lines.append(f"**Conclusion**: {outputs.conclusion}")
+                elif isinstance(outputs, Record):
+                    output_lines.append(f"### Record: {outputs.record_id}")
+                    # Display limited fields for brevity
+                    output_lines.append(f"```\n{pretty_repr(outputs.as_markdown(), max_string=2000)}\n```")
             elif isinstance(message, UIMessage):
                 output_lines.append(f"### Request:\n{message.content}")
                 # Often includes a plan or question needing confirmation

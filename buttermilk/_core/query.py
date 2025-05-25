@@ -11,7 +11,7 @@ import datetime
 import humanfriendly  # For human-readable data sizes and numbers
 import pandas as pd
 from google.cloud import bigquery  # Google Cloud BigQuery client library
-from pydantic import BaseModel, ConfigDict  # Pydantic for model validation
+from pydantic import BaseModel, ConfigDict, Field  # Pydantic for model validation
 
 from buttermilk._core.log import logger  # Centralized logger
 
@@ -29,24 +29,16 @@ class QueryRunner(BaseModel):
     approximate cost.
 
     Attributes:
-        _bq_client (bigquery.Client): An instance of the authenticated Google
-            BigQuery client. This is a private attribute.
+        bq_client (bigquery.Client): An instance of the authenticated Google
+            BigQuery client.
         model_config (ConfigDict): Pydantic model configuration.
             - `arbitrary_types_allowed`: True - Allows `bigquery.Client` type.
+
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    _bq_client: bigquery.Client # Private attribute for the BigQuery client instance
-
-    def __init__(self, bq_client: bigquery.Client) -> None:
-        """Initializes the QueryRunner with an authenticated BigQuery client.
-
-        Args:
-            bq_client (bigquery.Client): An instance of the Google Cloud
-                BigQuery client, already authenticated and configured.
-        """
-        super().__init__(_bq_client=bq_client)
+    bq_client: bigquery.Client = Field(..., description="Authenticated BigQuery client instance.")
 
     def run_query(
         self,
@@ -93,15 +85,16 @@ class QueryRunner(BaseModel):
             RuntimeError: Can be implicitly raised by the BigQuery client for
                 various API errors, though this method attempts to catch common
                 exceptions and log them, returning `False` or `None`.
+
         """
-        t_start = datetime.datetime.now(datetime.UTC) # Use UTC for consistency
+        t_start = datetime.datetime.now(datetime.UTC)  # Use UTC for consistency
 
         job_config = bigquery.QueryJobConfig(use_legacy_sql=False)
 
         if save_to_gcs:
             if not save_dir:
                 logger.error("`save_dir` must be provided when `save_to_gcs` is True.")
-                return None # Indicate failure due to missing configuration
+                return None  # Indicate failure due to missing configuration
 
             import shortuuid  # For unique filenames
             # Ensure save_dir ends with a slash for proper GCS path construction
@@ -115,31 +108,28 @@ class QueryRunner(BaseModel):
         elif destination:
             job_config.destination = destination
             job_config.write_disposition = (
-                bigquery.WriteDisposition.WRITE_TRUNCATE
-                if overwrite
-                else bigquery.WriteDisposition.WRITE_APPEND # Or WRITE_EMPTY if preferred
+                bigquery.WriteDisposition.WRITE_TRUNCATE if overwrite else bigquery.WriteDisposition.WRITE_APPEND  # Or WRITE_EMPTY if preferred
             )
             logger.info(f"Query results will be saved to BigQuery table: {destination} (Overwrite: {overwrite})")
 
-
         try:
-            query_job = self._bq_client.query(sql, job_config=job_config)
+            query_job = self.bq_client.query(sql, job_config=job_config)
             logger.info(f"BigQuery job submitted: {query_job.job_id}")
 
             # Wait for the job to complete to get statistics
-            query_job.result() # This blocks until the query completes
+            query_job.result()  # This blocks until the query completes
 
         except Exception as e:
             logger.error(f"BigQuery query submission or execution failed: {e!s}")
-            return None # Indicate failure
+            return None  # Indicate failure
 
         # Collect and log statistics
-        bytes_billed = query_job.total_bytes_billed or 0 # Ensure not None
+        bytes_billed = query_job.total_bytes_billed or 0  # Ensure not None
         cache_hit = query_job.cache_hit
         approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
 
         bytes_billed_str = humanfriendly.format_size(bytes_billed)
-        approx_cost_str = f"${approx_cost:.2f}" # Format cost to 2 decimal places
+        approx_cost_str = f"${approx_cost:.2f}"  # Format cost to 2 decimal places
 
         time_taken = datetime.datetime.now(datetime.UTC) - t_start
         logger.info(
@@ -147,18 +137,18 @@ class QueryRunner(BaseModel):
             f"Bytes billed: {bytes_billed_str}, Approx. cost: {approx_cost_str}.",
         )
 
-        if do_not_return_results or save_to_gcs: # If results saved to GCS, also don't return them directly
-            return True # Indicate successful execution without returning data
+        if do_not_return_results or save_to_gcs:  # If results saved to GCS, also don't return them directly
+            return True  # Indicate successful execution without returning data
 
         try:
             if return_df:
                 if query_job.total_rows and query_job.total_rows > 0:
                     return query_job.to_dataframe()
                 return pd.DataFrame()  # Return empty DataFrame for no rows
-            return query_job # Return the job object which contains RowIterator
+            return query_job  # Return the job object which contains RowIterator
         except Exception as e:
             logger.error(f"Failed to retrieve BigQuery query results for job '{query_job.job_id}': {e!s}")
-            return None # Indicate failure
+            return None  # Indicate failure
 
     def estimate_query_cost(self, sql: str) -> tuple[int | None, float | None]:
         """Estimates the cost of a BigQuery SQL query without actually executing it.
@@ -180,15 +170,16 @@ class QueryRunner(BaseModel):
                 or if cost estimation encounters an unexpected error. This behavior
                 is preserved from the original code, though returning (None, None)
                 might be an alternative for handling failures.
+
         """
         try:
             job_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
             # use_query_cache=False ensures it estimates actual processing cost
 
-            query_job = self._bq_client.query(sql, job_config=job_config) # Perform dry run
+            query_job = self.bq_client.query(sql, job_config=job_config)  # Perform dry run
 
-            bytes_processed = query_job.total_bytes_processed # This is the key metric from dry run
-            if bytes_processed is None: # Should not happen for successful dry run, but defensive
+            bytes_processed = query_job.total_bytes_processed  # This is the key metric from dry run
+            if bytes_processed is None:  # Should not happen for successful dry run, but defensive
                 logger.warning("Dry run for query cost estimation did not return total_bytes_processed.")
                 return None, None
 
@@ -196,11 +187,10 @@ class QueryRunner(BaseModel):
 
             # Log human-readable estimates
             bytes_processed_str = humanfriendly.format_size(bytes_processed)
-            estimated_cost_str = f"${estimated_cost_usd:.2f}" # Format cost
+            estimated_cost_str = f"${estimated_cost_usd:.2f}"  # Format cost
 
             logger.info(
-                f"Query cost estimation: Bytes to be processed: {bytes_processed_str}, "
-                f"Approximate cost: {estimated_cost_str}"
+                f"Query cost estimation: Bytes to be processed: {bytes_processed_str}, Approximate cost: {estimated_cost_str}",
             )
             return bytes_processed, estimated_cost_usd
         except Exception as e:

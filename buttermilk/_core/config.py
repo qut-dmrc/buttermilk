@@ -38,11 +38,8 @@ from buttermilk.utils.validators import (
     uppercase_validator,
 )
 
-from .defaults import BQ_SCHEMA_DIR  # Default directory for BigQuery schemas
+from .constants import BQ_SCHEMA_DIR  # Default directory for BigQuery schemas
 from .types import RunRequest  # Type for run requests
-
-BASE_DIR = Path(__file__).absolute().parent
-"""The absolute parent directory of this configuration file."""
 
 CloudProvider = Literal[
     "gcp",
@@ -596,25 +593,9 @@ class AgentConfig(BaseModel):
 
         # Construct the context for JMESPath search manually to avoid recursion.
         # This context should contain fields that name_components might refer to,
-        # respecting aliases and excluding None values.
-        context_for_jmespath = {}
-        for f_name, f_info in self.model_fields.items():
-            if f_name == "agent_name":  # Skip the computed field itself
-                continue
-            # Skip private attributes that are not part of the intended naming context
-            if f_name.startswith("_") and f_name != "_agent_name":  # Example, adjust if other private attrs are needed
-                continue
-
-            if hasattr(self, f_name):
-                value = getattr(self, f_name)
-                if value is not None:  # Mimic exclude_none=True
-                    key_for_jmespath = f_info.alias or f_name
-                    context_for_jmespath[key_for_jmespath] = value
-
-        # Explicitly add/ensure 'unique_identifier' and the canonical 'agent_id' are in the context.
-        # 'unique_identifier' might be Field(exclude=True) and 'agent_id' was just set.
-        context_for_jmespath["unique_identifier"] = self.unique_identifier
-        context_for_jmespath["agent_id"] = self.agent_id  # Use the canonical agent_id
+        # respecting aliases and excluding None values. Ensure 'unique_identifier'
+        # and the canonical 'agent_id' are in the context.
+        context_for_jmespath = {**self.model_dump(include={"unique_identifier", "agent_id", "role"}), **self.parameters}
 
         for comp_path in self.name_components:
             part = None
@@ -627,7 +608,7 @@ class AgentConfig(BaseModel):
                 name_parts.append(str(part).strip())
             # Fallback for literal short strings if JMESPath fails/not applicable
             # and comp_path itself is not a key that yielded a value from context_for_jmespath
-            elif part is None and comp_path and comp_path not in context_for_jmespath and len(comp_path) <= 16:
+            elif part is None and comp_path and comp_path not in context_for_jmespath and len(comp_path) <= 4:
                 name_parts.append(comp_path)
 
         name = " ".join(filter(None, name_parts)).strip()  # Filter None before join

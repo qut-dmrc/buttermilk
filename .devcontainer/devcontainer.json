@@ -27,7 +27,7 @@
             ],
             "settings": {
                 "python.terminal.activateEnvironment": true,
-                "python.defaultInterpreterPath": "/workspaces/buttermilk/.venv/bin/python",
+                "python.defaultInterpreterPath": "/src/buttermilk/.venv/bin/python",
                 "python.editor.formatOnSave": true,
                 "python.editor.codeActionsOnSave": {
                     "source.organizeImports": true

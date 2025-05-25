@@ -22,7 +22,6 @@ execution of defined flows.
 
 import asyncio
 import os  # For setting environment variables (e.g., Slack tokens)
-from uuid import uuid4  # For generating unique IDs
 
 import hydra  # For configuration management
 import uvicorn  # For running the FastAPI server
@@ -102,8 +101,8 @@ def main(conf: DictConfig) -> None:
             # Each job gets a completely fresh orchestrator instance to ensure
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
-            max_jobs = conf.get("max_jobs", 1)  # Get max_jobs from config or default to 1
-            ui = CLIUserAgent(session_id=uuid4().hex)
+            max_jobs = conf.get("max_jobs", 5)  # Get max_jobs from config or default to 5
+            ui = CLIUserAgent()
 
             logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
             asyncio.run(flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback()))

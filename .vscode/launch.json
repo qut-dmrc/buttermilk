@@ -82,7 +82,7 @@
     "+run=batch",
     "run.mode=batch_run",
     "flows=[trans]",
-    "human_in_loop=false",
+    "run.human_in_loop=false",
     "llms=full",
   ],
   "envFile": "${workspaceFolder}/.env",
@@ -104,7 +104,7 @@
         "flows=[trans,simple,z]",
         "+flow=${input:flow}",
         "llms=full",
-        "human_in_loop=${input:human_in_loop}",
+        "run.human_in_loop=${input:human_in_loop}",
         "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -142,31 +142,15 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "args": ["run", "buttermilk/web/interface.py",
+      "args": [
+        "run",
+        "buttermilk/frontend/streamlit/app.py",
         "hydra.verbose=false",
         "flows=[trans]",
-        "+run=streamlit",
-        "llms=lite",
-        "name=bmdevelopment",
-        "job=api",
+        "+name=bm_development",
+        "+job=streamlit",
         //"+record_id=${input:query}" // Will prompt for query
       ],
-    },
-    {
-      "name": "cli interactive",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": true,
-      "args": [
-        "+run=lv",
-        "llms=lite",
-        //"+record_id=${input:query}" // Will prompt for query
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
     },
     {
       "name": "slack debug",

@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.defaults import COL_PREDICTION
+from buttermilk._core.constants import COL_PREDICTION
 
 
 class Score(BaseModel):

@@ -128,6 +128,11 @@ dev = [
     "buttermilk",
     "pytest-anyio>=0.0.0",
 ]
+ui = [
+    "streamlit>=1.28.0",
+    "plotly>=5.17.0",
+    "altair>=5.0.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]

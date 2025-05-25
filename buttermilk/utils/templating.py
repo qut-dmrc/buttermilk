@@ -25,7 +25,7 @@ from jinja2 import (  # Jinja2 templating components
 from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
-from buttermilk._core.defaults import TEMPLATES_PATH  # Default path for templates
+from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError  # Custom exceptions
 from buttermilk._core.types import Record  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
