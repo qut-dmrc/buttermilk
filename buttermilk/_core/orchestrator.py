@@ -51,7 +51,7 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.runner.helpers import prepare_step_df  # Helper for data preparation
+from buttermilk.data.loaders import create_data_loader, DataLoader  # New data loading system
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
@@ -189,7 +189,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         description="Unique ID for this specific flow execution session, used for tracing.",
     )
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _data_sources: dict[str, Any] = PrivateAttr(default_factory=dict)  # Changed default to factory
+    _data_loaders: dict[str, DataLoader] = PrivateAttr(default_factory=dict)  # New data loaders
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
@@ -243,16 +243,23 @@ class Orchestrator(OrchestratorProtocol, ABC):
         return self
 
     async def load_data(self) -> None:
-        """Loads data from the configured data sources.
+        """Creates data loaders from the configured data sources.
 
-        Populates `self._data_sources` by processing the `DataSourceConfig`
-        entries in `self.data` using `prepare_step_df`.
+        Initializes `self._data_loaders` by creating appropriate DataLoader
+        instances for each `DataSourceConfig` in `self.data`.
         This method should be called before attempting to access data via
         `get_record_dataset` if data sources are defined.
         """
         if self.data:  # Only load if data sources are configured
-            self._data_sources = await prepare_step_df(self.data)
-            logger.info(f"Data sources loaded for orchestrator '{self.name}': {list(self._data_sources.keys())}")
+            for source_name, config in self.data.items():
+                try:
+                    loader = create_data_loader(config)
+                    self._data_loaders[source_name] = loader
+                    logger.debug(f"Created data loader for source '{source_name}': {type(loader).__name__}")
+                except Exception as e:
+                    logger.error(f"Failed to create data loader for source '{source_name}': {e}")
+                    raise
+            logger.info(f"Data loaders created for orchestrator '{self.name}': {list(self._data_loaders.keys())}")
         else:
             logger.info(f"No data sources configured for orchestrator '{self.name}'.")
 
@@ -421,12 +428,11 @@ class Orchestrator(OrchestratorProtocol, ABC):
             logger.info("No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list.")
 
     async def get_record_dataset(self, record_id: str) -> Record:
-        """Retrieves a specific record by its ID from the loaded data sources.
+        """Retrieves a specific record by its ID from the configured data loaders.
 
-        This method first ensures that data sources are loaded (by calling
-        `self.load_data()` if `self._data_sources` is empty). It then iterates
-        through the loaded datasets (typically Pandas DataFrames) and queries
-        for the given `record_id`.
+        This method first ensures that data loaders are initialized (by calling
+        `self.load_data()` if `self._data_loaders` is empty). It then iterates
+        through each data loader to find the record with the given `record_id`.
 
         Args:
             record_id: The unique identifier of the record to retrieve.
@@ -436,56 +442,60 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         Raises:
             ProcessingError: If the specified `record_id` cannot be found in any
-                of the loaded data sources.
-            ValueError: If multiple records are found for the given `record_id`
-                (implying non-unique IDs within or across datasets).
+                of the configured data sources.
 
         """
-        if not self._data_sources:  # Ensure data sources are loaded
+        if not self._data_loaders:  # Ensure data loaders are initialized
             await self.load_data()
-            if not self._data_sources:  # Still no data sources after attempting load
-                raise ProcessingError(f"No data sources loaded. Cannot find record: {record_id}")
+            if not self._data_loaders:  # Still no data loaders after attempting load
+                raise ProcessingError(f"No data sources configured. Cannot find record: {record_id}")
 
-        for source_name, dataset in self._data_sources.items():
-            # Assuming dataset is a Pandas DataFrame, adjust if other types are used
-            if not isinstance(dataset, pd.DataFrame):
-                logger.warning(f"Data source '{source_name}' is not a Pandas DataFrame. Skipping query for record_id '{record_id}'.")
-                continue
-
+        for source_name, loader in self._data_loaders.items():
             try:
-                # Ensure record_id is a valid column or index name before querying
-                # This check might be too simplistic depending on DataFrame structure
-                if "record_id" in dataset.columns or dataset.index.name == "record_id":
-                    # Querying logic might need adjustment based on how record_id is stored (column vs. index)
-                    # This example assumes 'record_id' can be directly queried.
-                    # If record_id is the index: found_records = dataset.loc[[record_id]]
-                    # If record_id is a column: found_records = dataset.query("record_id == @record_id")
-                    # For flexibility, let's try to be adaptive, but this could be fragile.
-                    if "record_id" in dataset.columns:
-                        found_records_df: pd.DataFrame = dataset.query("record_id == @record_id")
-                    elif dataset.index.name == "record_id" and record_id in dataset.index:
-                        found_records_df = dataset.loc[[record_id]]
-                    else:  # record_id not found as column or index name in this dataset
-                        continue
-                else:  # 'record_id' column or index not present in this dataset
-                    continue
-
-                if found_records_df.shape[0] == 1:
-                    data_dict = found_records_df.iloc[0].to_dict()
-                    # Ensure 'record_id' is in the dict, taking from index if it was the source
-                    if "record_id" not in data_dict and found_records_df.index.name == "record_id":
-                        data_dict["record_id"] = found_records_df.index[0]
-
-                    return Record(**data_dict)  # type: ignore
-                if found_records_df.shape[0] > 1:
-                    raise ValueError(
-                        f"Multiple records found in source '{source_name}' for record_id == '{record_id}'. Record IDs must be unique.",
-                    )
-            except Exception as e:  # Catch errors during query or Record instantiation
-                logger.warning(f"Error querying or processing record from source '{source_name}' for record_id '{record_id}': {e!s}")
+                # Iterate through records from this loader to find matching record_id
+                for record in loader:
+                    if record.record_id == record_id:
+                        logger.debug(f"Found record '{record_id}' in data source '{source_name}'")
+                        return record
+            except Exception as e:
+                logger.warning(f"Error searching for record '{record_id}' in source '{source_name}': {e!s}")
                 continue  # Try next data source
 
-        raise ProcessingError(f"Unable to find requested record: '{record_id}' in any loaded data source.")
+        raise ProcessingError(f"Unable to find requested record: '{record_id}' in any configured data source.")
+
+    async def get_all_records(self, source_name: str | None = None) -> list[Record]:
+        """Retrieves all records from specified data source or all sources.
+
+        Args:
+            source_name: Optional name of specific data source. If None, 
+                       returns records from all sources.
+
+        Returns:
+            List of Record objects.
+        """
+        if not self._data_loaders:
+            await self.load_data()
+            if not self._data_loaders:
+                return []
+
+        records = []
+        if source_name:
+            if source_name in self._data_loaders:
+                try:
+                    records.extend(list(self._data_loaders[source_name]))
+                except Exception as e:
+                    logger.error(f"Error loading records from source '{source_name}': {e}")
+            else:
+                logger.warning(f"Data source '{source_name}' not found")
+        else:
+            # Get records from all sources
+            for name, loader in self._data_loaders.items():
+                try:
+                    records.extend(list(loader))
+                except Exception as e:
+                    logger.error(f"Error loading records from source '{name}': {e}")
+        
+        return records
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates and returns an asynchronous callback function for publishing messages.

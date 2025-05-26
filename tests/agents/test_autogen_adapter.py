@@ -20,7 +20,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 # The class under test

@@ -5,7 +5,7 @@ from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
 from buttermilk._core.types import MediaObj, Record, RunRequest  # Import RunRequest
 from buttermilk.agents.llm import LLMAgent as LC
-from buttermilk.runner.flowrunner import Flow  # Import Flow
+from buttermilk.runner.flowrunner import FlowRunner  # Import Flow
 
 
 def param_model(request):
@@ -32,7 +32,7 @@ def framer():
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = Flow(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", steps=[framer])
     run_request = RunRequest(  # Replaced Job with RunRequest
         ui_type="testing",  # Mapped source to ui_type
         flow="testflow",  # Mapped flow_id to flow
@@ -41,7 +41,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
         session_id="test_session",  # Added required session_id
     )
 
-    async for result in flow.run_flows(run_request=run_request): # Pass run_request
+    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result
         assert isinstance(result.record, Record)
         assert not result.error
@@ -51,7 +51,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = Flow(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", steps=[framer])
     run_request = RunRequest(  # Replaced Job with RunRequest
         ui_type="testing",  # Mapped source to ui_type
         flow="testflow",  # Mapped flow_id to flow
@@ -59,7 +59,7 @@ async def test_frames_article(framer, news_record, bm: BM, model):
         run_info=bm.run_info,
         session_id="test_session",  # Added required session_id
     )
-    async for result in flow.run_flows(run_request=run_request): # Pass run_request
+    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result
         assert isinstance(result.record, Record)
         assert not result.error
@@ -69,9 +69,9 @@ async def test_frames_article(framer, news_record, bm: BM, model):
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
-    flow = Flow(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", steps=[framer])
 
-    record = Record(content="", data=link_to_video_gcp) # Added content field
+    record = Record(content="", data=link_to_video_gcp)  # Added content field
     run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", records=[record], run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args
     async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result

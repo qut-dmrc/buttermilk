@@ -1,7 +1,8 @@
-
 import pytest
 
-from buttermilk._core.contract import END, AgentInput, AgentTrace, ConductorRequest, StepRequest
+from buttermilk._core.constants import END
+from buttermilk._core.contract import AgentInput, AgentTrace, ConductorRequest, StepRequest
+from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 
 @pytest.mark.anyio

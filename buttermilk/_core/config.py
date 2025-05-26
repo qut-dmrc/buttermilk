@@ -258,7 +258,7 @@ class DataSourceConfig(BaseModel):
         description="Maximum records to process per group if grouping is applied. -1 for no limit.",
     )
     type: Literal[
-        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs",
+        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs", "huggingface",
     ] = Field(description="The type of the data source.")
     path: str = Field(
         default="",
@@ -310,6 +310,12 @@ class DataSourceConfig(BaseModel):
     )
     collection_name: str = Field(
         default="", description="Name of the collection for 'chromadb'.",
+    )
+    name: str = Field(
+        default="", description="Name/subset for HuggingFace datasets.",
+    )
+    split: str = Field(
+        default="train", description="Split for HuggingFace datasets (e.g., 'train', 'test').",
     )
 
     model_config = ConfigDict(
