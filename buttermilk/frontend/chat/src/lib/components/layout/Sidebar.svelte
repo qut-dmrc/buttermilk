@@ -53,7 +53,7 @@
 					placeholder="Choose a record..."
 					bind:value={$selectedRecord}
 					disabled={!$selectedFlow}
-					valueProperty="id"
+					valueProperty="record_id"
 					labelProperty="name"
 					on:change={(e) => {
 						console.log("Record dropdown changed detail:", e.detail);

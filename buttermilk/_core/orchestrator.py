@@ -444,7 +444,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if not self._data_sources:  # Ensure data sources are loaded
             await self.load_data()
             if not self._data_sources:  # Still no data sources after attempting load
-                 raise ProcessingError(f"No data sources loaded. Cannot find record: {record_id}")
+                raise ProcessingError(f"No data sources loaded. Cannot find record: {record_id}")
 
         for source_name, dataset in self._data_sources.items():
             # Assuming dataset is a Pandas DataFrame, adjust if other types are used
@@ -475,11 +475,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     # Ensure 'record_id' is in the dict, taking from index if it was the source
                     if "record_id" not in data_dict and found_records_df.index.name == "record_id":
                         data_dict["record_id"] = found_records_df.index[0]
-
-                    # Handle 'components' field if it exists and is empty (example specific logic)
-                    if "components" in data_dict and not data_dict["components"] and isinstance(data_dict.get("components"), list):
-                         # This specific transformation might need to be more robust or configurable
-                        data_dict["components"] = "\n".join([str(d.get("content", "")) for d in data_dict["components"] if isinstance(d, dict)])  # type: ignore
 
                     return Record(**data_dict)  # type: ignore
                 if found_records_df.shape[0] > 1:

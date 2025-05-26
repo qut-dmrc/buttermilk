@@ -1,6 +1,6 @@
 
 drag:
   type: file
-  path: gs://dmrc-platforms/data/osb_drag_toxic_train.jsonl
+  path: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
   index:
     - record_id
