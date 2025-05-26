@@ -1,5 +1,5 @@
 # Import silence_logs early to suppress noisy log messages
-from .utils.silence_logs import silence_task_logs
+from buttermilk.utils.silence_logs import silence_task_logs
 
 # Suppress logs as early as possible during import
 silence_task_logs()

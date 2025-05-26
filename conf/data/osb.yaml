@@ -1,6 +1,5 @@
 
 osb:
-  name: cases
   type: vector
   uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
   db:

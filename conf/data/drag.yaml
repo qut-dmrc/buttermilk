@@ -1,6 +1,5 @@
 
 drag:
-  name: Drag Queens and White Supremacists
   type: file
   path: gs://dmrc-platforms/data/osb_drag_toxic_train.jsonl
   index:

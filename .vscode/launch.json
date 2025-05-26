@@ -60,9 +60,8 @@
       "args": [
         "+run=api",
         "flows=[mock,trans,simple,z,tox,judger]",
-        "human_in_loop=${input:human_in_loop}",
+        "run.human_in_loop=${input:human_in_loop}",
         "llms=full",
-        "ui=web"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -104,7 +103,6 @@
         "flows=[trans,simple,z]",
         "+flow=${input:flow}",
         "llms=full",
-        "run.human_in_loop=${input:human_in_loop}",
         "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -131,26 +129,6 @@
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
-    },
-    {
-      "name": "streamlit",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "streamlit",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "args": [
-        "run",
-        "buttermilk/frontend/streamlit/app.py",
-        "hydra.verbose=false",
-        "flows=[trans]",
-        "+name=bm_development",
-        "+job=streamlit",
-        //"+record_id=${input:query}" // Will prompt for query
-      ],
     },
     {
       "name": "slack debug",
