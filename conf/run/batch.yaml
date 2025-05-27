@@ -2,7 +2,9 @@
 # Batch execution configuration
 defaults:
   - /local
+  - /llms: full
   - _self_
+  
 
 name: bm_batch
 job: flows

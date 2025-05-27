@@ -1,5 +1,5 @@
 differentiator:
-  role: DIFFERENTIATOR
+  role: DIFF
   name_components: ["📊", "role", "model", "criteria", "unique_identifier"]
   agent_obj: Differentiator
   num_runs: 1

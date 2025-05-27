@@ -60,7 +60,6 @@
       "args": [
         "+run=api",
         "flows=[mock,trans,simple,z,tox,judger]",
-        "run.human_in_loop=${input:human_in_loop}",
         "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -81,7 +80,6 @@
     "+run=batch",
     "run.mode=batch_run",
     "flows=[trans]",
-    "run.human_in_loop=false",
     "llms=full",
   ],
   "envFile": "${workspaceFolder}/.env",
