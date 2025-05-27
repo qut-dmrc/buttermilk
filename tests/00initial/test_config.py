@@ -55,7 +55,7 @@ async def test_get_ip_updates_ip(bm):
     mock_ip_address = "192.168.1.100"
 
     # Patch the external get_ip utility function
-    with patch("buttermilk.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
+    with patch("buttermilk.utils.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
         mock_get_ip.return_value = mock_ip_address
 
         # Create a minimal configuration required for BM initialization
@@ -81,7 +81,7 @@ async def test_get_ip_caches_ip(m):
     mock_ip_address = "10.0.0.50"
 
     # Patch the external get_ip utility function
-    with patch("buttermilk.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
+    with patch("buttermilk.utils.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
         mock_get_ip.return_value = mock_ip_address
 
         # Create a minimal configuration required for BM initialization

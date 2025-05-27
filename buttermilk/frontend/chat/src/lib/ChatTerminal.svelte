@@ -1,25 +1,21 @@
 <script lang="ts">
-import './styles/terminal.scss';
-import { onMount, onDestroy } from 'svelte';
+import { onDestroy, onMount } from 'svelte';
 import { get } from 'svelte/store';
 import MessageDisplay from './components/MessageDisplay.svelte';
-import { sessionId } from './stores/sessionStore';
-import { messageHistory } from './stores/messageHistoryStore';
-import { messageStore, addMessage as addToMessageStore } from './stores/messageStore';
 import { flowRunning, selectedFlow as flowStore, selectedRecord as recordStore, selectedCriteria, selectedModel } from './stores/apiStore';
-import { 
-  type Message, 
-  type WebSocketData,
-  type SystemUpdate,
-  type RecordData,
-  type SummaryResult,
-  type MessageType,
-  type UIMessage,
-  normalizeWebSocketMessage,
-  type ManagerResponse,
-  isAssessment,
-  type Assessments,
-  isSystemUpdate} from './utils/messageUtils';
+import { messageHistory } from './stores/messageHistoryStore';
+import { addMessage as addToMessageStore } from './stores/messageStore';
+import { sessionId } from './stores/sessionStore';
+import './styles/terminal.scss';
+import {
+	type ManagerResponse,
+	type Message,
+	type MessageType,
+	type SystemUpdate,
+	type UIMessage,
+	isSystemUpdate,
+	normalizeWebSocketMessage
+} from './utils/messageUtils';
 
 
   // WebSocket connection parameters
@@ -29,7 +25,7 @@ import {
   
   // Monitor props for debugging
   $: {
-    console.log(`DirectWebSocketTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
+    console.log(`ChatTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
   }
   
   // Component state
