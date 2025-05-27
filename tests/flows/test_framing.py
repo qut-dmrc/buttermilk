@@ -3,7 +3,7 @@ import pytest
 from buttermilk._core import BM, logger
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
-from buttermilk._core.types import MediaObj, Record, RunRequest  # Import RunRequest
+from buttermilk._core.types import Record, RunRequest  # Import RunRequest
 from buttermilk.agents.llm import LLMAgent as LC
 from buttermilk.runner.flowrunner import FlowRunner  # Import Flow
 
@@ -80,6 +80,6 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
 
 
 @pytest.fixture(scope="session")
-def link_to_video_gcp() -> MediaObj:
-    obj = MediaObj(uri="gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4", mime="video/mp4")
+def link_to_video_gcp() -> Record:
+    obj = Record(uri="gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4", content="Video content", mime="video/mp4")
     return obj

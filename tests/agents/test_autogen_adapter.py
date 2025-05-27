@@ -34,13 +34,13 @@ def conductor_request() -> ConductorRequest:
     """Create a sample ConductorRequest object for testing."""
     return ConductorRequest(
         inputs={
-            "participants": {
-                "AGENT1": {"config": "some_config"},
-                "AGENT2": {"config": "some_config"},
-            },
             "task": "test task",
+            "prompt": "Test prompt for conductor",
         },
-        prompt="Test prompt for conductor",
+        participants={
+            "AGENT1": {"config": "some_config"},
+            "AGENT2": {"config": "some_config"},
+        },
     )
 
 

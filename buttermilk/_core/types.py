@@ -1,12 +1,11 @@
 """Core data types and Pydantic models used throughout the Buttermilk framework.
 
 This module defines fundamental data structures such as `Record` for representing
-individual data items, `MediaObj` for handling multimedia content, and `RunRequest`
-for encapsulating parameters for initiating orchestrator runs. These types ensure
-consistent data handling and interfaces across different components of Buttermilk.
+individual data items and `RunRequest` for encapsulating parameters for initiating
+orchestrator runs. These types ensure consistent data handling and interfaces across
+different components of Buttermilk.
 """
 
-import base64
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from pathlib import Path  # For path manipulation
@@ -21,215 +20,10 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,  # For private attributes not part of the model schema
     computed_field,  # For fields computed from other fields
     field_validator,  # For custom field validation
     model_validator,  # For model-level validation
 )
-
-from buttermilk.utils.utils import is_b64  # Utility to check for base64 encoding
-
-
-class MediaObj(BaseModel):
-    """Represents a media object, which can be text, an image, or other binary data.
-
-    This model is used to encapsulate different types of media content, providing
-    methods to access the content in various formats (e.g., as text, data URL,
-    or as a content part for specific LLM providers like OpenAI or Anthropic).
-
-    Attributes:
-        label (str | None): An optional label describing the section or type of
-            this media content (e.g., "heading", "body_paragraph", "caption", "image").
-        metadata (dict): A dictionary for storing arbitrary metadata associated
-            with the media object. Defaults to an empty dict.
-        uri (str | None): An optional URI (Uniform Resource Identifier) that points
-            to the media content, especially if it's stored in cloud storage or
-            accessible via a URL.
-        mime (str | None): The MIME type of the media content (e.g., "text/plain",
-            "image/jpeg", "application/pdf"). Defaults to "text/plain".
-        _text (str | None): Private attribute storing the textual content if the
-            media is text-based.
-        _image (Image | None): Private attribute storing a Pillow `Image` object
-            if the media is an image.
-        _base_64 (str | None): Private attribute storing the base64 encoded string
-            if the media is binary data or an image represented in base64.
-        model_config (ConfigDict): Pydantic model configuration.
-            - `extra`: "ignore" - Ignores extra fields during model parsing.
-            - `arbitrary_types_allowed`: True.
-            - `populate_by_name`: True.
-            - `exclude_unset`: True.
-            - `exclude_none`: True.
-            - `exclude`: {"data", "base_64"} - Excludes these from serialization.
-
-    """
-
-    label: str | None = Field(
-        default=None,
-        description="Optional label for the type or section of content (e.g., 'heading', 'image').",
-    )
-    metadata: dict[str, Any] = Field(  # Added type hint for dict value
-        default_factory=dict,  # Use factory for mutable default
-        description="Arbitrary metadata associated with the media object.",
-    )
-    uri: str | None = Field(
-        default=None,
-        description="Optional URI for media content, especially if cloud-stored or URL-accessible.",
-    )
-    mime: str | None = Field(
-        default="text/plain",  # Default MIME type if not specified
-        description="MIME type of the media content (e.g., 'text/plain', 'image/jpeg').",
-    )
-
-    _text: str | None = PrivateAttr(default=None)
-    _image: Image | None = PrivateAttr(default=None)
-    _base_64: str | None = PrivateAttr(default=None)
-
-    model_config = ConfigDict(
-        extra="ignore",
-        arbitrary_types_allowed=True,
-        populate_by_name=True,
-        exclude_unset=True,
-        exclude_none=True,
-        exclude={"data", "base_64"},  # Exclude fields not directly part of the model
-    )
-
-    def __str__(self) -> str:
-        """Returns a string representation of the MediaObj, showing its label, MIME type, and a snippet of its text content."""
-        text_snippet = self.as_text()[:50] + "..." if self.as_text() and len(self.as_text()) > 50 else self.as_text()
-        return f"{self.label or 'MediaObj'} ({self.mime or 'unknown/mime'}) - Content: '{text_snippet}'"
-
-    @model_validator(mode="after")
-    def interpret_data(self) -> Self:
-        """Interprets raw content passed via `model_extra` (e.g., a 'content' field).
-
-        This validator attempts to determine if the raw content is text, base64
-        encoded data, raw bytes, or a Pillow `Image` object, and populates the
-        appropriate private attributes (`_text`, `_base_64`, `_image`) and `mime` type.
-
-        Returns:
-            Self: The updated `MediaObj` instance.
-
-        Raises:
-            ValueError: If conflicting data types are provided (e.g., both text
-                and base64 for the primary content).
-
-        """
-        if self.model_extra and (content := self.model_extra.get("content")):
-            if isinstance(content, str):
-                if self._base_64 and self._text:  # Check if both are already set
-                    raise ValueError("MediaObj received conflicting string and base64 content.")
-
-                if not self.mime or self.mime == "application/octet-stream":  # Default or if bytes were processed first
-                    self.mime = "text/plain"  # Assume text if not specified or was generic bytes
-
-                if is_b64(content):
-                    if self._text:  # If text was already set, this is ambiguous
-                        raise ValueError(
-                            "MediaObj received string content that is also valid base64, and text was already set.",
-                        )
-                    self._base_64 = content
-                    # Mime type for base64 should ideally be more specific if known, e.g., image/jpeg
-                    if self.mime == "text/plain":  # If it was defaulted to text/plain but is b64
-                        self.mime = "application/octet-stream"  # A generic default for b64
-                else:
-                    self._text = content
-
-            elif isinstance(content, bytes):
-                if self._base_64 or self._text or self._image:  # Check for conflicts
-                    raise ValueError("MediaObj received bytes content but other content forms already exist.")
-                self._base_64 = base64.b64encode(content).decode("utf-8")
-                if not self.mime or self.mime == "text/plain":  # If no specific mime or defaulted to text
-                    self.mime = "application/octet-stream"  # Default for raw bytes
-
-            elif isinstance(content, Image):
-                if self._image or self._text or self._base_64:  # Check for conflicts
-                    raise ValueError("MediaObj received Image content but other content forms already exist.")
-                self._image = content
-                # Attempt to infer MIME type from image format if not already set or is generic
-                if (not self.mime or self.mime in ["text/plain", "application/octet-stream"]) and self._image.format:
-                    self.mime = Image.MIME.get(self._image.format.upper()) or self.mime
-
-        return self
-
-    def as_url(self) -> tuple[str] | None:  # Changed to return None if no base64
-        """Returns the media content as a data URL (if base64 encoded).
-
-        Returns:
-            tuple[str] | None: A tuple containing the data URL string
-            (e.g., "data:image/jpeg;base64,...") if `_base_64` is set.
-            Returns `None` otherwise.
-
-        """
-        if self._base_64:
-            return (f"data:{self.mime};base64,{self._base_64}",)
-        return None
-
-    def as_image_url_message(self) -> dict[str, Any] | None:
-        """Formats the media as an image URL message, typically for LLM APIs, using its URI.
-
-        Returns:
-            dict[str, Any] | None: A dictionary structured for image URL messages
-            (e.g., `{"type": "image_url", "image_url": {"url": self.uri}}`)
-            if `self.uri` is set. Returns `None` otherwise.
-
-        """
-        if self.uri:
-            return {
-                "type": "image_url",
-                "image_url": {"url": self.uri},
-            }
-        return None
-
-    def as_text(self) -> str:
-        """Returns the textual representation of the media content.
-
-        Returns:
-            str: The text content from `self._text`, or an empty string if None.
-
-        """
-        return str(self._text) if self._text is not None else ""
-
-    def as_content_part(self, model_type: str = "openai") -> dict[str, Any] | str:
-        """Formats the media object as a content part for multimodal LLM requests.
-
-        Adapts the output format based on the specified `model_type` (e.g.,
-        "openai" or "anthropic") to match their expected API structures for
-        images or text.
-
-        Args:
-            model_type (str): The target LLM provider type. Currently supports
-                "openai" and "anthropic". Defaults to "openai".
-
-        Returns:
-            dict[str, Any] | str: A dictionary representing the structured content part
-            (typically for images) or a plain string (for text content).
-
-        """
-        part: dict[str, Any] | str
-        if self._base_64 and self.mime and not self.mime.startswith("text"):  # Prioritize base64 for non-text
-            if model_type == "openai":
-                part = {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{self.mime};base64,{self._base_64}"},
-                }
-            elif model_type == "anthropic":
-                part = {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": self.mime,
-                        "data": self._base_64,
-                    },
-                }
-            else:  # Fallback for unknown model_type with base64 data
-                part = self.as_text() or f"[Unsupported base64 media for {model_type}]"
-        elif self.uri and self.mime and not self.mime.startswith("text"):  # Then URI for non-text
-            # OpenAI format is common for URI based images too
-            part = self.as_image_url_message() or self.as_text()  # Fallback to text if URI message fails
-        else:  # Default to text
-            part = self.as_text()
-
-        return part
 
 
 class Record(BaseModel):
@@ -287,8 +81,8 @@ class Record(BaseModel):
         default=None,
         description="Optional URI pointing to the original source of the record's content.",
     )
-    content: str | Sequence[str | Image | MediaObj] = Field(  # Allow MediaObj in content
-        description="Main content of the record: a string, or a sequence of strings, Pillow Images, or MediaObj.",
+    content: str | Sequence[str | Image] = Field(
+        description="Main content of the record: a string, or a sequence of strings and Pillow Images.",
     )
     mime: str | None = Field(
         default="text/plain",
@@ -311,8 +105,6 @@ class Record(BaseModel):
             for item in self.content:
                 if isinstance(item, Image):
                     images_found.append(item)
-                elif isinstance(item, MediaObj) and item._image:
-                    images_found.append(item._image)
         return images_found or None
 
     def as_markdown(self) -> str:
@@ -354,10 +146,6 @@ class Record(BaseModel):
             for item in self.content:
                 if isinstance(item, str):
                     text_parts_from_content.append(item)
-                elif isinstance(item, MediaObj):
-                    text_parts_from_content.append(item.as_text())
-                    if item.mime and not item.mime.startswith("text/"):
-                        has_non_text = True
                 elif isinstance(item, Image):
                     has_non_text = True  # Mark that there's image content
 
@@ -481,24 +269,10 @@ class Record(BaseModel):
         if isinstance(self.content, str):
             message_content = self.content
         elif isinstance(self.content, Sequence):
-            # Convert content parts to a format suitable for Autogen UserMessage
-            # (e.g., text strings or dicts for images like OpenAI's format)
             processed_parts: list[Any] = []
             for item in self.content:
-                if isinstance(item, str):
+                if isinstance(item, (str, Image)):
                     processed_parts.append(item)
-                elif isinstance(item, Image):  # Convert PIL Image to OpenAI format part
-                    # This requires base64 encoding and determining MIME type
-                    # For simplicity, this example might just use alt_text or skip if complex
-                    # A more robust solution would involve a MediaObj-like conversion here
-                    if self.alt_text:  # Use alt_text if image directly in content
-                        processed_parts.append(f"[Image: {self.alt_text or 'Untitled Image'}]")
-                    else:  # Fallback if no alt_text for direct image
-                        processed_parts.append("[Image Content]")
-                elif isinstance(item, MediaObj):
-                    # Use MediaObj's own conversion logic
-                    # Assuming OpenAI format for Autogen UserMessage by default here
-                    processed_parts.append(item.as_content_part(model_type="openai"))
             message_content = processed_parts
         else:  # Fallback if content type is unexpected
             message_content = str(self.content)

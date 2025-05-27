@@ -776,3 +776,94 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
             return total_freed
             
         return await asyncio.to_thread(_clear_specific)
+
+
+# Image utility functions (replaces MediaObj functionality)
+def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest_edge: int = -1) -> str:
+    """Convert PIL Image to base64 string with optional resizing.
+    
+    Args:
+        image: PIL Image object
+        format: Image format for encoding (PNG, JPEG, etc.)
+        longest_edge: Resize to this max size on longest edge
+        shortest_edge: Resize to this max size on shortest edge
+        
+    Returns:
+        Base64 encoded string
+    """
+    from io import BytesIO
+    from PIL import Image
+    
+    # Resize if requested
+    if longest_edge > 0:
+        if image.width > longest_edge or image.height > longest_edge:
+            if image.width > image.height:
+                new_width = longest_edge
+                new_height = int(longest_edge * image.height / image.width)
+            else:
+                new_height = longest_edge
+                new_width = int(longest_edge * image.width / image.height)
+            image = image.resize((new_width, new_height))
+    elif shortest_edge > 0:
+        if image.width > shortest_edge or image.height > shortest_edge:
+            if image.width > image.height:
+                new_height = shortest_edge
+                new_width = int(shortest_edge * image.width / image.height)
+            else:
+                new_width = shortest_edge
+                new_height = int(shortest_edge * image.height / image.width)
+            image = image.resize((new_width, new_height))
+    
+    # Convert to base64
+    buffered = BytesIO()
+    image.save(buffered, format=format)
+    image_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return image_b64
+
+
+def image_to_content_part(image, model_type: str = "openai", mime_type: str = "image/png") -> dict[str, Any]:
+    """Convert PIL Image to LLM-specific content part format.
+    
+    Args:
+        image: PIL Image object
+        model_type: Target LLM provider ("openai" or "anthropic")
+        mime_type: MIME type for the image
+        
+    Returns:
+        Dictionary in the appropriate format for the LLM provider
+    """
+    b64_data = image_to_base64(image)
+    
+    if model_type == "openai":
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
+        }
+    elif model_type == "anthropic":
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": mime_type,
+                "data": b64_data,
+            },
+        }
+    else:
+        # Fallback format
+        return {"type": "image", "data": b64_data, "mime_type": mime_type}
+
+
+def base64_to_image(b64_string: str):
+    """Convert base64 string to PIL Image.
+    
+    Args:
+        b64_string: Base64 encoded image data
+        
+    Returns:
+        PIL Image object
+    """
+    from io import BytesIO
+    from PIL import Image
+    
+    image_data = base64.b64decode(b64_string)
+    return Image.open(BytesIO(image_data))

@@ -8,6 +8,7 @@ configured Language Model.
 
 from typing import Any  # For type hinting
 
+from PIL.Image import Image  # For image type checking
 from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk contract types
@@ -131,7 +132,7 @@ class Describer(LLMAgent):
         media_exists = False
         if isinstance(record_to_process.content, Sequence) and not isinstance(record_to_process.content, str):
             for item in record_to_process.content:
-                if isinstance(item, MediaObj) and item.mime and not item.mime.startswith("text/"):
+                if isinstance(item, Image):
                     media_exists = True
                     break
         # Add other checks if record.components was the intended place for complex media

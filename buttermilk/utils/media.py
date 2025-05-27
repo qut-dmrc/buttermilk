@@ -9,6 +9,7 @@ This module provides functions to:
 """
 
 import contextlib  # For suppressing exceptions in specific blocks
+from pathlib import Path  # For path operations
 from typing import Any
 
 import regex as re  # For regular expression operations
@@ -17,9 +18,10 @@ from readabilipy import simple_json_from_html_string  # For extracting main cont
 
 from buttermilk._core.image import read_image  # Utility for reading image data
 from buttermilk._core.log import logger  # Centralized logger
-from buttermilk._core.types import MediaObj, Record  # Buttermilk core data types
+from buttermilk._core.types import Record  # Buttermilk core data types
 from buttermilk.utils.utils import (  # General utilities
     download_limited_async,  # Async download with size limit
+    is_b64,  # Check if string is base64 encoded
     is_filepath,  # Check if string is a file path
     is_uri,  # Check if string is a URI
     read_file,  # Read local file content
@@ -145,7 +147,7 @@ async def download_and_convert(
         doc_metadata = extract_main_content(html=html_content_to_parse)
         "\n".join(doc_metadata.pop("paragraphs", []))
         # Add additional metadata to the record
-        metadata.update({k: doc_metadata.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc_metadata.get(k)})
+        active_metadata.update({k: doc_metadata.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc_metadata.get(k)})
 
         final_content = doc_metadata.pop("plain_text", "") if isinstance(doc_metadata, dict) else ""
         if isinstance(doc_metadata, dict): active_metadata.update(doc_metadata)  # Add extracted HTML metadata
@@ -157,7 +159,7 @@ async def download_and_convert(
         # read_image handles base64 and returns an ImageRecord (which is a Record)
         # We want to create a new Record, so extract info from ImageRecord if needed.
         image_rec_from_b64 = read_image(data=b64)  # Assuming read_image can take b64 string
-        final_content = image_rec_from_b64.content  # This might be complex (list of MediaObj)
+        final_content = image_rec_from_b64.content  # This should be a list with PIL images
         if image_rec_from_b64.mime: active_mime = image_rec_from_b64.mime
         active_metadata.update(image_rec_from_b64.metadata)
 
@@ -179,7 +181,7 @@ async def download_and_convert(
         logger.debug(f"download_and_convert: Processing obj of type {type(obj)} as generic content.")
         final_content = str(obj)  # Convert to string as a last resort
         if not active_mime or active_mime == "application/octet-stream":
-             active_mime = "text/plain"  # Assume text if unknown
+            active_mime = "text/plain"  # Assume text if unknown
     else:  # Should have been caught by the initial check, but as a safeguard
         logger.error("download_and_convert: Reached final content determination with no valid data.")
         return None
@@ -191,16 +193,14 @@ def get_news_record_from_uri(uri: str) -> Record:
     """Extracts article content from a news web page URI using the `newspaper3k` library.
 
     Downloads the article from the given URI, parses it to extract title, authors,
-    publication date, keywords, and main text. The main text is split into
-    paragraphs and stored as `MediaObj` components within the returned `Record`.
+    publication date, keywords, and main text.
 
     Args:
         uri (str): The URL of the news article to process.
 
     Returns:
         Record: A `Record` object populated with the extracted article information.
-                The `record.content` will be a list of `MediaObj` instances,
-                each representing a paragraph of the article text.
+                The `record.content` will be the article text as a string.
 
     Raises:
         newspaper.article.ArticleException: If `newspaper3k` fails to download or parse the article.
@@ -217,28 +217,8 @@ def get_news_record_from_uri(uri: str) -> Record:
     article.download()  # Download HTML content
     article.parse()    # Parse content to extract elements
 
-    media_components: list[MediaObj] = []
-    current_paragraph_chunks: list[str] = []
-
-    # Process extracted text, splitting into paragraphs
-    # article.text often contains newline characters separating paragraphs.
-    for line in (article.text or "").splitlines():
-        stripped_line = line.strip()
-        if stripped_line:  # If line has content, add to current paragraph chunk
-            current_paragraph_chunks.append(stripped_line)
-        elif current_paragraph_chunks:  # Empty line signifies end of a paragraph
-            paragraph_text = "\n".join(current_paragraph_chunks)  # Join chunks with newlines for multi-line para
-            media_components.append(
-                MediaObj(content=paragraph_text, label="paragraph", mime="text/plain"),
-            )
-            current_paragraph_chunks = []  # Reset for next paragraph
-
-    # Add any remaining text as the last paragraph
-    if current_paragraph_chunks:
-        paragraph_text = "\n".join(current_paragraph_chunks)
-        media_components.append(
-            MediaObj(content=paragraph_text, label="paragraph", mime="text/plain"),
-        )
+    # Just use the full article text as content
+    content = article.text.strip() if article.text else ""
 
     # Populate metadata
     record_metadata = {
@@ -251,8 +231,8 @@ def get_news_record_from_uri(uri: str) -> Record:
     # Filter out None metadata values for cleanliness
     record_metadata = {k: v for k, v in record_metadata.items() if v is not None}
 
-    # Create Record with MediaObj components for content
-    return Record(uri=uri, content=media_components, metadata=record_metadata, mime="multipart/mixed")  # mime for list of media
+    # Create Record with simple text content
+    return Record(uri=uri, content=content, metadata=record_metadata, mime="text/plain")
 
 
 def extract_main_content(html: str, **kwargs: Any) -> dict[str, Any]:

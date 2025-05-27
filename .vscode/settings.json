@@ -31,7 +31,8 @@
     "**/__pycache__"
   ],
   "python.analysis.extraPaths": [
-    "tests"
+    "tests",
+    "/workspaces/buttermilk"
     // ".venv/**/*"
   ],
   "python.analysis.diagnosticMode": "workspace",

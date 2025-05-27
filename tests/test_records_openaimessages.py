@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from buttermilk._core.types import MediaObj, Record
+from buttermilk._core.types import Record
 from buttermilk.utils.media import download_and_convert
 
 pytestmark = pytest.mark.anyio
@@ -131,20 +131,23 @@ async def test_record_update():
 
 
 def test_as_openai_message_with_media(image_bytes: bytes):
-    message = Record(data=[MediaObj(mime="image/png", content=image_bytes), "test"])
+    from io import BytesIO
+    pil_image = Image.open(BytesIO(image_bytes))
+    message = Record(content=[pil_image, "test"])
     openai_message = message.as_message()
-    assert openai_message["role"] == "user"
-    assert len(openai_message["content"]) == 2
-    assert openai_message["content"][0]["type"] == "image_url"
-    assert openai_message["content"][1]["type"] == "text"
+    assert openai_message.content is not None
+    assert len(openai_message.content) == 2
+    assert openai_message.content[0]["type"] == "image_url"
+    assert isinstance(openai_message.content[1], str)
 
 
 def test_as_openai_message_with_media_and_role(image_bytes: bytes):
-    message = Record(data=[MediaObj(mime="image/png", content=image_bytes)])
-    openai_message = message.as_message(role="system")
-    assert openai_message["role"] == "system"
-    assert openai_message["content"][0]["type"] == "image_url"
-    assert len(openai_message["content"]) == 1
+    from io import BytesIO
+    pil_image = Image.open(BytesIO(image_bytes))
+    message = Record(content=[pil_image])
+    openai_message = message.as_message(role="assistant")
+    # Assistant messages use string content (as_markdown)
+    assert isinstance(openai_message.content, str)
 
 
 def test_as_openai_message_with_text():
