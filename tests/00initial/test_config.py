@@ -76,7 +76,7 @@ async def test_get_ip_updates_ip(bm):
 
 
 @pytest.mark.anyio
-async def test_get_ip_caches_ip(m):
+async def test_get_ip_caches_ip(bm):
     """Test that get_ip caches the result and doesn't refetch."""
     mock_ip_address = "10.0.0.50"
 
