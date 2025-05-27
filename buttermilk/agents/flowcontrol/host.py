@@ -100,20 +100,22 @@ class HostAgent(Agent):
         elif isinstance(message, ManagerMessage):
             logger.info(f"Host {self.agent_name} received user input: {message}")
             self._user_confirmation = message
-            if message.confirm:
-                self._user_confirmation_received.set()
+            self._user_confirmation_received.set()
+
             if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
                 logger.info(f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})")
                 self.human_in_loop = message.human_in_loop
+
             content = getattr(message, "content", getattr(message, "params", None))
             if content and not str(content).startswith(COMMAND_SYMBOL):
                 content_to_log = str(content)[:TRUNCATE_LEN]
                 # store in user feedback separately as well
                 self._user_feedback.append(content)
+
         # Do not log TaskProgressUpdate messages to history
         elif isinstance(message, FlowProgressUpdate):
-             logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
-             return  # Do not proceed to log
+            logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
+            return  # Do not proceed to log
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
@@ -143,11 +145,11 @@ class HostAgent(Agent):
                     # If count reaches zero, remove the agent from pending
                     if self._pending_tasks_by_agent[agent_id_to_update] <= 0:  # Use <= 0 to handle potential negative counts from errors
                         if self._pending_tasks_by_agent[agent_id_to_update] < 0:
-                             logger.warning(f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue.")
+                            logger.warning(f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue.")
                         del self._pending_tasks_by_agent[agent_id_to_update]
                         logger.debug(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
                     else:
-                         logger.debug(
+                        logger.debug(
                             f"{log_prefix} "
                             f"Agent {agent_id_to_update} has {self._pending_tasks_by_agent[agent_id_to_update]} remaining tasks. "
                             f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
@@ -188,8 +190,8 @@ class HostAgent(Agent):
 
         # Ignore TaskProgressUpdate messages received by the host itself
         elif isinstance(message, FlowProgressUpdate):
-             logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
-             # Do nothing with progress updates received by the host
+            logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
+            # Do nothing with progress updates received by the host
 
         return None  # Explicitly return None if no other value is returned
 
@@ -257,7 +259,7 @@ class HostAgent(Agent):
                             message="Current pending tasks",
                         )
                     else:
-                         progress_message = FlowProgressUpdate(source=self.agent_id,
+                        progress_message = FlowProgressUpdate(source=self.agent_id,
                             status="idle",
                             step_name="IDLE",
                             waiting_on=dict(),
@@ -404,7 +406,7 @@ class HostAgent(Agent):
             return False
         # If successful, clear the pending tasks dictionary for the next step
         async with self._tasks_condition:
-             self._pending_tasks_by_agent.clear()
+            self._pending_tasks_by_agent.clear()
         logger.info("All tasks for the previous step completed successfully.")
         return True
 
@@ -425,7 +427,7 @@ class HostAgent(Agent):
                 self._step_starting.set()
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
             else:
-                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
+                logger.warning(f"Host executing step for unknown participant role: {step.role}")
 
             await self.callback_to_groupchat(step)
 

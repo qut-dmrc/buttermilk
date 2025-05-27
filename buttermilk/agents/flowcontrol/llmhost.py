@@ -66,6 +66,15 @@ class LLMHostAgent(LLMAgent, HostAgent):
         description="Maximum time to wait for agent responses in seconds",
     )
 
+    def _clear_pending_steps(self) -> None:
+        """Clear all pending steps from the queue."""
+        while not self._proposed_step.empty():
+            try:
+                self._proposed_step.get_nowait()
+                logger.debug("Cleared pending step from queue due to new manager request")
+            except asyncio.QueueEmpty:
+                break
+
     async def _initialize(self, callback_to_groupchat: Any) -> None:
         await super()._initialize(callback_to_groupchat=callback_to_groupchat)
 
@@ -131,6 +140,10 @@ class LLMHostAgent(LLMAgent, HostAgent):
             # Unless it's a command for another agent or something
             if message.content and str(message.content).startswith(COMMAND_SYMBOL):
                 return
+
+            # Clear any pending steps since the manager has a new request
+            self._clear_pending_steps()
+            logger.info(f"Manager interrupted with new request: {str(message.content)[:TRUNCATE_LEN]}")
 
             # Call the LLM to get the next step. Include the user feedback and participants in the input.
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "prompt": str(message.content), "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
