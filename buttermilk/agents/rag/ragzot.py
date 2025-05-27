@@ -282,7 +282,8 @@ class RagZot(LLMAgent, ToolConfig):
                     logger.info(f"RagZot '{self.agent_id}': Initializing ChromaDB from data source '{data_source_name}'.")
                     try:
                         self._chromadb = ChromaDBEmbeddings(**data_conf.model_dump())
-                        self._vectorstore = self._chromadb.collection
+                        # Don't initialize the collection here for remote persist_directory
+                        # It will be handled in ensure_chromadb_ready()
                         chroma_config_found = True
                         break  # Found and initialized ChromaDB, no need to check other data sources
                     except Exception as e:
@@ -314,6 +315,18 @@ class RagZot(LLMAgent, ToolConfig):
 
         logger.info(f"RagZot '{self.agent_id}': Search tool '{search_tool.name}' loaded.")
         return self
+
+    async def ensure_chromadb_ready(self) -> None:
+        """Ensure ChromaDB is ready for use, handling remote caching if needed."""
+        if not hasattr(self, "_chromadb") or not self._chromadb:
+            raise ValueError("ChromaDB not initialized. Call _load_tools first.")
+        
+        # Initialize cache for remote persist_directory
+        await self._chromadb.ensure_cache_initialized()
+        
+        # Now we can safely access the collection
+        self._vectorstore = self._chromadb.collection
+        logger.info(f"RagZot '{self.agent_id}': ChromaDB collection ready for queries.")
 
     def get_functions(self) -> list[FunctionTool]:  # More specific return type
         """Return the list of Autogen `FunctionTool` definitions for this agent.
@@ -364,8 +377,10 @@ class RagZot(LLMAgent, ToolConfig):
         """
         if not queries:
             raise ValueError("No queries provided to RagZot search tool (_run).")
-        if not hasattr(self, "_vectorstore") or not self._vectorstore:  # Check if vectorstore is initialized
-            raise ValueError("Vector store not initialized for RagZot search tool (_run). Ensure _load_tools ran successfully.")
+        
+        # Ensure ChromaDB is ready (handles caching if needed)
+        if not hasattr(self, "_vectorstore") or not self._vectorstore:
+            await self.ensure_chromadb_ready()
 
         if len(queries) > self.max_queries:
             logger.warning(

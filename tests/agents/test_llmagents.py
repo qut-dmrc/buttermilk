@@ -1,11 +1,10 @@
-
 import pytest
 
 # Buttermilk core imports
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.llms import CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk.agents.judge import AgentReasons, Judge  # Import Judge and its output model
+from buttermilk.agents.judge import Judge, Reasons  # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
@@ -63,10 +62,10 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     assert not result.is_error, f"Judge agent returned error: {result.error}"
     assert result.outputs is not None, "Judge agent should produce outputs"
 
-    # Assert that the output is the expected AgentReasons model
-    assert isinstance(result.outputs, AgentReasons), f"Expected AgentReasons output, got {type(result.outputs)}"
+    # Assert that the output is the expected Reasons model
+    assert isinstance(result.outputs, Reasons), f"Expected Reasons output, got {type(result.outputs)}"
 
-    # Check fields within AgentReasons
+    # Check fields within Reasons
     assert isinstance(result.outputs.prediction, bool), "'prediction' field should be boolean"
     assert isinstance(result.outputs.reasons, list), "'reasons' field should be a list"
     assert len(result.outputs.reasons) > 0, "'reasons' list should not be empty"

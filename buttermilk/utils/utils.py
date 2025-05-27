@@ -5,6 +5,9 @@ import itertools
 import math
 import mimetypes
 import pathlib
+import shutil
+import tempfile
+import threading
 import uuid
 from collections.abc import Mapping, Sequence
 from io import IOBase
@@ -559,3 +562,217 @@ def clean_empty_values(data):
                        (isinstance(item, (dict, list)) and not item))]
     # Return primitive values unchanged
     return data
+
+
+# Global state for managing concurrent downloads
+_download_locks: dict[str, threading.Lock] = {}
+_download_locks_lock = threading.Lock()
+
+
+def _get_cache_dir() -> pathlib.Path:
+    """Get the cache directory for ChromaDB databases."""
+    cache_dir = pathlib.Path.home() / ".cache" / "buttermilk" / "chromadb"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def _get_download_lock(persist_directory: str) -> threading.Lock:
+    """Get or create a download lock for a specific persist_directory to prevent concurrent downloads."""
+    with _download_locks_lock:
+        if persist_directory not in _download_locks:
+            _download_locks[persist_directory] = threading.Lock()
+        return _download_locks[persist_directory]
+
+
+async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
+    """Ensure ChromaDB database files are available locally, downloading from remote if needed.
+    
+    This function handles:
+    1. Checking if the ChromaDB files already exist in cache
+    2. Thread-safe downloading to prevent multiple concurrent downloads
+    3. Downloading the complete ChromaDB directory structure from GCS/remote storage
+    
+    Args:
+        persist_directory: The remote path (e.g., "gs://bucket/path") or local path to ChromaDB data
+        
+    Returns:
+        pathlib.Path: Local path to the cached ChromaDB directory
+        
+    Raises:
+        ValueError: If the persist_directory format is invalid
+        OSError: If download fails or files are corrupted
+    """
+    # If it's already a local path, return as-is
+    try:
+        local_path = pathlib.Path(persist_directory)
+        if local_path.exists() and (local_path / "chroma.sqlite3").exists():
+            logger.debug(f"Using existing local ChromaDB at {persist_directory}")
+            return local_path
+    except (OSError, ValueError):
+        pass  # Not a valid local path, treat as remote
+    
+    # Generate cache key from persist_directory
+    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_dir = _get_cache_dir()
+    local_cache_path = cache_dir / cache_key
+    
+    # Check if we already have cached data
+    chroma_db_path = local_cache_path / "chroma.sqlite3"
+    if chroma_db_path.exists():
+        logger.debug(f"Found cached ChromaDB at {local_cache_path}")
+        return local_cache_path
+    
+    # Use thread-safe download to prevent multiple parallel downloads of the same DB
+    download_lock = _get_download_lock(persist_directory)
+    
+    def _download_chromadb_sync():
+        """Synchronous download function to be run in thread."""
+        with download_lock:
+            # Double-check after acquiring lock - another thread might have completed the download
+            if chroma_db_path.exists():
+                logger.debug(f"ChromaDB cache created by another thread at {local_cache_path}")
+                return
+                
+            logger.info(f"Downloading ChromaDB from {persist_directory} to {local_cache_path}")
+            
+            try:
+                # Create temporary directory for atomic download
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = pathlib.Path(temp_dir) / "chromadb_download"
+                    temp_path.mkdir(parents=True, exist_ok=True)
+                    
+                    # Download the entire ChromaDB directory
+                    remote_path = CloudPath(persist_directory)
+                    
+                    if not remote_path.exists():
+                        raise OSError(f"Remote ChromaDB directory does not exist: {persist_directory}")
+                    
+                    # Download all files recursively
+                    _download_chromadb_recursive(remote_path, temp_path)
+                    
+                    # Verify essential files exist
+                    temp_chroma_db = temp_path / "chroma.sqlite3"
+                    if not temp_chroma_db.exists():
+                        raise OSError(f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}")
+                    
+                    # Atomic move to final location
+                    local_cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    if local_cache_path.exists():
+                        shutil.rmtree(local_cache_path)
+                    shutil.move(str(temp_path), str(local_cache_path))
+                    
+                    logger.info(f"Successfully cached ChromaDB at {local_cache_path}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to download ChromaDB from {persist_directory}: {e}")
+                # Clean up any partial download
+                if local_cache_path.exists():
+                    shutil.rmtree(local_cache_path, ignore_errors=True)
+                raise OSError(f"ChromaDB download failed: {e}") from e
+    
+    # Run download in thread to avoid blocking async operations
+    await asyncio.to_thread(_download_chromadb_sync)
+    
+    return local_cache_path
+
+
+def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Path) -> None:
+    """Recursively download ChromaDB directory structure.
+    
+    Args:
+        remote_path: CloudPath to remote ChromaDB directory
+        local_path: Local path to download to
+    """
+    try:
+        # List all items in the remote directory
+        for item in remote_path.iterdir():
+            local_item_path = local_path / item.name
+            
+            if item.is_dir():
+                # Create local directory and recurse
+                local_item_path.mkdir(parents=True, exist_ok=True)
+                _download_chromadb_recursive(item, local_item_path)
+            else:
+                # Download file
+                logger.debug(f"Downloading {item} to {local_item_path}")
+                local_item_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Use CloudPath's read_bytes/write_bytes for efficient transfer
+                file_data = item.read_bytes()
+                local_item_path.write_bytes(file_data)
+                
+    except Exception as e:
+        logger.error(f"Error downloading from {remote_path}: {e}")
+        raise
+
+
+async def get_chromadb_cache_size(persist_directory: str) -> int:
+    """Get the size of cached ChromaDB files in bytes.
+    
+    Args:
+        persist_directory: The persist_directory identifier
+        
+    Returns:
+        int: Size in bytes, or 0 if cache doesn't exist
+    """
+    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_dir = _get_cache_dir()
+    local_cache_path = cache_dir / cache_key
+    
+    if not local_cache_path.exists():
+        return 0
+    
+    def _calculate_size():
+        total_size = 0
+        for file_path in local_cache_path.rglob("*"):
+            if file_path.is_file():
+                total_size += file_path.stat().st_size
+        return total_size
+    
+    return await asyncio.to_thread(_calculate_size)
+
+
+async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
+    """Clear ChromaDB cache files.
+    
+    Args:
+        persist_directory: Specific cache to clear, or None to clear all caches
+        
+    Returns:
+        int: Number of bytes freed
+    """
+    cache_dir = _get_cache_dir()
+    
+    if persist_directory is None:
+        # Clear all caches
+        if not cache_dir.exists():
+            return 0
+            
+        def _clear_all():
+            total_freed = 0
+            for cache_path in cache_dir.iterdir():
+                if cache_path.is_dir():
+                    for file_path in cache_path.rglob("*"):
+                        if file_path.is_file():
+                            total_freed += file_path.stat().st_size
+                    shutil.rmtree(cache_path, ignore_errors=True)
+            return total_freed
+            
+        return await asyncio.to_thread(_clear_all)
+    else:
+        # Clear specific cache
+        cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+        local_cache_path = cache_dir / cache_key
+        
+        if not local_cache_path.exists():
+            return 0
+            
+        def _clear_specific():
+            total_freed = 0
+            for file_path in local_cache_path.rglob("*"):
+                if file_path.is_file():
+                    total_freed += file_path.stat().st_size
+            shutil.rmtree(local_cache_path, ignore_errors=True)
+            return total_freed
+            
+        return await asyncio.to_thread(_clear_specific)

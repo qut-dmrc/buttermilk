@@ -27,6 +27,7 @@ from buttermilk import (
 )
 from buttermilk._core.config import DataSouce
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
+from buttermilk.utils.utils import ensure_chromadb_cache
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -252,8 +253,13 @@ class ChromaDBEmbeddings(DataSouce):
             embedding_model=self.embedding_model,
             dimensionality=self.dimensionality,
         )
+        
+        # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
-        self._client = chromadb.PersistentClient(path=self.persist_directory)
+        
+        # For remote persist_directory, we'll cache it during collection access
+        # For local paths, use directly
+        self._client = None  # Will be initialized lazily in collection property
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
@@ -262,20 +268,43 @@ class ChromaDBEmbeddings(DataSouce):
         Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
         return self
 
+    async def ensure_cache_initialized(self) -> None:
+        """Ensure ChromaDB cache is initialized for remote persist_directory."""
+        if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
+            logger.info(f"Initializing cache for remote ChromaDB: {self.persist_directory}")
+            local_cache_path = await ensure_chromadb_cache(self.persist_directory)
+            
+            # Update persist_directory to use local cache
+            self.persist_directory = str(local_cache_path)
+            logger.info(f"ChromaDB cache ready at: {local_cache_path}")
+        
+        # Initialize client now that we have a local path
+        if not hasattr(self, "_client") or not self._client:
+            self._client = chromadb.PersistentClient(path=self.persist_directory)
+
     @property
     def collection(self) -> Collection:
         """Provides access to the ChromaDB collection."""
         # This vector store is single-threaded, so we're only keeping one instance around
-        if _db_registry.get("vectorstore") is None:
-            # Initialize the vector store.
+        cache_key = f"vectorstore_{id(self)}"
+        if _db_registry.get(cache_key) is None:
+            # Initialize the vector store
             if not hasattr(self, "_client") or not self._client:
+                # Try to detect if this is a remote path and provide helpful error
+                if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
+                    raise ValueError(
+                        f"Remote persist_directory '{self.persist_directory}' detected. "
+                        "Please call ensure_cache_initialized() asynchronously before "
+                        "accessing the collection."
+                    )
+                
                 self._client = chromadb.PersistentClient(path=self.persist_directory)
 
-            _db_registry["vectorstore"] = self._client.get_or_create_collection(
+            _db_registry[cache_key] = self._client.get_or_create_collection(
                 self.collection_name,
                 embedding_function=self._embedding_function,
             )
-        return _db_registry["vectorstore"]
+        return _db_registry[cache_key]
 
     async def embed_document(
         self,
