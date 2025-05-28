@@ -12,8 +12,7 @@ import {
 	type Message,
 	type MessageType,
 	type SystemUpdate,
-	type UIMessage,
-	isSystemUpdate,
+	type UIMessage, createManagerResponse, isSystemUpdate,
 	normalizeWebSocketMessage
 } from './utils/messageUtils';
 
@@ -35,7 +34,7 @@ import {
   let isConnected = false;
   let connectionError = '';
   let isInterruptEnabled = false;
-  let isAutoApproveEnabled = false;
+  let humanInLoop = true;
   let messageListElement: HTMLDivElement; // To control scrolling
   export let selectedTheme = 'theme-term'; // Default theme
   let isReconnecting = false; // Track reconnection attempts
@@ -145,14 +144,9 @@ import {
 
   // Toggle auto-approve state
   function toggleAutoApprove() {
-    isAutoApproveEnabled = !isAutoApproveEnabled;
-    const message = createManagerResponse(undefined, null, null, null, null, isAutoApproveEnabled);
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-      console.log(`Auto Approve is now: ${isAutoApproveEnabled ? 'Enabled' : 'Disabled'}. Sent selection response:`, message);
-    } else {
-      console.error('Socket not available or not open to send auto-approve message');
-    }
+    humanInLoop = !humanInLoop;
+    const message = createManagerResponse(!humanInLoop, null, null, null, null, humanInLoop);
+    sendManagerResponse(message);
   }
 
   // Toggle interrupt state
@@ -167,20 +161,17 @@ import {
         agent_id: "web socket"
       };
       // Also send separate interrupt message
-      const response = createManagerResponse(undefined, null, null, null, true, isAutoApproveEnabled);
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(response));
-      }
+      const response = createManagerResponse(false, null, null, null, true, humanInLoop);
+      sendManagerResponse(response);
+      
     } else {
       message = {
         type: "TaskProcessingComplete",
         role: "MANAGER",
         agent_id: "web socket"
       };
-      const response = createManagerResponse(undefined, null, null, null, false, isAutoApproveEnabled);
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(response));
-      }
+      const response = createManagerResponse(false, null, null, null, false, humanInLoop);
+      sendManagerResponse(response);
 
     }
 
@@ -198,6 +189,10 @@ import {
   function handleManagerResponse(event: CustomEvent<ManagerResponse>) {
     const response = event.detail;
     console.log("Received manager response from component:", response);
+    sendManagerResponse(response);
+  }
+
+  function sendManagerResponse(response: ManagerResponse) {
     if (socket && socket.readyState === WebSocket.OPEN) {
       try {
         socket.send(JSON.stringify(response));
@@ -218,67 +213,24 @@ import {
   }
   
   // New function to create manager response
-  function createManagerResponse(confirm: boolean | null | undefined, selection: string | null = null, prompt: string | null = null, halt: boolean|null = false, interrupt: boolean|null = false, human_in_loop: boolean|null = true): ManagerResponse {
-    return {
-      type: 'manager_response',
-      confirm: confirm,
-      halt: halt,
-      interrupt: interrupt,
-      content: prompt,
-      selection: selection,
-      human_in_loop: human_in_loop
-    };
-  }
+
 
   // Handle selection from options
   function handleSelection(value: string) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      const response = createManagerResponse(true, value, null, false, false, isAutoApproveEnabled);
-      socket.send(JSON.stringify(response));
-      console.log("Sent selection response:", response);
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(true, value, null, null, false, humanInLoop);
+    sendManagerResponse(response);
   }
   
   // Handle confirm/reject
   function handleConfirm(value: boolean) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      // If we have input text
-      const textInput = inputMessage.trim() ? inputMessage : null;
-      const response = createManagerResponse(value, null, textInput, false, false, isAutoApproveEnabled);
-      
-      socket.send(JSON.stringify(response));
-      console.log("Sent confirm/reject response:", response);
-      
-      // Clear input if it was used for manager response
-      if (textInput) inputMessage = '';
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(value, null, null, null, false, humanInLoop);
+    sendManagerResponse(response);
   }
   
   // Handle halt
   function handleHalt() {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      const response = createManagerResponse(false, null, null, true, false, isAutoApproveEnabled);
-      socket.send(JSON.stringify(response));
-      console.log("Sent halt response:", response);
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(false, null, null, true, null, humanInLoop);
+    sendManagerResponse(response);
   }
   async function getNewSessionId() {
     try {
@@ -491,7 +443,7 @@ import {
     console.log('Sending message:', inputMessage);
     
     // Create user message
-    const userMessage = createManagerResponse(false, null, inputMessage, false, false, isAutoApproveEnabled);
+    const userMessage = createManagerResponse(false, null, inputMessage, false, false, humanInLoop);
     
     try {
       socket.send(JSON.stringify(userMessage));
@@ -755,6 +707,7 @@ import {
           <!-- Manager request selection options - only shown when there's a selection request -->
           {#if currentUIMessage && selectionOptions.length > 0}
             <div class="selection-options">
+              Select: 
               {#each selectionOptions as option}
                 <button 
                   type="button" 
@@ -810,11 +763,11 @@ import {
               class="terminal-button approve-button"
               aria-label="Auto Approve"
               onclick={toggleAutoApprove}
-              title={isAutoApproveEnabled ? 'Disable Auto Approve' : 'Enable Auto Approve'}
+              title={humanInLoop ? 'Disable Auto Approve' : 'Enable Auto Approve'}
               disabled={!isConnected}>
               
-              <i class="bi {isAutoApproveEnabled ? 'bi-toggle-on' : 'bi-toggle-off'}"></i>
-              {isAutoApproveEnabled ? '[ human in loop ]' : '[ let it ride ]'}
+              <i class="bi {humanInLoop ? 'bi-toggle-off': 'bi-toggle-on'}"></i>
+              {humanInLoop ? '[ human in loop ]': '[ let it ride ]'}
             </button>
             
             <button 

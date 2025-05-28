@@ -2,17 +2,17 @@ import pytest
 
 from buttermilk._core.constants import END
 from buttermilk._core.contract import AgentInput, AgentTrace, ConductorRequest, StepRequest
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.host import HostAgent
 
 
 @pytest.mark.anyio
-async def test_sequencer_initialization():
-    """Test that Sequencer initializes correctly."""
-    agent = Sequencer(role="sequencer", name="Test Sequencer", description="A test sequencer")
+async def test_HostAgent_initialization():
+    """Test that HostAgent initializes correctly."""
+    agent = HostAgent(role="HostAgent", name="Test HostAgent", description="A test HostAgent")
 
     await agent.initialize()
-    assert agent.role == "sequencer"
-    assert "Test Sequencer" in agent.name  # Checks generated name
+    assert agent.role == "HostAgent"
+    assert "Test HostAgent" in agent.name  # Checks generated name
 
     # Process a basic input to test initialization and the _process path
     test_input = AgentInput(prompt="Hello", inputs={"task": "Test task"})  # Add task as _process checks it
@@ -21,13 +21,13 @@ async def test_sequencer_initialization():
     assert result.outputs is not None
     assert isinstance(result.outputs, dict)
     assert "status" in result.outputs
-    assert "Sequencer received" in result.outputs["status"]  # Check status field in outputs dict
+    assert "HostAgent received" in result.outputs["status"]  # Check status field in outputs dict
 
 
 @pytest.mark.anyio
-async def test_sequencer_round_robin():
-    """Test that Sequencer produces a round-robin sequence of steps."""
-    agent = Sequencer(role="sequencer", name="Test Sequencer", description="A test sequencer")
+async def test_HostAgent_round_robin():
+    """Test that HostAgent produces a round-robin sequence of steps."""
+    agent = HostAgent(role="HostAgent", name="Test HostAgent", description="A test HostAgent")
 
     await agent.initialize()
 
@@ -50,7 +50,7 @@ async def test_sequencer_round_robin():
     step1 = step1_response.outputs
     assert isinstance(step1, StepRequest)
     first_agent = step1.role
-    # Exclude Sequencer and MANAGER roles from expected sequence
+    # Exclude HostAgent and MANAGER roles from expected sequence
     expected_sequence = [role for role in participants if role not in [agent.role.upper(), "MANAGER"]]
 
     # Ensure the first step is one of the expected participants
@@ -82,5 +82,5 @@ async def test_sequencer_round_robin():
     assert isinstance(step4, StepRequest)
     fourth_agent_role = step4.role
 
-    # Sequencer implementation yields END after one full round.
+    # HostAgent implementation yields END after one full round.
     assert fourth_agent_role == END, f"Expected END after one round-robin cycle, got '{fourth_agent_role}'"

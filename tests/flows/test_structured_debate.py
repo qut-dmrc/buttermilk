@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from buttermilk._core.contract import ManagerResponse, StepRequest
+from buttermilk._core.contract import ManagerMessage, StepRequest
 from buttermilk.runner.selector import Selector
 
 
@@ -54,21 +54,21 @@ class TestStructuredDebate:
         # Configure the user responses
         selector._in_the_loop.side_effect = [
             # Phase 1: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 2: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 3: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 4 (Point 1): User provides feedback with interrupt
-            ManagerResponse(confirm=True, interrupt=True, prompt="I think we should consider X factor in this disagreement"),
+            ManagerMessage(confirm=True, interrupt=True, prompt="I think we should consider X factor in this disagreement"),
             # Phase 4 (Point 2): User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 5: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 6: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 7: User confirms
-            ManagerResponse(confirm=True, interrupt=False, prompt=None),
+            ManagerMessage(confirm=True, interrupt=False, prompt=None),
             # Phase 8 (END): No response needed
         ]
 

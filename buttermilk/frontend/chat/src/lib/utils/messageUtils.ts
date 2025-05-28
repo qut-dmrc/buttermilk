@@ -124,6 +124,17 @@ function formatTime(date: Date): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+export function createManagerResponse(confirm: boolean | null | undefined, selection: string | null = null, prompt: string | null = null, halt: boolean|null = false, interrupt: boolean|null = false, human_in_loop: boolean|null = true): ManagerResponse {
+  return {
+    type: 'manager_response',
+    confirm: confirm,
+    halt: halt,
+    interrupt: interrupt,
+    content: prompt || null, // Send free text input if any
+    selection: selection || null, // Send selection if it's a string
+    human_in_loop: human_in_loop || true, // Default to true if not specified
+  };
+}
 // --- Message Type Enum ---
 export type MessageType =
   | 'chat_message'

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
-  import { 
-    type UIMessage, 
-    type ManagerResponse, 
-    type Message // Import the base Message type
+  import {
+  	type ManagerResponse,
+  	type Message,
+  	type UIMessage
   } from '$lib/utils/messageUtils';
-  import { processLinksInText } from '$lib/utils/linkUtils';
+  import { createEventDispatcher } from 'svelte';
 
+  import { createManagerResponse } from '$lib/utils/messageUtils';
   // Props
   // Note: The component receives the 'Message' type from convertToDisplayMessage,
   // where the original UIMessage is nested within message.outputs
@@ -19,73 +19,26 @@
   
   // Extract the original UIMessage data (cast for type safety)
   $: UIMessageData = message.outputs as UIMessage | undefined; 
-  $: inputs = UIMessageData?.options;
-
-  // Determine input type based on the 'inputs' field
-  $: isSelection = Array.isArray(UIMessageData?.options) && UIMessageData.options.length > 0; // Check if options are provided
-  $: isConfirm = typeof UIMessageData?.confirm === 'boolean' && !isSelection; // Only confirm if not selection
-  // $: isParameters = typeof inputs?.parameters === 'object' && inputs.parameters !== null && !isSelection && !isConfirm; // Future: Handle parameters
-  $: isFreeText = !isSelection && !isConfirm; // Fallback to free text if no specific input defined
-
-  // Process message content for links if any
-  $: processedContent = UIMessageData?.content ? processLinksInText(UIMessageData.content) : '';
 
   // Local state for user input
   let userPrompt: string = '';
   let selectedValue: string | boolean | null = null; // Can hold boolean for confirm, string for selection/text
 
   // Function to send a response
-  function sendResponse(confirm: boolean, halt: boolean = false, interrupt: boolean = false) {
-    const response: ManagerResponse = {
-      type: 'manager_response',
-      confirm: confirm,
-      halt: halt,
-      interrupt: interrupt,
-      content: userPrompt || null, // Send free text input if any
-      selection: typeof selectedValue === 'string' ? selectedValue : null, // Send selection if it's a string
-      // params: parametersInput, // Future: Add parameters input
-    };
+  function sendResponse(confirm: boolean, halt: boolean = false, interrupt: boolean = false, human_in_loop: boolean = true) {
+    const response: ManagerResponse = createManagerResponse(
+      confirm,
+      typeof selectedValue === 'string' ? selectedValue : null,
+      userPrompt || null,
+      halt,
+      interrupt,
+      human_in_loop,
+    );
     dispatch('managerResponse', response);
+    console.log("Sent selection response:", response);
 
-    // Optionally clear input after sending
-    userPrompt = '';
-    selectedValue = null;
   } // End of sendResponse function
 
-  // --- Input Handlers ---
-
-  function handleConfirm(value: boolean) {
-    selectedValue = value;
-    // If in free text mode and we have text input, use it
-    if (isFreeText && userPrompt.trim()) {
-      sendResponse(value);
-    } else {
-      // Otherwise just send the confirmation value
-      sendResponse(value);
-    }
-  }
-
-  function handleSelection(selectionValue: any) {
-    // The actual value sent might be different from the display label
-    // For now, assume the value itself is what we send.
-    selectedValue = String(selectionValue); 
-    sendResponse(true); // Selecting an option implies confirmation
-  }
-
-  // This function is now only used when pressing Enter in the text field
-  function handleFreeTextSubmit() {
-    if (userPrompt.trim()) {
-      sendResponse(true);
-    }
-  }
-
-  function handleHalt() {
-    sendResponse(false, true); // Halt implies non-confirmation
-  }
-
-  function handleInterrupt() {
-    sendResponse(false, false, true); // Interrupt implies non-confirmation
-  }
 </script>
 
 {#if UIMessageData}

@@ -134,6 +134,7 @@ class MLPlatformTypes(Enum):
 # ```sh
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
+"""A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHATMODELS = [
     "gemini25pro",
     "gemini25flash",
@@ -144,20 +145,18 @@ CHATMODELS = [
     "llama4maverick",
     "llama32_90b",
     "llama33_70b",
+    "opus",
     "haiku",
     "sonnet",
 ]
-"""A predefined list of chat model identifiers available within the Buttermilk setup."""
 
+"""A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini25flash",
     "o3mini",
     "gpt41mini",
-    "llama31_8b",
-    "haiku",  # Note: "haiku" is duplicated, consider removing one.
 ]
-"""A predefined list of identifiers for cost-effective chat models."""
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
 """A predefined list of identifiers for multimodal models (supporting text, images, etc.)."""

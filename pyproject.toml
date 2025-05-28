@@ -215,8 +215,7 @@ addopts = [
     "--tb=auto",
     # "--show-capture=no",
     # "--disable-warnings",
-    "-m", "not integration",
-    "xfail_strict=true"
+    "-m not integration",
 ]
 
 #  "--timeout_method=thread", 
