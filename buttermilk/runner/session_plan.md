@@ -1,5 +1,3 @@
-Proceed with Phase 1 (Core Cleanup) of the Robust Session Management System Design Plan.
-
 Robust Session Management System Design Plan
 
 1. Core Architecture Changes
