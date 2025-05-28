@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { slide } from 'svelte/transition';
-  import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
-  import { formatUncertainty, getModelColor, getModelIdentifier, getRoleIdentifier, getScoreColor, type Message } from '$lib/utils/messageUtils';
-  import { calculateAverageScore } from '$lib/utils/scoreUtils';
   import { messageStore } from '$lib/stores/messageStore';
+  import { formatUncertainty, getModelColor, getModelIdentifier, getScoreColor, type Message } from '$lib/utils/messageUtils';
+  import { calculateAverageScore } from '$lib/utils/scoreUtils';
   import type { Tooltip } from 'bootstrap';
+  import { onDestroy, onMount } from 'svelte';
+  import { slide } from 'svelte/transition';
   
   import '$lib/styles/expandable-details.scss';
-	import BasicMessage from './BasicMessage.svelte';
+  import BasicMessage from './BasicMessage.svelte';
   
 
   export let message: Message;
@@ -22,11 +22,6 @@
   let averageScore: number | null = null;
   // Reactive declaration for assessments
   $: {
-    // Log when the messageStore updates and the reactive block runs
-    console.debug(`[JudgeMessage ${message.message_id}] Reactive block triggered by $messageStore update.`);
-    // Log the current state of the messageStore (be cautious with large stores)
-    // console.log(`[JudgeMessage ${message.message_id}] Current $messageStore content:`, $messageStore);
-
     // Filter the message store for assessment messages related to this judge message
     assessments = $messageStore.filter(m =>
       m.type === 'assessments' &&
