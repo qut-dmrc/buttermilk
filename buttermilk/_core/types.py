@@ -308,18 +308,10 @@ class RunRequest(BaseModel):
             This is a mandatory field, excluded from serialization.
         batch_id (str | None): If this run is part of a larger batch, this field
             holds the ID of the parent batch.
-        status (str): The current status of this job/run (e.g., "pending",
-            "running", "completed", "failed", "cancelled"). Defaults to "pending".
-        created_at (str): Timestamp (ISO format UTC) of when the run request was created.
-        started_at (str | None): Timestamp (ISO format UTC) of when the execution started.
-        completed_at (str | None): Timestamp (ISO format UTC) of when the execution completed.
-        error (str | None): Error message if the job/run failed.
-        result_uri (str | None): URI pointing to the results of the job/run, if applicable.
         source (list[str]): List of source identifiers, potentially for API requests
             indicating data origins. Defaults to an empty list.
         mime_type (str | None): MIME type for input data, especially if `data` field is used.
         data (bytes | None): Raw binary data input, e.g., for file uploads via API.
-        is_batch_job (bool): Computed property, True if `batch_id` is set.
         job_id (str): Computed property, generates a unique job ID, combining
             `batch_id` and `record_id` if available, otherwise a new UUID.
         tracing_attributes (dict): Computed property, provides a dictionary of
@@ -377,26 +369,9 @@ class RunRequest(BaseModel):
         default=None,
         description="ID of the parent batch, if this run is part of a batch.",
     )
-    status: str = Field(
-        default="pending",
-        description="Current status of this job (e.g., 'pending', 'running', 'completed').",
-    )
     created_at: str = Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC).isoformat(),
         description="Timestamp (ISO format UTC) when the run request was created.",
-    )
-    started_at: str | None = Field(
-        default=None,
-        description="Timestamp (ISO format UTC) when execution started.",
-    )
-    completed_at: str | None = Field(
-        default=None,
-        description="Timestamp (ISO format UTC) when execution completed.",
-    )
-    error: str | None = Field(default=None, description="Error message if the job/run failed.")
-    result_uri: str | None = Field(
-        default=None,
-        description="URI pointing to the results of the job/run, if applicable.",
     )
 
     # API-specific fields (can be used by other interfaces too)

@@ -6,8 +6,7 @@
   } from '$lib/utils/messageUtils';
   import { createEventDispatcher } from 'svelte';
 
-  import { createManagerResponse } from '$lib/utils/messageUtils';
-  // Props
+    // Props
   // Note: The component receives the 'Message' type from convertToDisplayMessage,
   // where the original UIMessage is nested within message.outputs
   export let message: Message; 
@@ -20,24 +19,6 @@
   // Extract the original UIMessage data (cast for type safety)
   $: UIMessageData = message.outputs as UIMessage | undefined; 
 
-  // Local state for user input
-  let userPrompt: string = '';
-  let selectedValue: string | boolean | null = null; // Can hold boolean for confirm, string for selection/text
-
-  // Function to send a response
-  function sendResponse(confirm: boolean, halt: boolean = false, interrupt: boolean = false, human_in_loop: boolean = true) {
-    const response: ManagerResponse = createManagerResponse(
-      confirm,
-      typeof selectedValue === 'string' ? selectedValue : null,
-      userPrompt || null,
-      halt,
-      interrupt,
-      human_in_loop,
-    );
-    dispatch('managerResponse', response);
-    console.log("Sent selection response:", response);
-
-  } // End of sendResponse function
 
 </script>
 

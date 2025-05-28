@@ -23,7 +23,6 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Self
 
-import pandas as pd
 import shortuuid  # For generating unique IDs
 import weave  # For tracing capabilities
 from pydantic import (
@@ -51,7 +50,7 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.data.loaders import create_data_loader, DataLoader  # New data loading system
+from buttermilk.data.loaders import DataLoader, create_data_loader  # New data loading system
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
@@ -283,9 +282,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Get the singleton instance using our new module-level function
         # Define attributes for logging and tracing.
         op = weave.op(self._run, call_display_name=display_name)
-        orchestrator_trace = bm.weave.create_call(op, inputs=clean_empty_values(request.model_dump(mode="json")),
-                                                    display_name=display_name,
-                                                    attributes=request.tracing_attributes)
+        orchestrator_trace = bm.weave.create_call(
+            op,
+            inputs=clean_empty_values(request.model_dump(mode="json", exclude={"tracing_attributes"})),
+            display_name=display_name,
+            attributes=request.tracing_attributes,
+        )
         self.trace_id = orchestrator_trace.trace_id
         try:
             # Execute the core run logic.
@@ -374,7 +376,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Cleanup is handled by the public `run` method's finally block.
 
     async def _fetch_initial_records(self, request: RunRequest) -> None:
-        """Fetches initial records based on the `RunRequest` if not already loaded.
+        """Fetch initial records based on the `RunRequest` if not already loaded.
 
         This helper method checks if `self._records` is empty. If so, and if the
         `request` provides a `record_id` or `uri`, it attempts to fetch the
@@ -467,11 +469,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """Retrieves all records from specified data source or all sources.
 
         Args:
-            source_name: Optional name of specific data source. If None, 
+            source_name: Optional name of specific data source. If None,
                        returns records from all sources.
 
         Returns:
             List of Record objects.
+
         """
         if not self._data_loaders:
             await self.load_data()
@@ -494,7 +497,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     records.extend(list(loader))
                 except Exception as e:
                     logger.error(f"Error loading records from source '{name}': {e}")
-        
+
         return records
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:

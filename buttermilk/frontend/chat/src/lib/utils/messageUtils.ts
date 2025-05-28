@@ -132,7 +132,7 @@ export function createManagerResponse(confirm: boolean | null | undefined, selec
     interrupt: interrupt,
     content: prompt || null, // Send free text input if any
     selection: selection || null, // Send selection if it's a string
-    human_in_loop: human_in_loop || true, // Default to true if not specified
+    human_in_loop: human_in_loop, 
   };
 }
 // --- Message Type Enum ---

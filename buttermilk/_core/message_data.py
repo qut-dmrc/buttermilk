@@ -57,6 +57,7 @@ def extract_message_data(
         `message.outputs = {"summary_text": "This is a summary."}`, and
         `input_mappings` is `{"extracted_summary": "Summarizer.outputs.summary_text"}`,
         the function would return `{"extracted_summary": "This is a summary."}`.
+
     """
     extracted_data: dict[str, Any] = {}
     if not input_mappings or not isinstance(input_mappings, dict):
@@ -67,15 +68,7 @@ def extract_message_data(
     # The message content is nested under a key derived from the source.
     # e.g., if source is "AgentName-xyz", key becomes "AgentName".
     source_key = source.split("-", maxsplit=1)[0]
-    try:
-        # model_dump() is preferred for Pydantic v2
-        message_dict = message.model_dump(mode="json") # Serialize to dict, handling complex types
-    except AttributeError: # Fallback for older Pydantic or non-Pydantic objects if any
-        try:
-            message_dict = message.dict() # type: ignore
-        except AttributeError:
-            logger.error(f"Message object of type {type(message)} does not have model_dump or dict method.")
-            return extracted_data # Cannot process further
+    message_dict = message.model_dump(mode="json")  # Serialize to dict, handling complex types
 
     data_for_jmespath = {source_key: message_dict}
 
@@ -88,8 +81,8 @@ def extract_message_data(
                 # Clean up search_result: remove None or empty sequences/mappings from list results
                 if isinstance(search_result, Sequence) and not isinstance(search_result, str):
                     cleaned_sequence = [item for item in search_result if item is not None and item not in ([], {})]
-                    if not cleaned_sequence: # If list becomes empty after cleaning
-                        search_result = None # Treat as no result
+                    if not cleaned_sequence:  # If list becomes empty after cleaning
+                        search_result = None  # Treat as no result
                     else:
                         search_result = cleaned_sequence
 
@@ -99,17 +92,17 @@ def extract_message_data(
                 else:
                     logger.debug(f"JMESPath expression '{jmespath_expr}' for key '{target_key}' yielded no meaningful result.")
 
-            except jmespath_exceptions.JMESPathError as e: # Catch specific JMESPath errors
+            except jmespath_exceptions.JMESPathError as e:  # Catch specific JMESPath errors
                 logger.warning(
-                    f"Error applying JMESPath expression '{jmespath_expr}' for key '{target_key}': {e!s}. Skipping this mapping."
+                    f"Error applying JMESPath expression '{jmespath_expr}' for key '{target_key}': {e!s}. Skipping this mapping.",
                 )
-            except Exception as e: # Catch any other unexpected errors during search
+            except Exception as e:  # Catch any other unexpected errors during search
                 logger.error(
-                    f"Unexpected error during JMESPath search for key '{target_key}' with expression '{jmespath_expr}': {e!s}. Skipping."
+                    f"Unexpected error during JMESPath search for key '{target_key}' with expression '{jmespath_expr}': {e!s}. Skipping.",
                 )
         else:
             logger.warning(
-                f"Invalid or empty JMESPath expression for key '{target_key}': '{jmespath_expr}'. Skipping this mapping."
+                f"Invalid or empty JMESPath expression for key '{target_key}': '{jmespath_expr}'. Skipping this mapping.",
             )
 
     # Final cleaning of the entire extracted dictionary (e.g., if some values were initially non-empty then became so)

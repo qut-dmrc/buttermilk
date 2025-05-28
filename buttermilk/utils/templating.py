@@ -151,12 +151,9 @@ class KeyValueCollector(BaseModel):
         for key in keys:
             self._data[key] = []
 
-    # The docstring for the section below was not part of the class definition.
-    # It seems to be a general comment about routing variables.
-    # """Routes variables between workflow steps using mappings
-    # Data is essentially a dict of lists, where each key is the name of a step and
-    # each list is the output of an agent in a step.
-    # """
+    def clear(self) -> None:
+        """Clears all collected data, resetting the internal dictionary to empty."""
+        self._data.clear()
 
     def _resolve_mappings(self, mappings: dict[str, Any], data: Mapping[str, Any]) -> dict[str, Any]:
         """Resolves JMESPath expressions defined in `mappings` against `data`. (DEPRECATED or under review)
