@@ -188,7 +188,7 @@ class HostAgent(Agent):
             logger.info(f"Host {self.agent_name} starting new conductor task.")
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))
 
-        # Ignore TaskProgressUpdate messages received by the host itself
+        # Ignore FlowProgressUpdate messages received by the host itself
         elif isinstance(message, FlowProgressUpdate):
             logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
             # Do nothing with progress updates received by the host
@@ -272,15 +272,7 @@ class HostAgent(Agent):
         except Exception as e:
             logger.exception(f"Error in progress reporting task: {e}")
         finally:
-            # Send one last update before exiting
-            progress_message = FlowProgressUpdate(source=self.agent_id,
-                                                    status="finished",
-                                                    step_name=END,
-                waiting_on=dict(),
-                message="Flow finished",
-            )
-            logger.debug(f"Host {self.agent_name} sending final progress update.")
-            await self.callback_to_groupchat(progress_message)
+            logger.debug(f"Host {self.agent_name} progress reporting task terminated.")
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed, reporting progress periodically."""
@@ -374,6 +366,17 @@ class HostAgent(Agent):
 
         # --- Sequence finished ---
         logger.info(f"Host {self.agent_name} flow execution finished.")
+        
+        # Send final progress update before any cleanup begins
+        final_progress_message = FlowProgressUpdate(
+            source=self.agent_id,
+            status="finished", 
+            step_name=END,
+            waiting_on={},
+            message="Flow completed",
+        )
+        logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
+        await self.callback_to_groupchat(final_progress_message)
 
     async def _shutdown(self) -> None:
         """Shutdown the agent and clean up resources."""
