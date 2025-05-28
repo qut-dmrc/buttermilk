@@ -9,7 +9,6 @@ This module provides functions to:
 """
 
 import contextlib  # For suppressing exceptions in specific blocks
-from pathlib import Path  # For path operations
 from typing import Any
 
 import regex as re  # For regular expression operations
@@ -131,7 +130,6 @@ async def download_and_convert(
         final_filepath = filepath or str(obj)
         logger.debug(f"download_and_convert: Processing filepath: {final_filepath}")
         obj = read_file(final_filepath)  # obj becomes file content (bytes or str)
-        uri = Path(final_filepath).as_uri()  # Store original filepath as URI
         # Try to guess MIME from filepath extension if current is generic
         import mimetypes
         guessed_type, _ = mimetypes.guess_type(final_filepath)
