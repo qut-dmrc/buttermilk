@@ -48,6 +48,100 @@ from buttermilk.api.services.message_service import MessageService
 from buttermilk.utils.utils import expand_dict
 
 
+class SessionResources(BaseModel):
+    """Tracks all resources allocated to a session for proper cleanup."""
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    tasks: set[asyncio.Task] = Field(default_factory=set)
+    websockets: set[Any] = Field(default_factory=set)
+    file_handles: set[Any] = Field(default_factory=set)  # For IO objects
+    memory_usage: int = Field(default=0)  # Bytes
+    custom_resources: dict[str, Any] = Field(default_factory=dict)  # For extension
+    
+    def add_task(self, task: asyncio.Task) -> None:
+        """Add a task to be tracked."""
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+    
+    def add_websocket(self, websocket: Any) -> None:
+        """Add a WebSocket to be tracked."""
+        self.websockets.add(websocket)
+    
+    def add_file_handle(self, file_handle: Any) -> None:
+        """Add a file handle to be tracked."""
+        self.file_handles.add(file_handle)
+    
+    def add_custom_resource(self, name: str, resource: Any) -> None:
+        """Add a custom resource to be tracked."""
+        self.custom_resources[name] = resource
+    
+    async def cleanup(self) -> dict[str, Any]:
+        """Cleanup all tracked resources and return a report."""
+        report = {
+            "tasks_cancelled": 0,
+            "websockets_closed": 0,
+            "files_closed": 0,
+            "custom_cleaned": 0,
+            "errors": []
+        }
+        
+        # Cancel tasks
+        for task in list(self.tasks):
+            if not task.done():
+                task.cancel()
+                report["tasks_cancelled"] += 1
+        
+        if self.tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self.tasks, return_exceptions=True),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                report["errors"].append("Timeout waiting for task cancellation")
+            
+            self.tasks.clear()
+        
+        # Close WebSockets
+        for ws in list(self.websockets):
+            try:
+                if hasattr(ws, 'close'):
+                    await ws.close()
+                    report["websockets_closed"] += 1
+            except Exception as e:
+                report["errors"].append(f"Error closing WebSocket: {e}")
+        self.websockets.clear()
+        
+        # Close file handles
+        for fh in list(self.file_handles):
+            try:
+                if hasattr(fh, 'close'):
+                    fh.close()
+                    report["files_closed"] += 1
+            except Exception as e:
+                report["errors"].append(f"Error closing file handle: {e}")
+        self.file_handles.clear()
+        
+        # Cleanup custom resources
+        for name, resource in list(self.custom_resources.items()):
+            try:
+                if hasattr(resource, 'cleanup'):
+                    cleanup_result = resource.cleanup()
+                    if asyncio.iscoroutine(cleanup_result):
+                        await cleanup_result
+                elif hasattr(resource, 'close'):
+                    close_result = resource.close()
+                    if asyncio.iscoroutine(close_result):
+                        await close_result
+                report["custom_cleaned"] += 1
+            except Exception as e:
+                report["errors"].append(f"Error cleaning up {name}: {e}")
+        self.custom_resources.clear()
+        
+        return report
+
+
 class FlowRunContext(BaseModel):
     """Encapsulates all state for a single flow run with session management."""
 
@@ -65,8 +159,9 @@ class FlowRunContext(BaseModel):
     # Session management fields
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    background_tasks: set[asyncio.Task] = Field(default_factory=set)
+    background_tasks: set[asyncio.Task] = Field(default_factory=set)  # DEPRECATED: Use resources.tasks
     session_timeout: int = 3600  # 1 hour default timeout in seconds
+    resources: SessionResources = Field(default_factory=SessionResources)  # Resource tracking
 
     websocket: Any = None
 
@@ -77,39 +172,71 @@ class FlowRunContext(BaseModel):
     def is_expired(self) -> bool:
         """Check if the session has expired based on timeout."""
         return (datetime.now(UTC) - self.last_activity).total_seconds() > self.session_timeout
+    
+    def get_isolated_topic(self, base_topic: str) -> str:
+        """Generate session-isolated topic names for message routing."""
+        return f"{self.session_id}:{base_topic}"
+    
+    def add_task(self, task: asyncio.Task) -> None:
+        """Add a task to be tracked by this session."""
+        self.resources.add_task(task)
+        self.update_activity()
+    
+    def add_websocket(self, websocket: Any) -> None:
+        """Add a WebSocket to be tracked by this session.""" 
+        self.resources.add_websocket(websocket)
+        self.websocket = websocket  # Maintain backward compatibility
+        self.update_activity()
+    
+    def add_file_handle(self, file_handle: Any) -> None:
+        """Add a file handle to be tracked by this session."""
+        self.resources.add_file_handle(file_handle)
+        self.update_activity()
+    
+    def add_custom_resource(self, name: str, resource: Any) -> None:
+        """Add a custom resource to be tracked by this session."""
+        self.resources.add_custom_resource(name, resource)
+        self.update_activity()
 
     async def cleanup(self) -> None:
-        """Clean up session resources."""
-        # Cancel background tasks
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-        self.background_tasks.clear()
+        """Clean up session resources with timeout and verification."""
+        logger.debug(f"Starting cleanup for session {self.session_id}")
+        
+        try:
+            # Set status to terminating
+            self.status = SessionStatus.COMPLETED  # Use COMPLETED for now, TERMINATING added in next phase
+            
+            # Add flow task to resource tracker if it exists
+            if self.flow_task and not self.flow_task.done():
+                self.resources.add_task(self.flow_task)
+            
+            # Add any legacy background tasks to resource tracker
+            for task in self.background_tasks:
+                self.resources.add_task(task)
+            self.background_tasks.clear()  # Clear the legacy set
+            
+            # Add WebSocket to resource tracker
+            if self.websocket:
+                self.resources.add_websocket(self.websocket)
+            
+            # Add orchestrator to custom resources if it exists
+            if self.orchestrator:
+                self.resources.add_custom_resource("orchestrator", self.orchestrator)
 
-        # Close WebSocket if connected
-        if self.websocket and not self.websocket.client_state == WebSocketState.DISCONNECTED:
-            try:
-                await self.websocket.close()
-            except Exception as e:
-                logger.warning(f"Error closing WebSocket for session {self.session_id}: {e}")
-
-        # Clean up orchestrator
-        if self.orchestrator:
-            cleanup_method = getattr(self.orchestrator, "cleanup", None)
-            if cleanup_method and callable(cleanup_method):
-                try:
-                    result = cleanup_method()
-                    if asyncio.iscoroutine(result):
-                        await result
-                except Exception as e:
-                    logger.warning(f"Error during orchestrator cleanup for session {self.session_id}: {e}")
-
-        self.status = SessionStatus.COMPLETED
-        logger.info(f"Session {self.session_id} cleaned up successfully")
+            # Perform comprehensive resource cleanup
+            logger.debug(f"Cleaning up resources for session {self.session_id}")
+            cleanup_report = await self.resources.cleanup()
+            
+            # Log cleanup report
+            if cleanup_report.get("errors"):
+                logger.warning(f"Session {self.session_id} cleanup completed with errors: {cleanup_report}")
+            else:
+                logger.info(f"Session {self.session_id} cleaned up successfully: {cleanup_report}")
+            
+        except Exception as e:
+            logger.error(f"Error during session cleanup for {self.session_id}: {e}")
+            # Ensure status is set even if cleanup fails
+            self.status = SessionStatus.FAILED
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
@@ -397,7 +524,7 @@ class FlowRunner(BaseModel):
             self._session_manager_started = True
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
-        """Get or create a session for the given session ID (async version).
+        """Get or create a session for the given session ID.
 
         Args:
             session_id: Unique identifier for the session
@@ -413,10 +540,6 @@ class FlowRunner(BaseModel):
             return None
 
         session = await self.session_manager.get_or_create_session(session_id, websocket)
-
-        # Backward compatibility: also store in the old sessions dict
-        self.sessions[session_id] = session
-
         return session
 
     async def cleanup(self) -> None:
@@ -506,17 +629,15 @@ class FlowRunner(BaseModel):
         # Get or create session using the session manager
         _session = await self.session_manager.get_or_create_session(run_request.session_id)
 
-        # Backward compatibility: also store in old sessions dict
-        self.sessions[run_request.session_id] = _session
-
         set_logging_context(run_request.session_id)
         _session.flow_name = run_request.flow
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
         _session.update_activity()  # Update activity timestamp
 
-        # Create the task
+        # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+        _session.add_task(_session.flow_task)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start

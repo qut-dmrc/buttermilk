@@ -196,6 +196,35 @@ class Agent(AgentConfig, ABC):
         # Set the agent ID in the context variable for tracing
         agent_id_var.set(self.agent_id)
 
+    async def cleanup(self) -> None:
+        """Cleanup agent resources and state.
+
+        Called when the agent is being shut down or when the session is being cleaned up.
+        Subclasses should override this method to cleanup any resources they have allocated
+        (e.g., file handles, network connections, background tasks).
+
+        The base implementation clears internal state and should be called by subclasses
+        using super().cleanup().
+        """
+        logger.debug(f"Agent {self.agent_name}: Base cleanup.")
+        
+        # Clear internal state
+        self._records.clear()
+        self._data.clear()
+        
+        # Clear model context
+        if hasattr(self._model_context, 'clear'):
+            self._model_context.clear()
+        elif hasattr(self._model_context, 'reset'):
+            await self._model_context.reset()
+        
+        # Clear heartbeat queue
+        while not self._heartbeat.empty():
+            try:
+                self._heartbeat.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Resets the agent's internal state to its initial condition.
 

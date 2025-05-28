@@ -280,17 +280,62 @@ class AutogenOrchestrator(Orchestrator):
         )
 
     async def _cleanup(self) -> None:
-        """Cleans up resources, primarily by stopping the Autogen runtime."""
+        """Cleans up resources with timeout and verification."""
         logger.debug("Cleaning up AutogenOrchestrator...")
+        cleanup_timeout = 15.0  # 15 second timeout for cleanup
+        
         try:
-            # Stop the runtime
-            if self._runtime._run_context:
-                # runtime is started. Call close() to stop and stop the agents.
-                await self._runtime.close()
-                logger.info("Autogen runtime stopped.")
-            await asyncio.sleep(2)  # Give it some time to properly shut down
-
-            # Print weave link again
+            # Cancel all registered agent tasks first
+            logger.debug("Cleaning up registered agents...")
+            for agent_id, agent_instance in self._agent_registry.items():
+                try:
+                    if hasattr(agent_instance, 'cleanup'):
+                        cleanup_result = agent_instance.cleanup()
+                        if asyncio.iscoroutine(cleanup_result):
+                            await asyncio.wait_for(cleanup_result, timeout=5.0)
+                    logger.debug(f"Cleaned up agent: {agent_id}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout cleaning up agent {agent_id}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up agent {agent_id}: {e}")
+            
+            # Also cleanup any agent adapters in the runtime
+            if hasattr(self, '_runtime') and hasattr(self._runtime, '_agents'):
+                logger.debug("Cleaning up agent adapters...")
+                for agent_type, agents in self._runtime._agents.items():
+                    for agent in agents:
+                        if hasattr(agent, 'cleanup'):
+                            try:
+                                await asyncio.wait_for(agent.cleanup(), timeout=5.0)
+                                logger.debug(f"Cleaned up adapter for agent type: {agent_type}")
+                            except asyncio.TimeoutError:
+                                logger.warning(f"Timeout cleaning up adapter for {agent_type}")
+                            except Exception as e:
+                                logger.warning(f"Error cleaning up adapter for {agent_type}: {e}")
+                    
+            # Clear registries
+            self._agent_registry.clear()
+            self._agent_types.clear()
+            
+            # Stop the runtime with timeout
+            if hasattr(self, '_runtime') and self._runtime._run_context:
+                logger.debug("Stopping Autogen runtime...")
+                try:
+                    cleanup_task = asyncio.create_task(self._runtime.close())
+                    await asyncio.wait_for(cleanup_task, timeout=cleanup_timeout)
+                    logger.info("Autogen runtime stopped successfully")
+                except asyncio.TimeoutError:
+                    logger.error(f"Autogen runtime cleanup timeout after {cleanup_timeout}s")
+                    # Force cleanup
+                    await self._force_cleanup()
+                except Exception as e:
+                    logger.error(f"Error during runtime cleanup: {e}")
+                    await self._force_cleanup()
+            
+            # Verify cleanup
+            await self._verify_cleanup()
+                
+            # Print weave link if available
             try:
                 call = weave.get_current_call()
                 if call and hasattr(call, "ui_url"):
@@ -299,7 +344,47 @@ class AutogenOrchestrator(Orchestrator):
                 pass
 
         except Exception as e:
-            logger.warning(f"Error during runtime cleanup: {e}")
+            logger.error(f"Fatal error during orchestrator cleanup: {e}")
+            await self._force_cleanup()
+            
+    async def _force_cleanup(self) -> None:
+        """Force cleanup when normal cleanup fails."""
+        logger.warning("Performing force cleanup of AutogenOrchestrator")
+        try:
+            # Clear all internal state
+            self._agent_registry.clear()
+            self._agent_types.clear()
+            
+            # Try to forcefully stop runtime
+            if hasattr(self, '_runtime'):
+                try:
+                    # Set runtime context to None to prevent further operations
+                    if hasattr(self._runtime, '_run_context'):
+                        self._runtime._run_context = None
+                except Exception as e:
+                    logger.warning(f"Error during force cleanup: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error during force cleanup: {e}")
+            
+    async def _verify_cleanup(self) -> None:
+        """Verify that cleanup was successful."""
+        issues = []
+        
+        # Check that registries are cleared
+        if self._agent_registry:
+            issues.append(f"{len(self._agent_registry)} agents still in registry")
+        if self._agent_types:
+            issues.append(f"{len(self._agent_types)} agent types still registered")
+            
+        # Check runtime state
+        if hasattr(self, '_runtime') and self._runtime._run_context:
+            issues.append("Runtime context still active")
+            
+        if issues:
+            logger.warning(f"Cleanup verification failed: {', '.join(issues)}")
+        else:
+            logger.debug("Cleanup verification passed")
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.

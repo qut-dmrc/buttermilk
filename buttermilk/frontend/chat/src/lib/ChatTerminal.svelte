@@ -145,6 +145,7 @@ import {
   // Toggle auto-approve state
   function toggleAutoApprove() {
     humanInLoop = !humanInLoop;
+    console.log("Toggled human in loop state:", humanInLoop, " approving:", !humanInLoop);
     const message = createManagerResponse(!humanInLoop, null, null, null, null, humanInLoop);
     sendManagerResponse(message);
   }
