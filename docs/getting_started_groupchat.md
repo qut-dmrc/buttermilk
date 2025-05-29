@@ -16,309 +16,83 @@ Before you begin, please ensure you have:
 *   The Buttermilk CLI installed and configured on your system.
 *   A basic understanding of Buttermilk concepts like flows and agents. If you're new to Buttermilk, consider reviewing the general documentation first.
 
-## Understanding Group Chat Configuration
-
-A group chat in Buttermilk is defined by a collection of agents that interact with each other, managed by an orchestrator, and configured through YAML files. While a very basic conceptual setup might look like this:
-
-```yaml
-# conceptual_group_chat_example.yaml
-# This is a simplified example to illustrate the core idea.
-# Practical configurations are more detailed.
-name: MySimpleConceptualChat
-agents:
-  - name: UserProxy
-    type: UserProxyAgent
-    description: Handles user interaction.
-  - name: Assistant
-    type: AssistantAgent
-    description: Provides responses.
-  - name: Specialist
-    type: SomeSpecializedAgent
-    description: Performs a specific task.
-```
-...a typical operational group chat requires a more structured **flow configuration file**. These files detail aspects like datasets, the orchestrator, and the specific behaviors and LLM configurations for each agent.
-
 ## Defining a Custom Group Chat Flow
 
-A full Buttermilk group chat flow involves detailed configuration, typically saved as a YAML file within the `conf/flows/` directory (e.g., `conf/flows/my_custom_chat.yaml`). This structure allows Buttermilk to discover and run your flow using a command like `buttermilk run flow=my_custom_chat`.
+A group chat in Buttermilk is defined by a collection of agents that interact with each other, managed by an orchestrator, and configured through YAML files. 
 
-A flow configuration file for a group chat generally includes these key sections:
-*   **`name`**: A unique identifier for your flow.
-*   **`description`**: A short description of what the flow does.
-*   **`dataset`** (optional): Specifies the data source for the flow. This could be records for agents to process, topics for discussion, or initial prompts.
-*   **`orchestrator`**: Defines the group chat manager, including its type, the LLM it uses, and its main instructions.
-*   **`agents`**: A list defining each participating agent, including their roles, types, LLM configurations, and system messages.
+A typical operational group chat requires a structured **flow configuration** **file** or **files**. The main flow file is typically saved as a YAML file within the `conf/flows/` directory (e.g., `conf/flows/my_custom_chat.yaml`). 
 
-### Key Configuration Sections:
 
-1.  **Dataset Configuration:**
-    If your group chat needs to process items from a dataset (e.g., questions to answer, documents to analyze) or start with predefined prompts:
-    ```yaml
-    # Example Dataset Configuration
-    dataset:
-      name: "my_discussion_topics"
-      # For BigQuery source:
-      # project: "my-gcp-project"
-      # table_name: "my_bq_table"
-      # For local files (e.g., JSONL, CSV):
-      # path: "data/my_topics.jsonl" # Relative to a data directory or an absolute path
-      # format: "jsonl" # or "csv", etc.
-      # For simple, in-configuration prompts (useful for fixed scenarios):
-      prompts:
-        - "Discuss the future of AI in education."
-        - "What are the ethical implications of autonomous vehicles?"
-    ```
-    The exact fields and their usage (e.g., how `prompts` are injected into the chat) will depend on your specific data loader and orchestrator setup in Buttermilk.
+```yaml
+name: MySimpleConceptualChat
+job: InteractiveChat
 
-2.  **Orchestrator Configuration:**
-    The orchestrator is responsible for managing the conversation flow, deciding which agent speaks next, and enforcing rules like maximum turns.
-    ```yaml
-    # Example Orchestrator Configuration
-    orchestrator:
-      type: "groupchat" # Specifies the GroupChatOrchestrator (actual type name may vary)
-      max_turns: 20      # Maximum number of turns in the conversation
-      # LLM configuration for the orchestrator itself (if it uses an LLM for decision-making,
-      # summarization, or other management tasks). This might not always be directly used
-      # by all orchestrator types but can serve as a default or for specific features.
-      llm:
-        provider: "openai" # or "anthropic", "vertexai", etc.
-        model: "gpt-4-turbo-preview"
-        temperature: 0.7
-      # General instructions or system message for the entire group chat.
-      # Individual agents will also have their own specific system messages.
-      system_message: |
-        This is a collaborative discussion. Agents should work together
-        to address the user's query or explore the given topic comprehensively.
-        Be respectful and build upon each other's contributions.
-    ```
 
-3.  **Agent Configuration:**
-    This is a list where you define each agent participating in the chat.
-    ```yaml
-    # Example Agent Definitions
+flows:
+
+  # Define a named flow
+  vaw:
+    # Use the autogen orchestrator
+    orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+    description: 
+
+    # Define the agents that will be available to the Orchestrator
     agents:
-      - name: "ChatInitiator" # Often a UserProxyAgent to represent the human or start the chat
-        type: "UserProxyAgent" # Actual agent type name may vary
-        description: "The agent that starts the conversation, often representing the human user or an initial prompt."
-        # UserProxyAgents typically relay user input in interactive modes or can be configured
-        # to inject prompts from a dataset. They usually don't have their own LLM for generation
-        # but might have settings for how they handle input/output.
-        # human_input_mode: "TERMINATE" # Example: defines when to ask for human input.
-                                      # Options: ALWAYS, TERMINATE, NEVER.
+      judge:
+        role: judge
+        description: Expert analysts, particularly suited to assess content with subject matter expertise.
+        agent_obj: Judge
+        name_components: ["⚖️", "role", "model", "criteria", "unique_identifier"]
+        num_runs: 1
+        # Set parameters common to all agents of this type
+        parameters:
+          template: judge
 
-      - name: "ResearchSpecialist"
-        type: "AssistantAgent" # A generic or custom LLM-backed assistant agent
-        description: "Specializes in finding and presenting research information."
-        llm:
-          provider: "openai"
-          model: "gpt-4-turbo-preview"
-          temperature: 0.5
-        system_message: |
-          You are a research specialist. Your primary goal is to find and provide accurate,
-          well-sourced information relevant to the ongoing discussion or user's query.
-          If you have access to tools (like web search), use them effectively.
-        # You might also define specific tools available to an agent:
-        # tools:
-        #   - type: "web_search_tool" # Actual tool type/name may vary
-        #   - type: "code_interpreter_tool"
+        # Variants are parameters that will be multiplied to run unique agents
+        variants:
+          model: ${llms.judgers}
 
-      - name: "CriticalThinker"
-        type: "AssistantAgent" # Another assistant agent with a different persona
-        description: "Analyzes information, asks clarifying questions, and ensures depth of discussion."
-        llm:
-          provider: "anthropic"
-          model: "claude-3-opus-20240229"
-          temperature: 0.8
-        system_message: |
-          You are a critical thinker. Your role is to analyze the information provided,
-          identify assumptions, and ask pertinent questions to ensure clarity and accuracy.
-          Challenge statements respectfully and encourage deeper thought.
-    ```
+        # Inputs specify what information the agent will extract from the group chat
+        # This is expressed in JMESPath format: https://jmespath.org/specification.html
+        inputs:
+          records: "FETCH.outputs||*.records[]"
 
-### Complete Example: `conf/flows/my_custom_chat.yaml`
+    # Observers are agents that will participate in the group chat but are not
+    # activated by the orchestrator. They are not a 'step' in the 'flow'.
+    observers:
+      fetch:
+        role: FETCH
+        name: "🔍 fetch record"
+        agent_obj: FetchAgent
+        description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
 
-Here's how these pieces might come together in a file named `conf/flows/my_custom_chat.yaml`:
+        # This agent will get records from a specified dataset: 
+        data: {}
+        inputs:
+          prompt: "prompt||content"
 
-```yaml
-name: "MyCustomDiscussionFlow"
-description: "A group chat flow for discussing various topics with specialized agents."
+      host:
+        role: HOST
+        name: "🎯 Assistant"
+        description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
+        # Choose a type of host. Standard HostAgent just iterates through each step. LLMHostAgent
+        # will use a template to determine the next step. 
+        agent_obj: LLMHostAgent
+        
+        # determine whether the host should seek confirmation from the user (MANAGER)
+        human_in_loop: true
+        parameters:
+          template: researchassistant
+          model: ${llms.host}
+          task: Assign an agent to the task. Repeat.
+        inputs: {}
 
-# Optional: If the chat is seeded by predefined topics/prompts
-dataset:
-  name: "discussion_starters"
-  prompts:
-    - "What are the key challenges and opportunities in renewable energy adoption?"
-    - "Explore the impact of social media on political discourse."
-
-orchestrator:
-  type: "groupchat"
-  max_turns: 15
-  system_message: "Facilitate a productive discussion among the agents to explore the given topic."
-  # LLM for the orchestrator itself (e.g., for turn management or summarization if applicable)
-  llm:
-    provider: "openai"
-    model: "gpt-3.5-turbo"
-
-agents:
-  - name: "UserProxy"
-    type: "UserProxyAgent" # Represents the user or initiates with a dataset prompt
-    description: "Initiates the discussion with a topic and relays user input if interactive."
-    # For non-interactive mode driven by dataset prompts, human_input_mode might be "NEVER",
-    # or the agent could be configured to automatically process prompts from the dataset.
-    # If interactive, it might wait for user input via the console.
-
-  - name: "ProArgumentAgent"
-    type: "AssistantAgent"
-    description: "Develops and presents arguments in favor of a position or explores a positive aspect of the topic."
-    llm:
-      provider: "openai"
-      model: "gpt-4-turbo-preview"
-      temperature: 0.7
-    system_message: |
-      You are the ProArgumentAgent. Your task is to explore and articulate the
-      positive aspects, benefits, and supporting arguments related to the current
-      discussion topic. Be constructive, provide well-reasoned points, and cite sources if possible.
-
-  - name: "ContraArgumentAgent"
-    type: "AssistantAgent"
-    description: "Develops and presents counter-arguments, challenges, or alternative perspectives."
-    llm:
-      provider: "anthropic"
-      model: "claude-3-sonnet-20240229" # Example of using a different LLM provider/model
-      temperature: 0.75 # Slightly higher temperature for more varied responses
-    system_message: |
-      You are the ContraArgumentAgent. Your task is to critically examine the topic
-      and any arguments presented. Raise potential challenges, drawbacks,
-      counter-arguments, and alternative perspectives. Ensure your points are
-      well-reasoned, respectful, and contribute to a balanced and thorough discussion.
-
-  - name: "SummarizerAgent"
-    type: "AssistantAgent"
-    description: "Periodically summarizes the discussion or provides a final summary."
-    llm:
-      provider: "openai"
-      model: "gpt-3.5-turbo" # A smaller model might be sufficient for summarization
-      temperature: 0.5
-    system_message: |
-      You are SummarizerAgent. Your role is to periodically provide concise
-      summaries of the ongoing discussion, highlighting key arguments, agreements,
-      and disagreements. You may be asked to summarize at the end of the conversation.
 ```
 
-By saving this YAML as `conf/flows/my_custom_chat.yaml`, you can then execute it using:
-```bash
-buttermilk run flow=my_custom_chat
-```
-You can also combine this with other Hydra overrides as discussed in the next section (e.g., `buttermilk run flow=my_custom_chat run.mode=api` or `buttermilk run flow=my_custom_chat agents.ProArgumentAgent.llm.model=gpt-3.5-turbo`).
+## Customizing LLM Agents with Prompts and Criteria
 
-## Customizing Judge Agents with Prompts and Criteria
+LLM Agents rely on a main Jinja2 template with additional variables. Variables can come from data collected from the outputs of other agents or from other templates. Core templates are stored in the `templates/prompt/` directory. 
 
-Judge agents (or Evaluator agents) play a crucial role in assessing the output of other agents or the overall conversation quality. Their behavior is heavily guided by prompt templates and criteria templates, which are typically written in Jinja2 format and stored in the `templates/prompt/` and `templates/criteria/` directories respectively.
-
-### 1. Writing Jinja2 Prompt Templates for Judges
-
-A prompt template for a Judge agent dynamically constructs the instructions given to the LLM that powers the Judge. It can include placeholders for various pieces of information, such as the text to be evaluated, specific guidelines, or examples.
-
-**Example: `templates/prompt/my_custom_judge_prompt.jinja2`**
-
-Let's say you want a Judge agent to evaluate a piece of text for clarity and conciseness.
-
-```jinja2
-{# templates/prompt/my_custom_judge_prompt.jinja2 #}
-You are an expert evaluator. Your task is to assess the following text for clarity and conciseness based on the provided criteria.
-
-**Text to Evaluate:**
-{{ submission_text }}
-
-**Evaluation Guidelines:**
-{{ critique_guidelines }}
-
-Provide your assessment in the format specified by the criteria.
-```
-
-*   `{{ submission_text }}`: This variable would be replaced with the actual text the Judge needs to evaluate.
-*   `{{ critique_guidelines }}`: This could be a general set of instructions or specific points to focus on, passed from the agent's configuration.
-
-Save this file as `my_custom_judge_prompt.jinja2` inside your `templates/prompt/` directory.
-
-### 2. Writing Jinja2 Criteria Templates for Judges
-
-Criteria templates define the structure and specific points the Judge agent should use for its evaluation. This can be free-form text, or it can be structured (e.g., to request JSON output) for easier parsing of the Judge's feedback.
-
-**Example: `templates/criteria/my_custom_criteria.jinja2`**
-
-This template asks the Judge to provide scores and reasoning in a structured way.
-
-```jinja2
-{# templates/criteria/my_custom_criteria.jinja2 #}
-Please provide your evaluation based on the following aspects:
-
-1.  **Clarity Score (1-5):** How clear and easy to understand is the text?
-    *   Score: {{'{'}} "clarity_score": <score_value> {{'}'}}
-    *   Reasoning: {{'{'}} "clarity_reasoning": "<your_reasoning>" {{'}'}}
-
-2.  **Conciseness Score (1-5):** Is the text to the point and free of unnecessary jargon or verbosity?
-    *   Score: {{'{'}} "conciseness_score": <score_value> {{'}'}}
-    *   Reasoning: {{'{'}} "conciseness_reasoning": "<your_reasoning>" {{'}'}}
-
-Return your response as a single JSON object containing these scores and reasons.
-Example:
-{
-  "clarity_score": 4,
-  "clarity_reasoning": "The main points were clear, but some sentences could be simpler.",
-  "conciseness_score": 3,
-  "conciseness_reasoning": "The text was a bit repetitive in places."
-}
-```
-*   Note the use of `{{'{'}}` and `{{'}'}}` to output literal curly braces for the JSON structure, preventing Jinja2 from interpreting them.
-
-Save this file as `my_custom_criteria.jinja2` inside your `templates/criteria/` directory.
-
-### 3. Configuring the Judge Agent in YAML
-
-Once you have your custom Jinja2 templates, you need to tell your Judge agent to use them. This is done in the flow configuration YAML file where you define your agents.
-
-**Example: Part of `conf/flows/my_judging_flow.yaml`**
-
-```yaml
-# ... (flow name, description, other agents, etc.)
-
-agents:
-  # ... (other agents in your group chat or flow)
-
-  - name: "QualityAssessorAgent"
-    type: "JudgeAgent" # Or your specific Judge agent type
-    description: "Assesses submissions for clarity and conciseness using custom templates."
-    llm:
-      provider: "openai"
-      model: "gpt-4-turbo-preview" # Judges often benefit from powerful models
-      temperature: 0.3
-    
-    # Configuration for the Judge agent's behavior
-    judge_config: # This key (`judge_config`) is illustrative; the actual key for configuring
-                  # prompt/criteria templates and related variables might vary based on your
-                  # specific JudgeAgent or EvaluatorAgent implementation in Buttermilk.
-      prompt_template: "prompt/my_custom_judge_prompt.jinja2" # Path relative to project's templates/ directory
-      criteria_template: "criteria/my_custom_criteria.jinja2" # Path relative to project's templates/ directory
-      
-      # Variables to be passed into the prompt and/or criteria templates
-      template_vars:
-        critique_guidelines: |
-          Focus on whether the text is understandable by a general audience
-          and if it conveys its message without unnecessary length.
-          Scores should be integers between 1 (poor) and 5 (excellent).
-          Provide constructive feedback.
-
-# ... (other parts of your flow configuration, like the orchestrator)
-```
-
-**Key Points for YAML Configuration:**
-
-*   **Agent Type**: Ensure you're using the correct `type` for your evaluating agent (e.g., `JudgeAgent`, `EvaluatorAgent`, or a custom type).
-*   **Template Paths**: The `prompt_template` and `criteria_template` values are typically paths relative to a base `templates/` directory in your Buttermilk project (e.g., `templates/prompt/your_template.jinja2`).
-*   **`template_vars`**: This section (the key name might vary, e.g., `prompt_vars`, `params`) is where you define static variables that your Jinja2 templates expect. Dynamic variables like `submission_text` (the content to be judged) are usually passed by the Buttermilk framework or orchestrator when an evaluation is triggered.
-
-By setting up your Judge agents with custom Jinja2 templates, you can tailor their evaluation process precisely to your needs, ensuring consistent, structured, and relevant feedback for your group chat interactions or other agent outputs.
 
 ## Running Your Group Chat: Configuration and Execution
 
@@ -326,31 +100,12 @@ Buttermilk's command-line interface (CLI), primarily managed by `buttermilk/runn
 
 The primary way to specify how Buttermilk should execute (e.g., run a group chat in the console, or expose it via an API) is through the `run.mode` configuration, which can be set in your main YAML config or overridden via the CLI.
 
-### Main Configuration File (`conf/config.yaml` or a custom one):
-
-```yaml
-# conf/config.yaml (or a custom config file)
-defaults:
-  - run: console # Default run mode
-  # ... other defaults
-
-run:
-  mode: console # Can be console, api, batch, etc.
-  # ... other run configurations
-
-# Flow specific configuration for your groupchat
-flow: your_groupchat_flow_name
-# ... other parameters like record_id, prompt, etc.
-
-# Agent configurations would be part of your specific flow's config
-# or loaded dynamically by the groupchat orchestrator.
-```
 
 ### Overriding Configuration with Hydra
 
 One of the powerful features of Hydra is the ability to override any part of your configuration directly from the command line, without modifying the YAML files. This is extremely useful for experiments, testing different settings, or running specific configurations on the fly.
 
-You can override parameters by providing them as `key=value` arguments after the `buttermilk run` command. For nested parameters, use dot notation (e.g., `parent.child=value`).
+You can override parameters by providing them as `key=value` arguments. For nested parameters, use dot notation (e.g., `parent.child=value`).
 
 **Common Override Examples:**
 
@@ -374,13 +129,13 @@ These overrides can be combined with the `run.mode` setting:
 
 *   **Console Mode with specific flow and LLM config:**
     ```bash
-    buttermilk run run.mode=console flow=judger llms=full
+    buttermilk run run.mode=console flows=[judger] flow=judger llms=full
     ```
     This command starts Buttermilk in console mode, runs the `judger` flow, and uses the `full` LLM configuration.
 
 *   **API Mode with a specific flow:**
     ```bash
-    buttermilk run run.mode=api flow=your_api_optimized_flow
+    buttermilk run run.mode=api flows=[your_api_optimized_flow]
     ```
     This starts the API server, configured to serve `your_api_optimized_flow`. You can also add other overrides like `bm.llm.default_model=claude-3-opus` if your configuration supports such specific overrides:
     ```bash
