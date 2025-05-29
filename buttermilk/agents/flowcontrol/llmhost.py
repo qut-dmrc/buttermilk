@@ -141,10 +141,15 @@ class LLMHostAgent(LLMAgent, HostAgent):
             if message.content and str(message.content).startswith(COMMAND_SYMBOL):
                 return
 
+            # Skip processing if message content is None or empty
+            if not message.content:
+                logger.debug(f"Manager message received with empty content, skipping processing: {message}")
+                return
+
             # Clear any pending steps since the manager has a new request
             self._clear_pending_steps()
-            logger.info(f"Manager interrupted with new request: {str(message.content)[:TRUNCATE_LEN]}")
 
+            logger.info(f"Manager interrupted with new request: {message.content}")
             # Call the LLM to get the next step. Include the user feedback and participants in the input.
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "prompt": str(message.content), "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
 
@@ -153,8 +158,9 @@ class LLMHostAgent(LLMAgent, HostAgent):
                 # Check if the result is a CallOnAgent object -- and convert it to StepRequest
                 if isinstance(result, AgentTrace) and isinstance(result.outputs, CallOnAgent):
                     # Create a new message for the agent
-                    choice = StepRequest(role=result.outputs.role, inputs={"prompt": result.outputs.prompt})
-                    logger.info(f"Host {self.agent_name} calling on agent: {result.outputs.role} with prompt: {result.outputs.prompt}")
+                    explanation = f"Proposing to call on agent {result.outputs.role} with prompt: {result.outputs.prompt}"
+                    choice = StepRequest(role=result.outputs.role, inputs={"prompt": result.outputs.prompt}, content=explanation)
+                    logger.info(f"Host {self.agent_name} interpreted manager request: {message.content!s}. {explanation}")
                     # add to our queue
                     await self._proposed_step.put(choice)
                 elif isinstance(result, StepRequest):

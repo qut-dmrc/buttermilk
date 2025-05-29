@@ -9,7 +9,7 @@ from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.constants import COMMAND_SYMBOL, END, WAIT
+from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
@@ -72,7 +72,9 @@ class HostAgent(Agent):
     _progress_reporter_task: asyncio.Task | None = PrivateAttr(default=None)
 
     async def initialize(
-        self, callback_to_groupchat, **kwargs: Any,
+        self,
+        callback_to_groupchat,
+        **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
         super().initialize(**kwargs)
@@ -103,7 +105,9 @@ class HostAgent(Agent):
             self._user_confirmation_received.set()
 
             if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
-                logger.info(f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})")
+                logger.info(
+                    f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
+                )
                 self.human_in_loop = message.human_in_loop
 
             content = getattr(message, "content", getattr(message, "params", None))
@@ -145,7 +149,9 @@ class HostAgent(Agent):
                     # If count reaches zero, remove the agent from pending
                     if self._pending_tasks_by_agent[agent_id_to_update] <= 0:  # Use <= 0 to handle potential negative counts from errors
                         if self._pending_tasks_by_agent[agent_id_to_update] < 0:
-                            logger.warning(f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue.")
+                            logger.warning(
+                                f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue."
+                            )
                         del self._pending_tasks_by_agent[agent_id_to_update]
                         logger.debug(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
                     else:
@@ -153,7 +159,7 @@ class HostAgent(Agent):
                             f"{log_prefix} "
                             f"Agent {agent_id_to_update} has {self._pending_tasks_by_agent[agent_id_to_update]} remaining tasks. "
                             f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
-                         )
+                        )
 
                     # If the entire dictionary is now empty AND it was NOT empty before this update, notify waiters
                     if not self._pending_tasks_by_agent and not was_empty_before_update:
@@ -211,7 +217,7 @@ class HostAgent(Agent):
         self._user_confirmation_received.clear()
         # Send the request to the user
         confirmation_request = UIMessage(
-            content=f"Confirm next step: {step.role}",
+            content=step.content or f"Confirm next step: {step.role}",
             options=["confirm", "reject"],
         )
         # This is callback to groupchat, because we're the host agent right now.
@@ -252,14 +258,16 @@ class HostAgent(Agent):
                 await asyncio.sleep(interval)
                 async with self._tasks_condition:
                     if self._pending_tasks_by_agent:
-                        progress_message = FlowProgressUpdate(source=self.agent_id,
-                                                              status="pending",
-                                                              step_name=self._current_step,
+                        progress_message = FlowProgressUpdate(
+                            source=self.agent_id,
+                            status="pending",
+                            step_name=self._current_step,
                             waiting_on=dict(self._pending_tasks_by_agent),
                             message="Current pending tasks",
                         )
                     else:
-                        progress_message = FlowProgressUpdate(source=self.agent_id,
+                        progress_message = FlowProgressUpdate(
+                            source=self.agent_id,
                             status="idle",
                             step_name="IDLE",
                             waiting_on=dict(),
@@ -293,8 +301,7 @@ class HostAgent(Agent):
         except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
             msg = (
-                f"Timeout waiting for task completion condition. "
-                f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
+                f"Timeout waiting for task completion condition. " f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
             )
             logger.warning(msg)
             self._step_starting.clear()  # Reset the event to allow for new steps
@@ -356,7 +363,8 @@ class HostAgent(Agent):
                 # If the wait failed (timeout or error), stop the flow
                 # break
                 pass
-            if self.human_in_loop and not await self._wait_for_user(next_step):
+            # Don't seek confirmation from the manager to send a request to the manager
+            if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                 # If user rejected or timed out, stop the flow
                 continue
                 # break
@@ -366,11 +374,11 @@ class HostAgent(Agent):
 
         # --- Sequence finished ---
         logger.info(f"Host {self.agent_name} flow execution finished.")
-        
+
         # Send final progress update before any cleanup begins
         final_progress_message = FlowProgressUpdate(
             source=self.agent_id,
-            status="finished", 
+            status="finished",
             step_name=END,
             waiting_on={},
             message="Flow completed",
@@ -435,7 +443,11 @@ class HostAgent(Agent):
             await self.callback_to_groupchat(step)
 
     async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs: Any,
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
     ) -> AgentOutput:
         # A non-LLM host will return a StepRequest
 
