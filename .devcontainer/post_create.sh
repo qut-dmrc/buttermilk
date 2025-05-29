@@ -2,10 +2,8 @@
 
 export DEBIAN_FRONTEND=noninteractive
 
-#cd /workspaces
 USER=$(whoami)
 echo "This setup script is running as $USER in `pwd`"
-#sudo chown -R $USER /workspaces /opt/conda
 
 # create a default .zshrc file
 touch /home/$USER/.zshrc || echo "Unable to create /home/$USER/.zshrc"

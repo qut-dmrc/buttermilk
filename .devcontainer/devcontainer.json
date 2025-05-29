@@ -3,7 +3,7 @@
 {
     "name": "buttermilk",
     "image": "us-central1-docker.pkg.dev/prosocial-443205/reg/prosocialdev:latest",
-    "workspaceFolder": "/workspaces/buttermilk",
+    "workspaceFolder": "/src/buttermilk",
     "remoteUser": "debian",
     "runArgs": [
         "--network=host",
@@ -27,7 +27,7 @@
             ],
             "settings": {
                 "python.terminal.activateEnvironment": true,
-                "python.defaultInterpreterPath": "/workspaces/buttermilk/.venv/bin/python",
+                "python.defaultInterpreterPath": "/src/buttermilk/.venv/bin/python",
                 "python.editor.formatOnSave": true,
                 "python.editor.codeActionsOnSave": {
                     "source.organizeImports": true
