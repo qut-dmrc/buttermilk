@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import openai
 from anthropic import (
     AnthropicVertex,  # Client for Anthropic models on Vertex AI
     AsyncAnthropicVertex,
@@ -815,6 +816,10 @@ class AutoGenWrapper(RetryWrapper):
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
                 logger.error(error_msg := "Unexpected tool response from LLM")
                 raise ProcessingError(error_msg, create_result.content)
+        except openai.ContentFilterFinishReasonError as filter_error:
+            # Prompt or response was rejected by the content filter.
+            msg = f"Agent {self.agent_id}: Content filter blocked the response from model '{self._model}': {filter_error}"
+            raise ProcessingError(msg) from filter_error
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
             logger.error(error_msg)
