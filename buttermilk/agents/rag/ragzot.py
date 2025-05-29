@@ -79,7 +79,7 @@ class RefResult(pydantic.BaseModel):
             f"**Title:** {self.document_title or 'N/A'}\n"
             f"**Document ID:** {self.document_id} (Source: {self.doi_or_url or 'N/A'}, Chunk: {self.chunk_index})\n"
             f"**Citation:** {self.citation or 'N/A'}\n"
-            f"**Full Text Snippet:** {self.full_text[:200] + '...' if len(self.full_text) > 200 else self.full_text}\n"
+            f"**Full Text Snippet:** {self.full_text[:2000] + '...' if len(self.full_text) > 2000 else self.full_text}\n"
         )
 
     def as_message(self, source: str = "search_result") -> UserMessage:
@@ -246,11 +246,11 @@ class RagZot(LLMAgent, ToolConfig):
         description="Number of search results to retrieve per query for context.",
     )
     no_duplicates: bool = pydantic.Field(
-        default=True,
+        default=False,
         description="If True, filter search results to ensure unique parent documents.",
     )
     max_queries: int = pydantic.Field(
-        default=3,
+        default=5,
         description="Maximum number of concurrent search queries when used as a tool.",
     )
 
@@ -320,10 +320,10 @@ class RagZot(LLMAgent, ToolConfig):
         """Ensure ChromaDB is ready for use, handling remote caching if needed."""
         if not hasattr(self, "_chromadb") or not self._chromadb:
             raise ValueError("ChromaDB not initialized. Call _load_tools first.")
-        
+
         # Initialize cache for remote persist_directory
         await self._chromadb.ensure_cache_initialized()
-        
+
         # Now we can safely access the collection
         self._vectorstore = self._chromadb.collection
         logger.info(f"RagZot '{self.agent_id}': ChromaDB collection ready for queries.")
@@ -377,7 +377,7 @@ class RagZot(LLMAgent, ToolConfig):
         """
         if not queries:
             raise ValueError("No queries provided to RagZot search tool (_run).")
-        
+
         # Ensure ChromaDB is ready (handles caching if needed)
         if not hasattr(self, "_vectorstore") or not self._vectorstore:
             await self.ensure_chromadb_ready()
@@ -466,10 +466,8 @@ class RagZot(LLMAgent, ToolConfig):
         else:
             final_records_for_context = parsed_records[:self.n_results]  # Simple truncation
 
-        # Check token limits for the context to be sent to LLM (if model client is available)
-        # This part is specific to when RagZot acts as an LLMAgent itself, not just a tool.
-        # When RagZot is a tool, the calling LLMAgent would handle token limits of its own LLM.
-        # For now, this token check remains, assuming it might be relevant for internal LLM use by RagZot.
+        # Check token limits for the context to be sent to LLM when RagZot acts as an LLMAgent itself,
+        # not just a tool. When RagZot is a tool, the calling LLMAgent would handle token limits of its own LLM.
         context_messages_for_llm: list[UserMessage] = []
         if hasattr(self, "_model_client") and self._model_client and hasattr(self._model_client, "client"):
             for i, rec in enumerate(final_records_for_context):
