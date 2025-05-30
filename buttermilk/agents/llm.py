@@ -227,16 +227,10 @@ class LLMAgent(Agent):
             (e.g., token usage) and details about the agent.
 
         Raises:
-        <<<<<<< HEAD
-            ProcessingError: If template filling fails.
-            Exception: If the LLM call itself fails unexpectedly.
-
-        =======
             ProcessingError: If template filling fails and `fail_on_unfilled_parameters`
                 is True, or if the LLM call itself fails after retries, or if
                 parsing/validation of the LLM response fails critically.
             FatalError: If the LLM client fails to initialize (caught in `init_model`).
-        >>>>>>> d9f9326 (Docs: Comprehensive documentation update (Autumn 2024))
 
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
