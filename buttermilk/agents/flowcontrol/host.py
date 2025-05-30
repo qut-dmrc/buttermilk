@@ -432,11 +432,14 @@ class HostAgent(Agent):
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
             await self.callback_to_groupchat(step)
         else:
-            if step.role in list(self._participants.keys()) + [MANAGER]:
+            if step.role in list(self._participants.keys()):
                 # Signal that we expect at least one response/task start for this step
                 # This event is used in the wait_for predicate.
                 self._step_starting.set()
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
+            elif step.role == MANAGER:
+                # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
+                logger.debug(f"Host executing MANAGER step without setting _step_starting: {step.role}")
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 

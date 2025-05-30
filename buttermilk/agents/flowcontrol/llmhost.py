@@ -163,9 +163,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
                     # Create a new message for the agent
                     explanation = f"Proposing to call on agent {result.outputs.role} with prompt: {result.outputs.prompt}"
                     choice = StepRequest(role=result.outputs.role, inputs={"prompt": result.outputs.prompt}, content=explanation)
-                    logger.info(
-                        f"Host {self.agent_name} interpreted manager request and added proposed step to the sequence queue: {message.content!s}. {explanation}"
-                    )
+                    logger.info(f"Host {self.agent_name} interpreted manager request. {explanation}")
                     # add to our queue
                     await self._proposed_step.put(choice)
                 elif isinstance(result, StepRequest):
