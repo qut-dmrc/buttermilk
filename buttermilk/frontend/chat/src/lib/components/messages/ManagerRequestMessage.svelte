@@ -1,13 +1,12 @@
 <script lang="ts">
   import {
+  	type ManagerMessage,
   	type ManagerResponse,
-  	type Message,
-  	type UIMessage
+  	type Message
   } from '$lib/utils/messageUtils';
   import { createEventDispatcher } from 'svelte';
   import BasicMessage from './BasicMessage.svelte';
 
-    // Props
   // Note: The component receives the 'Message' type from convertToDisplayMessage,
   // where the original UIMessage is nested within message.outputs
   export let message: Message; 
@@ -18,7 +17,7 @@
   // --- Reactive variables to access nested data and determine input type ---
   
   // Extract the original UIMessage data (cast for type safety)
-  $: UIMessageData = message.outputs as UIMessage | undefined; 
+  $: ManagerMessageData = message.outputs as ManagerMessage;
 
   $: agentName = message.agent_info?.agent_id || 'SYSTEM';
 
@@ -32,7 +31,7 @@
     <div class="message-text col-sm-10">
       <span class="message-body manager-text">
         <slot name="messageContent">
-          {message.outputs.content}
+          {ManagerMessageData.content}
         </slot>
       </span>
     </div>

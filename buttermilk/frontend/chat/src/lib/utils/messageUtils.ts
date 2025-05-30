@@ -182,13 +182,6 @@ export interface Message {
   tracing_link?: string;
 }
 
-// Judge message types
-export interface JudgeReasons {
-  prediction: boolean; // violates or not
-  conclusion: string;
-  reasons: string[];
-  uncertainty?: string;
-}
 
 // Assessment message types
 export interface Assessments {
@@ -288,7 +281,7 @@ export interface TaskProcessingFinished {
 
 // Manager Request types (from Python definition)
 
-export interface UIMessage {
+export interface ManagerMessage {
   content: string;
   options?: boolean | string[] | null; // Options for the manager to choose from
   confirm?: boolean|null;
@@ -332,7 +325,7 @@ export interface GenericMessage {
   [key: string]: any; // Allow for additional properties
 }
 
-export type WebSocketData = SystemUpdate  | SystemMessage | UIMessage | RecordData | ManagerResponse | SummaryResult | GenericMessage;
+export type WebSocketData = SystemUpdate  | SystemMessage | ManagerMessage | RecordData | ManagerResponse | SummaryResult | GenericMessage;
 
 export function isSystemUpdate(data: any): data is SystemUpdate {
   return (
@@ -372,16 +365,6 @@ export function isResearcher(data: any): data is ResearcherData {
   );
 }
 
-// Type guard for JudgeReasons
-export function isJudgeReasons(data: any): data is JudgeReasons {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    typeof data.prediction === 'boolean' &&
-    typeof data.conclusion === 'string' &&
-    Array.isArray(data.reasons)
-  );
-}
 
 // Type guard for Assessment
 export function isAssessment(data: any): data is Assessments {

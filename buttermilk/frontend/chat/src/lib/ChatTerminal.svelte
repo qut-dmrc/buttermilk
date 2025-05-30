@@ -8,11 +8,12 @@ import { addMessage as addToMessageStore } from './stores/messageStore';
 import { sessionId } from './stores/sessionStore';
 import './styles/terminal.scss';
 import {
+	type ManagerMessage,
 	type ManagerResponse,
 	type Message,
 	type MessageType,
 	type SystemUpdate,
-	type UIMessage, createManagerResponse, isSystemUpdate,
+	createManagerResponse, isSystemUpdate,
 	normalizeWebSocketMessage
 } from './utils/messageUtils';
 
@@ -44,8 +45,7 @@ import {
   let systemUpdateStatus: SystemUpdate | null = null;
   
   // Manager request state
-  let currentUIMessage: UIMessage | null = null;
-  let currentManagerMessage: Message | null = null;
+  let currentUIMessage: ManagerMessage | null = null;
   let selectionOptions: string[] = [];
   let isConfirmRequest = false;
 
@@ -60,6 +60,29 @@ import {
         
         // Set the messages array directly to avoid any reprocessing
         messages = storedMessages;
+        
+        // Restore manager request state from the last ui_message if any
+        const lastUIMessage = storedMessages.slice().reverse().find(msg => msg.type === 'ui_message');
+        if (lastUIMessage && lastUIMessage.outputs) {
+          currentUIMessage = lastUIMessage.outputs as ManagerMessage;
+          
+          // Determine input type
+          const inputs = currentUIMessage.options;
+          
+          // Check if it's a selection request
+          if (inputs && Array.isArray(inputs) && inputs.length > 0) {
+            selectionOptions = inputs.map(val => String(val));
+            isConfirmRequest = false;
+          } else {
+            selectionOptions = [];
+            isConfirmRequest = true;
+          }
+          
+          console.log("Restored manager request state from stored messages:", { 
+            selectionOptions, 
+            isConfirmRequest, 
+          });
+        }
         
         // Scroll to bottom after messages are loaded
         setTimeout(() => {
@@ -200,7 +223,6 @@ import {
         console.log("Sent manager response via WebSocket:", response);
         // Clear current manager request after responding
         currentUIMessage = null;
-        currentManagerMessage = null;
         selectionOptions = [];
         isConfirmRequest = false;
       } catch (e) {
@@ -361,10 +383,8 @@ import {
             addMessage(normalizedMessage);
           }
           // Check if this is a manager request and update state
-          
           if (normalizedMessage.type === 'ui_message' && outputs) {
-            currentUIMessage = outputs as UIMessage;
-            currentManagerMessage = normalizedMessage;
+            currentUIMessage = outputs as ManagerMessage;
             
             // Determine input type
             const inputs = currentUIMessage.options;
@@ -374,7 +394,6 @@ import {
               selectionOptions = inputs.map(val => String(val));
               isConfirmRequest = false;
             } 
-            // 
             else {
               selectionOptions = [];
               isConfirmRequest = true;
@@ -566,32 +585,7 @@ import {
       message.timestamp = formatTimestamp(message.timestamp);
     }
     
-    // Handle manager request messages differently
-    if (message.type === 'ui_message') {
-      console.log('Handling manager request message:', message);
-      currentUIMessage = message.outputs as UIMessage;
-      currentManagerMessage = message;
-      
-      // Determine input type
-      const options = currentUIMessage?.options;
-      
-      // Check if it's a selection request
-      if (options && Array.isArray(options) && options.length > 0) {
-        selectionOptions = options.map(val => String(val));
-        isConfirmRequest = false;
-      } 
-      // Default to boolean confirm request
-      else {
-        selectionOptions = [];
-        isConfirmRequest = false;
-      }
-      
-    }
-    
-    // Skip other messages with empty previews
-    if (message.preview === 'No Preview Available') {
-      return;
-    }
+    // Note: Manager request state is handled in WebSocket message handler
      
     messages = [...messages, message];
     
@@ -631,11 +625,6 @@ import {
     }
   }
 
-  // Function to handle theme changes
-  function handleThemeChange() {
-    document.body.className = selectedTheme; // Apply theme to body
-    localStorage.setItem('terminalTheme', selectedTheme); // Store theme in local storage
-  }
 </script>
 
 <div class="terminal-container terminal-only">
@@ -679,11 +668,11 @@ import {
     </div>
 
       <!-- Manager Request Area - Only visible when there's an active request -->
-      {#if currentManagerMessage}
+      {#if currentUIMessage}
         <div class="manager-request-area">
           <div class="manager-request-content">
             <span class="request-tag">[REQUEST]</span>
-            {#if currentUIMessage?.content}
+            {#if currentUIMessage.content}
               <span class="request-text">{currentUIMessage.content}</span>
             {/if}
           </div>
