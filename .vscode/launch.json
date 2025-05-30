@@ -63,7 +63,7 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": false,
+      "justMyCode": true,
       "args": [
         "+run=api",
         "flows=[mock,trans,simple,z,tox,judger]",
@@ -82,7 +82,7 @@
     "-Xfrozen_modules=off",
     "-Xdev"
   ],
-  "justMyCode": false,
+  "justMyCode": true,
   "args": [
     "+run=batch",
     "run.mode=batch_run",

@@ -25,7 +25,7 @@ import {
   
   // Monitor props for debugging
   $: {
-    console.log(`ChatTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
+    console.debug(`ChatTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
   }
   
   // Component state
@@ -56,7 +56,7 @@ import {
       const stored = localStorage.getItem(key);
       if (stored) {
         const storedMessages: Message[] = JSON.parse(stored);
-        console.log(`Loading ${storedMessages.length} stored messages for session ${sessionIdToLoad}`);
+        console.debug(`Loading ${storedMessages.length} stored messages for session ${sessionIdToLoad}`);
         
         // Set the messages array directly to avoid any reprocessing
         messages = storedMessages;
@@ -77,10 +77,10 @@ import {
             selectionOptions = [];
             isConfirmRequest = true;
           }
-          
-          console.log("Restored manager request state from stored messages:", { 
-            selectionOptions, 
-            isConfirmRequest, 
+
+          console.debug("Restored manager request state from stored messages:", {
+            selectionOptions,
+            isConfirmRequest,
           });
         }
         
@@ -91,9 +91,9 @@ import {
           }
         }, 100);
         
-        console.log(`Loaded ${storedMessages.length} previous messages`);
+        console.debug(`Loaded ${storedMessages.length} previous messages`);
       } else {
-        console.log(`No stored messages found for session ${sessionIdToLoad}`);
+        console.debug(`No stored messages found for session ${sessionIdToLoad}`);
       }
     } catch (e) {
       console.error('Error loading stored messages:', e);
@@ -103,7 +103,7 @@ import {
 
   // Handle component mounting
   onMount(async () => { // Make the callback async
-    console.log('Attempting direct WebSocket connection to:', wsUrl);
+    console.debug('Attempting direct WebSocket connection to:', wsUrl);
     // Ensure we have a session ID before attempting to connect
     if (!get(sessionId)) {
       addSystemMessage('Initializing session...');
@@ -114,7 +114,7 @@ import {
       loadStoredMessages(get(sessionId));
       
       // wsUrl prop should be the base like "ws://localhost:5173/ws"
-      console.log('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
+      console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
       connectWebSocket();
     } else {
       const errorMsg = "Failed to obtain session ID on mount. WebSocket connection not established.";
@@ -212,7 +212,7 @@ import {
   // Function to send ManagerResponse back via WebSocket
   function handleManagerResponse(event: CustomEvent<ManagerResponse>) {
     const response = event.detail;
-    console.log("Received manager response from component:", response);
+    console.debug("Received manager response from component:", response);
     sendManagerResponse(response);
   }
 
@@ -298,7 +298,7 @@ import {
       try {
         socket.close();
       } catch (e) {
-        console.log('Error closing existing socket:', e);
+        console.error('Error closing existing socket:', e);
       }
     }
     
@@ -315,7 +315,7 @@ import {
     try {
         
       wsUrlWithSession = `${wsUrl}/${currentSessionId}`;
-      console.log('Attempting to connect to WebSocket with URL:', wsUrlWithSession);
+      console.debug('Attempting to connect to WebSocket with URL:', wsUrlWithSession);
       
       // Set connection timeout
       const connectionTimeout = setTimeout(() => {
@@ -355,10 +355,10 @@ import {
               console.debug('Message received:', messageData);
             } catch (parseError) {
               // Not valid JSON
-              console.log('Message is not valid JSON, ignoring:', event.data);
+              console.error('Message is not valid JSON, ignoring:', event.data);
             }
           } else {
-            console.log('Message is not a string:', typeof event.data);
+            console.error('Message is not a string:', typeof event.data);
             messageData = event.data;
           }
           
@@ -366,8 +366,11 @@ import {
           // First normalize to a consistent format
           const normalizedMessage = normalizeWebSocketMessage(messageData);
           const outputs = normalizedMessage.outputs;
-          console.log('Normalized message received from websocket:', normalizedMessage);
-          
+          if (!isSystemUpdate(normalizedMessage)) {
+            console.log('Normalized message received from websocket:', normalizedMessage);
+          } else {
+            console.debug('Normalized message received from websocket:', normalizedMessage);
+          }
 
           // Check for system updates
           if (isSystemUpdate(messageData)) {
@@ -399,7 +402,7 @@ import {
               isConfirmRequest = true;
             }
             
-            console.log("Updated manager request state:", { 
+            console.debug("Updated manager request state:", { 
               selectionOptions, 
               isConfirmRequest, 
             });

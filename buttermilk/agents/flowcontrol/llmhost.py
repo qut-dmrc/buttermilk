@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from buttermilk._core import AgentTrace, StepRequest
 from buttermilk._core.agent import ManagerMessage
-from buttermilk._core.constants import COMMAND_SYMBOL, MANAGER
+from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
 from buttermilk._core.log import logger
 from buttermilk.agents.flowcontrol.host import HostAgent
@@ -104,6 +104,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
         # First, say hello to the user
+        await asyncio.sleep(3)  # we need to let the group chat initialize
         yield StepRequest(
             role=MANAGER,
             content="Hi! What would you like to do?",
@@ -113,7 +114,9 @@ class LLMHostAgent(LLMAgent, HostAgent):
             # This is a blocking call, so it will wait until a message is received
             task = await self._proposed_step.get()
             yield task
-            continue
+            # Check if this is an END task to break the loop
+            if task.role == END:
+                break
 
     async def _listen(
         self,
@@ -160,7 +163,9 @@ class LLMHostAgent(LLMAgent, HostAgent):
                     # Create a new message for the agent
                     explanation = f"Proposing to call on agent {result.outputs.role} with prompt: {result.outputs.prompt}"
                     choice = StepRequest(role=result.outputs.role, inputs={"prompt": result.outputs.prompt}, content=explanation)
-                    logger.info(f"Host {self.agent_name} interpreted manager request: {message.content!s}. {explanation}")
+                    logger.info(
+                        f"Host {self.agent_name} interpreted manager request and added proposed step to the sequence queue: {message.content!s}. {explanation}"
+                    )
                     # add to our queue
                     await self._proposed_step.put(choice)
                 elif isinstance(result, StepRequest):
