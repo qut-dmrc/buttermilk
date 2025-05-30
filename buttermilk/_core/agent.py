@@ -526,15 +526,25 @@ class Agent(AgentConfig, ABC):
 
         # Add relevant message content to the conversation history (_model_context).
         # This logic determines what parts of messages are considered for context.
-        # TODO: This section could be made more configurable, e.g., via AgentConfig.
+        # Only add messages that are relevant to this agent's role and responsibilities.
         if isinstance(message, AgentTrace):
-            content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
-            if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                 content_to_add = str(message.outputs) if message.outputs else None
-            if content_to_add:
-                await self._model_context.add_message(
-                    AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
-                )
+            # Only add traces to context if they are directly relevant to this agent
+            # Avoid contaminating agent context with irrelevant traces from other agents
+            should_add_to_context = (
+                source == self.agent_name or  # Messages from this agent itself
+                source == "manager" or        # Direct user/manager messages
+                (hasattr(message, "agent_info") and 
+                 getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
+            )
+            
+            if should_add_to_context:
+                content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
+                if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
+                     content_to_add = str(message.outputs) if message.outputs else None
+                if content_to_add:
+                    await self._model_context.add_message(
+                        AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
+                    )
         elif isinstance(message, ManagerMessage) and message.content:
             content_str = str(message.content)
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history

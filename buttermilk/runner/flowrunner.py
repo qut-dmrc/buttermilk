@@ -303,31 +303,25 @@ class FlowRunContext(BaseModel):
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
             @retry(
-                stop=stop_after_attempt(30),  # Try 30 times in total (1 initial + 29 retries)
-                wait=wait_fixed(2),          # Wait 2 seconds between attempts
+                stop=stop_after_attempt(10),
+                wait=wait_fixed(3),  # Wait 3 seconds between attempts
                 retry=retry_if_exception_type(Exception),  # Retry on any exception during send
-                reraise=True,                # Reraise the last exception if all retries fail
-                before_sleep=before_sleep_log(logger, logging.WARNING),  # Log a warning before retrying
+                reraise=True,  # Reraise the last exception if all retries fail
+                # before_sleep=before_sleep_log(logger, logging.WARNING),  # Log a warning before retrying
             )
             async def _send_with_retry_internal():
                 if not self.websocket:
-                    logger.error(f"WebSocket is None for session {self.session_id} during send attempt.")
                     # Raise an error to be caught by tenacity or the outer try/except
-                    raise RuntimeError(f"WebSocket is None for session {self.session_id}")
+                    raise RuntimeError(f"WebSocket is None for session {self.session_id} during send attempt.")
 
                 if self.websocket.client_state != WebSocketState.CONNECTED:
-                    logger.warning(
+                    logger.debug(
                         f"WebSocket not connected (state: {self.websocket.client_state}) for session {self.session_id}. Retrying send.",
                     )
                     # Proceed to send; if it fails due to state, tenacity will catch and retry.
 
                 await self.websocket.send_json(message_data_to_send)
                 logger.debug(f"Message sent to UI for session {self.session_id}: {message_type}")
-
-            if not self.websocket:
-                logger.error(f"Cannot send message to UI for session {self.session_id}: WebSocket is None.")
-                # No point in trying to send an error message if websocket is None
-                return
 
             await _send_with_retry_internal()
 
