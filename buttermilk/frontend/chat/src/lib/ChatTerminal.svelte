@@ -330,7 +330,7 @@ import {
           if (typeof event.data === 'string') {
             try {
               messageData = JSON.parse(event.data);
-              console.log('Message received:', messageData);
+              console.debug('Message received:', messageData);
             } catch (parseError) {
               // Not valid JSON
               console.log('Message is not valid JSON, ignoring:', event.data);
@@ -351,10 +351,10 @@ import {
           if (isSystemUpdate(messageData)) {
             // Assign a shallow copy to ensure reactivity if properties change within the object
             systemUpdateStatus = outputs as SystemUpdate;
-            console.log('Updated system status:', systemUpdateStatus);  
+            console.debug('Updated system status:', systemUpdateStatus);  
             // Add logs to check specific properties
-            console.log('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
-            console.log('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
+            console.debug('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
+            console.debug('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
           
           } else {
             // Add the message to the display
@@ -569,7 +569,6 @@ import {
     // Handle manager request messages differently
     if (message.type === 'ui_message') {
       console.log('Handling manager request message:', message);
-      // Don't add to main message list, but update manager request state
       currentUIMessage = message.outputs as UIMessage;
       currentManagerMessage = message;
       
@@ -587,7 +586,6 @@ import {
         isConfirmRequest = false;
       }
       
-      return; // Don't add to messages array
     }
     
     // Skip other messages with empty previews
