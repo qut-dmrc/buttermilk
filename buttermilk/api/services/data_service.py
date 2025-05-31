@@ -1,9 +1,9 @@
 from typing import Any, Protocol
 
-from buttermilk._core import logger
 from buttermilk._core.log import logger
-from buttermilk.runner.helpers import prepare_step_df
 
+
+from buttermilk.data.loaders import DataLoader, create_data_loader
 
 class FlowRunner(Protocol):
     """Protocol for FlowRunner to avoid circular imports"""
@@ -68,14 +68,10 @@ class DataService:
         """
         try:
             record_ids = []
-            datasets = await prepare_step_df(flow_runner.flows[flow_name].data)
 
-            for name, df in datasets.items():
-                df_temp = df.copy().reset_index()
-                if "name" not in df_temp.columns:
-                    df_temp["name"] = df_temp["record_id"]
-
-                record_ids.extend(df_temp[["record_id", "name"]].to_dict(orient="records"))
+            loader = create_data_loader(list(flow_runner.flows[flow_name].data.values())[0])
+            for record in loader:
+                record_ids.append({"record_id": record.record_id, "name": record.title})
 
             return record_ids
 

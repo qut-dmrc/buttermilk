@@ -139,15 +139,14 @@ class JSONLDataLoader(DataLoader):
                     logger.warning(f"Skipping invalid JSON at line {line_num + 1}: {e}")
                     continue
 
-                # Apply column mapping if specified
+                # Apply column mapping to rename specified columns
+                mapped_item = {}
                 if self.config.columns:
-                    mapped_item = {}
                     for new_name, old_name in self.config.columns.items():
                         if old_name in item:
                             mapped_item[new_name] = item[old_name]
-                    processed_item = mapped_item
-                else:
-                    processed_item = item
+
+                processed_item = {**item, **mapped_item}
 
                 # Separate Record fields from metadata
                 record_kwargs = {}
@@ -291,7 +290,6 @@ class PlaintextDataLoader(DataLoader):
                     yield record
                 except Exception as e:
                     logger.warning(f"Failed to read file {file_path}: {e}")
-
 
 
 def create_data_loader(config: DataSourceConfig) -> DataLoader:

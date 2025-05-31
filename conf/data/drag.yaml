@@ -4,8 +4,7 @@ drag:
   path: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
   index:
     - record_id
-  # type: file                    # or "huggingface", "plaintext" 
-  # path: "data/records.jsonl"    # File path or HF dataset name
-  # columns:                      # Optional column mapping
-  #   content: "text"
-  #   label: "category"
+  columns:
+    content: "alt_text"
+    ground_truth: "expected"
+    title: "name"
