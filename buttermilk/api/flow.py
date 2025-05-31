@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
 from buttermilk._core import BM, logger
+from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
@@ -171,7 +172,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 logger.info(f"Client {session_id} disconnected.")
                 break
             except Exception as e:
-                logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+                msg = f"Error receiving/processing client message for {session_id}: {e}"
+                raise FatalError(msg) from e
             finally:
                 session_id_var.reset(token)
 

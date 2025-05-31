@@ -1,221 +1,75 @@
-Robust Session Management System Design Plan
+# Investigation Notes: Robust Flow Execution with Resumable UI Sessions
+Core Architecture Questions
+## Flow State Management
 
-1. Core Architecture Changes
+- How is flow state persisted between UI disconnections?
+- Can flows checkpoint their progress for resumption?
+- What happens to intermediate results when UI disconnects?
 
-  Session Manager Enhancements
+## Error Classification System
 
-  class SessionManager:
-      """
-      Centralized session management with:
-      - Atomic session operations
-      - Graceful shutdown coordination
-      - Resource tracking per session
-      - WebSocket connection pooling
-      """
+Need to distinguish between:
+- Recoverable errors: Network timeouts, temporary service unavailability
+- Fatal errors: Invalid input, authentication failures, resource exhaustion
+- UI-dependent errors: Human input required, approval needed
+- Current code treats all exceptions as fatal
 
-      # Key additions:
-      - session_resources: Dict[str, SessionResources]  # Track all resources
-      - active_connections: Dict[str, Set[WebSocket]]  # Multiple connections per session
-      - shutdown_handlers: Dict[str, Callable]  # Custom cleanup per session
-      - session_locks: Dict[str, asyncio.Lock]  # Prevent race conditions
+## Session Lifecycle Management
 
-  Session Lifecycle States
+- When should sessions be created/destroyed?
+- How to handle orphaned sessions (UI never reconnects)?
+- Session expiry vs. flow completion timing
+- Specific Technical Investigations
 
-  class SessionStatus(Enum):
-      INITIALIZING = "initializing"    # Session created, resources allocating
-      ACTIVE = "active"               # Ready for operations
-      RECONNECTING = "reconnecting"   # Client disconnected, awaiting reconnect
-      TERMINATING = "terminating"     # Cleanup in progress
-      TERMINATED = "terminated"       # Cleanup complete
-      ERROR = "error"                # Failed state, needs manual cleanup
+## FlowRunner Task Management
+- Can `run_flow()` tasks be paused/resumed?
+- How to detect if a flow requires UI interaction vs. autonomous execution?
+- Should tasks have different cancellation policies based on flow type?
 
-  2. Session Lifecycle Management
+## Session State Persistence
+- Where is session state stored? (memory, database, cache)
+- Can UI reconnect to in-progress flows?
+- How to handle concurrent UI connections to same session?
 
-  Creation Flow
+## Error Recovery Mechanisms
+- Retry logic for transient failures
+- Circuit breaker patterns for external services
+- Graceful degradation when UI unavailable
 
-  1. Pre-creation validation - Check resource limits, user permissions
-  2. Atomic session initialization - Create session with INITIALIZING status
-  3. Resource allocation - Track all resources (orchestrators, agents, tasks)
-  4. Health check - Verify all components initialized correctly
-  5. Activation - Transition to ACTIVE only when fully ready
+# Proposed Investigation Areas
+## Flow Execution Modes
 
-  Termination Flow
+Batch Mode: Flow runs to completion without UI (implemented)
+Interactive Mode: Flow requires periodic UI input (implemented)
+Hybrid Mode: Flow can switch between autonomous/interactive? (partially implemneted; client can toggle human_in_loop but it's not reliable)
 
-  1. Graceful shutdown signal - Notify all components
-  2. Stop accepting new operations - Set TERMINATING status
-  3. Cancel active operations - With configurable timeout
-  4. Resource cleanup cascade:
-    - Cancel agent tasks
-    - Stop orchestrator runtime
-    - Clear registries and callbacks
-    - Close database connections
-  5. Final cleanup verification - Ensure no resource leaks
-  6. Mark as TERMINATED
+## Error Handling Framework
 
-  3. WebSocket Reconnection Strategy
+- Separate task cancellation policies by error type. FatalError is fatal; processingerror might be recoverable. Check that this is both correctly implemented and respected. 
+- Background task monitoring and cleanup
+- Resource leak prevention
 
-  Connection Management
+# Recommended Next Steps
+Audit FlowRunner class for existing error handling patterns
+Map flow types to understand UI dependency requirements
+Audit session management and flow control
 
-  class WebSocketConnectionPool:
-      """
-      Manages WebSocket connections with:
-      - Automatic reconnection window (configurable, default 30s)
-      - Message buffering during disconnects
-      - Connection health monitoring
-      - Graceful degradation
-      """
+## Additional instructions
 
-      async def handle_disconnect(self, session_id: str, ws: WebSocket):
-          # 1. Mark connection as disconnected
-          # 2. Start reconnection timer
-          # 3. Buffer outgoing messages
-          # 4. If timer expires, trigger session cleanup
+- Only address back-end design. 
+- DO NOT investigate the front-end implementations (including console.py and /frontend/chat).
+- DOCUMENT WHAT YOU LEARN in a concise way that will help LLM developers more efficiently understand the code base.
 
-      async def handle_reconnect(self, session_id: str, ws: WebSocket):
-          # 1. Verify session still valid
-          # 2. Flush buffered messages
-          # 3. Resume normal operations
 
-  Client Notification System
+##  Questions for Architecture Review
+Should flows be designed as resumable by default?
+What's the acceptable window for UI reconnection?
+How to handle partial flow results during errors?
 
-  - Heartbeat mechanism every 10 seconds
-  - Session status updates on state changes
-  - Explicit termination notifications
-  - Reconnection instructions with session token
-
-  4. Autogen Orchestrator Lifecycle
-
-  Enhanced Cleanup
-
-  class AutogenOrchestratorEnhanced:
-      async def _cleanup(self):
-          """Complete cleanup with timeout and verification"""
-          try:
-              # 1. Stop accepting new messages
-              self._accepting_messages = False
-
-              # 2. Cancel all agent tasks
-              for agent in self._agent_registry.values():
-                  if hasattr(agent, 'cleanup'):
-                      await agent.cleanup()
-
-              # 3. Clear registries
-              self._agent_registry.clear()
-              self._agent_types.clear()
-
-              # 4. Stop runtime with timeout
-              cleanup_task = asyncio.create_task(
-                  autogen.runtime_stop()
-              )
-              await asyncio.wait_for(cleanup_task, timeout=10.0)
-
-              # 5. Clear all callbacks
-              self._callback_to_groupchat = None
-
-              # 6. Verify cleanup
-              await self._verify_cleanup()
-
-          except asyncio.TimeoutError:
-              logger.error("Orchestrator cleanup timeout")
-              # Force cleanup
-              await self._force_cleanup()
-
-  Agent Lifecycle Management
-
-  - Track all async tasks created by agents
-  - Implement AgentLifecycleManager to monitor agent health
-  - Add timeout for agent operations
-  - Graceful degradation if agent becomes unresponsive
-
-  5. State Isolation Improvements
-
-  Session Context Isolation
-
-  class SessionContext:
-      """Encapsulates all session-specific state"""
-      session_id: str
-      user_id: str
-      orchestrator: Optional[Orchestrator]
-      agents: Dict[str, Agent]
-      resources: SessionResources
-      message_buffer: MessageBuffer
-
-      def get_isolated_topic(self, base_topic: str) -> str:
-          """Generate session-isolated topic names"""
-          return f"{self.session_id}:{base_topic}"
-
-  Resource Tracking
-
-  class SessionResources:
-      """Track all resources allocated to a session"""
-      tasks: Set[asyncio.Task]
-      connections: Set[WebSocket]
-      file_handles: Set[IO]
-      memory_usage: int
-
-      async def cleanup(self) -> CleanupReport:
-          """Cleanup all tracked resources with reporting"""
-
-  6. Monitoring and Observability
-
-  Session Health Checks
-
-  class SessionHealthMonitor:
-      async def check_session_health(self, session_id: str) -> HealthStatus:
-          """
-          Periodic health checks including:
-          - Memory usage
-          - Task status
-          - Orchestrator responsiveness
-          - WebSocket connection status
-          """
-
-  Metrics Collection
-
-  - Session creation/termination rates
-  - Average session duration
-  - Resource usage per session
-  - Cleanup success/failure rates
-  - Reconnection statistics
-
-  7. Error Recovery
-
-  Zombie Session Detection
-
-  async def detect_zombie_sessions():
-      """
-      Identify and cleanup zombie sessions:
-      - Sessions with no active connections > threshold
-      - Sessions with failed orchestrators
-      - Sessions exceeding resource limits
-      """
-
-  Recovery Strategies
-
-  1. Soft recovery - Attempt to restore session to healthy state
-  2. Partial cleanup - Clean up failed components, keep session active
-  3. Full termination - Complete cleanup when recovery fails
-  4. Manual intervention - Flag sessions requiring admin attention
-
-  8. Implementation Priority
-
-  1. Phase 1: Core Cleanup (Critical)
-    - Fix dual session management issue
-    - Implement complete orchestrator cleanup
-    - Add proper agent lifecycle management
-  2. Phase 2: Robust Lifecycle (High)
-    - Implement enhanced session states
-    - Add atomic session operations
-    - Create resource tracking system
-  3. Phase 3: Reconnection (Medium)
-    - Implement WebSocket connection pool
-    - Add message buffering
-    - Create reconnection protocol
-  4. Phase 4: Monitoring (Medium)
+## Advanced Features (Low priority)
     - Add health checks
     - Implement metrics collection
     - Create admin dashboard
-  5. Phase 5: Advanced Features (Low)
     - Session persistence
     - Cross-server session migration
     - Session replay capabilities

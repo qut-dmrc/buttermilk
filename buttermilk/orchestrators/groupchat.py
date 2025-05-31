@@ -128,7 +128,7 @@ class AutogenOrchestrator(Orchestrator):
         if agent_id in self._agent_registry:
             logger.warning(f"Agent with ID '{agent_id}' already exists in the registry. Overwriting.")
         self._agent_registry[agent_id] = agent_instance
-        logger.info(f"Registered Buttermilk agent instance '{agent_instance.agent_name}' with ID '{agent_id}' to orchestrator registry.")
+        logger.debug(f"Registered Buttermilk agent instance '{agent_instance.agent_name}' with ID '{agent_id}' to orchestrator registry.")
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
@@ -442,15 +442,12 @@ class AutogenOrchestrator(Orchestrator):
                 except FatalError:
                     raise
                 except Exception as e:
-                    logger.exception(f"Unexpected error: {e}")
                     raise FatalError from e
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")
-        except FatalError as e:
-            logger.error(f"Fatal error: {e}")
-        except Exception as e:
-            logger.exception(f"Unhandled exception: {e}")
+        except (FatalError, Exception) as e:
+            logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
         finally:
             await self._cleanup()
 

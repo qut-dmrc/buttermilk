@@ -9,6 +9,7 @@ defaults:
       - differences
   - /agents@observers:
       - owl
+      - scorer
       - host/sequencer
   - criteria@parameters.criteria: hate
 

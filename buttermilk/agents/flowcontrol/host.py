@@ -232,13 +232,13 @@ class HostAgent(Agent):
 
         """
         max_tries = self.max_user_confirmation_time // 60
-        for i in range(max_tries):
-            logger.debug(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
+        for _ in range(max_tries):
+            logger.info(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
             try:
                 await self.request_user_confirmation(step)
                 await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
             except TimeoutError:
-                logger.warning(f"{self.agent_name} hit timeout waiting for manager response after 60 seconds.")
+                logger.info(f"{self.agent_name} hit timeout waiting for manager response after 60 seconds.")
                 continue
 
             if self._user_confirmation and getattr(self._user_confirmation, "confirm", False):
@@ -418,7 +418,7 @@ class HostAgent(Agent):
         # If successful, clear the pending tasks dictionary for the next step
         async with self._tasks_condition:
             self._pending_tasks_by_agent.clear()
-        logger.info("All tasks for the previous step completed successfully.")
+        logger.info("No pending tasks left over from previous steps, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:
