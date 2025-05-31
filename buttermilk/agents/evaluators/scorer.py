@@ -365,7 +365,7 @@ class LLMScorer(LLMAgent):
                 )
                 # Replace the simpler QualScore in outputs with the richer QualResults
                 llm_output_base.outputs = qual_results
-                logger.info(f"Scorer '{self.agent_id}' successfully processed score into QualResults for assessed call ID '{assessed_call_id}'.")
+                logger.debug(f"Scorer '{self.agent_id}' successfully processed score into QualResults for assessed call ID '{assessed_call_id}'.")
             else:
                 logger.warning(
                     f"Scorer '{self.agent_id}': Could not extract assessed agent/call ID from "

@@ -326,7 +326,6 @@ class FlowRunContext(BaseModel):
             await _send_with_retry_internal()
 
         except Exception as e:
-            logger.error(f"Error sending message to UI for session {self.session_id} (final attempt or pre-send issue): {e}")
             # Attempt to send an error message back to the client if the websocket is still viable
             if self.websocket and self.websocket.client_state == WebSocketState.CONNECTED:
                 try:
@@ -334,9 +333,9 @@ class FlowRunContext(BaseModel):
                     error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
                     await self.websocket.send_json(error_message_data)
                 except Exception as e_fallback:
-                    logger.error(f"Failed to send error notification to UI for session {self.session_id}: {e_fallback!s}")
-            else:
-                logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected.")
+                    pass
+
+            logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected. {e}")
 
 
 class OrchestratorFactory:
