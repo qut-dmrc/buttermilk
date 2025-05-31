@@ -23,11 +23,12 @@ export function getModelColor(modelName: string | undefined): string {
   if (!modelName) return '#aaaaaa';
   
   const modelLower = modelName.toLowerCase();
-  if (modelLower.includes('gpt-4')) return '#10a37f';
-  if (modelLower.includes('gpt-3.5')) return '#1f85de';
-  if (modelLower.includes('claude')) return '#8e44ad';
-  if (modelLower.includes('gemini')) return '#f39c12';
-  if (modelLower.includes('llama')) return '#e74c3c';
+  if (modelLower.includes('gpt-4') || modelLower.includes('gpt4')) return '#10a37f'; // OpenAI green
+  if (modelLower.includes('gpt-3.5')) return '#1f85de'; // OpenAI blue
+  if (modelLower.includes('o3')) return '#00d4aa'; // OpenAI teal for o3 series
+  if (modelLower.includes('claude') || modelLower.includes('opus') || modelLower.includes('haiku') || modelLower.includes('sonnet')) return '#ff6b35'; // Anthropic orange
+  if (modelLower.includes('gemini')) return '#4285f4'; // Google blue
+  if (modelLower.includes('llama')) return '#0866ff'; // Meta blue (Facebook/Meta's brand color)
   if (modelLower.includes('falcon')) return '#3498db';
   
   let hash = 0;
@@ -49,9 +50,13 @@ export function getModelIdentifier(message: Message): string {
   if (!message.agent_info?.parameters?.model) return '';
 
   const idLower = message.agent_info.parameters.model.toLowerCase();
-  if (idLower.includes('gpt4')) return 'GPT4';
-  if (idLower.includes('gpt3')) return 'GPT3';
-  if (idLower.includes('sonnet')) return 'CLDE';
+  if (idLower.includes('gpt4') || idLower.includes('gpt-4')) return 'GPT4';
+  if (idLower.includes('gpt3') || idLower.includes('gpt-3')) return 'GPT3';
+  if (idLower.includes('o3')) return 'O3';
+  if (idLower.includes('sonnet')) return 'SNNT';
+  if (idLower.includes('opus')) return 'OPUS';
+  if (idLower.includes('haiku')) return 'HAIK';
+  if (idLower.includes('claude')) return 'CLDE'; // Fallback for other Claude models
   if (idLower.includes('gemini')) return 'GEMN';
   if (idLower.includes('llama')) return 'LLMA';
   return 'UNKN';
