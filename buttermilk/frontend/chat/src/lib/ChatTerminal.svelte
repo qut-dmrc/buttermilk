@@ -665,8 +665,7 @@ import {
     <!-- Message Display Area -->
     <div class="console" id="console-messages"  bind:this={messageListElement}>
       {#each messages as msg }
-        <!-- Attach the managerResponse handler to the message as displayed -->
-        <MessageDisplay message={msg} on:managerResponse={handleManagerResponse} />
+        <MessageDisplay message={msg} /> 
       {/each}
     </div>
 
