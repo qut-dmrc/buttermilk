@@ -1,4 +1,3 @@
-
 import pytest
 from pydantic import ValidationError
 
@@ -20,7 +19,7 @@ SAMPLE_REASONS_DATA = {
 try:
     from buttermilk._core.contract import AgentTrace as ActualAgentTrace
 
-    # Correct the import name from AgentReasons to JudgeReasons
+    # Correct the import name from Reasons to JudgeReasons
     from buttermilk.agents.judge import JudgeReasons as ActualJudgeReasons
 
     ACTUAL_MODELS_AVAILABLE = True

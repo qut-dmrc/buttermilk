@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from buttermilk._core.contract import ManagerResponse, StepRequest
+from buttermilk._core.contract import ManagerMessage, StepRequest
 from buttermilk.runner.selector import Selector
 
 
@@ -40,8 +40,8 @@ class TestUserInterrupt:
         # First call: User confirms without interrupt
         # Second call: User confirms with interrupt
         selector._in_the_loop.side_effect = [
-            ManagerResponse(confirm=True, interrupt=False, prompt=None, halt=False, selection=None),  # First iteration - normal confirmation
-            ManagerResponse(confirm=True, interrupt=True, prompt="User feedback", halt=False, selection=None),  # Second iteration - interrupt
+            ManagerMessage(confirm=True, interrupt=False, prompt=None, halt=False, selection=None),  # First iteration - normal confirmation
+            ManagerMessage(confirm=True, interrupt=True, prompt="User feedback", halt=False, selection=None),  # Second iteration - interrupt
         ]
 
         # Run the orchestrator
@@ -92,7 +92,7 @@ class TestUserInterrupt:
             # Check that the callback was called with interrupt=True
             assert callback_mock.call_count == 1
             response_arg = callback_mock.call_args[0][0]
-            assert isinstance(response_arg, ManagerResponse)
+            assert isinstance(response_arg, ManagerMessage)
             assert response_arg.confirm is True
             assert response_arg.interrupt is True
             assert response_arg.prompt == "Some feedback"
@@ -119,7 +119,7 @@ class TestUserInterrupt:
             # Check that the callback was called with interrupt=False
             assert callback_mock.call_count == 1
             response_arg = callback_mock.call_args[0][0]
-            assert isinstance(response_arg, ManagerResponse)
+            assert isinstance(response_arg, ManagerMessage)
             assert response_arg.confirm is True
             assert response_arg.interrupt is False
             assert response_arg.prompt is None

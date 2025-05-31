@@ -4,3 +4,7 @@ drag:
   path: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
   index:
     - record_id
+  columns:
+    content: "alt_text"
+    ground_truth: "expected"
+    title: "name"

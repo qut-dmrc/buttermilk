@@ -11,31 +11,52 @@ from buttermilk.utils.uploader import AsyncDataUploader
 # Sample data based on provided examples
 @pytest.fixture(autouse=True)
 def sample_outputs() -> list[AgentTrace]:
-    return [AgentTrace(
-        error=[], metadata={}, agent_info={
+    return [
+        AgentTrace(
+            error=[],
+            metadata={},
+            agent_info={
                 "agent_id": "host-Yc8ekP",
-            }, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="Bc8scgvzT3vycJrrJUMhov", run_info={
+            },
+            session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
+            call_id="Bc8scgvzT3vycJrrJUMhov",
+            run_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
                 "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
                 "save_dir": "gs://prosocial-dev/runs/batch/debugging/20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            }, outputs=StepRequest(role="WAIT", prompt=""), is_error=False,
-    ),
-    AgentTrace(
-        error=[], metadata={"finish_reason": "stop", "role": "judge", "name": "⚖️ Judge WRESDb"}, agent_info={
+            },
+            outputs=StepRequest(role="WAIT", prompt=""),
+            is_error=False,
+        ),
+        AgentTrace(
+            error=[],
+            metadata={"finish_reason": "stop", "role": "judge", "name": "⚖️ Judge WRESDb"},
+            agent_info={
                 "agent_id": "judge-WRESDb",
-            }, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="8MPyjSZt6PikCEMocsPFr6", run_info={
+            },
+            session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
+            call_id="8MPyjSZt6PikCEMocsPFr6",
+            run_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
                 "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            }, outputs=QualResults(conclusion="The content adheres to the guidelines.", prediction=False, confidence="high"), is_error=False,
-    ),
-    AgentTrace(
-        error=[], metadata={"role": "scorers", "name": "📊 Scorer MyVLKi"}, agent_info={"agent_id": "scorers-MyVLKi"}, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="7R7w4Un76TDJaSzgp36gUW", outputs=AgentReasons(assessments=QualScoreCRA(correct=True, feedback="Feedback text")), is_error=False,
-    ),
-]
+            },
+            outputs=QualResults(conclusion="The content adheres to the guidelines.", prediction=False, confidence="high"),
+            is_error=False,
+        ),
+        AgentTrace(
+            error=[],
+            metadata={"role": "scorers", "name": "📊 Scorer MyVLKi"},
+            agent_info={"agent_id": "scorers-MyVLKi"},
+            session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
+            call_id="7R7w4Un76TDJaSzgp36gUW",
+            outputs=Reasons(assessments=QualScoreCRA(correct=True, feedback="Feedback text")),
+            is_error=False,
+        ),
+    ]
 
 
 @pytest.fixture

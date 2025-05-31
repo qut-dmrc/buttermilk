@@ -41,7 +41,7 @@ class CloudManager:
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
 
             if quota_project_id:
-                os.environ["google_billing_project"] = os.environ.get("google_billing_project", quota_project_id)
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
 
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""

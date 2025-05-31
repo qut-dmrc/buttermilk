@@ -112,7 +112,7 @@ def test_logging_without_context_vars(configured_logger):
 
 
 # Test Case 3: Cloud Logging (Mocking)
-@patch("buttermilk._core.bm_init.CloudLoggingHandler")  # Path to CloudLoggingHandler where it's USED
+@patch("google.cloud.logging_v2.handlers.CloudLoggingHandler")  # Path to CloudLoggingHandler where it's imported
 def test_cloud_logging_with_context_vars(MockCloudLoggingHandler, tmp_path):
     # Configure a BM instance to enable cloud logging
     # We need to provide a logger_cfg that would trigger cloud logging setup

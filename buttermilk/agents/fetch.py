@@ -29,7 +29,7 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record
-from buttermilk.runner.helpers import prepare_step_df
+from buttermilk.data.loaders import DataLoader, create_data_loader
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
 
@@ -53,8 +53,8 @@ class FetchRecord(ToolConfig):
     `DataSourceConfig` instances. `load_data` populates `_data_sources` from these.
 
     Attributes:
-        _data_sources (dict[str, Any]): Private attribute storing loaded data sources,
-            typically Pandas DataFrames, keyed by their configured names.
+        _data_sources (dict[str, DataLoader]): Private attribute storing loaded data sources,
+            as DataLoader instances, keyed by their configured names.
         _data_task (asyncio.Task): Private attribute for an asyncio task, potentially
             for asynchronous data loading (though not explicitly used in `load_data`).
         _pat (Any): Private attribute storing a compiled regex pattern (`MATCH_PATTERNS`)
@@ -64,7 +64,7 @@ class FetchRecord(ToolConfig):
 
     """
 
-    _data_sources: dict[str, Any] = pydantic.PrivateAttr(default_factory=dict)
+    _data_sources: dict[str, DataLoader] = pydantic.PrivateAttr(default_factory=dict)
     _data_task: asyncio.Task[Any] = pydantic.PrivateAttr()  # type: ignore # Needs default or factory
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default_factory=list)
@@ -72,17 +72,37 @@ class FetchRecord(ToolConfig):
     async def load_data(self) -> None:
         """Loads and prepares data sources defined in `self.data`.
 
-        Populates the `self._data_sources` attribute with processed datasets,
-        typically Pandas DataFrames, making them available for querying by `record_id`.
+        Populates the `self._data_sources` attribute with DataLoader instances,
+        making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
         """
         if self.data:  # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
-            self._data_sources = await prepare_step_df(self.data)
+            self._data_sources = {}
+            for key, config in self.data.items():
+                self._data_sources[key] = create_data_loader(config)
+
+    async def _get_record_dataset(self, record_id: str) -> Record | None:
+        """Retrieve a record by ID from loaded data sources.
+
+        Args:
+            record_id: The record ID to search for
+
+        Returns:
+            Record if found, None otherwise
+        """
+        if not self._data_sources:
+            await self.load_data()
+
+        for data_loader in self._data_sources.values():
+            for record in data_loader:
+                if record.record_id == record_id:
+                    return record
+        return None
 
     def get_functions(self) -> list[FunctionTool]:  # Return type changed to list[FunctionTool]
         """Creates and returns Autogen `FunctionTool` definitions for this tool.
 
-        This method makes the `_run` method callable by an LLM agent (e.g.,
+        This method makes the `fetch` method callable by an LLM agent (e.g.,
         via Autogen's tool use mechanism). It generates a `FunctionTool`
         with the description and role name defined in this `FetchRecord` instance's
         configuration. The generated tools are cached in `self._fns`.
@@ -228,7 +248,7 @@ class FetchAgent(FetchRecord, Agent):
         user and inject them into the chat.
 
         If the incoming `message` is an `AgentInput` and contains either a `uri`
-        or `record_id` in its `inputs` dictionary, this method calls the `_run`
+        or `record_id` in its `inputs` dictionary, this method calls the `fetch`
         (inherited from `FetchRecord`) to fetch the record. If successful and a
         `public_callback` is provided, it wraps the fetched `Record` in an
         `AgentOutput` and publishes it.

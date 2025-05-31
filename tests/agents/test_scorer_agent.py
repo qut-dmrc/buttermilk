@@ -45,7 +45,7 @@ class TestLLMScorerListen:
             role="SCORER",
             description="A scorer for testing",
             parameters=parameters,
-            session_id="test_session_id", # Add the required session_id
+            session_id="test_session_id",  # Add the required session_id
             # Add other required AgentConfig fields if any
         )
         # Mock _process and _extract_vars methods
@@ -70,9 +70,9 @@ class TestLLMScorerListen:
         # Create a minimal AgentConfig for the judge agent info
         judge_agent_config = AgentConfig(role="JUDGE")
         return AgentTrace(
-            agent_info=judge_agent_config, # Use AgentConfig object
-            session_id="test_session_id", # Add required session_id
-            inputs=AgentInput(), # Add required inputs
+            agent_info=judge_agent_config,  # Use AgentConfig object
+            session_id="test_session_id",  # Add required session_id
+            inputs=AgentInput(),  # Add required inputs
             outputs=judge_reasons,
             records=[ground_truth_record],  # Pass record directly in a list
             tracing={"weave": "mock_trace_id"},  # Include weave trace ID
@@ -143,7 +143,7 @@ class TestLLMScorerListen:
         mock_public_callback.assert_called_once_with(mock_process_output)
 
     async def test_listen_ignores_irrelevant_messages(self, mock_scorer: LLMScorer, mock_global_weave):
-        """Test that _listen ignores messages that are not AgentTrace or lack AgentReasons."""
+        """Test that _listen ignores messages that are not AgentTrace or lack Reasons."""
         mock_weave_obj, mock_apply_scorer_func = mock_global_weave
         mock_public_callback = AsyncMock()
 

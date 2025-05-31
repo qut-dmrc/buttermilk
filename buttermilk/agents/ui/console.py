@@ -60,7 +60,7 @@ class CLIUserAgent(UIAgent):
     Inherits from `UIAgent`. It uses `rich` to display formatted messages received
     by the agent (`_listen`, `_handle_events`) and `aioconsole` to asynchronously
     poll for user input (`_poll_input`). User input is interpreted as confirmation,
-    negation, or free text, which is then sent back to the system as a `ManagerResponse`
+    negation, or free text, which is then sent back to the system as a `ManagerMessage`
     via the `callback_to_groupchat` provided during initialization.
     """
 
@@ -228,11 +228,11 @@ class CLIUserAgent(UIAgent):
                 if user_input.strip().lower() == "exit":
                     logger.info("User requested exit.")
                     # TODO: How to signal exit cleanly to the orchestrator? Raising KeyboardInterrupt might be harsh.
-                    # Maybe send a specific ManagerResponse or signal?
+                    # Maybe send a specific ManagerMessage or signal?
                     # For now, simulate interrupt. Need a better mechanism.
                     # Find the main task and cancel it? Difficult from here.
                     # Send a special message via callback?
-                    # await self.callback_to_groupchat(ManagerResponse(confirm=False, prompt="USER_EXIT_REQUEST"))
+                    # await self.callback_to_groupchat(ManagerMessage(confirm=False, prompt="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
 
                 # Handle confirmation/negation based on input
@@ -292,7 +292,7 @@ class CLIUserAgent(UIAgent):
 
         Args:
             callback_to_groupchat: The async function to call when user input is received.
-                            Expected signature: `async def callback(response: ManagerResponse)`
+                            Expected signature: `async def callback(response: ManagerMessage)`
             **kwargs: Additional keyword arguments passed to the base class initializer.
 
         """

@@ -1,24 +1,19 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { 
-    type Message, 
-    type UIMessage, 
-    type ManagerResponse,
-    type SummaryResult,
-    type MessageType,getAgentStyle,
+  import {
+  	type ManagerResponse,
+  	type Message,
+  	getAgentStyle
   } from '$lib/utils/messageUtils';
-  import {processLinksInText} from '$lib/utils/linkUtils';
   import { createEventDispatcher } from 'svelte';
-  
-  // Import modular components
+// Import modular components
   import JudgeMessage from './messages/JudgeMessage.svelte'; // Import JudgeMessage directly
   import AssessmentMessage from './messages/AssessmentMessage.svelte';
-  import * as RecordMessageComponent from './messages/RecordMessage.svelte';
-  import ManagerRequestMessage from './messages/ManagerRequestMessage.svelte';
-  import * as SummaryMessageComponent from './messages/SummaryMessage.svelte';
-  import * as ResearcherMessageComponent from './messages/ResearcherMessage.svelte';
+  import BasicMessage from './messages/BasicMessage.svelte';
   import * as DifferencesMessageComponent from './messages/DifferencesMessage.svelte';
-	import BasicMessage from './messages/BasicMessage.svelte';
+  import ManagerRequestMessage from './messages/ManagerRequestMessage.svelte';
+  import * as RecordMessageComponent from './messages/RecordMessage.svelte';
+  import * as ResearcherMessageComponent from './messages/ResearcherMessage.svelte';
+  import * as SummaryMessageComponent from './messages/SummaryMessage.svelte';
 
   const RecordMessage = RecordMessageComponent.default;
   const SummaryMessage = SummaryMessageComponent.default;

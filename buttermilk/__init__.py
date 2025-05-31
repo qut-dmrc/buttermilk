@@ -16,7 +16,7 @@ get_buttermilk_instance = get_bm
 class BMAccessor:
     """Descriptor that provides access to the singleton BM instance."""
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):# -> Any:
         return getattr(get_bm(), name)
 
     # BM instances are not callable, so we'll just return the instance

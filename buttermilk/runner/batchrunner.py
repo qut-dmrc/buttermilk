@@ -7,13 +7,11 @@ This module contains the BatchRunner class, which is responsible for:
 """
 
 import asyncio
-from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import logger
-from buttermilk._core.batch import BatchJobStatus, BatchMetadata
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.runner.flowrunner import FlowRunner
@@ -30,7 +28,6 @@ class BatchRunner(BaseModel):
     """
 
     job_queue: JobQueueClient | None = None
-    _active_batches: dict[str, BatchMetadata] = PrivateAttr(default_factory=dict)
     _pending_jobs: dict[str, list[RunRequest]] = PrivateAttr(default_factory=dict)
     _running_jobs: set[str] = PrivateAttr(default_factory=set)
     _job_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
@@ -50,24 +47,6 @@ class BatchRunner(BaseModel):
                 logger.info("Initialized job queue client")
             except Exception as e:
                 logger.warning(f"Failed to create job queue client: {e}. Jobs will be processed locally.")
-
-    async def get_batch_status(self, batch_id: str) -> BatchMetadata:
-        """Get status information for a batch.
-
-        Args:
-            batch_id: The ID of the batch to check
-
-        Returns:
-            The batch metadata
-
-        Raises:
-            ValueError: If batch_id is not found
-
-        """
-        if batch_id not in self._active_batches:
-            raise ValueError(f"Batch '{batch_id}' not found")
-
-        return self._active_batches[batch_id]
 
     async def get_batch_jobs(self, batch_id: str) -> list[RunRequest]:
         """Get job definitions for a batch.
@@ -120,35 +99,3 @@ class BatchRunner(BaseModel):
                 return result
 
         raise ValueError(f"Task for record '{record_id}' in batch '{batch_id}' not found")  # Updated message
-
-    async def cancel_batch(self, batch_id: str) -> BatchMetadata:
-        """Cancel a batch job.
-
-        Args:
-            batch_id: The ID of the batch to cancel
-
-        Returns:
-            The updated batch metadata
-
-        Raises:
-            ValueError: If batch_id is not found
-
-        """
-        if batch_id not in self._active_batches:
-            raise ValueError(f"Batch '{batch_id}' not found")
-
-        batch = self._active_batches[batch_id]
-
-        # Only allow cancelling if not completed
-        if batch.status in [BatchJobStatus.COMPLETED, BatchJobStatus.FAILED]:
-            raise ValueError(f"Cannot cancel batch '{batch_id}' with status '{batch.status}'")
-
-        # Update status
-        batch.status = BatchJobStatus.CANCELLED
-        batch.completed_at = datetime.now(UTC).isoformat()
-
-        # Remove pending jobs
-        self._pending_jobs[batch_id] = []
-
-        logger.info(f"Cancelled batch '{batch_id}'")
-        return batch

@@ -31,7 +31,7 @@ These components form the foundation of Buttermilk and are designed to be runtim
         *   `FlowMessage`: Base class for all messages.
         *   `AgentInput`: Standard input to an agent's `_process` method. Contains `content`, `context`, `inputs`, `records`, etc.
         *   `AgentTrace`: Standard output yielded by an agent's `_process` method. Contains `content`, `outputs`, `metadata`, `error`, etc.
-        *   `UIMessage`, `ManagerResponse`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
+        *   `UIMessage`, `ManagerMessage`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
         *   `StepRequest`: Used by some orchestrators (`Selector`) to define the next agent to run and its parameters.
 
 ## Autogen Integration (Optional Runtime)
@@ -70,7 +70,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
 2.  **Runtime Setup:** The `AutogenOrchestrator`'s `run()` method calls `_setup_runtime()`.
 3.  **Agent Registration:** `_register_agents()` creates `AutogenAgentAdapter` instances for each Buttermilk agent defined in the config and registers them with the Autogen runtime. UI agents (`UIAgent` subclasses) are also registered.
 4.  **Flow Start:** The orchestrator might prompt the user via `_send_ui_message()`. The UI agent (e.g., `Slack `, `CLIUserAgent`) displays the prompt.
-5.  **User Input:** The user provides input (text, button click). The UI agent's callback (`callback_to_groupchat` provided by `AutogenAgentAdapter.handle_input()`) publishes   `ManagerResponse` message into the Autogen runtime via the adapter.
+5.  **User Input:** The user provides input (text, button click). The UI agent's callback (`callback_to_groupchat` provided by `AutogenAgentAdapter.handle_input()`) publishes   `ManagerMessage` message into the Autogen runtime via the adapter.
 6.  **Orchestration Logic:**
     *   The orchestrator (e.g., `Selector`) might receive the user input (if subscribed) or proceed based on its internal logic (`_get_next_step`).
     *   It determines the next `StepRequest`.

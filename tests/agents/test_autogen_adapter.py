@@ -20,8 +20,8 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -34,13 +34,13 @@ def conductor_request() -> ConductorRequest:
     """Create a sample ConductorRequest object for testing."""
     return ConductorRequest(
         inputs={
-            "participants": {
-                "AGENT1": {"config": "some_config"},
-                "AGENT2": {"config": "some_config"},
-            },
             "task": "test task",
+            "prompt": "Test prompt for conductor",
         },
-        prompt="Test prompt for conductor",
+        participants={
+            "AGENT1": {"config": "some_config"},
+            "AGENT2": {"config": "some_config"},
+        },
     )
 
 
@@ -72,20 +72,20 @@ class TestAutogenAgentAdapter:
 
     # --- Initialization Tests ---
 
-    async def test_adapter_initialization_with_sequencer(self):
-        """Test adapter initialization with a Sequencer agent."""
-        sequencer_config = AgentConfig(role="SEQUENCER", name="Test Sequencer", description="Test Sequencer")
+    async def test_adapter_initialization_with_HostAgent(self):
+        """Test adapter initialization with a HostAgent agent."""
+        HostAgent_config = AgentConfig(role="HostAgent", name="Test HostAgent", description="Test HostAgent")
         adapter = AutogenAgentAdapter(
             topic_type="test_topic",
-            agent_cls=Sequencer,
-            agent_cfg=sequencer_config,
+            agent_cls=HostAgent,
+            agent_cfg=HostAgent_config,
         )
         await adapter.agent.initialize()  # Initialize agent after adapter creation
 
-        assert isinstance(adapter.agent, Sequencer)
-        assert adapter.agent.role == "sequencer"
+        assert isinstance(adapter.agent, HostAgent)
+        assert adapter.agent.role == "HostAgent"
         assert adapter.topic_id.type == "test_topic"
-        assert adapter.is_manager, "Sequencer should be identified as a manager"
+        assert adapter.is_manager, "HostAgent should be identified as a manager"
 
     async def test_adapter_initialization_with_host(self):
         """Test adapter initialization with an LLMHostAgent."""
@@ -189,20 +189,20 @@ class TestAutogenAgentAdapter:
 
     # --- Integration Test ---
 
-    async def test_integration_adapter_with_sequencer_conductor_request(self, conductor_request, mock_message_context):
-        """Integration test: verify adapter routes ConductorRequest to a real Sequencer."""
-        sequencer = Sequencer(role="SEQUENCER", name="Real Sequencer", description="Integration Test Sequencer")
-        await sequencer.initialize()  # Initialize the real agent
+    async def test_integration_adapter_with_HostAgent_conductor_request(self, conductor_request, mock_message_context):
+        """Integration test: verify adapter routes ConductorRequest to a real HostAgent."""
+        HostAgent = HostAgent(role="HostAgent", name="Real HostAgent", description="Integration Test HostAgent")
+        await HostAgent.initialize()  # Initialize the real agent
 
-        adapter = AutogenAgentAdapter(topic_type="integration_topic", agent=sequencer)
+        adapter = AutogenAgentAdapter(topic_type="integration_topic", agent=HostAgent)
         adapter.publish_message = AsyncMock()  # Mock publish to prevent side effects
 
         response = await adapter.handle_conductor_request(conductor_request, mock_message_context)
 
         assert isinstance(response, AgentTrace)
-        assert not response.is_error, f"Sequencer returned error: {response.error}"
+        assert not response.is_error, f"HostAgent returned error: {response.error}"
         assert isinstance(response.outputs, StepRequest)
         participants = conductor_request.inputs["participants"]
         assert response.outputs.role in list(participants.keys()) + [END, WAIT]
-        assert response.outputs.role != sequencer.role.upper()
+        assert response.outputs.role != HostAgent.role.upper()
         adapter.publish_message.assert_not_called()

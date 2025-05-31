@@ -1,25 +1,21 @@
 <script lang="ts">
-import './styles/terminal.scss';
-import { onMount, onDestroy } from 'svelte';
+import { onDestroy, onMount } from 'svelte';
 import { get } from 'svelte/store';
 import MessageDisplay from './components/MessageDisplay.svelte';
-import { sessionId } from './stores/sessionStore';
-import { messageHistory } from './stores/messageHistoryStore';
-import { messageStore, addMessage as addToMessageStore } from './stores/messageStore';
 import { flowRunning, selectedFlow as flowStore, selectedRecord as recordStore, selectedCriteria, selectedModel } from './stores/apiStore';
-import { 
-  type Message, 
-  type WebSocketData,
-  type SystemUpdate,
-  type RecordData,
-  type SummaryResult,
-  type MessageType,
-  type UIMessage,
-  normalizeWebSocketMessage,
-  type ManagerResponse,
-  isAssessment,
-  type Assessments,
-  isSystemUpdate} from './utils/messageUtils';
+import { messageHistory } from './stores/messageHistoryStore';
+import { addMessage as addToMessageStore } from './stores/messageStore';
+import { sessionId } from './stores/sessionStore';
+import './styles/terminal.scss';
+import {
+	type ManagerMessage,
+	type ManagerResponse,
+	type Message,
+	type MessageType,
+	type SystemUpdate,
+	createManagerResponse, isSystemUpdate,
+	normalizeWebSocketMessage
+} from './utils/messageUtils';
 
 
   // WebSocket connection parameters
@@ -29,7 +25,7 @@ import {
   
   // Monitor props for debugging
   $: {
-    console.log(`DirectWebSocketTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
+    console.debug(`ChatTerminal props updated: selectedFlow='${selectedFlow}', selectedRecord='${selectedRecord}'`);
   }
   
   // Component state
@@ -39,7 +35,7 @@ import {
   let isConnected = false;
   let connectionError = '';
   let isInterruptEnabled = false;
-  let isAutoApproveEnabled = false;
+  let humanInLoop = true;
   let messageListElement: HTMLDivElement; // To control scrolling
   export let selectedTheme = 'theme-term'; // Default theme
   let isReconnecting = false; // Track reconnection attempts
@@ -49,8 +45,7 @@ import {
   let systemUpdateStatus: SystemUpdate | null = null;
   
   // Manager request state
-  let currentUIMessage: UIMessage | null = null;
-  let currentManagerMessage: Message | null = null;
+  let currentUIMessage: ManagerMessage | null = null;
   let selectionOptions: string[] = [];
   let isConfirmRequest = false;
 
@@ -61,10 +56,33 @@ import {
       const stored = localStorage.getItem(key);
       if (stored) {
         const storedMessages: Message[] = JSON.parse(stored);
-        console.log(`Loading ${storedMessages.length} stored messages for session ${sessionIdToLoad}`);
+        console.debug(`Loading ${storedMessages.length} stored messages for session ${sessionIdToLoad}`);
         
         // Set the messages array directly to avoid any reprocessing
         messages = storedMessages;
+        
+        // Restore manager request state from the last ui_message if any
+        const lastUIMessage = storedMessages.slice().reverse().find(msg => msg.type === 'ui_message');
+        if (lastUIMessage && lastUIMessage.outputs) {
+          currentUIMessage = lastUIMessage.outputs as ManagerMessage;
+          
+          // Determine input type
+          const inputs = currentUIMessage.options;
+          
+          // Check if it's a selection request
+          if (inputs && Array.isArray(inputs) && inputs.length > 0) {
+            selectionOptions = inputs.map(val => String(val));
+            isConfirmRequest = false;
+          } else {
+            selectionOptions = [];
+            isConfirmRequest = true;
+          }
+
+          console.debug("Restored manager request state from stored messages:", {
+            selectionOptions,
+            isConfirmRequest,
+          });
+        }
         
         // Scroll to bottom after messages are loaded
         setTimeout(() => {
@@ -73,9 +91,9 @@ import {
           }
         }, 100);
         
-        console.log(`Loaded ${storedMessages.length} previous messages`);
+        console.debug(`Loaded ${storedMessages.length} previous messages`);
       } else {
-        console.log(`No stored messages found for session ${sessionIdToLoad}`);
+        console.debug(`No stored messages found for session ${sessionIdToLoad}`);
       }
     } catch (e) {
       console.error('Error loading stored messages:', e);
@@ -85,7 +103,7 @@ import {
 
   // Handle component mounting
   onMount(async () => { // Make the callback async
-    console.log('Attempting direct WebSocket connection to:', wsUrl);
+    console.debug('Attempting direct WebSocket connection to:', wsUrl);
     // Ensure we have a session ID before attempting to connect
     if (!get(sessionId)) {
       addSystemMessage('Initializing session...');
@@ -96,7 +114,7 @@ import {
       loadStoredMessages(get(sessionId));
       
       // wsUrl prop should be the base like "ws://localhost:5173/ws"
-      console.log('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
+      console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
       connectWebSocket();
     } else {
       const errorMsg = "Failed to obtain session ID on mount. WebSocket connection not established.";
@@ -149,14 +167,10 @@ import {
 
   // Toggle auto-approve state
   function toggleAutoApprove() {
-    isAutoApproveEnabled = !isAutoApproveEnabled;
-    const message = createManagerResponse(undefined, null, null, null, null, isAutoApproveEnabled);
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-      console.log(`Auto Approve is now: ${isAutoApproveEnabled ? 'Enabled' : 'Disabled'}. Sent selection response:`, message);
-    } else {
-      console.error('Socket not available or not open to send auto-approve message');
-    }
+    humanInLoop = !humanInLoop;
+    console.log("Toggled human in loop state:", humanInLoop, " approving:", !humanInLoop);
+    const message = createManagerResponse(!humanInLoop, null, null, null, null, humanInLoop);
+    sendManagerResponse(message);
   }
 
   // Toggle interrupt state
@@ -171,20 +185,17 @@ import {
         agent_id: "web socket"
       };
       // Also send separate interrupt message
-      const response = createManagerResponse(undefined, null, null, null, true, isAutoApproveEnabled);
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(response));
-      }
+      const response = createManagerResponse(false, null, null, null, true, humanInLoop);
+      sendManagerResponse(response);
+      
     } else {
       message = {
         type: "TaskProcessingComplete",
         role: "MANAGER",
         agent_id: "web socket"
       };
-      const response = createManagerResponse(undefined, null, null, null, false, isAutoApproveEnabled);
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(response));
-      }
+      const response = createManagerResponse(false, null, null, null, false, humanInLoop);
+      sendManagerResponse(response);
 
     }
 
@@ -201,14 +212,17 @@ import {
   // Function to send ManagerResponse back via WebSocket
   function handleManagerResponse(event: CustomEvent<ManagerResponse>) {
     const response = event.detail;
-    console.log("Received manager response from component:", response);
+    console.debug("Received manager response from component:", response);
+    sendManagerResponse(response);
+  }
+
+  function sendManagerResponse(response: ManagerResponse) {
     if (socket && socket.readyState === WebSocket.OPEN) {
       try {
         socket.send(JSON.stringify(response));
         console.log("Sent manager response via WebSocket:", response);
         // Clear current manager request after responding
         currentUIMessage = null;
-        currentManagerMessage = null;
         selectionOptions = [];
         isConfirmRequest = false;
       } catch (e) {
@@ -220,69 +234,24 @@ import {
       addSystemMessage("Error: Connection not open.");
     }
   }
-  
-  // New function to create manager response
-  function createManagerResponse(confirm: boolean | null | undefined, selection: string | null = null, prompt: string | null = null, halt: boolean|null = false, interrupt: boolean|null = false, human_in_loop: boolean|null = true): ManagerResponse {
-    return {
-      type: 'manager_response',
-      confirm: confirm,
-      halt: halt,
-      interrupt: interrupt,
-      content: prompt,
-      selection: selection,
-      human_in_loop: human_in_loop
-    };
-  }
+
 
   // Handle selection from options
   function handleSelection(value: string) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      const response = createManagerResponse(true, value, null, false, false, isAutoApproveEnabled);
-      socket.send(JSON.stringify(response));
-      console.log("Sent selection response:", response);
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(true, value, null, null, false, humanInLoop);
+    sendManagerResponse(response);
   }
   
   // Handle confirm/reject
   function handleConfirm(value: boolean) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      // If we have input text
-      const textInput = inputMessage.trim() ? inputMessage : null;
-      const response = createManagerResponse(value, null, textInput, false, false, isAutoApproveEnabled);
-      
-      socket.send(JSON.stringify(response));
-      console.log("Sent confirm/reject response:", response);
-      
-      // Clear input if it was used for manager response
-      if (textInput) inputMessage = '';
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(value, null, null, null, false, humanInLoop);
+    sendManagerResponse(response);
   }
   
   // Handle halt
   function handleHalt() {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      const response = createManagerResponse(false, null, null, true, false, isAutoApproveEnabled);
-      socket.send(JSON.stringify(response));
-      console.log("Sent halt response:", response);
-      
-      // Clear current manager request
-      currentUIMessage = null;
-      currentManagerMessage = null;
-      selectionOptions = [];
-      isConfirmRequest = false;
-    }
+    const response = createManagerResponse(false, null, null, true, null, humanInLoop);
+    sendManagerResponse(response);
   }
   async function getNewSessionId() {
     try {
@@ -327,7 +296,7 @@ import {
       try {
         socket.close();
       } catch (e) {
-        console.log('Error closing existing socket:', e);
+        console.error('Error closing existing socket:', e);
       }
     }
     
@@ -344,7 +313,7 @@ import {
     try {
         
       wsUrlWithSession = `${wsUrl}/${currentSessionId}`;
-      console.log('Attempting to connect to WebSocket with URL:', wsUrlWithSession);
+      console.debug('Attempting to connect to WebSocket with URL:', wsUrlWithSession);
       
       // Set connection timeout
       const connectionTimeout = setTimeout(() => {
@@ -381,13 +350,13 @@ import {
           if (typeof event.data === 'string') {
             try {
               messageData = JSON.parse(event.data);
-              console.log('Message received:', messageData);
+              console.debug('Message received:', messageData);
             } catch (parseError) {
               // Not valid JSON
-              console.log('Message is not valid JSON, ignoring:', event.data);
+              console.error('Message is not valid JSON, ignoring:', event.data);
             }
           } else {
-            console.log('Message is not a string:', typeof event.data);
+            console.error('Message is not a string:', typeof event.data);
             messageData = event.data;
           }
           
@@ -395,27 +364,30 @@ import {
           // First normalize to a consistent format
           const normalizedMessage = normalizeWebSocketMessage(messageData);
           const outputs = normalizedMessage.outputs;
-          console.log('Normalized message received from websocket:', normalizedMessage);
-          
+          if (!isSystemUpdate(normalizedMessage)) {
+            console.log('Normalized message received from websocket:', normalizedMessage);
+          } else {
+            console.debug('Normalized message received from websocket:', normalizedMessage);
+          }
 
           // Check for system updates
           if (isSystemUpdate(messageData)) {
             // Assign a shallow copy to ensure reactivity if properties change within the object
             systemUpdateStatus = outputs as SystemUpdate;
-            console.log('Updated system status:', systemUpdateStatus);  
+            console.debug('Updated system status:', systemUpdateStatus);  
             // Add logs to check specific properties
-            console.log('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
-            console.log('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
+            console.debug('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
+            console.debug('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
           
           } else {
             // Add the message to the display
+            console.debug('added message for display: ', normalizedMessage);
             addMessage(normalizedMessage);
+
           }
           // Check if this is a manager request and update state
-          
           if (normalizedMessage.type === 'ui_message' && outputs) {
-            currentUIMessage = outputs as UIMessage;
-            currentManagerMessage = normalizedMessage;
+            currentUIMessage = outputs as ManagerMessage;
             
             // Determine input type
             const inputs = currentUIMessage.options;
@@ -425,13 +397,12 @@ import {
               selectionOptions = inputs.map(val => String(val));
               isConfirmRequest = false;
             } 
-            // 
             else {
               selectionOptions = [];
               isConfirmRequest = true;
             }
             
-            console.log("Updated manager request state:", { 
+            console.debug("Updated manager request state:", { 
               selectionOptions, 
               isConfirmRequest, 
             });
@@ -495,7 +466,7 @@ import {
     console.log('Sending message:', inputMessage);
     
     // Create user message
-    const userMessage = createManagerResponse(false, null, inputMessage, false, false, isAutoApproveEnabled);
+    const userMessage = createManagerResponse(false, null, inputMessage, false, false, humanInLoop);
     
     try {
       socket.send(JSON.stringify(userMessage));
@@ -617,34 +588,7 @@ import {
       message.timestamp = formatTimestamp(message.timestamp);
     }
     
-    // Handle manager request messages differently
-    if (message.type === 'ui_message') {
-      console.log('Handling manager request message:', message);
-      // Don't add to main message list, but update manager request state
-      currentUIMessage = message.outputs as UIMessage;
-      currentManagerMessage = message;
-      
-      // Determine input type
-      const options = currentUIMessage?.options;
-      
-      // Check if it's a selection request
-      if (options && Array.isArray(options) && options.length > 0) {
-        selectionOptions = options.map(val => String(val));
-        isConfirmRequest = false;
-      } 
-      // Default to boolean confirm request
-      else {
-        selectionOptions = [];
-        isConfirmRequest = false;
-      }
-      
-      return; // Don't add to messages array
-    }
-    
-    // Skip other messages with empty previews
-    if (message.preview === 'No Preview Available') {
-      return;
-    }
+    // Note: Manager request state is handled in WebSocket message handler
      
     messages = [...messages, message];
     
@@ -684,11 +628,6 @@ import {
     }
   }
 
-  // Function to handle theme changes
-  function handleThemeChange() {
-    document.body.className = selectedTheme; // Apply theme to body
-    localStorage.setItem('terminalTheme', selectedTheme); // Store theme in local storage
-  }
 </script>
 
 <div class="terminal-container terminal-only">
@@ -726,17 +665,16 @@ import {
     <!-- Message Display Area -->
     <div class="console" id="console-messages"  bind:this={messageListElement}>
       {#each messages as msg }
-        <!-- Attach the managerResponse handler to the message as displayed -->
-        <MessageDisplay message={msg} on:managerResponse={handleManagerResponse} />
+        <MessageDisplay message={msg} /> 
       {/each}
     </div>
 
       <!-- Manager Request Area - Only visible when there's an active request -->
-      {#if currentManagerMessage}
+      {#if currentUIMessage}
         <div class="manager-request-area">
           <div class="manager-request-content">
             <span class="request-tag">[REQUEST]</span>
-            {#if currentUIMessage?.content}
+            {#if currentUIMessage.content}
               <span class="request-text">{currentUIMessage.content}</span>
             {/if}
           </div>
@@ -759,6 +697,7 @@ import {
           <!-- Manager request selection options - only shown when there's a selection request -->
           {#if currentUIMessage && selectionOptions.length > 0}
             <div class="selection-options">
+              Select: 
               {#each selectionOptions as option}
                 <button 
                   type="button" 
@@ -814,11 +753,11 @@ import {
               class="terminal-button approve-button"
               aria-label="Auto Approve"
               onclick={toggleAutoApprove}
-              title={isAutoApproveEnabled ? 'Disable Auto Approve' : 'Enable Auto Approve'}
+              title={humanInLoop ? 'Disable Auto Approve' : 'Enable Auto Approve'}
               disabled={!isConnected}>
               
-              <i class="bi {isAutoApproveEnabled ? 'bi-toggle-on' : 'bi-toggle-off'}"></i>
-              {isAutoApproveEnabled ? '[ human in loop ]' : '[ let it ride ]'}
+              <i class="bi {humanInLoop ? 'bi-toggle-off': 'bi-toggle-on'}"></i>
+              {humanInLoop ? '[ human in loop ]': '[ let it ride ]'}
             </button>
             
             <button 

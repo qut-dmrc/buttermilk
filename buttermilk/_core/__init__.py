@@ -1,24 +1,24 @@
 import buttermilk._core.dmrc as DMRC
 
-from .bm_init import BM
-from .config import AgentConfig, AgentVariants
+from .bm_init import BM as BM
+from .config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from .contract import (
-    AgentInput,
-    AgentTrace,
-    AllMessages,
-    ConductorRequest,
-    FlowMessage,
-    GroupchatMessageTypes,
-    HeartBeat,
-    ManagerMessage,
-    OOBMessages,
-    ProceedToNextTaskSignal,
-    StepRequest,
-    TaskProcessingComplete,
-    ToolOutput,
-    UIMessage,
+    AgentInput as AgentInput,
+    AgentTrace as AgentTrace,
+    AllMessages as AllMessages,
+    ConductorRequest as ConductorRequest,
+    FlowMessage as FlowMessage,
+    GroupchatMessageTypes as GroupchatMessageTypes,
+    HeartBeat as HeartBeat,
+    ManagerMessage as ManagerMessage,
+    OOBMessages as OOBMessages,
+    ProceedToNextTaskSignal as ProceedToNextTaskSignal,
+    StepRequest as StepRequest,
+    TaskProcessingComplete as TaskProcessingComplete,
+    ToolOutput as ToolOutput,
+    UIMessage as UIMessage,
 )
-from .log import logger
+from .log import logger as logger
 
 ALL = [
     "BM",
@@ -32,7 +32,7 @@ ALL = [
     "AgentTrace",
     "ManagerMessage",
     "UIMessage",
-    "ManagerResponse",
+    "ManagerMessage",
     "TaskProcessingComplete",
     "OOBMessages",
     "ToolOutput",

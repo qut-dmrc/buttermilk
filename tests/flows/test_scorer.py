@@ -89,11 +89,11 @@ def judge_output_fixture() -> dict[str, Any]:
         }
     }
     """
-    # Minor correction: AgentReasons doesn't have severity/labels by default
-    # Also, Judge output might be directly AgentReasons, not nested under 'outputs'
+    # Minor correction: Reasons doesn't have severity/labels by default
+    # Also, Judge output might be directly Reasons, not nested under 'outputs'
     # Adjusting the fixture slightly based on documented Judge Agent
     data = json.loads(json_str)
-    # Simulate AgentTrace(outputs=AgentReasons(...)) structure more closely if needed
+    # Simulate AgentTrace(outputs=Reasons(...)) structure more closely if needed
     # For simplicity, keep using the dict structure, assuming the test extracts correctly
     return data
 

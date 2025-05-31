@@ -1,6 +1,12 @@
-# CLAUDE.md
+# Buttermilk Terminal web frontend (Sveltekit): Collaborative Assessment Interface (IRC-Style) 
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Overarching Philosophy & Core Principles: 
+- Academic Rigor: This is a scientific research project. Accuracy, traceability, and robustness are paramount. We cannot afford mistakes stemming from rushed development. 
+- Methodical Approach: Take everything step-by-step. Build, test, validate, and document each component or change before moving on. Prioritize stability over features. 
+- Simplicity: Strive for the simplest possible implementation that meets the requirements. Avoid unnecessary complexity. Do not add defensive coding, just raise informative errors. Avoid duplicating code. 
+- User Experience: While functional and robust, the interface must also "look amazing" within the defined aesthetic constraints and be intuitive for the user (the academic researcher). The user is an active supervisor of the chat and should feel in control. Interface elements should support, not dominate, their interaction. 
+- Core Design Conceit: Retro Terminal Group Chat (IRC-like) metaphor: The user is participating in a group chat session within an interface styled after classic terminal-based IRC clients (e.g., irssi, mIRC with a text-based theme). Think text-based interaction, clear delineation of messages, user lists (in our case, the summary sidebar), and command-line sensibilities. Rationale: This conceit provides a familiar interaction model for text-heavy tasks, focuses attention on the content, and aligns with the desired retro-tech/cyberpunk aesthetic.
+- Minimal CSS + JS: We are using Sveltekit. You should always rely on existing libraries, including Bootstrap, wherever possible to reduce the amount of custom code that needs to be maintained.
 
 ## Chat Frontend Development
 
@@ -87,7 +93,6 @@ Supports multiple agent message types:
 
 ### Theme Implementation
 - **Retro Terminal**: IRC-style interface with terminal colors
-- **Two Themes**: Classic retro and modern terminal variants in `_theme-*.scss`
 - **Agent Representation**: Color-coded by model, avoid emoji/cartoonish icons
 - **Compact UI**: Minimize whitespace, focus on information density
 

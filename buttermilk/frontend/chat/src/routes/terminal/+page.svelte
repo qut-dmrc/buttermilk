@@ -1,16 +1,18 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-import { onMount, onDestroy } from 'svelte'; // Import onDestroy
-import DirectWebSocketTerminal from '$lib/DirectWebSocketTerminal.svelte';
+  import { onDestroy, onMount } from 'svelte';
+// Import onDestroy
+import ChatTerminal from '$lib/ChatTerminal.svelte';
 import {
-  // Import the necessary stores
-  selectedFlow,
-  selectedRecord, // Import global selection store
-  selectedCriteria, // Import global selection store
-  selectedModel, // Import global selection store
-  initializeApp // Import initializer
+	initializeApp // Import initializer
+	, // Import global selection store
+	selectedCriteria,
+	// Import the necessary stores
+	selectedFlow,
+	selectedRecord
 } from '$lib/stores/apiStore';
-import { runFlowAction } from '$lib/stores/terminalActionsStore'; // Import the action store
+import { runFlowAction } from '$lib/stores/terminalActionsStore';
+ // Import the action store
 
 // State variables for connection
 let isLoading = true;
@@ -19,7 +21,7 @@ let sessionId = '';
 let wsUrl = ''; // Direct WebSocket URL
 
 // WebSocket terminal instance
-let websocketTerminal: DirectWebSocketTerminal | null = null; // Initialize as null
+let websocketTerminal: ChatTerminal | null = null; // Initialize as null
 
 // Function to run flow - uses global stores now
 function runFlow() {
@@ -111,7 +113,7 @@ onDestroy(() => {
 <!-- Just the terminal component, sidebar is in layout -->
 <div class="h-100">
   {#if wsUrl}
-  <DirectWebSocketTerminal
+  <ChatTerminal
     wsUrl={wsUrl}
     bind:this={websocketTerminal}
     selectedFlow={$selectedFlow}

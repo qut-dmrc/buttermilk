@@ -29,7 +29,7 @@
 		</div>
 
 		{/if}
-		<div class={!$flowRunning ? 'col-lg-9' : 'col-12'}>
+		<div class={!$flowRunning ? 'col-sm-9 col-xl-10' : 'col-12'}>
 			<slot />
 		</div>
 	</div>

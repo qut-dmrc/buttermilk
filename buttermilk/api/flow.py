@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
 from buttermilk._core import BM, logger
+from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
@@ -171,7 +172,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 logger.info(f"Client {session_id} disconnected.")
                 break
             except Exception as e:
-                logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+                msg = f"Error receiving/processing client message for {session_id}: {e}"
+                raise FatalError(msg) from e
             finally:
                 session_id_var.reset(token)
 
@@ -180,9 +182,12 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         
         # Clean up the session when WebSocket disconnects
         try:
-            if hasattr(flow_runner, 'session_manager') and session_id in flow_runner.session_manager.sessions:
-                await flow_runner.session_manager.cleanup_session(session_id)
-                logger.info(f"Cleaned up session {session_id} after WebSocket disconnect")
+            if hasattr(flow_runner, 'session_manager'):
+                success = await flow_runner.session_manager.cleanup_session(session_id)
+                if success:
+                    logger.info(f"Cleaned up session {session_id} after WebSocket disconnect")
+                else:
+                    logger.debug(f"Session {session_id} not found during cleanup (may have already been cleaned up)")
         except Exception as e:
             logger.warning(f"Error cleaning up session {session_id}: {e}")
         
@@ -209,7 +214,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
         
-        if hasattr(flow_runner, 'session_manager') and session_id in flow_runner.session_manager.sessions:
+        if not hasattr(flow_runner, 'session_manager'):
+            raise HTTPException(status_code=500, detail="Session manager not available")
+            
+        if session_id in flow_runner.session_manager.sessions:
             session = flow_runner.session_manager.sessions[session_id]
             return {
                 "session_id": session_id,
@@ -231,14 +239,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
         
-        if hasattr(flow_runner, 'session_manager'):
-            success = await flow_runner.session_manager.cleanup_session(session_id)
-            if success:
-                return {"message": f"Session {session_id} cleaned up successfully"}
-            else:
-                raise HTTPException(status_code=404, detail="Session not found")
-        else:
+        if not hasattr(flow_runner, 'session_manager'):
             raise HTTPException(status_code=500, detail="Session manager not available")
+            
+        success = await flow_runner.session_manager.cleanup_session(session_id)
+        if success:
+            return {"message": f"Session {session_id} cleaned up successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
 
     @app.get("/api/sessions")
     async def list_sessions(request: Request):
@@ -249,20 +257,20 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
         
-        if hasattr(flow_runner, 'session_manager'):
-            sessions_info = []
-            for session_id, session in flow_runner.session_manager.sessions.items():
-                sessions_info.append({
-                    "session_id": session_id,
-                    "status": session.status,
-                    "flow_name": session.flow_name,
-                    "created_at": session.created_at.isoformat(),
-                    "last_activity": session.last_activity.isoformat(),
-                    "is_expired": session.is_expired()
-                })
-            return {"sessions": sessions_info, "total": len(sessions_info)}
-        else:
+        if not hasattr(flow_runner, 'session_manager'):
             return {"sessions": [], "total": 0}
+            
+        sessions_info = []
+        for session_id, session in flow_runner.session_manager.sessions.items():
+            sessions_info.append({
+                "session_id": session_id,
+                "status": session.status,
+                "flow_name": session.flow_name,
+                "created_at": session.created_at.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+                "is_expired": session.is_expired()
+            })
+        return {"sessions": sessions_info, "total": len(sessions_info)}
 
     # --- Add API data routes ---
     # Set up templates

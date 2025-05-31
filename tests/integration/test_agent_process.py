@@ -18,10 +18,10 @@ from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreC
 
 # Try to import LLMJudge, but don't fail if it doesn't exist
 try:
-    from buttermilk.agents.judge import AgentReasons
+    from buttermilk.agents.judge import Reasons
 except ImportError:
     # Create placeholder for tests if not available
-    AgentReasons = MagicMock()
+    Reasons = MagicMock()
     Judge = MagicMock()
 
 
@@ -102,7 +102,7 @@ class TestScorerAgent:
         # Setup a valid judge output
         judge_output = AgentTrace(
             agent_info="judge-abc",
-            outputs=AgentReasons(
+            outputs=Reasons(
                 conclusion="Judge conclusion",
                 prediction=True,
                 reasons=["Judge reason"],

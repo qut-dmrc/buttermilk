@@ -26,7 +26,7 @@ from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
-from buttermilk._core.exceptions import FatalError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.types import Record  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
 
@@ -151,12 +151,9 @@ class KeyValueCollector(BaseModel):
         for key in keys:
             self._data[key] = []
 
-    # The docstring for the section below was not part of the class definition.
-    # It seems to be a general comment about routing variables.
-    # """Routes variables between workflow steps using mappings
-    # Data is essentially a dict of lists, where each key is the name of a step and
-    # each list is the output of an agent in a step.
-    # """
+    def clear(self) -> None:
+        """Clears all collected data, resetting the internal dictionary to empty."""
+        self._data.clear()
 
     def _resolve_mappings(self, mappings: dict[str, Any], data: Mapping[str, Any]) -> dict[str, Any]:
         """Resolves JMESPath expressions defined in `mappings` against `data`. (DEPRECATED or under review)
@@ -466,7 +463,7 @@ def make_messages(
     except Exception as e:  # Broad catch if _parse_prompty itself fails
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
         logger.error(err_msg, exc_info=True)
-        raise ValueError(err_msg) from e
+        raise ProcessingError(err_msg) from e
 
     # Use PromptFlow's utility to parse chat messages from the Prompty content
     from promptflow.core._prompty_utils import parse_chat  # Local import as it's a specific utility

@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { slide } from 'svelte/transition';
-  import { getAgentStyle, getAgentEmoji, type Message } from '$lib/utils/messageUtils';
+  import { getModelColor, type Message } from '$lib/utils/messageUtils';
   import { marked } from 'marked';
-  
-  // Import common expandable details styles
+  import { slide } from 'svelte/transition';
+// Import common expandable details styles
   import '$lib/styles/expandable-details.scss';
   import BasicMessage from './BasicMessage.svelte';
 
@@ -39,7 +38,7 @@
   $: researcherData = message.outputs || {};
   $: literature = researcherData.literature || [];
   $: response = researcherData.response || '';
-  $: error = researcherData.error;
+  $: modelBasedColor = getModelColor(message.agent_info?.parameters?.model);
 
   // Toggle literature expansion
   function toggleLiterature() {
@@ -47,13 +46,12 @@
   }
 </script>
 
-<div class="message-terminal" style="color: #5fadaa;">
+<div class="message-terminal" style="color: {modelBasedColor}">
   <BasicMessage message={message}>
     <svelte:fragment slot="agentNick">[RESEARCH]</svelte:fragment>
     
     <svelte:fragment slot="messagePrefix">
-      <i class="bi bi-book"></i> Literature: {literature.length} references
-      {#if error}<span class="error-message">Error: {error}</span>{/if}
+      <i class="bi bi-book"></i>{literature.length} refs
     </svelte:fragment>
     
     <svelte:fragment slot="messageContent">

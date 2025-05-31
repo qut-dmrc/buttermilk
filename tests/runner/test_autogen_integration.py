@@ -12,12 +12,11 @@ from buttermilk._core.agent import AgentInput, AgentTrace
 from buttermilk._core.config import AgentConfig
 
 # Specific agent classes
-from buttermilk.agents.judge import AgentReasons, Judge
+from buttermilk.agents.judge import Judge, Reasons
 
 # The adapter under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
-bm = bm
 # --- Test Fixtures ---
 
 
@@ -84,7 +83,8 @@ class TestAutogenAdapterIntegration:
         mock_judge = MagicMock(spec=Judge)
         mock_judge.evaluate_content = AsyncMock(name="evaluate_content")
         mock_response = AgentTrace(
-            agent_info=mock_judge._cfg, outputs=AgentReasons(prediction=True, reasons=[], confidence="low", conclusion="mocked"),
+            agent_info=mock_judge._cfg,
+            outputs=Reasons(prediction=True, reasons=[], confidence="low", conclusion="mocked"),
         )
         mock_judge.evaluate_content.return_value = mock_response
         # Set necessary attributes

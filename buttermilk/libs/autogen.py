@@ -50,11 +50,13 @@ class AutogenAgentAdapter(RoutedAgent):
     Attributes:
         agent (Agent): The instance of the Buttermilk agent being wrapped.
         topic_id (TopicId): The default Autogen topic this agent primarily interacts with.
+        _background_tasks (set): Set of background tasks created by this adapter.
 
     """
 
     agent: Agent  # The wrapped Buttermilk agent instance.
     topic_id: TopicId  # The primary topic ID for this agent adapter.
+    _background_tasks: set[asyncio.Task]  # Track all background tasks
 
     def __init__(
         self,
@@ -101,13 +103,18 @@ class AutogenAgentAdapter(RoutedAgent):
 
         # Set the default topic ID based on the provided type string.
         self.topic_id = DefaultTopicId(type=topic_type)
+        
+        # Initialize task tracking
+        self._background_tasks = set()
 
         # Initialize the base Autogen RoutedAgent class, using the Buttermilk agent's description.
         super().__init__(description=self.agent.description)
 
         # This allows UI agents, for example, to send user input back into the Autogen flow.
         init_task = self.agent.initialize(callback_to_groupchat=self._make_publish_callback())
-        asyncio.create_task(init_task)
+        task = asyncio.create_task(init_task)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
         logger.debug(f"Scheduled initialization for agent {self.agent.agent_name} with callback.")
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
@@ -138,6 +145,38 @@ class AutogenAgentAdapter(RoutedAgent):
             )
 
         return publish_callback
+
+    async def cleanup(self) -> None:
+        """Clean up the adapter and its wrapped agent.
+        
+        Cancels all background tasks and calls cleanup on the wrapped agent.
+        """
+        logger.debug(f"Cleaning up AutogenAgentAdapter for agent {self.agent.agent_name}")
+        
+        # Cancel all background tasks
+        if self._background_tasks:
+            logger.debug(f"Cancelling {len(self._background_tasks)} background tasks for agent {self.agent.agent_name}")
+            for task in self._background_tasks:
+                if not task.done():
+                    task.cancel()
+            
+            # Wait for cancellation with timeout
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self._background_tasks, return_exceptions=True),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for background tasks cancellation in adapter for {self.agent.agent_name}")
+            
+            self._background_tasks.clear()
+        
+        # Cleanup the wrapped agent
+        try:
+            await self.agent.cleanup()
+            logger.debug(f"Agent {self.agent.agent_name} cleanup completed")
+        except Exception as e:
+            logger.warning(f"Error during agent cleanup for {self.agent.agent_name}: {e}")
 
     @message_handler
     async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:

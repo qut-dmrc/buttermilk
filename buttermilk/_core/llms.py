@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import openai
 from anthropic import (
     AnthropicVertex,  # Client for Anthropic models on Vertex AI
     AsyncAnthropicVertex,
@@ -134,6 +135,7 @@ class MLPlatformTypes(Enum):
 # ```sh
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
+"""A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHATMODELS = [
     "gemini25pro",
     "gemini25flash",
@@ -144,20 +146,18 @@ CHATMODELS = [
     "llama4maverick",
     "llama32_90b",
     "llama33_70b",
+    "opus",
     "haiku",
     "sonnet",
 ]
-"""A predefined list of chat model identifiers available within the Buttermilk setup."""
 
+"""A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini25flash",
     "o3mini",
     "gpt41mini",
-    "llama31_8b",
-    "haiku",  # Note: "haiku" is duplicated, consider removing one.
 ]
-"""A predefined list of identifiers for cost-effective chat models."""
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
 """A predefined list of identifiers for multimodal models (supporting text, images, etc.)."""
@@ -816,6 +816,10 @@ class AutoGenWrapper(RetryWrapper):
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
                 logger.error(error_msg := "Unexpected tool response from LLM")
                 raise ProcessingError(error_msg, create_result.content)
+        except openai.ContentFilterFinishReasonError as filter_error:
+            # Prompt or response was rejected by the content filter.
+            msg = f"Agent {self.agent_id}: Content filter blocked the response from model '{self._model}': {filter_error}"
+            raise ProcessingError(msg) from filter_error
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
             logger.error(error_msg)

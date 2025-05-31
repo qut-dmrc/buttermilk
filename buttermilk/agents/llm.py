@@ -178,14 +178,10 @@ class LLMAgent(Agent):
         )
 
         try:
-            prompty_structure = _parse_prompty(rendered_template_str)
-        except Exception as e:
-            logger.error(f"Agent '{self.agent_name}': Failed to parse rendered template '{template_name}' as Prompty: {e!s}")
-            raise ProcessingError(f"Failed to parse template '{template_name}' for agent '{self.agent_id}'") from e
-
-        try:
             llm_messages: list[LLMMessage] = make_messages(
-                local_template=prompty_structure, context=current_context, records=current_records,
+                local_template=rendered_template_str,
+                context=current_context,
+                records=current_records,
             )
         except Exception as e:
             logger.error(f"Agent '{self.agent_name}': Failed to create messages from Prompty structure for template '{template_name}': {e!s}")
@@ -227,16 +223,10 @@ class LLMAgent(Agent):
             (e.g., token usage) and details about the agent.
 
         Raises:
-        <<<<<<< HEAD
-            ProcessingError: If template filling fails.
-            Exception: If the LLM call itself fails unexpectedly.
-
-        =======
             ProcessingError: If template filling fails and `fail_on_unfilled_parameters`
                 is True, or if the LLM call itself fails after retries, or if
                 parsing/validation of the LLM response fails critically.
             FatalError: If the LLM client fails to initialize (caught in `init_model`).
-        >>>>>>> d9f9326 (Docs: Comprehensive documentation update (Autumn 2024))
 
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")

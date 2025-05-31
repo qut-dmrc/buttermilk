@@ -32,7 +32,7 @@ from shortuuid import uuid  # For generating short unique identifiers
 
 from buttermilk._core.exceptions import FatalError  # Custom exceptions
 from buttermilk._core.log import logger  # Centralized logger
-from buttermilk.utils.utils import expand_dict  # Utility for dictionary expansion
+from buttermilk.utils.utils import clean_empty_values, expand_dict  # Utility for dictionary expansion
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,  # Pydantic validators
     uppercase_validator,
@@ -258,7 +258,7 @@ class DataSourceConfig(BaseModel):
         description="Maximum records to process per group if grouping is applied. -1 for no limit.",
     )
     type: Literal[
-        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs",
+        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs", "huggingface",
     ] = Field(description="The type of the data source.")
     path: str = Field(
         default="",
@@ -310,6 +310,12 @@ class DataSourceConfig(BaseModel):
     )
     collection_name: str = Field(
         default="", description="Name of the collection for 'chromadb'.",
+    )
+    name: str = Field(
+        default="", description="Name/subset for HuggingFace datasets.",
+    )
+    split: str = Field(
+        default="train", description="Split for HuggingFace datasets (e.g., 'train', 'test').",
     )
 
     model_config = ConfigDict(
@@ -681,7 +687,7 @@ class AgentVariants(AgentConfig):
         description="List of parameter names to source from the runtime RunRequest and merge into agent parameters.",
     )
 
-    def get_configs(self, params: RunRequest | None = None) -> list[tuple[type[Any], AgentConfig]]:
+    def get_configs(self, params: RunRequest | None = None, flow_default_params: dict = {}) -> list[tuple[type[Any], AgentConfig]]:
         """Generates a list of agent configurations based on defined variants and tasks.
 
         This method expands the `variants` and `tasks` dictionaries to create all
@@ -721,10 +727,12 @@ class AgentVariants(AgentConfig):
             },
             exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
         )
+        static_config_dict = clean_empty_values(static_config_dict)
 
         # Ensure 'parameters' exists and is a dict, even if empty from model_dump
         base_parameters = static_config_dict.pop("parameters", {})
-        if base_parameters is None: base_parameters = {}
+        if base_parameters is None:
+            base_parameters = {}
 
         # Merge extra parameters from RunRequest if provided
         if params and self.extra_params:
@@ -736,18 +744,21 @@ class AgentVariants(AgentConfig):
 
         # Merge parameters from the RunRequest.parameters (user-provided overrides)
         if params and params.parameters:
-            base_parameters.update(params.parameters)
+            base_parameters.update(clean_empty_values(params.parameters))
 
         from buttermilk._core.variants import AgentRegistry  # Lazy import
         try:
             agent_class = AgentRegistry.get(self.agent_obj)
             if agent_class is None:  # AgentRegistry.get might return None if not found and not raising
-                 raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
+                raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
         except KeyError:  # Assuming AgentRegistry might raise KeyError
             raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
 
-        parallel_variant_combinations = expand_dict(self.variants) if self.variants else [{}]
-        sequential_task_sets = expand_dict(self.tasks) if self.tasks else [{}]
+        parallel_variant_combinations = expand_dict(clean_empty_values(self.variants)) if self.variants else [{}]
+
+        # Add flow default parameters to sequential tasks if provided
+        sequential_task_sets = {**clean_empty_values(self.tasks), **clean_empty_values(flow_default_params)}
+        sequential_task_sets = expand_dict(sequential_task_sets)    
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs
@@ -759,7 +770,7 @@ class AgentVariants(AgentConfig):
                     # Combine parameters: base, then parallel, then task-specific.
                     # This order defines precedence.
                     final_params = {**base_parameters, **parallel_params, **task_params}
-                    current_config_dict["parameters"] = final_params
+                    current_config_dict["parameters"] = clean_empty_values(final_params)
 
                     # Ensure all necessary fields for AgentConfig are present or defaulted
                     # Role and description might come from static_config_dict or need defaults

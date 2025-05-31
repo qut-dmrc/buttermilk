@@ -208,18 +208,19 @@ addopts = [
     "--capture=fd", 
     "--continue-on-collection-errors",
     "--durations=10", 
-    "-n", "12", "-vv",
-    "-rfEX",
+    "-n 24", 
+    "-v", # show name of tests 
+    "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
+    "-s",
     "--tb=auto",
-    "--show-capture=no",
-    "--disable-warnings",
-#    "-m", "not integration",
+    # "--show-capture=no",
+    # "--disable-warnings",
+    "-m not integration",
 ]
 
-#    "--no-summary",
-#    "--no-header",
-#   " "-rA", "--timeout_method=thread", "--with-integration"
-# xfail_strict = true
+#  "--timeout_method=thread", 
+# "--with-integration"
+# 
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",

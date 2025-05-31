@@ -196,6 +196,35 @@ class Agent(AgentConfig, ABC):
         # Set the agent ID in the context variable for tracing
         agent_id_var.set(self.agent_id)
 
+    async def cleanup(self) -> None:
+        """Cleanup agent resources and state.
+
+        Called when the agent is being shut down or when the session is being cleaned up.
+        Subclasses should override this method to cleanup any resources they have allocated
+        (e.g., file handles, network connections, background tasks).
+
+        The base implementation clears internal state and should be called by subclasses
+        using super().cleanup().
+        """
+        logger.debug(f"Agent {self.agent_name}: Base cleanup.")
+        
+        # Clear internal state
+        self._records.clear()
+        self._data.clear()
+        
+        # Clear model context
+        if hasattr(self._model_context, 'clear'):
+            self._model_context.clear()
+        elif hasattr(self._model_context, 'reset'):
+            await self._model_context.reset()
+        
+        # Clear heartbeat queue
+        while not self._heartbeat.empty():
+            try:
+                self._heartbeat.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Resets the agent's internal state to its initial condition.
 
@@ -497,15 +526,25 @@ class Agent(AgentConfig, ABC):
 
         # Add relevant message content to the conversation history (_model_context).
         # This logic determines what parts of messages are considered for context.
-        # TODO: This section could be made more configurable, e.g., via AgentConfig.
+        # Only add messages that are relevant to this agent's role and responsibilities.
         if isinstance(message, AgentTrace):
-            content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
-            if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                 content_to_add = str(message.outputs) if message.outputs else None
-            if content_to_add:
-                await self._model_context.add_message(
-                    AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
-                )
+            # Only add traces to context if they are directly relevant to this agent
+            # Avoid contaminating agent context with irrelevant traces from other agents
+            should_add_to_context = (
+                source == self.agent_name or  # Messages from this agent itself
+                source == "manager" or        # Direct user/manager messages
+                (hasattr(message, "agent_info") and 
+                 getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
+            )
+            
+            if should_add_to_context:
+                content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
+                if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
+                     content_to_add = str(message.outputs) if message.outputs else None
+                if content_to_add:
+                    await self._model_context.add_message(
+                        AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
+                    )
         elif isinstance(message, ManagerMessage) and message.content:
             content_str = str(message.content)
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history
