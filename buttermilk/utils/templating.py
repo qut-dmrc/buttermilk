@@ -26,7 +26,7 @@ from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
-from buttermilk._core.exceptions import FatalError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.types import Record  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
 
@@ -463,7 +463,7 @@ def make_messages(
     except Exception as e:  # Broad catch if _parse_prompty itself fails
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
         logger.error(err_msg, exc_info=True)
-        raise ValueError(err_msg) from e
+        raise ProcessingError(err_msg) from e
 
     # Use PromptFlow's utility to parse chat messages from the Prompty content
     from promptflow.core._prompty_utils import parse_chat  # Local import as it's a specific utility

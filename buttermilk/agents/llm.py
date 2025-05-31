@@ -178,14 +178,10 @@ class LLMAgent(Agent):
         )
 
         try:
-            prompty_structure = _parse_prompty(rendered_template_str)
-        except Exception as e:
-            logger.error(f"Agent '{self.agent_name}': Failed to parse rendered template '{template_name}' as Prompty: {e!s}")
-            raise ProcessingError(f"Failed to parse template '{template_name}' for agent '{self.agent_id}'") from e
-
-        try:
             llm_messages: list[LLMMessage] = make_messages(
-                local_template=prompty_structure, context=current_context, records=current_records,
+                local_template=rendered_template_str,
+                context=current_context,
+                records=current_records,
             )
         except Exception as e:
             logger.error(f"Agent '{self.agent_name}': Failed to create messages from Prompty structure for template '{template_name}': {e!s}")

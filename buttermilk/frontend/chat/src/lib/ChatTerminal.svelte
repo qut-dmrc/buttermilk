@@ -234,8 +234,6 @@ import {
       addSystemMessage("Error: Connection not open.");
     }
   }
-  
-  // New function to create manager response
 
 
   // Handle selection from options
@@ -383,7 +381,9 @@ import {
           
           } else {
             // Add the message to the display
+            console.debug('added message for display: ', normalizedMessage);
             addMessage(normalizedMessage);
+
           }
           // Check if this is a manager request and update state
           if (normalizedMessage.type === 'ui_message' && outputs) {

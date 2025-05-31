@@ -169,16 +169,17 @@ class AutogenOrchestrator(Orchestrator):
         """
         logger.debug("Registering agents with Autogen runtime...")
 
+        # Add flow's static parameters to the request parameters
         # Create list of participants in the group chat
         self._participants = {v.role: v.description for k, v in self.agents.items()}
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
-            for agent_cls, variant_config in step_config.get_configs(params=params):
+            for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
                 # Define a factory function required by Autogen's registration.
                 if isinstance(agent_cls, type(Agent)):
-                    config_with_session = {**variant_config.model_dump(), **self.parameters, "session_id": params.session_id}
+                    config_with_session = {**variant_config.model_dump(), "session_id": params.session_id}
 
                     # This function creates an instance of the AutogenAgentAdapter,
                     # wrapping the actual Buttermilk agent logic.

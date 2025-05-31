@@ -432,7 +432,7 @@ class HostAgent(Agent):
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
             await self.callback_to_groupchat(step)
         else:
-            if step.role in list(self._participants.keys()):
+            if step.role in self._participants:
                 # Signal that we expect at least one response/task start for this step
                 # This event is used in the wait_for predicate.
                 self._step_starting.set()
