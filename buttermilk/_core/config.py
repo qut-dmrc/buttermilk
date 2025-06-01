@@ -756,9 +756,8 @@ class AgentVariants(AgentConfig):
 
         parallel_variant_combinations = expand_dict(clean_empty_values(self.variants)) if self.variants else [{}]
 
-        # Add flow default parameters to sequential tasks if provided
-        sequential_task_sets = {**clean_empty_values(self.tasks), **clean_empty_values(flow_default_params)}
-        sequential_task_sets = expand_dict(sequential_task_sets)    
+        # Only use explicitly defined tasks, not flow default parameters
+        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]    
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs

@@ -51,6 +51,28 @@ Level 6: orchestrator.py (coordinates everything)
 - Supports command-line overrides for experimentation
 - Modular configs: separate files for agents, data sources, flows, LLMs, etc.
 
+### Configuration Principles
+- **Explicit > Implicit**: Prefer `variants:` declarations over automatic parameter expansion
+- **Flow-agnostic agents**: Agents work with any flow via relative references
+- **Separation of concerns**: Orchestration agents vs content-processing agents have different variant needs
+
+### Common Configuration Patterns
+- **Agent needs flow parameter**: `${...parameters.key}` (relative reference, 2 levels up)
+- **Agent needs global config**: `${llms.model_name}` (absolute reference from config root)
+- **Agent needs variants**: Explicit `variants:` block in agent config
+- **Flow sets parameters**: `parameters:` section in flow config
+
+### Configuration Anti-Patterns
+- ❌ Hardcoding parameter names in code
+- ❌ Automatic parameter→variant conversion affecting all agents
+- ❌ Flow-specific agent configurations
+- ✅ Use explicit, declarative configuration patterns instead
+
+### Agent Types & Variants
+- **Orchestration**: HostAgent, Explorer (coordinate flows, rarely need content variants)
+- **Content Processing**: Judge, Synthesiser, Differentiator (typically need `criteria: ${...parameters.criteria}`)
+- **Observers**: Spy, Owl, Scorer (monitoring, usually no variants needed)
+
 ### Key Modules
 - **buttermilk/_core/**: Core framework components
 - **buttermilk/agents/**: Specialized agent implementations
@@ -147,7 +169,20 @@ Project info:
 - Main entry point is `cli.py`, using RunRequest() for the job and FlowRunner() for the executor. 
 - Python command is `uv run python`. Dependencies managed by `uv`.
 - Test command is `uv run python -m pytest`
-``` 
+```
+
+### Configuration Troubleshooting
+**If you find yourself wanting to hardcode parameter names in code, STOP.** This indicates the configuration patterns aren't clear. Instead:
+
+1. **Check for relative references**: Use `${....parameters.key}` for flow-level parameters
+2. **Look for existing patterns**: Find similar working configs in the codebase
+3. **Prefer explicit configuration**: Add `variants:` blocks rather than modifying code
+4. **Ask the user**: If configuration seems wrong, ask rather than hardcoding
+
+Common issues:
+- **"Multiple agent instances"**: Check for implicit variant creation from flow parameters
+- **"InterpolationKeyError"**: Wrong number of dots in relative reference (`${...}` vs `${....}`)
+- **"Agent shouldn't have variants"**: Orchestration agents (HostAgent) rarely need content variants 
 
 ## Key project info
 
