@@ -156,7 +156,7 @@ warn_untyped_fields = true
 
 [tool.uv]
 upgrade = true
-default-groups = [] #"ml", "dev"]  # Add the groups you want installed by default
+default-groups = [] # Add the groups you want installed by default
 
 [tool.uv.sources]
 buttermilk = { workspace = true }
