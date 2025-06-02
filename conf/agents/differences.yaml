@@ -6,9 +6,7 @@ differentiator:
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
     model: ${llms.general}
-    criteria: ${....parameters.criteria}
   parameters:
     template: differences
-    criteria: Evaluate how well the provided content aligns with the rules.
   inputs:
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id }"
