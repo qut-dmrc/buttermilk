@@ -40,6 +40,7 @@ class HostAgent(Agent):
     Uses a dictionary to count pending tasks per agent ID and a Condition variable
     for synchronization.
     """
+    
 
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
     callback_to_groupchat: Any = Field(default=None)
@@ -61,10 +62,14 @@ class HostAgent(Agent):
         default=1220,
         description="Maximum time to wait for agent responses in seconds",
     )
-    human_in_loop: bool = Field(
-        default=True,
-        description="Whether to interact with the human/manager for step confirmation",
-    )
+    # human_in_loop is now read from self.parameters instead of being a direct field
+    @property
+    def human_in_loop(self) -> bool:
+        """Whether to interact with the human/manager for step confirmation.
+        
+        Gets the value from parameters dict, defaulting to True if not specified.
+        """
+        return self.parameters.get('human_in_loop', True)
     #  Event for confirmation responses from the MANAGER.
     _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
     _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -79,6 +84,7 @@ class HostAgent(Agent):
         """Initialize the agent."""
         super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
+        logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
 
     async def _listen(
         self,
@@ -231,6 +237,7 @@ class HostAgent(Agent):
             bool: True if user confirmed, False if rejected or timed out
 
         """
+        logger.info(f"Host {self.agent_name}: _wait_for_user called for step {step.role}")
         max_tries = self.max_user_confirmation_time // 60
         for _ in range(max_tries):
             logger.info(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
@@ -358,12 +365,14 @@ class HostAgent(Agent):
         logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
         async for next_step in self._step_generator:
+            logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
             # Wait for tasks from the *previous* step to complete before starting the *next* step
             if not await self.wait_check_last_step_completions():
                 # If the wait failed (timeout or error), stop the flow
                 # break
                 pass
             # Don't seek confirmation from the manager to send a request to the manager
+            logger.info(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
             if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                 # If user rejected or timed out, stop the flow
                 continue

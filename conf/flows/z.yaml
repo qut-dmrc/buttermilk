@@ -9,5 +9,5 @@ defaults:
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 description: Research assistant
-parameters:
-  human_in_loop: true
+parameters: {}
+
