@@ -4,6 +4,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable  # Added List, Union, Optional
 from typing import Union
+from datetime import datetime
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
@@ -13,6 +14,8 @@ from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.markdown import Markdown
 from rich.pretty import pretty_repr  # For formatted output of complex objects
+from rich.text import Text
+from rich.padding import Padding
 
 from buttermilk import logger
 
@@ -37,6 +40,123 @@ from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
 # Initialize a global console instance with JSON highlighting
 console = Console(highlighter=JSONHighlighter())
+
+
+# Model-based colors (matching frontend)
+MODEL_COLORS = {
+    "gpt-4": "#10a37f",      # OpenAI green
+    "gpt4": "#10a37f", 
+    "gpt-3.5": "#1f85de",    # OpenAI blue
+    "gpt3": "#1f85de",
+    "o3": "#00d4aa",         # OpenAI teal for o3 series
+    "claude": "#ff6b35",     # Anthropic orange
+    "opus": "#ff6b35",
+    "sonnet": "#ff6b35", 
+    "haiku": "#ff6b35",
+    "gemini": "#4285f4",     # Google blue
+    "llama": "#0866ff",      # Meta blue
+    "falcon": "#3498db",
+}
+
+# IRC-style agent icons
+AGENT_ICONS = {
+    "judge": "⚖",
+    "scorer": "📊", 
+    "assistant": "🤖",
+    "describer": "📝",
+    "fetch": "🔍",
+    "imagegen": "🎨",
+    "reasoning": "💭",
+    "scraper": "🕷",
+    "spy": "👁",
+    "synthesiser": "⚡",
+    "tool": "🔧",
+    "instructions": "📋",
+    "record": "📄",
+    "summary": "📈",
+    "researcher": "🔬",
+    "system": "⚙",
+    "controller": "🎛",
+    "manager": "👤",
+}
+
+def get_model_color(message) -> str:
+    """Get color for agent based on model (matching frontend logic)"""
+    if hasattr(message, 'agent_info') and message.agent_info:
+        if hasattr(message.agent_info, 'parameters') and message.agent_info.parameters:
+            model = getattr(message.agent_info.parameters, 'model', None)
+            if model:
+                model_lower = model.lower()
+                for model_name, color in MODEL_COLORS.items():
+                    if model_name in model_lower:
+                        # Convert hex colors to rich color names
+                        if color == "#10a37f": return "green"
+                        elif color == "#1f85de": return "blue" 
+                        elif color == "#00d4aa": return "cyan"
+                        elif color == "#ff6b35": return "bright_red"
+                        elif color == "#4285f4": return "bright_blue"
+                        elif color == "#0866ff": return "blue"
+                        elif color == "#3498db": return "bright_cyan"
+    
+    # Fallback to role-based coloring
+    if hasattr(message, 'agent_info') and message.agent_info:
+        agent_name = getattr(message.agent_info, 'agent_name', '').lower()
+        if 'judge' in agent_name: return "bright_red"
+        elif 'scorer' in agent_name: return "bright_yellow"
+        elif 'assistant' in agent_name: return "bright_blue"
+        elif 'researcher' in agent_name: return "bright_cyan"
+    
+    return "dim white"
+
+def get_agent_name(message, source: str) -> str:
+    """Extract agent name from message, preferring agent_info.agent_name"""
+    if hasattr(message, 'agent_info') and message.agent_info:
+        agent_name = getattr(message.agent_info, 'agent_name', None)
+        if agent_name:
+            return agent_name
+    
+    # Fallback to agent_id or source
+    agent_id = getattr(message, "agent_id", source or "unknown")
+    return agent_id
+
+def get_agent_icon(agent_id: str) -> str:
+    """Get icon for agent based on name/type"""
+    agent_lower = agent_id.lower()
+    for agent_type, icon in AGENT_ICONS.items():
+        if agent_type in agent_lower:
+            return icon
+    return "💬"
+
+def get_model_tag(message) -> str:
+    """Extract model identifier from message"""
+    if hasattr(message, 'agent_info') and message.agent_info:
+        if hasattr(message.agent_info, 'parameters') and message.agent_info.parameters:
+            model = getattr(message.agent_info.parameters, 'model', None)
+            if model:
+                model_lower = model.lower()
+                if 'gpt-4' in model_lower or 'gpt4' in model_lower:
+                    return "GPT4"
+                elif 'gpt-3' in model_lower:
+                    return "GPT3"
+                elif 'o3' in model_lower:
+                    return "O3"
+                elif 'sonnet' in model_lower:
+                    return "SNNT"
+                elif 'opus' in model_lower:
+                    return "OPUS"
+                elif 'haiku' in model_lower:
+                    return "HAIK"
+                elif 'claude' in model_lower:
+                    return "CLDE"
+                elif 'gemini' in model_lower:
+                    return "GEMN"
+                elif 'llama' in model_lower:
+                    return "LLMA"
+    return ""
+
+def format_timestamp() -> str:
+    """Format current time as HH:MM:SS for IRC-style display"""
+    return datetime.now().strftime("%H:%M:%S")
 
 
 # Define a Union for types _fmt_msg can handle, improving type safety for the formatter.
@@ -70,9 +190,9 @@ class CLIUserAgent(UIAgent):
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
 
     async def callback_to_ui(self, message, source: str = "system", **kwargs):
-        if msg_markdown := self._fmt_msg(message, source=source):
+        if formatted_msg := self._fmt_msg(message, source=source):
             # If formatting is successful, print the message to the console.
-            self._console.print(msg_markdown)
+            self._console.print(formatted_msg)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
@@ -89,93 +209,165 @@ class CLIUserAgent(UIAgent):
         """
         logger.debug(f"{self.agent_name}: Received direct input request via _process.")
         # Format and display the incoming message.
-        if msg_markdown := self._fmt_msg(message, source="controller"):  # Use := walrus operator
-            self._console.print(msg_markdown)
+        if formatted_msg := self._fmt_msg(message, source="controller"):  # Use := walrus operator
+            self._console.print(formatted_msg)
         else:
-            # Fallback if formatting fails or returns None
-            self._console.print(Markdown(f"## Input Request:\n{pretty_repr(message)}"))  # Display raw if formatting fails
+            # Fallback if formatting fails or returns None - use IRC style for consistency
+            fallback_text = Text()
+            fallback_text.append(f"[{format_timestamp()}] ", style="dim")
+            fallback_text.append("🎛 ", style="white")
+            fallback_text.append("controller".ljust(16), style="red")
+            fallback_text.append(" │ ", style="dim")
+            fallback_text.append(f"INPUT REQ: {pretty_repr(message)[:100]}", style="yellow")
+            self._console.print(fallback_text)
 
         # This method primarily triggers output; input is handled by _poll_input.
         return None
 
-    def _fmt_msg(self, message: FormattableMessages, source: str) -> Markdown | None:
-        """Formats various message types into Rich Markdown for console display.
+    def _fmt_msg(self, message: FormattableMessages, source: str) -> Text | None:
+        """Formats various message types into IRC-style console display.
 
         Args:
             message: The message object to format.
             source: The identifier of the agent sending the message.
 
         Returns:
-            A Rich Markdown object ready for printing, or None if the message is not formatted.
-
+            A Rich Text object ready for printing, or None if the message is not formatted.
         """
-        # TODO: This function is complex. Refactor into smaller helpers for maintainability.
-        #       Consider using a dictionary dispatch pattern based on message type.
-        output_lines: list[str] = []  # Use list to build output lines
-
         try:
-            # Add specific identifiers if available
-            agent_id = getattr(message, "agent_id", "unknown")
-            getattr(message, "role", None)
-            header = f"## Message from {agent_id}"
+            # Extract agent information
+            agent_name = get_agent_name(message, source)
+            agent_color = get_model_color(message)
+            agent_icon = get_agent_icon(agent_name)
+            model_tag = get_model_tag(message)
+            timestamp = format_timestamp()
+            
+            # Build agent display name (use actual name, not ID)
+            agent_display = agent_name[:16].ljust(16)  # Increased to 16 chars for longer names
+            if model_tag:
+                agent_display = f"{agent_display}[{model_tag}]"
+            
+            # Build the formatted message text
+            result = Text()
+            result.append(f"[{timestamp}] ", style="dim")
+            result.append(f"{agent_icon} ", style="white")
+            result.append(agent_display, style=agent_color)
+            result.append(" │ ", style="dim")
 
-            output_lines.append(header)
-
-            # --- Specific Type Formatting ---
-            if isinstance(message, (AgentTrace)):
+            # Format content based on message type
+            content_added = False
+            
+            if isinstance(message, AgentTrace) or hasattr(message, 'outputs'):
                 outputs = getattr(message, "outputs", None)
-                getattr(message, "inputs", None)  # Original inputs triggering this output
-                metadata = getattr(message, "metadata", {})
-
-                # Display specific structured outputs
+                
                 if isinstance(outputs, QualResults):
-                    output_lines.append(str(outputs))  # Use QualResults's __str__
-                elif isinstance(outputs, JudgeReasons):
-                    output_lines.append("### Conclusion")
-                    output_lines.append(f"**Prediction**: {outputs.prediction}")
-                    output_lines.append(f"**Conclusion**: {outputs.conclusion}")
-                    if outputs.reasons:
-                        output_lines.append("### Reasons:")
-                        output_lines.extend([f"- {reason}" for reason in outputs.reasons])
-                elif isinstance(outputs, Differences):
-                    output_lines.append("### Differences:")
-                    output_lines.append(f"**Conclusion**: {outputs.conclusion}")
-                elif isinstance(outputs, Record):
-                    output_lines.append(f"### Record: {outputs.record_id}")
-                    # Display limited fields for brevity
-                    output_lines.append(f"```\n{pretty_repr(outputs.as_markdown(), max_string=2000)}\n```")
+                    result.append(f"Score: {outputs}", style="bright_white")
+                    content_added = True
+                    
+                elif isinstance(outputs, JudgeReasons) or (hasattr(outputs, 'prediction') and hasattr(outputs, 'conclusion')):
+                    # Detailed judge output with more information
+                    prediction = getattr(outputs, 'prediction', None)
+                    conclusion = getattr(outputs, 'conclusion', '')
+                    reasons = getattr(outputs, 'reasons', [])
+                    
+                    pred_color = "green" if prediction else "red"
+                    pred_symbol = "✓" if prediction else "✗"
+                    
+                    result.append(f"{pred_symbol} ", style=pred_color)
+                    result.append(f"{conclusion[:200]}", style="white")  # Show more conclusion text
+                    
+                    # Show first 2 reasons if available
+                    if reasons and len(reasons) > 0:
+                        result.append(f"\n{' ' * 25}├ ", style="dim")  # Indent for reasons
+                        result.append(f"{reasons[0][:150]}", style="dim white")
+                        if len(reasons) > 1:
+                            result.append(f"\n{' ' * 25}├ ", style="dim")
+                            result.append(f"{reasons[1][:150]}", style="dim white")
+                        if len(reasons) > 2:
+                            result.append(f"\n{' ' * 25}└ ", style="dim")
+                            result.append(f"({len(reasons) - 2} more reasons...)", style="dim")
+                    content_added = True
+                    
+                elif isinstance(outputs, QualResults) or (hasattr(outputs, 'score') or hasattr(outputs, 'assessment')):
+                    # Summarized scorer output - just show the key metrics
+                    if hasattr(outputs, 'score'):
+                        score = getattr(outputs, 'score', 0)
+                        result.append("SCORE: ", style="dim")
+                        score_color = "green" if score > 0.7 else "yellow" if score > 0.4 else "red"
+                        result.append(f"{score:.2f}", style=score_color)
+                    
+                    if hasattr(outputs, 'assessment'):
+                        assessment = getattr(outputs, 'assessment', '')
+                        result.append(" │ ", style="dim")
+                        result.append(f"{assessment[:100]}", style="white")
+                        
+                    content_added = True
+                    
+                elif isinstance(outputs, Differences) or hasattr(outputs, 'conclusion'):
+                    conclusion = getattr(outputs, 'conclusion', '')
+                    result.append("DIFF: ", style="yellow")
+                    result.append(f"{conclusion[:100]}", style="white")
+                    content_added = True
+                    
+                elif isinstance(outputs, Record) or hasattr(outputs, 'record_id'):
+                    record_id = getattr(outputs, 'record_id', 'unknown')
+                    result.append(f"REC:{record_id} ", style="cyan")
+                    # Show first 100 chars of content if available
+                    if hasattr(outputs, 'content') and outputs.content:
+                        preview = outputs.content[:100].replace('\n', ' ')
+                        result.append(f"{preview}...", style="dim white")
+                    content_added = True
+                    
             elif isinstance(message, UIMessage):
-                output_lines.append(f"### Request:\n{message.content}")
-                # Often includes a plan or question needing confirmation
-
-            elif isinstance(message, TaskProcessingComplete):
-                if message.is_error:
-                    output_lines.append(f"Task {message.task_index} FAILED.")
-                # else: Don't necessarily need to show successful completion signal
-
+                result.append("REQ: ", style="bright_yellow")
+                content = getattr(message, 'content', '')
+                content_preview = content[:150].replace('\n', ' ') if content else "No content"
+                result.append(content_preview, style="white")
+                if len(content) > 150:
+                    result.append("...", style="dim")
+                content_added = True
+                
+            elif isinstance(message, TaskProcessingComplete) or (hasattr(message, 'task_index') and hasattr(message, 'is_error')):
+                # Hide task progress messages to reduce noise - only show errors
+                is_error = getattr(message, 'is_error', False)
+                if is_error:
+                    task_index = getattr(message, 'task_index', '?')
+                    result.append(f"TASK {task_index} FAILED", style="red")
+                    content_added = True
+                else:
+                    # Skip successful task completion messages
+                    return None
+                    
             elif isinstance(message, ToolOutput):
-                output_lines.append(f"### Tool Output (for Tool Call {message.call_id}):")
-                # TODO: Format tool output better based on its content type
-                output_lines.append(f"```\n{pretty_repr(message.content, max_string=1000)}\n```")
-
+                result.append(f"TOOL:{message.call_id} ", style="green")
+                content_preview = str(message.content)[:100].replace('\n', ' ') if message.content else "No output"
+                result.append(content_preview, style="dim white")
+                content_added = True
+                
             elif hasattr(message, "content") and message.content:
-                output_lines.append(message.content)
-
+                # Generic content
+                content_preview = str(message.content)[:150].replace('\n', ' ')
+                result.append(content_preview, style="white")
+                if len(str(message.content)) > 150:
+                    result.append("...", style="dim")
+                content_added = True
+                
+            # If no specific content was added, show the message type
+            if not content_added:
+                result.append(f"[{type(message).__name__}]", style="dim")
+                
+            return result
+            
         except Exception as e:
             logger.error(f"Error formatting message type {type(message)} from {source}: {e}")
-            # Fallback to raw representation on error
-            try:
-                output_lines.append("_(Error formatting message. Raw data below)_")
-                output_lines.append(f"```\n{pretty_repr(message, max_string=1000)}\n```")
-            except Exception:  # If even pretty_repr fails
-                output_lines.append("_(Error formatting message, could not represent raw data)_")
-
-        # Filter out the header if no other content was added, or if content is just empty strings/None
-        filtered_output = [line for line in output_lines if isinstance(line, str) and line.strip()]
-        if len(filtered_output) > 1:  # Check if more than just the header was added
-            return Markdown("\n".join(filtered_output))
-        logger.debug(f"Skipping display for message type {type(message)} from {source} - no formatted content.")
-        return None  # Don't print if only header remains or content was empty
+            # Fallback IRC-style error message
+            error_text = Text()
+            error_text.append(f"[{format_timestamp()}] ", style="dim")
+            error_text.append("⚠ ", style="red")
+            error_text.append("ERROR".ljust(16), style="red")
+            error_text.append(" │ ", style="dim")
+            error_text.append(f"Failed to format {type(message).__name__}: {str(e)[:100]}", style="red")
+            return error_text
 
     async def _listen(
         self,
@@ -202,10 +394,15 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.agent_name} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        displayable_types = (TaskProcessingComplete, UIMessage, ToolOutput)
-        if isinstance(message, displayable_types):
-            if msg_markdown := self._fmt_msg(message, source=source):
-                self._console.print(msg_markdown)
+        # Skip successful TaskProcessingComplete messages to reduce noise
+        if isinstance(message, TaskProcessingComplete):
+            if getattr(message, 'is_error', False):
+                # Only show failed tasks
+                if formatted_msg := self._fmt_msg(message, source=source):
+                    self._console.print(formatted_msg)
+        elif isinstance(message, (UIMessage, ToolOutput)):
+            if formatted_msg := self._fmt_msg(message, source=source):
+                self._console.print(formatted_msg)
         else:
             # Log other OOB types at debug level if not explicitly formatted.
             logger.debug(f"ConsoleAgent ignoring unformatted OOB message type: {type(message).__name__}")
@@ -220,8 +417,8 @@ class CLIUserAgent(UIAgent):
         while True:
             try:
                 # Get input asynchronously, allowing other tasks to run.
-                # The prompt indicates multi-line mode (Enter blank line to send).
-                display_prompt = "(Enter text, blank line to send/confirm, 'n'/'q' to cancel)> "
+                # IRC-style prompt
+                display_prompt = f"[{format_timestamp()}] 👤 user             │ "
                 user_input = await ainput(display_prompt)
 
                 # Handle exit command
@@ -311,6 +508,15 @@ class CLIUserAgent(UIAgent):
                 pass  # Expected
 
         if self.callback_to_groupchat:
+            # Display IRC-style welcome message
+            welcome_text = Text()
+            welcome_text.append(f"[{format_timestamp()}] ", style="dim")
+            welcome_text.append("⚙ ", style="white")
+            welcome_text.append("system".ljust(16), style="yellow")
+            welcome_text.append(" │ ", style="dim")
+            welcome_text.append("Console UI initialized. Type 'exit' to quit, empty line to confirm, 'n'/'q' to cancel.", style="green")
+            self._console.print(welcome_text)
+            
             # Start the background task to poll for console input.
             self._input_task = asyncio.create_task(self._poll_input())
             logger.debug(f"{self.agent_name}: Input polling task created.")
