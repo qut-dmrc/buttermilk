@@ -3,8 +3,8 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable  # Added List, Union, Optional
-from typing import Union
 from datetime import datetime
+from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
@@ -12,10 +12,8 @@ from autogen_core import CancellationToken  # Autogen types (used by base Agent)
 from pydantic import PrivateAttr
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
-from rich.markdown import Markdown
 from rich.pretty import pretty_repr  # For formatted output of complex objects
 from rich.text import Text
-from rich.padding import Padding
 
 from buttermilk import logger
 
@@ -28,6 +26,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
     TaskProcessingComplete,  # Status updates
+    TaskProcessingStarted,  # Task start notifications (to be filtered)
     ToolOutput,  # Potentially displayable tool output
     UIMessage,  # Requests sent *to* the manager (this agent)
 )
@@ -45,13 +44,13 @@ console = Console(highlighter=JSONHighlighter())
 # Model-based colors (matching frontend)
 MODEL_COLORS = {
     "gpt-4": "#10a37f",      # OpenAI green
-    "gpt4": "#10a37f", 
+    "gpt4": "#10a37f",
     "gpt-3.5": "#1f85de",    # OpenAI blue
     "gpt3": "#1f85de",
     "o3": "#00d4aa",         # OpenAI teal for o3 series
     "claude": "#ff6b35",     # Anthropic orange
     "opus": "#ff6b35",
-    "sonnet": "#ff6b35", 
+    "sonnet": "#ff6b35",
     "haiku": "#ff6b35",
     "gemini": "#4285f4",     # Google blue
     "llama": "#0866ff",      # Meta blue
@@ -61,7 +60,7 @@ MODEL_COLORS = {
 # IRC-style agent icons
 AGENT_ICONS = {
     "judge": "⚖",
-    "scorer": "📊", 
+    "scorer": "📊",
     "assistant": "🤖",
     "describer": "📝",
     "fetch": "🔍",
@@ -82,39 +81,39 @@ AGENT_ICONS = {
 
 def get_model_color(message) -> str:
     """Get color for agent based on model (matching frontend logic)"""
-    if hasattr(message, 'agent_info') and message.agent_info:
-        if hasattr(message.agent_info, 'parameters') and message.agent_info.parameters:
-            model = getattr(message.agent_info.parameters, 'model', None)
+    if hasattr(message, "agent_info") and message.agent_info:
+        if hasattr(message.agent_info, "parameters") and message.agent_info.parameters:
+            model = getattr(message.agent_info.parameters, "model", None)
             if model:
                 model_lower = model.lower()
                 for model_name, color in MODEL_COLORS.items():
                     if model_name in model_lower:
                         # Convert hex colors to rich color names
                         if color == "#10a37f": return "green"
-                        elif color == "#1f85de": return "blue" 
+                        elif color == "#1f85de": return "blue"
                         elif color == "#00d4aa": return "cyan"
                         elif color == "#ff6b35": return "bright_red"
                         elif color == "#4285f4": return "bright_blue"
                         elif color == "#0866ff": return "blue"
                         elif color == "#3498db": return "bright_cyan"
-    
+
     # Fallback to role-based coloring
-    if hasattr(message, 'agent_info') and message.agent_info:
-        agent_name = getattr(message.agent_info, 'agent_name', '').lower()
-        if 'judge' in agent_name: return "bright_red"
-        elif 'scorer' in agent_name: return "bright_yellow"
-        elif 'assistant' in agent_name: return "bright_blue"
-        elif 'researcher' in agent_name: return "bright_cyan"
-    
+    if hasattr(message, "agent_info") and message.agent_info:
+        agent_name = getattr(message.agent_info, "agent_name", "").lower()
+        if "judge" in agent_name: return "bright_red"
+        elif "scorer" in agent_name: return "bright_yellow"
+        elif "assistant" in agent_name: return "bright_blue"
+        elif "researcher" in agent_name: return "bright_cyan"
+
     return "dim white"
 
 def get_agent_name(message, source: str) -> str:
     """Extract agent name from message, preferring agent_info.agent_name"""
-    if hasattr(message, 'agent_info') and message.agent_info:
-        agent_name = getattr(message.agent_info, 'agent_name', None)
+    if hasattr(message, "agent_info") and message.agent_info:
+        agent_name = getattr(message.agent_info, "agent_name", None)
         if agent_name:
             return agent_name
-    
+
     # Fallback to agent_id or source
     agent_id = getattr(message, "agent_id", source or "unknown")
     return agent_id
@@ -129,28 +128,28 @@ def get_agent_icon(agent_id: str) -> str:
 
 def get_model_tag(message) -> str:
     """Extract model identifier from message"""
-    if hasattr(message, 'agent_info') and message.agent_info:
-        if hasattr(message.agent_info, 'parameters') and message.agent_info.parameters:
-            model = getattr(message.agent_info.parameters, 'model', None)
+    if hasattr(message, "agent_info") and message.agent_info:
+        if hasattr(message.agent_info, "parameters") and message.agent_info.parameters:
+            model = getattr(message.agent_info.parameters, "model", None)
             if model:
                 model_lower = model.lower()
-                if 'gpt-4' in model_lower or 'gpt4' in model_lower:
+                if "gpt-4" in model_lower or "gpt4" in model_lower:
                     return "GPT4"
-                elif 'gpt-3' in model_lower:
+                elif "gpt-3" in model_lower:
                     return "GPT3"
-                elif 'o3' in model_lower:
+                elif "o3" in model_lower:
                     return "O3"
-                elif 'sonnet' in model_lower:
+                elif "sonnet" in model_lower:
                     return "SNNT"
-                elif 'opus' in model_lower:
+                elif "opus" in model_lower:
                     return "OPUS"
-                elif 'haiku' in model_lower:
+                elif "haiku" in model_lower:
                     return "HAIK"
-                elif 'claude' in model_lower:
+                elif "claude" in model_lower:
                     return "CLDE"
-                elif 'gemini' in model_lower:
+                elif "gemini" in model_lower:
                     return "GEMN"
-                elif 'llama' in model_lower:
+                elif "llama" in model_lower:
                     return "LLMA"
     return ""
 
@@ -163,6 +162,7 @@ def format_timestamp() -> str:
 FormattableMessages = Union[
     AgentTrace,
     TaskProcessingComplete,
+    TaskProcessingStarted,
     UIMessage,
     ToolOutput,
     AgentInput,
@@ -241,12 +241,12 @@ class CLIUserAgent(UIAgent):
             agent_icon = get_agent_icon(agent_name)
             model_tag = get_model_tag(message)
             timestamp = format_timestamp()
-            
+
             # Build agent display name (use actual name, not ID)
             agent_display = agent_name[:16].ljust(16)  # Increased to 16 chars for longer names
             if model_tag:
                 agent_display = f"{agent_display}[{model_tag}]"
-            
+
             # Build the formatted message text
             result = Text()
             result.append(f"[{timestamp}] ", style="dim")
@@ -256,108 +256,124 @@ class CLIUserAgent(UIAgent):
 
             # Format content based on message type
             content_added = False
-            
-            if isinstance(message, AgentTrace) or hasattr(message, 'outputs'):
+
+            if isinstance(message, AgentTrace) or hasattr(message, "outputs"):
                 outputs = getattr(message, "outputs", None)
-                
+
                 if isinstance(outputs, QualResults):
                     result.append(f"Score: {outputs}", style="bright_white")
                     content_added = True
-                    
-                elif isinstance(outputs, JudgeReasons) or (hasattr(outputs, 'prediction') and hasattr(outputs, 'conclusion')):
+
+                elif isinstance(outputs, JudgeReasons) or (hasattr(outputs, "prediction") and hasattr(outputs, "conclusion")):
                     # Detailed judge output with more information
-                    prediction = getattr(outputs, 'prediction', None)
-                    conclusion = getattr(outputs, 'conclusion', '')
-                    reasons = getattr(outputs, 'reasons', [])
-                    
+                    prediction = getattr(outputs, "prediction", None)
+                    conclusion = getattr(outputs, "conclusion", "")
+                    reasons = getattr(outputs, "reasons", [])
+
                     pred_color = "green" if prediction else "red"
                     pred_symbol = "✓" if prediction else "✗"
-                    
+
                     result.append(f"{pred_symbol} ", style=pred_color)
-                    result.append(f"{conclusion[:200]}", style="white")  # Show more conclusion text
-                    
-                    # Show first 2 reasons if available
+                    # Clean up whitespace in conclusion and show more text
+                    clean_conclusion = " ".join(conclusion.strip().split())
+                    result.append(f"{clean_conclusion[:300]}", style="white")
+
+                    # Show first 2 reasons if available with better formatting
                     if reasons and len(reasons) > 0:
                         result.append(f"\n{' ' * 25}├ ", style="dim")  # Indent for reasons
-                        result.append(f"{reasons[0][:150]}", style="dim white")
+                        clean_reason1 = " ".join(str(reasons[0]).strip().split())
+                        result.append(f"{clean_reason1[:200]}", style="dim white")
                         if len(reasons) > 1:
                             result.append(f"\n{' ' * 25}├ ", style="dim")
-                            result.append(f"{reasons[1][:150]}", style="dim white")
+                            clean_reason2 = " ".join(str(reasons[1]).strip().split())
+                            result.append(f"{clean_reason2[:200]}", style="dim white")
                         if len(reasons) > 2:
                             result.append(f"\n{' ' * 25}└ ", style="dim")
                             result.append(f"({len(reasons) - 2} more reasons...)", style="dim")
                     content_added = True
-                    
-                elif isinstance(outputs, QualResults) or (hasattr(outputs, 'score') or hasattr(outputs, 'assessment')):
-                    # Summarized scorer output - just show the key metrics
-                    if hasattr(outputs, 'score'):
-                        score = getattr(outputs, 'score', 0)
-                        result.append("SCORE: ", style="dim")
-                        score_color = "green" if score > 0.7 else "yellow" if score > 0.4 else "red"
-                        result.append(f"{score:.2f}", style=score_color)
-                    
-                    if hasattr(outputs, 'assessment'):
-                        assessment = getattr(outputs, 'assessment', '')
-                        result.append(" │ ", style="dim")
-                        result.append(f"{assessment[:100]}", style="white")
-                        
+
+                elif isinstance(outputs, QualResults) or (hasattr(outputs, "assessed_call_id") and hasattr(outputs, "correctness")):
+                    # Compact scorer output - show call_id and overall score only
+                    call_id = getattr(outputs, "assessed_call_id", "unknown")
+                    correctness = getattr(outputs, "correctness", 0) or 0
+
+                    # Extract short call ID for display
+                    short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
+
+                    result.append(f"[{short_call_id}] ", style="dim")
+                    score_color = "green" if correctness > 0.7 else "yellow" if correctness > 0.4 else "red"
+                    result.append(f"Score: {correctness:.2f}", style=score_color)
+
+                    # Show count of correct assessments if available
+                    if hasattr(outputs, "assessments") and outputs.assessments:
+                        correct_count = sum(1 for a in outputs.assessments if a.correct)
+                        total_count = len(outputs.assessments)
+                        result.append(f" ({correct_count}/{total_count})", style="dim")
+
                     content_added = True
-                    
-                elif isinstance(outputs, Differences) or hasattr(outputs, 'conclusion'):
-                    conclusion = getattr(outputs, 'conclusion', '')
+
+                elif isinstance(outputs, Differences) or hasattr(outputs, "conclusion"):
+                    conclusion = getattr(outputs, "conclusion", "")
                     result.append("DIFF: ", style="yellow")
                     result.append(f"{conclusion[:100]}", style="white")
                     content_added = True
-                    
-                elif isinstance(outputs, Record) or hasattr(outputs, 'record_id'):
-                    record_id = getattr(outputs, 'record_id', 'unknown')
+
+                elif isinstance(outputs, Record) or hasattr(outputs, "record_id"):
+                    record_id = getattr(outputs, "record_id", "unknown")
                     result.append(f"REC:{record_id} ", style="cyan")
                     # Show first 100 chars of content if available
-                    if hasattr(outputs, 'content') and outputs.content:
-                        preview = outputs.content[:100].replace('\n', ' ')
+                    if hasattr(outputs, "content") and outputs.content:
+                        preview = outputs.content[:100].replace("\n", " ")
                         result.append(f"{preview}...", style="dim white")
                     content_added = True
-                    
+
             elif isinstance(message, UIMessage):
                 result.append("REQ: ", style="bright_yellow")
-                content = getattr(message, 'content', '')
-                content_preview = content[:150].replace('\n', ' ') if content else "No content"
+                content = getattr(message, "content", "")
+                content_preview = content[:150].replace("\n", " ") if content else "No content"
                 result.append(content_preview, style="white")
                 if len(content) > 150:
                     result.append("...", style="dim")
                 content_added = True
-                
-            elif isinstance(message, TaskProcessingComplete) or (hasattr(message, 'task_index') and hasattr(message, 'is_error')):
+
+            elif isinstance(message, TaskProcessingStarted):
+                # Skip all TaskProcessingStarted messages to reduce noise
+                return None
+
+            elif isinstance(message, TaskProcessingComplete) or (hasattr(message, "task_index") and hasattr(message, "is_error")):
                 # Hide task progress messages to reduce noise - only show errors
-                is_error = getattr(message, 'is_error', False)
+                is_error = getattr(message, "is_error", False)
                 if is_error:
-                    task_index = getattr(message, 'task_index', '?')
+                    task_index = getattr(message, "task_index", "?")
                     result.append(f"TASK {task_index} FAILED", style="red")
                     content_added = True
                 else:
                     # Skip successful task completion messages
                     return None
-                    
+
             elif isinstance(message, ToolOutput):
                 result.append(f"TOOL:{message.call_id} ", style="green")
-                content_preview = str(message.content)[:100].replace('\n', ' ') if message.content else "No output"
+                content_preview = str(message.content)[:100].replace("\n", " ") if message.content else "No output"
                 result.append(content_preview, style="dim white")
                 content_added = True
-                
+
             elif hasattr(message, "content") and message.content:
-                # Generic content
-                content_preview = str(message.content)[:150].replace('\n', ' ')
+                # Generic content - increased limit and better whitespace handling
+                content_str = str(message.content)
+                # Clean up excessive whitespace but preserve structure
+                clean_content = " ".join(content_str.split())
+                content_preview = clean_content[:300]  # Increased from 150
                 result.append(content_preview, style="white")
-                if len(str(message.content)) > 150:
+                if len(clean_content) > 300:
                     result.append("...", style="dim")
                 content_added = True
-                
+
             # If no specific content was added, show the message type
             if not content_added:
                 result.append(f"[{type(message).__name__}]", style="dim")
-                
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error formatting message type {type(message)} from {source}: {e}")
             # Fallback IRC-style error message
@@ -394,9 +410,12 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.agent_name} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        # Skip successful TaskProcessingComplete messages to reduce noise
-        if isinstance(message, TaskProcessingComplete):
-            if getattr(message, 'is_error', False):
+        # Skip TaskProcessingStarted and successful TaskProcessingComplete messages to reduce noise
+        if isinstance(message, TaskProcessingStarted):
+            # Skip all TaskProcessingStarted messages
+            return None
+        elif isinstance(message, TaskProcessingComplete):
+            if getattr(message, "is_error", False):
                 # Only show failed tasks
                 if formatted_msg := self._fmt_msg(message, source=source):
                     self._console.print(formatted_msg)
@@ -516,7 +535,7 @@ class CLIUserAgent(UIAgent):
             welcome_text.append(" │ ", style="dim")
             welcome_text.append("Console UI initialized. Type 'exit' to quit, empty line to confirm, 'n'/'q' to cancel.", style="green")
             self._console.print(welcome_text)
-            
+
             # Start the background task to poll for console input.
             self._input_task = asyncio.create_task(self._poll_input())
             logger.debug(f"{self.agent_name}: Input polling task created.")

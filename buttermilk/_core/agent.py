@@ -49,6 +49,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
+from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -207,17 +208,17 @@ class Agent(AgentConfig, ABC):
         using super().cleanup().
         """
         logger.debug(f"Agent {self.agent_name}: Base cleanup.")
-        
+
         # Clear internal state
         self._records.clear()
         self._data.clear()
-        
+
         # Clear model context
-        if hasattr(self._model_context, 'clear'):
+        if hasattr(self._model_context, "clear"):
             self._model_context.clear()
-        elif hasattr(self._model_context, 'reset'):
+        elif hasattr(self._model_context, "reset"):
             await self._model_context.reset()
-        
+
         # Clear heartbeat queue
         while not self._heartbeat.empty():
             try:
@@ -301,10 +302,27 @@ class Agent(AgentConfig, ABC):
 
         parent_call: Call | WeaveObject | None = None
         if message.parent_call_id:
+            async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
+                """Retry getting weave call to handle async upload timing."""
+                return bm.weave.get_call(call_id)
+
+            # Use RetryWrapper with shorter delays for weave call retrieval
+            retry_wrapper = RetryWrapper(
+                client=None,  # Not using client, just the retry logic
+                max_retries=3,
+                min_wait_seconds=0.1,
+                max_wait_seconds=1.0,
+                jitter_seconds=0.1,
+                cooldown_seconds=0
+            )
+
             try:
-                parent_call = bm.weave.get_call(message.parent_call_id)
+                parent_call = await retry_wrapper._execute_with_retry(
+                    get_weave_call_with_retry,
+                    message.parent_call_id
+                )
             except Exception as e:  # Broad exception for Weave call retrieval
-                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id}. Error: {e}")
+                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
                 parent_call = weave.get_current_call()  # Fallback to current call if specified parent not found
         else:
             parent_call = weave.get_current_call()
@@ -533,10 +551,10 @@ class Agent(AgentConfig, ABC):
             should_add_to_context = (
                 source == self.agent_name or  # Messages from this agent itself
                 source == "manager" or        # Direct user/manager messages
-                (hasattr(message, "agent_info") and 
+                (hasattr(message, "agent_info") and
                  getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
             )
-            
+
             if should_add_to_context:
                 content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
                 if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
