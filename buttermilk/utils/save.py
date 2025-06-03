@@ -179,7 +179,7 @@ def save(
     # These are ordered from more specific/cloud-preferred to general/local fallbacks.
     file_upload_methods: list[Callable[..., str | None]] = []
 
-    if final_uri_str and isinstance(final_uri_str, CloudPath):  # Prioritize cloud methods if URI is cloud
+    if final_uri_str and final_uri_str.startswith(("gs://", "s3://", "azure://", "gcs://")):  # Prioritize cloud methods if URI is cloud
         if isinstance(data, pd.DataFrame):
             # Add DataFrame-specific cloud upload first if applicable
             file_upload_methods.append(lambda **kwargs_lambda: upload_dataframe_json(data=data, uri=final_uri_str, **kwargs_lambda.get("kwargs_for_upload", {})))  # type: ignore
