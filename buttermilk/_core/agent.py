@@ -411,7 +411,18 @@ class Agent(AgentConfig, ABC):
                 agent_info=self._cfg, tracing_link=result.tracing_link,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
             )
-
+        except ProcessingError as e:
+            logger.warning(f"Agent {self.agent_name} error during __call__: {e}", exc_info=False)
+            result = ErrorEvent(source=self.agent_name, content=f"Processing error: {e}")
+            is_error = True
+            trace = AgentTrace(
+                call_id=result.call_id,
+                agent_id=self.agent_id,
+                agent_info=self._cfg,
+                inputs=final_input,
+                parent_call_id=final_input.parent_call_id,
+                outputs=result,
+            )
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
@@ -559,7 +570,7 @@ class Agent(AgentConfig, ABC):
             if should_add_to_context:
                 content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
                 if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                     content_to_add = str(message.outputs) if message.outputs else None
+                    content_to_add = str(message.outputs) if message.outputs else None
                 if content_to_add:
                     await self._model_context.add_message(
                         AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
@@ -569,9 +580,9 @@ class Agent(AgentConfig, ABC):
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history
                 await self._model_context.add_message(UserMessage(content=content_str, source=source or "manager"))
         # elif isinstance(message, AgentOutput) and hasattr(message, 'outputs'):
-            # output_str = str(message.outputs)
-            # if output_str: # Avoid empty strings
-                # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
+        # output_str = str(message.outputs)
+        # if output_str: # Avoid empty strings
+        # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
 
