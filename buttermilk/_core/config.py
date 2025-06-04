@@ -766,9 +766,9 @@ class AgentVariants(AgentConfig):
                     # Start with the static parts of AgentVariants config
                     current_config_dict = static_config_dict.copy()
 
-                    # Combine parameters: base, then parallel, then task-specific.
-                    # This order defines precedence.
-                    final_params = {**base_parameters, **parallel_params, **task_params}
+                    # Combine parameters: flow defaults, then base (agent + RunRequest), then parallel, then task-specific.
+                    # This order defines precedence - later values override earlier ones.
+                    final_params = {**flow_default_params, **base_parameters, **parallel_params, **task_params}
                     current_config_dict["parameters"] = clean_empty_values(final_params)
 
                     # Ensure all necessary fields for AgentConfig are present or defaulted
