@@ -66,8 +66,8 @@
       "justMyCode": true,
       "args": [
         "+run=api",
-        "flows=[mock,trans,simple,z,tox,judger]",
-        "llms=full",
+        "+flows=[trans]",
+        "+llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
