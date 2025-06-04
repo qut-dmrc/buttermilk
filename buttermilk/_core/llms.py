@@ -818,7 +818,7 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError(error_msg, create_result.content)
         except openai.ContentFilterFinishReasonError as filter_error:
             # Prompt or response was rejected by the content filter.
-            msg = f"Content filter blocked the response from model '{self._model}': {filter_error}"
+            msg = f"Content filter blocked the response from model '{self.model_info.model}': {filter_error}"
             raise ProcessingError(msg) from filter_error
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
