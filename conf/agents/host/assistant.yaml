@@ -6,6 +6,6 @@ host:
   parameters:
     template: panel_host
     model: ${llms.host}
-    human_in_loop: ${....parameters.human_in_loop}
+    human_in_loop: ${run.human_in_loop}
     task: Ask the MANAGER for input and assign an agent to the task. Repeat.
   inputs: {}

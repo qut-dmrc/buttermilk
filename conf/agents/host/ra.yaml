@@ -6,6 +6,6 @@ host:
   parameters:
     template: researchassistant
     model: ${llms.host}
-    human_in_loop: ${....parameters.human_in_loop}
+    human_in_loop: ${run.human_in_loop}
     task: Assign an agent to the task. Repeat.
   inputs: {}

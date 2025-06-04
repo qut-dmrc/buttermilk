@@ -6,7 +6,7 @@ host:
   parameters:
     template: panel_host
     model: ${llms.host}
-    human_in_loop: ${....parameters.human_in_loop}
+    human_in_loop: ${run.human_in_loop}
     task: >
       The purpose of this conversation is to assess a single piece of content. You are the HOST.
       Unless the MANAGER directs you otherwise, the standard approach is for you to:
