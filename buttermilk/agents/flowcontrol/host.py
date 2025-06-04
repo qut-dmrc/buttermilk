@@ -70,6 +70,11 @@ class HostAgent(Agent):
         Gets the value from parameters dict, defaulting to True if not specified.
         """
         return self.parameters.get('human_in_loop', True)
+    
+    @human_in_loop.setter
+    def human_in_loop(self, value: bool) -> None:
+        """Set the human_in_loop value in parameters."""
+        self.parameters['human_in_loop'] = value
     #  Event for confirmation responses from the MANAGER.
     _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
     _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
