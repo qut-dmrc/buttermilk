@@ -17,9 +17,10 @@ from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing
+from weave.trace.weave_client import Call, WeaveObject
 
 if TYPE_CHECKING:
-    from weave.trace.weave_client import Call, WeaveObject
+    pass
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
