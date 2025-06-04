@@ -754,7 +754,14 @@ class AgentVariants(AgentConfig):
         except KeyError:  # Assuming AgentRegistry might raise KeyError
             raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
 
-        parallel_variant_combinations = expand_dict(clean_empty_values(self.variants)) if self.variants else [{}]
+        # Filter out variant parameters that are overridden by RunRequest parameters
+        filtered_variants = self.variants.copy() if self.variants else {}
+        if params and params.parameters:
+            # Remove any variant keys that are explicitly set in params.parameters
+            for key in params.parameters.keys():
+                filtered_variants.pop(key, None)
+                
+        parallel_variant_combinations = expand_dict(clean_empty_values(filtered_variants)) if filtered_variants else [{}]
 
         # Only use explicitly defined tasks, not flow default parameters
         sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]    
