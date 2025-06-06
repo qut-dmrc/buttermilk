@@ -205,15 +205,20 @@ The current implementation uses mock data that matches this structure, so once t
 - `drag` - Drag Queen vs White Supremacist dataset  
 - `tonepolice` - Tone policing detection dataset
 
-## 📝 **Example Frontend Usage:**
+## 📝 **Backend Implementation Status:**
 
-```typescript
-// Fetch record details and scores
-const recordData = await fetch(`/api/records/${recordId}`);
-const scoreData = await fetch(`/api/records/${recordId}/scores`);
+**✅ IMPLEMENTED**: Frontend API proxy endpoints are fully implemented and ready for backend integration:
+- All three record detail endpoints (`/api/records/{record_id}`, `/scores`, `/responses`)
+- Enhanced records list endpoint with `include_scores` parameter
+- Complete mock data for development and testing
+- Error handling with graceful fallbacks
+- Authorization header forwarding
+- Environment-based backend URL configuration
 
-// Optional: Fetch detailed AI responses
-const responsesData = await fetch(`/api/records/${recordId}/responses`);
-```
+**🔧 REQUIRED**: Backend developers need to implement the actual data endpoints at:
+- `{BACKEND_API_URL}/api/records/{record_id}`
+- `{BACKEND_API_URL}/api/records/{record_id}/scores` 
+- `{BACKEND_API_URL}/api/records/{record_id}/responses`
+- `{BACKEND_API_URL}/api/records?flow={flow}&include_scores={boolean}`
 
-The frontend score pages are fully implemented and ready to consume these endpoints once available.
+The frontend will automatically proxy to these backend endpoints when available, falling back to mock data during development.
