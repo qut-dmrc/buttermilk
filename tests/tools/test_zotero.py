@@ -14,13 +14,13 @@ from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
 def mock_bm_credentials(mocker):
     mock_bm = MagicMock()
     mock_bm.credentials.get.side_effect = lambda key: f"dummy_{key}"
-    mocker.patch("buttermilk.tools.zotero.bm", mock_bm)
+    mocker.patch("buttermilk.libs.zotero.bm", mock_bm)
 
 
 @pytest.fixture
 def mock_pyzotero(mocker):
     """Mocks the pyzotero.Zotero class."""
-    return mocker.patch("buttermilk.tools.zotero.zotero.Zotero", autospec=True)
+    return mocker.patch("buttermilk.libs.zotero.zotero.Zotero", autospec=True)
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def zot_downloader(tmp_path, mock_pyzotero):
 async def test_download_pdf_does_not_exist(zot_downloader, tmp_path, mocker):
     """Tests downloading when the PDF attachment exists and the local file doesn't."""
     mock_download = mocker.patch(
-        "buttermilk.tools.zotero.download_limited_async",
+        "buttermilk.libs.zotero.download_limited_async",
         new_callable=AsyncMock,
         return_value=b"pdf content",
     )
@@ -73,7 +73,7 @@ async def test_download_pdf_does_not_exist(zot_downloader, tmp_path, mocker):
 async def test_download_pdf_already_exists(zot_downloader, tmp_path, mocker):
     """Tests download behavior when the PDF file already exists locally."""
     mock_download = mocker.patch(
-        "buttermilk.tools.zotero.download_limited_async",
+        "buttermilk.libs.zotero.download_limited_async",
         new_callable=AsyncMock,
     )
     mocker.patch("pathlib.Path.exists", return_value=True)
@@ -108,7 +108,7 @@ async def test_download_pdf_already_exists(zot_downloader, tmp_path, mocker):
 async def test_download_no_attachment_link(zot_downloader, mocker):
     """Tests download behavior when there's no attachment link."""
     mock_download = mocker.patch(
-        "buttermilk.tools.zotero.download_limited_async",
+        "buttermilk.libs.zotero.download_limited_async",
         new_callable=AsyncMock,
     )
     item = {
@@ -127,7 +127,7 @@ async def test_download_no_attachment_link(zot_downloader, mocker):
 async def test_download_not_pdf(zot_downloader, mocker):
     """Tests download behavior when the attachment is not a PDF."""
     mock_download = mocker.patch(
-        "buttermilk.tools.zotero.download_limited_async",
+        "buttermilk.libs.zotero.download_limited_async",
         new_callable=AsyncMock,
     )
     item = {

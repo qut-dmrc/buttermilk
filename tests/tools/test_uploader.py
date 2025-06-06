@@ -3,8 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.contract import AgentTrace
+from buttermilk._core.contract import AgentTrace, StepRequest
 from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA
+from buttermilk.agents.judge import Reasons
 from buttermilk.utils.uploader import AsyncDataUploader
 
 

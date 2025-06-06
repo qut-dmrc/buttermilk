@@ -197,7 +197,7 @@ def main(conf: DictConfig) -> None:
 
             event_loop = asyncio.get_event_loop()
             # Queue for managing asyncio tasks created by Slack event handlers
-            asyncio.Queue()  # type: ignore
+            orchestrator_tasks = asyncio.Queue()  # type: ignore
 
             slack_bolt_app, slack_bolt_handler = initialize_slack_bot(
                 bot_token=slack_bot_token,
@@ -214,7 +214,7 @@ def main(conf: DictConfig) -> None:
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 from buttermilk.runner.slackbot import register_handlers
                 await register_handlers(
-                    slack_app=slack_app,
+                    slack_app=slack_bolt_app,
                     flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
                 )
@@ -224,7 +224,7 @@ def main(conf: DictConfig) -> None:
                     await asyncio.sleep(3600)  # Wake up periodically or rely on events
 
             try:
-                event_loop.run_until_complete(slack_main_loop())
+                event_loop.run_until_complete(runloop())
             except KeyboardInterrupt:
                 logger.info("Slackbot received KeyboardInterrupt. Shutting down...")
             finally:

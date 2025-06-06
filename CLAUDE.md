@@ -12,6 +12,7 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * Pay down tech debt: The project is still in "very early stages". There is left-over code that does not align with these principles or the direction of the project. You should seek confirmation but not hesitate to suggest removing or refactoring code that creates unecessary complexity and maintenance overhead.
 * You might find a lot of linting errors. If you've been asked to complete a task, you should only fix the critical errors or problems you introduced. Don't go aruond looking for other stuff to do, although you should make a note of problems you noticed but didn't fix in your final report.
 * Never change the general agent initialisation interface just to fix one agent
+* Don't write disposable test scripts; write pytest unittests instead in /tests
 
 ## Development Commands
 
