@@ -13,54 +13,51 @@
 
   $: recordId = $page.params.record_id;
 
-  // Mock function to fetch record data - replace with actual API call
+  // Function to fetch record data from API
   async function fetchRecordData(id: string) {
     try {
       loading = true;
       error = null;
       
-      // TODO: Replace with actual API endpoint
-      // For now, use mock data based on the reference example
-      const mockData = {
-        id: id,
-        name: id.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-        content: "Sample content that will be analyzed for toxicity. This represents the text that was evaluated by various AI models for potential policy violations.",
+      // Fetch record details, scores, and responses in parallel
+      const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
+        fetch(`/api/records/${encodeURIComponent(id)}`),
+        fetch(`/api/records/${encodeURIComponent(id)}/scores`),
+        fetch(`/api/records/${encodeURIComponent(id)}/responses`)
+      ]);
+      
+      // Check if all requests were successful
+      if (!recordResponse.ok) {
+        throw new Error(`Failed to fetch record: ${recordResponse.statusText}`);
+      }
+      if (!scoresResponse.ok) {
+        throw new Error(`Failed to fetch scores: ${scoresResponse.statusText}`);
+      }
+      if (!responsesResponse.ok) {
+        throw new Error(`Failed to fetch responses: ${responsesResponse.statusText}`);
+      }
+      
+      // Parse responses
+      const [recordDetails, scoresData, responsesData] = await Promise.all([
+        recordResponse.json(),
+        scoresResponse.json(),
+        responsesResponse.json()
+      ]);
+      
+      // Combine data into the format expected by the components
+      recordData = {
+        id: recordDetails.id,
+        name: recordDetails.name,
+        content: recordDetails.content,
+        metadata: recordDetails.metadata,
         toxicity_scores: {
-          off_shelf: {
-            'GPT-4': { correct: true, score: 0.85, label: 'TOXIC' },
-            'Claude-3': { correct: false, score: 0.42, label: 'SAFE' },
-            'Gemini': { correct: true, score: 0.78, label: 'TOXIC' },
-            'LLaMA-2': { correct: true, score: 0.91, label: 'TOXIC' }
-          },
-          custom: {
-            'Judge-GPT4': { step: 'judge', score: 0.88 },
-            'Judge-Claude': { step: 'judge', score: 0.45 },
-            'Synth-GPT4': { step: 'synth', score: 0.82 },
-            'Synth-Claude': { step: 'synth', score: 0.39 }
-          }
+          off_shelf: scoresData.off_shelf_results,
+          custom: scoresData.custom_results,
+          summary: scoresData.summary
         },
-        messages: [
-          {
-            agent: 'Judge-GPT4',
-            type: 'judge',
-            content: 'This content violates our community guidelines regarding hate speech targeting specific groups.',
-            score: 0.88,
-            reasoning: 'The language used contains derogatory terms and promotes harmful stereotypes.'
-          },
-          {
-            agent: 'Judge-Claude',
-            type: 'judge', 
-            content: 'While the content discusses sensitive topics, it appears to be educational in nature.',
-            score: 0.45,
-            reasoning: 'The context suggests academic analysis rather than promoting harmful behavior.'
-          }
-        ]
+        messages: responsesData.responses
       };
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      recordData = mockData;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to fetch record data';
     } finally {

@@ -4,6 +4,79 @@ import { env } from '$env/dynamic/private';
 
 // Sample record data for fallback when backend is unavailable
 const FALLBACK_RECORDS = {
+  'osb': [
+    { 
+      id: 'osb-001', 
+      name: 'Oversight Board Case #001', 
+      description: 'Platform moderation policy discussion',
+      summary_scores: {
+        off_shelf_accuracy: 0.75,
+        custom_average: 0.635,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    },
+    { 
+      id: 'osb-002', 
+      name: 'Oversight Board Case #002', 
+      description: 'Satirical content with political commentary',
+      summary_scores: {
+        off_shelf_accuracy: 0.50,
+        custom_average: 0.565,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    }
+  ],
+  'drag': [
+    { 
+      id: 'drag-001', 
+      name: 'Drag Performance Analysis #001', 
+      description: 'Positive drag culture celebration',
+      summary_scores: {
+        off_shelf_accuracy: 1.0,
+        custom_average: 0.10,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    },
+    { 
+      id: 'drag-002', 
+      name: 'Drag Performance Analysis #002', 
+      description: 'Suspected coded messaging in drag context',
+      summary_scores: {
+        off_shelf_accuracy: 0.50,
+        custom_average: 0.65,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    }
+  ],
+  'tonepolice': [
+    { 
+      id: 'tonepolice-001', 
+      name: 'Tone Policing Example #001', 
+      description: 'Civility-focused dismissal of social justice concerns',
+      summary_scores: {
+        off_shelf_accuracy: 0.50,
+        custom_average: 0.748,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    },
+    { 
+      id: 'tonepolice-002', 
+      name: 'Tone Policing Example #002', 
+      description: 'Emotional tone dismissal of systemic criticism',
+      summary_scores: {
+        off_shelf_accuracy: 0.50,
+        custom_average: 0.68,
+        total_evaluations: 8,
+        has_detailed_responses: true
+      }
+    }
+  ],
+  // Legacy fallback data for compatibility
   'user-authentication': [
     { id: 'auth-1', name: 'Login Success Rate', description: 'Percentage of successful logins' },
     { id: 'auth-2', name: 'Failed Attempts', description: 'Number of failed login attempts' },
@@ -37,8 +110,9 @@ const FALLBACK_RECORDS = {
 };
 
 export const GET: RequestHandler = async ({ fetch, request, url }) => {
-  // Get the flow parameter from the URL
+  // Get query parameters
   const flow = url.searchParams.get('flow');
+  const includeScores = url.searchParams.get('include_scores') === 'true';
   
   // If no flow is specified, return an empty array
   if (!flow) {
@@ -58,20 +132,46 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
-    // Forward the request to the backend with the flow parameter
-    const response = await fetch(`${backendUrl}/api/records?flow=${encodeURIComponent(flow)}`, {
+    // Build backend URL with query parameters
+    const backendQueryParams = new URLSearchParams();
+    backendQueryParams.append('flow', flow);
+    if (includeScores) {
+      backendQueryParams.append('include_scores', 'true');
+    }
+    
+    // Forward the request to the backend
+    const response = await fetch(`${backendUrl}/api/records?${backendQueryParams.toString()}`, {
       method: 'GET',
       headers
     });
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch records from backend: ${response.statusText}`);
+    if (response.ok) {
+      const data = await response.json();
+      return json(data);
     }
     
-    // Return the response from the backend
-    const data = await response.json();
-    return json(data);
+    // If backend is unavailable or returns error, fall back to mock data
+    console.warn(`Backend unavailable for records flow=${flow}, using fallback data`);
+    
   } catch (error) {
-    console.error('Error fetching records from backend:', error);
+    console.warn('Error fetching records from backend:', error);
   }
+  
+  // Return fallback data if available
+  if (FALLBACK_RECORDS[flow as keyof typeof FALLBACK_RECORDS]) {
+    let records = FALLBACK_RECORDS[flow as keyof typeof FALLBACK_RECORDS];
+    
+    // If scores aren't requested, remove them from the response
+    if (!includeScores) {
+      records = records.map((record: any) => {
+        const { summary_scores, ...recordWithoutScores } = record;
+        return recordWithoutScores;
+      });
+    }
+    
+    return json(records);
+  }
+  
+  // No fallback data available
+  return json([]);
 };

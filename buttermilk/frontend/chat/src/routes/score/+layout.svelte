@@ -9,11 +9,30 @@
   let loading = false;
   let error: string | null = null;
 
-  // Set the flow and fetch records
-  function loadRecordsForFlow(flow: string) {
+  // Set the flow and fetch records with scores
+  async function loadRecordsForFlow(flow: string) {
     if (flow && $flowChoices.data.includes(flow)) {
       selectedFlow.set(flow);
       currentFlow = flow;
+      
+      // Fetch records with scores for score page
+      try {
+        loading = true;
+        error = null;
+        
+        const response = await fetch(`/api/records?flow=${encodeURIComponent(flow)}&include_scores=true`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch records: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        records = data;
+      } catch (err) {
+        error = err instanceof Error ? err.message : 'Failed to fetch records';
+        records = [];
+      } finally {
+        loading = false;
+      }
     }
   }
 
@@ -21,15 +40,6 @@
   $: if ($flowChoices.data.length > 0 && !currentFlow) {
     currentFlow = $flowChoices.data[0];
     loadRecordsForFlow(currentFlow);
-  }
-
-  // Subscribe to records store
-  $: {
-    if ($recordsStore) {
-      records = $recordsStore.data;
-      loading = $recordsStore.loading;
-      error = $recordsStore.error;
-    }
   }
 
   onMount(() => {
@@ -94,8 +104,22 @@
                     class="record-link"
                     class:active={$page.params.record_id === record.id}
                   >
-                    <span class="record-id">{record.id}</span>
-                    <span class="record-name">{record.name}</span>
+                    <div class="record-header">
+                      <span class="record-id">{record.id}</span>
+                      <span class="record-name">{record.name}</span>
+                    </div>
+                    {#if record.summary_scores}
+                      <div class="record-scores">
+                        <div class="score-item">
+                          <span class="score-label">Off-shelf:</span>
+                          <span class="score-value">{(record.summary_scores.off_shelf_accuracy * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="score-item">
+                          <span class="score-label">Custom:</span>
+                          <span class="score-value">{(record.summary_scores.custom_average * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    {/if}
                   </a>
                 </li>
               {/each}
@@ -185,6 +209,10 @@
     color: #00ff00;
   }
 
+  .record-header {
+    margin-bottom: 0.25rem;
+  }
+
   .record-id {
     display: block;
     font-size: 0.85rem;
@@ -194,6 +222,28 @@
   .record-name {
     display: block;
     font-size: 0.9rem;
+    font-weight: bold;
+  }
+
+  .record-scores {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  .score-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .score-label {
+    color: #aaa;
+  }
+
+  .score-value {
+    color: #00ffff;
     font-weight: bold;
   }
 
