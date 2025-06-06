@@ -67,7 +67,7 @@ class DataService:
 
         """
         try:
-            record_ids = []
+            records = []
 
             loader = create_data_loader(list(flow_runner.flows[flow_name].data.values())[0])
             for record in loader:
@@ -83,9 +83,9 @@ class DataService:
                         "has_detailed_responses": True
                     }
 
-                record_ids.append(record_data)
+                records.append(record_data)
 
-            return record_ids
+            return records
 
         except Exception as e:
             logger.warning(f"Error getting records for flow {flow_name}: {e}")
