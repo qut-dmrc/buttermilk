@@ -1,0 +1,16 @@
+# @package _global_
+# Recovery mode for failed BigQuery uploads
+defaults:
+  - /local
+  - /llms: lite
+  - _self_
+
+name: bm_recovery
+job: recovery
+
+run:
+  _target_: buttermilk.runner.recoveryrunner.RecoveryRunner
+  mode: recovery
+  ui: console
+  backup_dir: ${oc.env:BM_BACKUP_DIR,~/.buttermilk/backups}
+  save: ${save}

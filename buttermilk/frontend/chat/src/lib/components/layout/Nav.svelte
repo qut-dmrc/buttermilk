@@ -52,6 +52,16 @@
 			<li class="nav-item">
 				<a
 					class="nav-link"
+					class:active={$page.url.pathname.startsWith('/score')}
+					aria-current={$page.url.pathname.startsWith('/score') ? 'page' : undefined}
+					href="/score"
+				>
+					Scores
+				</a>
+			</li>
+			<li class="nav-item">
+				<a
+					class="nav-link"
 					class:active={$page.url.pathname === '/faq'}
 					aria-current={$page.url.pathname === '/faq' ? 'page' : undefined}
 					href="/faq"

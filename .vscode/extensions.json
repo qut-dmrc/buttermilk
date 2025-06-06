@@ -11,6 +11,7 @@
         "ms-python.mypy-type-checker",
         "ms-toolsai.jupyter",
         "eamodio.gitlens",
-        "github.copilot"
+        "github.copilot",
+        "anthropic.claude-code"
     ]
 }

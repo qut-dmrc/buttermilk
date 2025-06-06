@@ -623,6 +623,17 @@ class AgentConfig(BaseModel):
 
         return self
 
+    def get_display_name(self) -> str:
+        """Get the display name for this agent.
+        
+        Returns the agent_name which is consistently formatted across UIs.
+        LLM agents may override this to include model information.
+        
+        Returns:
+            str: The display name for the agent
+        """
+        return self.agent_name
+
 
 class AgentVariants(AgentConfig):
     """A factory for creating multiple `AgentConfig` instances (variants).
@@ -754,11 +765,17 @@ class AgentVariants(AgentConfig):
         except KeyError:  # Assuming AgentRegistry might raise KeyError
             raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
 
-        parallel_variant_combinations = expand_dict(clean_empty_values(self.variants)) if self.variants else [{}]
+        # Filter out variant parameters that are overridden by RunRequest parameters
+        filtered_variants = self.variants.copy() if self.variants else {}
+        if params and params.parameters:
+            # Remove any variant keys that are explicitly set in params.parameters
+            for key in params.parameters.keys():
+                filtered_variants.pop(key, None)
+                
+        parallel_variant_combinations = expand_dict(clean_empty_values(filtered_variants)) if filtered_variants else [{}]
 
-        # Add flow default parameters to sequential tasks if provided
-        sequential_task_sets = {**clean_empty_values(self.tasks), **clean_empty_values(flow_default_params)}
-        sequential_task_sets = expand_dict(sequential_task_sets)    
+        # Only use explicitly defined tasks, not flow default parameters
+        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]    
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs
@@ -767,9 +784,9 @@ class AgentVariants(AgentConfig):
                     # Start with the static parts of AgentVariants config
                     current_config_dict = static_config_dict.copy()
 
-                    # Combine parameters: base, then parallel, then task-specific.
-                    # This order defines precedence.
-                    final_params = {**base_parameters, **parallel_params, **task_params}
+                    # Combine parameters: flow defaults, then base (agent + RunRequest), then parallel, then task-specific.
+                    # This order defines precedence - later values override earlier ones.
+                    final_params = {**flow_default_params, **base_parameters, **parallel_params, **task_params}
                     current_config_dict["parameters"] = clean_empty_values(final_params)
 
                     # Ensure all necessary fields for AgentConfig are present or defaulted

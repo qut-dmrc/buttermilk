@@ -17,9 +17,10 @@ from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing
+from weave.trace.weave_client import Call, WeaveObject
 
 if TYPE_CHECKING:
-    from weave.trace.weave_client import Call, WeaveObject
+    pass
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -49,6 +50,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
+from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -207,17 +209,17 @@ class Agent(AgentConfig, ABC):
         using super().cleanup().
         """
         logger.debug(f"Agent {self.agent_name}: Base cleanup.")
-        
+
         # Clear internal state
         self._records.clear()
         self._data.clear()
-        
+
         # Clear model context
-        if hasattr(self._model_context, 'clear'):
+        if hasattr(self._model_context, "clear"):
             self._model_context.clear()
-        elif hasattr(self._model_context, 'reset'):
+        elif hasattr(self._model_context, "reset"):
             await self._model_context.reset()
-        
+
         # Clear heartbeat queue
         while not self._heartbeat.empty():
             try:
@@ -301,10 +303,27 @@ class Agent(AgentConfig, ABC):
 
         parent_call: Call | WeaveObject | None = None
         if message.parent_call_id:
+            async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
+                """Retry getting weave call to handle async upload timing."""
+                return bm.weave.get_call(call_id)
+
+            # Use RetryWrapper with shorter delays for weave call retrieval
+            retry_wrapper = RetryWrapper(
+                client=None,  # Not using client, just the retry logic
+                max_retries=3,
+                min_wait_seconds=0.1,
+                max_wait_seconds=1.0,
+                jitter_seconds=0.1,
+                cooldown_seconds=0
+            )
+
             try:
-                parent_call = bm.weave.get_call(message.parent_call_id)
+                parent_call = await retry_wrapper._execute_with_retry(
+                    get_weave_call_with_retry,
+                    message.parent_call_id
+                )
             except Exception as e:  # Broad exception for Weave call retrieval
-                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id}. Error: {e}")
+                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
                 parent_call = weave.get_current_call()  # Fallback to current call if specified parent not found
         else:
             parent_call = weave.get_current_call()
@@ -392,7 +411,18 @@ class Agent(AgentConfig, ABC):
                 agent_info=self._cfg, tracing_link=result.tracing_link,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
             )
-
+        except ProcessingError as e:
+            logger.warning(f"Agent {self.agent_name} error during __call__: {e}", exc_info=False)
+            result = ErrorEvent(source=self.agent_name, content=f"Processing error: {e}")
+            is_error = True
+            trace = AgentTrace(
+                call_id=result.call_id,
+                agent_id=self.agent_id,
+                agent_info=self._cfg,
+                inputs=final_input,
+                parent_call_id=final_input.parent_call_id,
+                outputs=result,
+            )
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
@@ -533,14 +563,14 @@ class Agent(AgentConfig, ABC):
             should_add_to_context = (
                 source == self.agent_name or  # Messages from this agent itself
                 source == "manager" or        # Direct user/manager messages
-                (hasattr(message, "agent_info") and 
+                (hasattr(message, "agent_info") and
                  getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
             )
-            
+
             if should_add_to_context:
                 content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
                 if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                     content_to_add = str(message.outputs) if message.outputs else None
+                    content_to_add = str(message.outputs) if message.outputs else None
                 if content_to_add:
                     await self._model_context.add_message(
                         AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
@@ -550,9 +580,9 @@ class Agent(AgentConfig, ABC):
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history
                 await self._model_context.add_message(UserMessage(content=content_str, source=source or "manager"))
         # elif isinstance(message, AgentOutput) and hasattr(message, 'outputs'):
-            # output_str = str(message.outputs)
-            # if output_str: # Avoid empty strings
-                # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
+        # output_str = str(message.outputs)
+        # if output_str: # Avoid empty strings
+        # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
 

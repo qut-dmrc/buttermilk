@@ -71,7 +71,7 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = FlowRunner(source="testing", steps=[framer])
 
-    record = Record(content="", data=link_to_video_gcp)  # Added content field
+    record = link_to_video_gcp  # Use the video record directly
     run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", records=[record], run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args
     async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result

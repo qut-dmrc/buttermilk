@@ -124,6 +124,49 @@ class LLMAgent(Agent):
             self._tools_list = []
         return self
 
+    def get_display_name(self) -> str:
+        """Get the display name for this LLM agent, including model information.
+        
+        Extends the base agent display name to include model tag for UI consistency.
+        
+        Returns:
+            str: The display name with model tag (e.g., "judge abc123[GPT4]")
+        """
+        model_tag = self._get_model_tag()
+        if model_tag:
+            return f"{self.agent_name}[{model_tag}]"
+        return self.agent_name
+
+    def _get_model_tag(self) -> str:
+        """Extract model identifier for display purposes.
+        
+        Returns:
+            str: Short model identifier (e.g., "GPT4", "SNNT", "GEMN")
+        """
+        if not self._model:
+            return ""
+        
+        model_lower = self._model.lower()
+        if "gpt-4" in model_lower or "gpt4" in model_lower:
+            return "GPT4"
+        elif "gpt-3" in model_lower:
+            return "GPT3"
+        elif "o3" in model_lower:
+            return "O3"
+        elif "sonnet" in model_lower:
+            return "SNNT"
+        elif "opus" in model_lower:
+            return "OPUS"
+        elif "haiku" in model_lower:
+            return "HAIK"
+        elif "claude" in model_lower:
+            return "CLDE"
+        elif "gemini" in model_lower:
+            return "GEMN"
+        elif "llama" in model_lower:
+            return "LLMA"
+        return ""
+
     async def _fill_template(
         self,
         task_params: dict[str, Any],

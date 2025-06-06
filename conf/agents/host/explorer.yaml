@@ -5,6 +5,7 @@ agent_obj: ExplorerHost
 parameters:
   template: panel_host
   model: ${llms.host}
+  human_in_loop: ${run.human_in_loop}
 inputs:
   task: >
     The purpose of this interactive analysis is to explore a record with different analysis approaches.

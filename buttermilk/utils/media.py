@@ -147,7 +147,15 @@ async def download_and_convert(
         # Add additional metadata to the record
         active_metadata.update({k: doc_metadata.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc_metadata.get(k)})
 
-        final_content = doc_metadata.pop("plain_text", "") if isinstance(doc_metadata, dict) else ""
+        # Convert plain_text from list of dicts to string
+        plain_text_data = doc_metadata.pop("plain_text", []) if isinstance(doc_metadata, dict) else []
+        if isinstance(plain_text_data, list):
+            # Extract text from list of dicts with "text" keys
+            text_parts = [item.get("text", "") for item in plain_text_data if isinstance(item, dict) and "text" in item]
+            final_content = " ".join(text_parts).strip()
+        else:
+            # Fallback if plain_text is already a string
+            final_content = str(plain_text_data).strip()
         if isinstance(doc_metadata, dict): active_metadata.update(doc_metadata)  # Add extracted HTML metadata
         if not active_mime or active_mime == "application/octet-stream":  # Ensure mime is text/html
             active_mime = "text/html"

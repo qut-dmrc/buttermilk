@@ -48,8 +48,7 @@ def mock_message_context() -> MagicMock:
 def agent_input_message() -> AgentInput:
     """Provides a sample AgentInput message."""
     return AgentInput(
-        prompt="Evaluate this content based on criteria.",
-        inputs={"content": "Some content to evaluate"},
+        inputs={"prompt": "Evaluate this content based on criteria.", "content": "Some content to evaluate"},
         parameters={},  # Add task-specific parameters if needed
     )
 

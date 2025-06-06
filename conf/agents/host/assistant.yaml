@@ -3,9 +3,9 @@ host:
   name: "🎯 Assistant"
   description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
   agent_obj: LLMHostAgent
-  human_in_loop: ${run.human_in_loop}
   parameters:
     template: panel_host
     model: ${llms.host}
+    human_in_loop: ${run.human_in_loop}
     task: Ask the MANAGER for input and assign an agent to the task. Repeat.
   inputs: {}

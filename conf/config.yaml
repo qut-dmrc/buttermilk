@@ -1,15 +1,12 @@
 defaults:
   - _self_
   - local
+  - run: api
   - llms: lite
-  - flows: []
-
-
-ui: console
-
-run:
-  human_in_loop: true
-
+  - flows:
+      - trans
+      - tox
+      - z
 bm:
   _target_: buttermilk._core.bm_init.BM
   logger_cfg:
