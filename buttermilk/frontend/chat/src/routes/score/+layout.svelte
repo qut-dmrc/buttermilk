@@ -1,22 +1,26 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { selectedFlow, recordsStore, initializeApp } from '$lib/stores/apiStore';
+  import { selectedFlow, recordsStore, initializeApp, flowChoices } from '$lib/stores/apiStore';
   import { browser } from '$app/environment';
 
-  // Available flows for scoring
-  const SCORE_FLOWS = ['osb', 'drag', 'tonepolice'];
-  let currentFlow = 'osb'; // default
+  let currentFlow = ''; // will be set from available flows
   let records: any[] = [];
   let loading = false;
   let error: string | null = null;
 
   // Set the flow and fetch records
   function loadRecordsForFlow(flow: string) {
-    if (SCORE_FLOWS.includes(flow)) {
+    if (flow && $flowChoices.data.includes(flow)) {
       selectedFlow.set(flow);
       currentFlow = flow;
     }
+  }
+
+  // Set default flow when flow choices are loaded
+  $: if ($flowChoices.data.length > 0 && !currentFlow) {
+    currentFlow = $flowChoices.data[0];
+    loadRecordsForFlow(currentFlow);
   }
 
   // Subscribe to records store
@@ -31,7 +35,6 @@
   onMount(() => {
     if (browser) {
       initializeApp();
-      loadRecordsForFlow(currentFlow);
     }
   });
 
@@ -52,16 +55,24 @@
         <!-- Flow selection -->
         <div class="flow-selector mb-3">
           <label for="flow-select" class="form-label">Dataset:</label>
-          <select 
-            id="flow-select" 
-            class="form-select terminal-select" 
-            bind:value={currentFlow}
-            on:change={handleFlowChange}
-          >
-            {#each SCORE_FLOWS as flow}
-              <option value={flow}>{flow.toUpperCase()}</option>
-            {/each}
-          </select>
+          {#if $flowChoices.loading}
+            <div class="terminal-loading">Loading flows...</div>
+          {:else if $flowChoices.error}
+            <div class="terminal-error">Error: {$flowChoices.error}</div>
+          {:else if $flowChoices.data.length > 0}
+            <select 
+              id="flow-select" 
+              class="form-select terminal-select" 
+              bind:value={currentFlow}
+              on:change={handleFlowChange}
+            >
+              {#each $flowChoices.data as flow}
+                <option value={flow}>{flow.toUpperCase()}</option>
+              {/each}
+            </select>
+          {:else}
+            <div class="terminal-warning">No flows available</div>
+          {/if}
         </div>
 
         <!-- Records list -->

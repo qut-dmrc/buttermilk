@@ -47,7 +47,6 @@
       "args": [
         "+run=batch",
         "flows=[trans]",
-        "llms=full",
         "+flow=trans"
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -65,9 +64,8 @@
       ],
       "justMyCode": true,
       "args": [
-        "+run=api",
-        "+flows=[trans]",
-        "+llms=full",
+        "run=api",
+        "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

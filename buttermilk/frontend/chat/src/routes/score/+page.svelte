@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { recordsStore, selectedFlow } from '$lib/stores/apiStore';
+  import { recordsStore, selectedFlow, flowChoices, initializeApp } from '$lib/stores/apiStore';
 
   let records: any[] = [];
 
@@ -12,6 +12,9 @@
   }
 
   onMount(() => {
+    // Initialize app to load flow choices
+    initializeApp();
+    
     // If we have records, redirect to the first one
     if (records.length > 0) {
       goto(`/score/${records[0].id}`);
@@ -33,11 +36,19 @@
   <div class="terminal-content">
     <div class="info-panel">
       <h3 class="panel-title">Available Datasets</h3>
-      <ul class="dataset-list">
-        <li><strong>OSB</strong> - Oversight Board dataset</li>
-        <li><strong>DRAG</strong> - Drag Queen vs White Supremacist dataset</li>
-        <li><strong>TONEPOLICE</strong> - Tone policing detection dataset</li>
-      </ul>
+      {#if $flowChoices.loading}
+        <div class="loading-text">Loading available flows...</div>
+      {:else if $flowChoices.error}
+        <div class="error-text">Error loading flows: {$flowChoices.error}</div>
+      {:else if $flowChoices.data.length > 0}
+        <ul class="dataset-list">
+          {#each $flowChoices.data as flow}
+            <li><strong>{flow.toUpperCase()}</strong> - {flow} dataset</li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="no-data-text">No datasets available</div>
+      {/if}
     </div>
 
     <div class="info-panel">
@@ -158,6 +169,23 @@
 
   .score-text {
     color: #ccc;
+  }
+
+  .loading-text {
+    color: #ffaa00;
+    font-style: italic;
+    padding: 0.5rem 0;
+  }
+
+  .error-text {
+    color: #ff4444;
+    padding: 0.5rem 0;
+  }
+
+  .no-data-text {
+    color: #666;
+    font-style: italic;
+    padding: 0.5rem 0;
   }
 
   @media (max-width: 768px) {

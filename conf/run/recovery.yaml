@@ -2,7 +2,7 @@
 # Recovery mode for failed BigQuery uploads
 defaults:
   - /local
-  - /llms: lite
+  - override llms: lite
   - _self_
 
 name: bm_recovery
