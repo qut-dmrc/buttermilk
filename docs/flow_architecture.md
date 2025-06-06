@@ -26,9 +26,9 @@ criteria: hate (multiple toxicity criteria)
 
 1. **CLI Entry**: `cli.py` @hydra.main loads config from `conf/`
 2. **API Mode**: Creates FastAPI app via `create_fastapi_app(bm, flow_runner)`
-3. **FlowRunner**: Instantiates orchestrator using `OrchestratorFactory.create_orchestrator()`
-4. **AutogenOrchestrator**: Manages agent lifecycle via `SingleThreadedAgentRuntime`
-5. **Session Management**: `SessionManager` handles WebSocket connections and cleanup
+3. **FlowRunner**: Receives a RunRequest and then instantiates orchestrator using `OrchestratorFactory.create_orchestrator()`
+4. **AutogenOrchestrator**: Manages agent lifecycle and internal pub/sub communication via `SingleThreadedAgentRuntime`
+5. **Session Management**: `SessionManager` handles WebSocket connections and cleanup for frontend clients
 
 ## Agent Class Hierarchy
 
@@ -62,12 +62,17 @@ Agent (ABC) <- AgentConfig
 1. **Orchestrator Setup**: `AutogenOrchestrator._setup()` registers agents with `SingleThreadedAgentRuntime`
 2. **Agent Registration**: Each agent becomes `AutogenAgentAdapter` wrapping Buttermilk `Agent`
 3. **Topic Subscription**: Agents subscribe to main topic (`{bm.name}-{job}-{uuid}`) and role topics
-4. **Message Flow**: Host agent sends `ConductorRequest`, other agents respond via internal pub/sub (managed by Autogen)
+4. **Message Flow**: Host agent sends `ConductorRequest` and `AgentInput`; other agents respond via internal pub/sub (managed by Autogen)
 5. **Session Cleanup**: `SessionManager` handles resource cleanup and timeout
 
-### Agent vs Observer Roles
-- **Agents**: Core processing (judge content, synthesize, find differences)
-- **Observers**: Monitoring, scoring, data collection, flow control
+### Agent-based data processing
+
+- Agent is the key abstraction for processing data
+- Agents are stateful and can be configured to save data sent over internal Autogen pub/sub groupchat
+- Agents are explicitly invoked with a `AgentInput` object that provides parameters and data, often including a `Record` item
+- Subclasses of Agent must implement a `_process()` method that expects AgentInput and returns AgentOutput
+- The invoke method is the normal interface point; it accepts an `AgentInput` and returns an `AgentTrace` that includes the `AgentOutput` and additional tracing information for full observability and logging. 
+- `Observer` Agents are not invoked directly, but have their own logic that is usually triggered in their `_listen` events.
 
 ## Configuration Merge Order
 1. Flow defaults (`conf/flows/{flow}.yaml`)
@@ -81,12 +86,4 @@ Agent (ABC) <- AgentConfig
 - Async cleanup with timeout protection
 - Weave tracing for debugging/monitoring
 - Resource tracking for memory management
-- Each substantive data processing operation loggged to BigQuery (AgentTrace object; spy agent uploads all AgentTrace objects in groupchat)
-
-
-## Quick Reference
-- **Start flow**: `FlowRunner.run_flow(RunRequest)`
-- **Agent factory**: `OrchestratorFactory.create_orchestrator()`
-- **Session handling**: `SessionManager.get_or_create_session()`
-- **Cleanup**: `FlowRunContext.cleanup()` -> `SessionResources.cleanup()`
-
+- Each substantive data processing operation loggged to BigQuery (spy agent uploads all AgentTrace objects in groupchat)
