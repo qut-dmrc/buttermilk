@@ -1,13 +1,25 @@
 <script lang="ts">
   import { getScoreColor } from '$lib/utils/messageUtils';
   
-  export let messages: Array<{
-    agent: string;
-    type: string;
-    content: string;
-    score: number;
-    reasoning?: string;
-  }>;
+  // Native AgentTrace interface
+  interface AgentTrace {
+    timestamp: string;
+    call_id: string;
+    agent_id: string;
+    metadata: Record<string, any>;
+    outputs: any;
+    agent_info: {
+      agent_name: string;
+      role: string;
+      parameters: Record<string, any>;
+    };
+    session_id: string;
+    inputs: {
+      records: any[];
+    };
+  }
+
+  export let messages: AgentTrace[];
 
   // Generate ASCII score bar similar to other components
   function generateScoreBar(score: number): string {
@@ -46,6 +58,35 @@
     return now.toISOString().replace(/\.\d{3}Z$/, '');
   }
 
+  // Process AgentTrace objects into display format
+  $: processedMessages = messages.map(trace => {
+    const outputs = trace.outputs || {};
+    const agentName = trace.agent_info?.agent_name || trace.agent_id;
+    const model = trace.agent_info?.parameters?.model || '';
+    const role = trace.agent_info?.role || 'unknown';
+    
+    // Extract data from outputs
+    const content = outputs.conclusion || outputs.content || JSON.stringify(outputs);
+    const reasoning = Array.isArray(outputs.reasons) ? outputs.reasons.join(' ') : (outputs.reasons || '');
+    const prediction = outputs.prediction || false;
+    const confidence = outputs.confidence || 'medium';
+    
+    // Convert confidence to numeric score
+    const confidenceMap: Record<string, number> = { high: 0.9, medium: 0.7, low: 0.5 };
+    const score = typeof confidence === 'string' ? confidenceMap[confidence] || 0.7 : confidence;
+    
+    return {
+      agent: `${agentName}-${model}`,
+      type: role.toLowerCase(),
+      content,
+      score,
+      reasoning,
+      prediction,
+      timestamp: trace.timestamp,
+      call_id: trace.call_id
+    };
+  });
+
   // Get agent identifier with color
   function getAgentColor(agent: string): string {
     // Color coding based on agent type
@@ -68,9 +109,9 @@
 </script>
 
 <div class="score-messages-display">
-  {#if messages && messages.length > 0}
+  {#if processedMessages && processedMessages.length > 0}
     <div class="messages-container">
-      {#each messages as message, index}
+      {#each processedMessages as message, index}
         {@const scoreColor = getScoreColor(message.score)}
         {@const agentColor = getAgentColor(message.agent)}
         

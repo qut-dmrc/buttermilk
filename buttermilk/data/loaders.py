@@ -17,6 +17,7 @@ import cloudpathlib
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk.data.bigquery_loader import BigQueryRecordLoader
 
 
 class DataLoader(ABC):
@@ -318,5 +319,7 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
             return JSONLDataLoader(config)
     elif config.type == "plaintext":
         return PlaintextDataLoader(config)
+    elif config.type == "bigquery":
+        return BigQueryRecordLoader(**config.model_dump())
     else:
         raise ValueError(f"Unsupported data source type: {config.type}")

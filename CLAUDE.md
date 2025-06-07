@@ -15,7 +15,7 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * You might find a lot of linting errors. If you've been asked to complete a task, you should only fix the critical errors or problems you introduced. Don't go aruond looking for other stuff to do, although you should make a note of problems you noticed but didn't fix in your final report.
 * Never change the general agent initialisation interface just to fix one agent
 * Don't write disposable test scripts; write pytest unittests instead in /tests
-
+* Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
 
 ## Development Commands
 
@@ -32,3 +32,5 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 ## Configuration Hints
 
 * To see the actual hydra config in use, use `-c job`, like: `uv run python -m buttermilk.runner.cli -c job +flow=tox +run=batch "+flows=[tox]" "run.mode=batch_run"`
+
+* When dumping pydantic objects, use pydantic's model_dump()

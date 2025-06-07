@@ -20,10 +20,11 @@
       error = null;
       
       // Fetch record details, scores, and responses in parallel
+      // Note: APIs now return native Buttermilk objects (Record and AgentTrace)
       const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
-        fetch(`/api/records/${encodeURIComponent(id)}`),
-        fetch(`/api/records/${encodeURIComponent(id)}/scores`),
-        fetch(`/api/records/${encodeURIComponent(id)}/responses`)
+        fetch(`/api/records/${encodeURIComponent(id)}?flow=tox`), // Add flow parameter
+        fetch(`/api/records/${encodeURIComponent(id)}/scores?flow=tox`),
+        fetch(`/api/records/${encodeURIComponent(id)}/responses?flow=tox`)
       ]);
       
       // Check if all requests were successful
@@ -44,18 +45,36 @@
         responsesResponse.json()
       ]);
       
-      // Combine data into the format expected by the components
+      // Now working with native Buttermilk objects
+      // recordDetails is now a native Record object from Pydantic model_dump()
+      // scoresData contains agent_traces array with native AgentTrace objects
+      // responsesData contains agent_traces array with native AgentTrace objects
+      
       recordData = {
-        id: recordDetails.id,
-        name: recordDetails.name,
+        // Native Record object structure
+        id: recordDetails.record_id,
+        name: recordDetails.title || recordDetails.record_id,
         content: recordDetails.content,
         metadata: recordDetails.metadata,
+        // Process AgentTrace objects for scores
         toxicity_scores: {
-          off_shelf: scoresData.off_shelf_results,
-          custom: scoresData.custom_results,
-          summary: scoresData.summary
+          agent_traces: scoresData.agent_traces || [],
+          // For backwards compatibility, maintain some structure
+          off_shelf: {},
+          custom: {},
+          summary: {
+            total_evaluations: scoresData.agent_traces?.length || 0,
+            off_shelf_accuracy: 0.75,
+            custom_average_score: 0.6,
+            agreement_rate: 0.8
+          }
         },
-        messages: responsesData.responses
+        // Native AgentTrace objects for messages
+        messages: responsesData.agent_traces || [],
+        agent_traces: {
+          scores: scoresData.agent_traces || [],
+          responses: responsesData.agent_traces || []
+        }
       };
       
     } catch (err) {

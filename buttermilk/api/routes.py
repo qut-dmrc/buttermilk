@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.log import logger
+from buttermilk._core.types import Record
+from buttermilk._core.contract import AgentTrace
 from buttermilk.api.services.data_service import DataService
 
 FlowRunner = Any
@@ -112,9 +114,13 @@ async def get_records_list_endpoint(
         logger.debug(f"Returning data for {len(records)} records")
 
         if "application/json" in accept_header:
-            return JSONResponse(content=records)
+            # Send native Record objects using Pydantic's model_dump()
+            records_data = [record.model_dump() for record in records]
+            return JSONResponse(content=records_data)
 
-        context_data = {"records": records, "flow": flow, "include_scores": include_scores}
+        # For HTML response, use Pydantic model_dump() as well
+        records_data = [record.model_dump() for record in records]
+        context_data = {"records": records_data, "flow": flow, "include_scores": include_scores}
         return await negotiate_response(request, context_data, "partials/records_list.html", templates)
 
     except Exception as e:
@@ -153,10 +159,12 @@ async def get_flowinfo_endpoint(
 
     try:
         criteria = await DataService.get_criteria_for_flow(flow, flows)
-        record_ids = await DataService.get_records_for_flow(flow, flows, include_scores=False)
+        records = await DataService.get_records_for_flow(flow, flows, include_scores=False)
         models = await DataService.get_models_for_flow(flow, flows)
-        logger.debug(f"Returning data for {len(criteria)} criteria options and {len(record_ids)} record options")
-        context_data = {"criteria": criteria, "record_ids": record_ids, "models": models}
+        logger.debug(f"Returning data for {len(criteria)} criteria options and {len(records)} record options")
+        # Use model_dump() to serialize Record objects
+        record_data = [record.model_dump() for record in records]
+        context_data = {"criteria": criteria, "record_ids": record_data, "models": models}
         return await negotiate_response(request, context_data, "partials/flow_dependent_data.html", templates)
 
     except Exception as e:
@@ -210,9 +218,9 @@ async def get_record_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        record_data = await DataService.get_record_by_id(record_id, flow, flows)
+        record = await DataService.get_record_by_id(record_id, flow, flows)
 
-        if not record_data:
+        if not record:
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -222,7 +230,8 @@ async def get_record_endpoint(
                 }
             )
 
-        return JSONResponse(content=record_data)
+        # Send native Record object using Pydantic's model_dump()
+        return JSONResponse(content=record.model_dump())
 
     except HTTPException:
         raise
@@ -249,7 +258,14 @@ async def get_record_scores_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        scores_data = await DataService.get_scores_for_record(record_id, flow, bm_instance, session_id)
+        agent_traces = await DataService.get_scores_for_record(record_id, flow, bm_instance, session_id)
+        
+        # Send native AgentTrace objects directly using Pydantic's model_dump()
+        scores_data = {
+            "record_id": record_id,
+            "agent_traces": [trace.model_dump() for trace in agent_traces]
+        }
+        
         return JSONResponse(content=scores_data)
 
     except Exception as e:
@@ -276,7 +292,14 @@ async def get_record_responses_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        responses_data = await DataService.get_responses_for_record(record_id, flow, bm_instance, session_id, include_reasoning)
+        agent_traces = await DataService.get_responses_for_record(record_id, flow, bm_instance, session_id, include_reasoning)
+        
+        # Send native AgentTrace objects directly using Pydantic's model_dump()
+        responses_data = {
+            "record_id": record_id,
+            "agent_traces": [trace.model_dump() for trace in agent_traces]
+        }
+        
         return JSONResponse(content=responses_data)
 
     except Exception as e:
