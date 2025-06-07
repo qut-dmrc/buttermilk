@@ -10,14 +10,28 @@ import csv
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Protocol, runtime_checkable
 
 import cloudpathlib
 
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.data.bigquery_loader import BigQueryRecordLoader
+
+
+@runtime_checkable
+class DataLoaderProtocol(Protocol):
+    """Protocol defining the interface for data loaders."""
+    
+    config: DataSourceConfig | None
+    
+    def __iter__(self) -> Iterator[Record]:
+        """Yield Record objects from the data source."""
+        ...
+    
+    def __len__(self) -> int:
+        """Return number of records if known, 0 if streaming/unknown."""
+        ...
 
 
 class DataLoader(ABC):
@@ -320,6 +334,7 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
     elif config.type == "plaintext":
         return PlaintextDataLoader(config)
     elif config.type == "bigquery":
+        from buttermilk.data.bigquery_loader import BigQueryRecordLoader
         return BigQueryRecordLoader(**config.model_dump())
     else:
         raise ValueError(f"Unsupported data source type: {config.type}")

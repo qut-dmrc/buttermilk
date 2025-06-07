@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Protocol
 
-from buttermilk._core.config import AgentConfig
+from buttermilk._core.config import AgentConfig, BigQueryConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
@@ -217,6 +217,9 @@ class DataService:
             # Get BigQuery client from BM instance
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
+            
+            # Get BigQuery configuration for dataset name
+            bq_config = BigQueryConfig()
 
             # Build the query for scores
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -238,7 +241,7 @@ class DataService:
                 tracing_link,
                 error,
                 messages
-            FROM `{bq_client.project}.buttermilk.flows`
+            FROM `{bq_client.project}.{bq_config.dataset_id}.flows`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
             AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
@@ -324,6 +327,9 @@ class DataService:
             # Get BigQuery client from BM instance
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
+            
+            # Get BigQuery configuration for dataset name
+            bq_config = BigQueryConfig()
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -346,7 +352,7 @@ class DataService:
                 tracing_link,
                 error,
                 messages
-            FROM `{bq_client.project}.buttermilk.flows`
+            FROM `{bq_client.project}.{bq_config.dataset_id}.flows`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
             AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL

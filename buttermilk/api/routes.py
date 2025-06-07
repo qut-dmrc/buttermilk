@@ -214,6 +214,9 @@ async def get_record_endpoint(
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
 
+    if not record_id or record_id.strip() == "" or record_id == "undefined":
+        raise HTTPException(status_code=422, detail="Invalid record_id parameter")
+
     if flow not in flows.flows:
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
@@ -254,6 +257,9 @@ async def get_record_scores_endpoint(
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
 
+    if not record_id or record_id.strip() == "" or record_id == "undefined":
+        raise HTTPException(status_code=422, detail="Invalid record_id parameter")
+
     if flow not in flows.flows:
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
@@ -287,6 +293,9 @@ async def get_record_responses_endpoint(
 
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
+
+    if not record_id or record_id.strip() == "" or record_id == "undefined":
+        raise HTTPException(status_code=422, detail="Invalid record_id parameter")
 
     if flow not in flows.flows:
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")

@@ -6,17 +6,22 @@ the Record object fields, with clustering by record_id and dataset name.
 
 import datetime
 import json
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator
 
 from google.cloud import bigquery
 
+from buttermilk._core.config import BigQueryConfig
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.data.loaders import DataLoader
+
+if TYPE_CHECKING:
+    pass
 
 
-class BigQueryRecordLoader(DataLoader):
+class BigQueryRecordLoader:
     """BigQuery dataloader for Records table.
+    
+    Implements DataLoaderProtocol interface.
     
     Core functionality:
     1. Defaults to a generic `Records` table clustered by record_id and dataset name
@@ -26,31 +31,51 @@ class BigQueryRecordLoader(DataLoader):
     """
 
     def __init__(self, config=None, **kwargs):
-        """Initialize BigQuery loader."""
+        """Initialize BigQuery loader.
+        
+        Args:
+            config: Configuration object or BigQueryConfig instance
+            **kwargs: Override parameters and data-specific settings
+        """
+        # Initialize default BigQuery configuration
+        bq_defaults = BigQueryConfig()
+
         if config:
-            super().__init__(config)
-            # Extract BigQuery-specific config from the config object
-            self.project_id = getattr(config, "project_id", kwargs.get("project_id"))
-            self.dataset_id = getattr(config, "dataset_id", kwargs.get("dataset_id", "buttermilk"))
-            self.table_id = getattr(config, "table_id", kwargs.get("table_id", "records"))
+            self.config = config
+            # Extract BigQuery-specific config from the config object, falling back to defaults
+            self.project_id = getattr(config, "project_id", kwargs.get("project_id", bq_defaults.project_id))
+            self.dataset_id = getattr(config, "dataset_id", kwargs.get("dataset_id", bq_defaults.dataset_id))
+            self.table_id = getattr(config, "table_id", kwargs.get("table_id", bq_defaults.table_id))
             self.dataset_name = getattr(config, "dataset_name", kwargs.get("dataset_name"))
             self.split_type = getattr(config, "split_type", kwargs.get("split_type", "train"))
-            self.randomize = getattr(config, "randomize", kwargs.get("randomize", True))
-            self.batch_size = getattr(config, "batch_size", kwargs.get("batch_size", 1000))
+            self.randomize = getattr(config, "randomize", kwargs.get("randomize", bq_defaults.randomize))
+            self.batch_size = getattr(config, "batch_size", kwargs.get("batch_size", bq_defaults.batch_size))
             self.limit = getattr(config, "limit", kwargs.get("limit"))
         else:
-            # Direct initialization with kwargs
-            self.project_id = kwargs["project_id"]
-            self.dataset_id = kwargs.get("dataset_id", "buttermilk")
-            self.table_id = kwargs.get("table_id", "records")
-            self.dataset_name = kwargs["dataset_name"]
+            # Direct initialization with kwargs, using defaults where not provided
+            self.config = None
+            self.project_id = kwargs.get("project_id", bq_defaults.project_id)
+            if not self.project_id:
+                raise ValueError("project_id must be provided either in config or kwargs")
+            self.dataset_id = kwargs.get("dataset_id", bq_defaults.dataset_id)
+            self.table_id = kwargs.get("table_id", bq_defaults.table_id)
+            self.dataset_name = kwargs.get("dataset_name")
+            if not self.dataset_name:
+                raise ValueError("dataset_name must be provided in config or kwargs")
             self.split_type = kwargs.get("split_type", "train")
-            self.randomize = kwargs.get("randomize", True)
-            self.batch_size = kwargs.get("batch_size", 1000)
+            self.randomize = kwargs.get("randomize", bq_defaults.randomize)
+            self.batch_size = kwargs.get("batch_size", bq_defaults.batch_size)
             self.limit = kwargs.get("limit")
 
         self.client = bigquery.Client(project=self.project_id)
         self.table_ref = f"{self.project_id}.{self.dataset_id}.{self.table_id}"
+
+    def __len__(self) -> int:
+        """Return number of records if known, 0 if streaming/unknown."""
+        try:
+            return self.count()
+        except Exception:
+            return 0
 
     def _build_query(self) -> str:
         """Build the BigQuery SQL query."""

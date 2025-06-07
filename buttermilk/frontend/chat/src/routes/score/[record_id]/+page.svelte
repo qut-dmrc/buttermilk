@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
+  import { selectedFlow, initializeApp } from '$lib/stores/apiStore';
   import ToxicityScoreTable from '$lib/components/score/ToxicityScoreTable.svelte';
   import RecordDisplay from '$lib/components/score/RecordDisplay.svelte';
   import ScoreMessagesDisplay from '$lib/components/score/ScoreMessagesDisplay.svelte';
@@ -10,21 +11,36 @@
   let recordData: any = null;
   let loading = true;
   let error: string | null = null;
+  let currentFlow: string = '';
 
   $: recordId = $page.params.record_id;
+  $: currentFlow = $selectedFlow || $page.url.searchParams.get('flow') || 'tox';
 
   // Function to fetch record data from API
   async function fetchRecordData(id: string) {
+    if (!id || id === 'undefined' || id.trim() === '') {
+      error = 'Invalid record ID provided';
+      loading = false;
+      return;
+    }
+
+    if (!currentFlow || currentFlow.trim() === '') {
+      error = 'No flow specified';
+      loading = false;
+      return;
+    }
+
     try {
       loading = true;
       error = null;
       
+      
       // Fetch record details, scores, and responses in parallel
       // Note: APIs now return native Buttermilk objects (Record and AgentTrace)
       const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
-        fetch(`/api/records/${encodeURIComponent(id)}?flow=tox`), // Add flow parameter
-        fetch(`/api/records/${encodeURIComponent(id)}/scores?flow=tox`),
-        fetch(`/api/records/${encodeURIComponent(id)}/responses?flow=tox`)
+        fetch(`/api/records/${encodeURIComponent(id)}?flow=${encodeURIComponent(currentFlow)}`),
+        fetch(`/api/records/${encodeURIComponent(id)}/scores?flow=${encodeURIComponent(currentFlow)}`),
+        fetch(`/api/records/${encodeURIComponent(id)}/responses?flow=${encodeURIComponent(currentFlow)}`)
       ]);
       
       // Check if all requests were successful
@@ -85,13 +101,16 @@
   }
 
   onMount(() => {
-    if (browser && recordId) {
-      fetchRecordData(recordId);
+    if (browser) {
+      initializeApp();
+      if (recordId && currentFlow) {
+        fetchRecordData(recordId);
+      }
     }
   });
 
-  // Watch for recordId changes
-  $: if (browser && recordId) {
+  // Watch for recordId or currentFlow changes
+  $: if (browser && recordId && currentFlow) {
     fetchRecordData(recordId);
   }
 </script>

@@ -1,7 +1,7 @@
 # BigQuery Records table configuration for tox dataset  
 type: bigquery
 project_id: ${oc.env:GOOGLE_CLOUD_PROJECT}
-dataset_id: buttermilk
+dataset_id: testing
 table_id: records
 dataset_name: tox
 split_type: train

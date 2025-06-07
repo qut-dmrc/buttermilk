@@ -100,12 +100,12 @@
               {#each records as record}
                 <li class="record-item">
                   <a 
-                    href="/score/{record.id}" 
+                    href="/score/{record.record_id}?flow={encodeURIComponent(currentFlow)}" 
                     class="record-link"
-                    class:active={$page.params.record_id === record.id}
+                    class:active={$page.params.record_id === record.record_id}
                   >
                     <div class="record-header">
-                      <span class="record-id">{record.id}</span>
+                      <span class="record-id">{record.record_id}</span>
                       <span class="record-name">{record.name}</span>
                     </div>
                     {#if record.summary_scores}

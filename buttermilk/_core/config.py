@@ -297,6 +297,28 @@ class DataSourceConfig(BaseModel):
         default_factory=dict,
         description="Database-specific connection parameters (e.g., for 'bq', 'chromadb').",
     )
+    # BigQuery-specific fields
+    project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID for BigQuery data sources."
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="BigQuery dataset ID."
+    )
+    table_id: str | None = Field(
+        default=None,
+        description="BigQuery table ID."
+    )
+    randomize: bool | None = Field(
+        default=None,
+        description="Whether to randomize BigQuery query results."
+    )
+    batch_size: int | None = Field(
+        default=None,
+        ge=1,
+        description="Batch size for BigQuery operations."
+    )
     embedding_model: str = Field(
         default="",
         description="Name or path of embedding model (for 'chromadb'/vector search).",
@@ -332,6 +354,70 @@ class DataSouce(DataSourceConfig):
 
     Refer to `DataSourceConfig` for detailed documentation.
     """
+
+
+class BigQueryConfig(BaseModel):
+    """Configuration for BigQuery-related operations.
+    
+    Provides default values for BigQuery operations including data loading,
+    table creation, and migration utilities.
+    
+    Attributes:
+        project_id (str | None): Google Cloud project ID. If None, will use
+            the default project from credentials.
+        dataset_id (str): BigQuery dataset ID. Defaults to "buttermilk".
+        table_id (str): BigQuery table ID. Defaults to "records".
+        randomize (bool): Whether to randomize query results. Defaults to True.
+        batch_size (int): Batch size for operations. Defaults to 1000.
+        auto_create_table (bool): Whether to auto-create tables if they don't exist.
+        clustering_fields (list[str]): Default clustering fields for new tables.
+    """
+
+    project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID. If None, uses default from credentials."
+    )
+    dataset_id: str = Field(
+        default="buttermilk",
+        description="BigQuery dataset ID."
+    )
+    table_id: str = Field(
+        default="records",
+        description="BigQuery table ID."
+    )
+    randomize: bool = Field(
+        default=True,
+        description="Whether to randomize query results."
+    )
+    batch_size: int = Field(
+        default=1000,
+        ge=1,
+        description="Batch size for operations."
+    )
+    auto_create_table: bool = Field(
+        default=True,
+        description="Whether to auto-create tables if they don't exist."
+    )
+    clustering_fields: list[str] = Field(
+        default=["record_id", "dataset_name"],
+        description="Default clustering fields for new tables."
+    )
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
+    
+    @model_validator(mode="after")
+    def set_project_id_from_env(self) -> "BigQueryConfig":
+        """Set project_id from environment if not already set."""
+        import os
+        if not self.project_id:
+            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        return self
 
 
 class ToolConfig(BaseModel):
@@ -771,11 +857,11 @@ class AgentVariants(AgentConfig):
             # Remove any variant keys that are explicitly set in params.parameters
             for key in params.parameters.keys():
                 filtered_variants.pop(key, None)
-                
+
         parallel_variant_combinations = expand_dict(clean_empty_values(filtered_variants)) if filtered_variants else [{}]
 
         # Only use explicitly defined tasks, not flow default parameters
-        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]    
+        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs

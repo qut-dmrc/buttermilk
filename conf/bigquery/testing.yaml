@@ -1,0 +1,9 @@
+project_id: ${oc.env:GOOGLE_CLOUD_PROJECT}
+dataset_id: testing
+table_id: records
+randomize: true
+batch_size: 1000
+auto_create_table: true
+clustering_fields:
+  - record_id
+  - dataset_name
