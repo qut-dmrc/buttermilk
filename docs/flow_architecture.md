@@ -2,6 +2,7 @@
 
 Dense technical reference for trans.yaml and tox.yaml flows in Buttermilk. For HASS researchers working with content moderation and bias evaluation.
 
+
 ## Flow Configurations
 
 ### Trans Flow (trans.yaml)
@@ -73,17 +74,3 @@ Agent (ABC) <- AgentConfig
 - Subclasses of Agent must implement a `_process()` method that expects AgentInput and returns AgentOutput
 - The invoke method is the normal interface point; it accepts an `AgentInput` and returns an `AgentTrace` that includes the `AgentOutput` and additional tracing information for full observability and logging. 
 - `Observer` Agents are not invoked directly, but have their own logic that is usually triggered in their `_listen` events.
-
-## Configuration Merge Order
-1. Flow defaults (`conf/flows/{flow}.yaml`)
-2. Agent defaults (`conf/agents/{agent}.yaml`) 
-3. Runtime parameters (CLI args, API requests)
-4. Session-specific overrides
-
-## Development Notes
-- Fresh orchestrator instance per flow run (no state leakage)
-- Session isolation via unique topic IDs
-- Async cleanup with timeout protection
-- Weave tracing for debugging/monitoring
-- Resource tracking for memory management
-- Each substantive data processing operation loggged to BigQuery (spy agent uploads all AgentTrace objects in groupchat)

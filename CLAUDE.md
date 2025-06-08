@@ -29,8 +29,87 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 - **Type checking**: Uses mypy (configured in pyproject.toml)
 - **Main CLI**: `uv run python buttermilk/runner/cli.py`
 
+## The BM singleton
+
+- All configuration is stored in composable YAML files in `conf/` and managed by Hydra.
+- At run time, a main BM singleton instance is created. This holds project-level configuration and provides a standard interface for MLOps tasks.
+
 ## Configuration Hints
 
 * To see the actual hydra config in use, use `-c job`, like: `uv run python -m buttermilk.runner.cli -c job +flow=tox +run=batch "+flows=[tox]" "run.mode=batch_run"`
 
+## Execution Path (API Default)
+
+1. **CLI Entry**: `cli.py` @hydra.main loads config from `conf/`
+2. **API Mode**: Creates FastAPI app via `create_fastapi_app(bm, flow_runner)`
+3. **FlowRunner**: Receives a RunRequest and then instantiates orchestrator using `OrchestratorFactory.create_orchestrator()`
+4. **AutogenOrchestrator**: Manages agent lifecycle and internal pub/sub communication via `SingleThreadedAgentRuntime`
+5. **Session Management**: `SessionManager` handles WebSocket connections and cleanup for frontend clients
+
+
+## Flow Configurations
+
+### Trans Flow (trans.yaml)
+```yaml
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+data: tja_train (journalism training dataset)
+agents: [judge, synth, differences]
+observers: [spy, owl, scorer, fetch, host/sequencer]
+criteria: trans (advocacy/journalism quality criteria)
+```
+
+### Tox Flow (tox.yaml)  
+```yaml
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+data: drag (toxicity dataset)
+agents: [judge, synth, differences] 
+observers: [owl, scorer, host/sequencer]
+criteria: hate (multiple toxicity criteria)
+```
+## Agent Class Hierarchy
+
+```
+Agent (ABC) <- AgentConfig
+├── LLM-based agents (judge, synth, differences)
+├── UIAgent <- Agent
+│   ├── CLIUserAgent (console interaction)
+│   └── WebSocketAgent (API interaction)
+├── FlowControl agents
+│   ├── HostAgent (conductor/sequencer role)
+│   ├── ExplorerAgent (adaptive flow control)
+│   └── LLMHostAgent (LLM-driven conductor)
+└── Observer agents (spy, owl, scorer, fetch)
+```
+
+## Host/UI Options
+
+### Host Agents (conductor role)
+- **host/sequencer**: Basic sequential host (default)
+- **host/explorer**: Adaptive exploration host  
+- **host/assistant**: LLM-driven assistant host
+
+### UI Options
+- **console**: CLIUserAgent for terminal interaction
+- **web**: WebSocket-based for browser/API clients
+- **batch**: No UI for automated processing
+
+## Component Flow
+
+1. **Orchestrator Setup**: `AutogenOrchestrator._setup()` registers agents with `SingleThreadedAgentRuntime`
+2. **Agent Registration**: Each agent becomes `AutogenAgentAdapter` wrapping Buttermilk `Agent`
+3. **Topic Subscription**: Agents subscribe to main topic (`{bm.name}-{job}-{uuid}`) and role topics
+4. **Message Flow**: Host agent sends `ConductorRequest` and `AgentInput`; other agents respond via internal pub/sub (managed by Autogen)
+5. **Session Cleanup**: `SessionManager` handles resource cleanup and timeout
+
+### Agent-based data processing
+
+- Agent is the key abstraction for processing data
+- Agents are stateful and can be configured to save data sent over internal Autogen pub/sub groupchat
+- Agents are explicitly invoked with a `AgentInput` object that provides parameters and data, often including a `Record` item
+- Subclasses of Agent must implement a `_process()` method that expects AgentInput and returns AgentOutput
+- The invoke method is the normal interface point; it accepts an `AgentInput` and returns an `AgentTrace` that includes the `AgentOutput` and additional tracing information for full observability and logging. 
+- `Observer` Agents are not invoked directly, but have their own logic that is usually triggered in their `_listen` events.
+
+## Development hints
 * When dumping pydantic objects, use pydantic's model_dump()
+

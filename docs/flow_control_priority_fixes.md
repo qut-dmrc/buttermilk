@@ -188,7 +188,6 @@ def validate_transition(self, session: FlowRunContext, new_status: SessionStatus
 - Session expiry warnings delivered 5 minutes before timeout
 
 ## Notes for Developers
-- All changes should maintain backward compatibility
 - Add comprehensive logging for debugging
 - Update documentation for new behaviors
 - Consider feature flags for gradual rollout

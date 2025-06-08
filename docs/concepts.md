@@ -28,21 +28,6 @@ The structure of a Flow can be simple, like a linear chain of operations, or mor
 3.  Analyze the sentiment of each post using an AI language model (another **Agent**).
 4.  Store the posts along with their sentiment scores in a database.
 
-## Jobs
-
-**What are Jobs?**
-
-A **Job** is the most fundamental unit of work in Buttermilk. It represents a single, atomic step within a Flow. Each Job contains all the information necessary for an **Agent** to perform its task on a specific piece of data.
-
-**What information do Jobs contain?**
-
-A Job typically includes:
-*   A reference to the **Record** (see below) being processed.
-*   The specific task to be performed (e.g., "classify text," "extract entities," "translate text").
-*   Configuration parameters for the **Agent** that will execute the Job.
-*   Information for tracing and logging, so you can understand what happened during the Job's execution.
-
-Because Jobs are self-contained, they can be executed independently, retried if they fail, and distributed across different computing resources if needed. Saving a Job's details (input, configuration, output) provides a complete audit trail for that specific processing step.
 
 ## Records
 
@@ -139,7 +124,3 @@ Buttermilk is designed to be extensible. While it provides core components, rese
 *   **Custom Flows**: You can combine existing Agents in novel ways to create new Flows tailored to your research questions.
 
 This extensibility allows Buttermilk to adapt to the diverse and evolving needs of HASS research.
-
----
-
-This document provides a high-level overview. As you start using Buttermilk, you'll see these concepts in action. Refer to specific tutorials and examples for more hands-on guidance.
