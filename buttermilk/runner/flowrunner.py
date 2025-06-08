@@ -35,7 +35,6 @@ from buttermilk._core import (
     logger,  # noqa
 )
 from buttermilk._core.agent import ErrorEvent
-from buttermilk._core.config import SaveInfo
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -689,7 +688,6 @@ class FlowRunner(BaseModel):
 
     flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
 
-    save: SaveInfo
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
     ui: str = Field(default="console")

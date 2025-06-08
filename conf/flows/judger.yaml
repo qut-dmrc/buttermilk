@@ -1,7 +1,6 @@
 # @package run.flows.judger
 
 defaults:
-  - /data: tja_train 
   - _self_ 
   - /agents:
     - fetch
@@ -13,8 +12,6 @@ defaults:
     - owl
     - scorer
     - host/selector
-  - criteria@parameters.criteria: trans
   
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-name: "TJA"
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.

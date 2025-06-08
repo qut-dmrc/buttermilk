@@ -415,8 +415,7 @@ class BigQueryConfig(BaseModel):
     def set_project_id_from_env(self) -> "BigQueryConfig":
         """Set project_id from environment if not already set."""
         import os
-        if not self.project_id:
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        self.project_id = self.project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
         return self
 
 

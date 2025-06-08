@@ -9,7 +9,6 @@ job: development
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
-  save: ${save}
   mode: console
   ui: console
   human_in_loop: true

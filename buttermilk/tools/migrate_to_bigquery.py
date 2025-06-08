@@ -1,23 +1,25 @@
 """Migration utility to convert JSONL datasets to BigQuery Records tables (DEPRECATED).
 
 This utility is deprecated and maintained for backward compatibility only.
-Use buttermilk.storage classes directly for new implementations.
+Use buttermilk.storage classes via the BM singleton for new implementations.
 
 Example migration:
     # Old way (deprecated)
     from buttermilk.tools.migrate_to_bigquery import DatasetMigrator
     migrator = DatasetMigrator(project_id="my-project")
     
-    # New way (recommended)
-    from buttermilk.storage import StorageConfig, BigQueryStorage, FileStorage
+    # New way (recommended) - use BM factory methods
+    from buttermilk._core.dmrc import get_bm
+    from buttermilk.storage import StorageConfig
+    
+    bm = get_bm()
     
     # Source storage
     source_config = StorageConfig(type="file", path="data.jsonl")
-    source = FileStorage(source_config, bm)
+    source = bm.get_storage(source_config)
     
-    # Target storage  
-    target_config = StorageConfig(type="bigquery", dataset_name="my_dataset")
-    target = BigQueryStorage(target_config, bm)
+    # Target storage - use convenience method
+    target = bm.get_bigquery_storage("my_dataset")
     
     # Migrate
     records = list(source)

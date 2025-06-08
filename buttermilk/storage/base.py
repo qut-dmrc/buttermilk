@@ -8,7 +8,7 @@ from buttermilk._core.types import Record
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
-    from .config import StorageConfig
+    from .._core.storage_config import StorageConfig
 
 
 class Storage(ABC):

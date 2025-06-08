@@ -10,8 +10,9 @@ defaults:
   - /agents@observers:
       - owl
       - scorer
+      - spy
       - host/sequencer
-  - criteria@parameters.criteria: hate
+  - /data@storage: tox_bigquery
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "tox"
@@ -22,3 +23,4 @@ parameters:
     - criteria_ordinary
     - criteria_gelber
     - criteria_hatefb_factorised
+  save: {..parameters.save}

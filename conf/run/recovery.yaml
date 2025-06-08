@@ -13,4 +13,3 @@ run:
   mode: recovery
   ui: console
   backup_dir: ${oc.env:BM_BACKUP_DIR,~/.buttermilk/backups}
-  save: ${save}

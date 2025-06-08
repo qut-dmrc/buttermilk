@@ -104,6 +104,7 @@ Agent (ABC) <- AgentConfig
 ### Agent-based data processing
 
 - Agent is the key abstraction for processing data
+- Agents are strictly _independent_ from flows: mix and match as needed.
 - Agents are stateful and can be configured to save data sent over internal Autogen pub/sub groupchat
 - Agents are explicitly invoked with a `AgentInput` object that provides parameters and data, often including a `Record` item
 - Subclasses of Agent must implement a `_process()` method that expects AgentInput and returns AgentOutput

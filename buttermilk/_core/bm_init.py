@@ -47,7 +47,7 @@ from buttermilk._core.log import ContextFilter, logger  # Centralized logger ins
 from buttermilk._core.query import QueryRunner  # For running SQL queries
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
-from buttermilk.storage.config import StorageConfig, BigQueryDefaults  # Unified storage config
+from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults  # Unified storage config
 
 # Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -219,10 +219,6 @@ class BM(SessionInfo):
     datasets: dict[str, DataSourceConfig] = Field(
         default_factory=dict,
         description="Dictionary of predefined data source configurations.",
-    )
-    storage_defaults: StorageConfig = Field(
-        default_factory=lambda: BigQueryDefaults().to_storage_config(),
-        description="Default storage configuration for unified storage operations.",
     )
     save_dir_base: str = Field(
         default_factory=mkdtemp,  # Creates a new temporary directory by default
@@ -806,7 +802,7 @@ class BM(SessionInfo):
             save_dir=self.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )
-    
+
     def get_storage(self, config: StorageConfig | None = None) -> Any:
         """Factory method to create unified storage instances.
         
@@ -823,24 +819,24 @@ class BM(SessionInfo):
             ValueError: If storage type is not supported
         """
         from buttermilk.storage import BigQueryStorage, FileStorage
-        
+
         # Use defaults if no config provided
-        effective_config = config or self.storage_defaults
-        
+        effective_config = config 
+
         # Merge with defaults to ensure all fields are populated
-        if config and config != self.storage_defaults:
-            effective_config = config.merge_defaults(self.storage_defaults)
-        
+        if config and config != self.storage:
+            effective_config = config.merge_defaults(self.storage)
+
         # Create appropriate storage instance based on type
         storage_type = effective_config.type
-        
+
         if storage_type == "bigquery":
             return BigQueryStorage(effective_config, self)
         elif storage_type in ["file", "local", "gcs", "s3"]:
             return FileStorage(effective_config, self)
         else:
             raise ValueError(f"Unsupported storage type: {storage_type}")
-    
+
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
         """Convenience method to create BigQuery storage with dataset name.
         
@@ -852,7 +848,7 @@ class BM(SessionInfo):
             BigQueryStorage instance
         """
         # Exclude computed fields to avoid validation errors
-        config_data = self.storage_defaults.model_dump(exclude={"full_table_id", "table_ref"})
+        config_data = self.storage.model_dump(exclude={"full_table_id", "table_ref"})
         config_data.update({"dataset_name": dataset_name, **kwargs})
         config = StorageConfig(**config_data)
         return self.get_storage(config)

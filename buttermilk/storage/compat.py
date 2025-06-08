@@ -8,7 +8,7 @@ import warnings
 from typing import TYPE_CHECKING, Iterator, Any
 
 from buttermilk._core.types import Record
-from .config import StorageConfig
+from .._core.storage_config import StorageConfig
 from .bigquery import BigQueryStorage
 
 if TYPE_CHECKING:

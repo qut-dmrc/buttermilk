@@ -2,7 +2,6 @@
 # Batch execution configuration
 defaults:
   - /local
-  - override /llms: full
   - _self_
   
 
@@ -14,5 +13,4 @@ run:
   mode: batch
   ui: console
   human_in_loop: false
-  save: ${save}
   flows: {}

@@ -64,7 +64,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "run=api",
+        "flows=[trans]",
         "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",

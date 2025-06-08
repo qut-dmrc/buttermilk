@@ -21,7 +21,7 @@ an Autogen-based multi-agent conversation).
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, Self, TYPE_CHECKING
 
 import shortuuid  # For generating unique IDs
 import weave  # For tracing capabilities
@@ -51,13 +51,11 @@ from buttermilk._core.types import (
     RunRequest,
 )
 from buttermilk.data.loaders import DataLoader, create_data_loader  # New data loading system
+from buttermilk._core.storage_config import StorageConfig
+
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
-
-# Re-importing for clarity, though already imported above.
-# from .config import AgentVariants, DataSourceConfig, SaveInfo
-# from .types import Record
 
 
 class OrchestratorProtocol(BaseModel):
@@ -113,6 +111,10 @@ class OrchestratorProtocol(BaseModel):
     description: str = Field(
         default="",
         description="Short description explaining the purpose and goals of this flow.",
+    )
+    storage: StorageConfig | None = Field(
+        default=None,  # Default to None, can be set to a specific StorageConfig instance
+        description="Default storage configuration for unified storage operations.",
     )
     save: SaveInfo | None = Field(
         default=None,

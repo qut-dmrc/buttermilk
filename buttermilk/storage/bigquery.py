@@ -12,7 +12,7 @@ from .base import Storage, StorageClient, StorageError
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
-    from .config import StorageConfig
+    from .._core.storage_config import StorageConfig
 
 
 class BigQueryStorage(Storage, StorageClient):

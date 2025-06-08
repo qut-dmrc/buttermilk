@@ -1,7 +1,4 @@
-# @package run.flows.trans
-# COMMENTED OUT # @package _global_
 defaults:
-  - /data: tja_train 
   - _self_ 
   - /agents:
     - judge
@@ -12,11 +9,15 @@ defaults:
     - owl
     - scorer
     - fetch
-    - host/sequencer
+    # - host/sequencer
   - criteria@parameters.criteria: trans
+  - /data@storage: tox_bigquery
   
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "TJA"
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
-  human_in_loop: ${run.human_in_loop} 
+  human_in_loop: ${run.human_in_loop}
+  criteria: []
+observers: {}
+agents: {}

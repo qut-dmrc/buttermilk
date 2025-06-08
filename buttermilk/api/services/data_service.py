@@ -218,9 +218,9 @@ class DataService:
             bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
-            
+
             # Use BM instance's storage defaults for dataset configuration
-            dataset_id = bm_instance.storage_defaults.dataset_id
+            dataset_id = bm_instance.save.dataset_id
 
             # Build the query for scores
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -329,9 +329,9 @@ class DataService:
             bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
-            
+
             # Use BM instance's storage defaults for dataset configuration
-            dataset_id = bm_instance.storage_defaults.dataset_id
+            dataset_id = bm_instance.save.dataset_id
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"
