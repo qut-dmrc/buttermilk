@@ -61,7 +61,7 @@ def main(conf: DictConfig) -> None:
     # Initialize the global Buttermilk instance (bm) with its configuration section
     if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
         raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-    bm_instance = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
@@ -70,7 +70,7 @@ def main(conf: DictConfig) -> None:
 
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
-    set_bm(bm_instance)  # Set the Buttermilk instance using the singleton pattern
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -127,7 +127,7 @@ def main(conf: DictConfig) -> None:
             # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
             # These are typically passed to the app creation function.
             fastapi_app = create_fastapi_app(
-                bm=bm_instance,  # Pass the global BM instance
+                bm=bm,  # Pass the global BM instance
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
@@ -178,7 +178,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Starting Slackbot mode...")
 
             # Retrieve Slack tokens securely from bm.credentials
-            slack_creds = bm_instance.credentials
+            slack_creds = bm.credentials
             if not isinstance(slack_creds, dict):
                 raise TypeError(f"Expected bm.credentials to be a dict, got {type(slack_creds)}")
 

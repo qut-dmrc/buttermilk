@@ -201,13 +201,12 @@ class DataService:
             return None
 
     @staticmethod
-    async def get_scores_for_record(record_id: str, flow_name: str, bm_instance, session_id: str | None = None) -> list[AgentTrace]:
+    async def get_scores_for_record(record_id: str, flow_name: str, session_id: str | None = None) -> list[AgentTrace]:
         """Get toxicity scores for a specific record as AgentTrace objects
 
         Args:
             record_id: The record ID
             flow_name: The flow name for table partitioning
-            bm_instance: Buttermilk instance for BigQuery access
             session_id: Optional session ID for filtering
 
         Returns:
@@ -215,6 +214,8 @@ class DataService:
         """
         try:
             # Get BigQuery client from BM instance
+            from buttermilk._core.dmrc import get_bm
+            bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
             
@@ -310,13 +311,12 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_responses_for_record(record_id: str, flow_name: str, bm_instance, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
+    async def get_responses_for_record(record_id: str, flow_name: str, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
         """Get detailed AI responses for a specific record as AgentTrace objects
 
         Args:
             record_id: The record ID
             flow_name: The flow name for table partitioning
-            bm_instance: Buttermilk instance for BigQuery access
             session_id: Optional session ID for filtering
             include_reasoning: Whether to include detailed reasoning (preserved for API compatibility)
 
@@ -325,6 +325,8 @@ class DataService:
         """
         try:
             # Get BigQuery client from BM instance
+            from buttermilk._core.dmrc import get_bm
+            bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
             

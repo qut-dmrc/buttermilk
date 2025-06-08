@@ -24,12 +24,6 @@ async def get_templates(request: Request) -> Jinja2Templates:
     return templates
 
 
-async def get_bm_instance(request: Request):
-    bm_instance = getattr(request.app.state, "bm", None)
-    if bm_instance is None:
-        raise RuntimeError("BM instance not found in app.state.bm")
-    return bm_instance
-
 
 async def get_flows(request: Request) -> FlowRunner:
     from buttermilk.runner.flowrunner import FlowRunner as FlowRunner_object
@@ -249,7 +243,6 @@ async def get_record_scores_endpoint(
     flow: str = Query(..., description="The flow name for data context"),
     session_id: str = Query(None, description="Optional session ID for filtering"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
-    bm_instance: Annotated[Any, Depends(get_bm_instance)] = None,
 ):
     """Get toxicity scores for a specific record"""
     logger.debug(f"Request received for /api/records/{record_id}/scores with flow: {flow}, session: {session_id}")
@@ -264,7 +257,7 @@ async def get_record_scores_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_scores_for_record(record_id, flow, bm_instance, session_id)
+        agent_traces = await DataService.get_scores_for_record(record_id, flow, session_id)
         
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         scores_data = {
@@ -286,7 +279,6 @@ async def get_record_responses_endpoint(
     session_id: str = Query(None, description="Optional session ID for filtering"),
     include_reasoning: bool = Query(True, description="Include detailed reasoning"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
-    bm_instance: Annotated[Any, Depends(get_bm_instance)] = None,
 ):
     """Get detailed AI responses for a specific record"""
     logger.debug(f"Request received for /api/records/{record_id}/responses with flow: {flow}, session: {session_id}")
@@ -301,7 +293,7 @@ async def get_record_responses_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_responses_for_record(record_id, flow, bm_instance, session_id, include_reasoning)
+        agent_traces = await DataService.get_responses_for_record(record_id, flow, session_id, include_reasoning)
         
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         responses_data = {

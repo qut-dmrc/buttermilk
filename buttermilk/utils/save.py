@@ -117,8 +117,8 @@ def save(
         final_save_dir_str = save_dir
     else:  # save_dir is empty or not a path type
         try:
-            bm_instance = get_bm()
-            final_save_dir_str = bm_instance.save_dir
+            bm = get_bm()
+            final_save_dir_str = bm.save_dir
             if not final_save_dir_str:  # If bm.save_dir is also None or empty
                 logger.warning("`save_dir` not provided and `bm.save_dir` is not set. Saving might default to temporary or current dir.")
         except Exception as e:
