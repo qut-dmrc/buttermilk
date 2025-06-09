@@ -1,15 +1,14 @@
 # @package _global_
 defaults:
   - /local
-  - /flows@run.flows:
-    - trans
+  # Don't hardcode flows - let user specify via command line
   
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: api
   ui: web
   human_in_loop: true
-  flows: {}
+  flows: {}  # Will be populated by command line args
 
   name: bm_api
   job: flows

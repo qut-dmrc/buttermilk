@@ -1,0 +1,31 @@
+# Trans Flow - Clean version with hierarchical composition
+# This flow uses Hydra's composition to pull in reusable components
+
+defaults:
+  - _self_
+  # Agents are defined separately and reused across flows
+  - /agents@agents.judge: judge
+  - /agents@agents.synth: synth  
+  - /agents@agents.differences: differences
+  # Observer agents
+  - /agents@observers.spy: spy
+  - /agents@observers.owl: owl
+  - /agents@observers.scorer: scorer
+  - /agents@observers.fetch: fetch
+  # Criteria for this specific flow
+  - /flows/criteria@parameters.criteria: trans
+  # Data source configuration
+  - /data@storage: tox_bigquery
+
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "trans_clean"
+description: "Journalism quality assessment for trans issues reporting"
+
+parameters:
+  human_in_loop: ${run.human_in_loop}
+  criteria: []  # Will be populated by criteria default above
+
+# These will be populated by the defaults
+agents: {}
+observers: {}
