@@ -2,37 +2,61 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from hydra import compose, initialize
+from omegaconf import OmegaConf
 
+from buttermilk import BM
 from buttermilk.api.flow import RunRequest, create_app
+from buttermilk.runner.flowrunner import FlowRunner
 
 
 @pytest.fixture(scope="session")
 def client():
-    app = create_app()
-    return TestClient(app)
+    # Initialize with minimal configuration for testing
+    with initialize(config_path="../../conf", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["run=api_clean"])
+        
+        # Create BM instance
+        resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+        bm = BM(**resolved_cfg_dict["bm"])
+        
+        # Create FlowRunner instance  
+        flows = FlowRunner.model_validate(cfg.run)
+        
+        # Set BM singleton
+        from buttermilk._core.dmrc import set_bm
+        set_bm(bm)
+        
+        app = create_app(bm=bm, flows=flows)
+        return TestClient(app)
 
 
 @pytest.fixture
 def flow_request_data():
-    req_cfg = {
+    # Return raw dict without RunRequest serialization since ui_type is excluded
+    return {
+        "flow": "test_minimal",
         "model": "haiku",
-        "template": "judge",
+        "template": "judge", 
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
         "text": "Sample text",
         "uri": None,
         "media_b64": None,
     }
-    req = RunRequest(**req_cfg)
-    return req.model_dump()
 
 
 def test_api_request_simple(
     flow_request_data: dict,
     client,
 ):
-    resolved_req_cfg = {k: v() if callable(v) else v for k, v in flow_request_data.items()}
-    flow_request = RunRequest(**resolved_req_cfg)
-    response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
+    # Send data directly as dict to API
+    response = client.post("/flow/simple", json=flow_request_data)
+    
+    # Debug the response if it fails
+    if response.status_code != 200:
+        print(f"Response status: {response.status_code}")
+        print(f"Response body: {response.text}")
+    
     assert response.status_code == 200
     json_response = response.json()
     assert "outputs" in json_response
