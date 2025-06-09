@@ -1,0 +1,18 @@
+scorer:
+  role: SCORERS
+  name_components: ["📊", "role", "parameters.model","unique_identifier"]
+  agent_obj: LLMScorer
+  num_runs: 1
+  description: Checks and scores answers against our expected ground truth.
+  variants:
+    model: ${llms.judgers}
+  parameters:
+    template: score
+  inputs:
+    model: "*.agent_info.parameters.model|[0]"
+    criteria: "*.agent_info.parameters.criteria|[0]"
+    template: "*.agent_info.parameters.template|[0]"
+    records: "*.inputs.records[]"
+    expected: "*.inputs.records[]||*.inputs.records[]|[0].ground_truth"
+    answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id }"
+    

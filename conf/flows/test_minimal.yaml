@@ -1,0 +1,14 @@
+# Minimal test flow to verify new configuration system works
+
+defaults:
+  - _self_
+
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "test_minimal"
+description: "Minimal flow for testing configuration system"
+
+parameters:
+  human_in_loop: false
+
+agents: {}
+observers: {}

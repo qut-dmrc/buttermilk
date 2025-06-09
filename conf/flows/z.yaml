@@ -2,10 +2,8 @@
 defaults:
   - _self_
   - /data: zot
-  - /agents:
-    - ragzot
-  - /agents@observers:
-    - host/ra
+  - /agents@agents.ragzot: ragzot
+  - /agents@observers.host_ra: host/ra
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 description: Research assistant

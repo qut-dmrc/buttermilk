@@ -1,0 +1,11 @@
+# @package _global_
+# Clean API configuration without hardcoded flows
+
+run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
+  mode: api
+  ui: web
+  human_in_loop: true
+  flows: {}
+  name: bm_api
+  job: flows

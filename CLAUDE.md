@@ -37,6 +37,7 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 ## Configuration Hints
 
 * To see the actual hydra config in use, use `-c job`, like: `uv run python -m buttermilk.runner.cli -c job +flow=tox +run=batch "+flows=[tox]" "run.mode=batch_run"`
+* Use `uv run python -m buttermilk.runner.cli -c job` to check configurations.
 
 ## Execution Path (API Default)
 
@@ -113,4 +114,3 @@ Agent (ABC) <- AgentConfig
 
 ## Development hints
 * When dumping pydantic objects, use pydantic's model_dump()
-

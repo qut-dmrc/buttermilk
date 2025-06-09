@@ -1,0 +1,13 @@
+analyst:
+  role: analyst
+  name: "🧑‍💻 Analyst"
+  description: General purpose analysts. This is the group you want to talk to by default or if you have specific questions.
+  agent_obj: LLMAgent
+  num_runs: 1
+  parameters:
+    template: analyst
+  variants:
+    model: ${llms.general}
+  inputs:
+    context: context
+    prompt: user.content

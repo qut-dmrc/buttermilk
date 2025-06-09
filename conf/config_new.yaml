@@ -1,0 +1,30 @@
+# Main Buttermilk configuration using improved hierarchy
+# This demonstrates the new composable approach
+
+defaults:
+  - _self_
+  - infrastructure: local_dev  # Infrastructure is separate and reusable
+  - run: api                   # Execution mode configuration
+  - llms@bm.llms: lite        # LLM configuration
+  - data@bm.data: []          # Data configurations (can be multiple)
+
+# Hydra search path configuration for external users
+hydra:
+  searchpath:
+    - pkg://buttermilk.conf                    # Core configs
+    - file://${oc.env:BUTTERMILK_CONFIG_DIR}   # User config directory
+    - file://./conf                            # Project-specific configs
+
+bm:
+  _target_: buttermilk._core.bm_init.BM
+  name: ${run.name}
+  job: ${run.job}
+  
+  # Infrastructure will be populated from infrastructure/* configs
+  infrastructure: {}
+  
+  # LLM configurations will be populated from llms/* configs  
+  llms: {}
+  
+  # Data configurations will be populated from data/* configs
+  data: {}

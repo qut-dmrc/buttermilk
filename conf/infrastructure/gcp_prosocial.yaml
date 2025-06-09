@@ -1,0 +1,45 @@
+# @package bm.infrastructure
+# GCP infrastructure configuration for prosocial project
+
+clouds:
+  - type: gcp
+    project_id: prosocial-443205
+    quota_project_id: prosocial-443205
+    region: us-central1
+    location: us-central1
+    storage_bucket: prosocial-dev
+    bigquery_dataset: buttermilk
+    
+  - type: vertex
+    project_id: prosocial-443205
+    region: us-central1
+    location: us-central1
+
+secret_provider:
+  type: gcp
+  project_id: prosocial-443205
+  models_secret: dev__llm__connections
+  credentials_secret: dev__shared_credentials
+
+logger_cfg:
+  type: gcp
+  project_id: prosocial-443205
+  location: us-central1
+  verbose: false
+
+pubsub:
+  type: gcp
+  project_id: prosocial-443205
+  jobs_subscription: jobs-sub
+  status_subscription: flow-sub
+  status_topic: flow
+  jobs_topic: jobs
+
+run_info:
+  platform: local
+  flow_api: http://localhost:8000/flow/
+  save_dir_base: gs://prosocial-dev/runs/
+
+tracing:
+  enabled: true
+  provider: weave

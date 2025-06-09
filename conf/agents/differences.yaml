@@ -1,0 +1,12 @@
+differentiator:
+  role: DIFF
+  name_components: ["📊", "role", "model", "criteria", "unique_identifier"]
+  agent_obj: Differentiator
+  num_runs: 1
+  description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
+  variants:
+    model: ${llms.general}
+  parameters:
+    template: differences
+  inputs:
+    answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id }"

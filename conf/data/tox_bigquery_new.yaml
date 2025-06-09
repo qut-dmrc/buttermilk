@@ -1,0 +1,19 @@
+# Toxicity dataset with BigQuery storage (new structure)
+
+defaults:
+  - /storage: bigquery_default
+
+# Override storage template with dataset-specific values
+dataset_id: testing
+table_id: records
+dataset_name: tox
+split_type: train
+
+# Migration source (when available)
+source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
+
+# Override default clustering for this dataset
+clustering_fields:
+  - record_id
+  - dataset_name
+  - toxicity_label

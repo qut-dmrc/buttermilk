@@ -3,15 +3,13 @@
 defaults:
   - /data: drag
   - _self_
-  - /agents:
-      - judge
-      - synth
-      - differences
-  - /agents@observers:
-      - owl
-      - scorer
-      - spy
-      - host/sequencer
+  - /agents@agents.judge: judge
+  - /agents@agents.synth: synth
+  - /agents@agents.differences: differences
+  - /agents@observers.owl: owl
+  - /agents@observers.scorer: scorer
+  - /agents@observers.spy: spy
+  - /agents@observers.host_sequencer: host/sequencer
   - /data@storage: tox_bigquery
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
