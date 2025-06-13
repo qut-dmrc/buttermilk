@@ -1,4 +1,3 @@
-# @package _global_
 # Batch execution configuration
 defaults:
   - /local
@@ -6,8 +5,3 @@ defaults:
   # ... other defaults
 
 name: bm_api
-job: flows
-run:
-  mode: notebook
-  ui: notebook
-  human_in_loop: true

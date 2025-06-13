@@ -1,7 +1,6 @@
 defaults:
   - _self_
   - local
-  - run: api
   - llms@bm.llms: lite
   - data@bm.data: []
 

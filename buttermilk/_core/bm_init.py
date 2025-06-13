@@ -820,20 +820,13 @@ class BM(SessionInfo):
         """
         from buttermilk.storage import BigQueryStorage, FileStorage
 
-        # Use defaults if no config provided
-        effective_config = config 
-
-        # Merge with defaults to ensure all fields are populated
-        if config and config != self.storage:
-            effective_config = config.merge_defaults(self.storage)
-
         # Create appropriate storage instance based on type
-        storage_type = effective_config.type
+        storage_type = config.type
 
         if storage_type == "bigquery":
-            return BigQueryStorage(effective_config, self)
+            return BigQueryStorage(config, self)
         elif storage_type in ["file", "local", "gcs", "s3"]:
-            return FileStorage(effective_config, self)
+            return FileStorage(config, self)
         else:
             raise ValueError(f"Unsupported storage type: {storage_type}")
 
@@ -848,7 +841,7 @@ class BM(SessionInfo):
             BigQueryStorage instance
         """
         # Exclude computed fields to avoid validation errors
-        config_data = self.storage.model_dump(exclude={"full_table_id", "table_ref"})
-        config_data.update({"dataset_name": dataset_name, **kwargs})
+        # config_data = self.storage.model_dump(exclude={"full_table_id", "table_ref"})
+        config_data = {"dataset_name": dataset_name, **kwargs}
         config = StorageConfig(**config_data)
         return self.get_storage(config)

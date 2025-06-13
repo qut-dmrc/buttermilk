@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
+from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from .base import Storage, StorageError
@@ -31,7 +32,7 @@ class FileStorage(Storage):
         if not config.path:
             raise ValueError("File storage requires a path")
         
-        self.path = Path(config.path)
+        self.path = AnyPath(config.path)
     
     def __iter__(self) -> Iterator[Record]:
         """Iterate over records from file.

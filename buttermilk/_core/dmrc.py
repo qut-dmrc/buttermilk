@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from .bm_init import BM
@@ -13,7 +12,7 @@ _bm_instance: BM = None  # Private storage  # no-qa
 def get_bm() -> BM:
     """Return the singleton BM instance."""
     if _bm_instance is None:
-        raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")
+        raise RuntimeError("BM singleton not initialized. Make sure CLI or nb.init() has been run.")
     return _bm_instance
 
 
