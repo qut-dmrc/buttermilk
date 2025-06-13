@@ -62,16 +62,16 @@ def main(conf: DictConfig) -> None:
     if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
         raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
     bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    # Set the singleton BM instance
+    from buttermilk._core.dmrc import set_bm
+
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
         raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
     flow_runner.flows = conf.flows
-
-    # Set the singleton BM instance
-    from buttermilk._core.dmrc import set_bm
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:

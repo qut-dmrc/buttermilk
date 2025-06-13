@@ -68,7 +68,8 @@ class OrchestratorProtocol(BaseModel):
 
     Attributes:
         orchestrator (str): The name or identifier of the orchestrator object/class
-            that should be used to execute this flow. This is a mandatory field.
+            that should be used to execute this flow. This is mandatory for an 
+            unconfigured object but overwritten by instantiated subclasses.
         name (str): A human-friendly name for this specific flow configuration.
             Useful for logging and identification.
         description (str): A brief description explaining the purpose and goals
@@ -100,8 +101,8 @@ class OrchestratorProtocol(BaseModel):
 
     """
 
-    orchestrator: str = Field(
-        ...,  # Mandatory field
+    orchestrator: str|None = Field(
+        default=None,
         description="Name or identifier of the orchestrator object/class to use for this flow.",
     )
     name: str = Field(

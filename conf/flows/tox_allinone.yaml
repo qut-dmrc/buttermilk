@@ -1,98 +1,98 @@
 # Tox Flow - All-in-one configuration
 # This flow defines everything in a single file without using defaults
+tox:
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  description: "Toxicity assessment with all configuration in one file"
 
-orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-description: "Toxicity assessment with all configuration in one file"
-
-# Data configuration embedded directly
-storage:
-  type: bigquery
-  dataset_id: testing
-  table_id: records
-  dataset_name: tox
-  split_type: train
-  source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
-  clustering_fields:
-    - record_id
-    - dataset_name
-
-# Parameters defined inline
-parameters:
-  human_in_loop: true
-  criteria:
-    - criteria_ordinary
-    - criteria_gelber
-    - criteria_hatefb_factorised
-  save:
+  # Data configuration embedded directly
+  storage:
     type: bigquery
     dataset_id: testing
-    table_id: flows
+    table_id: records
     dataset_name: tox
+    split_type: train
+    # source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
+    clustering_fields:
+      - record_id
+      - dataset_name
 
-# Agents defined inline (referencing agent classes)
-agents:
-  judge:
-    role: judge
-    description: "Content assessment expert"
-    agent_obj: Judge
-    name_components: ["⚖️", "role", "model", "criteria", "unique_identifier"]
-    parameters:
-      template: judge
-    variants:
-      model: ["gemini25flash", "o4mini"]
-      criteria: ${parameters.criteria}
-      
-  synth:
-    role: synthesiser
-    description: "Synthesis of judgments"
-    agent_obj: LLMAgent
-    name: "🧪 Synthesiser"
-    parameters:
-      template: synth
-    variants:
-      model: ["gemini25flash", "o4mini"]
-      
-  differences:
-    role: differences
-    description: "Identify differences between judgments"
-    agent_obj: DifferencesAgent
-    name: "🔍 Differences"
-    parameters:
-      template: differences
-    variants:
-      model: ["gemini2flashlite", "gpt41mini"]
+  # Parameters defined inline
+  parameters:
+    human_in_loop: true
+    criteria:
+      - criteria_ordinary
+      - criteria_gelber
+      - criteria_hatefb_factorised
+    save:
+      type: bigquery
+      dataset_id: testing
+      table_id: flows
+      dataset_name: tox
 
-# Observer agents defined inline
-observers:
-  spy:
-    name: "🕵️spy"
-    description: "Log agent outputs to storage"
-    role: spy
-    agent_obj: SpyAgent
-    
-  owl:
-    role: OWLS
-    name: "🦉 Owl"
-    description: "Observer that speaks up when needed"
-    agent_obj: LLMAgent
-    parameters:
-      template: owl
-    variants:
-      model: ["gemini2flashlite", "gpt41mini", "o4mini"]
+  # Agents defined inline (referencing agent classes)
+  agents:
+    judge:
+      role: judge
+      description: "Content assessment expert"
+      agent_obj: Judge
+      name_components: ["⚖️", "role", "model", "criteria", "unique_identifier"]
+      parameters:
+        template: judge
+      variants:
+        model: ["gemini25flash", "o4mini"]
+        criteria: ${....parameters.criteria}
+        
+    synth:
+      role: synthesiser
+      description: "Synthesis of judgments"
+      agent_obj: LLMAgent
+      name: "🧪 Synthesiser"
+      parameters:
+        template: synth
+      variants:
+        model: ["gemini25flash", "o4mini"]
+        
+    differences:
+      role: differences
+      description: "Identify differences between judgments"
+      agent_obj: DifferencesAgent
+      name: "🔍 Differences"
+      parameters:
+        template: differences
+      variants:
+        model: ["gemini2flashlite", "gpt41mini"]
+
+  # Observer agents defined inline
+  observers:
+    spy:
+      name: "🕵️spy"
+      description: "Log agent outputs to storage"
+      role: spy
+      agent_obj: SpyAgent
       
-  scorer:
-    role: scorer
-    name: "📊 Scorer"
-    description: "Score and evaluate outputs"
-    agent_obj: ScorerAgent
-    parameters:
-      template: score
-    variants:
-      model: ["gemini25flash", "o4mini"]
-      
-  host_sequencer:
-    role: host
-    name: "🎭 Host"
-    description: "Sequential flow conductor"
-    agent_obj: HostAgent
-    agent_class: host/sequencer
+    owl:
+      role: OWLS
+      name: "🦉 Owl"
+      description: "Observer that speaks up when needed"
+      agent_obj: LLMAgent
+      parameters:
+        template: owl
+      variants:
+        model: ["gemini2flashlite", "gpt41mini", "o4mini"]
+        
+    scorer:
+      role: scorer
+      name: "📊 Scorer"
+      description: "Score and evaluate outputs"
+      agent_obj: ScorerAgent
+      parameters:
+        template: score
+      variants:
+        model: ["gemini25flash", "o4mini"]
+        
+    host_sequencer:
+      role: host
+      name: "🎭 Host"
+      description: "Sequential flow conductor"
+      agent_obj: HostAgent
+      agent_class: host/sequencer

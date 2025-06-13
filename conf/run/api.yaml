@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - /local
-  # Don't hardcode flows - let user specify via command line
+
   
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner

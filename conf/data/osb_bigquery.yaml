@@ -8,8 +8,8 @@ randomize: true
 batch_size: 1000
 
 # Migration from existing JSONL source
-source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
+# source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
 
 # Table creation settings
-auto_create_table: true
+# auto_create_table: true
 clustering_fields: ["record_id", "dataset_name"]
