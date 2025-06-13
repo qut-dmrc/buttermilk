@@ -1,6 +1,7 @@
 defaults:
   - local
-  - flows: test
+  - flows: 
+    - test
   - _self_
   - bigquery: testing
 

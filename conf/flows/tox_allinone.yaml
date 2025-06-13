@@ -2,7 +2,6 @@
 # This flow defines everything in a single file without using defaults
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-name: "tox_allinone"
 description: "Toxicity assessment with all configuration in one file"
 
 # Data configuration embedded directly
@@ -28,7 +27,7 @@ parameters:
     type: bigquery
     dataset_id: testing
     table_id: flows
-    dataset_name: ${name}
+    dataset_name: tox
 
 # Agents defined inline (referencing agent classes)
 agents:

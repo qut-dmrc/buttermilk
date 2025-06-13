@@ -67,6 +67,7 @@ def main(conf: DictConfig) -> None:
     if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
         raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
+    flow_runner.flows = conf.flows
 
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm

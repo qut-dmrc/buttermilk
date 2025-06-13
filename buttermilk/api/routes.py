@@ -2,13 +2,11 @@ import asyncio
 import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
-from buttermilk._core.contract import AgentTrace
 from buttermilk.api.services.data_service import DataService
 
 FlowRunner = Any
@@ -22,7 +20,6 @@ async def get_templates(request: Request) -> Jinja2Templates:
     if templates is None:
         raise RuntimeError("Jinja2Templates not found in app.state.templates")
     return templates
-
 
 
 async def get_flows(request: Request) -> FlowRunner:
@@ -196,14 +193,15 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
 
 # --- New Score Pages API Endpoints ---
 
-@flow_data_router.get("/api/records/{record_id}")
+
+@flow_data_router.get("/api/flows/{flow}/records/{record_id}")
 async def get_record_endpoint(
     record_id: str,
-    flow: str = Query(..., description="The flow name for data context"),
+    flow: str = Path(..., description="The flow name for data context"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get individual record details"""
-    logger.debug(f"Request received for /api/records/{record_id} with flow: {flow}")
+    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}")
 
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
@@ -237,15 +235,15 @@ async def get_record_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error retrieving record")
 
 
-@flow_data_router.get("/api/records/{record_id}/scores")
+@flow_data_router.get("/api/flows/{flow}/records/{record_id}/scores")
 async def get_record_scores_endpoint(
     record_id: str,
-    flow: str = Query(..., description="The flow name for data context"),
+    flow: str = Path(..., description="The flow name for data context"),
     session_id: str = Query(None, description="Optional session ID for filtering"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get toxicity scores for a specific record"""
-    logger.debug(f"Request received for /api/records/{record_id}/scores with flow: {flow}, session: {session_id}")
+    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/scores with session: {session_id}")
 
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
@@ -258,13 +256,13 @@ async def get_record_scores_endpoint(
 
     try:
         agent_traces = await DataService.get_scores_for_record(record_id, flow, session_id)
-        
+
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         scores_data = {
             "record_id": record_id,
             "agent_traces": [trace.model_dump() for trace in agent_traces]
         }
-        
+
         return JSONResponse(content=scores_data)
 
     except Exception as e:
@@ -272,16 +270,16 @@ async def get_record_scores_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error retrieving scores")
 
 
-@flow_data_router.get("/api/records/{record_id}/responses")
+@flow_data_router.get("/api/flows/{flow}/records/{record_id}/responses")
 async def get_record_responses_endpoint(
     record_id: str,
-    flow: str = Query(..., description="The flow name for data context"),
+    flow: str = Path(..., description="The flow name for data context"),
     session_id: str = Query(None, description="Optional session ID for filtering"),
     include_reasoning: bool = Query(True, description="Include detailed reasoning"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get detailed AI responses for a specific record"""
-    logger.debug(f"Request received for /api/records/{record_id}/responses with flow: {flow}, session: {session_id}")
+    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/responses with session: {session_id}")
 
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
@@ -294,13 +292,13 @@ async def get_record_responses_endpoint(
 
     try:
         agent_traces = await DataService.get_responses_for_record(record_id, flow, session_id, include_reasoning)
-        
+
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         responses_data = {
             "record_id": record_id,
             "agent_traces": [trace.model_dump() for trace in agent_traces]
         }
-        
+
         return JSONResponse(content=responses_data)
 
     except Exception as e:

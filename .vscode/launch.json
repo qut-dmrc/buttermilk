@@ -64,8 +64,9 @@
       ],
       "justMyCode": true,
       "args": [
-        "flows=[trans]",
-        "llms=full",
+        "+flows=[trans_clean, tox_allinone]",
+        "run=api",
+        "+llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

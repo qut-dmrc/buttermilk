@@ -22,7 +22,6 @@ parameters:
     type: bigquery
     dataset_id: research_results
     table_id: sentiment_analysis
-    dataset_name: ${name}
 
 agents: {}
 observers: {}

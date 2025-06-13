@@ -8,7 +8,8 @@ run:
   mode: api
   ui: web
   human_in_loop: true
-  flows: {}  # Will be populated by command line args
 
   name: bm_api
   job: flows
+
+  flows: ${flows}

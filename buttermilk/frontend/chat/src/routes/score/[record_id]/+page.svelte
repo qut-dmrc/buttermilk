@@ -38,9 +38,9 @@
       // Fetch record details, scores, and responses in parallel
       // Note: APIs now return native Buttermilk objects (Record and AgentTrace)
       const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
-        fetch(`/api/records/${encodeURIComponent(id)}?flow=${encodeURIComponent(currentFlow)}`),
-        fetch(`/api/records/${encodeURIComponent(id)}/scores?flow=${encodeURIComponent(currentFlow)}`),
-        fetch(`/api/records/${encodeURIComponent(id)}/responses?flow=${encodeURIComponent(currentFlow)}`)
+        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}`),
+        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}/scores`),
+        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}/responses`)
       ]);
       
       // Check if all requests were successful

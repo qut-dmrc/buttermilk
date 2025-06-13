@@ -32,7 +32,7 @@ def framer():
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", flows=[framer])
     run_request = RunRequest(  # Replaced Job with RunRequest
         ui_type="testing",  # Mapped source to ui_type
         flow="testflow",  # Mapped flow_id to flow
@@ -51,7 +51,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", flows=[framer])
     run_request = RunRequest(  # Replaced Job with RunRequest
         ui_type="testing",  # Mapped source to ui_type
         flow="testflow",  # Mapped flow_id to flow
@@ -69,7 +69,7 @@ async def test_frames_article(framer, news_record, bm: BM, model):
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", steps=[framer])
+    flow = FlowRunner(source="testing", flows=[framer])
 
     record = link_to_video_gcp  # Use the video record directly
     run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", records=[record], run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args

@@ -257,7 +257,7 @@ class TestScoreAPIEndpoints:
         # Check that our new endpoints are registered
         routes = [route.path for route in flow_data_router.routes]
         
-        assert "/api/records/{record_id}" in routes
-        assert "/api/records/{record_id}/scores" in routes
-        assert "/api/records/{record_id}/responses" in routes
+        assert "/api/flows/{flow}/records/{record_id}" in routes
+        assert "/api/flows/{flow}/records/{record_id}/scores" in routes
+        assert "/api/flows/{flow}/records/{record_id}/responses" in routes
         assert "/api/records" in routes
