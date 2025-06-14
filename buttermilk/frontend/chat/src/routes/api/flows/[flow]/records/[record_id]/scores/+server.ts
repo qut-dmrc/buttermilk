@@ -445,11 +445,14 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
-    // Build backend URL with optional dataset parameter
-    const backendUrl_with_params = new URL(`${backendUrl}/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}/scores`);
+    // Build backend URL using path template format with optional dataset
+    let backendPath;
     if (dataset) {
-      backendUrl_with_params.searchParams.append('dataset', dataset);
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/datasets/${encodeURIComponent(dataset)}/records/${encodeURIComponent(record_id)}/scores`;
+    } else {
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}/scores`;
     }
+    const backendUrl_with_params = new URL(`${backendUrl}${backendPath}`);
     
     // Try to fetch from backend first using new flow-based endpoint
     const response = await fetch(backendUrl_with_params.toString(), {

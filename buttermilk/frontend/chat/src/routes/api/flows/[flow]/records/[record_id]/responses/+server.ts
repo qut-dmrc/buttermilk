@@ -246,15 +246,20 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
-    // Build backend URL with query params
-    const backendQueryParams = new URLSearchParams();
+    // Build backend URL using path template format with optional dataset
+    let backendPath;
     if (dataset) {
-      backendQueryParams.append('dataset', dataset);
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/datasets/${encodeURIComponent(dataset)}/records/${encodeURIComponent(record_id)}/responses`;
+    } else {
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}/responses`;
     }
+    
+    // Add query params for include_reasoning
+    const backendQueryParams = new URLSearchParams();
     if (!include_reasoning) {
       backendQueryParams.append('include_reasoning', 'false');
     }
-    const backendUrlWithParams = `${backendUrl}/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}/responses${backendQueryParams.toString() ? '?' + backendQueryParams.toString() : ''}`;
+    const backendUrlWithParams = `${backendUrl}${backendPath}${backendQueryParams.toString() ? '?' + backendQueryParams.toString() : ''}`;
     
     // Try to fetch from backend first
     const response = await fetch(backendUrlWithParams, {

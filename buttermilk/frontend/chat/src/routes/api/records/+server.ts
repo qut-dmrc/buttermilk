@@ -133,18 +133,24 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
-    // Build backend URL with query parameters
-    const backendQueryParams = new URLSearchParams();
-    backendQueryParams.append('flow', flow);
+    // Build backend URL using the new path template format
+    let backendPath;
     if (dataset) {
-      backendQueryParams.append('dataset', dataset);
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/datasets/${encodeURIComponent(dataset)}/records`;
+    } else {
+      backendPath = `/api/flows/${encodeURIComponent(flow)}/records`;
     }
+    
+    // Add query parameters for include_scores
+    const backendQueryParams = new URLSearchParams();
     if (includeScores) {
       backendQueryParams.append('include_scores', 'true');
     }
     
+    const fullBackendUrl = `${backendUrl}${backendPath}${backendQueryParams.toString() ? '?' + backendQueryParams.toString() : ''}`;
+    
     // Forward the request to the backend
-    const response = await fetch(`${backendUrl}/api/records?${backendQueryParams.toString()}`, {
+    const response = await fetch(fullBackendUrl, {
       method: 'GET',
       headers
     });
