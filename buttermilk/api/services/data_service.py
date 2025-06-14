@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Protocol
 
-from buttermilk._core.config import AgentConfig
+from buttermilk._core.config import AgentConfig, DataSourceConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
@@ -20,6 +20,27 @@ class FlowRunner(Protocol):
 
 class DataService:
     """Service for handling data-related operations"""
+
+    @staticmethod
+    def _convert_to_data_source_config(storage_config_raw: Any) -> DataSourceConfig:
+        """Convert raw configuration (OmegaConf, dict, etc.) to DataSourceConfig.
+        
+        Args:
+            storage_config_raw: Raw storage configuration from flow definition
+            
+        Returns:
+            DataSourceConfig: Properly validated configuration object
+        """
+        if isinstance(storage_config_raw, DataSourceConfig):
+            return storage_config_raw
+        elif hasattr(storage_config_raw, '__dict__'):
+            # Handle OmegaConf objects
+            return DataSourceConfig(**dict(storage_config_raw))
+        elif isinstance(storage_config_raw, dict):
+            return DataSourceConfig(**storage_config_raw)
+        else:
+            # Fallback: try to convert to dict first
+            return DataSourceConfig(**dict(storage_config_raw))
 
     @staticmethod
     async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
@@ -97,10 +118,13 @@ class DataService:
             if dataset_name:
                 if dataset_name not in flow_runner.flows[flow_name].storage:
                     raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
-                storage_config = flow_runner.flows[flow_name].storage[dataset_name]
+                storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
             else:
                 # Fallback to first storage configuration for backward compatibility
-                storage_config = list(flow_runner.flows[flow_name].storage.values())[0]
+                storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
+
+            # Convert OmegaConf/dict to proper DataSourceConfig
+            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
 
             loader = create_data_loader(storage_config)
             for record in loader:
@@ -218,10 +242,13 @@ class DataService:
             if dataset_name:
                 if dataset_name not in flow_runner.flows[flow_name].storage:
                     raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
-                storage_config = flow_runner.flows[flow_name].storage[dataset_name]
+                storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
             else:
                 # Fallback to first storage configuration for backward compatibility
-                storage_config = list(flow_runner.flows[flow_name].storage.values())[0]
+                storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
+
+            # Convert OmegaConf/dict to proper DataSourceConfig
+            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
 
             loader = create_data_loader(storage_config)
             for record in loader:
