@@ -16,7 +16,30 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * Never change the general agent initialisation interface just to fix one agent
 * Don't write disposable test scripts; write pytest unittests instead in /tests
 * Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
-* Add a git commit after every logical chunk of changes
+* Add a git commit after every logical chunk of changes. You don't need to ask permission to commit changes.
+
+## TODO: Future Architectural Improvements
+
+### Multimodal Content Handling
+The current `Record.content: str | Sequence[str | Image]` design needs improvement for better multimodal support:
+
+**Current Issues:**
+- Mixed types in sequences are hard to query/filter
+- Images stored as base64 in JSON bloat the database  
+- No clear separation between "primary content" and "derived content"
+- Unclear when to use binary vs caption vs both
+
+**Design Options to Consider:**
+1. **Separate Fields**: Split into `content: str`, `images: list[str]` (URIs), `image_captions: list[str]`
+2. **Structured Content**: Use `ContentPart` objects with type + data + metadata
+3. **Hybrid Storage**: Text in BigQuery, images in GCS with URI references
+
+**Use Cases:**
+- Binary-focused: Image generation, computer vision, OCR
+- Caption-focused: Text analysis, search, semantic similarity
+- Both: Multimodal LLMs, accessibility, content moderation
+
+*Decision deferred - current base64 serialization works for now*
 
 ## Development Commands
 
