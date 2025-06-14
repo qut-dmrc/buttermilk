@@ -838,7 +838,7 @@ class BM(SessionInfo):
         # Create appropriate storage instance based on type
         storage_type = config.type
 
-        if storage_type == "bigquery":
+        if storage_type in ["bigquery", "bq"]:
             return BigQueryStorage(config, self)
         elif storage_type in ["file", "local", "gcs", "s3"]:
             return FileStorage(config, self)

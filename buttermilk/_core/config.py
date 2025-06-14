@@ -219,7 +219,7 @@ class DataSourceConfig(BaseModel):
         max_records_per_group (int): Maximum records to process per group, if
             grouping is applied. -1 means no limit.
         type (Literal): The type of the data source.
-            Allowed values: "job", "file", "bq" (BigQuery), "generator",
+            Allowed values: "job", "file", "bq" or "bigquery", "generator",
             "plaintext", "chromadb", "outputs" (from a previous step).
         path (str): Path to the data source (e.g., file path, BigQuery table ID,
             URL). Meaning depends on the `type`.
@@ -258,7 +258,15 @@ class DataSourceConfig(BaseModel):
         description="Maximum records to process per group if grouping is applied. -1 for no limit.",
     )
     type: Literal[
-        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs", "huggingface",
+        "job",
+        "file",
+        "bq",
+        "bigquery",
+        "generator",
+        "plaintext",
+        "chromadb",
+        "outputs",
+        "huggingface",
     ] = Field(description="The type of the data source.")
     path: str = Field(
         default="",

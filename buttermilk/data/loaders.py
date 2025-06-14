@@ -333,7 +333,7 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
             return JSONLDataLoader(config)
     elif config.type == "plaintext":
         return PlaintextDataLoader(config)
-    elif config.type == "bigquery":
+    elif config.type in ["bigquery", "bq"]:
         from buttermilk.data.bigquery_loader import BigQueryRecordLoader
         return BigQueryRecordLoader(**config.model_dump())
     else:
