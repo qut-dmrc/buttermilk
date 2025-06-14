@@ -35,13 +35,28 @@ class DataLoaderProtocol(Protocol):
 
 
 class DataLoader(ABC):
-    """Abstract base class for all data loaders."""
+    """Abstract base class for all data loaders.
+    
+    Data loaders support column mapping via the 'columns' field in DataSourceConfig.
+    The 'columns' field is a mapping dictionary where:
+    - Keys: Target field names (Record field names)
+    - Values: Source field names (original data field names)
+    
+    Example:
+        columns = {
+            "content": "text",           # Maps source "text" to Record "content"
+            "ground_truth": "expected",  # Maps source "expected" to Record "ground_truth"
+            "title": "name"             # Maps source "name" to metadata "title"
+        }
+    
+    The columns mapping can be empty ({}) if no field renaming is needed.
+    """
 
     def __init__(self, config: DataSourceConfig):
         """Initialize loader with configuration.
 
         Args:
-            config: Data source configuration specifying type, path, etc.
+            config: Data source configuration specifying type, path, columns mapping, etc.
         """
         self.config = config
 
@@ -300,6 +315,28 @@ class PlaintextDataLoader(DataLoader):
                             "file_size": len(content)
                         }
                     }
+
+                    # Apply column mapping if specified
+                    if self.config.columns:
+                        mapped_kwargs = {}
+                        original_data = {
+                            "filename": file_path.name,
+                            "content": content,
+                            "path": str(file_path),
+                            "size": len(content)
+                        }
+                        
+                        for new_name, old_name in self.config.columns.items():
+                            if old_name in original_data:
+                                # Handle special mapping to Record fields
+                                if new_name in ["record_id", "content", "uri", "title"]:
+                                    mapped_kwargs[new_name] = original_data[old_name]
+                                else:
+                                    # Map to metadata
+                                    record_kwargs["metadata"][new_name] = original_data[old_name]
+                        
+                        # Override with mapped values
+                        record_kwargs.update(mapped_kwargs)
 
                     record = Record(**record_kwargs)
                     yield record

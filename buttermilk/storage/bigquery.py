@@ -279,29 +279,46 @@ class BigQueryStorage(Storage, StorageClient):
     def _parse_record(self, row: bigquery.Row) -> Record:
         """Parse a BigQuery row into a Record object."""
         try:
-            # Parse JSON fields
-            metadata = json.loads(row.metadata) if row.metadata else {}
-            ground_truth = json.loads(row.ground_truth) if row.ground_truth else None
+            # Convert row to dictionary for easier column mapping
+            row_dict = dict(row.items())
+            
+            # Apply column mapping if specified
+            if self.config.columns:
+                mapped_row = {}
+                for new_name, old_name in self.config.columns.items():
+                    if old_name in row_dict:
+                        mapped_row[new_name] = row_dict[old_name]
+                    elif hasattr(row, old_name):
+                        mapped_row[new_name] = getattr(row, old_name)
+                # Update row_dict with mapped values
+                row_dict.update(mapped_row)
+            
+            # Parse JSON fields (handle both mapped and original names)
+            metadata_field = row_dict.get('metadata', getattr(row, 'metadata', None))
+            ground_truth_field = row_dict.get('ground_truth', getattr(row, 'ground_truth', None))
+            
+            metadata = json.loads(metadata_field) if metadata_field else {}
+            ground_truth = json.loads(ground_truth_field) if ground_truth_field else None
 
-            # Create Record object
+            # Create Record object using mapped fields when available
             record = Record(
-                record_id=row.record_id,
-                content=row.content,
+                record_id=row_dict.get('record_id', getattr(row, 'record_id', 'unknown')),
+                content=row_dict.get('content', getattr(row, 'content', '')),
                 metadata=metadata,
-                alt_text=row.alt_text,
+                alt_text=row_dict.get('alt_text', getattr(row, 'alt_text', None)),
                 ground_truth=ground_truth,
-                uri=row.uri,
-                mime=row.mime or "text/plain"
+                uri=row_dict.get('uri', getattr(row, 'uri', None)),
+                mime=row_dict.get('mime', getattr(row, 'mime', 'text/plain'))
             )
 
             return record
 
         except Exception as e:
-            logger.warning(f"Error parsing BigQuery row {row.record_id}: {e}")
+            logger.warning(f"Error parsing BigQuery row {getattr(row, 'record_id', 'unknown')}: {e}")
             # Return a minimal record on parse error
             return Record(
-                record_id=row.record_id or "error",
-                content=str(row.content) if row.content else "Error loading content",
+                record_id=getattr(row, 'record_id', 'error'),
+                content=str(getattr(row, 'content', 'Error loading content')),
                 metadata={"parse_error": str(e)}
             )
 

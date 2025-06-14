@@ -295,7 +295,12 @@ class DataSourceConfig(BaseModel):
     )
     columns: Mapping[str, str | Mapping] | None = Field(
         default_factory=dict,
-        description="Columns to select or transformations to apply.",
+        description=(
+            "Column mapping for renaming data source fields to Record fields. "
+            "Dictionary where keys are target Record field names and values are source field names. "
+            "Can be empty ({}) if no field renaming is needed. "
+            "Example: {'content': 'text', 'ground_truth': 'expected'}"
+        ),
     )
     last_n_days: int = Field(
         default=7, description="For time-series data, retrieve from the last N days.",

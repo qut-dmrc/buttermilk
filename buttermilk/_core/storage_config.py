@@ -108,7 +108,12 @@ class StorageConfig(BaseModel):
     )
     columns: dict[str, Any] = Field(
         default_factory=dict,
-        description="Column selection/transformation mapping"
+        description=(
+            "Column mapping for renaming data source fields to Record fields. "
+            "Dictionary where keys are target Record field names and values are source field names. "
+            "Can be empty ({}) if no field renaming is needed. "
+            "Example: {'content': 'text', 'ground_truth': 'expected'}"
+        )
     )
     limit: int | None = Field(
         default=None,
