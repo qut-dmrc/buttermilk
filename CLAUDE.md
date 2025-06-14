@@ -16,6 +16,7 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * Never change the general agent initialisation interface just to fix one agent
 * Don't write disposable test scripts; write pytest unittests instead in /tests
 * Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
+* Add a git commit after every logical chunk of changes
 
 ## Development Commands
 
