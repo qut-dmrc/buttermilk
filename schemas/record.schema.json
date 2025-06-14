@@ -1,0 +1,68 @@
+[
+    {
+        "name": "dataset_name",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Name of the dataset this record belongs to"
+    },
+    {
+        "name": "split_type",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Data split type (train, test, validation, etc.)"
+    },
+    {
+        "name": "record_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Unique identifier for the record"
+    },
+    {
+        "name": "content",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Main content of the record (text or JSON for multimodal)"
+    },
+    {
+        "name": "metadata",
+        "type": "JSON",
+        "mode": "NULLABLE",
+        "description": "Arbitrary metadata associated with the record"
+    },
+    {
+        "name": "alt_text",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Textual description or transcript of media content"
+    },
+    {
+        "name": "ground_truth",
+        "type": "JSON",
+        "mode": "NULLABLE",
+        "description": "Ground truth data for evaluation"
+    },
+    {
+        "name": "uri",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "URI pointing to original source of content"
+    },
+    {
+        "name": "mime",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Primary MIME type of the content"
+    },
+    {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE",
+        "description": "Timestamp when record was created"
+    },
+    {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE",
+        "description": "Timestamp when record was last updated"
+    }
+]

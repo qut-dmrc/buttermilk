@@ -358,10 +358,10 @@ class DataSouce(DataSourceConfig):
 
 class BigQueryConfig(BaseModel):
     """Configuration for BigQuery-related operations.
-    
+
     Provides default values for BigQuery operations including data loading,
     table creation, and migration utilities.
-    
+
     Attributes:
         project_id (str | None): Google Cloud project ID. If None, will use
             the default project from credentials.
@@ -369,7 +369,7 @@ class BigQueryConfig(BaseModel):
         table_id (str): BigQuery table ID. Defaults to "records".
         randomize (bool): Whether to randomize query results. Defaults to True.
         batch_size (int): Batch size for operations. Defaults to 1000.
-        auto_create_table (bool): Whether to auto-create tables if they don't exist.
+        auto_create (bool): Whether to auto-create tables if they don't exist.
         clustering_fields (list[str]): Default clustering fields for new tables.
     """
 
@@ -394,10 +394,7 @@ class BigQueryConfig(BaseModel):
         ge=1,
         description="Batch size for operations."
     )
-    auto_create_table: bool = Field(
-        default=True,
-        description="Whether to auto-create tables if they don't exist."
-    )
+    auto_create: bool = Field(default=True, description="Whether to auto-create tables if they don't exist.")
     clustering_fields: list[str] = Field(
         default=["record_id", "dataset_name"],
         description="Default clustering fields for new tables."
@@ -410,7 +407,7 @@ class BigQueryConfig(BaseModel):
         exclude_none=True,
         exclude_unset=True,
     )
-    
+
     @model_validator(mode="after")
     def set_project_id_from_env(self) -> "BigQueryConfig":
         """Set project_id from environment if not already set."""
