@@ -96,6 +96,8 @@ class BigQueryStorage(Storage, StorageClient):
     def save(self, records: list[Record] | Record) -> None:
         """Save records to BigQuery table.
 
+        Uses the existing upload_rows pipeline for proper serialization and error handling.
+
         Args:
             records: Single record or list of records to save
         """
@@ -111,21 +113,32 @@ class BigQueryStorage(Storage, StorageClient):
             if self.config.auto_create:
                 self.create()
 
-            # Convert records to BigQuery rows
+            # Convert records to list of dicts for upload_rows
             rows_to_insert = []
             for record in records:
                 row = self._record_to_row(record)
                 rows_to_insert.append(row)
 
-            # Insert rows
-            table = self.table
-            errors = self.client.insert_rows_json(table, rows_to_insert)
+            # Use the existing upload_rows function which handles proper serialization
+            from buttermilk.utils.save import upload_rows
+            from buttermilk.utils.schema_utils import get_record_bigquery_schema
 
-            if errors:
-                logger.error(f"Error inserting records: {errors}")
-                raise StorageError(f"BigQuery insert errors: {errors}")
-            else:
+            # Get the schema for proper data transformation
+            schema = self.get_schema()
+            if not schema:
+                schema = get_record_bigquery_schema()
+
+            # Use the proven upload_rows pipeline
+            result = upload_rows(
+                rows=rows_to_insert,
+                schema=schema,
+                dataset=self.get_table_ref()
+            )
+
+            if result:
                 logger.info(f"Successfully saved {len(records)} records to {self.get_table_ref()}")
+            else:
+                raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
             logger.error(f"Error saving records to BigQuery: {e}")
@@ -277,15 +290,19 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
     def _record_to_row(self, record: Record) -> dict[str, Any]:
-        """Convert a Record object to a BigQuery row dict."""
+        """Convert a Record object to a BigQuery row dict.
+        
+        Note: This returns raw Python objects. The upload_rows pipeline will handle
+        proper JSON serialization and datetime formatting for BigQuery.
+        """
         return {
             "record_id": record.record_id,
             "dataset_name": self.config.dataset_name,
             "split_type": self.config.split_type,
-            "content": record.content if isinstance(record.content, str) else json.dumps(record.content),
-            "metadata": json.dumps(record.metadata),
+            "content": record.content,
+            "metadata": record.metadata,
             "alt_text": record.alt_text,
-            "ground_truth": json.dumps(record.ground_truth) if record.ground_truth else None,
+            "ground_truth": record.ground_truth,
             "uri": record.uri,
             "mime": record.mime,
             "created_at": datetime.datetime.now(datetime.UTC),
