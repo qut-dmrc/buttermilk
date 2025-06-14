@@ -185,14 +185,9 @@ async function refetchRecords() {
   const currentFlow = get(selectedFlow);
   const currentDataset = get(selectedDataset);
   
-  if (currentFlow) {
-    // Use path-based URLs instead of query parameters
-    let endpoint;
-    if (currentDataset && currentDataset.trim() !== '') {
-      endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/datasets/${encodeURIComponent(currentDataset)}/records`;
-    } else {
-      endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/records`;
-    }
+  if (currentFlow && currentDataset && currentDataset.trim() !== '') {
+    // Always require both flow and dataset - no fallback to flow-only
+    const endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/datasets/${encodeURIComponent(currentDataset)}/records`;
     
     // Make direct fetch call and update the records store
     try {
@@ -221,6 +216,7 @@ async function refetchRecords() {
       console.error(`>>> Records fetch error for ${endpoint}:`, error);
     }
   } else {
+    // Clear records if no flow or no dataset selected
     recordsStore.reset();
   }
 }

@@ -125,6 +125,32 @@ async def _get_records_impl(
             request, context_data, "partials/records_list.html", templates, status_code=400,
         )
 
+    # If no dataset specified, return available datasets instead of records
+    if not dataset:
+        try:
+            available_datasets = await DataService.get_datasets_for_flow(flow, flows)
+            logger.debug(f"Returning {len(available_datasets)} available datasets for flow {flow}")
+            
+            if "application/json" in accept_header:
+                return JSONResponse(content={
+                    "error": "dataset parameter required",
+                    "available_datasets": available_datasets,
+                    "message": f"Please specify a dataset. Available options: {', '.join(available_datasets)}"
+                }, status_code=400)
+            
+            context_data = {
+                "records": [], 
+                "error": f"Dataset parameter required. Available datasets: {', '.join(available_datasets)}",
+                "available_datasets": available_datasets,
+                "flow": flow
+            }
+            return await negotiate_response(request, context_data, "partials/records_list.html", templates, status_code=400)
+            
+        except Exception as e:
+            logger.error(f"Error getting datasets for flow {flow}: {e}", exc_info=True)
+            error_content = {"error": f"Error getting datasets for flow {flow}: {e!s}"}
+            return JSONResponse(content=error_content, status_code=500)
+
     try:
         records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores, dataset_name=dataset)
         logger.debug(f"Returning data for {len(records)} records")

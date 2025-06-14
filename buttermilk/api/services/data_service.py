@@ -105,7 +105,7 @@ class DataService:
             flow_name: The flow name
             flow_runner: The flow runner instance
             include_scores: Whether to include summary scores in metadata
-            dataset_name: Optional specific dataset name to load from
+            dataset_name: Required dataset name to load from
 
         Returns:
             List[Record]: The list of Record objects with optional score summaries.
@@ -114,14 +114,17 @@ class DataService:
         try:
             records = []
 
-            # Get the appropriate storage configuration
-            if dataset_name:
-                if dataset_name not in flow_runner.flows[flow_name].storage:
-                    raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
-                storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
-            else:
-                # Fallback to first storage configuration for backward compatibility
-                storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
+            # Require dataset_name to be specified
+            if not dataset_name:
+                available_datasets = list(flow_runner.flows[flow_name].storage.keys())
+                raise ValueError(f"dataset_name is required. Available datasets for flow '{flow_name}': {available_datasets}")
+            
+            # Get the specified storage configuration
+            if dataset_name not in flow_runner.flows[flow_name].storage:
+                available_datasets = list(flow_runner.flows[flow_name].storage.keys())
+                raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
+            
+            storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
 
             # Convert OmegaConf/dict to proper DataSourceConfig
             storage_config = DataService._convert_to_data_source_config(storage_config_raw)
