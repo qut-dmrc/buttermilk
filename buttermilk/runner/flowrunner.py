@@ -363,7 +363,12 @@ class OrchestratorFactory:
             orchestrator_cls = getattr(module, class_name)
 
             # Create a fresh config copy to avoid shared state
-            config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
+            if hasattr(flow_config, "model_dump"):
+                config = flow_config.model_dump()
+            else:
+                # Convert OmegaConf objects to standard Python types recursively
+                from buttermilk.utils.validators import convert_omegaconf_objects
+                config = convert_omegaconf_objects(dict(flow_config))
 
             # Create and return a fresh instance
             orchestrator = orchestrator_cls(**config)
