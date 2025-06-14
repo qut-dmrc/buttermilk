@@ -835,13 +835,18 @@ class BM(SessionInfo):
         
         Args:
             dataset_name: The dataset name for the storage
-            **kwargs: Additional configuration overrides
+            **kwargs: Additional configuration overrides. Must include dataset_id and table_id.
             
         Returns:
             BigQueryStorage instance
+            
+        Raises:
+            ValueError: If required BigQuery table components are missing
         """
-        # Exclude computed fields to avoid validation errors
-        # config_data = self.storage.model_dump(exclude={"full_table_id", "table_ref"})
-        config_data = {"dataset_name": dataset_name, **kwargs}
+        config_data = {
+            "type": "bigquery",
+            "dataset_name": dataset_name,
+            **kwargs
+        }
         config = StorageConfig(**config_data)
         return self.get_storage(config)

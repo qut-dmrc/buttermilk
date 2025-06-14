@@ -1,3 +1,7 @@
-type: bq
-dataset: dmrc-analysis.toxicity.flow
-db_schema: flow.json
+# BigQuery configuration for toxicity flow data
+type: bigquery
+project_id: dmrc-analysis
+dataset_id: toxicity
+table_id: flow
+dataset_name: tox_flow
+schema_path: flow.json

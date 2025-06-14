@@ -1,15 +1,14 @@
-# BigQuery Records table configuration for OSB dataset
-type: bigquery
-dataset_id: testing
-table_id: records
-dataset_name: osb
-split_type: train
-randomize: true
-batch_size: 1000
+# BigQuery Records table configuration for training dataset
+tox_train:
+  type: bigquery
+  project_id: dmrc-analysis
+  dataset_id: toxicity
+  table_id: osb_drag_toxic_train
+  dataset_name: tox_train
+  split_type: train
+  randomize: true
+  batch_size: 1000
 
-# Migration from existing JSONL source
-# source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
-
-# Table creation settings
-# auto_create_table: true
-clustering_fields: ["record_id", "dataset_name"]
+  # Table creation settings
+  auto_create: true
+  clustering_fields: ["record_id", "dataset_name"]
