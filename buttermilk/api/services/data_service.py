@@ -33,7 +33,7 @@ class DataService:
         """
         if isinstance(storage_config_raw, DataSourceConfig):
             return storage_config_raw
-        elif hasattr(storage_config_raw, '__dict__'):
+        elif hasattr(storage_config_raw, "__dict__"):
             # Handle OmegaConf objects
             return DataSourceConfig(**dict(storage_config_raw))
         elif isinstance(storage_config_raw, dict):
@@ -266,12 +266,13 @@ class DataService:
             return None
 
     @staticmethod
-    async def get_scores_for_record(record_id: str, flow_name: str, session_id: str | None = None) -> list[AgentTrace]:
+    async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[AgentTrace]:
         """Get toxicity scores for a specific record as AgentTrace objects
 
         Args:
             record_id: The record ID
-            flow_name: The flow name for table partitioning
+            flow_name: The flow name to get save configuration from
+            flow_runner: FlowRunner instance to access flow configuration
             session_id: Optional session ID for filtering
 
         Returns:
@@ -284,17 +285,35 @@ class DataService:
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
 
-            # Use BM instance's storage defaults for dataset configuration
-            from buttermilk._core.storage_config import BigQueryDefaults
-            bq_defaults = BigQueryDefaults()
-            dataset_id = bq_defaults.dataset_id
+            # Use the provided flow runner to access flow configuration and save settings
 
-            # Build the query for scores
+            # Get the save configuration from the flow parameters
+            if flow_name not in flow_runner.flows:
+                logger.warning(f"Flow '{flow_name}' not found in flow runner. Using default dataset.")
+                from buttermilk._core.storage_config import BigQueryDefaults
+                bq_defaults = BigQueryDefaults()
+                dataset_id = bq_defaults.dataset_id
+                table_id = "flows"  # Default table name
+            else:
+                flow_config = flow_runner.flows[flow_name]
+                save_config = flow_config.parameters.get("save", {})
+
+                if save_config and save_config.get("type") == "bigquery":
+                    dataset_id = save_config.get("dataset_id", "testing")
+                    table_id = save_config.get("table_id", "flows")
+                else:
+                    # Fallback to default if no save config or not BigQuery
+                    from buttermilk._core.storage_config import BigQueryDefaults
+                    bq_defaults = BigQueryDefaults()
+                    dataset_id = bq_defaults.dataset_id
+                    table_id = "flows"
+
+            # Build the query for scores using the correct table reference
             where_clause = f"WHERE record_id = '{record_id}'"
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
-            # Query the full AgentTrace data from the flows table
+            # Query the full AgentTrace data from the configured flows table
             sql = f"""
             SELECT
                 session_id,
@@ -309,7 +328,7 @@ class DataService:
                 tracing_link,
                 error,
                 messages
-            FROM `{bq_client.project}.{dataset_id}.flows`
+            FROM `{bq_client.project}.{dataset_id}.{table_id}`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
             AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
@@ -378,12 +397,13 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_responses_for_record(record_id: str, flow_name: str, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
+    async def get_responses_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
         """Get detailed AI responses for a specific record as AgentTrace objects
 
         Args:
             record_id: The record ID
-            flow_name: The flow name for table partitioning
+            flow_name: The flow name to get save configuration from
+            flow_runner: FlowRunner instance to access flow configuration
             session_id: Optional session ID for filtering
             include_reasoning: Whether to include detailed reasoning (preserved for API compatibility)
 
@@ -397,10 +417,28 @@ class DataService:
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
 
-            # Use BM instance's storage defaults for dataset configuration
-            from buttermilk._core.storage_config import BigQueryDefaults
-            bq_defaults = BigQueryDefaults()
-            dataset_id = bq_defaults.dataset_id
+            # Use the provided flow runner to access flow configuration and save settings
+
+            # Get the save configuration from the flow parameters
+            if flow_name not in flow_runner.flows:
+                logger.warning(f"Flow '{flow_name}' not found in flow runner. Using default dataset.")
+                from buttermilk._core.storage_config import BigQueryDefaults
+                bq_defaults = BigQueryDefaults()
+                dataset_id = bq_defaults.dataset_id
+                table_id = "flows"  # Default table name
+            else:
+                flow_config = flow_runner.flows[flow_name]
+                save_config = flow_config.parameters.get("save", {})
+
+                if save_config and save_config.get("type") == "bigquery":
+                    dataset_id = save_config.get("dataset_id", "testing")
+                    table_id = save_config.get("table_id", "flows")
+                else:
+                    # Fallback to default if no save config or not BigQuery
+                    from buttermilk._core.storage_config import BigQueryDefaults
+                    bq_defaults = BigQueryDefaults()
+                    dataset_id = bq_defaults.dataset_id
+                    table_id = "flows"
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -423,7 +461,7 @@ class DataService:
                 tracing_link,
                 error,
                 messages
-            FROM `{bq_client.project}.{dataset_id}.flows`
+            FROM `{bq_client.project}.{dataset_id}.{table_id}`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
             AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL

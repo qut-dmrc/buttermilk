@@ -325,7 +325,7 @@ async def _get_record_scores_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_scores_for_record(record_id, flow, session_id)
+        agent_traces = await DataService.get_scores_for_record(record_id, flow, flows, session_id)
 
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         scores_data = {
@@ -386,7 +386,7 @@ async def _get_record_responses_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_responses_for_record(record_id, flow, session_id, include_reasoning)
+        agent_traces = await DataService.get_responses_for_record(record_id, flow, flows, session_id, include_reasoning)
 
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         responses_data = {
