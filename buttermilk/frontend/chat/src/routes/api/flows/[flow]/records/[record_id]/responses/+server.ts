@@ -230,6 +230,7 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
   }
   
   // Get query parameters
+  const dataset = url.searchParams.get('dataset');
   const include_reasoning = url.searchParams.get('include_reasoning') !== 'false'; // Default true
   
   // Get backend base URL from environment or use default
@@ -247,6 +248,9 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
     
     // Build backend URL with query params
     const backendQueryParams = new URLSearchParams();
+    if (dataset) {
+      backendQueryParams.append('dataset', dataset);
+    }
     if (!include_reasoning) {
       backendQueryParams.append('include_reasoning', 'false');
     }

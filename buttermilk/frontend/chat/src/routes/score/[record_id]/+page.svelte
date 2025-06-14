@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { selectedFlow, initializeApp } from '$lib/stores/apiStore';
+  import { selectedFlow, selectedDataset, initializeApp } from '$lib/stores/apiStore';
   import ToxicityScoreTable from '$lib/components/score/ToxicityScoreTable.svelte';
   import RecordDisplay from '$lib/components/score/RecordDisplay.svelte';
   import ScoreMessagesDisplay from '$lib/components/score/ScoreMessagesDisplay.svelte';
@@ -12,9 +12,11 @@
   let loading = true;
   let error: string | null = null;
   let currentFlow: string = '';
+  let currentDataset: string = '';
 
   $: recordId = $page.params.record_id;
-  $: currentFlow = $selectedFlow || $page.url.searchParams.get('flow') || 'tox';
+  $: currentFlow = $selectedFlow || $page.url.searchParams.get('flow') || '';
+  $: currentDataset = $selectedDataset || $page.url.searchParams.get('dataset') || '';
 
   // Function to fetch record data from API
   async function fetchRecordData(id: string) {
@@ -35,12 +37,21 @@
       error = null;
       
       
+      // Build API URLs with optional dataset parameter
+      const buildApiUrl = (endpoint: string) => {
+        const url = new URL(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}${endpoint}`, window.location.origin);
+        if (currentDataset) {
+          url.searchParams.append('dataset', currentDataset);
+        }
+        return url.toString();
+      };
+
       // Fetch record details, scores, and responses in parallel
       // Note: APIs now return native Buttermilk objects (Record and AgentTrace)
       const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
-        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}`),
-        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}/scores`),
-        fetch(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}/responses`)
+        fetch(buildApiUrl('')),
+        fetch(buildApiUrl('/scores')),
+        fetch(buildApiUrl('/responses'))
       ]);
       
       // Check if all requests were successful

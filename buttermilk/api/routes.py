@@ -84,11 +84,12 @@ async def get_records_list_endpoint(
     flows: Annotated[FlowRunner, Depends(get_flows)],
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
     flow: str = Query(..., description="The flow name"),
+    dataset: str = Query(None, description="The dataset name"),
     include_scores: bool = Query(False, description="Include summary scores in list view"),
 ):
     """Enhanced records list with optional score summaries"""
     accept_header = request.headers.get("accept", "")
-    logger.info(f"Records list request received for flow: {flow}, include_scores: {include_scores} (Accept: {accept_header})")
+    logger.info(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
 
     if not flow:
         logger.warning("Request to /api/records missing 'flow' query parameter.")
@@ -101,7 +102,7 @@ async def get_records_list_endpoint(
         )
 
     try:
-        records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores)
+        records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores, dataset_name=dataset)
         logger.debug(f"Returning data for {len(records)} records")
 
         if "application/json" in accept_header:
@@ -111,7 +112,7 @@ async def get_records_list_endpoint(
 
         # For HTML response, use Pydantic model_dump() as well
         records_data = [record.model_dump() for record in records]
-        context_data = {"records": records_data, "flow": flow, "include_scores": include_scores}
+        context_data = {"records": records_data, "flow": flow, "dataset": dataset, "include_scores": include_scores}
         return await negotiate_response(request, context_data, "partials/records_list.html", templates)
 
     except Exception as e:
@@ -141,8 +142,8 @@ async def get_flowinfo_endpoint(
     logger.info(f"Flow data request received for flow: {flow} (Accept: {accept_header})")
 
     if not flow:
-        logger.warning("Request to /api/flowinfo/ missing 'flow' query parameter.")
-        error_msg = "Missing 'flow' query parameter."
+        logger.warning("Request to /api/flowinfo/ missing 'flow' parameter.")
+        error_msg = "Missing 'flow' parameter."
         context_data = {"criteria": [], "record_ids": [], "error": error_msg}
         return await negotiate_response(
             request, context_data, "partials/flow_dependent_data.html", templates, status_code=400,
@@ -152,17 +153,18 @@ async def get_flowinfo_endpoint(
         criteria = await DataService.get_criteria_for_flow(flow, flows)
         records = await DataService.get_records_for_flow(flow, flows, include_scores=False)
         models = await DataService.get_models_for_flow(flow, flows)
-        logger.debug(f"Returning data for {len(criteria)} criteria options and {len(records)} record options")
+        datasets = await DataService.get_datasets_for_flow(flow, flows)
+        logger.debug(f"Returning data for {len(criteria)} criteria options, {len(records)} record options, and {len(datasets)} dataset options")
         # Use model_dump() to serialize Record objects
         record_data = [record.model_dump() for record in records]
-        context_data = {"criteria": criteria, "record_ids": record_data, "models": models}
+        context_data = {"criteria": criteria, "record_ids": record_data, "models": models, "datasets": datasets}
         return await negotiate_response(request, context_data, "partials/flow_dependent_data.html", templates)
 
     except Exception as e:
         logger.error(f"Error getting data for flow {flow}: {e}", exc_info=True)
         error_content = {"error": f"Error getting data for flow {flow}: {e!s}"}
         if "text/html" in accept_header:
-             return templates.TemplateResponse(
+            return templates.TemplateResponse(
                  "partials/debug.html",
                  {
                      "request": request,
@@ -198,10 +200,11 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
 async def get_record_endpoint(
     record_id: str,
     flow: str = Path(..., description="The flow name for data context"),
+    dataset: str = Query(None, description="The dataset name"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get individual record details"""
-    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}")
+    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id} with dataset {dataset}")
 
     if not flow:
         raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
@@ -213,7 +216,7 @@ async def get_record_endpoint(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        record = await DataService.get_record_by_id(record_id, flow, flows)
+        record = await DataService.get_record_by_id(record_id, flow, flows, dataset_name=dataset)
 
         if not record:
             raise HTTPException(

@@ -72,8 +72,9 @@ const MOCK_RECORDS: Record<string, any> = {
   }
 };
 
-export const GET: RequestHandler = async ({ params, fetch, request }) => {
+export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
   const { record_id, flow } = params;
+  const dataset = url.searchParams.get('dataset');
   
   if (!record_id) {
     throw error(400, 'Record ID is required');
@@ -96,8 +97,14 @@ export const GET: RequestHandler = async ({ params, fetch, request }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
+    // Build backend URL with optional dataset parameter
+    const backendUrl_with_params = new URL(`${backendUrl}/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}`);
+    if (dataset) {
+      backendUrl_with_params.searchParams.append('dataset', dataset);
+    }
+    
     // Try to fetch from backend first using new flow-based endpoint
-    const response = await fetch(`${backendUrl}/api/flows/${encodeURIComponent(flow)}/records/${encodeURIComponent(record_id)}`, {
+    const response = await fetch(backendUrl_with_params.toString(), {
       method: 'GET',
       headers
     });

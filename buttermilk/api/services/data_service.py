@@ -59,13 +59,32 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False) -> list[Record]:
+    async def get_datasets_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
+        """Get available dataset names for a flow
+
+        Args:
+            flow_name: The flow name
+            flow_runner: The flow runner instance
+
+        Returns:
+            List[str]: The list of dataset names
+
+        """
+        try:
+            return list(flow_runner.flows[flow_name].storage.keys())
+        except Exception as e:
+            logger.warning(f"Error getting datasets for flow {flow_name}: {e}")
+            return []
+
+    @staticmethod
+    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False, dataset_name: str | None = None) -> list[Record]:
         """Get records for a flow
 
         Args:
             flow_name: The flow name
             flow_runner: The flow runner instance
             include_scores: Whether to include summary scores in metadata
+            dataset_name: Optional specific dataset name to load from
 
         Returns:
             List[Record]: The list of Record objects with optional score summaries.
@@ -74,7 +93,16 @@ class DataService:
         try:
             records = []
 
-            loader = create_data_loader(list(flow_runner.flows[flow_name].data.values())[0])
+            # Get the appropriate storage configuration
+            if dataset_name:
+                if dataset_name not in flow_runner.flows[flow_name].storage:
+                    raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
+                storage_config = flow_runner.flows[flow_name].storage[dataset_name]
+            else:
+                # Fallback to first storage configuration for backward compatibility
+                storage_config = list(flow_runner.flows[flow_name].storage.values())[0]
+
+            loader = create_data_loader(storage_config)
             for record in loader:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
@@ -173,19 +201,29 @@ class DataService:
             }
 
     @staticmethod
-    async def get_record_by_id(record_id: str, flow_name: str, flow_runner) -> Record | None:
+    async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_name: str | None = None) -> Record | None:
         """Get a single record by ID for a specific flow
 
         Args:
             record_id: The record ID to fetch
             flow_name: The flow name
             flow_runner: The flow runner instance
+            dataset_name: Optional specific dataset name to load from
 
         Returns:
             Record object or None if not found
         """
         try:
-            loader = create_data_loader(list(flow_runner.flows[flow_name].data.values())[0])
+            # Get the appropriate storage configuration
+            if dataset_name:
+                if dataset_name not in flow_runner.flows[flow_name].storage:
+                    raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
+                storage_config = flow_runner.flows[flow_name].storage[dataset_name]
+            else:
+                # Fallback to first storage configuration for backward compatibility
+                storage_config = list(flow_runner.flows[flow_name].storage.values())[0]
+
+            loader = create_data_loader(storage_config)
             for record in loader:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata

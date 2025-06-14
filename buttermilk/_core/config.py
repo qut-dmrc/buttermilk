@@ -245,7 +245,6 @@ class DataSourceConfig(BaseModel):
             other file-based vector stores.
         collection_name (str): Name of the collection for "chromadb".
         model_config (ConfigDict): Pydantic model configuration.
-            - `extra`: "forbid" - Disallow extra fields.
             - `arbitrary_types_allowed`: False.
             - `populate_by_name`: True.
             - `exclude_none`: True.
@@ -349,7 +348,7 @@ class DataSourceConfig(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="ignore",  # Ignore extra fields not defined in the model
         arbitrary_types_allowed=False,
         populate_by_name=True,
         exclude_none=True,

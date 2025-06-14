@@ -1,0 +1,13 @@
+researcher:
+  role: RESEARCHER
+  name_components: ["🔍", "role", "model", "template", "unique_identifier"]
+  agent_obj: RagAgent
+  description: A research assistant that provides relevant information from a vector knowledge base. Should be called upon frequently during conversations to provide context and information.
+  data: ${...data}
+  variants:
+    model: ${llms.general}
+  parameters:
+    template: rag_research
+    n_results: 20
+    no_duplicates: false
+    max_queries: 5

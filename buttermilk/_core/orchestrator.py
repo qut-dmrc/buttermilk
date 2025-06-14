@@ -114,10 +114,6 @@ class OrchestratorProtocol(BaseModel):
         default="",
         description="Short description explaining the purpose and goals of this flow.",
     )
-    storage: StorageConfig | None = Field(
-        default=None,  # Default to None, can be set to a specific StorageConfig instance
-        description="Default storage configuration for unified storage operations.",
-    )
     save: SaveInfo | None = Field(
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",

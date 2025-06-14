@@ -10,13 +10,16 @@ interface InitialFlowConfig {
 interface FlowInfoResponse {
   criteria?: string[];
   models?: string[];
+  datasets?: string[];
   record_ids?: { id: string; name: string }[];
 }
 
-// For a single record item (adjust as needed)
+// For a single record item (matching backend Record model)
 interface RecordItem {
-  id: string;
-  name: string;
+  record_id: string;
+  name?: string;
+  content?: string;
+  metadata?: any;
 }
 
 // --- Generic API Store Creator ---
@@ -141,6 +144,7 @@ export const flowChoices = derived(
 
 // 2. Stores for the currently selected API parameters
 export const selectedFlow = writable<string>('');
+export const selectedDataset = writable<string>('');
 
 // Create selectedRecord with a custom set method to log changes
 const createSelectedRecordStore = () => {
@@ -168,19 +172,27 @@ export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoRes
     (data) => data
 );
 
-// 4. Derived stores for specific data points from flowInfoStore
-export const recordsStore = derived(
-    flowInfoStore,
-    ($info) => {
-        const recordData = $info.data?.record_ids ?? [];
-        
-        return {
-            data: recordData,
-            loading: $info.loading,
-            error: $info.error
-        };
-    }
+// 4. Dedicated records store that handles dataset filtering
+export const recordsStore = createApiStore<RecordItem[], RecordItem[]>(
+    '/api/records',
+    []
 );
+
+// Override recordsStore to fetch when flow or dataset changes
+function refetchRecords() {
+  const currentFlow = get(selectedFlow);
+  const currentDataset = get(selectedDataset);
+  
+  if (currentFlow) {
+    const params: Record<string, string> = { flow: currentFlow };
+    if (currentDataset) {
+      params.dataset = currentDataset;
+    }
+    recordsStore.fetch(params);
+  } else {
+    recordsStore.reset();
+  }
+}
 
 export const criteriaStore = derived(
     flowInfoStore,
@@ -195,6 +207,15 @@ export const modelStore = derived(
     flowInfoStore,
     ($info) => ({
         data: $info.data?.models ?? [], // Corrected 'model' to 'models'
+        loading: $info.loading,
+        error: $info.error
+    })
+);
+
+export const datasetsStore = derived(
+    flowInfoStore,
+    ($info) => ({
+        data: $info.data?.datasets ?? [],
         loading: $info.loading,
         error: $info.error
     })
@@ -215,13 +236,25 @@ selectedFlow.subscribe((flowValue) => {
     console.log(`Selected flow changed to: ${flowValue}. Fetching flow info...`);
     const params = { flow: flowValue };
     flowInfoStore.fetch(params);
+    refetchRecords();
   } else {
     console.log("Flow selection cleared. Resetting flow info store.");
     flowInfoStore.reset();
+    recordsStore.reset();
     // Also reset other selections when flow changes
+    selectedDataset.set('');
     selectedRecord.set('');
     selectedCriteria.set('');
     selectedModel.set('');
+  }
+});
+
+// Subscribe to selectedDataset changes to refetch records
+selectedDataset.subscribe((datasetValue) => {
+  const currentFlow = get(selectedFlow);
+  if (currentFlow) {
+    console.log(`Selected dataset changed to: ${datasetValue}. Refetching records with dataset filter...`);
+    refetchRecords();
   }
 });
 

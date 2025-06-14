@@ -7,7 +7,9 @@
 		recordsStore,
 		criteriaStore,
 		modelStore,
+		datasetsStore,
 		selectedFlow,
+		selectedDataset,
 		selectedRecord,
 		selectedCriteria,
 		selectedModel,
@@ -46,13 +48,23 @@
 					isPlainArray={true}
 				/>
 
-				<!-- Records Dropdown - only enabled if a flow is selected -->
+				<!-- Datasets Dropdown - only enabled if a flow is selected -->
+				<ApiDropdown
+					store={datasetsStore}
+					label="Select Dataset"
+					placeholder="Choose a dataset..."
+					bind:value={$selectedDataset}
+					disabled={!$selectedFlow}
+					isPlainArray={true}
+				/>
+
+				<!-- Records Dropdown - only enabled if a flow and dataset are selected -->
 				<ApiDropdown
 					store={recordsStore}
 					label="Select Record"
 					placeholder="Choose a record..."
 					bind:value={$selectedRecord}
-					disabled={!$selectedFlow}
+					disabled={!$selectedFlow || !$selectedDataset}
 					valueProperty="record_id"
 					labelProperty="name"
 					on:change={(e) => {

@@ -112,6 +112,7 @@ const FALLBACK_RECORDS = {
 export const GET: RequestHandler = async ({ fetch, request, url }) => {
   // Get query parameters
   const flow = url.searchParams.get('flow');
+  const dataset = url.searchParams.get('dataset');
   const includeScores = url.searchParams.get('include_scores') === 'true';
   
   // If no flow is specified, return an empty array
@@ -135,6 +136,9 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
     // Build backend URL with query parameters
     const backendQueryParams = new URLSearchParams();
     backendQueryParams.append('flow', flow);
+    if (dataset) {
+      backendQueryParams.append('dataset', dataset);
+    }
     if (includeScores) {
       backendQueryParams.append('include_scores', 'true');
     }
