@@ -233,7 +233,6 @@ class BigQueryStorage(Storage, StorageClient):
             record_id,
             content,
             metadata,
-            alt_text,
             ground_truth,
             uri,
             mime
@@ -305,7 +304,6 @@ class BigQueryStorage(Storage, StorageClient):
                 record_id=row_dict.get('record_id', getattr(row, 'record_id', 'unknown')),
                 content=row_dict.get('content', getattr(row, 'content', '')),
                 metadata=metadata,
-                alt_text=row_dict.get('alt_text', getattr(row, 'alt_text', None)),
                 ground_truth=ground_truth,
                 uri=row_dict.get('uri', getattr(row, 'uri', None)),
                 mime=row_dict.get('mime', getattr(row, 'mime', 'text/plain'))

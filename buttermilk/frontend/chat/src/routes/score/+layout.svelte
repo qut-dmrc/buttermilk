@@ -20,7 +20,7 @@
         loading = true;
         error = null;
         
-        const response = await fetch(`/api/records?flow=${encodeURIComponent(flow)}&include_scores=true`);
+        const response = await fetch(`/api/flows/${encodeURIComponent(flow)}/records?include_scores=true`);
         if (!response.ok) {
           throw new Error(`Failed to fetch records: ${response.statusText}`);
         }

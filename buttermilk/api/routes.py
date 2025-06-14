@@ -78,22 +78,46 @@ async def get_flows_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error retrieving flows")
 
 
-@flow_data_router.get("/api/records")
-async def get_records_list_endpoint(
+@flow_data_router.get("/api/flows/{flow}/records")
+async def get_records_list_endpoint_flow_only(
     request: Request,
     flows: Annotated[FlowRunner, Depends(get_flows)],
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
-    flow: str = Query(..., description="The flow name"),
-    dataset: str = Query(None, description="The dataset name"),
+    flow: str = Path(..., description="The flow name"),
     include_scores: bool = Query(False, description="Include summary scores in list view"),
+):
+    """Get records for a specific flow"""
+    return await _get_records_impl(request, flows, templates, flow, None, include_scores)
+
+
+@flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records")
+async def get_records_list_endpoint_with_dataset(
+    request: Request,
+    flows: Annotated[FlowRunner, Depends(get_flows)],
+    templates: Annotated[Jinja2Templates, Depends(get_templates)],
+    flow: str = Path(..., description="The flow name"),
+    dataset: str = Path(..., description="The dataset name"),
+    include_scores: bool = Query(False, description="Include summary scores in list view"),
+):
+    """Get records for a specific flow and dataset"""
+    return await _get_records_impl(request, flows, templates, flow, dataset, include_scores)
+
+
+async def _get_records_impl(
+    request: Request,
+    flows: FlowRunner,
+    templates: Jinja2Templates,
+    flow: str,
+    dataset: str | None,
+    include_scores: bool,
 ):
     """Enhanced records list with optional score summaries"""
     accept_header = request.headers.get("accept", "")
     logger.info(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
 
     if not flow:
-        logger.warning("Request to /api/records missing 'flow' query parameter.")
-        error_msg = "Missing 'flow' query parameter."
+        logger.warning("Request to /api/flows/{flow}/records missing 'flow' path parameter.")
+        error_msg = "Missing 'flow' path parameter."
         if "application/json" in accept_header:
             return JSONResponse(content={"error": error_msg}, status_code=400)
         context_data = {"records": [], "error": error_msg}
@@ -131,12 +155,12 @@ async def get_records_list_endpoint(
         return JSONResponse(content=error_content, status_code=500)
 
 
-@flow_data_router.get("/api/flowinfo")
+@flow_data_router.get("/api/flows/{flow}/info")
 async def get_flowinfo_endpoint(
     request: Request,
     flows: Annotated[FlowRunner, Depends(get_flows)],
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
-    flow: str | None = None,
+    flow: str = Path(..., description="The flow name"),
 ):
     accept_header = request.headers.get("accept", "")
     logger.info(f"Flow data request received for flow: {flow} (Accept: {accept_header})")
@@ -197,17 +221,37 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
 
 
 @flow_data_router.get("/api/flows/{flow}/records/{record_id}")
-async def get_record_endpoint(
-    record_id: str,
+async def get_record_endpoint_flow_only(
+    record_id: str = Path(..., description="The record ID"),
     flow: str = Path(..., description="The flow name for data context"),
-    dataset: str = Query(None, description="The dataset name"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Get individual record details for flow only"""
+    return await _get_record_impl(record_id, flow, None, flows)
+
+
+@flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records/{record_id}")
+async def get_record_endpoint_with_dataset(
+    record_id: str = Path(..., description="The record ID"),
+    flow: str = Path(..., description="The flow name for data context"),
+    dataset: str = Path(..., description="The dataset name"),
+    flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Get individual record details with dataset"""
+    return await _get_record_impl(record_id, flow, dataset, flows)
+
+
+async def _get_record_impl(
+    record_id: str,
+    flow: str,
+    dataset: str | None,
+    flows: FlowRunner,
 ):
     """Get individual record details"""
     logger.debug(f"Request received for /api/flows/{flow}/records/{record_id} with dataset {dataset}")
 
-    if not flow:
-        raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
+    if not flow or flow.strip() == "":
+        raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
 
     if not record_id or record_id.strip() == "" or record_id == "undefined":
         raise HTTPException(status_code=422, detail="Invalid record_id parameter")
@@ -239,17 +283,40 @@ async def get_record_endpoint(
 
 
 @flow_data_router.get("/api/flows/{flow}/records/{record_id}/scores")
-async def get_record_scores_endpoint(
-    record_id: str,
+async def get_record_scores_endpoint_flow_only(
+    record_id: str = Path(..., description="The record ID"),
     flow: str = Path(..., description="The flow name for data context"),
     session_id: str = Query(None, description="Optional session ID for filtering"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
+    """Get toxicity scores for a specific record (flow only)"""
+    return await _get_record_scores_impl(record_id, flow, None, session_id, flows)
+
+
+@flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records/{record_id}/scores")
+async def get_record_scores_endpoint_with_dataset(
+    record_id: str = Path(..., description="The record ID"),
+    flow: str = Path(..., description="The flow name for data context"),
+    dataset: str = Path(..., description="The dataset name"),
+    session_id: str = Query(None, description="Optional session ID for filtering"),
+    flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Get toxicity scores for a specific record with dataset"""
+    return await _get_record_scores_impl(record_id, flow, dataset, session_id, flows)
+
+
+async def _get_record_scores_impl(
+    record_id: str,
+    flow: str,
+    dataset: str | None,
+    session_id: str | None,
+    flows: FlowRunner,
+):
     """Get toxicity scores for a specific record"""
     logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/scores with session: {session_id}")
 
-    if not flow:
-        raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
+    if not flow or flow.strip() == "":
+        raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
 
     if not record_id or record_id.strip() == "" or record_id == "undefined":
         raise HTTPException(status_code=422, detail="Invalid record_id parameter")
@@ -274,18 +341,43 @@ async def get_record_scores_endpoint(
 
 
 @flow_data_router.get("/api/flows/{flow}/records/{record_id}/responses")
-async def get_record_responses_endpoint(
-    record_id: str,
+async def get_record_responses_endpoint_flow_only(
+    record_id: str = Path(..., description="The record ID"),
     flow: str = Path(..., description="The flow name for data context"),
     session_id: str = Query(None, description="Optional session ID for filtering"),
     include_reasoning: bool = Query(True, description="Include detailed reasoning"),
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
+    """Get detailed AI responses for a specific record (flow only)"""
+    return await _get_record_responses_impl(record_id, flow, None, session_id, include_reasoning, flows)
+
+
+@flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses")
+async def get_record_responses_endpoint_with_dataset(
+    record_id: str = Path(..., description="The record ID"),
+    flow: str = Path(..., description="The flow name for data context"),
+    dataset: str = Path(..., description="The dataset name"),
+    session_id: str = Query(None, description="Optional session ID for filtering"),
+    include_reasoning: bool = Query(True, description="Include detailed reasoning"),
+    flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Get detailed AI responses for a specific record with dataset"""
+    return await _get_record_responses_impl(record_id, flow, dataset, session_id, include_reasoning, flows)
+
+
+async def _get_record_responses_impl(
+    record_id: str,
+    flow: str,
+    dataset: str | None,
+    session_id: str | None,
+    include_reasoning: bool,
+    flows: FlowRunner,
+):
     """Get detailed AI responses for a specific record"""
     logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/responses with session: {session_id}")
 
-    if not flow:
-        raise HTTPException(status_code=422, detail="Missing 'flow' query parameter")
+    if not flow or flow.strip() == "":
+        raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
 
     if not record_id or record_id.strip() == "" or record_id == "undefined":
         raise HTTPException(status_code=422, detail="Invalid record_id parameter")
@@ -307,3 +399,69 @@ async def get_record_responses_endpoint(
     except Exception as e:
         logger.error(f"Error getting responses for record {record_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error retrieving responses")
+
+
+# --- Score Page Routes ---
+
+@flow_data_router.get("/score/{flow}/{record_id}")
+async def get_score_page_endpoint_flow_only(
+    request: Request,
+    record_id: str = Path(..., description="The record ID"),
+    flow: str = Path(..., description="The flow name"),
+    templates: Annotated[Jinja2Templates, Depends(get_templates)] = None,
+    flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Score page route using flow only"""
+    return await _get_score_page_impl(request, record_id, flow, None, templates, flows)
+
+
+@flow_data_router.get("/score/{flow}/{dataset}/{record_id}")
+async def get_score_page_endpoint_with_dataset(
+    request: Request,
+    record_id: str = Path(..., description="The record ID"),
+    flow: str = Path(..., description="The flow name"),
+    dataset: str = Path(..., description="The dataset name"),
+    templates: Annotated[Jinja2Templates, Depends(get_templates)] = None,
+    flows: Annotated[FlowRunner, Depends(get_flows)] = None,
+):
+    """Score page route using flow and dataset"""
+    return await _get_score_page_impl(request, record_id, flow, dataset, templates, flows)
+
+
+async def _get_score_page_impl(
+    request: Request,
+    record_id: str,
+    flow: str,
+    dataset: str | None,
+    templates: Jinja2Templates,
+    flows: FlowRunner,
+):
+    """Score page route that uses path templates instead of query parameters"""
+    logger.debug(f"Request received for /score/{flow}/{dataset or ''}/{record_id}")
+
+    if not flow or flow.strip() == "":
+        raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
+
+    if not record_id or record_id.strip() == "" or record_id == "undefined":
+        raise HTTPException(status_code=422, detail="Invalid record_id parameter")
+
+    if flow not in flows.flows:
+        raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
+
+    try:
+        # This is an HTML route that will load the score page
+        # The frontend JavaScript will then fetch data via the API endpoints
+        context_data = {
+            "flow": flow,
+            "dataset": dataset,
+            "record_id": record_id
+        }
+
+        return templates.TemplateResponse(
+            "score.html",
+            {"request": request, **context_data}
+        )
+
+    except Exception as e:
+        logger.error(f"Error loading score page for record {record_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error loading score page")

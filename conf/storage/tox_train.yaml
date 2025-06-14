@@ -1,7 +1,7 @@
 # BigQuery Records table configuration for training dataset
 tox_train:
   type: bigquery
-  project_id: dmrc-analysis
+  project_id: prosocial-443205
   dataset_id: toxicity
   table_id: osb_drag_toxic_train
   dataset_name: tox_train

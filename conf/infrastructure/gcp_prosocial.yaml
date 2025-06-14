@@ -8,7 +8,7 @@ clouds:
     region: us-central1
     location: us-central1
     storage_bucket: prosocial-dev
-    bigquery_dataset: buttermilk
+    bigquery_dataset: toxicity
     
   - type: vertex
     project_id: prosocial-443205

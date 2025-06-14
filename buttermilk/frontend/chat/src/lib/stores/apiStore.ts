@@ -120,7 +120,9 @@ function createApiStore<T, R>(
     subscribe,
     fetch,
     fetchWithCache,
-    reset
+    reset,
+    // Expose internal store for manual updates
+    _store: store
   };
 }
 
@@ -165,30 +167,59 @@ export const selectedRecord = createSelectedRecordStore();
 export const selectedCriteria = writable<string>('');
 export const selectedModel = writable<string>('');
 
-// 3. Single store for flow-dependent info
+// 3. Single store for flow-dependent info - will be updated with flow parameter
 export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoResponse>(
-    '/api/flowinfo',
+    '/api/flows/{flow}/info',
     null,
     (data) => data
 );
 
-// 4. Dedicated records store that handles dataset filtering
+// 4. Dedicated records store that handles dataset filtering - will be updated with flow parameter
 export const recordsStore = createApiStore<RecordItem[], RecordItem[]>(
-    '/api/records',
+    '/api/flows/{flow}/records',
     []
 );
 
 // Override recordsStore to fetch when flow or dataset changes
-function refetchRecords() {
+async function refetchRecords() {
   const currentFlow = get(selectedFlow);
   const currentDataset = get(selectedDataset);
   
   if (currentFlow) {
-    const params: Record<string, string> = { flow: currentFlow };
-    if (currentDataset) {
-      params.dataset = currentDataset;
+    // Use path-based URLs instead of query parameters
+    let endpoint;
+    if (currentDataset && currentDataset.trim() !== '') {
+      endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/datasets/${encodeURIComponent(currentDataset)}/records`;
+    } else {
+      endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/records`;
     }
-    recordsStore.fetch(params);
+    
+    // Make direct fetch call and update the records store
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error(`Error fetching records: ${response.statusText} (Status: ${response.status})`);
+      }
+      const data: RecordItem[] = await response.json();
+      
+      // Update recordsStore using its internal writable
+      recordsStore._store.update(state => ({
+        ...state,
+        data: data || [],
+        loading: false,
+        error: null,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      recordsStore._store.update(state => ({
+        ...state,
+        loading: false,
+        error: errorMessage,
+        data: []
+      }));
+      console.error(`>>> Records fetch error for ${endpoint}:`, error);
+    }
   } else {
     recordsStore.reset();
   }
@@ -231,11 +262,39 @@ export function initializeApp() {
 }
 
 // Subscribe to selectedFlow changes to fetch dependent data
-selectedFlow.subscribe((flowValue) => {
+selectedFlow.subscribe(async (flowValue) => {
   if (flowValue) {
     console.log(`Selected flow changed to: ${flowValue}. Fetching flow info...`);
-    const params = { flow: flowValue };
-    flowInfoStore.fetch(params);
+    
+    // Fetch flow info using path-based URL
+    const flowInfoEndpoint = `/api/flows/${encodeURIComponent(flowValue)}/info`;
+    
+    try {
+      const response = await fetch(flowInfoEndpoint);
+      if (!response.ok) {
+        throw new Error(`Error fetching flow info: ${response.statusText} (Status: ${response.status})`);
+      }
+      const data: FlowInfoResponse = await response.json();
+      
+      // Update flowInfoStore using its internal writable
+      flowInfoStore._store.update(state => ({
+        ...state,
+        data: data || null,
+        loading: false,
+        error: null,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      flowInfoStore._store.update(state => ({
+        ...state,
+        loading: false,
+        error: errorMessage,
+        data: null
+      }));
+      console.error(`>>> Flow info fetch error for ${flowInfoEndpoint}:`, error);
+    }
+    
     refetchRecords();
   } else {
     console.log("Flow selection cleared. Resetting flow info store.");

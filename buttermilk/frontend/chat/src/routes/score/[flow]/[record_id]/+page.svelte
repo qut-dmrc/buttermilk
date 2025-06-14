@@ -43,13 +43,17 @@
       error = null;
       
       
-      // Build API URLs with optional dataset parameter
+      // Build API URLs using path parameters when available
       const buildApiUrl = (endpoint: string) => {
-        const url = new URL(`/api/flows/${encodeURIComponent(flowName)}/records/${encodeURIComponent(id)}${endpoint}`, window.location.origin);
-        if (currentDataset) {
-          url.searchParams.append('dataset', currentDataset);
+        let basePath;
+        if (currentDataset && currentDataset.trim() !== '') {
+          // Use dataset path parameter if available
+          basePath = `/api/flows/${encodeURIComponent(flowName)}/datasets/${encodeURIComponent(currentDataset)}/records/${encodeURIComponent(id)}`;
+        } else {
+          // Use flow-only path
+          basePath = `/api/flows/${encodeURIComponent(flowName)}/records/${encodeURIComponent(id)}`;
         }
-        return url.toString();
+        return new URL(`${basePath}${endpoint}`, window.location.origin).toString();
       };
 
       // Fetch record details, scores, and responses in parallel
