@@ -2,173 +2,75 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { selectedFlow, selectedDataset, initializeApp } from '$lib/stores/apiStore';
-  import ToxicityScoreTable from '$lib/components/score/ToxicityScoreTable.svelte';
-  import RecordDisplay from '$lib/components/score/RecordDisplay.svelte';
-  import ScoreMessagesDisplay from '$lib/components/score/ScoreMessagesDisplay.svelte';
 
   let recordId: string;
-  let recordData: any = null;
-  let loading = true;
-  let error: string | null = null;
   let currentFlow: string = '';
   let currentDataset: string = '';
+  let redirecting = true;
 
   $: recordId = $page.params.record_id;
   $: currentFlow = $selectedFlow || $page.url.searchParams.get('flow') || '';
   $: currentDataset = $selectedDataset || $page.url.searchParams.get('dataset') || '';
 
-  // Function to fetch record data from API
-  async function fetchRecordData(id: string) {
-    if (!id || id === 'undefined' || id.trim() === '') {
-      error = 'Invalid record ID provided';
-      loading = false;
-      return;
+  // Redirect to new URL pattern
+  async function redirectToNewPattern() {
+    if (!recordId) return;
+    
+    // If no flow is specified, try to get from store or use default
+    if (!currentFlow) {
+      // Wait for app initialization to get available flows
+      await initializeApp();
+      // Use selectedFlow from store if available, otherwise redirect will show error
+      currentFlow = $selectedFlow || '';
     }
 
-    if (!currentFlow || currentFlow.trim() === '') {
-      error = 'No flow specified';
-      loading = false;
-      return;
-    }
-
-    try {
-      loading = true;
-      error = null;
-      
-      
-      // Build API URLs with optional dataset parameter
-      const buildApiUrl = (endpoint: string) => {
-        const url = new URL(`/api/flows/${encodeURIComponent(currentFlow)}/records/${encodeURIComponent(id)}${endpoint}`, window.location.origin);
-        if (currentDataset) {
-          url.searchParams.append('dataset', currentDataset);
-        }
-        return url.toString();
-      };
-
-      // Fetch record details, scores, and responses in parallel
-      // Note: APIs now return native Buttermilk objects (Record and AgentTrace)
-      const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
-        fetch(buildApiUrl('')),
-        fetch(buildApiUrl('/scores')),
-        fetch(buildApiUrl('/responses'))
-      ]);
-      
-      // Check if all requests were successful
-      if (!recordResponse.ok) {
-        throw new Error(`Failed to fetch record: ${recordResponse.statusText}`);
+    if (currentFlow) {
+      if (currentDataset) {
+        // Redirect to /score/{flow}/{dataset}/{record_id}
+        goto(`/score/${encodeURIComponent(currentFlow)}/${encodeURIComponent(currentDataset)}/${encodeURIComponent(recordId)}`, { replaceState: true });
+      } else {
+        // Redirect to /score/{flow}/{record_id}
+        goto(`/score/${encodeURIComponent(currentFlow)}/${encodeURIComponent(recordId)}`, { replaceState: true });
       }
-      if (!scoresResponse.ok) {
-        throw new Error(`Failed to fetch scores: ${scoresResponse.statusText}`);
-      }
-      if (!responsesResponse.ok) {
-        throw new Error(`Failed to fetch responses: ${responsesResponse.statusText}`);
-      }
-      
-      // Parse responses
-      const [recordDetails, scoresData, responsesData] = await Promise.all([
-        recordResponse.json(),
-        scoresResponse.json(),
-        responsesResponse.json()
-      ]);
-      
-      // Now working with native Buttermilk objects
-      // recordDetails is now a native Record object from Pydantic model_dump()
-      // scoresData contains agent_traces array with native AgentTrace objects
-      // responsesData contains agent_traces array with native AgentTrace objects
-      
-      recordData = {
-        // Native Record object structure
-        id: recordDetails.record_id,
-        name: recordDetails.title || recordDetails.record_id,
-        content: recordDetails.content,
-        metadata: recordDetails.metadata,
-        // Process AgentTrace objects for scores
-        toxicity_scores: {
-          agent_traces: scoresData.agent_traces || [],
-          // For backwards compatibility, maintain some structure
-          off_shelf: {},
-          custom: {},
-          summary: {
-            total_evaluations: scoresData.agent_traces?.length || 0,
-            off_shelf_accuracy: 0.75,
-            custom_average_score: 0.6,
-            agreement_rate: 0.8
-          }
-        },
-        // Native AgentTrace objects for messages
-        messages: responsesData.agent_traces || [],
-        agent_traces: {
-          scores: scoresData.agent_traces || [],
-          responses: responsesData.agent_traces || []
-        }
-      };
-      
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to fetch record data';
-    } finally {
-      loading = false;
+    } else {
+      // If no flow available, show error instead of redirecting
+      redirecting = false;
     }
   }
 
   onMount(() => {
     if (browser) {
-      initializeApp();
-      if (recordId && currentFlow) {
-        fetchRecordData(recordId);
-      }
+      redirectToNewPattern();
     }
   });
 
-  // Watch for recordId or currentFlow changes
-  $: if (browser && recordId && currentFlow) {
-    fetchRecordData(recordId);
+  // Watch for parameter changes to redirect
+  $: if (browser && recordId) {
+    redirectToNewPattern();
   }
 </script>
 
 <svelte:head>
-  <title>Score: {recordId} | Toxicity Analysis</title>
+  <title>Score: {recordId} | Redirecting...</title>
 </svelte:head>
 
 <div class="record-score-page">
-  {#if loading}
+  {#if redirecting}
     <div class="terminal-loading">
-      <div class="loading-spinner">Loading record data...</div>
-    </div>
-  {:else if error}
-    <div class="terminal-error">
-      <h3>Error Loading Record</h3>
-      <p>{error}</p>
-    </div>
-  {:else if recordData}
-    <div class="record-header">
-      <h1 class="record-title">
-        <span class="record-id-badge">{recordData.id}</span>
-        {recordData.name}
-      </h1>
-    </div>
-
-    <!-- Record Content Display -->
-    <div class="section">
-      <h2 class="section-title">Content Under Analysis</h2>
-      <RecordDisplay {recordData} />
-    </div>
-
-    <!-- Toxicity Scores Summary -->
-    <div class="section">
-      <h2 class="section-title">Toxicity Score Summary</h2>
-      <ToxicityScoreTable scores={recordData.toxicity_scores} />
-    </div>
-
-    <!-- Detailed AI Responses -->
-    <div class="section">
-      <h2 class="section-title">AI Model Responses</h2>
-      <ScoreMessagesDisplay messages={recordData.messages} />
+      <div class="loading-spinner">Redirecting to new URL structure...</div>
+      <p>You are being redirected to the new score page format.</p>
     </div>
   {:else}
-    <div class="terminal-warning">
-      <h3>Record Not Found</h3>
-      <p>The requested record '{recordId}' could not be found.</p>
+    <div class="terminal-error">
+      <h3>Cannot Redirect - Flow Required</h3>
+      <p>The score page now requires a flow parameter in the URL.</p>
+      <p>Please access the score page via the proper navigation or include a 'flow' parameter in the URL.</p>
+      <p>Expected format: <code>/score/&lt;flow&gt;/&lt;record_id&gt;</code> or <code>/score/&lt;flow&gt;/&lt;dataset&gt;/&lt;record_id&gt;</code></p>
+      <div class="help-links">
+        <a href="/score" class="help-link">Return to Score Home</a>
+      </div>
     </div>
   {/if}
 </div>
@@ -253,5 +155,40 @@
   .terminal-warning p {
     font-size: 1rem;
     opacity: 0.8;
+  }
+
+  .terminal-loading p {
+    font-size: 1rem;
+    opacity: 0.8;
+    margin-top: 1rem;
+  }
+
+  .help-links {
+    margin-top: 1.5rem;
+  }
+
+  .help-link {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background-color: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    text-decoration: none;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+  }
+
+  .help-link:hover {
+    background-color: rgba(0, 255, 0, 0.3);
+    color: #ffffff;
+  }
+
+  code {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #00ffff;
+    padding: 0.2rem 0.4rem;
+    border-radius: 2px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   }
 </style>

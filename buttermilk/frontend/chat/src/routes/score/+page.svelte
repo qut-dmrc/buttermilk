@@ -15,15 +15,15 @@
     // Initialize app to load flow choices
     initializeApp();
     
-    // If we have records, redirect to the first one
-    if (records.length > 0) {
-      goto(`/score/${records[0].id}`);
+    // If we have records and a selected flow, redirect to the first one
+    if (records.length > 0 && $selectedFlow) {
+      goto(`/score/${encodeURIComponent($selectedFlow)}/${records[0].id}`);
     }
   });
 
   // Watch for records changes and auto-redirect
-  $: if (records.length > 0) {
-    goto(`/score/${records[0].id}`);
+  $: if (records.length > 0 && $selectedFlow) {
+    goto(`/score/${encodeURIComponent($selectedFlow)}/${records[0].id}`);
   }
 </script>
 

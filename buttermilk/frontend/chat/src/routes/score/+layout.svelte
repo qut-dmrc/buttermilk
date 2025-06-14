@@ -100,7 +100,7 @@
               {#each records as record}
                 <li class="record-item">
                   <a 
-                    href="/score/{record.record_id}?flow={encodeURIComponent(currentFlow)}" 
+                    href="/score/{encodeURIComponent(currentFlow)}/{record.record_id}" 
                     class="record-link"
                     class:active={$page.params.record_id === record.record_id}
                   >
