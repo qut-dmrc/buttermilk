@@ -1,6 +1,6 @@
 """Utilities for converting Pydantic models to BigQuery schemas."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 from google.cloud import bigquery
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
@@ -30,6 +30,10 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List
         # Skip computed fields - they're not stored
         if field_name in getattr(model_class, "model_computed_fields", {}):
             continue
+            
+        # Skip alt_text field - it's legacy and redundant with metadata
+        if field_name == "alt_text":
+            continue
 
         bq_field = _convert_pydantic_field_to_bq(field_name, field_info)
         if bq_field:
@@ -44,9 +48,16 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     # Get the field type
     field_type = field_info.annotation
 
-    # Handle Optional types (Union[T, None])
+    # Handle Optional types (Union[T, None] or T | None)
     is_optional = False
-    if hasattr(field_type, "__origin__") and field_type.__origin__ is type(Union):
+    
+    # Handle both Union[str, None] and str | None syntax
+    if hasattr(field_type, "__args__") and field_type.__args__:
+        args = field_type.__args__
+        if len(args) == 2 and type(None) in args:
+            is_optional = True
+            field_type = args[0] if args[1] is type(None) else args[1]
+    elif hasattr(field_type, "__origin__") and field_type.__origin__ is type(Union):
         args = field_type.__args__
         if len(args) == 2 and type(None) in args:
             is_optional = True
@@ -74,13 +85,20 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
         return None
     else:
         # For complex types like Sequence[str | Image], store as JSON if it contains strings
-        # or skip if it's primarily images
-        if "Image" in str(field_type):
-            return None  # Skip image-heavy fields
-        bq_type = "JSON"
+        # Special case for content field - always store even if it contains images
+        if field_name == "content":
+            bq_type = "JSON"  # Store content as JSON regardless of image presence
+        elif "Image" in str(field_type):
+            return None  # Skip other image-heavy fields
+        else:
+            bq_type = "JSON"
 
     # Determine mode
-    mode = "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
+    # Special case: record_id should always be REQUIRED even though it has a default_factory
+    if field_name == "record_id":
+        mode = "REQUIRED"
+    else:
+        mode = "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
 
     return bigquery.SchemaField(name=field_name, field_type=bq_type, mode=mode, description=field_info.description)
 

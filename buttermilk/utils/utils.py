@@ -275,6 +275,15 @@ def scrub_serializable(d) -> T:
     elif isinstance(d, (CloudPath, pathlib.Path)):
         # convert path objects to strings
         d = str(d)
+    
+    # Handle PIL Image objects - convert to base64 for JSON storage
+    try:
+        from PIL.Image import Image
+        if isinstance(d, Image):
+            d = image_to_base64(d)
+    except ImportError:
+        # PIL not available, skip image handling
+        pass
 
     return d
 
