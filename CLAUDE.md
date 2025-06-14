@@ -41,6 +41,40 @@ The current `Record.content: str | Sequence[str | Image]` design needs improveme
 
 *Decision deferred - current base64 serialization works for now*
 
+## Key Codebase Architecture Notes
+
+### Configuration System
+- **DataSourceConfig vs StorageConfig**: Two separate config models exist. DataSourceConfig has more fields (glob, agg, group, etc.). StorageConfig is used in newer storage system. Both support `columns` field for field mapping.
+- **OmegaConf to Pydantic**: Raw configs from YAML files are OmegaConf objects. Must convert to proper Pydantic models using `DataSourceConfig(**dict(config))` before passing to data loaders.
+- **columns field**: Maps source field names to Record field names. Can be empty `{}`. Pattern: `{target_record_field: source_data_field}`.
+
+### Data Loading & Storage
+- **create_data_loader()**: Expects `DataSourceConfig`, not raw config. All loaders support column mapping except deprecated ones.
+- **Flow storage access**: `flow_runner.flows[flow_name].storage[dataset_name]` - flows can have multiple datasets
+- **BM instance BigQuery**: Use `BigQueryDefaults().dataset_id` for default dataset, NOT `bm_instance.save.dataset_id` (save is a function)
+
+### Frontend API Structure  
+- **Frontend API routes**: Proxy to backend with dataset parameter support: `/api/records?flow=X&dataset=Y`
+- **Flow/dataset separation**: Frontend has separate dropdowns for flow → dataset → records selection
+- **Score page dataset handling**: Remove hardcoded 'tox' defaults, use URL params `flow` and `dataset`
+
+### Storage Access Patterns
+```python
+# CORRECT - Convert raw config to DataSourceConfig
+storage_config = DataService._convert_to_data_source_config(raw_config)
+loader = create_data_loader(storage_config)
+
+# CORRECT - Access dataset ID
+from buttermilk._core.storage_config import BigQueryDefaults  
+dataset_id = BigQueryDefaults().dataset_id
+
+# WRONG - Don't use raw OmegaConf directly
+loader = create_data_loader(raw_omegaconf_config)  # Fails validation
+
+# WRONG - Don't access save as attribute  
+dataset_id = bm_instance.save.dataset_id  # save is a function
+```
+
 ## Development Commands
 
 - **Install dependencies**: `uv install` (installs main + ml + dev groups by default)
