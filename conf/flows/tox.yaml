@@ -1,7 +1,7 @@
 
 # COMMENTED OUT # @package _global_
 defaults:
-  - /input_sources: drag
+  - /storage: drag
   - _self_
   - /agents@agents.judge: judge
   - /agents@agents.synth: synth

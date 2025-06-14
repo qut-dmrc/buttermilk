@@ -2,7 +2,7 @@
 
 defaults:
   - _self_
-  - /input_sources: survey_responses
+  - /storage: survey_responses
   - /agents@agents.judge: judge
   - /agents@agents.synth: synth
   - /agents@observers.spy: spy

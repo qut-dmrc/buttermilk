@@ -28,7 +28,7 @@ osb:
       inputs:
         answers: search
         
-  input_sources:
+  storage:
     cases:
       type: vector
       uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json

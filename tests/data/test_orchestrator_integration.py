@@ -56,11 +56,7 @@ class TestOrchestratorDataLoaderIntegration:
 
     async def test_orchestrator_load_data(self, sample_data_config):
         """Test that orchestrator can load data using new system."""
-        orchestrator = MockOrchestrator(
-            orchestrator="mock",
-            name="test_orchestrator",
-            input_sources=sample_data_config
-        )
+        orchestrator = MockOrchestrator(orchestrator="mock", name="test_orchestrator", storage=sample_data_config)
 
         # Test load_data method
         await orchestrator.load_data()
@@ -78,11 +74,7 @@ class TestOrchestratorDataLoaderIntegration:
 
     async def test_orchestrator_get_record_by_id(self, sample_data_config):
         """Test that orchestrator can find specific records by ID."""
-        orchestrator = MockOrchestrator(
-            orchestrator="mock", 
-            name="test_orchestrator",
-            input_sources=sample_data_config
-        )
+        orchestrator = MockOrchestrator(orchestrator="mock", name="test_orchestrator", storage=sample_data_config)
 
         await orchestrator.load_data()
 
@@ -94,11 +86,7 @@ class TestOrchestratorDataLoaderIntegration:
 
     async def test_orchestrator_record_not_found(self, sample_data_config):
         """Test that orchestrator raises error for non-existent record."""
-        orchestrator = MockOrchestrator(
-            orchestrator="mock",
-            name="test_orchestrator", 
-            input_sources=sample_data_config
-        )
+        orchestrator = MockOrchestrator(orchestrator="mock", name="test_orchestrator", storage=sample_data_config)
 
         await orchestrator.load_data()
 
@@ -140,11 +128,7 @@ class TestOrchestratorDataLoaderIntegration:
             "csv_source": DataSourceConfig(type="file", path=str(csv_path))
         }
 
-        orchestrator = MockOrchestrator(
-            orchestrator="mock",
-            name="test_orchestrator",
-            input_sources=data_config
-        )
+        orchestrator = MockOrchestrator(orchestrator="mock", name="test_orchestrator", storage=data_config)
 
         await orchestrator.load_data()
 
@@ -179,11 +163,7 @@ class TestOrchestratorDataLoaderIntegration:
             "large_data": DataSourceConfig(type="file", path=str(jsonl_path))
         }
 
-        orchestrator = MockOrchestrator(
-            orchestrator="mock",
-            name="test_orchestrator", 
-            input_sources=data_config
-        )
+        orchestrator = MockOrchestrator(orchestrator="mock", name="test_orchestrator", storage=data_config)
 
         await orchestrator.load_data()
 

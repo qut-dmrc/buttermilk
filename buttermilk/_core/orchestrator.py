@@ -77,7 +77,7 @@ class OrchestratorProtocol(BaseModel):
         save (SaveInfo | None): Optional configuration for saving the results of
             the flow (e.g., to a file, database, or cloud storage). If None,
             results might not be persisted automatically by the orchestrator.
-        input_sources (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
+        storage (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
             names for input data sources and values are `DataSourceConfig` objects
             defining how to load and configure each input data source for the flow.
             This is specifically for data that feeds INTO the flow.
@@ -122,7 +122,7 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    input_sources: Mapping[str, DataSourceConfig] = Field(
+    storage: Mapping[str, DataSourceConfig] = Field(
         default_factory=dict,
         description="Configuration for input data sources to be loaded for the flow, keyed by a descriptive name.",
     )
@@ -141,7 +141,7 @@ class OrchestratorProtocol(BaseModel):
 
     _validate_parameters: classmethod = field_validator(
         "parameters",
-        "input_sources",
+        "storage",
         "agents",
         "observers",
         mode="before",
@@ -183,7 +183,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         _flow_data (KeyValueCollector): An internal state collector used to store
             and manage data passed between steps or used for templating within the flow.
         _input_loaders (dict[str, DataLoader]): A dictionary to store loaded input data loaders,
-            keyed by the names defined in the `input_sources` configuration. Values are
+            keyed by the names defined in the `storage` configuration. Values are
             DataLoader instances that provide iterators over Record objects.
         _records (list[Record]): A list of `Record` objects currently loaded or
             being processed by the flow.
@@ -255,12 +255,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """Creates data loaders from the configured data sources.
 
         Initializes `self._input_loaders` by creating appropriate DataLoader
-        instances for each `DataSourceConfig` in `self.input_sources`.
+        instances for each `DataSourceConfig` in `self.storage`.
         This method should be called before attempting to access data via
         `get_record_dataset` if data sources are defined.
         """
-        if self.input_sources:  # Only load if data sources are configured
-            for source_name, config in self.input_sources.items():
+        if self.storage:  # Only load if data sources are configured
+            for source_name, config in self.storage.items():
                 try:
                     loader = create_data_loader(config)
                     self._input_loaders[source_name] = loader

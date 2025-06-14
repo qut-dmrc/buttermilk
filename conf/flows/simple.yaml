@@ -1,6 +1,6 @@
 
 defaults:
-  - /input_sources: tja_train 
+  - /storage: tja_train 
   - /agents:
     - judge
     - synth
