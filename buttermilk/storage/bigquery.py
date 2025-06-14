@@ -182,33 +182,49 @@ class BigQueryStorage(Storage, StorageClient):
             return False
 
     def create(self) -> None:
-        """Create the BigQuery table if it doesn't exist."""
-        if self.exists():
-            return
-
+        """Create the BigQuery table if it doesn't exist, or update schema if needed."""
         try:
             table_id = self.get_table_ref()
 
             # Use the schema from Pydantic model
             from buttermilk.utils.schema_utils import get_record_bigquery_schema
 
-            schema = get_record_bigquery_schema()
+            expected_schema = get_record_bigquery_schema()
 
             # Use custom schema if provided in config
             if self.get_schema():
-                schema = self.get_schema()
+                expected_schema = self.get_schema()
 
-            # Create table with clustering
-            table = bigquery.Table(table_id, schema=schema)
+            if self.exists():
+                # Check if schema needs updating
+                existing_table = self.client.get_table(table_id)
+                existing_field_names = {field.name for field in existing_table.schema}
+                expected_field_names = {field.name for field in expected_schema}
+                
+                missing_fields = expected_field_names - existing_field_names
+                if missing_fields:
+                    logger.info(f"Table {table_id} exists but missing fields: {missing_fields}")
+                    logger.info(f"Updating table schema to add missing fields...")
+                    
+                    # Update the table schema
+                    existing_table.schema = expected_schema
+                    updated_table = self.client.update_table(existing_table, ["schema"])
+                    logger.info(f"Updated BigQuery table schema: {table_id}")
+                else:
+                    logger.debug(f"Table {table_id} exists with correct schema")
+                return
+
+            # Create new table
+            table = bigquery.Table(table_id, schema=expected_schema)
             table.clustering_fields = self.config.clustering_fields or ["dataset_name", "record_id"]
             table.description = f"Buttermilk Records table for dataset '{self.config.dataset_name}'"
 
             table = self.client.create_table(table, exists_ok=True)
-            logger.info(f"Created/verified BigQuery table: {table_id}")
+            logger.info(f"Created BigQuery table: {table_id}")
 
         except Exception as e:
-            logger.error(f"Error creating BigQuery table: {e}")
-            raise StorageError(f"Failed to create table: {e}") from e
+            logger.error(f"Error creating/updating BigQuery table: {e}")
+            raise StorageError(f"Failed to create/update table: {e}") from e
 
     def _build_select_query(self) -> str:
         """Build SQL query for selecting records."""
@@ -301,7 +317,6 @@ class BigQueryStorage(Storage, StorageClient):
             "split_type": self.config.split_type,
             "content": record.content,
             "metadata": record.metadata,
-            "alt_text": record.alt_text,
             "ground_truth": record.ground_truth,
             "uri": record.uri,
             "mime": record.mime,
