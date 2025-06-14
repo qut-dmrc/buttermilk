@@ -1,7 +1,7 @@
 
 # COMMENTED OUT # @package _global_
 defaults:
-  - /data: drag
+  - /input_sources: drag
   - _self_
   - /agents@agents.judge: judge
   - /agents@agents.synth: synth
@@ -10,7 +10,7 @@ defaults:
   - /agents@observers.scorer: scorer
   - /agents@observers.spy: spy
   - /agents@observers.host_sequencer: host/sequencer
-  - /data@storage: tox_bigquery
+  - /storage@storage: tox_bigquery
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "tox"

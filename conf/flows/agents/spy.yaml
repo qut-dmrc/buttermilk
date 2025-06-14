@@ -1,7 +1,0 @@
-spy:
-  name: "🕵️spy"
-  description: Log agent outputs to storage
-  role: spy
-  agent_obj: SpyAgent
-  parameters:
-    save: {..parameters.save}

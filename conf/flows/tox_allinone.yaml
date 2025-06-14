@@ -5,16 +5,32 @@ tox:
   description: "Toxicity assessment with all configuration in one file"
 
   # Data configuration embedded directly
+  # BigQuery Records table configuration for training dataset
   storage:
-    type: bigquery
-    dataset_id: testing
-    table_id: records
-    dataset_name: tox
-    split_type: train
-    # source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
-    clustering_fields:
-      - record_id
-      - dataset_name
+    tox_train:
+      type: bigquery
+      project_id: dmrc-analysis
+      dataset_id: toxicity
+      table_id: osb_drag_toxic_train
+      dataset_name: tox_train
+      split_type: train
+      randomize: true
+      batch_size: 1000
+
+      # Table creation settings
+      auto_create: true
+      clustering_fields: ["record_id", "dataset_name"]
+
+  # tox_gcs:
+  #   type: bigquery
+  #   dataset_id: testing
+  #   table_id: records
+  #   dataset_name: tox
+  #   split_type: train
+  #   # source_jsonl: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
+  #   clustering_fields:
+  #     - record_id
+  #     - dataset_name
 
   # Parameters defined inline
   parameters:

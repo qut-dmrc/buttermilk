@@ -5,10 +5,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
+
+pytestmark = pytest.mark.anyio
 
 
 class MockOrchestrator(Orchestrator):
@@ -40,11 +41,11 @@ class TestOrchestratorDataLoaderIntegration:
             {"record_id": "test2", "content": "Second test record", "category": "B"},
             {"record_id": "test3", "content": "Third test record", "category": "A"}
         ]
-        
+
         with open(jsonl_path, 'w') as f:
             for record in test_records:
                 f.write(json.dumps(record) + '\n')
-        
+
         return {
             "test_data": DataSourceConfig(
                 type="file",
@@ -58,16 +59,16 @@ class TestOrchestratorDataLoaderIntegration:
         orchestrator = MockOrchestrator(
             orchestrator="mock",
             name="test_orchestrator",
-            data=sample_data_config
+            input_sources=sample_data_config
         )
-        
+
         # Test load_data method
         await orchestrator.load_data()
-        
+
         # Verify data loaders were created
-        assert len(orchestrator._data_loaders) == 1
-        assert "test_data" in orchestrator._data_loaders
-        
+        assert len(orchestrator._input_loaders) == 1
+        assert "test_data" in orchestrator._input_loaders
+
         # Verify we can get records
         records = await orchestrator.get_all_records("test_data")
         assert len(records) == 3
@@ -80,11 +81,11 @@ class TestOrchestratorDataLoaderIntegration:
         orchestrator = MockOrchestrator(
             orchestrator="mock", 
             name="test_orchestrator",
-            data=sample_data_config
+            input_sources=sample_data_config
         )
-        
+
         await orchestrator.load_data()
-        
+
         # Test getting specific record
         record = await orchestrator.get_record_dataset("test1")
         assert record.record_id == "test1"
@@ -96,11 +97,11 @@ class TestOrchestratorDataLoaderIntegration:
         orchestrator = MockOrchestrator(
             orchestrator="mock",
             name="test_orchestrator", 
-            data=sample_data_config
+            input_sources=sample_data_config
         )
-        
+
         await orchestrator.load_data()
-        
+
         # Test getting non-existent record
         from buttermilk._core.exceptions import ProcessingError
         with pytest.raises(ProcessingError, match="Unable to find requested record"):
@@ -112,11 +113,11 @@ class TestOrchestratorDataLoaderIntegration:
             orchestrator="mock",
             name="test_orchestrator"
         )
-        
+
         # Should handle gracefully
         await orchestrator.load_data()
-        assert len(orchestrator._data_loaders) == 0
-        
+        assert len(orchestrator._input_loaders) == 0
+
         # Should return empty list
         records = await orchestrator.get_all_records()
         assert records == []
@@ -127,40 +128,40 @@ class TestOrchestratorDataLoaderIntegration:
         jsonl_path = tmp_path / "data.jsonl"
         with open(jsonl_path, 'w') as f:
             f.write(json.dumps({"record_id": "jsonl1", "content": "JSONL content"}) + '\n')
-        
-        # Create CSV file  
+
+        # Create CSV file
         csv_path = tmp_path / "data.csv"
         with open(csv_path, 'w') as f:
             f.write("record_id,content\n")
             f.write("csv1,CSV content\n")
-        
+
         data_config = {
             "jsonl_source": DataSourceConfig(type="file", path=str(jsonl_path)),
             "csv_source": DataSourceConfig(type="file", path=str(csv_path))
         }
-        
+
         orchestrator = MockOrchestrator(
             orchestrator="mock",
             name="test_orchestrator",
-            data=data_config
+            input_sources=data_config
         )
-        
+
         await orchestrator.load_data()
-        
+
         # Verify both loaders created
-        assert len(orchestrator._data_loaders) == 2
-        assert "jsonl_source" in orchestrator._data_loaders
-        assert "csv_source" in orchestrator._data_loaders
-        
+        assert len(orchestrator._input_loaders) == 2
+        assert "jsonl_source" in orchestrator._input_loaders
+        assert "csv_source" in orchestrator._input_loaders
+
         # Test getting records from specific source
         jsonl_records = await orchestrator.get_all_records("jsonl_source") 
         csv_records = await orchestrator.get_all_records("csv_source")
-        
+
         assert len(jsonl_records) == 1
         assert len(csv_records) == 1
         assert jsonl_records[0].content == "JSONL content"
         assert csv_records[0].content == "CSV content"
-        
+
         # Test getting all records
         all_records = await orchestrator.get_all_records()
         assert len(all_records) == 2
@@ -173,19 +174,19 @@ class TestOrchestratorDataLoaderIntegration:
             for i in range(100):
                 record = {"record_id": f"record_{i}", "content": f"Content {i}"}
                 f.write(json.dumps(record) + '\n')
-        
+
         data_config = {
             "large_data": DataSourceConfig(type="file", path=str(jsonl_path))
         }
-        
+
         orchestrator = MockOrchestrator(
             orchestrator="mock",
             name="test_orchestrator", 
-            data=data_config
+            input_sources=data_config
         )
-        
+
         await orchestrator.load_data()
-        
+
         # Test that we can find a specific record without loading all
         # (This demonstrates streaming behavior)
         record = await orchestrator.get_record_dataset("record_50")

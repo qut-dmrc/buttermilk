@@ -2,7 +2,7 @@ defaults:
   - _self_
   - local
   - llms@bm.llms: lite
-  - data@bm.data: []
+  - input_sources@bm.input_sources: []
 
 bm:
   _target_: buttermilk._core.bm_init.BM

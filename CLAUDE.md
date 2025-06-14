@@ -138,3 +138,4 @@ Agent (ABC) <- AgentConfig
 
 ## Development hints
 * When dumping pydantic objects, use pydantic's model_dump()
+* Add 'pytestmark = pytest.mark.anyio' near the top of test modules

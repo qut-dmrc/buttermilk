@@ -1,8 +1,0 @@
-fetch:
-  role: FETCH
-  name: "🔍 fetch record"
-  agent_obj: FetchAgent
-  description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
-  data: ${...storage}
-  inputs:
-    prompt: 'prompt||content'

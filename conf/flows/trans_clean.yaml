@@ -15,7 +15,8 @@ defaults:
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration
-  - /data@trans.storage: tox_bigquery
+  - /storage@trans.storage: tja_train
+  - /storage@trans.parameters.save: tox
 
 trans:
   # Core flow configuration
@@ -26,6 +27,8 @@ trans:
   parameters:
     human_in_loop: ${run.human_in_loop}
     criteria: []  # Will be populated by criteria default above
+
+    save: {}
 
   # These will be populated by the defaults
   agents: {}

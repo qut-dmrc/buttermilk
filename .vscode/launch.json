@@ -65,7 +65,7 @@
       "justMyCode": true,
       "args": [
         "+flows=[trans_clean, tox_allinone]",
-        "run=api",
+        "+run=api",
         "+llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
