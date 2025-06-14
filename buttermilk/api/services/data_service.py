@@ -285,7 +285,9 @@ class DataService:
             query_runner = QueryRunner(bq_client=bq_client)
 
             # Use BM instance's storage defaults for dataset configuration
-            dataset_id = bm_instance.save.dataset_id
+            from buttermilk._core.storage_config import BigQueryDefaults
+            bq_defaults = BigQueryDefaults()
+            dataset_id = bq_defaults.dataset_id
 
             # Build the query for scores
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -396,7 +398,9 @@ class DataService:
             query_runner = QueryRunner(bq_client=bq_client)
 
             # Use BM instance's storage defaults for dataset configuration
-            dataset_id = bm_instance.save.dataset_id
+            from buttermilk._core.storage_config import BigQueryDefaults
+            bq_defaults = BigQueryDefaults()
+            dataset_id = bq_defaults.dataset_id
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"

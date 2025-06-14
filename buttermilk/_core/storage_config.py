@@ -120,6 +120,40 @@ class StorageConfig(BaseModel):
         description="Maximum number of records to process"
     )
 
+    # Additional fields from DataSourceConfig for compatibility
+    max_records_per_group: int = Field(
+        default=-1,
+        description="Maximum records to process per group if grouping is applied. -1 for no limit."
+    )
+    glob: str = Field(
+        default="**/*",
+        description="Glob pattern for matching files if type is 'file'."
+    )
+    join: dict[str, str] = Field(
+        default_factory=dict,
+        description="Configuration for joining with other data sources."
+    )
+    agg: bool = Field(
+        default=False,
+        description="Whether to aggregate results."
+    )
+    group: dict[str, str] = Field(
+        default_factory=dict,
+        description="Grouping configuration (new_group_col: original_col_or_expr)."
+    )
+    last_n_days: int = Field(
+        default=7,
+        description="For time-series data, retrieve from the last N days."
+    )
+    name: str = Field(
+        default="",
+        description="Name identifier for the storage configuration."
+    )
+    split: str = Field(
+        default="train",
+        description="Data split identifier (train/test/val)."
+    )
+
     # File-based storage specific
     index: list[str] | None = Field(
         default=None,

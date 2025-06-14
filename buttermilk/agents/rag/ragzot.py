@@ -11,6 +11,8 @@ from typing import Any, Self
 from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
+from buttermilk._core.contract import ToolOutput
+from buttermilk._core.types import UserMessage
 from buttermilk.agents.rag.rag_agent import RagAgent, RefResult, Reference, ResearchResult
 
 import pydantic
