@@ -803,14 +803,14 @@ class BM(SessionInfo):
             return_df=return_df,
         )
 
-    def get_storage(self, config: StorageConfig | None = None) -> Any:
+    def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
         """Factory method to create unified storage instances.
         
         Creates the appropriate storage class based on the configuration type,
         using this BM instance for client access and default configurations.
         
         Args:
-            config: Storage configuration. If None, uses self.storage_defaults
+            config: Storage configuration (StorageConfig object, dict, or None)
             
         Returns:
             Storage instance (BigQueryStorage, FileStorage, etc.)
@@ -819,6 +819,21 @@ class BM(SessionInfo):
             ValueError: If storage type is not supported
         """
         from buttermilk.storage import BigQueryStorage, FileStorage
+
+        # Ensure config is a StorageConfig object
+        if config is None:
+            raise ValueError("Storage configuration is required")
+        elif isinstance(config, dict):
+            # Convert dict/OmegaConf to StorageConfig object
+            config_dict = dict(config)  # Convert OmegaConf to plain dict if needed
+            config = StorageConfig(**config_dict)
+        elif not isinstance(config, StorageConfig):
+            # Handle other config types (like OmegaConf objects)
+            try:
+                config_dict = dict(config)
+                config = StorageConfig(**config_dict)
+            except Exception as e:
+                raise ValueError(f"Cannot convert config to StorageConfig: {e}") from e
 
         # Create appropriate storage instance based on type
         storage_type = config.type
