@@ -1,0 +1,14 @@
+# BigQuery Records table configuration for training dataset
+tox_train:
+  type: bigquery
+  project_id: dmrc-analysis
+  dataset_id: toxicity
+  table_id: osb_drag_toxic_train
+  dataset_name: tox_train
+  split_type: train
+  randomize: true
+  batch_size: 1000
+
+  # Table creation settings
+  auto_create: true
+  clustering_fields: ["record_id", "dataset_name"]
