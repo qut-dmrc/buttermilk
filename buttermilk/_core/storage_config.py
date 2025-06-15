@@ -226,8 +226,8 @@ class StorageConfig(BaseModel):
 class BigQueryDefaults(BaseModel):
     """Default configuration values specifically for BigQuery operations."""
 
-    dataset_id: str = Field(default="buttermilk")
-    table_id: str = Field(default="records")
+    dataset_id: str | None = Field(default=None)
+    table_id: str | None = Field(default=None)
     randomize: bool = Field(default=True)
     batch_size: int = Field(default=1000)
     auto_create: bool = Field(default=True)

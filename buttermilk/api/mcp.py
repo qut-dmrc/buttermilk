@@ -126,7 +126,7 @@ class JudgeRequest(BaseModel):
     text: str = Field(..., description="Text content to judge")
     criteria: str = Field(..., description="Criteria to judge against") 
     model: str = Field("gpt4o", description="LLM model to use")
-    flow: str = Field("tox", description="Flow configuration to use")
+    flow: str = Field(..., description="Flow configuration to use")
 
 @mcp_router.post("/tools/judge", response_model=MCPToolResponse)
 async def judge_content(
@@ -201,7 +201,7 @@ class SynthesizeRequest(BaseModel):
     text: str = Field(..., description="Text content to synthesize")
     criteria: str = Field(..., description="Criteria to use for synthesis")
     model: str = Field("gpt4o", description="LLM model to use")
-    flow: str = Field("tox", description="Flow configuration to use")
+    flow: str = Field(..., description="Flow configuration to use")
 
 @mcp_router.post("/tools/synthesize", response_model=MCPToolResponse)
 async def synthesize_content(
@@ -277,7 +277,7 @@ class DifferencesRequest(BaseModel):
     text2: str = Field(..., description="Second text to compare")
     criteria: str = Field(..., description="Criteria to use for comparison")
     model: str = Field("gpt4o", description="LLM model to use")
-    flow: str = Field("tox", description="Flow configuration to use")
+    flow: str = Field(..., description="Flow configuration to use")
 
 @mcp_router.post("/tools/find_differences", response_model=MCPToolResponse)
 async def find_differences(
@@ -466,7 +466,7 @@ class AnalyzeRecordRequest(BaseModel):
     """Request model for multi-agent record analysis."""
     record_id: str = Field(..., description="Record ID to analyze")
     agents: list[str] = Field(..., description="List of agent roles to run")
-    flow: str = Field("tox", description="Flow configuration to use")
+    flow: str = Field(..., description="Flow configuration to use")
     criteria: str = Field("", description="Optional criteria for analysis")
     model: str = Field("gpt4o", description="LLM model to use")
 

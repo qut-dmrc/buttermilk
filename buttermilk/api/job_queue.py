@@ -59,11 +59,19 @@ class JobQueueClient(BaseModel):
 
         return self
 
-    async def pull_tox_example(self) -> RunRequest:
+    async def pull_tox_example(self, flow: str = "tox") -> RunRequest:
+        """Pull a toxicity example for testing purposes.
+        
+        Args:
+            flow: Flow configuration to use (defaults to 'tox' for backward compatibility)
+            
+        Returns:
+            RunRequest configured for toxicity testing
+        """
         record = toxic_record()
 
         data = {"ui_type": "web", "parameters": {"criteria": "criteria_ordinary"}}
-        request = RunRequest(flow="tox", records=[record], **data)
+        request = RunRequest(flow=flow, records=[record], **data)
         return request
 
     async def pull_single_task(self) -> RunRequest | None:

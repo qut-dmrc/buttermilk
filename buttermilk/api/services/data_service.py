@@ -296,24 +296,21 @@ class DataService:
 
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
-                logger.warning(f"Flow '{flow_name}' not found in flow runner. Using default dataset.")
-                from buttermilk._core.storage_config import BigQueryDefaults
-                bq_defaults = BigQueryDefaults()
-                dataset_id = bq_defaults.dataset_id
-                table_id = "flows"  # Default table name
-            else:
-                flow_config = flow_runner.flows[flow_name]
-                save_config = flow_config.parameters.get("save", {})
+                raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
+            
+            flow_config = flow_runner.flows[flow_name]
+            save_config = flow_config.parameters.get("save", {})
 
-                if save_config and save_config.get("type") == "bigquery":
-                    dataset_id = save_config.get("dataset_id", "testing")
-                    table_id = save_config.get("table_id", "flows")
-                else:
-                    # Fallback to default if no save config or not BigQuery
-                    from buttermilk._core.storage_config import BigQueryDefaults
-                    bq_defaults = BigQueryDefaults()
-                    dataset_id = bq_defaults.dataset_id
-                    table_id = "flows"
+            if not save_config or save_config.get("type") != "bigquery":
+                raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
+            
+            dataset_id = save_config.get("dataset_id")
+            table_id = save_config.get("table_id")
+            
+            if not dataset_id:
+                raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
+            if not table_id:
+                raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for scores using the correct table reference
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -428,24 +425,21 @@ class DataService:
 
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
-                logger.warning(f"Flow '{flow_name}' not found in flow runner. Using default dataset.")
-                from buttermilk._core.storage_config import BigQueryDefaults
-                bq_defaults = BigQueryDefaults()
-                dataset_id = bq_defaults.dataset_id
-                table_id = "flows"  # Default table name
-            else:
-                flow_config = flow_runner.flows[flow_name]
-                save_config = flow_config.parameters.get("save", {})
+                raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
+            
+            flow_config = flow_runner.flows[flow_name]
+            save_config = flow_config.parameters.get("save", {})
 
-                if save_config and save_config.get("type") == "bigquery":
-                    dataset_id = save_config.get("dataset_id", "testing")
-                    table_id = save_config.get("table_id", "flows")
-                else:
-                    # Fallback to default if no save config or not BigQuery
-                    from buttermilk._core.storage_config import BigQueryDefaults
-                    bq_defaults = BigQueryDefaults()
-                    dataset_id = bq_defaults.dataset_id
-                    table_id = "flows"
+            if not save_config or save_config.get("type") != "bigquery":
+                raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
+            
+            dataset_id = save_config.get("dataset_id")
+            table_id = save_config.get("table_id")
+            
+            if not dataset_id:
+                raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
+            if not table_id:
+                raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"

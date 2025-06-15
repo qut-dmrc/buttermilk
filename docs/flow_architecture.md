@@ -8,7 +8,7 @@ Dense technical reference for trans.yaml and tox.yaml flows in Buttermilk. For H
 ### Trans Flow (trans.yaml)
 ```yaml
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-data: tja_train (journalism training dataset)
+data: tja (journalism training dataset)
 agents: [judge, synth, differences]
 observers: [spy, owl, scorer, fetch, host/sequencer]
 criteria: trans (advocacy/journalism quality criteria)

@@ -21,7 +21,7 @@ const MOCK_RECORDS: Record<string, any> = {
     content: 'Sample content for trans-related analysis from Clickhole dataset.',
     metadata: {
       created_at: '2024-01-17T16:45:00Z',
-      dataset: 'tja_train',
+      dataset: 'tja',
       word_count: 189,
       char_count: 1067
     }

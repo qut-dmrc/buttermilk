@@ -50,7 +50,7 @@ def cli():
 
 @cli.command()
 @click.option("--source", required=True, help="Source JSONL file path (local or GCS)")
-@click.option("--dataset-name", required=True, help="Dataset name (e.g., osb, tox, drag)")
+@click.option("--dataset-name", required=True, help="Dataset name for the source data")
 @click.option("--project-id", help="Google Cloud Project ID (uses default from config if not provided)")
 @click.option("--split-type", default="train", help="Split type (train/test/val)")
 @click.option("--mapping-file", help="JSON file with field mappings")

@@ -77,15 +77,11 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # app.include_router(batch_router, prefix="/api")
     # logger.info("Batch router added.")
 
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://www.city-journal.org/article/what-are-we-doing-to-children"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/osb' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Is it still hate speech if the targeted group is not explicitly named?"}'
-
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
+    # Example usage:
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Your text content here"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Your text content here"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://example.com/article"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "your_record_id"}'
 
     logger.info("Defining exception handler.")
 
