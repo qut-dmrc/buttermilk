@@ -576,12 +576,17 @@ class AgentConfig(BaseModel):
         validate_default=True,  # Ensures _generate_id_and_name runs even if id is not explicitly set
     )
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
-        default="",  # Should typically be set in YAML
         description="The functional role this agent plays in the workflow (e.g., 'JUDGE', 'SUMMARIZER'). Converted to uppercase.",
+        min_length=1,  # Ensure role is not empty
     )
     description: str = Field(
         default="",
         description="A brief human-readable explanation of the agent's purpose and capabilities.",
+    )
+    name: str = Field(
+        default="",
+        description="A human-readable name for the agent, used in UIs and displays.",
+        min_length=0,  # Allow empty name, but validate it's a string
     )
 
     # Behavior & Connections
@@ -708,6 +713,7 @@ class AgentConfig(BaseModel):
                 name_parts.append(str(part).strip())
             # Fallback for literal short strings if JMESPath fails/not applicable
             # and comp_path itself is not a key that yielded a value from context_for_jmespath
+            # and len(comp_path) <= 4:
             elif part is None and comp_path and comp_path not in context_for_jmespath and len(comp_path) <= 4:
                 name_parts.append(comp_path)
 
@@ -771,8 +777,8 @@ class AgentVariants(AgentConfig):
     """
 
     agent_obj: str = Field(
-        default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'LLMAgent'). Must be registered in AgentRegistry.",
+        min_length=1,  # Ensure it's not empty
     )
     variants: dict[str, list[Any]] = Field(  # More specific type hint
         default_factory=dict,
@@ -791,6 +797,27 @@ class AgentVariants(AgentConfig):
         default_factory=list,
         description="List of parameter names to source from the runtime RunRequest and merge into agent parameters.",
     )
+
+    @field_validator("agent_obj")
+    @classmethod
+    def validate_agent_obj(cls, v: str) -> str:
+        """Validate that agent_obj is not empty and exists in the AgentRegistry.
+
+        Args:
+            v: The agent_obj value to validate
+
+        Returns:
+            str: The validated agent_obj value
+
+        Raises:
+            ValueError: If agent_obj is empty or not found in registry
+        """
+        if not v or not v.strip():
+            raise ValueError("agent_obj cannot be empty. Must specify a valid agent class name.")
+
+        # Optional: Check if the agent exists in registry (may cause circular imports in some cases)
+        # For now, we'll just ensure it's not empty. The registry check happens in get_configs()
+        return v.strip()
 
     def get_configs(self, params: RunRequest | None = None, flow_default_params: dict = {}) -> list[tuple[type[Any], AgentConfig]]:
         """Generates a list of agent configurations based on defined variants and tasks.

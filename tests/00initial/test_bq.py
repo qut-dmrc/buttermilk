@@ -15,10 +15,10 @@ MOCK_ROWS = [
 
 
 @pytest.fixture
-def writer(flow):
+def writer():
     """Fixture to create a TableWriter instance for testing."""
     return TableWriter(
-        table_path=flow.agents[0].save.dataset,
+        table_path="test_project.test_dataset.test_table",
     )
 
 

@@ -10,7 +10,7 @@ def idgen():
 
 def test_generator(idgen):
     character = idgen.generate_identity()
-    assert set(character.model_fields_set) == set(character.model_fields)
+    assert set(character.model_fields_set) == set(character.__class__.model_fields)
 
 
 def test_sexuality_iv(idgen):
