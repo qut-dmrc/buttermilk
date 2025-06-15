@@ -176,11 +176,39 @@ export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoRes
 );
 
 // 4. Dedicated records store that handles dataset filtering - will be updated with flow parameter
-// Note: endpoint is not used since we manually fetch and update
-export const recordsStore = createApiStore<RecordItem[], RecordItem[]>(
-    '/api/flows/placeholder/records',
-    []
-);
+// Note: Use a simple writable store since we manually fetch and update
+export const recordsStore = {
+  subscribe: writable<{
+    data: RecordItem[];
+    loading: boolean;
+    error: string | null;
+    timestamp: number | null;
+  }>({
+    data: [],
+    loading: false,
+    error: null,
+    timestamp: null,
+  }).subscribe,
+  _store: writable<{
+    data: RecordItem[];
+    loading: boolean;
+    error: string | null;
+    timestamp: number | null;
+  }>({
+    data: [],
+    loading: false,
+    error: null,
+    timestamp: null,
+  }),
+  reset: function() {
+    this._store.set({
+      data: [],
+      loading: false,
+      error: null,
+      timestamp: null,
+    });
+  }
+};
 
 // Override recordsStore to fetch when flow or dataset changes
 async function refetchRecords() {
@@ -293,7 +321,8 @@ selectedFlow.subscribe(async (flowValue) => {
       console.error(`>>> Flow info fetch error for ${flowInfoEndpoint}:`, error);
     }
     
-    refetchRecords();
+    // Don't fetch records immediately - wait for dataset selection
+    // refetchRecords() will be called when dataset is selected
   } else {
     console.log("Flow selection cleared. Resetting flow info store.");
     flowInfoStore.reset();
