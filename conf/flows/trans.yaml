@@ -15,8 +15,8 @@ defaults:
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration
-  - /storage@trans.storage: tja_train
-  - /storage@trans.parameters.save: tox
+  - /storage@trans.storage: tja
+  - /storage@trans.parameters.save: flows
 
 trans:
   # Core flow configuration

@@ -1,9 +1,0 @@
-defaults:
-  - _self_
-  - /data: osb
-  - /agents@agents.rag_agent: rag_generic
-  - /agents@observers.host_ra: host/ra
-
-orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-description: OSB Research Assistant - Interactive RAG agent for Online Safety Bureau cases
-parameters: {}

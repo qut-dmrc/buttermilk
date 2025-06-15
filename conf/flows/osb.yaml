@@ -1,12 +1,17 @@
-
 defaults:
   - _self_
+  - /data: osb_vector
+  - /agents@osb.agents.rag_agent: rag_generic
+  - /agents@osb.observers.host_ra: host/ra
 
 osb:
   _target_: buttermilk.runner.flow.Flow
   source: api development
-  steps:
-    - name: search
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  description: OSB Research Assistant - Interactive RAG agent for Online Safety Bureau cases
+  parameters: {}
+  agents:
+    search:
       _target_: LLMAgent
       num_runs: 1
       parameters: 
@@ -16,7 +21,7 @@ osb:
         model: ${llm}
       data: osbcasessummary
 
-    - name: synth
+    synth:
       _target_: LLMAgent
       num_runs: 1
       concurrency: 20
@@ -29,7 +34,7 @@ osb:
         answers: search
         
   storage:
-    cases:
+    osbcasessummary:
       type: vector
       uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
       db:
@@ -37,4 +42,3 @@ osb:
         embeddings: gs://prosocial-public/osb/04_osb_embeddings_vertex-005.json
         model: text-embedding-005
         store: ".chromadb"
-
