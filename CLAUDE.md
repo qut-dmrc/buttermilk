@@ -17,6 +17,7 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * Don't write disposable test scripts; write pytest unittests instead in /tests
 * Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
 * Add a git commit after every logical chunk of changes. You don't need to ask permission to commit changes.
+* Don't put validation code in main methods if possible; prefer using pydantic v2 validation, and use pydantic objects for all configuration classes.
 
 ## TODO: Future Architectural Improvements
 
