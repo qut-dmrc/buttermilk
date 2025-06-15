@@ -18,6 +18,7 @@ from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
 
 from .routes import flow_data_router
+from .mcp import mcp_router
 
 # Define the base directory for the FastAPI app
 BASE_DIR = Path(__file__).resolve().parent
@@ -276,6 +277,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Set up templates
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.include_router(flow_data_router)
+    
+    # --- Add MCP tool routes ---
+    app.include_router(mcp_router)
 
     # Set up static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

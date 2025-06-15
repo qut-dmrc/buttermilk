@@ -171,5 +171,6 @@ Agent (ABC) <- AgentConfig
 - `Observer` Agents are not invoked directly, but have their own logic that is usually triggered in their `_listen` events.
 
 ## Development hints
+* Example run command: `uv run python -m buttermilk.runner.cli "+flows=[trans, tox_allinone]" +run=api +llms=lite`
 * When dumping pydantic objects, use pydantic's model_dump()
 * Add 'pytestmark = pytest.mark.anyio' near the top of test modules
