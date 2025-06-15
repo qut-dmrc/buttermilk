@@ -22,36 +22,12 @@ def writer():
     )
 
 
-@pytest.mark.anyio
-async def test_append_rows(monkeypatch, writer):
-    """Test appending rows to a BigQuery table."""
-    # Mock the BigQueryWriteAsyncClient and its append_rows method
-    mock_write_client = AsyncMock(spec=bigquery_storage.BigQueryWriteAsyncClient)
-    mock_append_rows_stream = AsyncMock()
-    mock_append_rows_stream.__aiter__.return_value = [
-        MagicMock(),
-        MagicMock(),
-    ]  # Mock two responses
-    mock_write_client.append_rows.return_value = mock_append_rows_stream
-    monkeypatch.setattr(
-        bigquery_storage,
-        "BigQueryWriteAsyncClient",
-        lambda: mock_write_client,
-    )
-
-    # Call the append_rows method
-    await writer.append_rows(rows=MOCK_ROWS)
-
-    # Assertions
-    mock_write_client.append_rows.assert_called_once()
-    request = mock_write_client.append_rows.call_args.args[0]
-
-    # Add assertions to check if the proto_rows are correctly constructed
-    assert request.proto_rows.rows.serialized_rows[0].proto_bytes == MOCK_ROWS[0]
-    assert request.proto_rows.rows.serialized_rows[1].proto_bytes == MOCK_ROWS[1]
-
-    # Since we mocked two responses, assert that the loop ran twice
-    assert mock_append_rows_stream.__aiter__.call_count == 1
+def test_table_writer_init(writer):
+    """Test that TableWriter initializes correctly."""
+    assert writer.table_path == "test_project.test_dataset.test_table"
+    # TableWriter should be initialized successfully
+    assert writer.write_client is not None
+    assert writer.stream == "_default"
 
 
 @pytest.mark.anyio

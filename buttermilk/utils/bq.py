@@ -12,6 +12,7 @@ such as:
 It uses the `google-cloud-bigquery` and `google-cloud-bigquery-storage` client libraries.
 """
 
+import asyncio
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from typing import Any, Mapping  # For type hinting
