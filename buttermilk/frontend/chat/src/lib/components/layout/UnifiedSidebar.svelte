@@ -133,7 +133,7 @@
           id="flow-select" 
           class="form-select terminal-select" 
           bind:value={$selectedFlow}
-          on:change={handleFlowChange}
+          onchange={handleFlowChange}
         >
           <option value="">Choose a flow...</option>
           {#each $flowChoices.data as flow}
@@ -161,7 +161,7 @@
           id="dataset-select" 
           class="form-select terminal-select" 
           bind:value={$selectedDataset}
-          on:change={handleDatasetChange}
+          onchange={handleDatasetChange}
         >
           <option value="">Choose a dataset...</option>
           {#each $datasetsStore.data as dataset}
@@ -270,7 +270,7 @@
           id="flow-select" 
           class="form-select terminal-select" 
           bind:value={$selectedFlow}
-          on:change={handleFlowChange}
+          onchange={handleFlowChange}
         >
           {#each $flowChoices.data as flow}
             <option value={flow}>{flow.toUpperCase()}</option>
@@ -289,7 +289,7 @@
         id="dataset-select" 
         class="form-select terminal-select" 
         bind:value={$selectedDataset}
-        on:change={handleDatasetChange}
+        onchange={handleDatasetChange}
       >
         {#each $datasetsStore.data as dataset}
           <option value={dataset}>{dataset.toUpperCase()}</option>
