@@ -723,8 +723,8 @@ class BM(SessionInfo):
 
         # Log initialization message
         log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.save_dir}"
-        if cloud_logging_resource:  # Add resource info if cloud logging is active
-            log_init_message = f"{log_init_message} | Cloud Logging Resource: {cloud_logging_resource.labels}"
+        # Note: cloud_logging_resource is only available if cloud logging is active
+        # It's set up in _setup_cloud_logging() which is called lazily
 
         logger.info(log_init_message, extra={"run_details": self.run_info.model_dump(exclude_none=True)})
 
