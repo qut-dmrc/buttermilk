@@ -29,13 +29,25 @@
 
 <div class="score-home">
   <div class="terminal-header">
-    <h1 class="terminal-title">Toxicity Score Analysis</h1>
-    <div class="terminal-subtitle">Select a record from the sidebar to view detailed scoring results</div>
+    <h1 class="terminal-title">
+      {#if $selectedFlow}
+        {$selectedFlow.toUpperCase()} Score Analysis
+      {:else}
+        Score Analysis
+      {/if}
+    </h1>
+    <div class="terminal-subtitle">
+      {#if $selectedFlow}
+        Select a record from the sidebar to view detailed scoring results
+      {:else}
+        Select a flow from the sidebar to begin analysis
+      {/if}
+    </div>
   </div>
 
   <div class="terminal-content">
     <div class="info-panel">
-      <h3 class="panel-title">Available Datasets</h3>
+      <h3 class="panel-title">Available Flows</h3>
       {#if $flowChoices.loading}
         <div class="loading-text">Loading available flows...</div>
       {:else if $flowChoices.error}
@@ -43,11 +55,16 @@
       {:else if $flowChoices.data.length > 0}
         <ul class="dataset-list">
           {#each $flowChoices.data as flow}
-            <li><strong>{flow.toUpperCase()}</strong> - {flow} dataset</li>
+            <li>
+              <strong>{flow.toUpperCase()}</strong> - {flow} analysis flow
+              {#if flow === $selectedFlow}
+                <span class="selected-indicator">← Selected</span>
+              {/if}
+            </li>
           {/each}
         </ul>
       {:else}
-        <div class="no-data-text">No datasets available</div>
+        <div class="no-data-text">No flows available</div>
       {/if}
     </div>
 
@@ -135,6 +152,12 @@
     color: #00ff00;
     display: inline-block;
     width: 120px;
+  }
+
+  .selected-indicator {
+    color: #00ffff;
+    font-weight: bold;
+    margin-left: 10px;
   }
 
   .score-legend {

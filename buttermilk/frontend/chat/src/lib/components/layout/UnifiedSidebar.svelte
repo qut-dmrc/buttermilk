@@ -79,10 +79,7 @@
     initializeApp();
   });
   
-  // For score pages: Set default flow when flow choices are loaded
-  $: if (isScorePage && $flowChoices.data.length > 0 && !$selectedFlow) {
-    loadRecordsForFlow($flowChoices.data[0]);
-  }
+  // For score pages: Don't auto-select flow, let user choose
   
   // Auto-select first dataset when datasets become available
   $: if ($datasetsStore.data.length > 0 && !$selectedDataset) {
@@ -285,11 +282,17 @@
 {:else if isScorePage}
   <!-- Score Page Sidebar -->
   <div class="score-sidebar">
-    <h4 class="terminal-title">Toxicity Scores</h4>
+    <h4 class="terminal-title">
+      {#if $selectedFlow}
+        {$selectedFlow.toUpperCase()} Scores
+      {:else}
+        Score Analysis
+      {/if}
+    </h4>
     
     <!-- Flow selection -->
     <div class="selector-group">
-      <label for="flow-select" class="form-label">Dataset:</label>
+      <label for="flow-select" class="form-label">Select Flow:</label>
       {#if $flowChoices.loading}
         <div class="terminal-loading">Loading flows...</div>
       {:else if $flowChoices.error}
@@ -301,6 +304,7 @@
           bind:value={$selectedFlow}
           onchange={handleFlowChange}
         >
+          <option value="">Choose a flow...</option>
           {#each $flowChoices.data as flow}
             <option value={flow}>{flow.toUpperCase()}</option>
           {/each}
@@ -331,7 +335,9 @@
     <div class="records-list">
       <h5 class="sidebar-section-title">Records</h5>
       
-      {#if loading}
+      {#if !$selectedFlow}
+        <div class="terminal-warning">Select a flow to view records</div>
+      {:else if loading}
         <div class="terminal-loading">Loading records...</div>
       {:else if error}
         <div class="terminal-error">Error: {error}</div>
