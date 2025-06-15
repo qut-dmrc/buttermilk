@@ -86,7 +86,9 @@
   
   // For terminal pages: use the recordsStore
   $: if (isTerminalPage && $recordsStore) {
+    console.log('Terminal page - recordsStore data:', $recordsStore.data);
     records = $recordsStore.data || [];
+    console.log('Terminal page - local records:', records);
   }
   
   // Handle flow change
@@ -108,11 +110,13 @@
   function handleDatasetChange(event: Event) {
     const target = event.target as HTMLSelectElement;
     const newDataset = target.value;
+    console.log('Dataset changed to:', newDataset);
     selectedDataset.set(newDataset);
     
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
     } else if (isTerminalPage) {
+      console.log('Terminal page - resetting record and refetching');
       // Reset record when dataset changes
       selectedRecord.set('');
       // Trigger refetch for terminal pages

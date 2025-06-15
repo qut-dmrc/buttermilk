@@ -177,31 +177,23 @@ export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoRes
 
 // 4. Dedicated records store that handles dataset filtering - will be updated with flow parameter
 // Note: Use a simple writable store since we manually fetch and update
+const recordsStoreInternal = writable<{
+  data: RecordItem[];
+  loading: boolean;
+  error: string | null;
+  timestamp: number | null;
+}>({
+  data: [],
+  loading: false,
+  error: null,
+  timestamp: null,
+});
+
 export const recordsStore = {
-  subscribe: writable<{
-    data: RecordItem[];
-    loading: boolean;
-    error: string | null;
-    timestamp: number | null;
-  }>({
-    data: [],
-    loading: false,
-    error: null,
-    timestamp: null,
-  }).subscribe,
-  _store: writable<{
-    data: RecordItem[];
-    loading: boolean;
-    error: string | null;
-    timestamp: number | null;
-  }>({
-    data: [],
-    loading: false,
-    error: null,
-    timestamp: null,
-  }),
+  subscribe: recordsStoreInternal.subscribe,
+  _store: recordsStoreInternal,
   reset: function() {
-    this._store.set({
+    recordsStoreInternal.set({
       data: [],
       loading: false,
       error: null,
@@ -215,17 +207,25 @@ export async function refetchRecords() {
   const currentFlow = get(selectedFlow);
   const currentDataset = get(selectedDataset);
   
+  console.log('refetchRecords called with:', { currentFlow, currentDataset });
+  
   if (currentFlow && currentDataset && currentDataset.trim() !== '') {
     // Always require both flow and dataset - no fallback to flow-only
     const endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/datasets/${encodeURIComponent(currentDataset)}/records`;
     
+    console.log('Fetching records from:', endpoint);
+    
     // Make direct fetch call and update the records store
     try {
+      recordsStore._store.update(state => ({ ...state, loading: true, error: null }));
+      
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error(`Error fetching records: ${response.statusText} (Status: ${response.status})`);
       }
       const data: RecordItem[] = await response.json();
+      
+      console.log('Records fetched successfully:', data);
       
       // Update recordsStore using its internal writable
       recordsStore._store.update(state => ({
@@ -237,15 +237,16 @@ export async function refetchRecords() {
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Error fetching records:', error);
       recordsStore._store.update(state => ({
         ...state,
         loading: false,
         error: errorMessage,
         data: []
       }));
-      console.error(`>>> Records fetch error for ${endpoint}:`, error);
     }
   } else {
+    console.log('Clearing records - missing flow or dataset');
     // Clear records if no flow or no dataset selected
     recordsStore.reset();
   }
