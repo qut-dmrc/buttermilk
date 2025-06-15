@@ -211,7 +211,7 @@ export const recordsStore = {
 };
 
 // Override recordsStore to fetch when flow or dataset changes
-async function refetchRecords() {
+export async function refetchRecords() {
   const currentFlow = get(selectedFlow);
   const currentDataset = get(selectedDataset);
   

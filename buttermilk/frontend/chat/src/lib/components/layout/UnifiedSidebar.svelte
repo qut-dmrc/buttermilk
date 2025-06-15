@@ -12,7 +12,8 @@
     selectedRecord,
     selectedCriteria,
     selectedModel,
-    initializeApp
+    initializeApp,
+    refetchRecords
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
   import { flowRunning } from '$lib/stores/apiStore';
@@ -96,6 +97,10 @@
     
     if (isScorePage) {
       loadRecordsForFlow(newFlow);
+    } else if (isTerminalPage) {
+      // Reset dataset and record when flow changes
+      selectedDataset.set('');
+      selectedRecord.set('');
     }
   }
   
@@ -107,6 +112,11 @@
     
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
+    } else if (isTerminalPage) {
+      // Reset record when dataset changes
+      selectedRecord.set('');
+      // Trigger refetch for terminal pages
+      refetchRecords();
     }
   }
   
