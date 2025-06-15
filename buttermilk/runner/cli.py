@@ -132,10 +132,13 @@ def main(conf: DictConfig) -> None:
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
-            # Short delay, as a workaround for potential async initialization timing issues
-            # TODO: Replace with a more robust readiness check if needed.
-            import time
-            time.sleep(1)  # Reduced from 2s, check if still needed
+            # Verify app is ready instead of sleeping
+            logger.debug("Verifying FastAPI app readiness...")
+            if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
+                raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
+            if not hasattr(fastapi_app.state, "bm") or not fastapi_app.state.bm:
+                raise RuntimeError("BM instance not properly initialized in FastAPI app state")
+            logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")
             uvicorn_config = uvicorn.Config(

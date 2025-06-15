@@ -309,9 +309,62 @@ class BM(SessionInfo):
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
-        # Print current config to console and save it
+        # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
+        
+        # Defer non-critical operations to background tasks for faster startup
+        self._schedule_background_init()
+
+    def _schedule_background_init(self) -> None:
+        """Schedule non-critical initialization tasks in the background.
+        
+        This method defers operations that aren't immediately needed for core functionality:
+        - Config file saving
+        - IP address fetching  
+        - Cloud provider authentication
+        
+        These operations happen asynchronously to improve startup performance.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create background task for deferred operations
+                asyncio.create_task(self._background_init())
+            else:
+                # No event loop running, run synchronously (fallback)
+                logger.debug("No event loop running, performing background init synchronously")
+                self._sync_background_init()
+        except RuntimeError:
+            # No current event loop, run synchronously
+            logger.debug("No event loop available, performing background init synchronously")
+            self._sync_background_init()
+    
+    async def _background_init(self) -> None:
+        """Perform non-critical initialization operations in the background."""
+        try:
+            # Save initial config (non-critical, can be deferred)
+            await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
+            
+            # Start IP fetching task (already async)
+            self.start_fetch_ip_task()
+            
+            # Defer cloud login - will happen on first cloud operation
+            logger.debug("Background initialization completed")
+        except Exception as e:
+            logger.warning(f"Error during background initialization: {e}")
+    
+    def _sync_background_init(self) -> None:
+        """Fallback synchronous version of background initialization."""
+        try:
+            self._save_initial_config()
+            # Note: IP fetching and cloud login will happen on first use
+            logger.debug("Synchronous background initialization completed")
+        except Exception as e:
+            logger.warning(f"Error during synchronous background initialization: {e}")
+    
+    def _save_initial_config(self) -> None:
+        """Save the initial BM configuration to disk."""
         try:
             if self.save_dir:
                 # Data to save: BM config and run_info
@@ -325,20 +378,19 @@ class BM(SessionInfo):
                     extension=".json",
                     # save_dir is implicitly self.save_dir if not provided to self.save
                 )
+                logger.debug("Initial BM config saved successfully")
             else:  # Should not happen if save_dir_base defaults to mkdtemp
                 logger.warning("BM.save_dir is not set. Skipping saving initial config.")
         except Exception as e:
             logger.error(f"Could not save initial BM config to default save directory: {e!s}")
-
-        self.start_fetch_ip_task()  # Start task to get IP address
-        self._login_clouds()  # Login to configured cloud providers
 
     @cached_property
     def cloud_manager(self) -> CloudManager:
         """Provides access to the `CloudManager` instance.
 
         The `CloudManager` handles interactions with various configured cloud
-        providers (e.g., GCP, Azure). It's instantiated on first access.
+        providers (e.g., GCP, Azure). It's instantiated on first access and 
+        performs lazy authentication to improve startup performance.
 
         Returns:
             CloudManager: The initialized `CloudManager` instance.
@@ -346,7 +398,61 @@ class BM(SessionInfo):
         """
         if self._cloud_manager is None:
             self._cloud_manager = CloudManager(clouds=self.clouds)
+            # Perform cloud login and tracing setup on first access
+            self._ensure_cloud_authentication()
         return self._cloud_manager
+    
+    def _ensure_cloud_authentication(self) -> None:
+        """Ensure cloud providers are authenticated and tracing is set up.
+        
+        This method is called lazily when the cloud_manager is first accessed,
+        rather than during __post_init__, to improve startup performance.
+        """
+        try:
+            if self._cloud_manager:
+                logger.debug("Performing lazy cloud authentication...")
+                self._cloud_manager.login_clouds()  # Perform logins
+                
+                # Set up tracing if configured and enabled
+                if self.tracing and self.tracing.enabled:
+                    self._cloud_manager.setup_tracing(self.tracing)
+                
+                # Set up cloud logging now that cloud manager is authenticated
+                self._setup_cloud_logging()
+                    
+                logger.debug("Cloud authentication completed")
+        except Exception as e:
+            logger.warning(f"Error during cloud authentication: {e}")
+    
+    def _setup_cloud_logging(self) -> None:
+        """Set up Google Cloud Logging after cloud authentication."""
+        if self.logger_cfg and self.logger_cfg.type == "gcp" and self._cloud_manager:
+            try:
+                from google.cloud import logging as gcp_logging
+                from google.cloud.logging_v2.handlers import CloudLoggingHandler
+
+                cloud_logging_resource = gcp_logging.Resource(
+                    type="generic_task",
+                    labels={
+                        "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
+                        "location": getattr(self.logger_cfg, "location", "unknown-location"),
+                        "namespace": self.name,
+                        "job": self.job,
+                        "task_id": self.run_id,
+                    },
+                )
+
+                cloudHandler = CloudLoggingHandler(
+                    client=self._cloud_manager.gcs_log_client(self.logger_cfg),
+                    resource=cloud_logging_resource,
+                    name=self.name,
+                    labels=self.model_dump(include={"run_id", "name", "job", "platform"}),
+                )
+                cloudHandler.setLevel(logging.INFO)
+                logger.addHandler(cloudHandler)
+                logger.debug("Cloud logging handler added")
+            except Exception as e:
+                logger.warning(f"Failed to setup cloud logging: {e}")
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -593,36 +699,10 @@ class BM(SessionInfo):
             level=logging.DEBUG if verbose else logging.INFO,
         )
 
-        # Configure Google Cloud Logging if specified
-        cloud_logging_resource = None
+        # Defer Google Cloud Logging setup to improve startup performance
+        # Cloud logging will be initialized on first cloud operation
         if self.logger_cfg and self.logger_cfg.type == "gcp":
-            from google.cloud import logging as gcp_logging  # GCP Logging library
-            from google.cloud.logging_v2.handlers import CloudLoggingHandler
-
-            cloud_logging_resource = gcp_logging.Resource(
-                type="generic_task",  # Recommended type for general tasks
-                labels={
-                    "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
-                    "location": getattr(self.logger_cfg, "location", "unknown-location"),
-                    "namespace": self.name,  # Flow name
-                    "job": self.job,       # Job name
-                    "task_id": self.run_id,  # Unique run ID
-                },
-            )
-
-            # Get log client from cloud manager
-
-            # session_id and agent_id are added to the LogRecord by ContextFilter.
-            # The CloudLoggingHandler is expected to automatically pick up these extra fields
-            # and include them in the structured log entry sent to Google Cloud Logging.
-            cloudHandler = CloudLoggingHandler(
-                client=self.cloud_manager.gcs_log_client(self.logger_cfg),
-                resource=cloud_logging_resource,
-                name=self.name,
-                labels=self.dict(include={"run_id", "name", "job", "platform"}),
-            )
-            cloudHandler.setLevel(logging.INFO)  # Cloud logs at INFO level, not DEBUG
-            logger.addHandler(cloudHandler)
+            logger.debug("Cloud logging configuration detected - will be initialized on first cloud access")
 
         # Set default logging levels for other loggers to WARNING to reduce noise
         root_logger.setLevel(logging.WARNING)
@@ -680,19 +760,6 @@ class BM(SessionInfo):
             # else: No event loop running, cannot start async task
         except RuntimeError:  # No current event loop
             logger.debug("No running event loop, skipping async IP fetch task.")
-
-    def _login_clouds(self) -> None:
-        """Initializes connections to configured cloud providers and sets up tracing.
-
-        Delegates to `self.cloud_manager.login_clouds()` for cloud provider logins.
-        If tracing is enabled in `self.tracing`, it then calls
-        `self.cloud_manager.setup_tracing()`.
-        """
-        self.cloud_manager.login_clouds()  # Perform logins
-
-        # Set up tracing if configured and enabled
-        if self.tracing and self.tracing.enabled:
-            self.cloud_manager.setup_tracing(self.tracing)
 
     def save(
         self,
