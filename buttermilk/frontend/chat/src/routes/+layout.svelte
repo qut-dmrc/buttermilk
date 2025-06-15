@@ -4,7 +4,7 @@
 	import { browser } from '$app/environment'; // Import browser check
 	import Nav from '$lib/components/layout/Nav.svelte'; // Placeholder
 	import Header from '$lib/components/layout/Header.svelte'; // Placeholder
-	import Sidebar from '$lib/components/layout/Sidebar.svelte'; // Placeholder
+	import UnifiedSidebar from '$lib/components/layout/UnifiedSidebar.svelte';
 	import '$lib/styles/app.scss'; // Import the main SCSS file
     import { flowRunning } from '$lib/stores/apiStore';
 	onMount(() => {
@@ -25,7 +25,7 @@
 
 		{#if !$flowRunning}
 		<div class="col-sm-3 col-md-3 col-xxl-2 col-xl-2 col-lg-3">
-			<Sidebar />
+			<UnifiedSidebar />
 		</div>
 
 		{/if}
