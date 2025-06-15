@@ -128,6 +128,10 @@ class DataService:
 
             # Convert OmegaConf/dict to proper DataSourceConfig
             storage_config = DataService._convert_to_data_source_config(storage_config_raw)
+            
+            # Ensure the dataset_name is set correctly in the config
+            if hasattr(storage_config, 'dataset_name') and dataset_name:
+                storage_config.dataset_name = dataset_name
 
             loader = create_data_loader(storage_config)
             for record in loader:

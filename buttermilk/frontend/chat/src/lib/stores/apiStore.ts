@@ -168,15 +168,17 @@ export const selectedCriteria = writable<string>('');
 export const selectedModel = writable<string>('');
 
 // 3. Single store for flow-dependent info - will be updated with flow parameter
+// Note: endpoint is not used since we manually fetch and update
 export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoResponse>(
-    '/api/flows/{flow}/info',
+    '/api/flows/placeholder/info',
     null,
     (data) => data
 );
 
 // 4. Dedicated records store that handles dataset filtering - will be updated with flow parameter
+// Note: endpoint is not used since we manually fetch and update
 export const recordsStore = createApiStore<RecordItem[], RecordItem[]>(
-    '/api/flows/{flow}/records',
+    '/api/flows/placeholder/records',
     []
 );
 
