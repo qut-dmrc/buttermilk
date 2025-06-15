@@ -84,6 +84,21 @@
     loadRecordsForFlow($flowChoices.data[0]);
   }
   
+  // Auto-select first dataset when datasets become available
+  $: if ($datasetsStore.data.length > 0 && !$selectedDataset) {
+    console.log('Auto-selecting first dataset:', $datasetsStore.data[0]);
+    selectedDataset.set($datasetsStore.data[0]);
+    
+    // Trigger appropriate action based on page type
+    if (isTerminalPage && $selectedFlow) {
+      console.log('Auto-triggered refetch for terminal page');
+      refetchRecords();
+    } else if (isScorePage && $selectedFlow) {
+      console.log('Auto-triggered loadRecordsForFlow for score page');
+      loadRecordsForFlow($selectedFlow, $datasetsStore.data[0]);
+    }
+  }
+  
   // For terminal pages: use the recordsStore
   $: if (isTerminalPage && $recordsStore) {
     console.log('Terminal page - recordsStore data:', $recordsStore.data);
