@@ -384,6 +384,10 @@ class ChromaDBEmbeddings(DataSouce):
                 name=self.collection_name
             )
             
+            # Ensure embedding function is set on existing collection
+            if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+                existing_collection._embedding_function = self._embedding_function
+            
             # Get some basic stats
             count = existing_collection.count()
             logger.info(f"✅ Collection '{self.collection_name}' ready ({count} embeddings)")
@@ -400,9 +404,10 @@ class ChromaDBEmbeddings(DataSouce):
     async def _create_new_collection(self) -> None:
         """Create a new collection with proper configuration."""
         try:
-            # Create collection with metadata but without embedding function initially
+            # Create collection with metadata and embedding function
             new_collection = self._client.create_collection(
                 name=self.collection_name,
+                embedding_function=self._embedding_function,
                 metadata={
                     "embedding_model": self.embedding_model,
                     "dimensionality": self.dimensionality,
@@ -417,9 +422,12 @@ class ChromaDBEmbeddings(DataSouce):
         except Exception as e:
             # If creation fails, try get_or_create as fallback
             logger.warning(f"Direct creation failed, using get_or_create fallback: {e}")
-            self._client.get_or_create_collection(
+            fallback_collection = self._client.get_or_create_collection(
                 name=self.collection_name
             )
+            # Ensure embedding function is set on fallback collection
+            if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+                fallback_collection._embedding_function = self._embedding_function
             logger.info(f"✅ Collection '{self.collection_name}' ready via fallback")
 
     @property
@@ -457,7 +465,12 @@ class ChromaDBEmbeddings(DataSouce):
                     name=self.collection_name
                 )
         
-        return _db_registry[cache_key]
+        # Ensure collection._embedding_function is synchronized with vectorstore._embedding_function
+        collection = _db_registry[cache_key]
+        if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+            collection._embedding_function = self._embedding_function
+        
+        return collection
 
     def record_to_input_document(self, record: Record) -> InputDocument:
         """Convert a Record to InputDocument format.
@@ -659,6 +672,41 @@ class ChromaDBEmbeddings(DataSouce):
         await self._embed_chunks(record.chunks)
         
         return record
+
+    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> None:
+        """Generate embeddings for a list of chunks in place.
+        
+        Args:
+            chunks: List of ChunkedDocument objects to embed
+        """
+        if not chunks:
+            return
+            
+        # Prepare embedding inputs
+        embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
+        for i, chunk in enumerate(chunks):
+            embeddings_input.append(
+                (
+                    i,  # Use list index as identifier
+                    TextEmbeddingInput(
+                        text=chunk.chunk_text,
+                        task_type=self.task,
+                        title=chunk.chunk_title,
+                    ),
+                ),
+            )
+        
+        # Generate embeddings
+        embedding_results = await self._embed(embeddings_input)
+        
+        # Assign embeddings back to chunks
+        for idx, embedding in embedding_results:
+            if embedding is not None and idx < len(chunks):
+                chunks[idx].embedding = embedding
+            elif embedding is None:
+                logger.warning(f"Failed to generate embedding for chunk {idx}")
+        
+        logger.debug(f"Generated embeddings for {len([c for c in chunks if c.embedding is not None])} out of {len(chunks)} chunks")
 
     async def process_with_multi_field_chunks(self, doc: InputDocument) -> InputDocument | None:
         """Process document with configuration-driven multi-field chunking."""
