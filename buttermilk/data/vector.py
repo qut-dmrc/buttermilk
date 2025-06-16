@@ -395,6 +395,138 @@ class ChromaDBEmbeddings(DataSouce):
         
         return _db_registry[cache_key]
 
+    def create_enhanced_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
+        """Create chunks for multiple content types to enable field-specific search.
+        
+        This creates separate embeddings for:
+        - Full text content (chunked)
+        - Summary (single chunk) 
+        - Title (single chunk)
+        
+        Each chunk is tagged with content_type for targeted searching.
+        """
+        chunks = []
+        
+        # 1. Main content chunks (existing behavior)
+        if doc.full_text:
+            # Use the text splitter to chunk the full text
+            text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
+            content_chunks = text_splitter.split_text(doc.full_text)
+            
+            for i, chunk_text in enumerate(content_chunks):
+                if chunk_text.strip():
+                    chunks.append(ChunkedDocument(
+                        document_title=doc.title,
+                        chunk_index=len(chunks),
+                        chunk_text=chunk_text.strip(),
+                        document_id=doc.record_id,
+                        metadata={
+                            **doc.metadata,
+                            "content_type": "full_text",
+                            "chunk_type": "content",
+                            "chunk_sequence": i
+                        }
+                    ))
+        
+        # 2. Summary chunk (if exists and substantial)
+        summary = doc.metadata.get('summary', '')
+        if summary and len(summary.strip()) > 50:  # Only if substantial summary
+            chunks.append(ChunkedDocument(
+                document_title=doc.title,
+                chunk_index=len(chunks),
+                chunk_text=summary.strip(),
+                document_id=doc.record_id,
+                metadata={
+                    **doc.metadata,
+                    "content_type": "summary", 
+                    "chunk_type": "summary"
+                }
+            ))
+        
+        # 3. Title chunk (for title-specific semantic search)
+        if doc.title and len(doc.title.strip()) > 10:
+            chunks.append(ChunkedDocument(
+                document_title=doc.title,
+                chunk_index=len(chunks),
+                chunk_text=doc.title.strip(),
+                document_id=doc.record_id,
+                metadata={
+                    **doc.metadata,
+                    "content_type": "title",
+                    "chunk_type": "title"  
+                }
+            ))
+            
+        return chunks
+
+    async def process_with_enhanced_metadata(self, doc: InputDocument) -> InputDocument | None:
+        """Process document with enhanced multi-field chunking for better search capabilities."""
+        
+        # Create enhanced chunks instead of using standard chunker
+        doc.chunks = self.create_enhanced_chunks(doc)
+        
+        if not doc.chunks:
+            logger.warning(f"No chunks created for document {doc.record_id}")
+            return None
+            
+        content_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'full_text'])
+        summary_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'summary'])
+        title_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'title'])
+        
+        logger.info(f"Enhanced chunks for {doc.record_id}: {content_chunks} content, {summary_chunks} summary, {title_chunks} title")
+        
+        # Continue with normal embedding and storage process
+        doc_with_embeddings = await self.embed_document(doc)
+        if not doc_with_embeddings:
+            return None
+            
+        # Store in ChromaDB with enhanced metadata
+        return await self._store_enhanced_chunks(doc_with_embeddings)
+
+    async def _store_enhanced_chunks(self, doc: InputDocument) -> InputDocument:
+        """Store document chunks with enhanced metadata in ChromaDB."""
+        try:
+            ids = []
+            documents = []
+            embeddings_list = []
+            metadatas = []
+
+            chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
+
+            for chunk in chunks_to_upsert:
+                ids.append(chunk.chunk_id)
+                documents.append(chunk.chunk_text)
+                embeddings_list.append(list(chunk.embedding))  # type: ignore
+
+                # Enhanced metadata with content type tagging
+                enhanced_metadata = {
+                    "document_title": chunk.document_title,
+                    "chunk_index": chunk.chunk_index,
+                    "document_id": chunk.document_id,
+                    "content_type": chunk.metadata.get("content_type", "unknown"),
+                    "chunk_type": chunk.metadata.get("chunk_type", "unknown"),
+                    **{k: v for k, v in chunk.metadata.items() if k not in ["content_type", "chunk_type"]}
+                }
+                metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
+
+            logger.info(f"Upserting {len(ids)} enhanced chunks for document {doc.record_id}...")
+
+            # Execute the upsert operation
+            await asyncio.to_thread(
+                self.collection.upsert,
+                ids=ids,
+                embeddings=embeddings_list,
+                metadatas=metadatas,
+                documents=documents,
+            )
+
+            logger.info(f"Successfully stored enhanced chunks for document {doc.record_id}")
+            return doc
+
+        except Exception as e:
+            logger.error(f"Failed to store enhanced chunks for document {doc.record_id}: {e}")
+            return None
+
     async def embed_document(
         self,
         input_doc: InputDocument,
