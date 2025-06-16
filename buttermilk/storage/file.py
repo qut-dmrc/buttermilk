@@ -19,7 +19,7 @@ class FileStorage(Storage):
     
     Supports local files and cloud storage paths (GCS, S3) for JSON/JSONL formats.
     """
-    
+
     def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
         """Initialize file storage.
         
@@ -28,12 +28,12 @@ class FileStorage(Storage):
             bm: Buttermilk instance (optional for file operations)
         """
         super().__init__(config, bm)
-        
+
         if not config.path:
             raise ValueError("File storage requires a path")
-        
+
         self.path = AnyPath(config.path)
-    
+
     def __iter__(self) -> Iterator[Record]:
         """Iterate over records from file.
         
@@ -44,11 +44,32 @@ class FileStorage(Storage):
             if not self.exists():
                 logger.warning(f"File does not exist: {self.path}")
                 return
-            
-            with open(self.path, 'r') as f:
-                if self.path.suffix == '.jsonl':
-                    # JSONL format - one JSON object per line
-                    for line_num, line in enumerate(f, 1):
+
+            # Handle both local and cloud paths (GCS, S3, etc.)
+            if str(self.path).startswith(("gs://", "s3://", "azure://")):
+                # Use cloudpathlib for cloud storage paths
+                file_obj = self.path.open("r", encoding="utf-8")
+            else:
+                # Use regular open for local files
+                file_obj = open(self.path, "r")
+                
+            try:
+                # Check if the file is a JSON array or JSONL
+                first_char = file_obj.read(1)
+                file_obj.seek(0)  # Reset to beginning
+                
+                if first_char == '[':
+                    # Handle JSON array format
+                    data_array = json.load(file_obj)
+                    for line_num, data in enumerate(data_array, 1):
+                        try:
+                            record = self._dict_to_record(data, line_num)
+                            yield record
+                        except Exception as e:
+                            logger.warning(f"Error processing JSON array item {line_num}: {e}")
+                else:
+                    # Handle JSONL format (one JSON object per line)
+                    for line_num, line in enumerate(file_obj, 1):
                         line = line.strip()
                         if not line:
                             continue
@@ -59,21 +80,13 @@ class FileStorage(Storage):
                         except json.JSONDecodeError as e:
                             logger.warning(f"Invalid JSON on line {line_num}: {e}")
                             continue
-                else:
-                    # JSON format - single JSON array or object
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for i, item in enumerate(data):
-                            record = self._dict_to_record(item, i + 1)
-                            yield record
-                    else:
-                        record = self._dict_to_record(data, 1)
-                        yield record
-                        
+            finally:
+                file_obj.close()
+
         except Exception as e:
             logger.error(f"Error reading from file {self.path}: {e}")
             raise StorageError(f"Failed to read file: {e}") from e
-    
+
     def save(self, records: list[Record] | Record) -> None:
         """Save records to file.
         
@@ -82,18 +95,18 @@ class FileStorage(Storage):
         """
         if isinstance(records, Record):
             records = [records]
-        
+
         if not records:
             logger.warning("No records to save")
             return
-        
+
         try:
             # Ensure parent directory exists
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Convert records to dictionaries
             data = [self._record_to_dict(record) for record in records]
-            
+
             with open(self.path, 'w') as f:
                 if self.path.suffix == '.jsonl':
                     # JSONL format - one JSON object per line
@@ -103,13 +116,13 @@ class FileStorage(Storage):
                 else:
                     # JSON format - single JSON array
                     json.dump(data, f, indent=2, ensure_ascii=False)
-            
+
             logger.info(f"Successfully saved {len(records)} records to {self.path}")
-            
+
         except Exception as e:
             logger.error(f"Error saving records to file {self.path}: {e}")
             raise StorageError(f"Failed to save file: {e}") from e
-    
+
     def count(self) -> int:
         """Count total records in file.
         
@@ -124,7 +137,7 @@ class FileStorage(Storage):
         except Exception as e:
             logger.warning(f"Error counting records in file {self.path}: {e}")
             return -1
-    
+
     def exists(self) -> bool:
         """Check if the file exists.
         
@@ -132,16 +145,16 @@ class FileStorage(Storage):
             True if file exists, False otherwise
         """
         return self.path.exists() and self.path.is_file()
-    
+
     def create(self) -> None:
         """Create an empty file if it doesn't exist."""
         if self.exists():
             return
-        
+
         try:
             # Ensure parent directory exists
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Create empty file with appropriate format
             with open(self.path, 'w') as f:
                 if self.path.suffix == '.jsonl':
@@ -150,13 +163,13 @@ class FileStorage(Storage):
                 else:
                     # Empty JSON array
                     json.dump([], f)
-            
+
             logger.info(f"Created empty file: {self.path}")
-            
+
         except Exception as e:
             logger.error(f"Error creating file {self.path}: {e}")
             raise StorageError(f"Failed to create file: {e}") from e
-    
+
     def _dict_to_record(self, data: dict, index: int) -> Record:
         """Convert dictionary to Record object.
         
@@ -172,14 +185,24 @@ class FileStorage(Storage):
             if self.config.columns:
                 mapped_data = {}
                 for new_key, old_key in self.config.columns.items():
-                    if old_key in data:
+                    # Handle nested metadata mapping
+                    if new_key == 'metadata' and isinstance(old_key, dict):
+                        metadata = {}
+                        for meta_key, meta_source in old_key.items():
+                            if meta_source in data:
+                                metadata[meta_key] = data[meta_source]
+                        mapped_data['metadata'] = metadata
+                    elif old_key in data:
                         mapped_data[new_key] = data[old_key]
-                data = mapped_data
-            
+                
+                # If we have mapped data, use it; otherwise keep original
+                if mapped_data:
+                    data = mapped_data
+
             # Extract required and optional fields
             record_id = data.get('record_id', data.get('id', f"record_{index}"))
             content = data.get('content', data.get('text', ''))
-            
+
             # Build metadata from remaining fields
             metadata = data.get('metadata', {})
             if isinstance(metadata, str):
@@ -187,13 +210,13 @@ class FileStorage(Storage):
                     metadata = json.loads(metadata)
                 except json.JSONDecodeError:
                     metadata = {'raw_metadata': metadata}
-            
+
             # Add other fields to metadata if not already Record fields
             record_fields = {'record_id', 'content', 'metadata', 'alt_text', 'ground_truth', 'uri', 'mime'}
             for key, value in data.items():
                 if key not in record_fields and key not in ['id', 'text']:
                     metadata[key] = value
-            
+
             return Record(
                 record_id=str(record_id),
                 content=content,
@@ -203,15 +226,27 @@ class FileStorage(Storage):
                 uri=data.get('uri'),
                 mime=data.get('mime', 'text/plain')
             )
-            
+
         except Exception as e:
             logger.warning(f"Error converting data to Record at index {index}: {e}")
-            return Record(
-                record_id=f"error_{index}",
-                content=str(data),
-                metadata={'parse_error': str(e), 'original_data': data}
-            )
-    
+            # Create a safer error record with string representation of data
+            try:
+                safe_data = str(data)[:1000]  # Limit length to avoid huge error messages
+                safe_metadata = {'parse_error': str(e)}
+                # Don't include original_data as it might not be serializable
+                return Record(
+                    record_id=f"error_{index}",
+                    content=safe_data,
+                    metadata=safe_metadata
+                )
+            except Exception as e2:
+                # Ultimate fallback
+                return Record(
+                    record_id=f"error_{index}",
+                    content=f"Failed to parse record: {str(e2)}",
+                    metadata={'critical_error': True}
+                )
+
     def _record_to_dict(self, record: Record) -> dict:
         """Convert Record object to dictionary for file storage.
         
@@ -226,7 +261,7 @@ class FileStorage(Storage):
             'content': record.content,
             'metadata': record.metadata,
         }
-        
+
         # Add optional fields if present
         if record.alt_text:
             result['alt_text'] = record.alt_text
@@ -236,5 +271,5 @@ class FileStorage(Storage):
             result['uri'] = record.uri
         if record.mime and record.mime != 'text/plain':
             result['mime'] = record.mime
-        
+
         return result

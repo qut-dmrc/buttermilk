@@ -11,8 +11,8 @@ vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
   persist_directory: "gs://prosocial-public/osb/chromadb"
   collection_name: "osb_fulltext"
-  embedding_model: "text-embedding-005"
-  dimensionality: 768
+  embedding_model: "gemini-embedding-001"
+  dimensionality: 3072
   arrow_save_dir: "/tmp/osb_embeddings"
   concurrency: 20
   upsert_batch_size: 50

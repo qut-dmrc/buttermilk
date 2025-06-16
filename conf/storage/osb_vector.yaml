@@ -1,9 +1,0 @@
-
-osb:
-  type: vector
-  uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
-  db:
-    type: chromadb
-    embeddings: gs://prosocial-public/osb/04_osb_embeddings_vertex-005.json
-    model: text-embedding-005
-    store: ".chromadb"

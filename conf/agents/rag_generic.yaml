@@ -1,9 +1,9 @@
-researcher:
+rag:
   role: RESEARCHER
   name_components: ["🔍", "role", "model", "template", "unique_identifier"]
   agent_obj: RagAgent
   description: A research assistant that provides relevant information from a vector knowledge base. Should be called upon frequently during conversations to provide context and information.
-  data: ${...data}
+  data: {}
   variants:
     model: ${llms.general}
   parameters:
@@ -11,3 +11,20 @@ researcher:
     n_results: 20
     no_duplicates: false
     max_queries: 5
+
+
+researcher:
+  role: "RESEARCHER"
+  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  description: "Primary research assistant with intelligent multi-field search"
+  data: {}
+  variants:
+    model: ${llms.general}
+  parameters:
+    enable_query_planning: true
+    enable_result_synthesis: true
+    search_strategies: ["semantic", "title", "summary", "hybrid", "metadata"]
+    max_search_rounds: 3
+    confidence_threshold: 0.5
+    max_results_per_strategy: 5
+    include_search_explanation: true

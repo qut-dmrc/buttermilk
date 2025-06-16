@@ -12,14 +12,14 @@ osb_json:
 
 osb_vector:
   type: chromadb
-  persist_directory: "gs://prosocial-public/osb/chromadb"
+  persist_directory: "gs://prosocial-dev/data/osb/chromadb"
   collection_name: "osb_fulltext"
   embedding_model: "gemini-embedding-001"
   dimensionality: 3072
   multi_field_embedding:
     content_field: "content"
-    chunk_size: 2000
-    chunk_overlap: 500
+    chunk_size: 1200
+    chunk_overlap: 400
     additional_fields:
       - source_field: "summary"
         chunk_type: "summary"

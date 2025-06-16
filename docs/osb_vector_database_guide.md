@@ -71,7 +71,7 @@ from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument
 vector_store = ChromaDBEmbeddings(
     collection_name="osb_cases",
     persist_directory="./osb_vectorstore",
-    embedding_model="text-embedding-005",
+    embedding_model="gemini-embedding-001",
     dimensionality=3072
 )
 
