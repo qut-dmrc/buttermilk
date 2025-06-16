@@ -317,8 +317,7 @@ class ChromaDBEmbeddings(DataSouce):
         try:
             # Get existing collection to check its properties
             existing_collection = self._client.get_collection(
-                name=self.collection_name,
-                embedding_function=self._embedding_function
+                name=self.collection_name
             )
             
             # Get some basic stats
@@ -337,10 +336,9 @@ class ChromaDBEmbeddings(DataSouce):
     async def _create_new_collection(self) -> None:
         """Create a new collection with proper configuration."""
         try:
-            # Create collection with embedding function
+            # Create collection with metadata but without embedding function initially
             new_collection = self._client.create_collection(
                 name=self.collection_name,
-                embedding_function=self._embedding_function,
                 metadata={
                     "embedding_model": self.embedding_model,
                     "dimensionality": self.dimensionality,
@@ -356,8 +354,7 @@ class ChromaDBEmbeddings(DataSouce):
             # If creation fails, try get_or_create as fallback
             logger.warning(f"Direct creation failed, using get_or_create fallback: {e}")
             self._client.get_or_create_collection(
-                name=self.collection_name,
-                embedding_function=self._embedding_function
+                name=self.collection_name
             )
             logger.info(f"✅ Collection '{self.collection_name}' ready via fallback")
 
@@ -387,15 +384,13 @@ class ChromaDBEmbeddings(DataSouce):
             # Get the collection (should exist after ensure_cache_initialized)
             try:
                 _db_registry[cache_key] = self._client.get_collection(
-                    name=self.collection_name,
-                    embedding_function=self._embedding_function
+                    name=self.collection_name
                 )
             except Exception as e:
                 # Fallback to get_or_create if get fails
                 logger.warning(f"Failed to get collection, falling back to get_or_create: {e}")
                 _db_registry[cache_key] = self._client.get_or_create_collection(
-                    name=self.collection_name,
-                    embedding_function=self._embedding_function
+                    name=self.collection_name
                 )
         
         return _db_registry[cache_key]
