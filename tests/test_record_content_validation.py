@@ -152,7 +152,7 @@ class TestRecordFieldCounts:
         
         # Expected vector processing fields (these were added for the vector workflow)
         expected_vector_fields = {
-            "file_path", "full_text", "chunks", "chunks_path"
+            "file_path", "chunks", "chunks_path"
         }
         
         expected_all_fields = expected_core_fields | expected_vector_fields

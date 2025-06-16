@@ -98,10 +98,6 @@ class Record(BaseModel):
         default=None,
         description="Source file path for the record (used in vector processing).",
     )
-    full_text: str | None = Field(
-        default=None,
-        description="Extracted full text content for vector processing (lazy-loaded).",
-    )
     chunks: list[Any] = Field(
         default_factory=list,
         description="Vector chunks created from this record (lazy-loaded).",
@@ -134,19 +130,16 @@ class Record(BaseModel):
     def text_content(self) -> str:
         """Unified text access for vector processing.
         
-        Returns the best available text representation in priority order:
-        1. content (if it's a string) - preferred for new workflows
-        2. full_text (if available) - compatibility with legacy workflows
-        3. alt_text (as fallback)
-        4. string representation of content
+        Returns the best available text representation:
+        1. content (if it's a string) - main content field
+        2. alt_text (as fallback for non-text content)
+        3. string representation of content (for multimodal)
         
         Returns:
             str: Text content suitable for vector processing.
         """
         if isinstance(self.content, str) and self.content.strip():
             return self.content
-        elif self.full_text and self.full_text.strip():
-            return self.full_text
         elif self.alt_text and self.alt_text.strip():
             return self.alt_text
         else:

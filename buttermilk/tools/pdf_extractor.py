@@ -18,11 +18,11 @@ class PdfTextExtractor(BaseModel):
     )  # Allow customization if needed
 
     async def process(self, item: Record, **kwargs) -> Record | None:
-        if item.full_text:
+        if isinstance(item.content, str) and item.content.strip():
             # Got it already; return
             return item
 
-        item.full_text = self.extract(item.file_path) or ""
+        item.content = self.extract(item.file_path) or ""
         metadata_file = Path(item.uri or "")
 
         # --- Save Item JSON with text ---

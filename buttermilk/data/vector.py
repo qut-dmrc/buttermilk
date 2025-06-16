@@ -609,11 +609,8 @@ class ChromaDBEmbeddings(DataSouce):
         Returns:
             Record: Enhanced Record with chunks, or None if processing failed
         """
-        # Ensure full_text is populated for vector processing
-        if not record.full_text and isinstance(record.content, str):
-            record.full_text = record.content
-        elif not record.full_text:
-            record.full_text = record.text_content
+        # Ensure content is ready for vector processing (no full_text needed)
+        # The text_content property handles content access automatically
             
         # Create chunks using configuration (direct on Record)
         record.chunks = self.create_multi_field_chunks_for_record(record)

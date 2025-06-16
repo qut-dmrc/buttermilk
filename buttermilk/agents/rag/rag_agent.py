@@ -63,7 +63,7 @@ class RefResult(BaseModel):
             f"**Title:** {self.document_title or 'N/A'}\n"
             f"**Document ID:** {self.document_id} (Chunk: {self.chunk_index})\n"
             f"**URI:** {self.uri or 'N/A'}\n"
-            f"**Full Text:** {self.full_text[:2000] + '...' if len(self.full_text) > 2000 else self.full_text}\n"
+            f"**Full Text:** {self.text_content[:2000] + '...' if len(self.text_content) > 2000 else self.text_content}\n"
         )
 
     def as_message(self, source: str = "search_result") -> UserMessage:

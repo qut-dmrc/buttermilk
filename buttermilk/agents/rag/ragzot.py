@@ -46,7 +46,7 @@ class ZoteroRefResult(RefResult):
             f"**Title:** {self.document_title or 'N/A'}\n"
             f"**Document ID:** {self.document_id} (Source: {self.doi_or_url or 'N/A'}, Chunk: {self.chunk_index})\n"
             f"**Citation:** {self.citation or 'N/A'}\n"
-            f"**Full Text Snippet:** {self.full_text[:2000] + '...' if len(self.full_text) > 2000 else self.full_text}\n"
+            f"**Full Text Snippet:** {self.text_content[:2000] + '...' if len(self.text_content) > 2000 else self.text_content}\n"
         )
 
     @classmethod
