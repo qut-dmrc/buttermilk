@@ -34,7 +34,8 @@ class CloudManager:
 
         # Initialize environment variables if GCP config exists
         if self.gcp_cloud_cfg:
-            project_id = getattr(self.gcp_cloud_cfg, "project", None)
+            # Try both 'project_id' (config field) and 'project' (legacy field)
+            project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
             quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
             if project_id:
@@ -61,7 +62,8 @@ class CloudManager:
         if not self.gcp_cloud_cfg:
             raise RuntimeError("No GCP cloud configuration found")
 
-        project_id = getattr(self.gcp_cloud_cfg, "project", None)
+        # Try both 'project_id' (config field) and 'project' (legacy field)
+        project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
         quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
         if not project_id:
@@ -144,7 +146,7 @@ class CloudManager:
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 
-        project = getattr(logger_cfg, "project", None)
+        project = getattr(logger_cfg, "project_id", None) or getattr(logger_cfg, "project", None)
         if not project:
             raise RuntimeError("Logger config missing 'project' attribute")
 
@@ -169,8 +171,8 @@ class CloudManager:
         """Initialize Vertex AI connection."""
         from vertexai import init as aiplatform_init
 
-        # Ensure required attributes exist
-        project = getattr(cloud, "project", None)
+        # Ensure required attributes exist - try both field name variants
+        project = getattr(cloud, "project_id", None) or getattr(cloud, "project", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 
