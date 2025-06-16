@@ -3,7 +3,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Any, Self, TypeVar, cast  # Corrected import for Tuple
+from typing import Any, Literal, Self, TypeVar, cast  # Corrected import for Tuple
 
 import chromadb
 import hydra
@@ -29,7 +29,7 @@ from buttermilk._core.config import DataSouce
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
 from buttermilk.utils.utils import ensure_chromadb_cache
 
-MODEL_NAME = "text-embedding-large-exp-03-07"
+MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
 FAILED_BATCH_DIR = "failed_upsert_batches"
 MAX_TOTAL_TASKS_PER_RUN = 500
@@ -224,7 +224,7 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
 # --- Core Embedding and DB Interaction Class ---
 class ChromaDBEmbeddings(DataSouce):
     """Handles configuration, embedding model interaction, and ChromaDB connection."""
-
+    type: Literal["chromadb"] = "chromadb"
     model_config = pydantic.ConfigDict(extra="ignore")
 
     embedding_model: str = Field(default=MODEL_NAME)
@@ -236,7 +236,6 @@ class ChromaDBEmbeddings(DataSouce):
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
-    embedding_model: str = Field(default="text-embedding-large-exp-03-07")
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -253,10 +252,10 @@ class ChromaDBEmbeddings(DataSouce):
             embedding_model=self.embedding_model,
             dimensionality=self.dimensionality,
         )
-        
+
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
-        
+
         # For remote persist_directory, we'll cache it during collection access
         # For local paths, use directly
         self._client = None  # Will be initialized lazily in collection property
@@ -269,41 +268,136 @@ class ChromaDBEmbeddings(DataSouce):
         return self
 
     async def ensure_cache_initialized(self) -> None:
-        """Ensure ChromaDB cache is initialized for remote persist_directory."""
+        """Ensure ChromaDB cache and collection are ready for use.
+        
+        This method handles both creation and reading scenarios:
+        - Downloads remote ChromaDB to local cache if needed
+        - Initializes ChromaDB client
+        - Creates collection if it doesn't exist
+        - Validates existing collection compatibility
+        """
+        # Step 1: Handle remote ChromaDB caching
         if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
-            logger.info(f"Initializing cache for remote ChromaDB: {self.persist_directory}")
+            logger.info(f"🔄 Downloading remote ChromaDB: {self.persist_directory}")
             local_cache_path = await ensure_chromadb_cache(self.persist_directory)
-            
+
             # Update persist_directory to use local cache
             self.persist_directory = str(local_cache_path)
-            logger.info(f"ChromaDB cache ready at: {local_cache_path}")
-        
-        # Initialize client now that we have a local path
+            logger.info(f"✅ ChromaDB cache ready at: {local_cache_path}")
+
+        # Step 2: Initialize ChromaDB client
         if not hasattr(self, "_client") or not self._client:
             self._client = chromadb.PersistentClient(path=self.persist_directory)
+            logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
+
+        # Step 3: Ensure collection is ready (create or validate)
+        await self._ensure_collection_ready()
+
+    async def _ensure_collection_ready(self) -> None:
+        """Ensure the collection exists and is compatible with current configuration.
+        
+        Handles both creation (if missing) and validation (if exists) scenarios.
+        """
+        if not self._client:
+            raise RuntimeError("ChromaDB client must be initialized before ensuring collection")
+
+        # Check if collection already exists
+        existing_collections = self._client.list_collections()
+        collection_names = [col.name for col in existing_collections]
+        
+        if self.collection_name in collection_names:
+            logger.info(f"📖 Found existing collection '{self.collection_name}'")
+            await self._validate_existing_collection()
+        else:
+            logger.info(f"🆕 Creating new collection '{self.collection_name}'")
+            await self._create_new_collection()
+
+    async def _validate_existing_collection(self) -> None:
+        """Validate that existing collection is compatible with current config."""
+        try:
+            # Get existing collection to check its properties
+            existing_collection = self._client.get_collection(
+                name=self.collection_name,
+                embedding_function=self._embedding_function
+            )
+            
+            # Get some basic stats
+            count = existing_collection.count()
+            logger.info(f"✅ Collection '{self.collection_name}' ready ({count} embeddings)")
+            
+            # TODO: Could add more sophisticated validation here:
+            # - Check embedding dimensionality by sampling
+            # - Verify metadata schema compatibility
+            # - Check embedding model consistency
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Could not fully validate collection '{self.collection_name}': {e}")
+            logger.info("Proceeding with existing collection...")
+
+    async def _create_new_collection(self) -> None:
+        """Create a new collection with proper configuration."""
+        try:
+            # Create collection with embedding function
+            new_collection = self._client.create_collection(
+                name=self.collection_name,
+                embedding_function=self._embedding_function,
+                metadata={
+                    "embedding_model": self.embedding_model,
+                    "dimensionality": self.dimensionality,
+                    "created_by": "buttermilk",
+                    "task_type": self.task
+                }
+            )
+            
+            logger.info(f"✅ Created collection '{self.collection_name}' with {self.embedding_model} embeddings")
+            logger.debug(f"   Dimensionality: {self.dimensionality}, Task: {self.task}")
+            
+        except Exception as e:
+            # If creation fails, try get_or_create as fallback
+            logger.warning(f"Direct creation failed, using get_or_create fallback: {e}")
+            self._client.get_or_create_collection(
+                name=self.collection_name,
+                embedding_function=self._embedding_function
+            )
+            logger.info(f"✅ Collection '{self.collection_name}' ready via fallback")
 
     @property
     def collection(self) -> Collection:
-        """Provides access to the ChromaDB collection."""
-        # This vector store is single-threaded, so we're only keeping one instance around
+        """Provides access to the ChromaDB collection.
+        
+        Note: Call ensure_cache_initialized() first for proper setup.
+        """
+        if not hasattr(self, "_client") or not self._client:
+            # Provide helpful error message about initialization
+            if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
+                raise ValueError(
+                    f"Remote persist_directory '{self.persist_directory}' detected. "
+                    "Please call ensure_cache_initialized() asynchronously before "
+                    "accessing the collection."
+                )
+            else:
+                raise ValueError(
+                    "ChromaDB client not initialized. "
+                    "Please call ensure_cache_initialized() before accessing the collection."
+                )
+
+        # Use cached collection or get it from client
         cache_key = f"vectorstore_{id(self)}"
         if _db_registry.get(cache_key) is None:
-            # Initialize the vector store
-            if not hasattr(self, "_client") or not self._client:
-                # Try to detect if this is a remote path and provide helpful error
-                if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
-                    raise ValueError(
-                        f"Remote persist_directory '{self.persist_directory}' detected. "
-                        "Please call ensure_cache_initialized() asynchronously before "
-                        "accessing the collection."
-                    )
-                
-                self._client = chromadb.PersistentClient(path=self.persist_directory)
-
-            _db_registry[cache_key] = self._client.get_or_create_collection(
-                self.collection_name,
-                embedding_function=self._embedding_function,
-            )
+            # Get the collection (should exist after ensure_cache_initialized)
+            try:
+                _db_registry[cache_key] = self._client.get_collection(
+                    name=self.collection_name,
+                    embedding_function=self._embedding_function
+                )
+            except Exception as e:
+                # Fallback to get_or_create if get fails
+                logger.warning(f"Failed to get collection, falling back to get_or_create: {e}")
+                _db_registry[cache_key] = self._client.get_or_create_collection(
+                    name=self.collection_name,
+                    embedding_function=self._embedding_function
+                )
+        
         return _db_registry[cache_key]
 
     async def embed_document(
