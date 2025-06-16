@@ -335,15 +335,15 @@ class ChromaDBEmbeddings(DataSouce):
         """Ensure ChromaDB cache and collection are ready for use.
         
         This method handles both creation and reading scenarios:
-        - Downloads remote ChromaDB to local cache if needed
+        - Downloads remote ChromaDB to local cache if needed (with smart caching)
         - Initializes ChromaDB client
         - Creates collection if it doesn't exist
         - Validates existing collection compatibility
         """
-        # Step 1: Handle remote ChromaDB caching
+        # Step 1: Handle remote ChromaDB caching with smart cache management
         if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
-            logger.info(f"🔄 Downloading remote ChromaDB: {self.persist_directory}")
-            local_cache_path = await ensure_chromadb_cache(self.persist_directory)
+            self._remote_path = self.persist_directory  # Store original remote path
+            local_cache_path = await self._smart_cache_management(self.persist_directory)
 
             # Update persist_directory to use local cache
             self.persist_directory = str(local_cache_path)
@@ -356,6 +356,89 @@ class ChromaDBEmbeddings(DataSouce):
 
         # Step 3: Ensure collection is ready (create or validate)
         await self._ensure_collection_ready()
+
+    async def _smart_cache_management(self, remote_path: str) -> Path:
+        """
+        Smart cache management that prevents overwriting newer local changes.
+        
+        Args:
+            remote_path: Remote GCS/S3 path to ChromaDB
+            
+        Returns:
+            Path to local cache directory
+        """
+        from buttermilk.utils.utils import ensure_chromadb_cache
+        import os
+        import time
+        
+        # Get local cache path
+        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
+        
+        # Check if local cache exists and has recent modifications
+        local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()
+        
+        if local_exists:
+            # Check modification time of local cache
+            local_mtime = os.path.getmtime(cache_path / "chroma.sqlite3")
+            time_since_modified = time.time() - local_mtime
+            
+            # If modified within last hour, don't re-download
+            if time_since_modified < 3600:  # 1 hour
+                logger.info(f"📋 Using existing local cache (modified {time_since_modified/60:.1f} minutes ago)")
+                logger.info(f"🔒 Skipping download to preserve local changes")
+                return cache_path
+            else:
+                logger.info(f"⏰ Local cache is {time_since_modified/3600:.1f} hours old, checking for updates...")
+        
+        # Download remote ChromaDB (will skip if already up to date)
+        logger.info(f"🔄 Syncing remote ChromaDB: {remote_path}")
+        local_cache_path = await ensure_chromadb_cache(remote_path)
+        
+        return local_cache_path
+
+    async def _sync_local_changes_to_remote(self) -> None:
+        """
+        Sync local ChromaDB changes back to remote storage.
+        
+        This method should be called after embedding operations to ensure
+        local changes are persisted to the remote storage.
+        """
+        if not self.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
+            # Not a remote storage, no sync needed
+            logger.debug("Local storage detected, no remote sync needed")
+            return
+            
+        try:
+            from buttermilk.utils.utils import upload_chromadb_cache
+            import os
+            import time
+            
+            # Get local cache path
+            cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / self.persist_directory.replace("://", "___").replace("/", "_")
+            
+            # Check if local cache exists and has been modified
+            if not cache_path.exists() or not (cache_path / "chroma.sqlite3").exists():
+                logger.debug("No local cache to sync")
+                return
+                
+            # Check if local cache has been recently modified
+            local_mtime = os.path.getmtime(cache_path / "chroma.sqlite3")
+            time_since_modified = time.time() - local_mtime
+            
+            # Only sync if modified within last 6 hours (indicates recent embedding work)
+            if time_since_modified > 21600:  # 6 hours
+                logger.debug(f"Local cache not recently modified ({time_since_modified/3600:.1f}h ago), skipping sync")
+                return
+                
+            logger.info(f"🔄 Syncing local changes back to remote: {self.persist_directory}")
+            
+            # Upload local cache to remote storage
+            await upload_chromadb_cache(str(cache_path), self.persist_directory)
+            logger.info("✅ Successfully synced local changes to remote storage")
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to sync local changes to remote storage: {e}")
+            logger.info("Local changes are preserved in cache and can be manually synced later")
 
     async def _ensure_collection_ready(self) -> None:
         """Ensure the collection exists and is compatible with current configuration.
@@ -781,6 +864,10 @@ class ChromaDBEmbeddings(DataSouce):
             )
 
             logger.info(f"Successfully stored enhanced chunks for document {doc.record_id}")
+            
+            # Sync local changes to remote storage after successful upsert
+            await self._sync_local_changes_to_remote()
+            
             return doc
 
         except Exception as e:
@@ -1051,6 +1138,10 @@ class ChromaDBEmbeddings(DataSouce):
                         f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
                     )
 
+        # Sync local changes to remote storage after batch upsert operations
+        if successful_docs_upserted > 0:
+            await self._sync_local_changes_to_remote()
+
         return successful_docs_upserted, failed_docs_upserted
 
     async def process(self, doc: InputDocument) -> InputDocument | None:
@@ -1115,6 +1206,10 @@ class ChromaDBEmbeddings(DataSouce):
             logger.info(
                 f"Successfully processed document {doc.record_id} - embedded, saved, and upserted.",
             )
+            
+            # Sync local changes to remote storage after successful upsert
+            await self._sync_local_changes_to_remote()
+            
             return doc_with_embeddings
 
         except Exception as e:

@@ -654,15 +654,21 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
                     remote_path = CloudPath(persist_directory)
                     
                     if not remote_path.exists():
-                        raise OSError(f"Remote ChromaDB directory does not exist: {persist_directory}")
+                        # For new vector stores, the remote directory won't exist yet
+                        # Create empty local directory that ChromaDB can initialize
+                        logger.info(f"Remote ChromaDB directory does not exist: {persist_directory}")
+                        logger.info(f"Creating new empty ChromaDB directory for initialization")
+                        # temp_path already exists, so we just leave it empty for ChromaDB to initialize
+                    else:
+                        # Download all files recursively
+                        _download_chromadb_recursive(remote_path, temp_path)
                     
-                    # Download all files recursively
-                    _download_chromadb_recursive(remote_path, temp_path)
-                    
-                    # Verify essential files exist
-                    temp_chroma_db = temp_path / "chroma.sqlite3"
-                    if not temp_chroma_db.exists():
-                        raise OSError(f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}")
+                    # For new vector stores, we skip verification since ChromaDB will create the files
+                    if remote_path.exists():
+                        # Only verify for existing remote stores
+                        temp_chroma_db = temp_path / "chroma.sqlite3"
+                        if not temp_chroma_db.exists():
+                            raise OSError(f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}")
                     
                     # Atomic move to final location
                     local_cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -785,6 +791,83 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
             return total_freed
             
         return await asyncio.to_thread(_clear_specific)
+
+
+async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -> None:
+    """Upload local ChromaDB cache to remote storage.
+    
+    This function uploads a local ChromaDB directory to remote storage (GCS, S3, etc.)
+    to persist local changes back to the shared remote storage.
+    
+    Args:
+        local_cache_path: Path to local ChromaDB directory to upload
+        persist_directory: Remote destination path (e.g., "gs://bucket/path")
+        
+    Raises:
+        ValueError: If paths are invalid
+        OSError: If upload fails
+    """
+    local_path = pathlib.Path(local_cache_path)
+    
+    if not local_path.exists() or not local_path.is_dir():
+        raise ValueError(f"Local cache path does not exist or is not a directory: {local_cache_path}")
+    
+    # Check if it's actually a ChromaDB directory
+    if not (local_path / "chroma.sqlite3").exists():
+        raise ValueError(f"Local path does not appear to be a ChromaDB directory (missing chroma.sqlite3): {local_cache_path}")
+    
+    try:
+        remote_path = CloudPath(persist_directory)
+        
+        def _upload_chromadb_sync():
+            """Synchronous upload function to be run in thread."""
+            logger.info(f"Uploading ChromaDB from {local_cache_path} to {persist_directory}")
+            
+            # Ensure remote directory exists
+            if not remote_path.exists():
+                remote_path.mkdir(parents=True, exist_ok=True)
+            
+            # Upload all files recursively
+            _upload_chromadb_recursive(local_path, remote_path)
+            
+            logger.info(f"Successfully uploaded ChromaDB to {persist_directory}")
+        
+        # Run upload in thread to avoid blocking async operations
+        await asyncio.to_thread(_upload_chromadb_sync)
+        
+    except Exception as e:
+        logger.error(f"Failed to upload ChromaDB to {persist_directory}: {e}")
+        raise OSError(f"ChromaDB upload failed: {e}") from e
+
+
+def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath) -> None:
+    """Recursively upload ChromaDB directory structure.
+    
+    Args:
+        local_path: Local path to ChromaDB directory
+        remote_path: CloudPath to remote destination
+    """
+    try:
+        # Upload all items in the local directory
+        for item in local_path.iterdir():
+            remote_item_path = remote_path / item.name
+            
+            if item.is_dir():
+                # Create remote directory and recurse
+                if not remote_item_path.exists():
+                    remote_item_path.mkdir(parents=True, exist_ok=True)
+                _upload_chromadb_recursive(item, remote_item_path)
+            else:
+                # Upload file
+                logger.debug(f"Uploading {item} to {remote_item_path}")
+                
+                # Use CloudPath's read_bytes/write_bytes for efficient transfer
+                file_data = item.read_bytes()
+                remote_item_path.write_bytes(file_data)
+                
+    except Exception as e:
+        logger.error(f"Error uploading to {remote_path}: {e}")
+        raise
 
 
 # Image utility functions (replaces MediaObj functionality)
