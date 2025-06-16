@@ -145,6 +145,30 @@ class Record(BaseModel):
         else:
             return str(self.content)
 
+    def model_dump(self, **kwargs) -> dict[str, Any]:
+        """Custom model_dump that excludes computed fields by default.
+        
+        For simple text content, text_content duplicates content, so we exclude it
+        unless explicitly requested. For multimodal content, users can include it
+        by passing exclude=None or exclude={other_fields}.
+        """
+        # Get current exclude set
+        current_exclude = kwargs.get('exclude', set())
+        if current_exclude is None:
+            current_exclude = set()
+        elif isinstance(current_exclude, (list, tuple)):
+            current_exclude = set(current_exclude)
+        elif not isinstance(current_exclude, set):
+            current_exclude = {current_exclude}
+        
+        # Add computed fields to exclusion for simple text content
+        if isinstance(self.content, str):
+            # For simple string content, text_content is redundant
+            current_exclude.update({'text_content', 'title', 'images'})
+        
+        kwargs['exclude'] = current_exclude
+        return super().model_dump(**kwargs)
+
     @classmethod
     def from_input_document(cls, doc: Any) -> "Record":
         """Convert InputDocument to Record (no data loss).
