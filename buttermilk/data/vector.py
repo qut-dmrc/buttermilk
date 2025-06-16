@@ -678,14 +678,16 @@ class ChromaDBEmbeddings(DataSouce):
         # Multi-field chunking based on configuration
         config = self.multi_field_config
         
-        # 1. Main content field (chunked)
-        content_text = record.text_content
-        if content_text:
+        # 1. Main content field (chunked) - use content field configured in multi_field_config
+        content_text = getattr(record, config.content_field, record.text_content)
+        if isinstance(content_text, str) and content_text:
+            logger.debug(f"Content text length for {record.record_id}: {len(content_text)} chars (from {config.content_field})")
             text_splitter = DefaultTextSplitter(
                 chunk_size=config.chunk_size,
                 chunk_overlap=config.chunk_overlap
             )
             content_chunks = text_splitter.split_text(content_text)
+            logger.debug(f"Text splitter with chunk_size={config.chunk_size} created {len(content_chunks)} content chunks for {record.record_id}")
             
             for i, chunk_text in enumerate(content_chunks):
                 if chunk_text.strip():
@@ -749,7 +751,12 @@ class ChromaDBEmbeddings(DataSouce):
             for chunk in record.chunks:
                 chunk_type = chunk.metadata.get('chunk_type', 'content')
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
-            logger.info(f"Created chunks for record {record.record_id}: {chunk_types}")
+            
+            # Get content length for context
+            content_text = getattr(record, self.multi_field_config.content_field, record.text_content)
+            content_length = len(content_text) if isinstance(content_text, str) else 0
+            
+            logger.info(f"Created chunks for record {record.record_id}: {chunk_types} (content_length: {content_length}, chunk_size: {self.multi_field_config.chunk_size})")
         
         # Generate embeddings for all chunks
         await self._embed_chunks(record.chunks)
