@@ -309,12 +309,45 @@ class BM(SessionInfo):
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
+        # Set GCP environment variables immediately (needed for GCS access)
+        self._setup_gcp_environment()
+
         # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
 
         # Defer non-critical operations to background tasks for faster startup
         self._schedule_background_init()
+
+    def _setup_gcp_environment(self) -> None:
+        """Set up GCP environment variables immediately for early GCS access.
+        
+        This extracts the environment variable setup from CloudManager 
+        to ensure they're available before any cloud operations.
+        """
+        import os
+        
+        if not self.clouds:
+            return
+            
+        # Find GCP cloud config 
+        gcp_cloud_cfg = next(
+            (c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"),
+            None,
+        )
+        
+        if gcp_cloud_cfg:
+            # Try both 'project_id' (config field) and 'project' (legacy field)
+            project_id = getattr(gcp_cloud_cfg, "project_id", None) or getattr(gcp_cloud_cfg, "project", None)
+            quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
+
+            if project_id:
+                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
+
+            if quota_project_id:
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
+                
+            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
     def _schedule_background_init(self) -> None:
         """Schedule non-critical initialization tasks in the background.
