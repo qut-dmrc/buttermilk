@@ -5,15 +5,16 @@ from azure.keyvault.secrets import SecretClient
 from google.cloud import secretmanager
 
 from buttermilk._core.config import CloudProviderCfg
+from buttermilk._core.utils.lazy_loading import cached_property
 from buttermilk.utils.utils import load_json_flexi
 
 
 class SecretsManager(CloudProviderCfg):
     _path: str = ""
 
-    @property
+    @cached_property
     def client(self):
-        """Initialize secrets manager client with project ID"""
+        """Initialize secrets manager client with project ID - deferred until first secret access."""
         client = None
 
         if self.type == "gcp":

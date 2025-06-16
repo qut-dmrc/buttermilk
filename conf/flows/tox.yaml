@@ -1,17 +1,16 @@
-# @package run.flows.tox
+
 # COMMENTED OUT # @package _global_
 defaults:
-  - /data: drag
+  - /storage: drag
   - _self_
-  - /agents:
-      - judge
-      - synth
-      - differences
-  - /agents@observers:
-      - owl
-      - scorer
-      - host/sequencer
-  - criteria@parameters.criteria: hate
+  - /agents@agents.judge: judge
+  - /agents@agents.synth: synth
+  - /agents@agents.differences: differences
+  - /agents@observers.owl: owl
+  - /agents@observers.scorer: scorer
+  - /agents@observers.spy: spy
+  - /agents@observers.host_sequencer: host/sequencer
+  - /storage@storage: tox_bigquery
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "tox"
@@ -22,3 +21,4 @@ parameters:
     - criteria_ordinary
     - criteria_gelber
     - criteria_hatefb_factorised
+  save: {..parameters.save}

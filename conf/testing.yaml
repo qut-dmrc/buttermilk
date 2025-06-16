@@ -1,15 +1,10 @@
 defaults:
-  - config
   - local
-  - flows: test
+  - flows: 
+    - test
   - _self_
+  - bigquery: testing
 
 name: buttermilk
 job: testing
 ui: console
-
-
-save:
-  type: bq
-  dataset: prosocial-443205.testing.flow
-  db_schema: flow.json

@@ -1,8 +1,16 @@
+# Flow-independent fetch agent configuration
+
 fetch:
-  role: FETCH
-  name: "🔍 fetch record"
+  name: "🔍 Fetch"
+  role: FETCH  
+  description: "Data fetcher that retrieves records from configured data sources"
   agent_obj: FetchAgent
-  description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
-  data: ${...data}
+
+  num_runs: 1
+
+  parameters:
+    batch_size: 100  # Default batch size
+
+  # Data source will be determined by flow configuration
   inputs:
     prompt: 'prompt||content'

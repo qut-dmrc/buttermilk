@@ -41,16 +41,21 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
         path = os.getcwd() + "/conf"
 
     overrides.append("+run=notebook")
-    overrides.append(f"job={job}")
+    overrides.append(f"+run.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
         conf = compose(config_name="config", overrides=overrides)
 
     objs = hydra.utils.instantiate(conf)
-    
+
     # Get the Buttermilk instance
     bm = objs.bm
-    
+
+    # Set the singleton BM instance
+    from buttermilk._core.dmrc import set_bm
+
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+
     logger.info(
         f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",
     )

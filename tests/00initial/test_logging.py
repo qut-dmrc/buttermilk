@@ -82,7 +82,6 @@ def test_logging_with_context_vars(configured_logger):
     log_output = log_buffer.getvalue()
 
     assert f"[{test_session_id}:{test_agent_id}] {log_message}" in log_output
-
     # Cleanup context variables
     set_logging_context(None, None)
 
@@ -95,7 +94,6 @@ def test_logging_without_context_vars(configured_logger):
     test_formatter = logging.Formatter("[%(session_id)s:%(agent_id)s] %(message)s")
     stream_handler = logging.StreamHandler(log_buffer)
     stream_handler.setFormatter(test_formatter)
-
     configured_logger.addHandler(stream_handler)
     # configured_logger.setLevel(logging.INFO)
 
@@ -106,7 +104,6 @@ def test_logging_without_context_vars(configured_logger):
     stream_handler.close()
 
     log_output = log_buffer.getvalue()
-
     # Default None values for context vars should appear as "None" in the string
     assert f"[None:None] {log_message}" in log_output
 

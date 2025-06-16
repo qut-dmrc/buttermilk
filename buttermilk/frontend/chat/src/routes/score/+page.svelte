@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { recordsStore, selectedFlow } from '$lib/stores/apiStore';
+  import { recordsStore, selectedFlow, flowChoices, initializeApp } from '$lib/stores/apiStore';
 
   let records: any[] = [];
 
@@ -12,32 +12,60 @@
   }
 
   onMount(() => {
-    // If we have records, redirect to the first one
-    if (records.length > 0) {
-      goto(`/score/${records[0].id}`);
+    // Initialize app to load flow choices
+    initializeApp();
+    
+    // If we have records and a selected flow, redirect to the first one
+    if (records.length > 0 && $selectedFlow) {
+      goto(`/score/${encodeURIComponent($selectedFlow)}/${records[0].id}`);
     }
   });
 
   // Watch for records changes and auto-redirect
-  $: if (records.length > 0) {
-    goto(`/score/${records[0].id}`);
+  $: if (records.length > 0 && $selectedFlow) {
+    goto(`/score/${encodeURIComponent($selectedFlow)}/${records[0].id}`);
   }
 </script>
 
 <div class="score-home">
   <div class="terminal-header">
-    <h1 class="terminal-title">Toxicity Score Analysis</h1>
-    <div class="terminal-subtitle">Select a record from the sidebar to view detailed scoring results</div>
+    <h1 class="terminal-title">
+      {#if $selectedFlow}
+        {$selectedFlow.toUpperCase()} Score Analysis
+      {:else}
+        Score Analysis
+      {/if}
+    </h1>
+    <div class="terminal-subtitle">
+      {#if $selectedFlow}
+        Select a record from the sidebar to view detailed scoring results
+      {:else}
+        Select a flow from the sidebar to begin analysis
+      {/if}
+    </div>
   </div>
 
   <div class="terminal-content">
     <div class="info-panel">
-      <h3 class="panel-title">Available Datasets</h3>
-      <ul class="dataset-list">
-        <li><strong>OSB</strong> - Oversight Board dataset</li>
-        <li><strong>DRAG</strong> - Drag Queen vs White Supremacist dataset</li>
-        <li><strong>TONEPOLICE</strong> - Tone policing detection dataset</li>
-      </ul>
+      <h3 class="panel-title">Available Flows</h3>
+      {#if $flowChoices.loading}
+        <div class="loading-text">Loading available flows...</div>
+      {:else if $flowChoices.error}
+        <div class="error-text">Error loading flows: {$flowChoices.error}</div>
+      {:else if $flowChoices.data.length > 0}
+        <ul class="dataset-list">
+          {#each $flowChoices.data as flow}
+            <li>
+              <strong>{flow.toUpperCase()}</strong> - {flow} analysis flow
+              {#if flow === $selectedFlow}
+                <span class="selected-indicator">← Selected</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="no-data-text">No flows available</div>
+      {/if}
     </div>
 
     <div class="info-panel">
@@ -126,6 +154,12 @@
     width: 120px;
   }
 
+  .selected-indicator {
+    color: #00ffff;
+    font-weight: bold;
+    margin-left: 10px;
+  }
+
   .score-legend {
     display: flex;
     flex-direction: column;
@@ -158,6 +192,23 @@
 
   .score-text {
     color: #ccc;
+  }
+
+  .loading-text {
+    color: #ffaa00;
+    font-style: italic;
+    padding: 0.5rem 0;
+  }
+
+  .error-text {
+    color: #ff4444;
+    padding: 0.5rem 0;
+  }
+
+  .no-data-text {
+    color: #666;
+    font-style: italic;
+    padding: 0.5rem 0;
   }
 
   @media (max-width: 768px) {

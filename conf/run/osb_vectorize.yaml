@@ -1,0 +1,42 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+start_from: 0
+
+name: osb_vectorizer
+job: osb_processing
+vectoriser:
+  _target_: buttermilk.data.vector.ChromaDBEmbeddings
+  persist_directory: "gs://prosocial-public/osb/chromadb"
+  collection_name: "osb_fulltext"
+  embedding_model: "text-embedding-005"
+  dimensionality: 768
+  arrow_save_dir: "/tmp/osb_embeddings"
+  concurrency: 20
+  upsert_batch_size: 50
+  embedding_batch_size: 5
+
+chunker:
+  _target_: buttermilk.data.vector.DefaultTextSplitter
+  chunk_size: 4000
+  chunk_overlap: 1000
+
+input_docs:
+  _target_: buttermilk.data.loaders.json_loader.JsonDataLoader
+  uri: "gs://prosocial-public/osb/03_osb_fulltext_summaries.json"
+  field_mapping:
+    record_id: id
+    content: full_text
+    metadata:
+      title: title
+      case_number: case_number
+      url: url
+      summary: summary
+
+preprocessor:
+  _target_: buttermilk.data.processors.text_preprocessor.TextPreprocessor
+
+processor:
+  _target_: buttermilk.data.processors.pass_through.PassThroughProcessor

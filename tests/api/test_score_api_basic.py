@@ -42,9 +42,9 @@ class TestScoreAPIBasics:
         routes = [route.path for route in flow_data_router.routes]
         
         expected_routes = [
-            "/api/records/{record_id}",
-            "/api/records/{record_id}/scores", 
-            "/api/records/{record_id}/responses",
+            "/api/flows/{flow}/records/{record_id}",
+            "/api/flows/{flow}/records/{record_id}/scores", 
+            "/api/flows/{flow}/records/{record_id}/responses",
             "/api/records"
         ]
         
@@ -123,9 +123,9 @@ class TestAPISpecCompliance:
         from buttermilk.api.routes import flow_data_router
         
         spec_endpoints = {
-            "/api/records/{record_id}": "GET",
-            "/api/records/{record_id}/scores": "GET", 
-            "/api/records/{record_id}/responses": "GET",
+            "/api/flows/{flow}/records/{record_id}": "GET",
+            "/api/flows/{flow}/records/{record_id}/scores": "GET", 
+            "/api/flows/{flow}/records/{record_id}/responses": "GET",
             "/api/records": "GET"
         }
         

@@ -5,6 +5,9 @@ all: test
 # TESTING AND COVERAGE
 ######################
 
+# Print default configurations
+config:
+	uv run python -m buttermilk.runner.cli -c job
 
 # Run unit tests and generate a coverage report.
 coverage:
@@ -15,13 +18,13 @@ coverage:
 		$(TEST_FILE)
 
 format:	
-	./venv/bin/python -m black buttermilk
+	uv run python -m black buttermilk
 
 lint:
-	./venv/bin/python -m  ruff buttermilk
+	uv run python -m  ruff buttermilk
 
 test tests:
-	./venv/bin/python -m pytest 
+	uv run python -m pytest 
 
 scheduled_tests:
-	./venv/bin/python -m pytest -m scheduled tests
+	uv run 	python -m pytest -m scheduled tests

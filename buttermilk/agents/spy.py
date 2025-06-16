@@ -16,7 +16,6 @@ from autogen_core import (  # Autogen core components
 
 from buttermilk._core import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
-from buttermilk._core.config import SaveInfo  # Configuration model for saving data
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
 from buttermilk.utils.uploader import AsyncDataUploader  # Utility for asynchronous data upload
 
@@ -46,30 +45,34 @@ class SpyAgent(RoutedAgent):
 
     def __init__(
         self,
-        save_dest: SaveInfo | None = None,
-        **kwargs: Any,
+        flow_name: str = "",
+        **_kwargs: Any,
     ) -> None:
         """Initializes the SpyAgent.
 
         Args:
-            name (str): The name of this spy agent. Defaults to "spy_agent".
-            save_dest (SaveInfo): A `SaveInfo` Pydantic model instance specifying
-                the destination and configuration for saving data (e.g., BigQuery
-                table details, file paths).
-            description (str): A human-readable description of the agent's purpose.
-            **kwargs: Additional keyword arguments passed to the `RoutedAgent`
+            flow_name: Name of the flow this agent is part of, provided by orchestrator
+            **_kwargs: Additional keyword arguments passed to the `RoutedAgent`
                 superclass constructor.
 
         """
-        super().__init__(description="Save results to BQ")
-        self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE, save_dest=save_dest)
+        super().__init__(description="Save results to storage")
+        self.flow_name = flow_name
+        self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE)
+        
+        # Configure storage based on flow_name provided by orchestrator
+        if self.flow_name:
+            self.manager.configure_storage(self.flow_name)
+            logger.debug(f"SpyAgent: Configured storage for flow '{self.flow_name}'")
+        else:
+            logger.debug("SpyAgent: No flow_name provided, using session-level storage fallback")
 
     @message_handler  # Autogen decorator to register this method as a handler
     async def agent_output_handler(self, message: AgentTrace, ctx: MessageContext) -> ErrorEvent | None:  # Changed to Any to handle type check first
         """Message handler that captures `AgentTrace` messages and saves them.
 
         This method is decorated with `@message_handler`, making it the entry point
-        for messages routed to this agent within an Autogen system.
+        for `AgentTrace` messages routed to this agent within an Autogen system.
 
         It performs the following actions:
         1.  Checks if the incoming `message` is an instance of `AgentTrace`.

@@ -8,13 +8,6 @@ Welcome to the Buttermilk Group Chat feature! This guide will walk you through s
 *   Run your group chats using different modes (console, API) via the Buttermilk CLI.
 *   Leverage Hydra for flexible configuration overrides.
 
-## Prerequisites
-
-Before you begin, please ensure you have:
-
-*   An active Buttermilk account (if applicable for cloud features).
-*   The Buttermilk CLI installed and configured on your system.
-*   A basic understanding of Buttermilk concepts like flows and agents. If you're new to Buttermilk, consider reviewing the general documentation first.
 
 ## Defining a Custom Group Chat Flow
 

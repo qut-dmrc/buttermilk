@@ -17,7 +17,9 @@ from buttermilk._core.context import session_id_var
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
 
+from .lazy_routes import LazyRouteManager, create_core_router
 from .routes import flow_data_router
+from .mcp import mcp_router
 
 # Define the base directory for the FastAPI app
 BASE_DIR = Path(__file__).resolve().parent
@@ -35,13 +37,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """Lifespan event handler for startup and shutdown events.
         """
         try:
-            # # Startup event
-            # worker = JobQueueClient(
-            #     max_concurrent_jobs=1,
-            # )
-            # app.state.job_worker = worker
-            # logger.info("Started job worker in FastAPI application")
-            # task = asyncio.create_task(worker.pull_tasks())
+            # Complete BM initialization in the FastAPI event loop
+            if hasattr(app.state, "bm"):
+                await app.state.bm._background_init()
             yield
         except Exception as e:
             logger.error(f"Failed to start job worker: {e}")
@@ -50,7 +48,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             if hasattr(app.state, "job_worker"):
                 await app.state.job_worker.stop()
                 logger.info("Stopped job worker")
-            
+
             # Clean up FlowRunner sessions
             if hasattr(app.state, "flow_runner"):
                 try:
@@ -72,19 +70,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     logger.info("App state configured.")
 
     # Add batch router
-#    batch_router = create_batch_router(app.state.batch_runner)
+    #    batch_router = create_batch_router(app.state.batch_runner)
     # app.include_router(batch_router, prefix="/api")
     # logger.info("Batch router added.")
 
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://www.city-journal.org/article/what-are-we-doing-to-children"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/osb' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Is it still hate speech if the targeted group is not explicitly named?"}'
-
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
-    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
+    # Example usage:
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Your text content here"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Your text content here"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://example.com/article"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/{flow_name}' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "your_record_id"}'
 
     logger.info("Defining exception handler.")
 
@@ -95,24 +89,17 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             content={"detail": str(exc)},
         )
 
-    logger.info("Defining API routes.")
+    logger.info("Setting up lazy route management.")
 
-    @app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
-    async def run_flow_json(
-        flow_name: str,
-        request: Request,
-        run_request: RunRequest | None = None,
-    ) -> StreamingResponse:
-        """Run a flow with provided inputs."""
-        # Access state via request.app.state
-        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
-            raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
+    # Initialize lazy route manager for Phase 2 optimization
+    lazy_manager = LazyRouteManager(app)
 
-        # Use stream method with the flow runner
-        return StreamingResponse(
-            request.app.state.flow_runner.stream(run_request),
-            media_type="application/json",
-        )
+    # Register core routes immediately (essential functionality)
+    core_router = create_core_router()
+    app.include_router(core_router)
+    lazy_manager.register_core_routes()
+
+    logger.info("Core routes registered, deferring heavy routes.")
 
     # Set up CORS
 
@@ -134,6 +121,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
+    # WebSocket endpoint - essential for frontend terminal functionality
     @flow_data_router.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """WebSocket endpoint for client communication with the WebUIAgent.
@@ -179,7 +167,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         if task:
             await task
-        
+
         # Clean up the session when WebSocket disconnects
         try:
             if hasattr(flow_runner, 'session_manager'):
@@ -190,11 +178,11 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                     logger.debug(f"Session {session_id} not found during cleanup (may have already been cleaned up)")
         except Exception as e:
             logger.warning(f"Error cleaning up session {session_id}: {e}")
-        
+
         with contextlib.suppress(Exception):
             await websocket.close()
 
-    # Helper route to generate session IDs for clients
+    # Session management routes - essential for frontend functionality
     @app.get("/api/session")
     async def create_session():
         """Generates a unique session ID for new web clients.
@@ -213,10 +201,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict with session status information
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             raise HTTPException(status_code=500, detail="Session manager not available")
-            
+
         if session_id in flow_runner.session_manager.sessions:
             session = flow_runner.session_manager.sessions[session_id]
             return {
@@ -238,10 +226,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict confirming cleanup
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             raise HTTPException(status_code=500, detail="Session manager not available")
-            
+
         success = await flow_runner.session_manager.cleanup_session(session_id)
         if success:
             return {"message": f"Session {session_id} cleaned up successfully"}
@@ -256,10 +244,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict with list of session information
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             return {"sessions": [], "total": 0}
-            
+
         sessions_info = []
         for session_id, session in flow_runner.session_manager.sessions.items():
             sessions_info.append({
@@ -272,10 +260,16 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             })
         return {"sessions": sessions_info, "total": len(sessions_info)}
 
-    # --- Add API data routes ---
+    # --- Defer heavy routes for Phase 2 optimization ---
     # Set up templates
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    app.include_router(flow_data_router)
+
+    # Defer heavy routers until first request
+    lazy_manager.defer_router(flow_data_router, prefix="")
+    lazy_manager.defer_router(mcp_router, prefix="")
+    lazy_manager.create_lazy_middleware()
+
+    logger.info("Heavy routes deferred - will load on first request")
 
     # Set up static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

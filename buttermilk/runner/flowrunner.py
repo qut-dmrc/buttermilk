@@ -35,7 +35,6 @@ from buttermilk._core import (
     logger,  # noqa
 )
 from buttermilk._core.agent import ErrorEvent
-from buttermilk._core.config import SaveInfo
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -364,7 +363,12 @@ class OrchestratorFactory:
             orchestrator_cls = getattr(module, class_name)
 
             # Create a fresh config copy to avoid shared state
-            config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
+            if hasattr(flow_config, "model_dump"):
+                config = flow_config.model_dump()
+            else:
+                # Convert OmegaConf objects to standard Python types recursively
+                from buttermilk.utils.validators import convert_omegaconf_objects
+                config = convert_omegaconf_objects(dict(flow_config))
 
             # Create and return a fresh instance
             orchestrator = orchestrator_cls(**config)
@@ -689,7 +693,6 @@ class FlowRunner(BaseModel):
 
     flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
 
-    save: SaveInfo
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
     ui: str = Field(default="console")

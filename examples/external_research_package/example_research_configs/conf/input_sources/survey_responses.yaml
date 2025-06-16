@@ -1,0 +1,17 @@
+# Example survey response dataset configuration
+
+defaults:
+  - /storage: bigquery_default
+
+# Dataset-specific configuration
+dataset_name: survey_responses_2024
+split_type: complete
+# source_jsonl: gs://${oc.env:RESEARCH_BUCKET,university-research-data}/raw/survey_responses.jsonl
+
+# Override storage template for this dataset
+dataset_id: research_datasets
+table_id: survey_responses
+clustering_fields:
+  - record_id
+  - participant_id
+  - survey_date

@@ -1,17 +1,15 @@
 # @package _global_
-# Batch execution configuration
 defaults:
   - /local
-  - _self_
 
-name: bm_api
-job: flows
-
+  
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: api
   ui: web
   human_in_loop: true
-  save: ${save}
-  flows: {}
-  
+
+  name: bm_api
+  job: flows
+
+  flows: ${flows}

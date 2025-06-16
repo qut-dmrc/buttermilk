@@ -200,7 +200,7 @@ class HostAgent(Agent):
             if self._conductor_task and not self._conductor_task.done():
                 logger.warning(f"Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
-
+            self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
             # If no task is running, start a new one
             logger.info(f"Host {self.agent_name} starting new conductor task.")
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))

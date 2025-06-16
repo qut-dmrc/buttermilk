@@ -47,7 +47,6 @@
       "args": [
         "+run=batch",
         "flows=[trans]",
-        "llms=full",
         "+flow=trans"
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -65,8 +64,8 @@
       ],
       "justMyCode": true,
       "args": [
+        "+flows=[trans, tox_allinone]",
         "+run=api",
-        "+flows=[trans]",
         "+llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",

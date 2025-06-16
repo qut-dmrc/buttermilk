@@ -1,0 +1,32 @@
+# Fast API configuration with minimal setup for performance testing
+# @package _global_
+
+defaults:
+  - /local
+
+run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
+  mode: api
+  ui: web
+  human_in_loop: false  # Disable for speed
+  name: bm_fast_api
+  job: perf_test
+  flows:
+    simple_test:
+      _target_: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+      name: "simple_test"
+      description: "Minimal test flow for performance testing"
+      orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+      parameters: {}
+      agents: {}
+      observers: {}
+      storage:
+        type: memory  # In-memory storage for speed
+
+# Override logger to avoid cloud setup
+logger:
+  type: console
+  verbose: false
+
+# Minimal cloud config (empty to avoid authentication)
+clouds: []

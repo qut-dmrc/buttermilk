@@ -1,6 +1,6 @@
-# @package run.flows.simple
+
 defaults:
-  - /data: tja_train 
+  - /storage: tja 
   - /agents:
     - judge
     - synth

@@ -10,13 +10,16 @@ interface InitialFlowConfig {
 interface FlowInfoResponse {
   criteria?: string[];
   models?: string[];
+  datasets?: string[];
   record_ids?: { id: string; name: string }[];
 }
 
-// For a single record item (adjust as needed)
+// For a single record item (matching backend Record model)
 interface RecordItem {
-  id: string;
-  name: string;
+  record_id: string;
+  name?: string;
+  content?: string;
+  metadata?: any;
 }
 
 // --- Generic API Store Creator ---
@@ -117,7 +120,9 @@ function createApiStore<T, R>(
     subscribe,
     fetch,
     fetchWithCache,
-    reset
+    reset,
+    // Expose internal store for manual updates
+    _store: store
   };
 }
 
@@ -141,6 +146,7 @@ export const flowChoices = derived(
 
 // 2. Stores for the currently selected API parameters
 export const selectedFlow = writable<string>('');
+export const selectedDataset = writable<string>('');
 
 // Create selectedRecord with a custom set method to log changes
 const createSelectedRecordStore = () => {
@@ -161,26 +167,90 @@ export const selectedRecord = createSelectedRecordStore();
 export const selectedCriteria = writable<string>('');
 export const selectedModel = writable<string>('');
 
-// 3. Single store for flow-dependent info
+// 3. Single store for flow-dependent info - will be updated with flow parameter
+// Note: endpoint is not used since we manually fetch and update
 export const flowInfoStore = createApiStore<FlowInfoResponse | null, FlowInfoResponse>(
-    '/api/flowinfo',
+    '/api/flows/placeholder/info',
     null,
     (data) => data
 );
 
-// 4. Derived stores for specific data points from flowInfoStore
-export const recordsStore = derived(
-    flowInfoStore,
-    ($info) => {
-        const recordData = $info.data?.record_ids ?? [];
-        
-        return {
-            data: recordData,
-            loading: $info.loading,
-            error: $info.error
-        };
+// 4. Dedicated records store that handles dataset filtering - will be updated with flow parameter
+// Note: Use a simple writable store since we manually fetch and update
+const recordsStoreInternal = writable<{
+  data: RecordItem[];
+  loading: boolean;
+  error: string | null;
+  timestamp: number | null;
+}>({
+  data: [],
+  loading: false,
+  error: null,
+  timestamp: null,
+});
+
+export const recordsStore = {
+  subscribe: recordsStoreInternal.subscribe,
+  _store: recordsStoreInternal,
+  reset: function() {
+    recordsStoreInternal.set({
+      data: [],
+      loading: false,
+      error: null,
+      timestamp: null,
+    });
+  }
+};
+
+// Override recordsStore to fetch when flow or dataset changes
+export async function refetchRecords() {
+  const currentFlow = get(selectedFlow);
+  const currentDataset = get(selectedDataset);
+  
+  console.log('refetchRecords called with:', { currentFlow, currentDataset });
+  
+  if (currentFlow && currentDataset && currentDataset.trim() !== '') {
+    // Always require both flow and dataset - no fallback to flow-only
+    const endpoint = `/api/flows/${encodeURIComponent(currentFlow)}/datasets/${encodeURIComponent(currentDataset)}/records`;
+    
+    console.log('Fetching records from:', endpoint);
+    
+    // Make direct fetch call and update the records store
+    try {
+      recordsStore._store.update(state => ({ ...state, loading: true, error: null }));
+      
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error(`Error fetching records: ${response.statusText} (Status: ${response.status})`);
+      }
+      const data: RecordItem[] = await response.json();
+      
+      console.log('Records fetched successfully:', data);
+      
+      // Update recordsStore using its internal writable
+      recordsStore._store.update(state => ({
+        ...state,
+        data: data || [],
+        loading: false,
+        error: null,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Error fetching records:', error);
+      recordsStore._store.update(state => ({
+        ...state,
+        loading: false,
+        error: errorMessage,
+        data: []
+      }));
     }
-);
+  } else {
+    console.log('Clearing records - missing flow or dataset');
+    // Clear records if no flow or no dataset selected
+    recordsStore.reset();
+  }
+}
 
 export const criteriaStore = derived(
     flowInfoStore,
@@ -200,6 +270,15 @@ export const modelStore = derived(
     })
 );
 
+export const datasetsStore = derived(
+    flowInfoStore,
+    ($info) => ({
+        data: $info.data?.datasets ?? [],
+        loading: $info.loading,
+        error: $info.error
+    })
+);
+
 // --- Logic ---
 
 // Fetch initial flow list when app loads
@@ -210,18 +289,59 @@ export function initializeApp() {
 }
 
 // Subscribe to selectedFlow changes to fetch dependent data
-selectedFlow.subscribe((flowValue) => {
+selectedFlow.subscribe(async (flowValue) => {
   if (flowValue) {
     console.log(`Selected flow changed to: ${flowValue}. Fetching flow info...`);
-    const params = { flow: flowValue };
-    flowInfoStore.fetch(params);
+    
+    // Fetch flow info using path-based URL
+    const flowInfoEndpoint = `/api/flows/${encodeURIComponent(flowValue)}/info`;
+    
+    try {
+      const response = await fetch(flowInfoEndpoint);
+      if (!response.ok) {
+        throw new Error(`Error fetching flow info: ${response.statusText} (Status: ${response.status})`);
+      }
+      const data: FlowInfoResponse = await response.json();
+      
+      // Update flowInfoStore using its internal writable
+      flowInfoStore._store.update(state => ({
+        ...state,
+        data: data || null,
+        loading: false,
+        error: null,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      flowInfoStore._store.update(state => ({
+        ...state,
+        loading: false,
+        error: errorMessage,
+        data: null
+      }));
+      console.error(`>>> Flow info fetch error for ${flowInfoEndpoint}:`, error);
+    }
+    
+    // Don't fetch records immediately - wait for dataset selection
+    // refetchRecords() will be called when dataset is selected
   } else {
     console.log("Flow selection cleared. Resetting flow info store.");
     flowInfoStore.reset();
+    recordsStore.reset();
     // Also reset other selections when flow changes
+    selectedDataset.set('');
     selectedRecord.set('');
     selectedCriteria.set('');
     selectedModel.set('');
+  }
+});
+
+// Subscribe to selectedDataset changes to refetch records
+selectedDataset.subscribe((datasetValue) => {
+  const currentFlow = get(selectedFlow);
+  if (currentFlow) {
+    console.log(`Selected dataset changed to: ${datasetValue}. Refetching records with dataset filter...`);
+    refetchRecords();
   }
 });
 

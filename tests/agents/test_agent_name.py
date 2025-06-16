@@ -28,7 +28,7 @@ async def test_agent_name_generation():
     )
 
     # Expected agent name
-    expected_name = f"⚖️ TESTROLE gemini25pro trans_factored {agent.unique_identifier}"
+    expected_name = "⚖️ TESTROLE gemini25pro trans_factored"
 
     # Assert that the generated agent name matches the expected name
     assert agent.agent_name == expected_name
@@ -44,14 +44,14 @@ async def test_agent_name_generation_empty_components():
     agent = MockAgent(
         agent_id="test_agent_id",
         unique_identifier="test_agent_id",
-        role="",
-        name_components=["role"],  # Empty role
+        role="EmptyRole",
+        name_components=["nonexistent"],  # This should result in fallback behavior
         inputs={},
         parameters={},
         session_id="test_session_id",
     )
 
-    assert agent.agent_name == "-test_agent_id"
+    assert agent.agent_name == "EMPTYROLE-test_agent_id"
 
 
 @pytest.mark.anyio

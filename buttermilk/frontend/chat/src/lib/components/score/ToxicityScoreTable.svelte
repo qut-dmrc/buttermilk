@@ -1,7 +1,24 @@
 <script lang="ts">
+  // Native AgentTrace interface based on Buttermilk contract.py
+  interface AgentTrace {
+    timestamp: string;
+    call_id: string;
+    agent_id: string;
+    metadata: Record<string, any>;
+    outputs: any;
+    agent_info: {
+      agent_name: string;
+      role: string;
+      parameters: Record<string, any>;
+    };
+    session_id: string;
+    inputs: {
+      records: any[];
+    };
+  }
+
   export let scores: {
-    off_shelf: Record<string, { correct: boolean; score: number; label: string }>;
-    custom: Record<string, { step: string; score: number }>;
+    agent_traces: AgentTrace[];
   };
 
   // Generate ASCII progress bar
@@ -51,17 +68,45 @@
     return `${(score * 100).toFixed(0)}%`;
   }
 
-  // Calculate summary stats
-  $: offShelfResults = scores?.off_shelf || {};
-  $: customResults = scores?.custom || {};
+  // Process native AgentTrace objects
+  $: agentTraces = scores?.agent_traces || [];
   
-  $: offShelfCorrect = Object.values(offShelfResults).filter((r: any) => r.correct).length;
-  $: offShelfTotal = Object.keys(offShelfResults).length;
-  $: offShelfAccuracy = offShelfTotal > 0 ? (offShelfCorrect / offShelfTotal) : 0;
+  // Extract scores from AgentTrace outputs
+  $: processedResults = agentTraces.map(trace => {
+    const outputs = trace.outputs || {};
+    const agentName = trace.agent_info?.agent_name || trace.agent_id;
+    const model = trace.agent_info?.parameters?.model || '';
+    const role = trace.agent_info?.role || 'unknown';
+    
+    // Extract prediction and confidence from outputs
+    const prediction = outputs.prediction || false;
+    const confidence = outputs.confidence || 'medium';
+    const conclusion = outputs.conclusion || '';
+    const reasons = outputs.reasons || [];
+    
+    // Convert confidence to numeric
+    const confidenceMap: Record<string, number> = { high: 0.9, medium: 0.7, low: 0.5 };
+    const score = typeof confidence === 'string' ? confidenceMap[confidence] || 0.7 : confidence;
+    
+    return {
+      name: `${agentName}-${model}`,
+      role,
+      model,
+      prediction,
+      score,
+      confidence,
+      conclusion,
+      reasons,
+      label: prediction ? 'TOXIC' : 'SAFE',
+      correct: true // Would need ground truth to determine
+    };
+  });
   
-  $: customAverage = Object.values(customResults).length > 0 
-    ? Object.values(customResults).reduce((sum: number, r: any) => sum + (r.score || 0), 0) / Object.values(customResults).length
-    : 0;
+  // Calculate stats from AgentTrace data
+  $: totalTraces = processedResults.length;
+  $: avgScore = totalTraces > 0 ? processedResults.reduce((sum, r) => sum + r.score, 0) / totalTraces : 0;
+  $: judgeResults = processedResults.filter(r => r.role === 'JUDGE' || r.role === 'SYNTHESISER');
+  $: judgeAccuracy = judgeResults.length > 0 ? judgeResults.filter(r => r.correct).length / judgeResults.length : 0;
 </script>
 
 <div class="toxicity-score-table">
@@ -69,8 +114,8 @@
   <div class="score-section">
     <h3 class="section-header">
       <span class="section-icon">🤖</span>
-      Off-the-Shelf Model Results
-      <span class="section-summary">({formatPercentage(offShelfAccuracy)} correct)</span>
+      Judge Model Results
+      <span class="section-summary">({formatPercentage(judgeAccuracy)} correct)</span>
     </h3>
     
     <div class="table-container">
@@ -85,14 +130,14 @@
           </tr>
         </thead>
         <tbody>
-          {#each Object.entries(offShelfResults) as [model, result]}
+          {#each judgeResults as result}
             {@const score = result.score}
             {@const scoreColor = getScoreColor(score)}
             <tr>
-              <td class="model-name">{model}</td>
+              <td class="model-name">{result.name}</td>
               <td class="prediction-cell">
                 <span class="prediction-icon" class:correct={result.correct}>
-                  {result.correct ? '✓' : '✗'}
+                  {result.prediction ? '🔥' : '✅'}
                 </span>
               </td>
               <td class="score-cell" style="color: {scoreColor}">
@@ -106,7 +151,7 @@
               </td>
               <td class="accuracy-cell">
                 <span class="accuracy-icon" class:correct={result.correct}>
-                  {result.correct ? '✓' : '✗'}
+                  {result.correct ? '✓' : '?'}
                 </span>
               </td>
             </tr>
@@ -120,8 +165,8 @@
   <div class="score-section">
     <h3 class="section-header">
       <span class="section-icon">⚡</span>
-      Custom Model Results
-      <span class="section-summary">(avg: {formatPercentage(customAverage)})</span>
+      All Agent Results
+      <span class="section-summary">(avg: {formatPercentage(avgScore)})</span>
     </h3>
     
     <div class="table-container">
@@ -135,14 +180,14 @@
           </tr>
         </thead>
         <tbody>
-          {#each Object.entries(customResults) as [model, result]}
+          {#each processedResults as result}
             {@const score = result.score}
             {@const scoreColor = getScoreColor(score)}
             <tr>
-              <td class="model-name">{model}</td>
+              <td class="model-name">{result.name}</td>
               <td class="step-cell">
-                <span class="step-badge" class:judge={result.step === 'judge'} class:synth={result.step === 'synth'}>
-                  {result.step}
+                <span class="step-badge" class:judge={result.role === 'JUDGE'} class:synth={result.role === 'SYNTHESISER'}>
+                  {result.role.toLowerCase()}
                 </span>
               </td>
               <td class="score-cell" style="color: {scoreColor}">

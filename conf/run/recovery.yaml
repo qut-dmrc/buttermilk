@@ -2,7 +2,7 @@
 # Recovery mode for failed BigQuery uploads
 defaults:
   - /local
-  - /llms: lite
+  - override llms: lite
   - _self_
 
 name: bm_recovery
@@ -13,4 +13,3 @@ run:
   mode: recovery
   ui: console
   backup_dir: ${oc.env:BM_BACKUP_DIR,~/.buttermilk/backups}
-  save: ${save}

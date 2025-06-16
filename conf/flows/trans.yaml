@@ -1,22 +1,38 @@
-# @package run.flows.trans
-# COMMENTED OUT # @package _global_
+# Trans Flow - Clean version with hierarchical composition
+# This flow uses Hydra's composition to pull in reusable components
+
 defaults:
-  - /data: tja_train 
-  - _self_ 
-  - /agents:
+  - _self_
+  # Agents are defined separately and reused across flows
+  - /agents@trans.agents: 
     - judge
-    - synth
+    - synth 
     - differences
-  - /agents@observers:
+  # Observer agents
+  - /agents@trans.observers: 
     - spy
     - owl
     - scorer
     - fetch
     - host/sequencer
-  - criteria@parameters.criteria: trans
-  
-orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-name: "TJA"
-description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
-parameters:
-  human_in_loop: ${run.human_in_loop} 
+  # Criteria for this specific flow
+  - /flows/criteria@trans.parameters.criteria: trans
+  # Data source configuration
+  - /storage@trans.storage: tja
+  - /storage@trans.parameters.save: flows
+
+trans:
+  # Core flow configuration
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  name: "trans"
+  description: "Journalism quality assessment for trans issues reporting"
+
+  parameters:
+    human_in_loop: ${run.human_in_loop}
+    criteria: []  # Will be populated by criteria default above
+
+    save: {}
+
+  # These will be populated by the defaults
+  agents: {}
+  observers: {}

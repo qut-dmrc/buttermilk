@@ -21,7 +21,7 @@ an Autogen-based multi-agent conversation).
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, Self, TYPE_CHECKING
 
 import shortuuid  # For generating unique IDs
 import weave  # For tracing capabilities
@@ -51,13 +51,11 @@ from buttermilk._core.types import (
     RunRequest,
 )
 from buttermilk.data.loaders import DataLoader, create_data_loader  # New data loading system
+from buttermilk._core.storage_config import StorageConfig
+
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
-
-# Re-importing for clarity, though already imported above.
-# from .config import AgentVariants, DataSourceConfig, SaveInfo
-# from .types import Record
 
 
 class OrchestratorProtocol(BaseModel):
@@ -70,7 +68,8 @@ class OrchestratorProtocol(BaseModel):
 
     Attributes:
         orchestrator (str): The name or identifier of the orchestrator object/class
-            that should be used to execute this flow. This is a mandatory field.
+            that should be used to execute this flow. This is mandatory for an
+            unconfigured object but overwritten by instantiated subclasses.
         name (str): A human-friendly name for this specific flow configuration.
             Useful for logging and identification.
         description (str): A brief description explaining the purpose and goals
@@ -78,9 +77,10 @@ class OrchestratorProtocol(BaseModel):
         save (SaveInfo | None): Optional configuration for saving the results of
             the flow (e.g., to a file, database, or cloud storage). If None,
             results might not be persisted automatically by the orchestrator.
-        data (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
-            names for data sources and values are `DataSourceConfig` objects
-            defining how to load and configure each data source for the flow.
+        storage (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
+            names for input data sources and values are `DataSourceConfig` objects
+            defining how to load and configure each input data source for the flow.
+            This is specifically for data that feeds INTO the flow.
         agents (Mapping[str, AgentVariants]): A mapping where keys are agent role
             names (typically in uppercase, e.g., "SUMMARIZER") and values are
             `AgentVariants` configurations. `AgentVariants` define how one or
@@ -102,8 +102,8 @@ class OrchestratorProtocol(BaseModel):
 
     """
 
-    orchestrator: str = Field(
-        ...,  # Mandatory field
+    orchestrator: str|None = Field(
+        default=None,
         description="Name or identifier of the orchestrator object/class to use for this flow.",
     )
     name: str = Field(
@@ -118,9 +118,9 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    data: Mapping[str, DataSourceConfig] = Field(
+    storage: Mapping[str, DataSourceConfig] = Field(
         default_factory=dict,
-        description="Configuration for data sources to be loaded for the flow, keyed by a descriptive name.",
+        description="Configuration for input data sources to be loaded for the flow, keyed by a descriptive name.",
     )
     agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
@@ -136,8 +136,14 @@ class OrchestratorProtocol(BaseModel):
     )
 
     _validate_parameters: classmethod = field_validator(
-        "parameters", "data", "agents", "observers", mode="before",
-    )(convert_omegaconf_objects)  # type: ignore
+        "parameters",
+        "storage",
+        "agents",
+        "observers",
+        mode="before",
+    )(
+        convert_omegaconf_objects
+    )  # type: ignore
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,  # Allows for flexibility if some configs are complex types
@@ -172,9 +178,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
             used for tracing purposes (e.g., with Weave). Defaults to a new short UUID.
         _flow_data (KeyValueCollector): An internal state collector used to store
             and manage data passed between steps or used for templating within the flow.
-        _data_sources (dict[str, Any]): A dictionary to store loaded data sources,
-            keyed by the names defined in the `data` configuration. Values are typically
-            Pandas DataFrames or similar data structures.
+        _input_loaders (dict[str, DataLoader]): A dictionary to store loaded input data loaders,
+            keyed by the names defined in the `storage` configuration. Values are
+            DataLoader instances that provide iterators over Record objects.
         _records (list[Record]): A list of `Record` objects currently loaded or
             being processed by the flow.
         model_config (ConfigDict): Pydantic model configuration.
@@ -188,7 +194,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         description="Unique ID for this specific flow execution session, used for tracing.",
     )
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _data_loaders: dict[str, DataLoader] = PrivateAttr(default_factory=dict)  # New data loaders
+    _input_loaders: dict[str, DataLoader] = PrivateAttr(default_factory=dict)  # Input data loaders
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
@@ -244,21 +250,21 @@ class Orchestrator(OrchestratorProtocol, ABC):
     async def load_data(self) -> None:
         """Creates data loaders from the configured data sources.
 
-        Initializes `self._data_loaders` by creating appropriate DataLoader
-        instances for each `DataSourceConfig` in `self.data`.
+        Initializes `self._input_loaders` by creating appropriate DataLoader
+        instances for each `DataSourceConfig` in `self.storage`.
         This method should be called before attempting to access data via
         `get_record_dataset` if data sources are defined.
         """
-        if self.data:  # Only load if data sources are configured
-            for source_name, config in self.data.items():
+        if self.storage:  # Only load if data sources are configured
+            for source_name, config in self.storage.items():
                 try:
                     loader = create_data_loader(config)
-                    self._data_loaders[source_name] = loader
+                    self._input_loaders[source_name] = loader
                     logger.debug(f"Created data loader for source '{source_name}': {type(loader).__name__}")
                 except Exception as e:
                     logger.error(f"Failed to create data loader for source '{source_name}': {e}")
                     raise
-            logger.info(f"Data loaders created for orchestrator '{self.name}': {list(self._data_loaders.keys())}")
+            logger.info(f"Data loaders created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
         else:
             logger.info(f"No data sources configured for orchestrator '{self.name}'.")
 
@@ -433,7 +439,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """Retrieves a specific record by its ID from the configured data loaders.
 
         This method first ensures that data loaders are initialized (by calling
-        `self.load_data()` if `self._data_loaders` is empty). It then iterates
+        `self.load_data()` if `self._input_loaders` is empty). It then iterates
         through each data loader to find the record with the given `record_id`.
 
         Args:
@@ -447,12 +453,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 of the configured data sources.
 
         """
-        if not self._data_loaders:  # Ensure data loaders are initialized
+        if not self._input_loaders:  # Ensure data loaders are initialized
             await self.load_data()
-            if not self._data_loaders:  # Still no data loaders after attempting load
+            if not self._input_loaders:  # Still no data loaders after attempting load
                 raise ProcessingError(f"No data sources configured. Cannot find record: {record_id}")
 
-        for source_name, loader in self._data_loaders.items():
+        for source_name, loader in self._input_loaders.items():
             try:
                 # Iterate through records from this loader to find matching record_id
                 for record in loader:
@@ -476,23 +482,23 @@ class Orchestrator(OrchestratorProtocol, ABC):
             List of Record objects.
 
         """
-        if not self._data_loaders:
+        if not self._input_loaders:
             await self.load_data()
-            if not self._data_loaders:
+            if not self._input_loaders:
                 return []
 
         records = []
         if source_name:
-            if source_name in self._data_loaders:
+            if source_name in self._input_loaders:
                 try:
-                    records.extend(list(self._data_loaders[source_name]))
+                    records.extend(list(self._input_loaders[source_name]))
                 except Exception as e:
                     logger.error(f"Error loading records from source '{source_name}': {e}")
             else:
                 logger.warning(f"Data source '{source_name}' not found")
         else:
             # Get records from all sources
-            for name, loader in self._data_loaders.items():
+            for name, loader in self._input_loaders.items():
                 try:
                     records.extend(list(loader))
                 except Exception as e:

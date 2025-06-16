@@ -61,16 +61,17 @@ def main(conf: DictConfig) -> None:
     # Initialize the global Buttermilk instance (bm) with its configuration section
     if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
         raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-    bm_instance = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    # Set the singleton BM instance
+    from buttermilk._core.dmrc import set_bm
+
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
         raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
-
-    # Set the singleton BM instance
-    from buttermilk._core.dmrc import set_bm
-    set_bm(bm_instance)  # Set the Buttermilk instance using the singleton pattern
+    flow_runner.flows = conf.flows
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -127,14 +128,17 @@ def main(conf: DictConfig) -> None:
             # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
             # These are typically passed to the app creation function.
             fastapi_app = create_fastapi_app(
-                bm=bm_instance,  # Pass the global BM instance
+                bm=bm,  # Pass the global BM instance
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
-            # Short delay, as a workaround for potential async initialization timing issues
-            # TODO: Replace with a more robust readiness check if needed.
-            import time
-            time.sleep(1)  # Reduced from 2s, check if still needed
+            # Verify app is ready instead of sleeping
+            logger.debug("Verifying FastAPI app readiness...")
+            if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
+                raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
+            if not hasattr(fastapi_app.state, "bm") or not fastapi_app.state.bm:
+                raise RuntimeError("BM instance not properly initialized in FastAPI app state")
+            logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")
             uvicorn_config = uvicorn.Config(
@@ -178,7 +182,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Starting Slackbot mode...")
 
             # Retrieve Slack tokens securely from bm.credentials
-            slack_creds = bm_instance.credentials
+            slack_creds = bm.credentials
             if not isinstance(slack_creds, dict):
                 raise TypeError(f"Expected bm.credentials to be a dict, got {type(slack_creds)}")
 

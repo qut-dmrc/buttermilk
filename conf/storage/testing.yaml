@@ -1,0 +1,12 @@
+# Base configuration for testing data sources
+type: bigquery
+# project_id will be auto-detected from GOOGLE_CLOUD_PROJECT environment variable
+dataset_id: testing
+table_id: records
+dataset_name: testing
+randomize: true
+batch_size: 1000
+# auto_create: true
+clustering_fields:
+  - record_id
+  - dataset_name

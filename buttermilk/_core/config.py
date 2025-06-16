@@ -219,7 +219,7 @@ class DataSourceConfig(BaseModel):
         max_records_per_group (int): Maximum records to process per group, if
             grouping is applied. -1 means no limit.
         type (Literal): The type of the data source.
-            Allowed values: "job", "file", "bq" (BigQuery), "generator",
+            Allowed values: "job", "file", "bq" or "bigquery", "generator",
             "plaintext", "chromadb", "outputs" (from a previous step).
         path (str): Path to the data source (e.g., file path, BigQuery table ID,
             URL). Meaning depends on the `type`.
@@ -245,7 +245,6 @@ class DataSourceConfig(BaseModel):
             other file-based vector stores.
         collection_name (str): Name of the collection for "chromadb".
         model_config (ConfigDict): Pydantic model configuration.
-            - `extra`: "forbid" - Disallow extra fields.
             - `arbitrary_types_allowed`: False.
             - `populate_by_name`: True.
             - `exclude_none`: True.
@@ -258,7 +257,15 @@ class DataSourceConfig(BaseModel):
         description="Maximum records to process per group if grouping is applied. -1 for no limit.",
     )
     type: Literal[
-        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs", "huggingface",
+        "job",
+        "file",
+        "bq",
+        "bigquery",
+        "generator",
+        "plaintext",
+        "chromadb",
+        "outputs",
+        "huggingface",
     ] = Field(description="The type of the data source.")
     path: str = Field(
         default="",
@@ -288,7 +295,12 @@ class DataSourceConfig(BaseModel):
     )
     columns: Mapping[str, str | Mapping] | None = Field(
         default_factory=dict,
-        description="Columns to select or transformations to apply.",
+        description=(
+            "Column mapping for renaming data source fields to Record fields. "
+            "Dictionary where keys are target Record field names and values are source field names. "
+            "Can be empty ({}) if no field renaming is needed. "
+            "Example: {'content': 'text', 'ground_truth': 'expected'}"
+        ),
     )
     last_n_days: int = Field(
         default=7, description="For time-series data, retrieve from the last N days.",
@@ -296,6 +308,28 @@ class DataSourceConfig(BaseModel):
     db: Mapping[str, str] = Field(
         default_factory=dict,
         description="Database-specific connection parameters (e.g., for 'bq', 'chromadb').",
+    )
+    # BigQuery-specific fields
+    project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID for BigQuery data sources."
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="BigQuery dataset ID."
+    )
+    table_id: str | None = Field(
+        default=None,
+        description="BigQuery table ID."
+    )
+    randomize: bool | None = Field(
+        default=None,
+        description="Whether to randomize BigQuery query results."
+    )
+    batch_size: int | None = Field(
+        default=None,
+        ge=1,
+        description="Batch size for BigQuery operations."
     )
     embedding_model: str = Field(
         default="",
@@ -319,7 +353,7 @@ class DataSourceConfig(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="ignore",  # Ignore extra fields not defined in the model
         arbitrary_types_allowed=False,
         populate_by_name=True,
         exclude_none=True,
@@ -332,6 +366,66 @@ class DataSouce(DataSourceConfig):
 
     Refer to `DataSourceConfig` for detailed documentation.
     """
+
+
+class BigQueryConfig(BaseModel):
+    """Configuration for BigQuery-related operations.
+
+    Provides default values for BigQuery operations including data loading,
+    table creation, and migration utilities.
+
+    Attributes:
+        project_id (str | None): Google Cloud project ID. If None, will use
+            the default project from credentials.
+        dataset_id (str): BigQuery dataset ID. Defaults to "buttermilk".
+        table_id (str): BigQuery table ID. Defaults to "records".
+        randomize (bool): Whether to randomize query results. Defaults to True.
+        batch_size (int): Batch size for operations. Defaults to 1000.
+        auto_create (bool): Whether to auto-create tables if they don't exist.
+        clustering_fields (list[str]): Default clustering fields for new tables.
+    """
+
+    project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID. If None, uses default from credentials."
+    )
+    dataset_id: str = Field(
+        default="buttermilk",
+        description="BigQuery dataset ID."
+    )
+    table_id: str = Field(
+        default="records",
+        description="BigQuery table ID."
+    )
+    randomize: bool = Field(
+        default=True,
+        description="Whether to randomize query results."
+    )
+    batch_size: int = Field(
+        default=1000,
+        ge=1,
+        description="Batch size for operations."
+    )
+    auto_create: bool = Field(default=True, description="Whether to auto-create tables if they don't exist.")
+    clustering_fields: list[str] = Field(
+        default=["record_id", "dataset_name"],
+        description="Default clustering fields for new tables."
+    )
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
+
+    @model_validator(mode="after")
+    def set_project_id_from_env(self) -> "BigQueryConfig":
+        """Set project_id from environment if not already set."""
+        import os
+        self.project_id = self.project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
+        return self
 
 
 class ToolConfig(BaseModel):
@@ -677,7 +771,6 @@ class AgentVariants(AgentConfig):
     """
 
     agent_obj: str = Field(
-        default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'LLMAgent'). Must be registered in AgentRegistry.",
     )
     variants: dict[str, list[Any]] = Field(  # More specific type hint
@@ -771,11 +864,11 @@ class AgentVariants(AgentConfig):
             # Remove any variant keys that are explicitly set in params.parameters
             for key in params.parameters.keys():
                 filtered_variants.pop(key, None)
-                
+
         parallel_variant_combinations = expand_dict(clean_empty_values(filtered_variants)) if filtered_variants else [{}]
 
         # Only use explicitly defined tasks, not flow default parameters
-        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]    
+        sequential_task_sets = expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs

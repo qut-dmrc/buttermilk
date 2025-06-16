@@ -3,7 +3,6 @@ import atexit
 import json
 import signal
 import time
-from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from tempfile import mkdtemp
@@ -11,30 +10,16 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from buttermilk._core.config import SaveInfo
 from buttermilk._core.log import logger
-from buttermilk.utils.save import upload_rows, upload_rows_async, save
 
 
 class AsyncDataUploader:
     def __init__(
         self,
-        save_dest: SaveInfo,
         buffer_size: int = 10,
         flush_interval: int = 30,
     ):
-        # Validate that save_dest is a proper SaveInfo instance
-        if not isinstance(save_dest, SaveInfo):
-            # If it's a dict (from Hydra), try to create a SaveInfo object
-            if isinstance(save_dest, Mapping):
-                try:
-                    save_dest = SaveInfo(**save_dest)
-                except Exception as e:
-                    raise TypeError(f"Failed to convert save_dest dict to SaveInfo: {e}")
-            else:
-                raise TypeError(f"save_dest must be a SaveInfo object, got {type(save_dest)}")
-
-        self.save_dest = save_dest
+        self.dataset_name = None  # Will be determined from flow context
 
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
@@ -45,18 +30,28 @@ class AsyncDataUploader:
         self._shutdown: asyncio.Event = asyncio.Event()
 
         self.backup_dir = Path(mkdtemp())
-
-        # Create the worker task and shield it
-        worker_coroutine = self._worker()
-        self.worker_task = asyncio.shield(asyncio.create_task(worker_coroutine))
+        self.worker_task = None
 
         # Register shutdown handlers
         atexit.register(self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
         signal.signal(signal.SIGINT, self.shutdown)
+    
+    def configure_storage(self, dataset_name: str) -> None:
+        """Configure storage destination. Should be called by orchestrator/flow, not agent.
+        
+        Args:
+            dataset_name: Dataset name for BigQuery storage
+        """
+        self.dataset_name = dataset_name
 
     async def add(self, item: Any):
         """Add item to upload queue."""
+        # Lazily start worker task
+        if self.worker_task is None:
+            worker_coroutine = self._worker()
+            self.worker_task = asyncio.shield(asyncio.create_task(worker_coroutine))
+            
         if isinstance(item, BaseModel):
             # Convert to serialisable types
             item = item.model_dump(mode="json")
@@ -91,7 +86,18 @@ class AsyncDataUploader:
             return
 
         try:
-            await upload_rows_async(self.buffer, save_dest=self.save_dest)
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            
+            # Determine storage from flow context or use default
+            # The flow/orchestrator should configure storage, not the agent
+            if self.dataset_name:
+                storage = bm.get_bigquery_storage(self.dataset_name)
+                storage.save(self.buffer)
+            else:
+                # Fallback: use BM's session-level save for agent traces
+                bm.save(self.buffer, extension=".json")
+                
             self.last_flush = time.time()
             self.buffer = []
             await self._clear_backup()
@@ -109,17 +115,27 @@ class AsyncDataUploader:
         for f in self.backup_dir.glob("backup_*.json"):
             f.unlink()
 
-    def shutdown(self, *args):
+    def shutdown(self, *_args):
         """Graceful shutdown ensuring all data is flushed."""
         self._shutdown.set()
 
         # Handle synchronously to avoid event loop issues
         if self.buffer:
             try:
-                upload_rows(self.buffer, save_dest=self.save_dest)
+                from buttermilk._core.dmrc import get_bm
+                bm = get_bm()
+                
+                if self.dataset_name:
+                    storage = bm.get_bigquery_storage(self.dataset_name)
+                    storage.save(self.buffer)
+                else:
+                    # Fallback: use BM's session-level save
+                    bm.save(self.buffer, extension=".json")
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
-                save(self.buffer)
+                from buttermilk._core.dmrc import get_bm
+                bm = get_bm()
+                bm.save(self.buffer, extension=".json")
 
                 # Clean backup files synchronously
                 for f in self.backup_dir.glob("backup_*.json"):

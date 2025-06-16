@@ -25,6 +25,7 @@ authorized_keys
 .eggs
 core
 .chroma
+.DS_Store
 
 # exceptions
 !.devcontainer

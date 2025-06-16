@@ -58,8 +58,8 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
       headers.append('Authorization', request.headers.get('Authorization') || '');
     }
     
-    // Forward the request to the backend with the flow parameter
-    const response = await fetch(`${backendUrl}/api/flowinfo?flow=${encodeURIComponent(flow)}`, {
+    // Forward the request to the backend using the new path template format
+    const response = await fetch(`${backendUrl}/api/flows/${encodeURIComponent(flow)}/info`, {
       method: 'GET',
       headers
     });

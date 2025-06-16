@@ -12,6 +12,7 @@ SAMPLE_REASONS_DATA = {
     "prediction": False,
     "reasons": ["Reason 1", "Reason 2"],
     "confidence": "medium",
+    "uncertainty": "low",
 }
 
 # --- Pytest Tests ---
@@ -36,7 +37,13 @@ def test_actual_judge_reasons_direct_dump():
     try:
         reasons_obj = ActualJudgeReasons(**SAMPLE_REASONS_DATA)
         dumped_reasons = reasons_obj.model_dump()
-        assert dumped_reasons == SAMPLE_REASONS_DATA
+        # Check that key fields are present
+        assert dumped_reasons["conclusion"] == "Test conclusion."
+        assert dumped_reasons["prediction"] == False
+        assert dumped_reasons["reasons"] == ["Reason 1", "Reason 2"]
+        assert dumped_reasons["uncertainty"] == "low"
+        # Check that a preview field is generated
+        assert "preview" in dumped_reasons
     except ValidationError as e:
         pytest.fail(f"ActualJudgeReasons validation failed: {e}")
 

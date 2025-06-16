@@ -47,6 +47,7 @@ from buttermilk._core.log import ContextFilter, logger  # Centralized logger ins
 from buttermilk._core.query import QueryRunner  # For running SQL queries
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
+from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults  # Unified storage config
 
 # Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -308,9 +309,57 @@ class BM(SessionInfo):
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
-        # Print current config to console and save it
+        # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
+
+        # Defer non-critical operations to background tasks for faster startup
+        self._schedule_background_init()
+
+    def _schedule_background_init(self) -> None:
+        """Schedule non-critical initialization tasks in the background.
+        
+        This method defers operations that aren't immediately needed for core functionality:
+        - Config file saving
+        - IP address fetching  
+        - Cloud provider authentication
+        
+        These operations happen asynchronously to improve startup performance.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            asyncio.create_task(self._background_init())
+        except RuntimeError as e:
+            # No current event loop, run synchronously
+            msg = "No event loop available, unable to schedule BM background initialisation."
+            logger.error(msg)
+            # raise RuntimeError(msg) from e
+
+    async def _background_init(self) -> None:
+        """Perform non-critical initialization operations in the background."""
+        try:
+            # Save initial config (non-critical, can be deferred)
+            await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
+
+            # Start IP fetching task (already async)
+            self.start_fetch_ip_task()
+
+            # Defer cloud login - will happen on first cloud operation
+            logger.debug("Background initialization completed")
+        except Exception as e:
+            logger.warning(f"Error during background initialization: {e}")
+
+    def _sync_background_init(self) -> None:
+        """Fallback synchronous version of background initialization."""
+        try:
+            self._save_initial_config()
+            # Note: IP fetching and cloud login will happen on first use
+            logger.debug("Synchronous background initialization completed")
+        except Exception as e:
+            logger.warning(f"Error during synchronous background initialization: {e}")
+
+    def _save_initial_config(self) -> None:
+        """Save the initial BM configuration to disk."""
         try:
             if self.save_dir:
                 # Data to save: BM config and run_info
@@ -324,20 +373,19 @@ class BM(SessionInfo):
                     extension=".json",
                     # save_dir is implicitly self.save_dir if not provided to self.save
                 )
+                logger.debug("Initial BM config saved successfully")
             else:  # Should not happen if save_dir_base defaults to mkdtemp
                 logger.warning("BM.save_dir is not set. Skipping saving initial config.")
         except Exception as e:
             logger.error(f"Could not save initial BM config to default save directory: {e!s}")
-
-        self.start_fetch_ip_task()  # Start task to get IP address
-        self._login_clouds()  # Login to configured cloud providers
 
     @cached_property
     def cloud_manager(self) -> CloudManager:
         """Provides access to the `CloudManager` instance.
 
         The `CloudManager` handles interactions with various configured cloud
-        providers (e.g., GCP, Azure). It's instantiated on first access.
+        providers (e.g., GCP, Azure). It's instantiated on first access and 
+        performs lazy authentication to improve startup performance.
 
         Returns:
             CloudManager: The initialized `CloudManager` instance.
@@ -345,7 +393,61 @@ class BM(SessionInfo):
         """
         if self._cloud_manager is None:
             self._cloud_manager = CloudManager(clouds=self.clouds)
+            # Perform cloud login and tracing setup on first access
+            self._ensure_cloud_authentication()
         return self._cloud_manager
+
+    def _ensure_cloud_authentication(self) -> None:
+        """Ensure cloud providers are authenticated and tracing is set up.
+        
+        This method is called lazily when the cloud_manager is first accessed,
+        rather than during __post_init__, to improve startup performance.
+        """
+        try:
+            if self._cloud_manager:
+                logger.debug("Performing lazy cloud authentication...")
+                self._cloud_manager.login_clouds()  # Perform logins
+
+                # Set up tracing if configured and enabled
+                if self.tracing and self.tracing.enabled:
+                    self._cloud_manager.setup_tracing(self.tracing)
+
+                # Set up cloud logging now that cloud manager is authenticated
+                self._setup_cloud_logging()
+
+                logger.debug("Cloud authentication completed")
+        except Exception as e:
+            logger.warning(f"Error during cloud authentication: {e}")
+
+    def _setup_cloud_logging(self) -> None:
+        """Set up Google Cloud Logging after cloud authentication."""
+        if self.logger_cfg and self.logger_cfg.type == "gcp" and self._cloud_manager:
+            try:
+                from google.cloud import logging as gcp_logging
+                from google.cloud.logging_v2.handlers import CloudLoggingHandler
+
+                cloud_logging_resource = gcp_logging.Resource(
+                    type="generic_task",
+                    labels={
+                        "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
+                        "location": getattr(self.logger_cfg, "location", "unknown-location"),
+                        "namespace": self.name,
+                        "job": self.job,
+                        "task_id": self.run_id,
+                    },
+                )
+
+                cloudHandler = CloudLoggingHandler(
+                    client=self._cloud_manager.gcs_log_client(self.logger_cfg),
+                    resource=cloud_logging_resource,
+                    name=self.name,
+                    labels=self.model_dump(include={"run_id", "name", "job", "platform"}),
+                )
+                cloudHandler.setLevel(logging.INFO)
+                logger.addHandler(cloudHandler)
+                logger.debug("Cloud logging handler added")
+            except Exception as e:
+                logger.warning(f"Failed to setup cloud logging: {e}")
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -413,20 +515,41 @@ class BM(SessionInfo):
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
                     logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
 
-                    # Try to cache the connections for next time
+                    # Defer cache writing to background task - Phase 2 optimization
                     try:
-                        cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        import json
-                        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
-                        logger.info(f"Cached LLM connections to: {cache_path}")
-                    except Exception as e:
-                        logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self._cache_llm_connections_async(connections_data, cache_path))
+                        else:
+                            # If no event loop is running, cache synchronously as fallback
+                            logger.info("No async loop running, caching LLM connections synchronously")
+                            self._write_cache_sync(connections_data, cache_path)
+                    except RuntimeError:
+                        # No event loop available, cache synchronously
+                        logger.info("No event loop available, caching LLM connections synchronously")
+                        self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
                     logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
                     raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
 
             self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
+
+    async def _cache_llm_connections_async(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+        """Asynchronously cache LLM connections to avoid blocking startup - Phase 2 optimization."""
+        try:
+            # Run file operations in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._write_cache_sync, connections_data, cache_path)
+            logger.info(f"Cached LLM connections to: {cache_path}")
+        except Exception as e:
+            logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
+
+    def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+        """Synchronous cache writing helper for thread pool execution."""
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @cached_property
     def query_runner(self) -> QueryRunner:
@@ -508,18 +631,18 @@ class BM(SessionInfo):
         """
         return self.cloud_manager.bq
 
-    @property
+    @cached_property
     def weave(self) -> Any:  # Type hint could be weave.weave_types.WeaveClient
         """Provides access to the Weights & Biases Weave client for tracing.
 
         Initializes Weave with a collection name derived from `self.name` (flow name)
-        and `self.job` (job name).
+        and `self.job` (job name). Cached for performance - Phase 2 optimization.
 
         Returns:
             Any: The initialized Weave client instance.
 
         """
-        import weave  # Ensure weave is imported
+        import weave  # Ensure weave is imported - deferred until first access
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
         return weave.init(collection_name)  # Initialize and return client
 
@@ -592,36 +715,10 @@ class BM(SessionInfo):
             level=logging.DEBUG if verbose else logging.INFO,
         )
 
-        # Configure Google Cloud Logging if specified
-        cloud_logging_resource = None
+        # Defer Google Cloud Logging setup to improve startup performance
+        # Cloud logging will be initialized on first cloud operation
         if self.logger_cfg and self.logger_cfg.type == "gcp":
-            from google.cloud import logging as gcp_logging  # GCP Logging library
-            from google.cloud.logging_v2.handlers import CloudLoggingHandler
-
-            cloud_logging_resource = gcp_logging.Resource(
-                type="generic_task",  # Recommended type for general tasks
-                labels={
-                    "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
-                    "location": getattr(self.logger_cfg, "location", "unknown-location"),
-                    "namespace": self.name,  # Flow name
-                    "job": self.job,       # Job name
-                    "task_id": self.run_id,  # Unique run ID
-                },
-            )
-
-            # Get log client from cloud manager
-
-            # session_id and agent_id are added to the LogRecord by ContextFilter.
-            # The CloudLoggingHandler is expected to automatically pick up these extra fields
-            # and include them in the structured log entry sent to Google Cloud Logging.
-            cloudHandler = CloudLoggingHandler(
-                client=self.cloud_manager.gcs_log_client(self.logger_cfg),
-                resource=cloud_logging_resource,
-                name=self.name,
-                labels=self.dict(include={"run_id", "name", "job", "platform"}),
-            )
-            cloudHandler.setLevel(logging.INFO)  # Cloud logs at INFO level, not DEBUG
-            logger.addHandler(cloudHandler)
+            logger.debug("Cloud logging configuration detected - will be initialized on first cloud access")
 
         # Set default logging levels for other loggers to WARNING to reduce noise
         root_logger.setLevel(logging.WARNING)
@@ -642,8 +739,8 @@ class BM(SessionInfo):
 
         # Log initialization message
         log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.save_dir}"
-        if cloud_logging_resource:  # Add resource info if cloud logging is active
-            log_init_message = f"{log_init_message} | Cloud Logging Resource: {cloud_logging_resource.labels}"
+        # Note: cloud_logging_resource is only available if cloud logging is active
+        # It's set up in _setup_cloud_logging() which is called lazily
 
         logger.info(log_init_message, extra={"run_details": self.run_info.model_dump(exclude_none=True)})
 
@@ -679,19 +776,6 @@ class BM(SessionInfo):
             # else: No event loop running, cannot start async task
         except RuntimeError:  # No current event loop
             logger.debug("No running event loop, skipping async IP fetch task.")
-
-    def _login_clouds(self) -> None:
-        """Initializes connections to configured cloud providers and sets up tracing.
-
-        Delegates to `self.cloud_manager.login_clouds()` for cloud provider logins.
-        If tracing is enabled in `self.tracing`, it then calls
-        `self.cloud_manager.setup_tracing()`.
-        """
-        self.cloud_manager.login_clouds()  # Perform logins
-
-        # Set up tracing if configured and enabled
-        if self.tracing and self.tracing.enabled:
-            self.cloud_manager.setup_tracing(self.tracing)
 
     def save(
         self,
@@ -801,3 +885,66 @@ class BM(SessionInfo):
             save_dir=self.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )
+
+    def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
+        """Factory method to create unified storage instances.
+        
+        Creates the appropriate storage class based on the configuration type,
+        using this BM instance for client access and default configurations.
+        
+        Args:
+            config: Storage configuration (StorageConfig object, dict, or None)
+            
+        Returns:
+            Storage instance (BigQueryStorage, FileStorage, etc.)
+            
+        Raises:
+            ValueError: If storage type is not supported
+        """
+        from buttermilk.storage import BigQueryStorage, FileStorage
+
+        # Ensure config is a StorageConfig object
+        if config is None:
+            raise ValueError("Storage configuration is required")
+        elif isinstance(config, dict):
+            # Convert dict/OmegaConf to StorageConfig object
+            config_dict = dict(config)  # Convert OmegaConf to plain dict if needed
+            config = StorageConfig(**config_dict)
+        elif not isinstance(config, StorageConfig):
+            # Handle other config types (like OmegaConf objects)
+            try:
+                config_dict = dict(config)
+                config = StorageConfig(**config_dict)
+            except Exception as e:
+                raise ValueError(f"Cannot convert config to StorageConfig: {e}") from e
+
+        # Create appropriate storage instance based on type
+        storage_type = config.type
+
+        if storage_type in ["bigquery", "bq"]:
+            return BigQueryStorage(config, self)
+        elif storage_type in ["file", "local", "gcs", "s3"]:
+            return FileStorage(config, self)
+        else:
+            raise ValueError(f"Unsupported storage type: {storage_type}")
+
+    def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
+        """Convenience method to create BigQuery storage with dataset name.
+        
+        Args:
+            dataset_name: The dataset name for the storage
+            **kwargs: Additional configuration overrides. Must include dataset_id and table_id.
+            
+        Returns:
+            BigQueryStorage instance
+            
+        Raises:
+            ValueError: If required BigQuery table components are missing
+        """
+        config_data = {
+            "type": "bigquery",
+            "dataset_name": dataset_name,
+            **kwargs
+        }
+        config = StorageConfig(**config_data)
+        return self.get_storage(config)
