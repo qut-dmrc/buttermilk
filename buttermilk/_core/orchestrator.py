@@ -50,7 +50,7 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.data.loaders import DataLoader, create_data_loader  # New data loading system
+from buttermilk.data.loaders import DataLoader  # Legacy data loading interface
 from buttermilk._core.storage_config import StorageConfig
 
 from buttermilk.utils.media import download_and_convert  # Media utilities
@@ -248,9 +248,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
         return self
 
     async def load_data(self) -> None:
-        """Creates data loaders from the configured data sources.
+        """Creates storage instances from the configured data sources.
 
-        Initializes `self._input_loaders` by creating appropriate DataLoader
+        Initializes `self._input_loaders` by creating appropriate storage
         instances for each `DataSourceConfig` in `self.storage`.
         This method should be called before attempting to access data via
         `get_record_dataset` if data sources are defined.
@@ -258,13 +258,25 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self.storage:  # Only load if data sources are configured
             for source_name, config in self.storage.items():
                 try:
-                    loader = create_data_loader(config)
-                    self._input_loaders[source_name] = loader
-                    logger.debug(f"Created data loader for source '{source_name}': {type(loader).__name__}")
+                    # Convert config to StorageConfig if needed
+                    if isinstance(config, DataSourceConfig):
+                        # Convert legacy DataSourceConfig to StorageConfig
+                        config_dict = config.model_dump()
+                        storage_config = StorageConfig(**config_dict)
+                    elif hasattr(config, "__dict__"):
+                        # Handle OmegaConf objects
+                        storage_config = StorageConfig(**dict(config))
+                    else:
+                        storage_config = StorageConfig(**config)
+                    
+                    # Use unified storage system instead of deprecated create_data_loader
+                    storage = bm.get_storage(storage_config)
+                    self._input_loaders[source_name] = storage
+                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
                 except Exception as e:
-                    logger.error(f"Failed to create data loader for source '{source_name}': {e}")
+                    logger.error(f"Failed to create storage for source '{source_name}': {e}")
                     raise
-            logger.info(f"Data loaders created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
+            logger.info(f"Storage instances created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
         else:
             logger.info(f"No data sources configured for orchestrator '{self.name}'.")
 
