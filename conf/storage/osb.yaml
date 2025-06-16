@@ -1,7 +1,7 @@
 osb_json:
-  type: json
-  uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
-  field_mapping:
+  type: gcs
+  path: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
+  columns:
     record_id: id
     content: full_text
     metadata: 
@@ -14,6 +14,16 @@ osb_vector:
   type: chromadb
   persist_directory: "gs://prosocial-public/osb/chromadb"
   collection_name: "osb_fulltext"
-  embedding_model: "text-embedding-005"
-  dimensionality: 768
-  arrow_save_dir: "/tmp/osb_embeddings"
+  embedding_model: "gemini-embedding-001"
+  dimensionality: 3072
+  multi_field_embedding:
+    content_field: "content"
+    chunk_size: 2000
+    chunk_overlap: 500
+    additional_fields:
+      - source_field: "summary"
+        chunk_type: "summary"
+        min_length: 50
+      - source_field: "title"
+        chunk_type: "title"
+        min_length: 10

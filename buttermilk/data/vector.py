@@ -26,6 +26,8 @@ from buttermilk import (
     logger,
 )
 from buttermilk._core.config import DataSouce
+from buttermilk._core.storage_config import MultiFieldEmbeddingConfig
+from buttermilk._core.types import Record
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
 from buttermilk.utils.utils import ensure_chromadb_cache
 
@@ -236,6 +238,7 @@ class ChromaDBEmbeddings(DataSouce):
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
+    multi_field_config: MultiFieldEmbeddingConfig | None = Field(default=None)
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -395,23 +398,52 @@ class ChromaDBEmbeddings(DataSouce):
         
         return _db_registry[cache_key]
 
-    def create_enhanced_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
-        """Create chunks for multiple content types to enable field-specific search.
+    def record_to_input_document(self, record: Record) -> InputDocument:
+        """Convert a Record to InputDocument format."""
+        return InputDocument(
+            record_id=record.record_id,
+            title=record.metadata.get('title', 'Untitled'),
+            full_text=record.content if isinstance(record.content, str) else str(record.content),
+            metadata=record.metadata,
+            file_path="",
+        )
+
+    def create_multi_field_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
+        """Create chunks for multiple content types using configuration.
         
-        This creates separate embeddings for:
-        - Full text content (chunked)
-        - Summary (single chunk) 
-        - Title (single chunk)
-        
-        Each chunk is tagged with content_type for targeted searching.
+        Uses multi_field_config to determine which fields to embed.
+        Falls back to single-field behavior if no config provided.
         """
         chunks = []
         
-        # 1. Main content chunks (existing behavior)
-        if doc.full_text:
-            # Use the text splitter to chunk the full text
-            text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
-            content_chunks = text_splitter.split_text(doc.full_text)
+        # If no multi-field config, use traditional single-field chunking
+        if not self.multi_field_config:
+            if doc.full_text:
+                text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
+                content_chunks = text_splitter.split_text(doc.full_text)
+                
+                for i, chunk_text in enumerate(content_chunks):
+                    if chunk_text.strip():
+                        chunks.append(ChunkedDocument(
+                            document_title=doc.title,
+                            chunk_index=len(chunks),
+                            chunk_text=chunk_text.strip(),
+                            document_id=doc.record_id,
+                            metadata=doc.metadata
+                        ))
+            return chunks
+        
+        # Multi-field chunking based on configuration
+        config = self.multi_field_config
+        
+        # 1. Main content field (chunked)
+        content_text = doc.full_text  # Default to full_text, could be configurable
+        if content_text:
+            text_splitter = DefaultTextSplitter(
+                chunk_size=config.chunk_size,
+                chunk_overlap=config.chunk_overlap
+            )
+            content_chunks = text_splitter.split_text(content_text)
             
             for i, chunk_text in enumerate(content_chunks):
                 if chunk_text.strip():
@@ -422,69 +454,74 @@ class ChromaDBEmbeddings(DataSouce):
                         document_id=doc.record_id,
                         metadata={
                             **doc.metadata,
-                            "content_type": "full_text",
+                            "content_type": config.content_field,
                             "chunk_type": "content",
                             "chunk_sequence": i
                         }
                     ))
         
-        # 2. Summary chunk (if exists and substantial)
-        summary = doc.metadata.get('summary', '')
-        if summary and len(summary.strip()) > 50:  # Only if substantial summary
-            chunks.append(ChunkedDocument(
-                document_title=doc.title,
-                chunk_index=len(chunks),
-                chunk_text=summary.strip(),
-                document_id=doc.record_id,
-                metadata={
-                    **doc.metadata,
-                    "content_type": "summary", 
-                    "chunk_type": "summary"
-                }
-            ))
-        
-        # 3. Title chunk (for title-specific semantic search)
-        if doc.title and len(doc.title.strip()) > 10:
-            chunks.append(ChunkedDocument(
-                document_title=doc.title,
-                chunk_index=len(chunks),
-                chunk_text=doc.title.strip(),
-                document_id=doc.record_id,
-                metadata={
-                    **doc.metadata,
-                    "content_type": "title",
-                    "chunk_type": "title"  
-                }
-            ))
+        # 2. Additional fields (single chunks each)
+        for field_config in config.additional_fields:
+            field_value = doc.metadata.get(field_config.source_field, '')
             
+            # Only embed if field exists and meets minimum length requirement
+            if field_value and len(str(field_value).strip()) >= field_config.min_length:
+                chunks.append(ChunkedDocument(
+                    document_title=doc.title,
+                    chunk_index=len(chunks),
+                    chunk_text=str(field_value).strip(),
+                    document_id=doc.record_id,
+                    metadata={
+                        **doc.metadata,
+                        "content_type": field_config.source_field,
+                        "chunk_type": field_config.chunk_type
+                    }
+                ))
+                
         return chunks
 
-    async def process_with_enhanced_metadata(self, doc: InputDocument) -> InputDocument | None:
-        """Process document with enhanced multi-field chunking for better search capabilities."""
+    async def process_record(self, record: Record) -> InputDocument | None:
+        """Process a Record object directly using multi-field chunking."""
+        doc = self.record_to_input_document(record)
+        return await self.process_with_multi_field_chunks(doc)
+
+    async def process_with_multi_field_chunks(self, doc: InputDocument) -> InputDocument | None:
+        """Process document with configuration-driven multi-field chunking."""
         
-        # Create enhanced chunks instead of using standard chunker
-        doc.chunks = self.create_enhanced_chunks(doc)
+        # Create chunks using configuration (generic approach)
+        doc.chunks = self.create_multi_field_chunks(doc)
         
         if not doc.chunks:
             logger.warning(f"No chunks created for document {doc.record_id}")
             return None
-            
-        content_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'full_text'])
-        summary_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'summary'])
-        title_chunks = len([c for c in doc.chunks if c.metadata.get('content_type') == 'title'])
         
-        logger.info(f"Enhanced chunks for {doc.record_id}: {content_chunks} content, {summary_chunks} summary, {title_chunks} title")
+        # Log chunk breakdown if multi-field config is used
+        if self.multi_field_config:
+            chunk_types = {}
+            for chunk in doc.chunks:
+                content_type = chunk.metadata.get('content_type', 'unknown')
+                chunk_types[content_type] = chunk_types.get(content_type, 0) + 1
+            
+            breakdown = ", ".join([f"{count} {ctype}" for ctype, count in chunk_types.items()])
+            logger.info(f"Multi-field chunks for {doc.record_id}: {breakdown}")
+        else:
+            logger.info(f"Single-field chunks for {doc.record_id}: {len(doc.chunks)} content")
         
         # Continue with normal embedding and storage process
         doc_with_embeddings = await self.embed_document(doc)
         if not doc_with_embeddings:
             return None
             
-        # Store in ChromaDB with enhanced metadata
-        return await self._store_enhanced_chunks(doc_with_embeddings)
+        # Store in ChromaDB 
+        return await self._store_chunks(doc_with_embeddings)
 
-    async def _store_enhanced_chunks(self, doc: InputDocument) -> InputDocument:
-        """Store document chunks with enhanced metadata in ChromaDB."""
+    # Keep the old method name for backwards compatibility
+    async def process_with_enhanced_metadata(self, doc: InputDocument) -> InputDocument | None:
+        """Legacy method name - redirects to process_with_multi_field_chunks."""
+        return await self.process_with_multi_field_chunks(doc)
+
+    async def _store_chunks(self, doc: InputDocument) -> InputDocument:
+        """Store document chunks with metadata in ChromaDB."""
         try:
             ids = []
             documents = []
@@ -797,7 +834,14 @@ class ChromaDBEmbeddings(DataSouce):
         """Process a document by embedding, saving to parquet, and upserting to ChromaDB.
 
         Follows the ProcessorCallable signature for compatibility with DocProcessor.
+        
+        If multi_field_config is provided and doc has no chunks, will create chunks using
+        the multi-field approach. Otherwise expects chunks to already exist.
         """
+        # If no chunks exist and we have multi-field config, create chunks automatically
+        if not doc.chunks and self.multi_field_config:
+            doc.chunks = self.create_multi_field_chunks(doc)
+            
         if not doc.chunks:
             logger.warning(
                 f"Document {doc.record_id} has no chunks, skipping embedding and upsert.",

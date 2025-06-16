@@ -5,6 +5,44 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
+from buttermilk._core.log import logger
+
+
+class AdditionalFieldConfig(BaseModel):
+    """Configuration for additional fields to embed in multi-field embedding."""
+    
+    source_field: str = Field(
+        description="Name of the field in Record.metadata to embed"
+    )
+    chunk_type: str = Field(
+        description="Type tag for this chunk (used for filtering searches)"
+    )
+    min_length: int = Field(
+        default=10,
+        description="Minimum character length required to embed this field"
+    )
+
+
+class MultiFieldEmbeddingConfig(BaseModel):
+    """Configuration for embedding multiple fields from records."""
+    
+    content_field: str = Field(
+        default="content",
+        description="Main content field to chunk and embed (from Record.content)"
+    )
+    additional_fields: list[AdditionalFieldConfig] = Field(
+        default_factory=list,
+        description="Additional fields from Record.metadata to embed as single chunks"
+    )
+    chunk_size: int = Field(
+        default=2000,
+        description="Chunk size for main content field"
+    )
+    chunk_overlap: int = Field(
+        default=500,
+        description="Chunk overlap for main content field"
+    )
+
 
 class StorageConfig(BaseModel):
     """Unified configuration for storage operations (read and write).
@@ -177,6 +215,15 @@ class StorageConfig(BaseModel):
         default=None,
         description="Dimensionality of embeddings, if applicable"
     )
+    
+    # Multi-field embedding configuration
+    multi_field_embedding: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Configuration for embedding multiple fields from records. "
+            "Format: {'content_field': 'content', 'additional_fields': [{'source_field': 'summary', 'chunk_type': 'summary', 'min_length': 50}]}"
+        )
+    )
 
     # Generic URI field for various storage types
     uri: str | None = Field(
@@ -275,6 +322,16 @@ class StorageFactory:
                 'embedding_model': config.embedding_model or 'gemini-embedding-001',
                 'dimensionality': config.dimensionality or 3072,
             }
+            
+            # Add multi-field embedding configuration if specified
+            if config.multi_field_embedding:
+                try:
+                    # Parse multi-field config into proper Pydantic model
+                    multi_field_config = MultiFieldEmbeddingConfig(**config.multi_field_embedding)
+                    chromadb_params['multi_field_config'] = multi_field_config
+                except Exception as e:
+                    logger.warning(f"Invalid multi_field_embedding config, using default: {e}")
+            
             # Add other ChromaDB-specific fields if present in config
             for field in ['concurrency', 'upsert_batch_size', 'embedding_batch_size', 'arrow_save_dir']:
                 if hasattr(config, field) and getattr(config, field) is not None:
