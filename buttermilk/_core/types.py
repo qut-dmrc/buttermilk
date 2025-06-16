@@ -9,7 +9,7 @@ different components of Buttermilk.
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from pathlib import Path  # For path manipulation
-from typing import Any, Literal, Self  # Standard typing utilities
+from typing import TYPE_CHECKING, Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
@@ -24,6 +24,10 @@ from pydantic import (
     field_validator,  # For custom field validation
     model_validator,  # For model-level validation
 )
+
+# Conditional imports to avoid circular dependencies
+if TYPE_CHECKING:
+    from buttermilk.data.vector import ChunkedDocument
 
 
 class Record(BaseModel):
@@ -88,6 +92,24 @@ class Record(BaseModel):
         default="text/plain",
         description="Primary MIME type of the content.",
     )
+    
+    # Vector processing fields (optional, for enhanced functionality)
+    file_path: str | None = Field(
+        default=None,
+        description="Source file path for the record (used in vector processing).",
+    )
+    full_text: str | None = Field(
+        default=None,
+        description="Extracted full text content for vector processing (lazy-loaded).",
+    )
+    chunks: list[Any] = Field(
+        default_factory=list,
+        description="Vector chunks created from this record (lazy-loaded).",
+    )
+    chunks_path: str | None = Field(
+        default=None,
+        description="Path to PyArrow file containing chunks and embeddings.",
+    )
 
     @computed_field
     @property
@@ -106,6 +128,91 @@ class Record(BaseModel):
                 if isinstance(item, Image):
                     images_found.append(item)
         return images_found or None
+
+    @computed_field
+    @property
+    def text_content(self) -> str:
+        """Unified text access for vector processing.
+        
+        Returns the best available text representation in priority order:
+        1. full_text (if available)
+        2. content (if it's a string)
+        3. alt_text (as fallback)
+        4. string representation of content
+        
+        Returns:
+            str: Text content suitable for vector processing.
+        """
+        if self.full_text:
+            return self.full_text
+        elif isinstance(self.content, str):
+            return self.content
+        elif self.alt_text:
+            return self.alt_text
+        else:
+            return str(self.content)
+
+    @classmethod
+    def from_input_document(cls, doc: Any) -> "Record":
+        """Convert InputDocument to Record (no data loss).
+        
+        Args:
+            doc: InputDocument instance (or object with compatible fields)
+            
+        Returns:
+            Record: Enhanced Record with all InputDocument data preserved
+        """
+        # Handle both actual InputDocument objects and dict-like objects
+        if hasattr(doc, 'model_dump'):
+            doc_dict = doc.model_dump()
+        else:
+            doc_dict = doc if isinstance(doc, dict) else doc.__dict__
+            
+        # Extract title from the object or dict
+        title = getattr(doc, 'title', None) or doc_dict.get('title', '')
+        
+        # Create metadata with title
+        metadata = doc_dict.get('metadata', {}).copy()
+        if title:
+            metadata['title'] = title
+            
+        return cls(
+            record_id=doc_dict.get('record_id', ''),
+            content=doc_dict.get('full_text', ''),
+            full_text=doc_dict.get('full_text'),
+            file_path=doc_dict.get('file_path'),
+            chunks=doc_dict.get('chunks', []),
+            chunks_path=doc_dict.get('chunks_path'),
+            metadata=metadata,
+            uri=doc_dict.get('record_path'),  # Map record_path to uri
+        )
+    
+    def to_input_document(self) -> Any:
+        """Convert Record to InputDocument format (backwards compatibility).
+        
+        This method provides backwards compatibility by converting the enhanced
+        Record back to InputDocument format when needed.
+        
+        Returns:
+            dict: InputDocument-compatible dictionary
+        """
+        import warnings
+        warnings.warn(
+            "to_input_document() is deprecated. Use Record directly for vector operations.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
+        return {
+            'record_id': self.record_id,
+            'title': self.title or f"Record {self.record_id}",
+            'full_text': self.text_content,
+            'file_path': self.file_path or '',
+            'record_path': self.uri or '',
+            'chunks_path': self.chunks_path or '',
+            'chunks': self.chunks,
+            'metadata': self.metadata,
+        }
 
     def as_markdown(self) -> str:
         """Combines metadata and text content into a single string.
@@ -168,7 +275,7 @@ class Record(BaseModel):
         populate_by_name=True,  # Allow population by field name or alias
         exclude_unset=True,  # Exclude fields not explicitly set during serialization
         exclude_none=True,  # Exclude fields with None values during serialization
-        exclude={"title", "images"},  # Exclude computed properties from model_dump
+        exclude={"title", "images", "text_content"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 
