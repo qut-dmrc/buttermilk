@@ -2,9 +2,38 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Process Guidelines
+
+### Before Making Any Code Changes
+1. **STOP**: Understand the full problem scope before proposing solutions
+2. **ANALYZE**: Map the system architecture and identify root causes  
+3. **PLAN**: Create documentation (issues/plans) with clear phases and validation criteria
+4. **TEST**: Write failing tests that capture expected behavior
+5. **IMPLEMENT**: Make minimal changes that solve the root cause
+6. **VALIDATE**: Ensure no regressions and all success criteria are met
+
+### Red Flags That Indicate You're Moving Too Fast
+- Proposing config changes without understanding data flow
+- Making multiple small fixes instead of one root cause fix
+- Suggesting "try this" without a systematic plan
+- Modifying code without first writing tests that demonstrate the problem
+
+### When Debugging Complex Issues
+- Create GitHub issues with comprehensive analysis
+- Write failing tests before implementing fixes
+- Validate architectural assumptions with code inspection
+- Make one minimal change that addresses the root cause
+
+### Development Discipline Principles
+- **Analysis Before Action**: Understand systems before changing them
+- **Documentation-Driven Development**: Write issues/plans before coding
+- **Test-First Debugging**: Failing tests → fix → passing tests
+- **Minimal Viable Fixes**: Smallest change that solves root cause
+- **Embrace "I Don't Know Yet"**: Systematic analysis beats guessing
+
 ## Buttermilk Project Development Guidelines
 
-## Overarching priorities
+### Overarching priorities
 Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 
 * HASS-Centric Design: Prioritize usability, clarity, extensibility, and accessibility for Humanities, Arts, and Social Sciences (HASS) researchers.
