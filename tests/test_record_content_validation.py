@@ -168,3 +168,71 @@ class TestRecordFieldCounts:
         print(f"✅ Record has {len(actual_fields)} fields (expected ~{len(expected_all_fields)})")
         print(f"   Core fields: {expected_core_fields}")
         print(f"   Vector fields: {expected_vector_fields}")
+
+
+class TestStructuredDataHandling:
+    """Test that Record handles structured metadata properly (arrays, objects, etc.)."""
+    
+    def test_record_preserves_structured_metadata(self):
+        """Test that Record can store and access structured metadata like OSB data."""
+        # Create a record similar to OSB structure
+        osb_like_record = Record(
+            record_id="BUN-QBBLZ8WI",
+            content="This is the fulltext content for vector processing",
+            metadata={
+                "title": "Mention of Al-Shabaab",
+                "case_content": "The first post included a picture showing weapons...",
+                "result": "leave up",
+                "type": "summary",
+                "location": "Somalia", 
+                "case_date": "2023-11-22",
+                "topics": ["War and conflict", "Dangerous individuals and organizations"],
+                "standards": ["Dangerous Individuals and Organizations policy"],
+                "reasons": [
+                    "The policy prohibits content that 'praises' dangerous organizations...",
+                    "In the first post, the caption describes a military operation..."
+                ],
+                "recommendations": [
+                    "Enhance training and accuracy of reviewers...",
+                    "Add criteria and illustrative examples..."
+                ],
+                "job_id": "2Luac3REAVKPnF52dZqtc4",
+                "timestamp": 1732052347313
+            }
+        )
+        
+        # Verify structured data is preserved
+        assert osb_like_record.metadata["topics"] == ["War and conflict", "Dangerous individuals and organizations"]
+        assert len(osb_like_record.metadata["reasons"]) == 2
+        assert len(osb_like_record.metadata["recommendations"]) == 2
+        assert osb_like_record.metadata["timestamp"] == 1732052347313
+        
+        # Verify content is accessible for vector processing
+        assert len(osb_like_record.text_content) > 100
+        assert osb_like_record.content == "This is the fulltext content for vector processing"
+        
+    def test_record_metadata_types_preserved(self):
+        """Test that different data types in metadata are preserved correctly."""
+        record = Record(
+            content="Test content",
+            metadata={
+                "string_field": "text value",
+                "number_field": 42,
+                "boolean_field": True,
+                "array_field": ["item1", "item2", "item3"],
+                "object_field": {"key1": "value1", "key2": "value2"},
+                "null_field": None
+            }
+        )
+        
+        # Verify types are preserved
+        assert isinstance(record.metadata["string_field"], str)
+        assert isinstance(record.metadata["number_field"], int)
+        assert isinstance(record.metadata["boolean_field"], bool)
+        assert isinstance(record.metadata["array_field"], list)
+        assert isinstance(record.metadata["object_field"], dict)
+        assert record.metadata["null_field"] is None
+        
+        # Verify values are correct
+        assert record.metadata["array_field"] == ["item1", "item2", "item3"]
+        assert record.metadata["object_field"]["key1"] == "value1"

@@ -569,18 +569,32 @@ class ChromaDBEmbeddings(DataSouce):
         # 2. Additional fields (single chunks each)
         for field_config in config.additional_fields:
             field_value = record.metadata.get(field_config.source_field, '')
-            if field_value and len(str(field_value).strip()) >= field_config.min_length:
-                chunks.append(ChunkedDocument(
-                    document_title=record.title or f"Record {record.record_id}",
-                    chunk_index=len(chunks),
-                    chunk_text=str(field_value).strip(),
-                    document_id=record.record_id,
-                    metadata={
-                        **record.metadata,
-                        "content_type": field_config.source_field,
-                        "chunk_type": field_config.chunk_type
-                    }
-                ))
+            
+            # Convert structured data to readable text
+            if field_value:
+                if isinstance(field_value, list):
+                    # Join list items with newlines for better readability
+                    chunk_text = '\n'.join(str(item).strip() for item in field_value if str(item).strip())
+                elif isinstance(field_value, dict):
+                    # Convert dict to key-value pairs
+                    chunk_text = '\n'.join(f"{k}: {v}" for k, v in field_value.items() if v)
+                else:
+                    # Handle simple strings and other types
+                    chunk_text = str(field_value).strip()
+                
+                if chunk_text and len(chunk_text) >= field_config.min_length:
+                    chunks.append(ChunkedDocument(
+                        document_title=record.title or f"Record {record.record_id}",
+                        chunk_index=len(chunks),
+                        chunk_text=chunk_text,
+                        document_id=record.record_id,
+                        metadata={
+                            **record.metadata,
+                            "content_type": field_config.source_field,
+                            "chunk_type": field_config.chunk_type,
+                            "original_type": type(field_value).__name__  # Track original data type
+                        }
+                    ))
                 
         return chunks
 
