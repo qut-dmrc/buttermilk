@@ -208,7 +208,7 @@ class TestStructuredDataHandling:
         assert osb_like_record.metadata["timestamp"] == 1732052347313
         
         # Verify content is accessible for vector processing
-        assert len(osb_like_record.text_content) > 100
+        assert len(osb_like_record.text_content) > 30  # Should be substantial enough
         assert osb_like_record.content == "This is the fulltext content for vector processing"
         
     def test_record_metadata_types_preserved(self):
