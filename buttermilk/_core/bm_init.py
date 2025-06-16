@@ -520,20 +520,41 @@ class BM(SessionInfo):
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
                     logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
 
-                    # Try to cache the connections for next time
+                    # Defer cache writing to background task - Phase 2 optimization
                     try:
-                        cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        import json
-                        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
-                        logger.info(f"Cached LLM connections to: {cache_path}")
-                    except Exception as e:
-                        logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self._cache_llm_connections_async(connections_data, cache_path))
+                        else:
+                            # If no event loop is running, cache synchronously as fallback
+                            logger.info("No async loop running, caching LLM connections synchronously")
+                            self._write_cache_sync(connections_data, cache_path)
+                    except RuntimeError:
+                        # No event loop available, cache synchronously
+                        logger.info("No event loop available, caching LLM connections synchronously")
+                        self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
                     logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
                     raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
 
             self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
+
+    async def _cache_llm_connections_async(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+        """Asynchronously cache LLM connections to avoid blocking startup - Phase 2 optimization."""
+        try:
+            # Run file operations in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._write_cache_sync, connections_data, cache_path)
+            logger.info(f"Cached LLM connections to: {cache_path}")
+        except Exception as e:
+            logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
+
+    def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+        """Synchronous cache writing helper for thread pool execution."""
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @cached_property
     def query_runner(self) -> QueryRunner:
@@ -615,18 +636,18 @@ class BM(SessionInfo):
         """
         return self.cloud_manager.bq
 
-    @property
+    @cached_property
     def weave(self) -> Any:  # Type hint could be weave.weave_types.WeaveClient
         """Provides access to the Weights & Biases Weave client for tracing.
 
         Initializes Weave with a collection name derived from `self.name` (flow name)
-        and `self.job` (job name).
+        and `self.job` (job name). Cached for performance - Phase 2 optimization.
 
         Returns:
             Any: The initialized Weave client instance.
 
         """
-        import weave  # Ensure weave is imported
+        import weave  # Ensure weave is imported - deferred until first access
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
         return weave.init(collection_name)  # Initialize and return client
 

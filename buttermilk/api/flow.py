@@ -17,8 +17,7 @@ from buttermilk._core.context import session_id_var
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
 
-from .routes import flow_data_router
-from .mcp import mcp_router
+from .lazy_routes import LazyRouteManager, create_core_router
 
 # Define the base directory for the FastAPI app
 BASE_DIR = Path(__file__).resolve().parent
@@ -92,24 +91,17 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             content={"detail": str(exc)},
         )
 
-    logger.info("Defining API routes.")
-
-    @app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
-    async def run_flow_json(
-        flow_name: str,
-        request: Request,
-        run_request: RunRequest | None = None,
-    ) -> StreamingResponse:
-        """Run a flow with provided inputs."""
-        # Access state via request.app.state
-        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
-            raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
-
-        # Use stream method with the flow runner
-        return StreamingResponse(
-            request.app.state.flow_runner.stream(run_request),
-            media_type="application/json",
-        )
+    logger.info("Setting up lazy route management.")
+    
+    # Initialize lazy route manager for Phase 2 optimization
+    lazy_manager = LazyRouteManager(app)
+    
+    # Register core routes immediately (essential functionality)
+    core_router = create_core_router()
+    app.include_router(core_router)
+    lazy_manager.register_core_routes()
+    
+    logger.info("Core routes registered, deferring heavy routes.")
 
     # Set up CORS
 
