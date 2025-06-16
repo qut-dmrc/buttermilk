@@ -125,9 +125,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
-    # WebSocket endpoint moved to routes.py for Phase 2 lazy loading
-    # @flow_data_router.websocket("/ws/{session_id}")
-    async def websocket_endpoint_disabled(websocket: WebSocket, session_id: str):
+    # WebSocket endpoint - essential for frontend terminal functionality
+    @flow_data_router.websocket("/ws/{session_id}")
+    async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """WebSocket endpoint for client communication with the WebUIAgent.
 
         Args:
@@ -186,9 +186,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         with contextlib.suppress(Exception):
             await websocket.close()
 
-    # Session routes moved to routes.py for Phase 2 lazy loading 
-    # @app.get("/api/session")
-    async def create_session_disabled():
+    # Session management routes - essential for frontend functionality
+    @app.get("/api/session")
+    async def create_session():
         """Generates a unique session ID for new web clients.
 
         Returns:
@@ -197,8 +197,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         return {"session_id": str(uuid.uuid4())}
 
     # Session management endpoints
-    # @app.get("/api/session/{session_id}/status")
-    async def get_session_status_disabled(session_id: str, request: Request):
+    @app.get("/api/session/{session_id}/status")
+    async def get_session_status(session_id: str, request: Request):
         """Get the status of a specific session.
         
         Returns:
@@ -222,8 +222,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         else:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    # @app.delete("/api/session/{session_id}")
-    async def cleanup_session_disabled(session_id: str, request: Request):
+    @app.delete("/api/session/{session_id}")
+    async def cleanup_session(session_id: str, request: Request):
         """Manually clean up a specific session.
         
         Returns:
@@ -240,8 +240,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         else:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    # @app.get("/api/sessions") 
-    async def list_sessions_disabled(request: Request):
+    @app.get("/api/sessions")
+    async def list_sessions(request: Request):
         """List all active sessions.
         
         Returns:
