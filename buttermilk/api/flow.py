@@ -37,13 +37,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """Lifespan event handler for startup and shutdown events.
         """
         try:
-            # # Startup event
-            # worker = JobQueueClient(
-            #     max_concurrent_jobs=1,
-            # )
-            # app.state.job_worker = worker
-            # logger.info("Started job worker in FastAPI application")
-            # task = asyncio.create_task(worker.pull_tasks())
+            # Complete BM initialization in the FastAPI event loop
+            if hasattr(app.state, "bm"):
+                await app.state.bm._background_init()
             yield
         except Exception as e:
             logger.error(f"Failed to start job worker: {e}")
@@ -52,7 +48,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             if hasattr(app.state, "job_worker"):
                 await app.state.job_worker.stop()
                 logger.info("Stopped job worker")
-            
+
             # Clean up FlowRunner sessions
             if hasattr(app.state, "flow_runner"):
                 try:
@@ -74,7 +70,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     logger.info("App state configured.")
 
     # Add batch router
-#    batch_router = create_batch_router(app.state.batch_runner)
+    #    batch_router = create_batch_router(app.state.batch_runner)
     # app.include_router(batch_router, prefix="/api")
     # logger.info("Batch router added.")
 
@@ -94,15 +90,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         )
 
     logger.info("Setting up lazy route management.")
-    
+
     # Initialize lazy route manager for Phase 2 optimization
     lazy_manager = LazyRouteManager(app)
-    
+
     # Register core routes immediately (essential functionality)
     core_router = create_core_router()
     app.include_router(core_router)
     lazy_manager.register_core_routes()
-    
+
     logger.info("Core routes registered, deferring heavy routes.")
 
     # Set up CORS
@@ -171,7 +167,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         if task:
             await task
-        
+
         # Clean up the session when WebSocket disconnects
         try:
             if hasattr(flow_runner, 'session_manager'):
@@ -182,7 +178,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                     logger.debug(f"Session {session_id} not found during cleanup (may have already been cleaned up)")
         except Exception as e:
             logger.warning(f"Error cleaning up session {session_id}: {e}")
-        
+
         with contextlib.suppress(Exception):
             await websocket.close()
 
@@ -205,10 +201,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict with session status information
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             raise HTTPException(status_code=500, detail="Session manager not available")
-            
+
         if session_id in flow_runner.session_manager.sessions:
             session = flow_runner.session_manager.sessions[session_id]
             return {
@@ -230,10 +226,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict confirming cleanup
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             raise HTTPException(status_code=500, detail="Session manager not available")
-            
+
         success = await flow_runner.session_manager.cleanup_session(session_id)
         if success:
             return {"message": f"Session {session_id} cleaned up successfully"}
@@ -248,10 +244,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             Dict with list of session information
         """
         flow_runner: FlowRunner = request.app.state.flow_runner
-        
+
         if not hasattr(flow_runner, 'session_manager'):
             return {"sessions": [], "total": 0}
-            
+
         sessions_info = []
         for session_id, session in flow_runner.session_manager.sessions.items():
             sessions_info.append({
@@ -267,12 +263,12 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # --- Defer heavy routes for Phase 2 optimization ---
     # Set up templates
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    
+
     # Defer heavy routers until first request
     lazy_manager.defer_router(flow_data_router, prefix="")
     lazy_manager.defer_router(mcp_router, prefix="")
     lazy_manager.create_lazy_middleware()
-    
+
     logger.info("Heavy routes deferred - will load on first request")
 
     # Set up static files

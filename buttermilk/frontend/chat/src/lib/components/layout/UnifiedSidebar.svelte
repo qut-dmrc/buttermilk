@@ -1,22 +1,22 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
   import {
-    flowChoices,
-    recordsStore,
-    criteriaStore,
-    modelStore,
-    datasetsStore,
-    selectedFlow,
-    selectedDataset,
-    selectedRecord,
-    selectedCriteria,
-    selectedModel,
-    initializeApp,
-    refetchRecords
+  	criteriaStore,
+  	datasetsStore,
+  	flowChoices,
+  	flowRunning,
+  	initializeApp,
+  	modelStore,
+  	recordsStore,
+  	refetchRecords,
+  	selectedCriteria,
+  	selectedDataset,
+  	selectedFlow,
+  	selectedModel,
+  	selectedRecord
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
-  import { flowRunning } from '$lib/stores/apiStore';
+  import { onMount } from 'svelte';
   
   $: isTerminalPage = $page.route.id === '/terminal';
   $: isScorePage = $page.route.id?.startsWith('/score');
@@ -83,24 +83,24 @@
   
   // Auto-select first dataset when datasets become available
   $: if ($datasetsStore.data.length > 0 && !$selectedDataset) {
-    console.log('Auto-selecting first dataset:', $datasetsStore.data[0]);
+    console.debug('Auto-selecting first dataset:', $datasetsStore.data[0]);
     selectedDataset.set($datasetsStore.data[0]);
     
     // Trigger appropriate action based on page type
     if (isTerminalPage && $selectedFlow) {
-      console.log('Auto-triggered refetch for terminal page');
+      console.debug('Auto-triggered refetch for terminal page');
       refetchRecords();
     } else if (isScorePage && $selectedFlow) {
-      console.log('Auto-triggered loadRecordsForFlow for score page');
+      console.debug('Auto-triggered loadRecordsForFlow for score page');
       loadRecordsForFlow($selectedFlow, $datasetsStore.data[0]);
     }
   }
   
   // For terminal pages: use the recordsStore
   $: if (isTerminalPage && $recordsStore) {
-    console.log('Terminal page - recordsStore data:', $recordsStore.data);
+    console.debug('Terminal page - recordsStore data:', $recordsStore.data);
     records = $recordsStore.data || [];
-    console.log('Terminal page - local records:', records);
+    console.debug('Terminal page - local records:', records);
   }
   
   // Handle flow change
@@ -128,7 +128,7 @@
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
     } else if (isTerminalPage) {
-      console.log('Terminal page - resetting record and refetching');
+      console.debug('Terminal page - resetting record and refetching');
       // Reset record when dataset changes
       selectedRecord.set('');
       // Trigger refetch for terminal pages

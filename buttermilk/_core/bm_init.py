@@ -312,7 +312,7 @@ class BM(SessionInfo):
         # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
-        
+
         # Defer non-critical operations to background tasks for faster startup
         self._schedule_background_init()
 
@@ -328,32 +328,27 @@ class BM(SessionInfo):
         """
         try:
             loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create background task for deferred operations
-                asyncio.create_task(self._background_init())
-            else:
-                # No event loop running, run synchronously (fallback)
-                logger.debug("No event loop running, performing background init synchronously")
-                self._sync_background_init()
-        except RuntimeError:
+            asyncio.create_task(self._background_init())
+        except RuntimeError as e:
             # No current event loop, run synchronously
-            logger.debug("No event loop available, performing background init synchronously")
-            self._sync_background_init()
-    
+            msg = "No event loop available, unable to schedule BM background initialisation."
+            logger.error(msg)
+            # raise RuntimeError(msg) from e
+
     async def _background_init(self) -> None:
         """Perform non-critical initialization operations in the background."""
         try:
             # Save initial config (non-critical, can be deferred)
             await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
-            
+
             # Start IP fetching task (already async)
             self.start_fetch_ip_task()
-            
+
             # Defer cloud login - will happen on first cloud operation
             logger.debug("Background initialization completed")
         except Exception as e:
             logger.warning(f"Error during background initialization: {e}")
-    
+
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""
         try:
@@ -362,7 +357,7 @@ class BM(SessionInfo):
             logger.debug("Synchronous background initialization completed")
         except Exception as e:
             logger.warning(f"Error during synchronous background initialization: {e}")
-    
+
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
         try:
@@ -401,7 +396,7 @@ class BM(SessionInfo):
             # Perform cloud login and tracing setup on first access
             self._ensure_cloud_authentication()
         return self._cloud_manager
-    
+
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
         
@@ -412,18 +407,18 @@ class BM(SessionInfo):
             if self._cloud_manager:
                 logger.debug("Performing lazy cloud authentication...")
                 self._cloud_manager.login_clouds()  # Perform logins
-                
+
                 # Set up tracing if configured and enabled
                 if self.tracing and self.tracing.enabled:
                     self._cloud_manager.setup_tracing(self.tracing)
-                
+
                 # Set up cloud logging now that cloud manager is authenticated
                 self._setup_cloud_logging()
-                    
+
                 logger.debug("Cloud authentication completed")
         except Exception as e:
             logger.warning(f"Error during cloud authentication: {e}")
-    
+
     def _setup_cloud_logging(self) -> None:
         """Set up Google Cloud Logging after cloud authentication."""
         if self.logger_cfg and self.logger_cfg.type == "gcp" and self._cloud_manager:

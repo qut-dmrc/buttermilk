@@ -4,14 +4,16 @@
 defaults:
   - _self_
   # Agents are defined separately and reused across flows
-  - /agents@trans.agents.judge: judge
-  - /agents@trans.agents.synth: synth
-  - /agents@trans.agents.differences: differences
+  - /agents@trans.agents: 
+    - judge
+    - synth 
+    - differences
   # Observer agents
-  - /agents@trans.observers.spy: spy
-  - /agents@trans.observers.owl: owl
-  - /agents@trans.observers.scorer: scorer
-  - /agents@trans.observers.fetch: fetch
+  - /agents@trans.observers: 
+    - spy
+    - owl
+    - scorer
+    - fetch
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration
@@ -21,7 +23,7 @@ defaults:
 trans:
   # Core flow configuration
   orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  name: "trans_clean"
+  name: "trans"
   description: "Journalism quality assessment for trans issues reporting"
 
   parameters:

@@ -771,7 +771,6 @@ class AgentVariants(AgentConfig):
     """
 
     agent_obj: str = Field(
-        default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'LLMAgent'). Must be registered in AgentRegistry.",
     )
     variants: dict[str, list[Any]] = Field(  # More specific type hint
