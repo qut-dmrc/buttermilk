@@ -55,29 +55,30 @@ class TestFetch:
 
     @pytest.mark.anyio
     async def test_load_data(self, fetch):
-        """Test the load_data method."""
-        from buttermilk._core.config import DataSourceConfig
+        """Test the load_data method with unified storage API."""
+        from buttermilk._core.storage_config import StorageConfig
 
-        mock_data_loader = MagicMock()
-        test_config = DataSourceConfig(
+        mock_storage = MagicMock()
+        test_config = StorageConfig(
             type="file",
             path="test.jsonl",
-            name="test_data"
+            dataset_name="test_data"
         )
         fetch.data = {"test_data": test_config}
 
-        with patch(
-            "buttermilk.agents.fetch.create_data_loader",
-            return_value=mock_data_loader,
-        ) as mock_create_loader:
+        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
+            mock_bm = MagicMock()
+            mock_bm.get_storage.return_value = mock_storage
+            mock_get_bm.return_value = mock_bm
+            
             await fetch.load_data()
 
-            # Assert create_data_loader was called with the right args
-            mock_create_loader.assert_called_once_with(test_config)
+            # Assert get_storage was called with the right config
+            mock_bm.get_storage.assert_called_once_with(test_config)
             # Assert data sources were assigned correctly
             assert isinstance(fetch._data_sources, dict)
             assert "test_data" in fetch._data_sources
-            assert fetch._data_sources["test_data"] == mock_data_loader
+            assert fetch._data_sources["test_data"] == mock_storage
 
     @pytest.mark.anyio
     async def test_get_record_dataset_success(self, fetch):

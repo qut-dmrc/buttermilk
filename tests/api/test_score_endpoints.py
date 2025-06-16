@@ -17,23 +17,18 @@ class TestDataService:
     def mock_flow_runner(self):
         """Mock flow runner with test data"""
         mock_runner = Mock()
-        mock_runner.flows = {
-            "test_flow": Mock()
+        
+        # Mock flow with storage configuration
+        mock_flow = Mock()
+        mock_flow.storage = {
+            "test_dataset": {"type": "file", "path": "test.jsonl"}
         }
         
-        # Mock data loader
-        mock_record = Mock()
-        mock_record.record_id = "test_record_1"
-        mock_record.title = "Test Record"
-        mock_record.content = "Test content for toxicity analysis"
+        mock_runner.flows = {
+            "test_flow": mock_flow
+        }
         
-        mock_loader = Mock()
-        mock_loader.__iter__ = Mock(return_value=iter([mock_record]))
-        
-        # Mock the data loader creation
-        with pytest.MonkeyPatch().context() as m:
-            m.setattr("buttermilk.api.services.data_service.create_data_loader", lambda x: mock_loader)
-            yield mock_runner
+        yield mock_runner
 
     @pytest.fixture
     def mock_bm_instance(self):
@@ -53,23 +48,29 @@ class TestDataService:
             mock_record.title = "Test Record"
             mock_record.content = "Test content"
             
-            mock_loader = [mock_record]
-            m.setattr("buttermilk.api.services.data_service.create_data_loader", lambda x: mock_loader)
+            mock_storage = Mock()
+            mock_storage.__iter__ = Mock(return_value=iter([mock_record]))
+            
+            mock_bm = Mock()
+            mock_bm.get_storage = Mock(return_value=mock_storage)
+            m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
             
             result = await DataService.get_record_by_id("test_record_1", "test_flow", mock_flow_runner)
             
             assert result is not None
-            assert result["id"] == "test_record_1"
-            assert result["name"] == "Test Record"
-            assert result["content"] == "Test content"
-            assert result["metadata"]["dataset"] == "test_flow"
+            assert result.record_id == "test_record_1"
+            assert result.content == "Test content"
 
     @pytest.mark.anyio
     async def test_get_record_by_id_not_found(self, mock_flow_runner):
         """Test getting a record that doesn't exist"""
         with pytest.MonkeyPatch().context() as m:
-            mock_loader = []  # Empty loader
-            m.setattr("buttermilk.api.services.data_service.create_data_loader", lambda x: mock_loader)
+            mock_storage = Mock()
+            mock_storage.__iter__ = Mock(return_value=iter([]))  # Empty storage
+            
+            mock_bm = Mock()
+            mock_bm.get_storage = Mock(return_value=mock_storage)
+            m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
             
             result = await DataService.get_record_by_id("nonexistent", "test_flow", mock_flow_runner)
             
@@ -82,16 +83,20 @@ class TestDataService:
             mock_record = Mock()
             mock_record.record_id = "test_record_1"
             mock_record.title = "Test Record"
+            mock_record.metadata = {}
             
-            mock_loader = [mock_record]
-            m.setattr("buttermilk.api.services.data_service.create_data_loader", lambda x: mock_loader)
+            mock_storage = Mock()
+            mock_storage.__iter__ = Mock(return_value=iter([mock_record]))
             
-            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=False)
+            mock_bm = Mock()
+            mock_bm.get_storage = Mock(return_value=mock_storage)
+            m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
+            
+            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=False, dataset_name="test_dataset")
             
             assert len(result) == 1
-            assert result[0]["record_id"] == "test_record_1"
-            assert result[0]["name"] == "Test Record"
-            assert "summary_scores" not in result[0]
+            assert result[0].record_id == "test_record_1"
+            assert "summary_scores" not in result[0].metadata
 
     @pytest.mark.anyio
     async def test_get_records_for_flow_with_scores(self, mock_flow_runner):
@@ -100,16 +105,21 @@ class TestDataService:
             mock_record = Mock()
             mock_record.record_id = "test_record_1"
             mock_record.title = "Test Record"
+            mock_record.metadata = {}
             
-            mock_loader = [mock_record]
-            m.setattr("buttermilk.api.services.data_service.create_data_loader", lambda x: mock_loader)
+            mock_storage = Mock()
+            mock_storage.__iter__ = Mock(return_value=iter([mock_record]))
             
-            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=True)
+            mock_bm = Mock()
+            mock_bm.get_storage = Mock(return_value=mock_storage)
+            m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
+            
+            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=True, dataset_name="test_dataset")
             
             assert len(result) == 1
-            assert result[0]["record_id"] == "test_record_1"
-            assert "summary_scores" in result[0]
-            assert result[0]["summary_scores"]["total_evaluations"] == 8
+            assert result[0].record_id == "test_record_1"
+            assert "summary_scores" in result[0].metadata
+            assert result[0].metadata["summary_scores"]["total_evaluations"] == 8
 
     @pytest.mark.anyio
     async def test_get_scores_for_record_no_data(self, mock_bm_instance):
