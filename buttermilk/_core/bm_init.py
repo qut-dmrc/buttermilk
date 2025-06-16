@@ -925,6 +925,9 @@ class BM(SessionInfo):
         Creates the appropriate storage class based on the configuration type,
         using this BM instance for client access and default configurations.
         
+        Note: For ChromaDB with remote storage, you must call ensure_cache_initialized()
+        before accessing the collection. Consider using get_storage_async() for auto-initialization.
+        
         Args:
             config: Storage configuration (StorageConfig object, dict, or None)
             
@@ -954,6 +957,45 @@ class BM(SessionInfo):
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory
         return StorageFactory.create_storage(config, self)
+
+    async def get_storage_async(self, config: StorageConfig | dict | None = None) -> Any:
+        """Async factory method that creates and auto-initializes storage instances.
+        
+        For ChromaDB with remote storage (gs://, s3://, etc.), this automatically calls
+        ensure_cache_initialized() so the storage is ready for immediate use.
+        
+        Args:
+            config: Storage configuration (StorageConfig object, dict, or None)
+            
+        Returns:
+            Fully initialized storage instance ready for use
+            
+        Raises:
+            ValueError: If storage type is not supported
+            
+        Example:
+            # Auto-initialized ChromaDB (recommended)
+            vectorstore = await bm.get_storage_async(cfg.storage.osb_vector)
+            count = vectorstore.collection.count()  # ✅ Works immediately
+            
+            # Compare with manual approach:
+            vectorstore = bm.get_storage(cfg.storage.osb_vector)
+            await vectorstore.ensure_cache_initialized()  # Extra step
+            count = vectorstore.collection.count()  # ✅ Works after init
+        """
+        # Create storage instance using sync method
+        storage = self.get_storage(config)
+        
+        # Auto-initialize if it's ChromaDB with remote storage
+        if hasattr(storage, 'ensure_cache_initialized'):
+            # Check if it's remote storage requiring initialization
+            if hasattr(storage, 'persist_directory') and storage.persist_directory:
+                if storage.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
+                    logger.info(f"🔄 Auto-initializing remote storage: {storage.persist_directory}")
+                    await storage.ensure_cache_initialized()
+                    logger.info("✅ Storage ready for use")
+        
+        return storage
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
         """Convenience method to create BigQuery storage with dataset name.
