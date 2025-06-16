@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from buttermilk._core.contract import ManagerMessage, StepRequest
-from buttermilk.runner.selector import Selector
+# from buttermilk.runner.selector import Selector  # Module no longer exists
+
+pytestmark = pytest.mark.skip(reason="Selector orchestrator no longer exists in codebase")
 
 
 class TestUserInterrupt:
@@ -16,7 +18,8 @@ class TestUserInterrupt:
     async def test_user_interrupt_flow(self):
         """Test that the user interrupt flag causes a re-request of host suggestions."""
         # Create a selector instance with mocked components
-        selector = Selector(name="test_selector", description="Test Selector")
+        # selector = Selector(name="test_selector", description="Test Selector")  # Selector no longer exists
+        selector = None  # Placeholder for old test
 
         # Mock the internal methods
         selector._setup = AsyncMock()

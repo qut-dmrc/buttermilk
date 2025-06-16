@@ -33,7 +33,7 @@ async def mock_flow_stream(
 async def run_flow_json(
     flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb"],
     request: Request,
-    flow_request: stream.FlowRequest | None = "",
+    flow_request: stream.RunRequest | None = None,
 ) -> StreamingResponse:
     if flow not in flows:
         raise HTTPException(status_code=403, detail=f"TEST: Flow {flow} not valid")

@@ -8,8 +8,8 @@ import pytest
 
 # Buttermilk core types
 from buttermilk._core.agent import AgentInput, AgentTrace
-from buttermilk._core.contract import END, ConductorRequest, StepRequest
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from buttermilk._core.contract import ConductorRequest, StepRequest
+from buttermilk._core.constants import END
 from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
