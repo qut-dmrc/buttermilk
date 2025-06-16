@@ -251,6 +251,7 @@ class ChromaDBEmbeddings(DataSouce):
     _embedding_model: TextEmbeddingModel = PrivateAttr()
     _embedding_function: Callable = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
+    _original_remote_path: str | None = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def load_models(self) -> Self:
@@ -287,7 +288,7 @@ class ChromaDBEmbeddings(DataSouce):
         """
         # Step 1: Handle remote ChromaDB caching with smart cache management
         if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
-            self._remote_path = self.persist_directory  # Store original remote path
+            self._original_remote_path = self.persist_directory  # Store original remote path
             local_cache_path = await self._smart_cache_management(self.persist_directory)
 
             # Update persist_directory to use local cache
@@ -348,7 +349,10 @@ class ChromaDBEmbeddings(DataSouce):
         This method should be called after embedding operations to ensure
         local changes are persisted to the remote storage.
         """
-        if not self.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
+        # Use original remote path if available, otherwise check current persist_directory
+        remote_path = self._original_remote_path or self.persist_directory
+        
+        if not remote_path.startswith(("gs://", "gcs://", "s3://", "azure://")):
             # Not a remote storage, no sync needed
             logger.debug("Local storage detected, no remote sync needed")
             return
@@ -358,12 +362,12 @@ class ChromaDBEmbeddings(DataSouce):
             import os
             import time
             
-            # Get local cache path
-            cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / self.persist_directory.replace("://", "___").replace("/", "_")
+            # Use actual persist_directory as the local cache path (it's been set to local cache)
+            cache_path = Path(self.persist_directory)
             
             # Check if local cache exists and has been modified
             if not cache_path.exists() or not (cache_path / "chroma.sqlite3").exists():
-                logger.debug("No local cache to sync")
+                logger.error(f"Local cache not found at expected location: {cache_path}")
                 return
                 
             # Check if local cache has been recently modified
@@ -375,15 +379,60 @@ class ChromaDBEmbeddings(DataSouce):
                 logger.debug(f"Local cache not recently modified ({time_since_modified/3600:.1f}h ago), skipping sync")
                 return
                 
-            logger.info(f"🔄 Syncing local changes back to remote: {self.persist_directory}")
+            logger.info(f"🔄 Syncing local changes back to remote: {cache_path} → {remote_path}")
             
             # Upload local cache to remote storage
-            await upload_chromadb_cache(str(cache_path), self.persist_directory)
+            await upload_chromadb_cache(str(cache_path), remote_path)
             logger.info("✅ Successfully synced local changes to remote storage")
             
         except Exception as e:
-            logger.warning(f"⚠️  Failed to sync local changes to remote storage: {e}")
-            logger.info("Local changes are preserved in cache and can be manually synced later")
+            logger.error(f"❌ CRITICAL: Failed to sync local changes to remote storage: {e}")
+            logger.error(f"Local cache with unsaved data: {cache_path}")
+            logger.error(f"Target remote path: {remote_path}")
+            raise RuntimeError(f"ChromaDB sync failed: {e}") from e
+
+    async def sync_to_remote(self, force: bool = False) -> bool:
+        """Manually sync local changes to remote storage.
+        
+        Args:
+            force: Sync even if no recent changes detected
+            
+        Returns:
+            bool: True if sync succeeded, False otherwise
+        """
+        if not self._original_remote_path:
+            logger.info("No remote storage configured, nothing to sync")
+            return True
+            
+        try:
+            # Temporarily override time check for forced sync
+            if force:
+                # Backup original method and replace with forced version
+                original_method = self._sync_local_changes_to_remote
+                async def forced_sync():
+                    cache_path = Path(self.persist_directory)
+                    remote_path = self._original_remote_path
+                    
+                    if not cache_path.exists() or not (cache_path / "chroma.sqlite3").exists():
+                        logger.error(f"Local cache not found at: {cache_path}")
+                        return False
+                        
+                    logger.info(f"🔄 Force syncing: {cache_path} → {remote_path}")
+                    
+                    from buttermilk.utils.utils import upload_chromadb_cache
+                    await upload_chromadb_cache(str(cache_path), remote_path)
+                    logger.info("✅ Force sync completed successfully")
+                    return True
+                
+                await forced_sync()
+            else:
+                await self._sync_local_changes_to_remote()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Manual sync failed: {e}")
+            return False
 
     async def _ensure_collection_ready(self) -> None:
         """Ensure the collection exists and is compatible with current configuration.
