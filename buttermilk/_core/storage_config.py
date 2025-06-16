@@ -338,6 +338,17 @@ class StorageFactory:
                     chromadb_params[field] = getattr(config, field)
             
             return ChromaDBEmbeddings(**chromadb_params)
+        elif storage_type == "huggingface":
+            from buttermilk.storage.huggingface import HuggingFaceStorage
+            return HuggingFaceStorage(config, bm_instance)
+        elif storage_type == "plaintext":
+            # Use FileStorage with plaintext-specific configuration
+            from buttermilk.storage.file import FileStorage
+            # For plaintext, we typically use glob patterns
+            if not config.glob or config.glob == "**/*":
+                # Set default glob for text files
+                config.glob = "**/*.txt"
+            return FileStorage(config, bm_instance)
         else:
             raise ValueError(f"Unsupported storage type: {storage_type}")
 

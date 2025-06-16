@@ -5,8 +5,8 @@ from buttermilk._core.config import AgentConfig, DataSourceConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
+from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
-from buttermilk.data.loaders import create_data_loader
 
 
 class FlowRunner(Protocol):
@@ -22,25 +22,29 @@ class DataService:
     """Service for handling data-related operations"""
 
     @staticmethod
-    def _convert_to_data_source_config(storage_config_raw: Any) -> DataSourceConfig:
-        """Convert raw configuration (OmegaConf, dict, etc.) to DataSourceConfig.
+    def _convert_to_storage_config(storage_config_raw: Any) -> StorageConfig:
+        """Convert raw configuration (OmegaConf, dict, etc.) to StorageConfig.
         
         Args:
             storage_config_raw: Raw storage configuration from flow definition
             
         Returns:
-            DataSourceConfig: Properly validated configuration object
+            StorageConfig: Properly validated configuration object
         """
-        if isinstance(storage_config_raw, DataSourceConfig):
+        if isinstance(storage_config_raw, StorageConfig):
             return storage_config_raw
+        elif isinstance(storage_config_raw, DataSourceConfig):
+            # Convert legacy DataSourceConfig to StorageConfig
+            config_dict = storage_config_raw.model_dump()
+            return StorageConfig(**config_dict)
         elif hasattr(storage_config_raw, "__dict__"):
             # Handle OmegaConf objects
-            return DataSourceConfig(**dict(storage_config_raw))
+            return StorageConfig(**dict(storage_config_raw))
         elif isinstance(storage_config_raw, dict):
-            return DataSourceConfig(**storage_config_raw)
+            return StorageConfig(**storage_config_raw)
         else:
             # Fallback: try to convert to dict first
-            return DataSourceConfig(**dict(storage_config_raw))
+            return StorageConfig(**dict(storage_config_raw))
 
     @staticmethod
     async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
@@ -126,15 +130,19 @@ class DataService:
             
             storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
 
-            # Convert OmegaConf/dict to proper DataSourceConfig
-            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
+            # Convert OmegaConf/dict to proper StorageConfig
+            storage_config = DataService._convert_to_storage_config(storage_config_raw)
             
             # Ensure the dataset_name is set correctly in the config
             if hasattr(storage_config, 'dataset_name') and dataset_name:
                 storage_config.dataset_name = dataset_name
 
-            loader = create_data_loader(storage_config)
-            for record in loader:
+            # Use unified storage system instead of deprecated create_data_loader
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            storage = bm.get_storage(storage_config)
+            
+            for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
                     # Add placeholder summary scores to metadata - in a real implementation,
@@ -254,11 +262,15 @@ class DataService:
                 # Fallback to first storage configuration for backward compatibility
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
-            # Convert OmegaConf/dict to proper DataSourceConfig
-            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
+            # Convert OmegaConf/dict to proper StorageConfig
+            storage_config = DataService._convert_to_storage_config(storage_config_raw)
 
-            loader = create_data_loader(storage_config)
-            for record in loader:
+            # Use unified storage system instead of deprecated create_data_loader
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            storage = bm.get_storage(storage_config)
+            
+            for record in storage:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata
                     record.metadata.update({
