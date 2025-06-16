@@ -22,7 +22,10 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def conductor_request() -> ConductorRequest:
     """Provides a sample ConductorRequest."""
-    return ConductorRequest(inputs={"test": "data"}, prompt="test prompt")
+    return ConductorRequest(
+        inputs={"test": "data", "prompt": "test prompt"},
+        participants={"AGENT1": "Test agent"}
+    )
 
 
 class TestConductorRouting:

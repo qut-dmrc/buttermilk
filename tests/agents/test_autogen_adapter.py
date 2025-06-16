@@ -38,8 +38,8 @@ def conductor_request() -> ConductorRequest:
             "prompt": "Test prompt for conductor",
         },
         participants={
-            "AGENT1": {"config": "some_config"},
-            "AGENT2": {"config": "some_config"},
+            "AGENT1": "First test agent",
+            "AGENT2": "Second test agent",
         },
     )
 
@@ -48,8 +48,7 @@ def conductor_request() -> ConductorRequest:
 def agent_input() -> AgentInput:
     """Create a sample AgentInput object for testing invocation."""
     return AgentInput(
-        inputs={"data": "sample input"},
-        prompt="Test prompt for invocation",
+        inputs={"data": "sample input", "prompt": "Test prompt for invocation"},
     )
 
 
@@ -90,7 +89,7 @@ class TestAutogenAgentAdapter:
     async def test_adapter_initialization_with_host(self):
         """Test adapter initialization with an LLMHostAgent."""
         host_config = AgentConfig(role="HOST", name="Test Host", description="Test Host", parameters={"model": "mock_model"})
-        with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
+        with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
             adapter = AutogenAgentAdapter(
                 topic_type="test_topic",
                 agent_cls=LLMHostAgent,
@@ -106,7 +105,7 @@ class TestAutogenAgentAdapter:
     async def test_adapter_initialization_with_explorer(self):
         """Test adapter initialization with an ExplorerHost agent."""
         explorer_config = AgentConfig(role="EXPLORER", name="Test Explorer", description="Test Explorer", parameters={"model": "mock_model"})
-        with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
+        with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
             adapter = AutogenAgentAdapter(
                 topic_type="test_topic",
                 agent_cls=ExplorerHost,

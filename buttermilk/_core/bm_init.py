@@ -332,7 +332,7 @@ class BM(SessionInfo):
         except RuntimeError as e:
             # No current event loop, run synchronously
             msg = "No event loop available, unable to schedule BM background initialisation."
-            logger.error(msg)
+            logger.warning(msg)
             # raise RuntimeError(msg) from e
 
     async def _background_init(self) -> None:

@@ -1,4 +1,5 @@
 import hydra
+from pydantic import BaseModel
 import pytest
 from hydra import compose, initialize
 from omegaconf import OmegaConf
@@ -25,35 +26,31 @@ def conf():
     """Hydra config fixture."""
     with initialize(version_base=None, config_path="../conf"):
         cfg = compose(config_name="testing")
+
+    try:
+        resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+
+        # Initialize the global Buttermilk instance (bm) with its configuration section
+        if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
+            raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
+        bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+        # Set the singleton BM instance
+        from buttermilk._core.dmrc import set_bm
+
+        set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+
+    except Exception as e:
+        print(f"Error with test configuration, cannot create BM instance: {e}")
+        raise
+
     return cfg
 
 
 @pytest.fixture(scope="session", autouse=True)
 def bm(conf) -> BM:
-    bm: BM
     """Buttermilk singleton instance fixture."""
-
-    try:
-        # If Hydra is configured with _target_ and _convert_="object",
-        # cfg might already be an AppConfig instance.
-        if isinstance(conf.bm, BM):
-            bm = conf.bm
-        else:
-            try:
-                bm = hydra.utils.instantiate(conf.bm)
-            except:
-                # Manually convert if cfg is a DictConfig
-                # OmegaConf.to_container resolves everything to basic python types
-                # then Pydantic can parse it.
-                resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
-                bm = BM(**resolved_cfg_dict["bm"])
-
-        from buttermilk._core.dmrc import set_bm
-        set_bm(bm)
-        return bm
-    except Exception as e:
-        print(f"Error during Pydantic model instantiation: {e}")
-        raise
+    bm = get_bm()
+    return bm
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -61,7 +61,7 @@ class TestAutogenAdapterIntegration:
     async def test_adapter_initialization(self, mock_agent_config):
         """Test adapter initializes the underlying agent correctly."""
         # Mock LLM client lookup needed by Judge (which inherits from LLMAgent)
-        with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
+        with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
             adapter = AutogenAgentAdapter(
                 topic_type="test_topic",  # Provide topic_type
                 agent_cls=Judge,  # Use correct param name
@@ -135,7 +135,7 @@ class TestAutogenAdapterIntegration:
         # Define the factory function
         def adapter_factory():
             # Mock LLM client lookup inside the factory
-            with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
+            with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
                 return AutogenAgentAdapter(
                     topic_type="reg_topic",  # Provide topic_type
                     agent_cls=Judge,  # Use agent_cls

@@ -11,6 +11,7 @@ from buttermilk._core.agent import AgentInput, AgentTrace
 from buttermilk._core.contract import ConductorRequest, StepRequest
 from buttermilk._core.constants import END
 from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
+from buttermilk.agents.flowcontrol.host import HostAgent
 
 pytestmark = pytest.mark.anyio
 
@@ -29,7 +30,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     """Test Sequencer._get_next_step returns the next step from its generator.
     """
     # Arrange
-    sequencer = Sequencer(role="SEQUENCER", name="Test Seq", description="test")
+    sequencer = HostAgent(role="SEQUENCER", name="Test Seq", description="test")
     await sequencer.initialize()  # Initialize to set up generator
 
     # Mock the internal generator to control the output
@@ -83,21 +84,21 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
 @pytest.fixture
 def mock_llm_host_agent() -> LLMHostAgent:
     """Fixture for a mocked LLMHostAgent."""
-    with patch.object(LLMHostAgent, "__init__", return_value=None):
-        agent = LLMHostAgent()
-        agent.id = "mock-host-id"
-        agent.role = "host"
-        agent.description = "Mocked host"
-        agent._process = AsyncMock(name="_process")
-        agent._check_completions = AsyncMock(name="_check_completions")
-        agent._step_completion_event = asyncio.Event()
-        agent._current_step = "previous_step"
-        # Add other necessary attributes if needed by _get_next_step
-        agent.parameters = {}  # Mock parameters dict
-        agent._records = []
-        agent._model_context = MagicMock()  # Mock context if needed
-        agent._data = MagicMock()  # Mock data collector if needed
-        return agent
+    # Create a proper instance with minimal required fields
+    agent = LLMHostAgent(
+        role="host",
+        description="Mocked host agent"
+    )
+    # Mock the methods that need to be mocked
+    agent._process = AsyncMock(name="_process")
+    agent._check_completions = AsyncMock(name="_check_completions")
+    agent._step_completion_event = asyncio.Event()
+    agent._current_step = "previous_step"
+    # Add other necessary attributes if needed by _get_next_step
+    agent._records = []
+    agent._model_context = MagicMock()  # Mock context if needed
+    agent._data = MagicMock()  # Mock data collector if needed
+    return agent
 
 
 @pytest.mark.anyio
