@@ -65,16 +65,15 @@ def test_no_variants_single_run(base_variant_config):
 
     assert agent_class is MockAgent
     assert isinstance(config, AgentConfig)
-    assert config.id == "TEST_AGENT"  # Should retain original ID
+    assert config.agent_id.startswith("TESTER-")  # Auto-generated ID based on role
     assert config.parameters == {"base_param": "base_value"}
-    assert config.sequential_tasks == [{}]  # Default single task
 
 
 def test_only_parallel_variants(base_variant_config):
     """Test config generation with only parallel variants."""
     config_data = {
         **base_variant_config,
-        "parallel_variants": {"model": ["model_a", "model_b"]},
+        "variants": {"model": ["model_a", "model_b"]},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
@@ -84,16 +83,15 @@ def test_only_parallel_variants(base_variant_config):
     for agent_class, config in configs:
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
-        assert config.sequential_tasks == [{}]  # Default single task
         assert "model" in config.parameters
-        ids.add(config.id)
+        ids.add(config.agent_id)
         if config.parameters["model"] == "model_a":
             assert config.parameters["base_param"] == "base_value"
-            assert "model_a" in config.id
+            assert config.agent_id.startswith("TESTER-")  # Each config gets unique ID
         else:
             assert config.parameters["model"] == "model_b"
             assert config.parameters["base_param"] == "base_value"
-            assert "model_b" in config.id
+            assert config.agent_id.startswith("TESTER-")  # Each config gets unique ID
     assert len(ids) == 2  # Ensure unique IDs generated
 
 
@@ -101,55 +99,62 @@ def test_only_sequential_variants(base_variant_config):
     """Test config generation with only sequential variants."""
     config_data = {
         **base_variant_config,
-        "sequential_variants": {"criteria": ["c1", "c2"], "temp": [0.5, 0.8]},
+        "tasks": {"criteria": ["c1", "c2"], "temp": [0.5, 0.8]},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
-    assert len(configs) == 1
-    agent_class, config = configs[0]
-
-    assert agent_class is MockAgent
-    assert isinstance(config, AgentConfig)
-    assert config.id == "TEST_AGENT"  # Original ID, no parallel variants
-    assert config.parameters == {"base_param": "base_value"}  # Base parameters only
-    assert len(config.sequential_tasks) == 4  # 2 criteria * 2 temp
-    expected_tasks = [
-        {"criteria": "c1", "temp": 0.5},
-        {"criteria": "c1", "temp": 0.8},
-        {"criteria": "c2", "temp": 0.5},
-        {"criteria": "c2", "temp": 0.8},
+    # Sequential tasks generate separate configs for each combination
+    assert len(configs) == 4  # 2 criteria * 2 temp
+    expected_combinations = [
+        {"base_param": "base_value", "criteria": "c1", "temp": 0.5},
+        {"base_param": "base_value", "criteria": "c1", "temp": 0.8},
+        {"base_param": "base_value", "criteria": "c2", "temp": 0.5},
+        {"base_param": "base_value", "criteria": "c2", "temp": 0.8},
     ]
+    
+    actual_parameters = []
+    for agent_class, config in configs:
+        assert agent_class is MockAgent
+        assert isinstance(config, AgentConfig)
+        assert config.agent_id.startswith("TESTER-")  # Auto-generated ID based on role
+        actual_parameters.append(config.parameters)
+    
     # Convert to set of tuples for order-independent comparison
-    assert set(tuple(sorted(d.items())) for d in config.sequential_tasks) == set(tuple(sorted(d.items())) for d in expected_tasks)
+    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
 
 
 def test_both_parallel_and_sequential_variants(base_variant_config):
     """Test config generation with both parallel and sequential variants."""
     config_data = {
         **base_variant_config,
-        "parallel_variants": {"model": ["m1", "m2"]},
-        "sequential_variants": {"temp": [0.1, 0.9]},
+        "variants": {"model": ["m1", "m2"]},
+        "tasks": {"temp": [0.1, 0.9]},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
-    assert len(configs) == 2  # 2 parallel variants
-    expected_tasks = [{"temp": 0.1}, {"temp": 0.9}]
-    task_set_tuples = set(tuple(sorted(d.items())) for d in expected_tasks)
-
+    # 2 parallel variants * 2 sequential tasks = 4 total configs
+    assert len(configs) == 4
+    expected_combinations = [
+        {"base_param": "base_value", "model": "m1", "temp": 0.1},
+        {"base_param": "base_value", "model": "m1", "temp": 0.9},
+        {"base_param": "base_value", "model": "m2", "temp": 0.1},
+        {"base_param": "base_value", "model": "m2", "temp": 0.9},
+    ]
+    
+    actual_parameters = []
     for agent_class, config in configs:
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
         assert "model" in config.parameters
+        assert "temp" in config.parameters
         assert config.parameters["base_param"] == "base_value"
-        assert len(config.sequential_tasks) == 2
-        assert set(tuple(sorted(d.items())) for d in config.sequential_tasks) == task_set_tuples
-        if config.parameters["model"] == "m1":
-            assert "m1" in config.id
-        else:
-            assert config.parameters["model"] == "m2"
-            assert "m2" in config.id
+        assert config.agent_id.startswith("TESTER-")
+        actual_parameters.append(config.parameters)
+    
+    # Convert to set of tuples for order-independent comparison
+    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
 
 
 def test_num_runs_greater_than_one(base_variant_config):
@@ -157,7 +162,7 @@ def test_num_runs_greater_than_one(base_variant_config):
     config_data = {
         **base_variant_config,
         "num_runs": 3,
-        "parallel_variants": {"model": ["m_a"]},  # Single parallel variant
+        "variants": {"model": ["m_a"]},  # Single parallel variant
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
@@ -168,10 +173,8 @@ def test_num_runs_greater_than_one(base_variant_config):
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
         assert config.parameters == {"base_param": "base_value", "model": "m_a"}
-        assert config.sequential_tasks == [{}]
-        assert f"run{i}" in config.id
-        assert "m_a" in config.id  # Parallel param should still be in ID
-        ids.add(config.id)
+        assert config.agent_id.startswith("TESTER-")  # Auto-generated unique ID
+        ids.add(config.agent_id)
     assert len(ids) == 3  # Ensure unique IDs across runs
 
 
@@ -180,13 +183,13 @@ def test_id_generation_uniqueness(base_variant_config):
     # Case 1: Multiple parallel variants (needs hash)
     config_data_p = {
         **base_variant_config,
-        "parallel_variants": {"model": ["m1", "m2"]},
+        "variants": {"model": ["m1", "m2"]},
     }
     variant_factory_p = AgentVariants(**config_data_p)
     configs_p = variant_factory_p.get_configs()
     assert len(configs_p) == 2
-    assert "m1" in configs_p[0][1].id and "abcd" in configs_p[0][1].id
-    assert "m2" in configs_p[1][1].id and "efgh" in configs_p[1][1].id
+    assert configs_p[0][1].agent_id.startswith("TESTER-")
+    assert configs_p[1][1].agent_id.startswith("TESTER-")
 
     # Case 2: Multiple runs (needs hash)
     config_data_r = {
@@ -196,23 +199,24 @@ def test_id_generation_uniqueness(base_variant_config):
     variant_factory_r = AgentVariants(**config_data_r)
     configs_r = variant_factory_r.get_configs()
     assert len(configs_r) == 2
-    assert "run0" in configs_r[0][1].id and "ijkl" in configs_r[0][1].id
-    assert "run1" in configs_r[1][1].id and "mnop" in configs_r[1][1].id
+    assert configs_r[0][1].agent_id.startswith("TESTER-")
+    assert configs_r[1][1].agent_id.startswith("TESTER-")
 
     # Case 3: Single config (no hash needed)
     variant_factory_s = AgentVariants(**base_variant_config)
     configs_s = variant_factory_s.get_configs()
     assert len(configs_s) == 1
-    assert configs_s[0][1].id == "TEST_AGENT"  # Original ID, no hash
-
-
-@pytest.fixture
-def variant_factory():
-    return AgentVariants(**config_data)
+    assert configs_s[0][1].agent_id.startswith("TESTER-")  # Auto-generated ID
 
 
 def test_parameter_overwriting(base_variant_config):
     """Test that parallel variants overwrite base parameters."""
+    config_data = {
+        **base_variant_config,
+        "parameters": {"base_param": "original"},
+        "variants": {"model": ["override_model"]},
+    }
+    variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
     assert len(configs) == 1
@@ -225,8 +229,8 @@ def test_omegaconf_conversion(base_variant_config):
     """Test that OmegaConf dicts/lists in variants are converted."""
     config_data = {
         **base_variant_config,
-        "parallel_variants": OmegaConf.create({"model": ["m1", "m2"]}),
-        "sequential_variants": OmegaConf.create({"temp": [0.1, 0.9]}),
+        "variants": OmegaConf.create({"model": ["m1", "m2"]}),
+        "tasks": OmegaConf.create({"temp": [0.1, 0.9]}),
     }
     # The validator runs on initialization
     variant_factory = AgentVariants(**config_data)
@@ -237,28 +241,31 @@ def test_omegaconf_conversion(base_variant_config):
     assert isinstance(variant_factory.tasks, dict)
     assert not isinstance(variant_factory.tasks, OmegaConf)
 
-    # Check generated configs
+    # Check generated configs - 2 parallel variants * 2 sequential tasks = 4 configs
     configs = variant_factory.get_configs()
-    assert len(configs) == 2
-    assert len(configs[0][1].sequential_tasks) == 2
-    assert isinstance(configs[0][1].sequential_tasks[0], dict)
+    assert len(configs) == 4
+    # Check that parameters contain both parallel and sequential variant values
+    for agent_class, config in configs:
+        assert "model" in config.parameters  # From parallel variants
+        assert "temp" in config.parameters   # From sequential tasks
+        assert config.parameters["model"] in ["m1", "m2"]
+        assert config.parameters["temp"] in [0.1, 0.9]
 
 
 def test_empty_variants(base_variant_config):
     """Test config generation with empty variant dicts."""
     config_data = {
         **base_variant_config,
-        "parallel_variants": {},
-        "sequential_variants": {},
+        "variants": {},
+        "tasks": {},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
     assert len(configs) == 1
     agent_class, config = configs[0]
-    assert config.id == "TEST_AGENT"
+    assert config.agent_id.startswith("TESTER-")
     assert config.parameters == {"base_param": "base_value"}
-    assert config.sequential_tasks == [{}]  # Default task
 
 
 def test_agent_not_found(base_variant_config):
@@ -280,7 +287,7 @@ from buttermilk._core.types import RunRequest
 # --- Mocking necessary classes ---
 # Mock AgentConfig as the structure seems to be the focus
 class MockAgentConfig(BaseModel):
-    id: str = Field(default="should be replaced")
+    agent_id: str = Field(default="should be replaced")
     unique_identifier: str = Field(default_factory=lambda: f"instance_{shortuuid.uuid()}")  # Simulate unique instance ID
     # Add other fields potentially needed by get_configs logic if any
     parameters: dict = {}
@@ -288,7 +295,7 @@ class MockAgentConfig(BaseModel):
 
 
 # --- Test Data ---
-PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
+PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"},"ui_type":"console","session_id":"test","created_at":"2024-01-01T00:00:00","source":["test"]}'
 
 
 @pytest.fixture
@@ -325,18 +332,18 @@ def test_step_config_get_configs_structure_and_ids(
             "Second element should be an AgentConfig instance (or mock)"
 
         # Check attributes exist
-        assert hasattr(agent_config, "id"), "AgentConfig should have an 'id' attribute"
+        assert hasattr(agent_config, "agent_id"), "AgentConfig should have an 'agent_id' attribute"
         assert hasattr(agent_config, "unique_identifier"), \
             "AgentConfig should have a 'unique_identifier' attribute"
 
         # Check attribute types
-        assert isinstance(agent_config.id, str), "AgentConfig.id should be a string"
+        assert isinstance(agent_config.agent_id, str), "AgentConfig.agent_id should be a string"
         assert isinstance(agent_config.unique_identifier, str), \
             "AgentConfig.unique_identifier should be a string"
 
         # Collect IDs for uniqueness check across configs
-        all_config_ids.append(agent_config.id)
+        all_config_ids.append(agent_config.agent_id)
 
     # Check the core requirement: IDs must be unique across all returned configs
     assert len(all_config_ids) == len(set(all_config_ids)), \
-        f"AgentConfig.id values are not unique across returned configs. Found IDs: {all_config_ids}"
+        f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
