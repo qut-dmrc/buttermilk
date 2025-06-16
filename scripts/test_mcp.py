@@ -107,7 +107,7 @@ if __name__ == "__main__":
         Path(temp_file).unlink()
 
 
-def test_endpoints_manually():
+def check_endpoints_manually():
     """Run manual tests against a running server."""
     import requests
     import json
@@ -176,7 +176,7 @@ def main():
         start_test_server()
         return 0
     elif args.command == "manual":
-        return 0 if test_endpoints_manually() else 1
+        return 0 if check_endpoints_manually() else 1
     else:
         print(f"Unknown command: {args.command}")
         return 1
