@@ -82,64 +82,9 @@ class InputDocument(BaseModel):
 
 
 # --- Compatibility Functions ---
-def create_input_document_from_record(record: Record) -> InputDocument:
-    """Create InputDocument from Record (compatibility function).
-    
-    DEPRECATED: Use Record directly for vector operations.
-    This function provides backwards compatibility during migration.
-    
-    Args:
-        record: Record instance to convert
-        
-    Returns:
-        InputDocument: Compatible InputDocument instance
-    """
-    import warnings
-    warnings.warn(
-        "create_input_document_from_record() is deprecated. Use Record directly.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    
-    input_doc_dict = record.to_input_document()
-    return InputDocument(**input_doc_dict)
-
-
-# Alternative compatibility: InputDocument constructor that creates Record
-def InputDocument_compat(**kwargs) -> Record:
-    """Compatibility constructor for InputDocument -> Record migration.
-    
-    DEPRECATED: Use Record class directly.
-    
-    Args:
-        **kwargs: InputDocument fields
-        
-    Returns:
-        Record: Enhanced Record instance
-    """
-    import warnings
-    warnings.warn(
-        "InputDocument constructor is deprecated. Use Record class directly.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    
-    # Convert InputDocument kwargs to Record
-    title = kwargs.get('title', '')
-    metadata = kwargs.get('metadata', {}).copy()
-    if title:
-        metadata['title'] = title
-        
-    return Record(
-        record_id=kwargs.get('record_id', ''),
-        content=kwargs.get('full_text', ''),
-        full_text=kwargs.get('full_text'),
-        file_path=kwargs.get('file_path'),
-        chunks=kwargs.get('chunks', []),
-        chunks_path=kwargs.get('chunks_path'),
-        metadata=metadata,
-        uri=kwargs.get('record_path'),
-    )
+# REMOVED: Deprecated compatibility functions
+# - create_input_document_from_record: Use Record directly
+# - InputDocument_compat: Use Record class directly
 
 
 # --- Type Aliases ---
@@ -555,93 +500,11 @@ class ChromaDBEmbeddings(DataSouce):
         
         return collection
 
-    def record_to_input_document(self, record: Record) -> InputDocument:
-        """Convert a Record to InputDocument format.
-        
-        DEPRECATED: Use process_record() directly with Record for better performance.
-        """
-        import warnings
-        warnings.warn(
-            "record_to_input_document() is deprecated. Use process_record() directly.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        
-        # Use the new Record.to_input_document() method
-        input_doc_dict = record.to_input_document()
-        return InputDocument(**input_doc_dict)
+    # REMOVED: record_to_input_document (deprecated)
+    # Use process_record() directly with Record for better performance
 
-    def create_multi_field_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
-        """Create chunks for multiple content types using configuration.
-        
-        Uses multi_field_config to determine which fields to embed.
-        Falls back to single-field behavior if no config provided.
-        """
-        chunks = []
-        
-        # If no multi-field config, use traditional single-field chunking
-        if not self.multi_field_config:
-            if doc.full_text:
-                text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
-                content_chunks = text_splitter.split_text(doc.full_text)
-                
-                for i, chunk_text in enumerate(content_chunks):
-                    if chunk_text.strip():
-                        chunks.append(ChunkedDocument(
-                            document_title=doc.title,
-                            chunk_index=len(chunks),
-                            chunk_text=chunk_text.strip(),
-                            document_id=doc.record_id,
-                            metadata=doc.metadata
-                        ))
-            return chunks
-        
-        # Multi-field chunking based on configuration
-        config = self.multi_field_config
-        
-        # 1. Main content field (chunked)
-        content_text = doc.full_text  # Default to full_text, could be configurable
-        if content_text:
-            text_splitter = DefaultTextSplitter(
-                chunk_size=config.chunk_size,
-                chunk_overlap=config.chunk_overlap
-            )
-            content_chunks = text_splitter.split_text(content_text)
-            
-            for i, chunk_text in enumerate(content_chunks):
-                if chunk_text.strip():
-                    chunks.append(ChunkedDocument(
-                        document_title=doc.title,
-                        chunk_index=len(chunks),
-                        chunk_text=chunk_text.strip(),
-                        document_id=doc.record_id,
-                        metadata={
-                            **doc.metadata,
-                            "content_type": config.content_field,
-                            "chunk_type": "content",
-                            "chunk_sequence": i
-                        }
-                    ))
-        
-        # 2. Additional fields (single chunks each)
-        for field_config in config.additional_fields:
-            field_value = doc.metadata.get(field_config.source_field, '')
-            
-            # Only embed if field exists and meets minimum length requirement
-            if field_value and len(str(field_value).strip()) >= field_config.min_length:
-                chunks.append(ChunkedDocument(
-                    document_title=doc.title,
-                    chunk_index=len(chunks),
-                    chunk_text=str(field_value).strip(),
-                    document_id=doc.record_id,
-                    metadata={
-                        **doc.metadata,
-                        "content_type": field_config.source_field,
-                        "chunk_type": field_config.chunk_type
-                    }
-                ))
-                
-        return chunks
+    # REMOVED: create_multi_field_chunks (redundant with create_multi_field_chunks_for_record)
+    # Use create_multi_field_chunks_for_record for Record objects
 
     def create_multi_field_chunks_for_record(self, record: Record) -> list[ChunkedDocument]:
         """Create chunks for multiple content types directly from Record.
@@ -889,10 +752,8 @@ class ChromaDBEmbeddings(DataSouce):
         # Store in ChromaDB 
         return await self._store_chunks(doc_with_embeddings)
 
-    # Keep the old method name for backwards compatibility
-    async def process_with_enhanced_metadata(self, doc: InputDocument) -> InputDocument | None:
-        """Legacy method name - redirects to process_with_multi_field_chunks."""
-        return await self.process_with_multi_field_chunks(doc)
+    # REMOVED: process_with_enhanced_metadata (legacy redirect)
+    # Use process_record() for Record objects directly
 
     async def _store_chunks(self, doc: InputDocument) -> InputDocument:
         """Store document chunks with metadata in ChromaDB."""
