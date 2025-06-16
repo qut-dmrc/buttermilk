@@ -14,6 +14,7 @@ defaults:
     - owl
     - scorer
     - fetch
+    - host/sequencer
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration

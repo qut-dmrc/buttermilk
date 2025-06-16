@@ -120,7 +120,6 @@ dev = [
     "google-cloud-pubsub<3.0.0,>=2.27.1",
     "google-cloud-bigquery<4.0.0,>=3.27.0",
     "opencv-python<5.0.0.0,>=4.10.0.84",
-    "moviepy<2.0.0,>=1.0.3",
     "promptflow-tracing>=1.16.2",
     "anyio>=4.7.0",
     "pandas-stubs>=2.2.3.241126",
