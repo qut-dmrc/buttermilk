@@ -195,9 +195,9 @@ class FileStorage(Storage):
                     elif old_key in data:
                         mapped_data[new_key] = data[old_key]
                 
-                # If we have mapped data, use it; otherwise keep original
+                # If we have mapped data, merge it with original (preserving unmapped fields)
                 if mapped_data:
-                    data = mapped_data
+                    data = {**data, **mapped_data}
 
             # Extract required and optional fields
             record_id = data.get('record_id', data.get('id', f"record_{index}"))
