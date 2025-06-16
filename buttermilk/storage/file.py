@@ -184,6 +184,19 @@ class FileStorage(Storage):
             # Apply column mapping if configured
             if self.config.columns:
                 mapped_data = {}
+                consumed_source_fields = set()  # Track which source fields should be removed
+                
+                # Collect all source fields that will be mapped
+                all_source_fields = set()
+                for new_key, old_key in self.config.columns.items():
+                    if new_key == 'metadata' and isinstance(old_key, dict):
+                        for meta_key, meta_source in old_key.items():
+                            if meta_source in data:
+                                all_source_fields.add(meta_source)
+                    elif old_key in data:
+                        all_source_fields.add(old_key)
+                
+                # Perform the actual mapping
                 for new_key, old_key in self.config.columns.items():
                     # Handle nested metadata mapping
                     if new_key == 'metadata' and isinstance(old_key, dict):
@@ -195,9 +208,63 @@ class FileStorage(Storage):
                     elif old_key in data:
                         mapped_data[new_key] = data[old_key]
                 
-                # If we have mapped data, merge it with original (preserving unmapped fields)
+                # Mark source fields for removal only if they were actually consumed
+                for new_key, old_key in self.config.columns.items():
+                    if new_key == 'metadata' and isinstance(old_key, dict):
+                        for meta_key, meta_source in old_key.items():
+                            if meta_source in data:
+                                consumed_source_fields.add(meta_source)
+                    elif old_key in data:
+                        consumed_source_fields.add(old_key)
+                
+                # Merge mapped data with original, but handle metadata specially
                 if mapped_data:
-                    data = {**data, **mapped_data}
+                    # Start with original data
+                    data = {**data}
+                    
+                    # Apply non-metadata mappings
+                    for key, value in mapped_data.items():
+                        if key != 'metadata':
+                            data[key] = value
+                    
+                    # Merge metadata: original metadata + mapped metadata
+                    if 'metadata' in mapped_data:
+                        original_metadata = data.get('metadata', {})
+                        if isinstance(original_metadata, str):
+                            try:
+                                original_metadata = json.loads(original_metadata)
+                            except json.JSONDecodeError:
+                                original_metadata = {'raw_metadata': original_metadata}
+                        
+                        mapped_metadata = mapped_data['metadata']
+                        data['metadata'] = {**original_metadata, **mapped_metadata}
+                
+                # Remove only the original source fields to avoid duplication
+                # But preserve unmapped fields and target fields
+                
+                # Get all direct mapping source fields (not nested metadata)
+                direct_source_fields = [old_key for new_key, old_key in self.config.columns.items() 
+                                      if new_key != 'metadata' and isinstance(old_key, str)]
+                
+                # Get all metadata source fields
+                metadata_source_fields = []
+                for new_key, old_key in self.config.columns.items():
+                    if new_key == 'metadata' and isinstance(old_key, dict):
+                        metadata_source_fields.extend(old_key.values())
+                
+                for field in consumed_source_fields:
+                    should_remove = False
+                    
+                    # Remove if it's a direct mapping source field that's being renamed
+                    if field in direct_source_fields and field not in self.config.columns.keys():
+                        should_remove = True
+                    
+                    # Remove if it's only used for metadata mapping and not a target field
+                    if field in metadata_source_fields and field not in self.config.columns.keys():
+                        should_remove = True
+                    
+                    if should_remove:
+                        data.pop(field, None)
 
             # Extract required and optional fields
             record_id = data.get('record_id', data.get('id', f"record_{index}"))

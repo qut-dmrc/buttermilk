@@ -7,13 +7,21 @@ config = StorageConfig(
     type="gcs",
     path="gs://prosocial-public/osb/03_osb_fulltext_summaries.json",
     columns={
-        "record_id": "id",
-        "content": "full_text",
+        "record_id": "record_id",
+        "content": "fulltext",
         "metadata": {
             "title": "title",
-            "case_number": "case_number",
-            "url": "url",
-            "summary": "summary"
+            "description": "content",
+            "result": "result",
+            "type": "type",
+            "location": "location",
+            "case_date": "case_date",
+            "topics": "topics",
+            "standards": "standards",
+            "reasons": "reasons",
+            "recommendations": "recommendations",
+            "job_id": "job_id",
+            "timestamp": "timestamp"
         }
     }
 )

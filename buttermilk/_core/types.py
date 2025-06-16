@@ -172,7 +172,6 @@ class Record(BaseModel):
         return cls(
             record_id=doc_dict.get('record_id', ''),
             content=doc_dict.get('full_text', ''),
-            full_text=doc_dict.get('full_text'),
             file_path=doc_dict.get('file_path'),
             chunks=doc_dict.get('chunks', []),
             chunks_path=doc_dict.get('chunks_path'),
