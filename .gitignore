@@ -26,6 +26,7 @@ authorized_keys
 core
 .chroma
 .DS_Store
+.parquet
 
 # exceptions
 !.devcontainer
