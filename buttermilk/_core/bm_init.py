@@ -918,15 +918,9 @@ class BM(SessionInfo):
             except Exception as e:
                 raise ValueError(f"Cannot convert config to StorageConfig: {e}") from e
 
-        # Create appropriate storage instance based on type
-        storage_type = config.type
-
-        if storage_type in ["bigquery", "bq"]:
-            return BigQueryStorage(config, self)
-        elif storage_type in ["file", "local", "gcs", "s3"]:
-            return FileStorage(config, self)
-        else:
-            raise ValueError(f"Unsupported storage type: {storage_type}")
+        # Use the storage factory to create the appropriate storage instance
+        from buttermilk._core.storage_config import StorageFactory
+        return StorageFactory.create_storage(config, self)
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
         """Convenience method to create BigQuery storage with dataset name.

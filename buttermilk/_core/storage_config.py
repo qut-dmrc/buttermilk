@@ -188,8 +188,6 @@ class StorageConfig(BaseModel):
         "extra": "forbid",
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
-        "exclude_none": True,
-        "exclude_unset": True,
     }
 
     @model_validator(mode="after")
@@ -218,8 +216,8 @@ class StorageConfig(BaseModel):
     def merge_defaults(self, defaults: "StorageConfig") -> "StorageConfig":
         """Merge this config with default values, prioritizing this config's values."""
         exclude_fields = {"full_table_id"}
-        merged_data = defaults.model_dump(exclude_unset=True, exclude=exclude_fields)
-        merged_data.update(self.model_dump(exclude_unset=True, exclude=exclude_fields))
+        merged_data = defaults.model_dump(exclude=exclude_fields)
+        merged_data.update(self.model_dump(exclude=exclude_fields))
         return StorageConfig(**merged_data)
 
 
@@ -239,4 +237,50 @@ class BigQueryDefaults(BaseModel):
             type="bigquery",
             **self.model_dump()
         )
+
+
+class StorageFactory:
+    """Factory for creating storage instances based on configuration."""
+    
+    @staticmethod
+    def create_storage(config: StorageConfig, bm_instance=None):
+        """Create storage instance based on configuration type.
+        
+        Args:
+            config: StorageConfig instance (from OmegaConf/Hydra)
+            bm_instance: BM instance for context (optional)
+            
+        Returns:
+            Storage instance appropriate for the config type
+        """
+        from buttermilk.data.vector import ChromaDBEmbeddings
+        
+        # Ensure we have a proper StorageConfig instance
+        if not isinstance(config, StorageConfig):
+            raise ValueError(f"Expected StorageConfig instance, got {type(config)}")
+        
+        storage_type = config.type
+        
+        if storage_type in ["bigquery", "bq"]:
+            from buttermilk.storage.bigquery import BigQueryStorage
+            return BigQueryStorage(config, bm_instance)
+        elif storage_type in ["file", "local", "gcs", "s3"]:
+            from buttermilk.storage.file import FileStorage
+            return FileStorage(config, bm_instance)
+        elif storage_type == "chromadb":
+            # Convert StorageConfig to ChromaDBEmbeddings parameters
+            chromadb_params = {
+                'collection_name': config.collection_name or 'default_collection',
+                'persist_directory': config.persist_directory or './data/chromadb',
+                'embedding_model': config.embedding_model or 'gemini-embedding-001',
+                'dimensionality': config.dimensionality or 3072,
+            }
+            # Add other ChromaDB-specific fields if present in config
+            for field in ['concurrency', 'upsert_batch_size', 'embedding_batch_size', 'arrow_save_dir']:
+                if hasattr(config, field) and getattr(config, field) is not None:
+                    chromadb_params[field] = getattr(config, field)
+            
+            return ChromaDBEmbeddings(**chromadb_params)
+        else:
+            raise ValueError(f"Unsupported storage type: {storage_type}")
 
