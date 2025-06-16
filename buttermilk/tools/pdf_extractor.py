@@ -6,7 +6,7 @@ from pdfminer.layout import LAParams
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
-from buttermilk.data.vector import InputDocument
+from buttermilk._core.types import Record
 
 
 class PdfTextExtractor(BaseModel):
@@ -17,22 +17,22 @@ class PdfTextExtractor(BaseModel):
         default_factory=LAParams,
     )  # Allow customization if needed
 
-    async def process(self, item: InputDocument, **kwargs) -> InputDocument | None:
+    async def process(self, item: Record, **kwargs) -> Record | None:
         if item.full_text:
             # Got it already; return
             return item
 
         item.full_text = self.extract(item.file_path) or ""
-        metadata_file = Path(item.record_path)
+        metadata_file = Path(item.uri or "")
 
         # --- Save Item JSON with text ---
         try:
             with metadata_file.open("w", encoding="utf-8") as f:
-                json.dump(item, f, ensure_ascii=False, indent=4)
+                json.dump(item.model_dump(), f, ensure_ascii=False, indent=4)
             logger.debug(f"Saved item record to {metadata_file}")
         except Exception as json_e:
             logger.error(
-                f"Failed to save item JSON for {item.record_id} to {metadata_file}: {json_e} {e.args=}",
+                f"Failed to save item JSON for {item.record_id} to {metadata_file}: {json_e} {json_e.args=}",
             )
         return item
 
