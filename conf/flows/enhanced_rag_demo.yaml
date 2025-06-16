@@ -1,0 +1,120 @@
+# Enhanced RAG Demo Flow
+# Demonstrates intelligent search capabilities with multi-field vector search
+
+defaults:
+  - base_flow
+
+# Flow metadata
+name: "Enhanced RAG Demo"
+description: "Demonstration of enhanced RAG capabilities with intelligent search planning"
+
+# Use AutogenOrchestrator for multi-agent coordination
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+
+# Data sources - enhanced multi-field vector store
+storage:
+  osb_vector:
+    type: chromadb
+    persist_directory: "gs://prosocial-public/osb/chromadb"
+    collection_name: "osb_fulltext"
+    embedding_model: "gemini-embedding-001"
+    dimensionality: 3072
+    multi_field_embedding:
+      content_field: "content"
+      chunk_size: 2000
+      chunk_overlap: 500
+      additional_fields:
+        - source_field: "summary"
+          chunk_type: "summary"
+          min_length: 50
+        - source_field: "title"
+          chunk_type: "title"
+          min_length: 10
+
+# Enhanced RAG agents with different specializations
+agents:
+  # Primary research agent with full enhanced capabilities
+  researcher:
+    role: "ENHANCED_RESEARCHER"
+    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    description: "Primary research assistant with intelligent multi-field search"
+    data:
+      vectorstore: ${storage.osb_vector}
+    parameters:
+      enable_query_planning: true
+      enable_result_synthesis: true
+      search_strategies: ["semantic", "title", "summary", "hybrid", "metadata"]
+      max_search_rounds: 3
+      confidence_threshold: 0.5
+      max_results_per_strategy: 5
+      include_search_explanation: true
+
+  # Specialized fact-checking agent
+  fact_checker:
+    role: "FACT_CHECKER"
+    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    description: "Fact-checking specialist focusing on titles and metadata"
+    data:
+      vectorstore: ${storage.osb_vector}
+    parameters:
+      enable_query_planning: true
+      enable_result_synthesis: true
+      search_strategies: ["title", "metadata", "semantic"]
+      max_search_rounds: 2
+      confidence_threshold: 0.7
+      max_results_per_strategy: 3
+
+  # Exploratory research agent
+  explorer:
+    role: "RESEARCH_EXPLORER"
+    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    description: "Exploratory research assistant for thematic discovery"
+    data:
+      vectorstore: ${storage.osb_vector}
+    parameters:
+      enable_query_planning: true
+      enable_result_synthesis: true
+      search_strategies: ["hybrid", "summary", "semantic", "content"]
+      max_search_rounds: 4
+      confidence_threshold: 0.4
+      max_results_per_strategy: 7
+
+# Observer agents for orchestration
+observers:
+  # Host agent for conversation management
+  host:
+    role: "HOST"
+    agent_obj: "buttermilk.agents.host.HostAgent"
+    description: "Conversation host and coordinator"
+    parameters:
+      max_rounds: 10
+      enable_user_interaction: true
+
+  # Sequencer for managing agent turns
+  sequencer:
+    role: "SEQUENCER"
+    agent_obj: "buttermilk.agents.sequencer.SequencerAgent"
+    description: "Manages the sequence of agent interactions"
+    parameters:
+      sequence_strategy: "round_robin"
+      max_iterations: 5
+
+# Flow parameters
+parameters:
+  # Enhanced RAG specific settings
+  enable_multi_agent_synthesis: true     # Combine insights from multiple agents
+  enable_cross_validation: true          # Fact-checker validates researcher findings
+  enable_thematic_exploration: true      # Explorer discovers related themes
+  
+  # Search optimization
+  adaptive_search_strategy: true         # Adapt search strategy based on query type
+  result_diversity_threshold: 0.3        # Ensure diverse results across agents
+  
+  # UI and interaction
+  show_search_strategies: true           # Display search strategies used
+  show_confidence_scores: true           # Display confidence in results
+  enable_follow_up_suggestions: true     # Suggest follow-up questions
+  
+  # Quality assurance
+  minimum_sources: 2                     # Require multiple sources for claims
+  cross_reference_threshold: 0.8         # Threshold for cross-referencing results

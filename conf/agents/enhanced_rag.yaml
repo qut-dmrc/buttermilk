@@ -1,0 +1,100 @@
+# Enhanced RAG Agent Configuration
+# Provides intelligent search capabilities with LLM-driven planning and synthesis
+
+defaults:
+  - base_agent
+
+# Enhanced RAG Agent with intelligent search planning
+enhanced_researcher:
+  role: "ENHANCED_RESEARCHER"
+  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  description: "Advanced research assistant with intelligent multi-field search capabilities"
+  
+  # Enhanced RAG specific parameters
+  parameters:
+    # Core functionality toggles
+    enable_query_planning: true          # Use LLM to analyze queries and plan searches
+    enable_result_synthesis: true       # Use LLM to synthesize and rank results
+    include_search_explanation: true    # Include search strategy explanation in responses
+    
+    # Search configuration
+    search_strategies:                   # Available search strategies
+      - "semantic"                       # Vector similarity across all content
+      - "title"                         # Search document titles only
+      - "summary"                       # Search document summaries only
+      - "content"                       # Search main document content only
+      - "metadata"                      # Search using metadata filters
+      - "hybrid"                        # Combine multiple search approaches
+    
+    max_search_rounds: 3                # Maximum number of search strategies to try
+    confidence_threshold: 0.5           # Minimum similarity threshold for results
+    max_results_per_strategy: 5         # Maximum results per search strategy
+    
+    # LLM configuration (optional - defaults to agent's main LLM)
+    planning_model: null                # Model for query planning (null = use main model)
+    synthesis_model: null               # Model for result synthesis (null = use main model)
+
+# Enhanced RAG Agent optimized for factual queries  
+enhanced_fact_checker:
+  role: "FACT_CHECKER"
+  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  description: "Fact-checking assistant that searches across titles and metadata for verification"
+  
+  parameters:
+    enable_query_planning: true
+    enable_result_synthesis: true
+    include_search_explanation: true
+    
+    # Optimized for factual verification
+    search_strategies:
+      - "title"                         # Focus on titles for fact checking
+      - "metadata"                      # Use metadata for verification
+      - "semantic"                      # Fallback to semantic search
+    
+    max_search_rounds: 2
+    confidence_threshold: 0.7           # Higher threshold for fact checking
+    max_results_per_strategy: 3
+
+# Enhanced RAG Agent optimized for exploratory research
+enhanced_explorer:
+  role: "RESEARCH_EXPLORER"
+  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  description: "Research assistant optimized for exploratory and thematic discovery"
+  
+  parameters:
+    enable_query_planning: true
+    enable_result_synthesis: true
+    include_search_explanation: true
+    
+    # Optimized for broad exploration
+    search_strategies:
+      - "hybrid"                        # Start with hybrid approach
+      - "summary"                       # Focus on summaries for themes
+      - "semantic"                      # Broad semantic search
+      - "content"                       # Deep content search
+    
+    max_search_rounds: 4                # More thorough exploration
+    confidence_threshold: 0.4           # Lower threshold for exploration
+    max_results_per_strategy: 7         # More results for discovery
+
+# Enhanced RAG Agent for policy and case analysis
+enhanced_policy_analyst:
+  role: "POLICY_ANALYST"
+  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  description: "Policy analysis assistant with focus on metadata filtering and case studies"
+  
+  parameters:
+    enable_query_planning: true
+    enable_result_synthesis: true
+    include_search_explanation: true
+    
+    # Optimized for policy analysis
+    search_strategies:
+      - "metadata"                      # Start with metadata filtering
+      - "title"                         # Policy titles
+      - "summary"                       # Policy summaries
+      - "hybrid"                        # Comprehensive view
+    
+    max_search_rounds: 3
+    confidence_threshold: 0.6
+    max_results_per_strategy: 6
