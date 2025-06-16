@@ -135,19 +135,19 @@ class Record(BaseModel):
         """Unified text access for vector processing.
         
         Returns the best available text representation in priority order:
-        1. full_text (if available)
-        2. content (if it's a string)
+        1. content (if it's a string) - preferred for new workflows
+        2. full_text (if available) - compatibility with legacy workflows
         3. alt_text (as fallback)
         4. string representation of content
         
         Returns:
             str: Text content suitable for vector processing.
         """
-        if self.full_text:
-            return self.full_text
-        elif isinstance(self.content, str):
+        if isinstance(self.content, str) and self.content.strip():
             return self.content
-        elif self.alt_text:
+        elif self.full_text and self.full_text.strip():
+            return self.full_text
+        elif self.alt_text and self.alt_text.strip():
             return self.alt_text
         else:
             return str(self.content)
@@ -278,6 +278,33 @@ class Record(BaseModel):
         exclude={"title", "images", "text_content"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
+
+    @field_validator('content')
+    @classmethod
+    def validate_content(cls, v):
+        """Validate that content is not empty or None."""
+        if v is None:
+            raise ValueError("Content cannot be None - Record must have meaningful content")
+        
+        if isinstance(v, str):
+            if not v.strip():
+                raise ValueError("Content cannot be empty string - Record must have meaningful content")
+        elif isinstance(v, Sequence):
+            if not v:
+                raise ValueError("Content sequence cannot be empty - Record must have meaningful content")
+            # Check that at least one item in sequence is meaningful
+            has_meaningful_content = False
+            for item in v:
+                if isinstance(item, str) and item.strip():
+                    has_meaningful_content = True
+                    break
+                elif not isinstance(item, str):  # Image or other content
+                    has_meaningful_content = True
+                    break
+            if not has_meaningful_content:
+                raise ValueError("Content sequence must contain at least one meaningful item")
+        
+        return v
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
