@@ -761,7 +761,68 @@ class ChromaDBEmbeddings(DataSouce):
         # Generate embeddings for all chunks
         await self._embed_chunks(record.chunks)
         
+        # Store chunks in ChromaDB
+        await self._store_chunks_for_record(record)
+        
         return record
+
+    async def _store_chunks_for_record(self, record: Record) -> None:
+        """Store record chunks with metadata in ChromaDB.
+        
+        Args:
+            record: Record with chunks and embeddings to store
+        """
+        try:
+            if not record.chunks:
+                logger.warning(f"No chunks to store for record {record.record_id}")
+                return
+
+            ids = []
+            documents = []
+            embeddings_list = []
+            metadatas = []
+
+            chunks_to_upsert = [c for c in record.chunks if c.embedding is not None]
+            
+            if not chunks_to_upsert:
+                logger.warning(f"No chunks with embeddings to store for record {record.record_id}")
+                return
+
+            for chunk in chunks_to_upsert:
+                ids.append(chunk.chunk_id)
+                documents.append(chunk.chunk_text)
+                embeddings_list.append(list(chunk.embedding))  # type: ignore
+
+                # Enhanced metadata with content type tagging
+                enhanced_metadata = {
+                    "document_title": chunk.document_title,
+                    "chunk_index": chunk.chunk_index,
+                    "document_id": chunk.document_id,
+                    "content_type": chunk.metadata.get("content_type", "unknown"),
+                    "chunk_type": chunk.metadata.get("chunk_type", "unknown"),
+                    **{k: v for k, v in chunk.metadata.items() if k not in ["content_type", "chunk_type"]}
+                }
+                metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
+
+            logger.info(f"Upserting {len(ids)} chunks for record {record.record_id}...")
+
+            # Execute the upsert operation
+            await asyncio.to_thread(
+                self.collection.upsert,
+                ids=ids,
+                embeddings=embeddings_list,
+                metadatas=metadatas,
+                documents=documents,
+            )
+
+            logger.info(f"Successfully stored {len(ids)} chunks for record {record.record_id}")
+            
+            # Sync local changes to remote storage after successful upsert
+            await self._sync_local_changes_to_remote()
+            
+        except Exception as e:
+            logger.error(f"Failed to store chunks for record {record.record_id}: {e}")
+            raise
 
     async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> None:
         """Generate embeddings for a list of chunks in place.
