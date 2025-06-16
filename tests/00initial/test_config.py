@@ -51,11 +51,11 @@ def test_time_to_instantiate():
 
 @pytest.mark.anyio
 async def test_get_ip_updates_ip(bm):
-    """Test that get_ip fetches and updates the _ip attribute."""
+    """Test that start_fetch_ip_task fetches and updates the _ip attribute."""
     mock_ip_address = "192.168.1.100"
 
     # Patch the external get_ip utility function
-    with patch("buttermilk.utils.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
+    with patch("buttermilk.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
         mock_get_ip.return_value = mock_ip_address
 
         # Create a minimal configuration required for BM initialization
@@ -65,8 +65,12 @@ async def test_get_ip_updates_ip(bm):
         # Ensure _ip is initially None
         assert bm._ip is None
 
-        # Call the async method
-        await bm.get_ip()
+        # Call the method to start IP fetching task
+        bm.start_fetch_ip_task()
+        
+        # Wait for the task to complete
+        if bm._get_ip_task:
+            await bm._get_ip_task
 
         # Assert that the _ip attribute was updated
         assert bm._ip == mock_ip_address
@@ -77,21 +81,25 @@ async def test_get_ip_updates_ip(bm):
 
 @pytest.mark.anyio
 async def test_get_ip_caches_ip(bm):
-    """Test that get_ip caches the result and doesn't refetch."""
+    """Test that start_fetch_ip_task caches the result and doesn't refetch."""
     mock_ip_address = "10.0.0.50"
 
     # Patch the external get_ip utility function
-    with patch("buttermilk.utils.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
+    with patch("buttermilk.utils.get_ip", new_callable=AsyncMock) as mock_get_ip:
         mock_get_ip.return_value = mock_ip_address
 
         # Create a minimal configuration required for BM initialization
         DictConfig({"name": "test_app_cache", "job": "test_job_cache"})
 
-        # Call the async method the first time
-        await bm.get_ip()
+        # Call the method the first time
+        bm.start_fetch_ip_task()
+        if bm._get_ip_task:
+            await bm._get_ip_task
 
-        # Call the async method a second time
-        await bm.get_ip()
+        # Call the method a second time
+        bm.start_fetch_ip_task()
+        if bm._get_ip_task:
+            await bm._get_ip_task
 
         # Assert that the utility function was still called only once
         # This verifies the caching logic (if not self._ip:)
