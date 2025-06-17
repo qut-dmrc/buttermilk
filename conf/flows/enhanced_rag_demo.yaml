@@ -36,7 +36,7 @@ agents:
   # Primary research agent with full enhanced capabilities
   researcher:
     role: "ENHANCED_RESEARCHER"
-    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    agent_obj: EnhancedRagAgent
     description: "Primary research assistant with intelligent multi-field search"
     data:
       vectorstore: ${storage.osb_vector}
@@ -52,7 +52,7 @@ agents:
   # Specialized fact-checking agent
   fact_checker:
     role: "FACT_CHECKER"
-    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    agent_obj: EnhancedRagAgent
     description: "Fact-checking specialist focusing on titles and metadata"
     data:
       vectorstore: ${storage.osb_vector}
@@ -67,7 +67,7 @@ agents:
   # Exploratory research agent
   explorer:
     role: "RESEARCH_EXPLORER"
-    agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+    agent_obj: EnhancedRagAgent
     description: "Exploratory research assistant for thematic discovery"
     data:
       vectorstore: ${storage.osb_vector}

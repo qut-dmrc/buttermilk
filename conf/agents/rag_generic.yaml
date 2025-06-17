@@ -15,7 +15,7 @@ rag:
 
 researcher:
   role: "RESEARCHER"
-  agent_obj: "buttermilk.agents.rag.enhanced_rag_agent.EnhancedRagAgent"
+  agent_obj: EnhancedRagAgent
   description: "Primary research assistant with intelligent multi-field search"
   data: {}
   variants:
