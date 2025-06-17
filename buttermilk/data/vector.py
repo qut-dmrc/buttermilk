@@ -1,7 +1,12 @@
 import asyncio
+import hashlib
 import json
+import shortuuid
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar, cast  # Corrected import for Tuple
 
@@ -40,6 +45,70 @@ T = TypeVar("T")
 
 
 _db_registry = {}
+
+# --- New Result Types and Configuration (Breaking Changes) ---
+
+@dataclass
+class ExistenceCheck:
+    """Detailed result from checking if a record+model combination exists."""
+    exists: bool
+    embedding_model: str
+    chunk_count: int
+    last_processed: datetime | None
+    metadata_hash: str | None
+
+@dataclass
+class ProcessingResult:
+    """Comprehensive result from record processing."""
+    record: Record | None
+    status: Literal["processed", "skipped", "failed"]
+    reason: str
+    chunks_created: int
+    embedding_model: str
+    processing_time_ms: float
+    metadata: dict[str, Any]
+
+@dataclass
+class BatchProcessingResult:
+    """Result from batch processing operations."""
+    total_records: int
+    successful_count: int
+    skipped_count: int
+    failed_count: int
+    processing_time_ms: float
+    validation_result: dict[str, Any] | None
+    failed_records: list[tuple[str, str]]  # (record_id, error_message)
+    metadata: dict[str, Any]
+
+class LocalLoggingConfig(BaseModel):
+    """Configuration for local run logging."""
+    enabled: bool = True
+    log_directory: str = "run_logs"
+    save_config: bool = True
+    save_metadata: bool = True
+    save_processing_stats: bool = True
+
+class ChromaDBConfig(BaseModel):
+    """Strict configuration with required fields for ChromaDB."""
+    
+    # Required fields (no defaults)
+    persist_directory: str
+    collection_name: str
+    embedding_model: str
+    
+    # Required deduplication strategy
+    deduplication_strategy: Literal["record_id", "content_hash", "both"] = "both"
+    
+    # Required local logging configuration
+    local_logging: LocalLoggingConfig = Field(default_factory=LocalLoggingConfig)
+    
+    # Optional fields with reasonable defaults
+    dimensionality: int = 3072
+    concurrency: int = 20
+    sync_batch_size: int = 50
+    sync_interval_minutes: int = 10
+    disable_auto_sync: bool = False
+    multi_field_config: MultiFieldEmbeddingConfig | None = None
 
 # --- Pydantic Models ---
 
@@ -250,6 +319,13 @@ class ChromaDBEmbeddings(DataSouce):
     sync_batch_size: int = Field(default=50, description="Sync every N records")
     sync_interval_minutes: int = Field(default=10, description="Sync every N minutes")
     disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing (manual only)")
+    
+    # New deduplication configuration (Breaking Change)
+    deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(default="both")
+    
+    # New local logging configuration (Breaking Change)
+    local_logging_enabled: bool = Field(default=True)
+    local_logging_dir: str = Field(default="run_logs")
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -258,6 +334,12 @@ class ChromaDBEmbeddings(DataSouce):
     _client: ClientAPI = PrivateAttr()
     _original_remote_path: str | None = PrivateAttr(default=None)
     _processed_records_count: int = PrivateAttr(default=0)
+    
+    # New private attributes for deduplication and logging
+    _processed_combinations_cache: set[str] = PrivateAttr(default_factory=set)
+    _current_run_id: str = PrivateAttr(default_factory=lambda: shortuuid.uuid())
+    _run_start_time: datetime = PrivateAttr(default_factory=datetime.now)
+    _logs_directory: Path = PrivateAttr()
     _last_sync_time: float = PrivateAttr(default=0.0)
     _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
     _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
@@ -294,6 +376,17 @@ class ChromaDBEmbeddings(DataSouce):
             logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
+        
+        # Initialize logging directory (Breaking Change - now mandatory)
+        if self.local_logging_enabled:
+            # Create logs directory relative to persist_directory
+            persist_path = Path(self.persist_directory)
+            self._logs_directory = persist_path / self.local_logging_dir
+            self._logs_directory.mkdir(parents=True, exist_ok=True)
+            logger.info(f"📁 Local logging enabled: {self._logs_directory}")
+        
+        # Log deduplication strategy
+        logger.info(f"🔍 Deduplication strategy: {self.deduplication_strategy}")
 
         Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
         Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
@@ -515,27 +608,152 @@ class ChromaDBEmbeddings(DataSouce):
             logger.error(f"Manual sync failed: {e}")
             return False
 
-    async def finalize_processing(self) -> bool:
-        """Perform final sync at the end of processing session.
+    async def _save_run_metadata(self) -> None:
+        """Save run configuration and metadata to vector database directory."""
+        if not self.local_logging_enabled:
+            return
+            
+        try:
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            
+            run_metadata = {
+                "run_id": self._current_run_id,
+                "start_time": self._run_start_time.isoformat(),
+                "end_time": datetime.now().isoformat(),
+                "embedding_model": self.embedding_model,
+                "collection_name": self.collection_name,
+                "processed_records": self._processed_records_count,
+                "deduplication_strategy": self.deduplication_strategy,
+                "configuration": {
+                    "chunk_size": getattr(self.multi_field_config, 'chunk_size', None),
+                    "chunk_overlap": getattr(self.multi_field_config, 'chunk_overlap', None),
+                    "dimensionality": self.dimensionality,
+                    "sync_batch_size": self._sync_batch_size,
+                    "sync_interval_minutes": self.sync_interval_minutes,
+                    "disable_auto_sync": self.disable_auto_sync
+                },
+                "system_info": bm.run_info.model_dump(exclude_none=True) if bm else None,
+                "total_embeddings": self.collection.count(),
+                "cache_statistics": {
+                    "processed_combinations_cache_size": len(self._processed_combinations_cache),
+                    "persist_directory": self.persist_directory,
+                    "remote_path": self._original_remote_path
+                }
+            }
+            
+            # Save to local logs directory
+            run_file = self._logs_directory / f"run_{self._current_run_id}.json"
+            with open(run_file, "w") as f:
+                json.dump(run_metadata, f, indent=2, default=str)
+                
+            logger.info(f"💾 Saved run metadata to {run_file}")
+            
+            # Also save current configuration for reproducibility
+            config_file = self._logs_directory / f"config_{self._current_run_id}.json"
+            config_data = {
+                "storage_config": {
+                    "type": "chromadb",
+                    "persist_directory": str(self.persist_directory),
+                    "collection_name": self.collection_name,
+                    "embedding_model": self.embedding_model,
+                    "dimensionality": self.dimensionality,
+                    "deduplication_strategy": self.deduplication_strategy,
+                    "local_logging_enabled": self.local_logging_enabled,
+                    "sync_batch_size": self.sync_batch_size,
+                    "sync_interval_minutes": self.sync_interval_minutes,
+                    "disable_auto_sync": self.disable_auto_sync
+                },
+                "multi_field_config": self.multi_field_config.model_dump() if self.multi_field_config else None,
+                "runtime_info": {
+                    "current_run_id": self._current_run_id,
+                    "start_time": self._run_start_time.isoformat(),
+                    "processed_records": self._processed_records_count
+                }
+            }
+            
+            with open(config_file, "w") as f:
+                json.dump(config_data, f, indent=2, default=str)
+                
+            logger.info(f"⚙️  Saved configuration to {config_file}")
+                
+        except Exception as e:
+            logger.error(f"Failed to save run metadata: {e}")
+    
+    async def _save_processing_stats(self) -> None:
+        """Save detailed processing statistics."""
+        if not self.local_logging_enabled:
+            return
+            
+        try:
+            stats_file = self._logs_directory / f"processing_stats_{self._current_run_id}.json"
+            
+            stats_data = {
+                "run_id": self._current_run_id,
+                "timestamp": datetime.now().isoformat(),
+                "collection_stats": {
+                    "total_embeddings": self.collection.count(),
+                    "collection_name": self.collection_name,
+                    "embedding_model": self.embedding_model
+                },
+                "processing_stats": {
+                    "processed_records_this_run": self._processed_records_count,
+                    "cache_size": len(self._processed_combinations_cache),
+                    "deduplication_strategy": self.deduplication_strategy
+                },
+                "performance_metrics": {
+                    "sync_batch_size": self._sync_batch_size,
+                    "sync_interval_minutes": self.sync_interval_minutes,
+                    "auto_sync_enabled": not self.disable_auto_sync
+                }
+            }
+            
+            with open(stats_file, "w") as f:
+                json.dump(stats_data, f, indent=2, default=str)
+                
+            logger.info(f"📊 Saved processing stats to {stats_file}")
+                
+        except Exception as e:
+            logger.error(f"Failed to save processing stats: {e}")
 
-        This should be called when you're done processing a batch of records
-        to ensure all changes are synced to remote storage.
+    async def finalize_processing(self) -> bool:
+        """Perform final sync and save run logs at the end of processing session.
+
+        Enhanced with mandatory local logging and comprehensive metadata saving.
 
         Returns:
-            bool: True if final sync succeeded, False otherwise
+            bool: True if final sync and logging succeeded, False otherwise
         """
         try:
+            sync_success = True
+            
+            # Step 1: Perform final sync
             if self._processed_records_count > 0:
                 logger.info(f"🔄 Performing final sync after processing {self._processed_records_count} records...")
-                await self._conditional_sync_to_remote(force=True)
-                logger.info("✅ Final sync completed successfully")
-                return True
+                sync_success = await self._conditional_sync_to_remote(force=True)
+                if sync_success:
+                    logger.info("✅ Final sync completed successfully")
+                else:
+                    logger.error("❌ Final sync failed")
             else:
                 logger.info("No records processed, no final sync needed")
-                return True
+            
+            # Step 2: Save run metadata (always attempt, even if sync failed)
+            logger.info("💾 Saving run metadata and configuration...")
+            await self._save_run_metadata()
+            await self._save_processing_stats()
+            
+            # Step 3: Display summary
+            if self.local_logging_enabled:
+                logger.info(f"📁 Run logs saved to: {self._logs_directory}")
+                log_files = list(self._logs_directory.glob(f"*{self._current_run_id}*"))
+                for log_file in log_files:
+                    logger.info(f"   📄 {log_file.name}")
+            
+            return sync_success
 
         except Exception as e:
-            logger.error(f"❌ Final sync failed: {e}")
+            logger.error(f"❌ Finalization failed: {e}")
             return False
 
     async def _ensure_collection_ready(self) -> None:
@@ -751,47 +969,271 @@ class ChromaDBEmbeddings(DataSouce):
 
         return chunks
 
-    async def process_record(self, record: Record) -> Record | None:
-        """Process a Record object directly using multi-field chunking.
+    def _get_record_model_key(self, record_id: str, embedding_model: str) -> str:
+        """Generate unique key for record+model combination."""
+        return f"{record_id}:{embedding_model}"
+    
+    def _get_content_hash(self, record: Record) -> str:
+        """Generate content hash for a record based on text content."""
+        content = record.text_content or ""
+        # Include metadata that affects embeddings
+        metadata_str = json.dumps({
+            k: v for k, v in sorted(record.metadata.items()) 
+            if k in ["title", "summary", "description"]  # Only include fields that affect embedding
+        }, sort_keys=True)
+        combined_content = f"{content}|{metadata_str}"
+        return hashlib.sha256(combined_content.encode()).hexdigest()
+
+    async def _check_record_exists(self, record: Record) -> ExistenceCheck:
+        """Check if record+model combination already has embeddings.
         
-        Enhanced to work directly with Record without conversion overhead.
+        Args:
+            record: Record to check
+            
+        Returns:
+            ExistenceCheck: Detailed information about existence
+        """
+        cache_key = self._get_record_model_key(record.record_id, self.embedding_model)
+        
+        # Check in-memory cache first
+        if cache_key in self._processed_combinations_cache:
+            return ExistenceCheck(
+                exists=True,
+                embedding_model=self.embedding_model,
+                chunk_count=0,  # Not available from cache
+                last_processed=None,  # Not available from cache
+                metadata_hash=None
+            )
+            
+        # Check ChromaDB for existing chunks with this record+model
+        try:
+            results = self.collection.get(
+                where={
+                    "document_id": record.record_id,
+                    "embedding_model": self.embedding_model
+                },
+                limit=10,  # Get a few to count and check metadata
+                include=["metadatas"]
+            )
+            
+            exists = len(results.get("ids", [])) > 0
+            chunk_count = len(results.get("ids", []))
+            
+            # Try to extract timestamp and content hash from metadata
+            last_processed = None
+            metadata_hash = None
+            
+            if exists and results.get("metadatas"):
+                for metadata in results["metadatas"]:
+                    if metadata:
+                        # Try to parse timestamp
+                        if "created_timestamp" in metadata:
+                            try:
+                                last_processed = datetime.fromisoformat(metadata["created_timestamp"])
+                            except:
+                                pass
+                        
+                        # Get content hash if available
+                        if "content_hash" in metadata:
+                            metadata_hash = metadata["content_hash"]
+                            break
+            
+            if exists:
+                # Add to cache for future checks
+                self._processed_combinations_cache.add(cache_key)
+                logger.debug(f"Found existing record {record.record_id} with {self.embedding_model}: {chunk_count} chunks")
+            
+            return ExistenceCheck(
+                exists=exists,
+                embedding_model=self.embedding_model,
+                chunk_count=chunk_count,
+                last_processed=last_processed,
+                metadata_hash=metadata_hash
+            )
+            
+        except Exception as e:
+            logger.error(f"Error checking record+model existence: {e}")
+            # Default to not exists to allow processing
+            return ExistenceCheck(
+                exists=False,
+                embedding_model=self.embedding_model,
+                chunk_count=0,
+                last_processed=None,
+                metadata_hash=None
+            )
+
+    async def _should_skip_record(self, record: Record, force_reprocess: bool = False) -> tuple[bool, str]:
+        """Determine if a record should be skipped based on deduplication strategy.
+        
+        Args:
+            record: Record to check
+            force_reprocess: Force reprocessing even if exists
+            
+        Returns:
+            tuple: (should_skip, reason)
+        """
+        if force_reprocess:
+            return False, "forced reprocessing"
+        
+        existence_check = await self._check_record_exists(record)
+        
+        if not existence_check.exists:
+            return False, "new record"
+        
+        # Handle different deduplication strategies
+        if self.deduplication_strategy == "record_id":
+            return True, f"record_id already exists with {self.embedding_model}"
+        
+        elif self.deduplication_strategy == "content_hash":
+            current_hash = self._get_content_hash(record)
+            if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
+                return True, f"content unchanged (hash: {current_hash[:8]}...)"
+            else:
+                return False, f"content changed (old: {existence_check.metadata_hash[:8] if existence_check.metadata_hash else 'unknown'}..., new: {current_hash[:8]}...)"
+        
+        elif self.deduplication_strategy == "both":
+            # More conservative - skip only if record_id exists AND content is the same
+            current_hash = self._get_content_hash(record)
+            if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
+                return True, f"record_id and content both unchanged"
+            else:
+                return False, f"record exists but content may have changed"
+        
+        return False, "unknown deduplication strategy"
+
+    async def process_record(
+        self, 
+        record: Record, 
+        *,
+        skip_existing: bool = True,
+        validate_before_process: bool = True,
+        embedding_model_override: str | None = None,
+        force_reprocess: bool = False
+    ) -> ProcessingResult:
+        """Process a Record object with comprehensive deduplication and validation.
+        
+        Breaking Change: Now returns ProcessingResult instead of Record | None.
         
         Args:
             record: Record instance to process
+            skip_existing: Whether to skip existing records (default: True)
+            validate_before_process: Whether to validate before processing (default: True)
+            embedding_model_override: Override embedding model for this record
+            force_reprocess: Force reprocessing even if exists (default: False)
             
         Returns:
-            Record: Enhanced Record with chunks, or None if processing failed
+            ProcessingResult: Comprehensive result with status and metadata
         """
-        # Ensure content is ready for vector processing (no full_text needed)
-        # The text_content property handles content access automatically
+        start_time = time.time()
+        
+        # Override embedding model if specified
+        effective_embedding_model = embedding_model_override or self.embedding_model
+        
+        try:
+            # Step 1: Check if we should skip this record
+            if skip_existing and not force_reprocess:
+                should_skip, skip_reason = await self._should_skip_record(record, force_reprocess)
+                if should_skip:
+                    processing_time_ms = (time.time() - start_time) * 1000
+                    return ProcessingResult(
+                        record=None,
+                        status="skipped",
+                        reason=skip_reason,
+                        chunks_created=0,
+                        embedding_model=effective_embedding_model,
+                        processing_time_ms=processing_time_ms,
+                        metadata={"skip_validation": True}
+                    )
+            
+            # Step 2: Validate record if requested
+            if validate_before_process:
+                if not record.text_content and not any(hasattr(record, field) for field in ["title", "summary", "description"]):
+                    processing_time_ms = (time.time() - start_time) * 1000
+                    return ProcessingResult(
+                        record=None,
+                        status="failed",
+                        reason="no processable content found",
+                        chunks_created=0,
+                        embedding_model=effective_embedding_model,
+                        processing_time_ms=processing_time_ms,
+                        metadata={"validation_failed": True}
+                    )
+            
+            # Step 3: Create chunks using configuration
+            record.chunks = self.create_multi_field_chunks_for_record(record)
 
-        # Create chunks using configuration (direct on Record)
-        record.chunks = self.create_multi_field_chunks_for_record(record)
+            if not record.chunks:
+                processing_time_ms = (time.time() - start_time) * 1000
+                return ProcessingResult(
+                    record=None,
+                    status="failed",
+                    reason="no chunks created",
+                    chunks_created=0,
+                    embedding_model=effective_embedding_model,
+                    processing_time_ms=processing_time_ms,
+                    metadata={"chunking_failed": True}
+                )
 
-        if not record.chunks:
-            logger.warning(f"No chunks created for record {record.record_id}")
-            return None
+            # Step 4: Generate embeddings for all chunks
+            await self._embed_chunks(record.chunks)
 
-        # Log chunk breakdown if multi-field config is used
-        if self.multi_field_config:
+            # Step 5: Enhance chunk metadata with provenance tracking
+            content_hash = self._get_content_hash(record)
+            current_timestamp = datetime.now().isoformat()
+            
+            for chunk in record.chunks:
+                chunk.metadata.update({
+                    "embedding_model": effective_embedding_model,
+                    "processing_run_id": self._current_run_id,
+                    "content_hash": content_hash,
+                    "created_timestamp": current_timestamp,
+                    "buttermilk_version": "dev",  # Could get from package
+                    "deduplication_strategy": self.deduplication_strategy
+                })
+
+            # Step 6: Store chunks in ChromaDB
+            await self._store_chunks_for_record(record)
+
+            # Step 7: Track successful processing
+            cache_key = self._get_record_model_key(record.record_id, effective_embedding_model)
+            self._processed_combinations_cache.add(cache_key)
+
+            processing_time_ms = (time.time() - start_time) * 1000
+            
+            # Log successful processing
             chunk_types = {}
             for chunk in record.chunks:
                 chunk_type = chunk.metadata.get('chunk_type', 'content')
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
+            
+            logger.info(f"✅ Processed record {record.record_id}: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms")
 
-            # Get content length for context
-            content_text = getattr(record, self.multi_field_config.content_field, record.text_content)
-            content_length = len(content_text) if isinstance(content_text, str) else 0
+            return ProcessingResult(
+                record=record,
+                status="processed",
+                reason="successfully processed",
+                chunks_created=len(record.chunks),
+                embedding_model=effective_embedding_model,
+                processing_time_ms=processing_time_ms,
+                metadata={
+                    "chunk_types": chunk_types,
+                    "content_hash": content_hash,
+                    "run_id": self._current_run_id
+                }
+            )
 
-            logger.info(f"Created chunks for record {record.record_id}: {chunk_types} (content_length: {content_length}, chunk_size: {self.multi_field_config.chunk_size})")
-
-        # Generate embeddings for all chunks
-        await self._embed_chunks(record.chunks)
-
-        # Store chunks in ChromaDB
-        await self._store_chunks_for_record(record)
-
-        return record
+        except Exception as e:
+            processing_time_ms = (time.time() - start_time) * 1000
+            logger.error(f"❌ Failed to process record {record.record_id}: {e}")
+            return ProcessingResult(
+                record=None,
+                status="failed",
+                reason=f"processing error: {str(e)}",
+                chunks_created=0,
+                embedding_model=effective_embedding_model,
+                processing_time_ms=processing_time_ms,
+                metadata={"error": str(e)}
+            )
 
     async def _store_chunks_for_record(self, record: Record) -> None:
         """Store record chunks with metadata in ChromaDB.
@@ -855,6 +1297,180 @@ class ChromaDBEmbeddings(DataSouce):
         except Exception as e:
             logger.error(f"Failed to store chunks for record {record.record_id}: {e}")
             raise
+
+    async def validate_incremental_update(self, new_records: list[Record]) -> dict[str, Any]:
+        """Validate that new records can be safely added to existing collection.
+        
+        Args:
+            new_records: List of records to validate
+            
+        Returns:
+            dict: Validation results with safety assessment
+        """
+        validation_results = {
+            "safe_to_add": True,
+            "warnings": [],
+            "conflicts": [],
+            "stats": {
+                "new_records": len(new_records),
+                "existing_count": self.collection.count(),
+                "would_skip": 0,
+                "would_process": 0
+            }
+        }
+        
+        logger.info(f"🔍 Validating {len(new_records)} records for incremental update...")
+        
+        for record in new_records:
+            try:
+                should_skip, reason = await self._should_skip_record(record)
+                if should_skip:
+                    validation_results["stats"]["would_skip"] += 1
+                    validation_results["warnings"].append(
+                        f"Record {record.record_id}: {reason}"
+                    )
+                else:
+                    validation_results["stats"]["would_process"] += 1
+            except Exception as e:
+                validation_results["conflicts"].append(
+                    f"Record {record.record_id}: validation error - {str(e)}"
+                )
+                validation_results["safe_to_add"] = False
+        
+        # Check for potential issues
+        if validation_results["stats"]["would_skip"] == len(new_records):
+            validation_results["warnings"].append(
+                "All records already exist - no new embeddings would be created"
+            )
+            
+        if validation_results["conflicts"]:
+            validation_results["safe_to_add"] = False
+            
+        logger.info(f"📋 Validation complete: {validation_results['stats']['would_process']} new, {validation_results['stats']['would_skip']} existing, {len(validation_results['conflicts'])} conflicts")
+        
+        return validation_results
+
+    async def process_batch(
+        self,
+        records: list[Record],
+        *,
+        mode: Literal["safe", "force", "validate_only"] = "safe",
+        max_failures: int = 0,
+        require_all_new: bool = False,
+    ) -> BatchProcessingResult:
+        """Process records with mandatory validation and detailed results.
+        
+        Breaking Change: New batch-first API with comprehensive validation.
+        
+        Args:
+            records: List of records to process
+            mode: Processing mode - "safe" (default), "force", or "validate_only"
+            max_failures: Maximum failures before stopping (0 = fail fast)
+            require_all_new: Require all records to be new (fail if any exist)
+            
+        Returns:
+            BatchProcessingResult: Comprehensive batch processing results
+        """
+        start_time = time.time()
+        
+        # Step 1: Validate the batch
+        validation_result = await self.validate_incremental_update(records)
+        
+        if mode == "validate_only":
+            processing_time_ms = (time.time() - start_time) * 1000
+            return BatchProcessingResult(
+                total_records=len(records),
+                successful_count=0,
+                skipped_count=validation_result["stats"]["would_skip"],
+                failed_count=0,
+                processing_time_ms=processing_time_ms,
+                validation_result=validation_result,
+                failed_records=[],
+                metadata={"mode": "validate_only"}
+            )
+        
+        # Check if validation passed for strict modes
+        if require_all_new and validation_result["stats"]["would_skip"] > 0:
+            processing_time_ms = (time.time() - start_time) * 1000
+            return BatchProcessingResult(
+                total_records=len(records),
+                successful_count=0,
+                skipped_count=0,
+                failed_count=len(records),
+                processing_time_ms=processing_time_ms,
+                validation_result=validation_result,
+                failed_records=[(r.record_id, "require_all_new failed") for r in records],
+                metadata={"mode": mode, "require_all_new": True}
+            )
+        
+        # Step 2: Process records
+        successful_count = 0
+        skipped_count = 0
+        failed_count = 0
+        failed_records = []
+        
+        force_reprocess = (mode == "force")
+        
+        logger.info(f"🏭 Processing batch of {len(records)} records (mode: {mode})")
+        
+        for i, record in enumerate(records):
+            try:
+                result = await self.process_record(
+                    record,
+                    skip_existing=(mode != "force"),
+                    validate_before_process=True,
+                    force_reprocess=force_reprocess
+                )
+                
+                if result.status == "processed":
+                    successful_count += 1
+                elif result.status == "skipped":
+                    skipped_count += 1
+                elif result.status == "failed":
+                    failed_count += 1
+                    failed_records.append((record.record_id, result.reason))
+                    
+                    # Check failure threshold
+                    if failed_count > max_failures:
+                        logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
+                        # Mark remaining records as failed
+                        remaining = len(records) - (i + 1)
+                        failed_count += remaining
+                        failed_records.extend([
+                            (records[j].record_id, "batch stopped due to failures") 
+                            for j in range(i + 1, len(records))
+                        ])
+                        break
+                        
+            except Exception as e:
+                failed_count += 1
+                failed_records.append((record.record_id, f"processing exception: {str(e)}"))
+                logger.error(f"❌ Exception processing record {record.record_id}: {e}")
+                
+                # Check failure threshold
+                if failed_count > max_failures:
+                    logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
+                    break
+        
+        processing_time_ms = (time.time() - start_time) * 1000
+        
+        logger.info(f"✅ Batch processing complete: {successful_count} processed, {skipped_count} skipped, {failed_count} failed in {processing_time_ms:.1f}ms")
+        
+        return BatchProcessingResult(
+            total_records=len(records),
+            successful_count=successful_count,
+            skipped_count=skipped_count,
+            failed_count=failed_count,
+            processing_time_ms=processing_time_ms,
+            validation_result=validation_result,
+            failed_records=failed_records,
+            metadata={
+                "mode": mode,
+                "max_failures": max_failures,
+                "require_all_new": require_all_new,
+                "run_id": self._current_run_id
+            }
+        )
 
     async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> None:
         """Generate embeddings for a list of chunks in place.
