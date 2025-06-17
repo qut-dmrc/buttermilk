@@ -1,0 +1,15 @@
+# Enhanced Fact Checker Agent Configuration
+# Specialized fact-checking agent
+
+role: "FACT_CHECKER"
+agent_obj: EnhancedRagAgent
+description: "Fact-checking specialist focusing on titles and metadata"
+data:
+  vectorstore: ${storage.osb_vector}
+parameters:
+  enable_query_planning: true
+  enable_result_synthesis: true
+  search_strategies: ["title", "metadata", "semantic"]
+  max_search_rounds: 2
+  confidence_threshold: 0.7
+  max_results_per_strategy: 3

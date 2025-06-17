@@ -1,0 +1,15 @@
+# Enhanced Explorer Agent Configuration
+# Exploratory research agent
+
+role: "RESEARCH_EXPLORER"
+agent_obj: EnhancedRagAgent
+description: "Exploratory research assistant for thematic discovery"
+data:
+  vectorstore: ${storage.osb_vector}
+parameters:
+  enable_query_planning: true
+  enable_result_synthesis: true
+  search_strategies: ["hybrid", "summary", "semantic", "content"]
+  max_search_rounds: 4
+  confidence_threshold: 0.4
+  max_results_per_strategy: 7

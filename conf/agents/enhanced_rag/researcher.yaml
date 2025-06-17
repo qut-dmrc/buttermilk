@@ -1,0 +1,16 @@
+# Enhanced Researcher Agent Configuration
+# Primary research agent with full enhanced capabilities
+
+role: "ENHANCED_RESEARCHER"
+agent_obj: EnhancedRagAgent
+description: "Primary research assistant with intelligent multi-field search"
+data:
+  vectorstore: ${storage.osb_vector}
+parameters:
+  enable_query_planning: true
+  enable_result_synthesis: true
+  search_strategies: ["semantic", "title", "summary", "hybrid", "metadata"]
+  max_search_rounds: 3
+  confidence_threshold: 0.5
+  max_results_per_strategy: 5
+  include_search_explanation: true

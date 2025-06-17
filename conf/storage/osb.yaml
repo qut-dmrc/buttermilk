@@ -1,28 +1,3 @@
-osb_json:
-  type: gcs
-  path: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
-  columns:
-    record_id: record_id
-    content: fulltext  # Full text for vector processing
-    metadata: 
-      # Core case information
-      title: title
-      description: content  # Actual case description (different from fulltext)
-      result: result
-      type: type
-      location: location
-      case_date: case_date
-      
-      # Structured arrays (preserved as JSON)
-      topics: topics
-      standards: standards  
-      reasons: reasons
-      recommendations: recommendations
-      
-      # Process metadata
-      job_id: job_id
-      timestamp: timestamp
-
 osb_vector:
   type: chromadb
   persist_directory: "gs://prosocial-dev/data/osb/chromadb"

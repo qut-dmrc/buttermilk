@@ -11,13 +11,12 @@ from pyzotero import zotero
 
 from buttermilk._core.log import logger
 
-# Import ChromaDBEmbeddings for type hinting  
+# Import ChromaDBEmbeddings for type hinting
 from buttermilk.data.vector import ChromaDBEmbeddings
 from buttermilk._core.types import Record
 
 # Import bm for credentials access
 from buttermilk._core.dmrc import get_bm
-bm = get_bm()
 
 # Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
 # and causes circular import issues. If they are in the same module or structure prevents
@@ -36,6 +35,7 @@ class ZotDownloader(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
+        bm = get_bm()
         self._zot = zotero.Zotero(
             library_id=self.library,
             library_type="group",

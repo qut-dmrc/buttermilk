@@ -64,7 +64,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "+flows=[trans, tox_allinone]",
+        "+flows=[trans, tox_allinone, osb]",
         "+run=api",
         "+llms=full",
       ],

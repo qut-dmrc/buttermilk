@@ -895,7 +895,7 @@ class AgentVariants(AgentConfig):
                         k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields
                     }
 
-                    # Add 'parameters' back as it's a valid field in AgentConfig
+                    # Ensure 'parameters' contains the final merged parameters
                     filtered_cfg_dict["parameters"] = final_params
 
                     try:

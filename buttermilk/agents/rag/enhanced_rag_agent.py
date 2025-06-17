@@ -79,14 +79,7 @@ class EnhancedRagAgent(Agent):
     )
     
     def __init__(self, **data):
-        # Extract config if passed as parameter, otherwise use all data
-        if 'config' in data:
-            config = data.pop('config')
-            # Initialize with config fields, plus any additional parameters
-            super().__init__(**config.model_dump(), **data)
-        else:
-            super().__init__(**data)
-        
+        super().__init__(**data)
         self._enhanced_search: Optional[EnhancedVectorSearch] = None
         self._llm_client = None  # Will be initialized from agent's LLM connection
     

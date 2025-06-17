@@ -1,103 +1,21 @@
-# Enhanced RAG Demo Flow
-# Demonstrates intelligent search capabilities with multi-field vector search
+# Enhanced RAG Demo Flow - Composable version
+# Uses Hydra's composition to pull in reusable components
 
 defaults:
-  - base_flow
+  - _self_
+  # Enhanced RAG agents
+  - /agents@agents.researcher: enhanced_rag/enhanced_researcher
+  - /agents@agents.fact_checker: enhanced_rag/enhanced_fact_checker
+  - /agents@agents.explorer: enhanced_rag/enhanced_explorer
+  # Observer agents
+  - /agents@observers.host: host/ra  # Using research assistant host
+  # Data source configuration
+  - /storage@storage: osb
 
-# Flow metadata
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "Enhanced RAG Demo"
 description: "Demonstration of enhanced RAG capabilities with intelligent search planning"
-
-# Use AutogenOrchestrator for multi-agent coordination
-orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-
-# Data sources - enhanced multi-field vector store
-storage:
-  osb_vector:
-    type: chromadb
-    persist_directory: "gs://prosocial-public/osb/chromadb"
-    collection_name: "osb_fulltext"
-    embedding_model: "gemini-embedding-001"
-    dimensionality: 3072
-    multi_field_embedding:
-      content_field: "content"
-      chunk_size: 2000
-      chunk_overlap: 500
-      additional_fields:
-        - source_field: "summary"
-          chunk_type: "summary"
-          min_length: 50
-        - source_field: "title"
-          chunk_type: "title"
-          min_length: 10
-
-# Enhanced RAG agents with different specializations
-agents:
-  # Primary research agent with full enhanced capabilities
-  researcher:
-    role: "ENHANCED_RESEARCHER"
-    agent_obj: EnhancedRagAgent
-    description: "Primary research assistant with intelligent multi-field search"
-    data:
-      vectorstore: ${storage.osb_vector}
-    parameters:
-      enable_query_planning: true
-      enable_result_synthesis: true
-      search_strategies: ["semantic", "title", "summary", "hybrid", "metadata"]
-      max_search_rounds: 3
-      confidence_threshold: 0.5
-      max_results_per_strategy: 5
-      include_search_explanation: true
-
-  # Specialized fact-checking agent
-  fact_checker:
-    role: "FACT_CHECKER"
-    agent_obj: EnhancedRagAgent
-    description: "Fact-checking specialist focusing on titles and metadata"
-    data:
-      vectorstore: ${storage.osb_vector}
-    parameters:
-      enable_query_planning: true
-      enable_result_synthesis: true
-      search_strategies: ["title", "metadata", "semantic"]
-      max_search_rounds: 2
-      confidence_threshold: 0.7
-      max_results_per_strategy: 3
-
-  # Exploratory research agent
-  explorer:
-    role: "RESEARCH_EXPLORER"
-    agent_obj: EnhancedRagAgent
-    description: "Exploratory research assistant for thematic discovery"
-    data:
-      vectorstore: ${storage.osb_vector}
-    parameters:
-      enable_query_planning: true
-      enable_result_synthesis: true
-      search_strategies: ["hybrid", "summary", "semantic", "content"]
-      max_search_rounds: 4
-      confidence_threshold: 0.4
-      max_results_per_strategy: 7
-
-# Observer agents for orchestration
-observers:
-  # Host agent for conversation management
-  host:
-    role: "HOST"
-    agent_obj: "buttermilk.agents.host.HostAgent"
-    description: "Conversation host and coordinator"
-    parameters:
-      max_rounds: 10
-      enable_user_interaction: true
-
-  # Sequencer for managing agent turns
-  sequencer:
-    role: "SEQUENCER"
-    agent_obj: "buttermilk.agents.sequencer.SequencerAgent"
-    description: "Manages the sequence of agent interactions"
-    parameters:
-      sequence_strategy: "round_robin"
-      max_iterations: 5
 
 # Flow parameters
 parameters:

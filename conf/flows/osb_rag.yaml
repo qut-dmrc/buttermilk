@@ -11,7 +11,7 @@ defaults:
   # Data source configuration
   - /storage@osb_rag.storage: osb
 
-osb:
+osb_rag:
   # Core flow configuration
   orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
   name: "Enhanced RAG Demo"
