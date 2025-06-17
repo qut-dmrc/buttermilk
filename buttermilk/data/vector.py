@@ -80,14 +80,6 @@ class BatchProcessingResult:
     failed_records: list[tuple[str, str]]  # (record_id, error_message)
     metadata: dict[str, Any]
 
-class LocalLoggingConfig(BaseModel):
-    """Configuration for local run logging."""
-    enabled: bool = True
-    log_directory: str = "run_logs"
-    save_config: bool = True
-    save_metadata: bool = True
-    save_processing_stats: bool = True
-
 class ChromaDBConfig(BaseModel):
     """Strict configuration with required fields for ChromaDB."""
     
@@ -98,9 +90,6 @@ class ChromaDBConfig(BaseModel):
     
     # Required deduplication strategy
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = "both"
-    
-    # Required local logging configuration
-    local_logging: LocalLoggingConfig = Field(default_factory=LocalLoggingConfig)
     
     # Optional fields with reasonable defaults
     dimensionality: int = 3072
@@ -323,9 +312,6 @@ class ChromaDBEmbeddings(DataSouce):
     # New deduplication configuration (Breaking Change)
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(default="both")
     
-    # New local logging configuration (Breaking Change)
-    local_logging_enabled: bool = Field(default=True)
-    local_logging_dir: str = Field(default="run_logs")
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -335,11 +321,8 @@ class ChromaDBEmbeddings(DataSouce):
     _original_remote_path: str | None = PrivateAttr(default=None)
     _processed_records_count: int = PrivateAttr(default=0)
     
-    # New private attributes for deduplication and logging
+    # New private attributes for deduplication
     _processed_combinations_cache: set[str] = PrivateAttr(default_factory=set)
-    _current_run_id: str = PrivateAttr(default_factory=lambda: shortuuid.uuid())
-    _run_start_time: datetime = PrivateAttr(default_factory=datetime.now)
-    _logs_directory: Path = PrivateAttr()
     _last_sync_time: float = PrivateAttr(default=0.0)
     _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
     _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
@@ -376,14 +359,6 @@ class ChromaDBEmbeddings(DataSouce):
             logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
-        
-        # Initialize logging directory (Breaking Change - now mandatory)
-        if self.local_logging_enabled:
-            # Create logs directory relative to persist_directory
-            persist_path = Path(self.persist_directory)
-            self._logs_directory = persist_path / self.local_logging_dir
-            self._logs_directory.mkdir(parents=True, exist_ok=True)
-            logger.info(f"📁 Local logging enabled: {self._logs_directory}")
         
         # Log deduplication strategy
         logger.info(f"🔍 Deduplication strategy: {self.deduplication_strategy}")
@@ -608,149 +583,35 @@ class ChromaDBEmbeddings(DataSouce):
             logger.error(f"Manual sync failed: {e}")
             return False
 
-    async def _save_run_metadata(self) -> None:
-        """Save run configuration and metadata to vector database directory."""
-        if not self.local_logging_enabled:
-            return
-            
-        try:
-            from buttermilk._core.dmrc import get_bm
-            bm = get_bm()
-            
-            run_metadata = {
-                "run_id": self._current_run_id,
-                "start_time": self._run_start_time.isoformat(),
-                "end_time": datetime.now().isoformat(),
-                "embedding_model": self.embedding_model,
-                "collection_name": self.collection_name,
-                "processed_records": self._processed_records_count,
-                "deduplication_strategy": self.deduplication_strategy,
-                "configuration": {
-                    "chunk_size": getattr(self.multi_field_config, 'chunk_size', None),
-                    "chunk_overlap": getattr(self.multi_field_config, 'chunk_overlap', None),
-                    "dimensionality": self.dimensionality,
-                    "sync_batch_size": self._sync_batch_size,
-                    "sync_interval_minutes": self.sync_interval_minutes,
-                    "disable_auto_sync": self.disable_auto_sync
-                },
-                "system_info": bm.run_info.model_dump(exclude_none=True) if bm else None,
-                "total_embeddings": self.collection.count(),
-                "cache_statistics": {
-                    "processed_combinations_cache_size": len(self._processed_combinations_cache),
-                    "persist_directory": self.persist_directory,
-                    "remote_path": self._original_remote_path
-                }
-            }
-            
-            # Save to local logs directory
-            run_file = self._logs_directory / f"run_{self._current_run_id}.json"
-            with open(run_file, "w") as f:
-                json.dump(run_metadata, f, indent=2, default=str)
-                
-            logger.info(f"💾 Saved run metadata to {run_file}")
-            
-            # Also save current configuration for reproducibility
-            config_file = self._logs_directory / f"config_{self._current_run_id}.json"
-            config_data = {
-                "storage_config": {
-                    "type": "chromadb",
-                    "persist_directory": str(self.persist_directory),
-                    "collection_name": self.collection_name,
-                    "embedding_model": self.embedding_model,
-                    "dimensionality": self.dimensionality,
-                    "deduplication_strategy": self.deduplication_strategy,
-                    "local_logging_enabled": self.local_logging_enabled,
-                    "sync_batch_size": self.sync_batch_size,
-                    "sync_interval_minutes": self.sync_interval_minutes,
-                    "disable_auto_sync": self.disable_auto_sync
-                },
-                "multi_field_config": self.multi_field_config.model_dump() if self.multi_field_config else None,
-                "runtime_info": {
-                    "current_run_id": self._current_run_id,
-                    "start_time": self._run_start_time.isoformat(),
-                    "processed_records": self._processed_records_count
-                }
-            }
-            
-            with open(config_file, "w") as f:
-                json.dump(config_data, f, indent=2, default=str)
-                
-            logger.info(f"⚙️  Saved configuration to {config_file}")
-                
-        except Exception as e:
-            logger.error(f"Failed to save run metadata: {e}")
-    
-    async def _save_processing_stats(self) -> None:
-        """Save detailed processing statistics."""
-        if not self.local_logging_enabled:
-            return
-            
-        try:
-            stats_file = self._logs_directory / f"processing_stats_{self._current_run_id}.json"
-            
-            stats_data = {
-                "run_id": self._current_run_id,
-                "timestamp": datetime.now().isoformat(),
-                "collection_stats": {
-                    "total_embeddings": self.collection.count(),
-                    "collection_name": self.collection_name,
-                    "embedding_model": self.embedding_model
-                },
-                "processing_stats": {
-                    "processed_records_this_run": self._processed_records_count,
-                    "cache_size": len(self._processed_combinations_cache),
-                    "deduplication_strategy": self.deduplication_strategy
-                },
-                "performance_metrics": {
-                    "sync_batch_size": self._sync_batch_size,
-                    "sync_interval_minutes": self.sync_interval_minutes,
-                    "auto_sync_enabled": not self.disable_auto_sync
-                }
-            }
-            
-            with open(stats_file, "w") as f:
-                json.dump(stats_data, f, indent=2, default=str)
-                
-            logger.info(f"📊 Saved processing stats to {stats_file}")
-                
-        except Exception as e:
-            logger.error(f"Failed to save processing stats: {e}")
-
     async def finalize_processing(self) -> bool:
-        """Perform final sync and save run logs at the end of processing session.
+        """Perform final sync at the end of processing session.
 
-        Enhanced with mandatory local logging and comprehensive metadata saving.
+        Uses existing BM logging infrastructure for run metadata.
 
         Returns:
-            bool: True if final sync and logging succeeded, False otherwise
+            bool: True if final sync succeeded, False otherwise
         """
         try:
-            sync_success = True
-            
-            # Step 1: Perform final sync
             if self._processed_records_count > 0:
                 logger.info(f"🔄 Performing final sync after processing {self._processed_records_count} records...")
                 sync_success = await self._conditional_sync_to_remote(force=True)
                 if sync_success:
                     logger.info("✅ Final sync completed successfully")
+                    
+                    # Log processing summary using existing BM logger
+                    logger.info(f"📊 Processing session complete:")
+                    logger.info(f"   📦 Records processed: {self._processed_records_count}")
+                    logger.info(f"   🔢 Total embeddings: {self.collection.count()}")
+                    logger.info(f"   🔍 Deduplication strategy: {self.deduplication_strategy}")
+                    logger.info(f"   📦 Cache size: {len(self._processed_combinations_cache)} combinations")
+                    
+                    return True
                 else:
                     logger.error("❌ Final sync failed")
+                    return False
             else:
                 logger.info("No records processed, no final sync needed")
-            
-            # Step 2: Save run metadata (always attempt, even if sync failed)
-            logger.info("💾 Saving run metadata and configuration...")
-            await self._save_run_metadata()
-            await self._save_processing_stats()
-            
-            # Step 3: Display summary
-            if self.local_logging_enabled:
-                logger.info(f"📁 Run logs saved to: {self._logs_directory}")
-                log_files = list(self._logs_directory.glob(f"*{self._current_run_id}*"))
-                for log_file in log_files:
-                    logger.info(f"   📄 {log_file.name}")
-            
-            return sync_success
+                return True
 
         except Exception as e:
             logger.error(f"❌ Finalization failed: {e}")
@@ -1181,15 +1042,25 @@ class ChromaDBEmbeddings(DataSouce):
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.now().isoformat()
             
+            # Get BM run info if available
+            try:
+                from buttermilk._core.dmrc import get_bm
+                bm = get_bm()
+                run_id = bm.run_info.run_id if bm and bm.run_info else None
+            except:
+                run_id = None
+            
             for chunk in record.chunks:
                 chunk.metadata.update({
                     "embedding_model": effective_embedding_model,
-                    "processing_run_id": self._current_run_id,
                     "content_hash": content_hash,
                     "created_timestamp": current_timestamp,
-                    "buttermilk_version": "dev",  # Could get from package
                     "deduplication_strategy": self.deduplication_strategy
                 })
+                
+                # Only add run_id if available from BM
+                if run_id:
+                    chunk.metadata["processing_run_id"] = run_id
 
             # Step 6: Store chunks in ChromaDB
             await self._store_chunks_for_record(record)
@@ -1218,7 +1089,7 @@ class ChromaDBEmbeddings(DataSouce):
                 metadata={
                     "chunk_types": chunk_types,
                     "content_hash": content_hash,
-                    "run_id": self._current_run_id
+                    "run_id": run_id
                 }
             )
 
@@ -1467,8 +1338,7 @@ class ChromaDBEmbeddings(DataSouce):
             metadata={
                 "mode": mode,
                 "max_failures": max_failures,
-                "require_all_new": require_all_new,
-                "run_id": self._current_run_id
+                "require_all_new": require_all_new
             }
         )
 
