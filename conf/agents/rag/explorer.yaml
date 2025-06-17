@@ -1,0 +1,22 @@
+
+# Enhanced RAG Agent optimized for exploratory research
+explorer:
+  role: "RESEARCH_EXPLORER"
+  agent_obj: EnhancedRagAgent
+  description: "Research assistant optimized for exploratory and thematic discovery"
+  
+  parameters:
+    enable_query_planning: true
+    enable_result_synthesis: true
+    include_search_explanation: true
+    
+    # Optimized for broad exploration
+    search_strategies:
+      - "hybrid"                        # Start with hybrid approach
+      - "summary"                       # Focus on summaries for themes
+      - "semantic"                      # Broad semantic search
+      - "content"                       # Deep content search
+    
+    max_search_rounds: 4                # More thorough exploration
+    confidence_threshold: 0.4           # Lower threshold for exploration
+    max_results_per_strategy: 7         # More results for discovery

@@ -1,21 +1,26 @@
-# Enhanced RAG Demo Flow - Composable version
-# Uses Hydra's composition to pull in reusable components
+# OSB Interactive Flow - Production Quality Configuration
+# Production-ready interactive group chat experience for OSB vector store queries
+# Integrates existing Buttermilk components: AutogenOrchestrator + WebSocket + Terminal
 
 defaults:
   - _self_
-  # Enhanced RAG agents
-  - /agents@osb_rag.agents: enhanced_rag
-  # Observer agents
-  - /agents@osb_rag.observers:
-    - host/ra  # Using research assistant host
+  # Enhanced RAG agents for OSB analysis
+  - /agents@osb.agents: 
+    - rag/researcher
+    - rag/policy_analyst
+    - rag/fact_checker
+    - rag/explorer
+  # Observer agents for coordination
+  - /agents@osb.observers:
+    - host/ra  # Research assistant host for multi-agent coordination
   # Data source configuration
-  - /storage@osb_rag.storage: osb
+  - /storage@osb.storage: osb
 
 osb:
   # Core flow configuration
   orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  name: "Enhanced RAG Demo"
-  description: "Demonstration of enhanced RAG capabilities with intelligent search planning"
+  name: "OSB Interactive Flow"
+  description: "Production-quality interactive group chat experience for querying OSB vector store with multi-agent analysis"
 
   # Flow parameters
   parameters:
@@ -37,6 +42,47 @@ osb:
     minimum_sources: 2                     # Require multiple sources for claims
     cross_reference_threshold: 0.8         # Threshold for cross-referencing results
 
+    # WebSocket and Session Management (Production Features)
+    session_management:
+      enable_websocket_sessions: true      # Enable WebSocket-based interactive sessions
+      session_timeout: 3600                # 1 hour session timeout (seconds)
+      max_concurrent_sessions: 25          # Support for 25 concurrent OSB sessions
+      enable_session_isolation: true       # Isolate sessions for security and performance
+      websocket_heartbeat_interval: 30     # WebSocket heartbeat every 30 seconds
+      reconnection_grace_period: 300       # 5 minutes to reconnect before session cleanup
+      
+    # Performance and Scalability
+    performance:
+      enable_response_streaming: true      # Stream partial responses for long queries
+      max_query_length: 2000              # Maximum characters in OSB query
+      response_timeout: 60                 # Maximum time for agent response (seconds)
+      enable_result_caching: true         # Cache common OSB query results
+      cache_ttl: 1800                     # Cache time-to-live: 30 minutes
+      
+    # Error Handling and Reliability  
+    error_handling:
+      max_retries: 3                      # Maximum retries for failed operations
+      retry_backoff_factor: 2             # Exponential backoff for retries
+      enable_graceful_degradation: true   # Continue with partial results on agent failure
+      fallback_response_timeout: 30       # Fallback timeout for degraded mode
+      
+    # OSB-Specific Features
+    osb_features:
+      enable_case_tracking: true          # Track OSB case numbers and metadata
+      enable_policy_references: true      # Include policy document references
+      enable_precedent_analysis: true     # Cross-reference with similar cases
+      enable_collaborative_review: true   # Support multiple reviewers per case
+      export_formats: ["json", "pdf", "csv"]  # Available export formats
+      
+    # Monitoring and Observability
+    monitoring:
+      enable_query_analytics: true        # Track query patterns and performance
+      enable_agent_performance_metrics: true  # Monitor individual agent response times
+      enable_user_interaction_tracking: true  # Track user interaction patterns
+      log_level: "INFO"                   # Logging level for OSB operations
+      enable_audit_trail: true           # Maintain audit trail for compliance
+
   # These will be populated by the defaults
   agents: {}
   observers: {}
+  storage: {}
