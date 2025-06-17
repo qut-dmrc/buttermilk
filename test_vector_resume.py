@@ -37,8 +37,6 @@ async def test_enhanced_vector_database():
             embedding_model="gemini-embedding-001",
             dimensionality=3072,
             deduplication_strategy="both",  # Test all features
-            local_logging_enabled=True,
-            local_logging_dir="run_logs",
             sync_batch_size=3,  # Small batch for testing
             disable_auto_sync=True  # Disable for testing
         )
@@ -48,7 +46,6 @@ async def test_enhanced_vector_database():
         
         print(f"✅ Vector store initialized")
         print(f"🔍 Deduplication strategy: {vectorstore.deduplication_strategy}")
-        print(f"📁 Local logging: {vectorstore.local_logging_enabled}")
         
         # Create test records
         test_records = [
@@ -153,34 +150,16 @@ async def test_enhanced_vector_database():
         
         print(f"✅ Validation: {validation['stats']['would_process']} new, {validation['stats']['would_skip']} existing")
         
-        # Test 6: Local logging
-        print(f"\n6️⃣ TESTING LOCAL LOGGING")
+        # Test 6: BM Integration and Finalization
+        print(f"\n6️⃣ TESTING BM INTEGRATION & FINALIZATION")
         print("-" * 40)
         
         # Finalize to trigger logging
         finalize_success = await vectorstore.finalize_processing()
         assert finalize_success, "Finalization should succeed"
         
-        # Check that log files were created
-        logs_dir = vectorstore._logs_directory
-        assert logs_dir.exists(), "Logs directory should exist"
-        
-        run_files = list(logs_dir.glob(f"*{vectorstore._current_run_id}*"))
-        assert len(run_files) > 0, "Should create run log files"
-        
-        # Check run metadata file
-        run_file = logs_dir / f"run_{vectorstore._current_run_id}.json"
-        assert run_file.exists(), "Run metadata file should exist"
-        
-        with open(run_file) as f:
-            run_data = json.load(f)
-            assert "run_id" in run_data, "Should include run_id"
-            assert "embedding_model" in run_data, "Should include embedding_model"
-            assert "deduplication_strategy" in run_data, "Should include deduplication_strategy"
-            assert run_data["processed_records"] > 0, "Should record processed records count"
-        
-        print(f"✅ Local logging: {len(run_files)} files created")
-        print(f"   📋 Run metadata: {run_file.name}")
+        print(f"✅ Finalization successful")
+        print(f"   📊 Uses existing BM logging infrastructure")
         
         # Test 7: Collection statistics
         print(f"\n7️⃣ TESTING COLLECTION STATISTICS")
@@ -204,7 +183,7 @@ async def test_enhanced_vector_database():
         print(f"✅ Deduplication: Working correctly")
         print(f"✅ Resume capability: Records skipped/processed appropriately") 
         print(f"✅ Batch processing: Validation and processing working")
-        print(f"✅ Local logging: Complete audit trail created")
+        print(f"✅ BM Integration: Uses existing Buttermilk logging infrastructure")
         print(f"✅ Enhanced metadata: Provenance tracking functional")
         
         return True

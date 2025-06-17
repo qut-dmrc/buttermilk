@@ -870,8 +870,10 @@ class ChromaDBEmbeddings(DataSouce):
         try:
             results = self.collection.get(
                 where={
-                    "document_id": record.record_id,
-                    "embedding_model": self.embedding_model
+                    "$and": [
+                        {"document_id": record.record_id},
+                        {"embedding_model": self.embedding_model}
+                    ]
                 },
                 limit=10,  # Get a few to count and check metadata
                 include=["metadatas"]
