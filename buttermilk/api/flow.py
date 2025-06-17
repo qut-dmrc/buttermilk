@@ -20,6 +20,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 from .lazy_routes import LazyRouteManager, create_core_router
 from .routes import flow_data_router
 from .mcp import mcp_router
+from .mcp_agents import agent_mcp_router
 
 # Define the base directory for the FastAPI app
 BASE_DIR = Path(__file__).resolve().parent
@@ -267,6 +268,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Defer heavy routers until first request
     lazy_manager.defer_router(flow_data_router, prefix="")
     lazy_manager.defer_router(mcp_router, prefix="")
+    lazy_manager.defer_router(agent_mcp_router, prefix="")
     lazy_manager.create_lazy_middleware()
 
     logger.info("Heavy routes deferred - will load on first request")

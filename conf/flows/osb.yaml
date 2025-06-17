@@ -5,14 +5,14 @@
 defaults:
   - _self_
   # Enhanced RAG agents for OSB analysis
-  - /agents@osb.agents: 
-    - rag/researcher
-    - rag/policy_analyst
-    - rag/fact_checker
-    - rag/explorer
+  - /agents/rag@osb.agents: 
+    - researcher
+    - policy_analyst
+    - fact_checker
+    - explorer
   # Observer agents for coordination
-  - /agents@osb.observers:
-    - host/ra  # Research assistant host for multi-agent coordination
+  - /agents/host@osb.observers:
+    - ra  # Research assistant host for multi-agent coordination
   # Data source configuration
   - /storage@osb.storage: osb
 
