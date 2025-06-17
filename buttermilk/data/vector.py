@@ -246,16 +246,32 @@ class ChromaDBEmbeddings(DataSouce):
     arrow_save_dir: str = Field(default="")
     multi_field_config: MultiFieldEmbeddingConfig | None = Field(default=None)
 
+    # New sync configuration options
+    sync_batch_size: int = Field(default=50, description="Sync every N records")
+    sync_interval_minutes: int = Field(default=10, description="Sync every N minutes")
+    disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing (manual only)")
+
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
     _embedding_function: Callable = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
     _original_remote_path: str | None = PrivateAttr(default=None)
+    _processed_records_count: int = PrivateAttr(default=0)
+    _last_sync_time: float = PrivateAttr(default=0.0)
+    _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
+    _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
 
     @pydantic.model_validator(mode="after")
     def load_models(self) -> Self:
         """Initializes the embedding model, ChromaDB client, and text splitter."""
+        import time
+
+        # Initialize sync timing and configure sync behavior
+        self._last_sync_time = time.time()
+        self._sync_batch_size = self.sync_batch_size
+        self._sync_interval_seconds = self.sync_interval_minutes * 60
+
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = TextEmbeddingModel.from_pretrained(self.embedding_model)
         self._embedding_function = VertexAIEmbeddingFunction(
@@ -272,6 +288,12 @@ class ChromaDBEmbeddings(DataSouce):
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
+
+        # Log sync configuration
+        if not self.disable_auto_sync:
+            logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
+        else:
+            logger.info("🔒 Auto-sync disabled - manual sync only")
 
         Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
         Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
@@ -316,18 +338,18 @@ class ChromaDBEmbeddings(DataSouce):
         from buttermilk.utils.utils import ensure_chromadb_cache
         import os
         import time
-        
+
         # Get local cache path
         cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
-        
+
         # Check if local cache exists and has recent modifications
         local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()
-        
+
         if local_exists:
             # Check modification time of local cache
             local_mtime = os.path.getmtime(cache_path / "chroma.sqlite3")
             time_since_modified = time.time() - local_mtime
-            
+
             # If modified within last hour, don't re-download
             if time_since_modified < 3600:  # 1 hour
                 logger.info(f"📋 Using existing local cache (modified {time_since_modified/60:.1f} minutes ago)")
@@ -335,11 +357,11 @@ class ChromaDBEmbeddings(DataSouce):
                 return cache_path
             else:
                 logger.info(f"⏰ Local cache is {time_since_modified/3600:.1f} hours old, checking for updates...")
-        
+
         # Download remote ChromaDB (will skip if already up to date)
         logger.info(f"🔄 Syncing remote ChromaDB: {remote_path}")
         local_cache_path = await ensure_chromadb_cache(remote_path)
-        
+
         return local_cache_path
 
     async def _sync_local_changes_to_remote(self) -> None:
@@ -351,45 +373,104 @@ class ChromaDBEmbeddings(DataSouce):
         """
         # Use original remote path if available, otherwise check current persist_directory
         remote_path = self._original_remote_path or self.persist_directory
-        
+
         if not remote_path.startswith(("gs://", "gcs://", "s3://", "azure://")):
             # Not a remote storage, no sync needed
             logger.debug("Local storage detected, no remote sync needed")
             return
-            
+
         try:
             from buttermilk.utils.utils import upload_chromadb_cache
             import os
             import time
-            
+
             # Use actual persist_directory as the local cache path (it's been set to local cache)
             cache_path = Path(self.persist_directory)
-            
+
             # Check if local cache exists and has been modified
             if not cache_path.exists() or not (cache_path / "chroma.sqlite3").exists():
                 logger.error(f"Local cache not found at expected location: {cache_path}")
                 return
-                
+
             # Check if local cache has been recently modified
             local_mtime = os.path.getmtime(cache_path / "chroma.sqlite3")
             time_since_modified = time.time() - local_mtime
-            
+
             # Only sync if modified within last 6 hours (indicates recent embedding work)
             if time_since_modified > 21600:  # 6 hours
                 logger.debug(f"Local cache not recently modified ({time_since_modified/3600:.1f}h ago), skipping sync")
                 return
-                
+
             logger.info(f"🔄 Syncing local changes back to remote: {cache_path} → {remote_path}")
-            
+
             # Upload local cache to remote storage
             await upload_chromadb_cache(str(cache_path), remote_path)
             logger.info("✅ Successfully synced local changes to remote storage")
-            
+
         except Exception as e:
             logger.error(f"❌ CRITICAL: Failed to sync local changes to remote storage: {e}")
             logger.error(f"Local cache with unsaved data: {cache_path}")
             logger.error(f"Target remote path: {remote_path}")
             raise RuntimeError(f"ChromaDB sync failed: {e}") from e
+
+    async def _should_sync_now(self, force: bool = False) -> bool:
+        """Determine if we should sync to remote storage now.
+
+        Args:
+            force: Force sync regardless of batch/time thresholds
+
+        Returns:
+            bool: True if sync should happen now
+        """
+        if force:
+            return True
+
+        if not self._original_remote_path:
+            return False
+
+        import time
+
+        current_time = time.time()
+
+        # Check batch threshold
+        batch_threshold_met = self._processed_records_count >= self._sync_batch_size
+
+        # Check time threshold (sync every 10 minutes)
+        time_threshold_met = (current_time - self._last_sync_time) >= self._sync_interval_seconds
+
+        return batch_threshold_met or time_threshold_met
+
+    async def _conditional_sync_to_remote(self, force: bool = False) -> bool:
+        """Conditionally sync to remote storage based on batch/time thresholds.
+
+        Args:
+            force: Force sync regardless of thresholds and auto_sync setting
+
+        Returns:
+            bool: True if sync was performed, False if skipped
+        """
+        # Respect auto-sync setting unless forced
+        if not force and self.disable_auto_sync:
+            return False
+
+        if not await self._should_sync_now(force):
+            return False
+
+        try:
+            await self._sync_local_changes_to_remote()
+
+            # Reset counters after successful sync
+            import time
+
+            self._processed_records_count = 0
+            self._last_sync_time = time.time()
+
+            logger.info(f"✅ Batch sync completed (reset counter to 0)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Conditional sync failed: {e}")
+            return False
 
     async def sync_to_remote(self, force: bool = False) -> bool:
         """Manually sync local changes to remote storage.
@@ -403,7 +484,7 @@ class ChromaDBEmbeddings(DataSouce):
         if not self._original_remote_path:
             logger.info("No remote storage configured, nothing to sync")
             return True
-            
+
         try:
             # Temporarily override time check for forced sync
             if force:
@@ -412,26 +493,49 @@ class ChromaDBEmbeddings(DataSouce):
                 async def forced_sync():
                     cache_path = Path(self.persist_directory)
                     remote_path = self._original_remote_path
-                    
+
                     if not cache_path.exists() or not (cache_path / "chroma.sqlite3").exists():
                         logger.error(f"Local cache not found at: {cache_path}")
                         return False
-                        
+
                     logger.info(f"🔄 Force syncing: {cache_path} → {remote_path}")
-                    
+
                     from buttermilk.utils.utils import upload_chromadb_cache
                     await upload_chromadb_cache(str(cache_path), remote_path)
                     logger.info("✅ Force sync completed successfully")
                     return True
-                
+
                 await forced_sync()
             else:
                 await self._sync_local_changes_to_remote()
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Manual sync failed: {e}")
+            return False
+
+    async def finalize_processing(self) -> bool:
+        """Perform final sync at the end of processing session.
+
+        This should be called when you're done processing a batch of records
+        to ensure all changes are synced to remote storage.
+
+        Returns:
+            bool: True if final sync succeeded, False otherwise
+        """
+        try:
+            if self._processed_records_count > 0:
+                logger.info(f"🔄 Performing final sync after processing {self._processed_records_count} records...")
+                await self._conditional_sync_to_remote(force=True)
+                logger.info("✅ Final sync completed successfully")
+                return True
+            else:
+                logger.info("No records processed, no final sync needed")
+                return True
+
+        except Exception as e:
+            logger.error(f"❌ Final sync failed: {e}")
             return False
 
     async def _ensure_collection_ready(self) -> None:
@@ -445,7 +549,7 @@ class ChromaDBEmbeddings(DataSouce):
         # Check if collection already exists
         existing_collections = self._client.list_collections()
         collection_names = [col.name for col in existing_collections]
-        
+
         if self.collection_name in collection_names:
             logger.info(f"📖 Found existing collection '{self.collection_name}'")
             await self._validate_existing_collection()
@@ -460,20 +564,20 @@ class ChromaDBEmbeddings(DataSouce):
             existing_collection = self._client.get_collection(
                 name=self.collection_name
             )
-            
+
             # Ensure embedding function is set on existing collection
             if hasattr(self, '_embedding_function') and self._embedding_function is not None:
                 existing_collection._embedding_function = self._embedding_function
-            
+
             # Get some basic stats
             count = existing_collection.count()
             logger.info(f"✅ Collection '{self.collection_name}' ready ({count} embeddings)")
-            
+
             # TODO: Could add more sophisticated validation here:
             # - Check embedding dimensionality by sampling
             # - Verify metadata schema compatibility
             # - Check embedding model consistency
-            
+
         except Exception as e:
             logger.warning(f"⚠️  Could not fully validate collection '{self.collection_name}': {e}")
             logger.info("Proceeding with existing collection...")
@@ -492,10 +596,10 @@ class ChromaDBEmbeddings(DataSouce):
                     "task_type": self.task
                 }
             )
-            
+
             logger.info(f"✅ Created collection '{self.collection_name}' with {self.embedding_model} embeddings")
             logger.debug(f"   Dimensionality: {self.dimensionality}, Task: {self.task}")
-            
+
         except Exception as e:
             # If creation fails, try get_or_create as fallback
             logger.warning(f"Direct creation failed, using get_or_create fallback: {e}")
@@ -541,12 +645,12 @@ class ChromaDBEmbeddings(DataSouce):
                 _db_registry[cache_key] = self._client.get_or_create_collection(
                     name=self.collection_name
                 )
-        
+
         # Ensure collection._embedding_function is synchronized with vectorstore._embedding_function
         collection = _db_registry[cache_key]
         if hasattr(self, '_embedding_function') and self._embedding_function is not None:
             collection._embedding_function = self._embedding_function
-        
+
         return collection
 
     # REMOVED: record_to_input_document (deprecated)
@@ -568,14 +672,14 @@ class ChromaDBEmbeddings(DataSouce):
             list[ChunkedDocument]: List of chunks created from the record
         """
         chunks = []
-        
+
         # If no multi-field config, use traditional single-field chunking
         if not self.multi_field_config:
             content_text = record.text_content
             if content_text:
                 text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
                 content_chunks = text_splitter.split_text(content_text)
-                
+
                 for i, chunk_text in enumerate(content_chunks):
                     if chunk_text.strip():
                         chunks.append(ChunkedDocument(
@@ -586,10 +690,10 @@ class ChromaDBEmbeddings(DataSouce):
                             metadata=record.metadata
                         ))
             return chunks
-        
+
         # Multi-field chunking based on configuration
         config = self.multi_field_config
-        
+
         # 1. Main content field (chunked) - use content field configured in multi_field_config
         content_text = getattr(record, config.content_field, record.text_content)
         if isinstance(content_text, str) and content_text:
@@ -600,7 +704,7 @@ class ChromaDBEmbeddings(DataSouce):
             )
             content_chunks = text_splitter.split_text(content_text)
             logger.debug(f"Text splitter with chunk_size={config.chunk_size} created {len(content_chunks)} content chunks for {record.record_id}")
-            
+
             for i, chunk_text in enumerate(content_chunks):
                 if chunk_text.strip():
                     chunks.append(ChunkedDocument(
@@ -614,11 +718,11 @@ class ChromaDBEmbeddings(DataSouce):
                             "chunk_type": "content"
                         }
                     ))
-        
+
         # 2. Additional fields (single chunks each)
         for field_config in config.additional_fields:
             field_value = record.metadata.get(field_config.source_field, '')
-            
+
             # Convert structured data to readable text
             if field_value:
                 if isinstance(field_value, list):
@@ -630,7 +734,7 @@ class ChromaDBEmbeddings(DataSouce):
                 else:
                     # Handle simple strings and other types
                     chunk_text = str(field_value).strip()
-                
+
                 if chunk_text and len(chunk_text) >= field_config.min_length:
                     chunks.append(ChunkedDocument(
                         document_title=record.title or f"Record {record.record_id}",
@@ -644,7 +748,7 @@ class ChromaDBEmbeddings(DataSouce):
                             "original_type": type(field_value).__name__  # Track original data type
                         }
                     ))
-                
+
         return chunks
 
     async def process_record(self, record: Record) -> Record | None:
@@ -660,33 +764,33 @@ class ChromaDBEmbeddings(DataSouce):
         """
         # Ensure content is ready for vector processing (no full_text needed)
         # The text_content property handles content access automatically
-            
+
         # Create chunks using configuration (direct on Record)
         record.chunks = self.create_multi_field_chunks_for_record(record)
-        
+
         if not record.chunks:
             logger.warning(f"No chunks created for record {record.record_id}")
             return None
-        
+
         # Log chunk breakdown if multi-field config is used
         if self.multi_field_config:
             chunk_types = {}
             for chunk in record.chunks:
                 chunk_type = chunk.metadata.get('chunk_type', 'content')
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
-            
+
             # Get content length for context
             content_text = getattr(record, self.multi_field_config.content_field, record.text_content)
             content_length = len(content_text) if isinstance(content_text, str) else 0
-            
+
             logger.info(f"Created chunks for record {record.record_id}: {chunk_types} (content_length: {content_length}, chunk_size: {self.multi_field_config.chunk_size})")
-        
+
         # Generate embeddings for all chunks
         await self._embed_chunks(record.chunks)
-        
+
         # Store chunks in ChromaDB
         await self._store_chunks_for_record(record)
-        
+
         return record
 
     async def _store_chunks_for_record(self, record: Record) -> None:
@@ -706,7 +810,7 @@ class ChromaDBEmbeddings(DataSouce):
             metadatas = []
 
             chunks_to_upsert = [c for c in record.chunks if c.embedding is not None]
-            
+
             if not chunks_to_upsert:
                 logger.warning(f"No chunks with embeddings to store for record {record.record_id}")
                 return
@@ -739,10 +843,15 @@ class ChromaDBEmbeddings(DataSouce):
             )
 
             logger.info(f"Successfully stored {len(ids)} chunks for record {record.record_id}")
-            
-            # Sync local changes to remote storage after successful upsert
-            await self._sync_local_changes_to_remote()
-            
+
+            # Increment processed records counter
+            self._processed_records_count += 1
+
+            # Conditionally sync based on batch/time thresholds (not after every record!)
+            sync_performed = await self._conditional_sync_to_remote()
+            if sync_performed:
+                logger.info(f"🔄 Performed batch sync after processing record {record.record_id}")
+
         except Exception as e:
             logger.error(f"Failed to store chunks for record {record.record_id}: {e}")
             raise
@@ -755,7 +864,7 @@ class ChromaDBEmbeddings(DataSouce):
         """
         if not chunks:
             return
-            
+
         # Prepare embedding inputs
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
@@ -769,47 +878,47 @@ class ChromaDBEmbeddings(DataSouce):
                     ),
                 ),
             )
-        
+
         # Generate embeddings
         embedding_results = await self._embed(embeddings_input)
-        
+
         # Assign embeddings back to chunks
         for idx, embedding in embedding_results:
             if embedding is not None and idx < len(chunks):
                 chunks[idx].embedding = embedding
             elif embedding is None:
                 logger.warning(f"Failed to generate embedding for chunk {idx}")
-        
+
         logger.debug(f"Generated embeddings for {len([c for c in chunks if c.embedding is not None])} out of {len(chunks)} chunks")
 
     async def process_with_multi_field_chunks(self, doc: InputDocument) -> InputDocument | None:
         """Process document with configuration-driven multi-field chunking."""
-        
+
         # Create chunks using configuration (generic approach)
         doc.chunks = self.create_multi_field_chunks(doc)
-        
+
         if not doc.chunks:
             logger.warning(f"No chunks created for document {doc.record_id}")
             return None
-        
+
         # Log chunk breakdown if multi-field config is used
         if self.multi_field_config:
             chunk_types = {}
             for chunk in doc.chunks:
                 content_type = chunk.metadata.get('content_type', 'unknown')
                 chunk_types[content_type] = chunk_types.get(content_type, 0) + 1
-            
+
             breakdown = ", ".join([f"{count} {ctype}" for ctype, count in chunk_types.items()])
             logger.info(f"Multi-field chunks for {doc.record_id}: {breakdown}")
         else:
             logger.info(f"Single-field chunks for {doc.record_id}: {len(doc.chunks)} content")
-        
+
         # Continue with normal embedding and storage process
         doc_with_embeddings = await self.embed_document(doc)
         if not doc_with_embeddings:
             return None
-            
-        # Store in ChromaDB 
+
+        # Store in ChromaDB
         return await self._store_chunks(doc_with_embeddings)
 
     # REMOVED: process_with_enhanced_metadata (legacy redirect)
@@ -853,10 +962,15 @@ class ChromaDBEmbeddings(DataSouce):
             )
 
             logger.info(f"Successfully stored enhanced chunks for document {doc.record_id}")
-            
-            # Sync local changes to remote storage after successful upsert
-            await self._sync_local_changes_to_remote()
-            
+
+            # Increment processed records counter
+            self._processed_records_count += 1
+
+            # Conditionally sync based on batch/time thresholds (not after every document!)
+            sync_performed = await self._conditional_sync_to_remote()
+            if sync_performed:
+                logger.info(f"🔄 Performed batch sync after processing document {doc.record_id}")
+
             return doc
 
         except Exception as e:
@@ -1127,9 +1241,15 @@ class ChromaDBEmbeddings(DataSouce):
                         f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
                     )
 
-        # Sync local changes to remote storage after batch upsert operations
+        # Update processed records counter for batch operations
+        self._processed_records_count += successful_docs_upserted
+
+        # For batch operations, always sync if we processed any records successfully
+        # This ensures batch operations don't lose data
         if successful_docs_upserted > 0:
-            await self._sync_local_changes_to_remote()
+            sync_performed = await self._conditional_sync_to_remote(force=True)
+            if sync_performed:
+                logger.info(f"🔄 Performed batch sync after processing {successful_docs_upserted} documents")
 
         return successful_docs_upserted, failed_docs_upserted
 
@@ -1144,7 +1264,7 @@ class ChromaDBEmbeddings(DataSouce):
         # If no chunks exist and we have multi-field config, create chunks automatically
         if not doc.chunks and self.multi_field_config:
             doc.chunks = self.create_multi_field_chunks(doc)
-            
+
         if not doc.chunks:
             logger.warning(
                 f"Document {doc.record_id} has no chunks, skipping embedding and upsert.",
@@ -1195,10 +1315,15 @@ class ChromaDBEmbeddings(DataSouce):
             logger.info(
                 f"Successfully processed document {doc.record_id} - embedded, saved, and upserted.",
             )
-            
-            # Sync local changes to remote storage after successful upsert
-            await self._sync_local_changes_to_remote()
-            
+
+            # Increment processed records counter
+            self._processed_records_count += 1
+
+            # Conditionally sync based on batch/time thresholds (not after every document!)
+            sync_performed = await self._conditional_sync_to_remote()
+            if sync_performed:
+                logger.info(f"🔄 Performed batch sync after processing document {doc.record_id}")
+
             return doc_with_embeddings
 
         except Exception as e:

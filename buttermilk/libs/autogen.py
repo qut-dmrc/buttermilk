@@ -90,7 +90,12 @@ class AutogenAgentAdapter(RoutedAgent):
         elif agent_cls and agent_cfg:
             # Instantiate the agent using the provided class and config.
             try:
-                self.agent = agent_cls(**agent_cfg)
+                # Convert AgentConfig to dict if needed
+                if hasattr(agent_cfg, 'model_dump'):
+                    config_dict = agent_cfg.model_dump()
+                else:
+                    config_dict = agent_cfg
+                self.agent = agent_cls(**config_dict)
                 logger.debug(f"Adapter instantiated agent: {self.agent.agent_name} ({agent_cls.__name__})")
                 if registration_callback:
                     registration_callback(self.agent.agent_id, self.agent)

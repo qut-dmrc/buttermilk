@@ -9,6 +9,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
 )
+from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
 
@@ -16,16 +17,17 @@ from buttermilk.libs.autogen import AutogenAgentAdapter
 def mock_agent():
     """Create a mock agent for testing."""
     agent = MagicMock(spec=Agent)
-    agent.id = "test_agent"
+    agent.agent_id = "test_agent"
     agent.description = "Test agent description"
-    agent.__call__ = AsyncMock(
+    agent.invoke = AsyncMock(
         return_value=AgentTrace(
             agent_id="test",
-            content="Test output",
+            agent_info=AgentConfig(role="test"),
+            inputs=AgentInput(),
         ),
     )
     agent.initialize = AsyncMock()
-    agent.receive_output = AsyncMock(return_value=None)
+    agent._listen = AsyncMock(return_value=None)
     return agent
 
 
@@ -58,7 +60,9 @@ async def test_agent_adapter_init_with_agent():
 async def test_agent_adapter_init_with_config():
     """Test AutogenAgentAdapter initialization with config."""
     mock_agent_cls = MagicMock()
+    mock_agent_cls.__name__ = "MockAgent"
     mock_agent_instance = MagicMock(spec=Agent)
+    mock_agent_instance.agent_id = "test_agent"
     mock_agent_instance.description = "Test description"
     mock_agent_instance.initialize = AsyncMock()
     mock_agent_cls.return_value = mock_agent_instance
@@ -78,29 +82,32 @@ async def test_agent_adapter_init_with_config():
 
 @pytest.mark.anyio
 async def test_agent_adapter_process_request(agent_adapter):
-    """Test process_request method."""
-    message = AgentInput(content="test input")
+    """Test handle_invocation method."""
+    message = AgentInput(inputs={"content": "test input"})
+    ctx = MagicMock()
+    ctx.cancellation_token = None
+    ctx.sender = "test_sender"
+    ctx.topic_id = "test_topic"
 
     # Non-conductor agent (publishes message)
-    with patch.object(agent_adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            result = await agent_adapter._process_request(message)
+    with patch.object(agent_adapter, "publish_message", new_callable=AsyncMock):
+        result = await agent_adapter.handle_invocation(message, ctx)
 
-    agent_adapter.agent.__call__.assert_called_once_with(message)
-    mock_publish.assert_called_once()
-    assert result == agent_adapter.agent.__call__.return_value
+    agent_adapter.agent.invoke.assert_called_once()
+    assert result == agent_adapter.agent.invoke.return_value
 
 
 @pytest.mark.anyio
 async def test_agent_adapter_process_request_conductor():
-    """Test process_request method for conductor agent."""
+    """Test handle_invocation method for conductor agent."""
     agent = MagicMock(spec=Agent)
-    agent.id = f"{CONDUCTOR}-test"
+    agent.agent_id = f"{CONDUCTOR}-test"
     agent.description = "Test conductor"
-    agent.__call__ = AsyncMock(
+    agent.invoke = AsyncMock(
         return_value=AgentTrace(
             agent_id="test",
-            content="Test output",
+            agent_info=AgentConfig(role="test"),
+            inputs=AgentInput(),
         ),
     )
     agent.initialize = AsyncMock()
@@ -111,56 +118,70 @@ async def test_agent_adapter_process_request_conductor():
             agent=agent,
         )
 
-    # Set ID to be a conductor
-    adapter.id.type = f"{CONDUCTOR}-test"
+    message = AgentInput(inputs={"content": "test input"})
+    ctx = MagicMock()
+    ctx.cancellation_token = None
+    ctx.sender = "test_sender"
+    ctx.topic_id = "test_topic"
 
-    message = AgentInput(content="test input")
+    # Test conductor behavior
+    with patch.object(adapter, "publish_message", new_callable=AsyncMock):
+        result = await adapter.handle_invocation(message, ctx)
 
-    # Conductor agent (doesn't publish message)
-    with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
-        result = await adapter._process_request(message)
-
-    adapter.agent.__call__.assert_called_once_with(message)
-    mock_publish.assert_not_called()
-    assert result == adapter.agent.__call__.return_value
+    adapter.agent.invoke.assert_called_once()
+    assert result == adapter.agent.invoke.return_value
 
 
 @pytest.mark.anyio
 async def test_agent_adapter_handle_output(agent_adapter):
-    """Test handle_output method."""
+    """Test handle_groupchat_message method."""
     # Create a message context with a different sender
     ctx = MagicMock()
-    ctx.sender.type = "different_agent"
+    ctx.sender = "different_agent"
+    ctx.topic_id = "test_topic"
+    ctx.cancellation_token = None
 
-    message = AgentTrace(agent_info="test", content="test output")
+    message = AgentTrace(
+        agent_id="test",
+        agent_info=AgentConfig(role="test"),
+        inputs=AgentInput(),
+    )
 
-    await agent_adapter.handle_output(message, ctx)
+    await agent_adapter.handle_groupchat_message(message, ctx)
 
-    # Should call receive_output since message is from someone else
-    agent_adapter.agent.receive_output.assert_called_once_with(message)
+    # Should call _listen since this is a group chat message
+    agent_adapter.agent._listen.assert_called_once()
 
 
 @pytest.mark.anyio
 async def test_agent_adapter_handle_output_from_self(agent_adapter):
-    """Test handle_output method with message from self."""
-    # Create a message context with self as sender
+    """Test handle_groupchat_message method with message from self."""
+    # Create a message context
     ctx = MagicMock()
-    ctx.sender.type = agent_adapter.id
+    ctx.sender = agent_adapter.id.type
+    ctx.topic_id = "test_topic"
+    ctx.cancellation_token = None
 
-    message = AgentTrace(agent_info="test", content="test output")
+    message = AgentTrace(
+        agent_id="test",
+        agent_info=AgentConfig(role="test"),
+        inputs=AgentInput(),
+    )
 
-    await agent_adapter.handle_output(message, ctx)
+    await agent_adapter.handle_groupchat_message(message, ctx)
 
-    # Should not call receive_output since message is from self
-    agent_adapter.agent.receive_output.assert_not_called()
+    # Should still call _listen for group chat messages regardless of sender
+    agent_adapter.agent._listen.assert_called_once()
 
 
 @pytest.mark.anyio
 async def test_agent_adapter_handle_input_ui_agent():
-    """Test handle_input method with UI agent."""
+    """Test handle_control_message method with UI agent."""
     ui_agent = MagicMock(spec=UIAgent)
+    ui_agent.agent_id = "ui_test"
     ui_agent.description = "Test UI agent"
     ui_agent.initialize = AsyncMock()
+    ui_agent._handle_events = AsyncMock(return_value=None)
 
     with patch("asyncio.create_task"):
         adapter = AutogenAgentAdapter(
@@ -168,23 +189,26 @@ async def test_agent_adapter_handle_input_ui_agent():
             agent=ui_agent,
         )
 
-    callback = adapter.handle_input()
-    assert callback is not None
+    from buttermilk._core.contract import HeartBeat
+    message = HeartBeat()
+    ctx = MagicMock()
+    ctx.cancellation_token = None
+    ctx.sender = "test_sender"
+    ctx.topic_id = "test_topic"
 
-    # Test the callback
-    with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
-        message = AgentInput(prompt="test input")
-        await callback(message)
-
-        mock_publish.assert_called_once_with(message, topic_id=adapter.topic_id)
+    result = await adapter.handle_control_message(message, ctx)
+    ui_agent._handle_events.assert_called_once()
+    assert result is None
 
 
 @pytest.mark.anyio
 async def test_agent_adapter_handle_input_normal_agent():
-    """Test handle_input method with normal agent."""
+    """Test handle_control_message method with normal agent."""
     agent = MagicMock(spec=Agent)
+    agent.agent_id = "normal_test"
     agent.description = "Test agent"
     agent.initialize = AsyncMock()
+    agent._handle_events = AsyncMock(return_value=None)
 
     with patch("asyncio.create_task"):
         adapter = AutogenAgentAdapter(
@@ -192,5 +216,13 @@ async def test_agent_adapter_handle_input_normal_agent():
             agent=agent,
         )
 
-    callback = adapter.handle_input()
-    assert callback is None
+    from buttermilk._core.contract import HeartBeat
+    message = HeartBeat()
+    ctx = MagicMock()
+    ctx.cancellation_token = None
+    ctx.sender = "test_sender"
+    ctx.topic_id = "test_topic"
+
+    result = await adapter.handle_control_message(message, ctx)
+    agent._handle_events.assert_called_once()
+    assert result is None

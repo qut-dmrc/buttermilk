@@ -1,6 +1,8 @@
 """Test ChromaDB remote sync fix."""
 
 import pytest
+
+pytestmark = pytest.mark.anyio  # Enable async test support
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock

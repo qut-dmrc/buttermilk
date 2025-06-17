@@ -262,12 +262,19 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     if isinstance(config, DataSourceConfig):
                         # Convert legacy DataSourceConfig to StorageConfig
                         config_dict = config.model_dump()
+                        # Filter out None values to allow StorageConfig defaults
+                        config_dict = {k: v for k, v in config_dict.items() if v is not None}
                         storage_config = StorageConfig(**config_dict)
                     elif hasattr(config, "__dict__"):
                         # Handle OmegaConf objects
-                        storage_config = StorageConfig(**dict(config))
+                        config_dict = dict(config)
+                        # Filter out None values to allow StorageConfig defaults
+                        config_dict = {k: v for k, v in config_dict.items() if v is not None}
+                        storage_config = StorageConfig(**config_dict)
                     else:
-                        storage_config = StorageConfig(**config)
+                        # Filter out None values to allow StorageConfig defaults
+                        config_dict = {k: v for k, v in config.items() if v is not None}
+                        storage_config = StorageConfig(**config_dict)
                     
                     # Use unified storage system instead of deprecated create_data_loader
                     storage = bm.get_storage(storage_config)

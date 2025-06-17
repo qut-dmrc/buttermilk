@@ -558,7 +558,7 @@ class LLMs(BaseModel):
 
         client_params: dict[str, Any] = {
             "base_url": config.base_url,
-            "model_info": config.model_info.model_copy(deep=True),  # Use a copy to avoid modifying original
+            "model_info": config.model_info.model_copy(deep=True) if hasattr(config.model_info, 'model_copy') else dict(config.model_info),  # Use a copy to avoid modifying original
             "api_key": config.api_key,
             **config.configs,  # Add other configs from LLMConfig.configs
         }

@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput, AgentTrace, UIMessage
 from buttermilk.agents.ui.slackthreadchat import (
     SlackUIAgent,
@@ -24,20 +25,22 @@ def slack_context():
 @pytest.fixture
 def slack_app():
     """Create a mock Slack app for testing."""
-    app = MagicMock()
-    app.client = MagicMock()
-    app.client.chat_update = AsyncMock()
-    app.client.conversations_replies = AsyncMock(
-        return_value={
-            "messages": [
-                {"user": "U123", "text": "Hello"},
-                {"user": "bot", "text": "Hi there!"},
-            ],
-        },
-    )
-    app.message = MagicMock(return_value=lambda f: f)
-    app.action = MagicMock(return_value=lambda f: f)
-    return app
+    from slack_bolt.async_app import AsyncApp
+    with patch.object(AsyncApp, '__init__', return_value=None):
+        app = AsyncApp()
+        app.client = MagicMock()
+        app.client.chat_update = AsyncMock()
+        app.client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    {"user": "U123", "text": "Hello"},
+                    {"user": "bot", "text": "Hi there!"},
+                ],
+            },
+        )
+        app.message = MagicMock(return_value=lambda f: f)
+        app.action = MagicMock(return_value=lambda f: f)
+        return app
 
 
 @pytest.fixture
@@ -46,6 +49,7 @@ def slack_ui_agent(slack_app, slack_context):
     agent = SlackUIAgent(
         id="test_agent",
         description="Test agent for Slack",
+        callback_to_groupchat=AsyncMock(),
     )
     agent.app = slack_app
     agent.context = slack_context
@@ -91,7 +95,8 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     """Test handling of AgentTrace messages."""
     message = AgentTrace(
         agent_id="test",
-        content="Test output",
+        agent_info=AgentConfig(role="test"),
+        inputs=AgentInput(),
         outputs={"key": "value"},
     )
 
@@ -115,7 +120,8 @@ async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
     message = AgentTrace(
         agent_id="test",
-        content="Test output",
+        agent_info=AgentConfig(role="test"),
+        inputs=AgentInput(),
         outputs={"key": "value"},
     )
 

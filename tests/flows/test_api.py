@@ -14,7 +14,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 def client():
     # Initialize with minimal configuration for testing
     with initialize(config_path="../../conf", version_base="1.3"):
-        cfg = compose(config_name="config", overrides=["run=api_clean"])
+        cfg = compose(config_name="config", overrides=["run=test_api"])
         
         # Create BM instance
         resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
