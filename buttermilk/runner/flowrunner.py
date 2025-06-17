@@ -803,6 +803,18 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # Initialize metrics tracking
+        import time
+        start_time = time.time()
+        success = False
+        
+        try:
+            from buttermilk.monitoring import get_metrics_collector
+            metrics_collector = get_metrics_collector()
+        except Exception as e:
+            logger.debug(f"Failed to initialize metrics collector: {e}")
+            metrics_collector = None
+
         # Ensure session manager is started
         await self._ensure_session_manager_started()
 
@@ -834,12 +846,25 @@ class FlowRunner(BaseModel):
                 # Wait for the task
                 await _session.flow_task
                 await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.COMPLETED)
+                success = True
                 return
         except Exception as e:
             await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.ERROR)
             logger.error(f"Error running flow '{run_request.flow}': {e}")
             raise
         finally:
+            # Record flow execution metrics
+            if metrics_collector:
+                execution_time = time.time() - start_time
+                try:
+                    metrics_collector.record_flow_execution(
+                        flow_name=run_request.flow,
+                        execution_time=execution_time,
+                        success=success
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record flow execution metrics: {e}")
+            
             if wait_for_completion:
                 # Clean up after completion if we were waiting
                 await self.session_manager.cleanup_session(run_request.session_id)

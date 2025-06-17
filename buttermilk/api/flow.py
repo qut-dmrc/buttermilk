@@ -21,6 +21,7 @@ from .lazy_routes import LazyRouteManager, create_core_router
 from .routes import flow_data_router
 from .mcp import mcp_router
 from .mcp_agents import agent_mcp_router
+from .monitoring import monitoring_router
 
 # Define the base directory for the FastAPI app
 BASE_DIR = Path(__file__).resolve().parent
@@ -41,10 +42,26 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             # Complete BM initialization in the FastAPI event loop
             if hasattr(app.state, "bm"):
                 await app.state.bm._background_init()
+            
+            # Initialize and start monitoring infrastructure
+            from buttermilk.monitoring import get_observability_manager
+            observability = get_observability_manager()
+            app.state.observability = observability
+            await observability.start_monitoring()
+            logger.info("Started observability monitoring")
+            
             yield
         except Exception as e:
-            logger.error(f"Failed to start job worker: {e}")
+            logger.error(f"Failed to start services: {e}")
         finally:
+            # Shutdown observability monitoring
+            if hasattr(app.state, "observability"):
+                try:
+                    await app.state.observability.stop_monitoring()
+                    logger.info("Stopped observability monitoring")
+                except Exception as e:
+                    logger.error(f"Error stopping observability monitoring: {e}")
+            
             # Shutdown event
             if hasattr(app.state, "job_worker"):
                 await app.state.job_worker.stop()
@@ -122,6 +139,45 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
+    # Production monitoring middleware
+    @app.middleware("http")
+    async def monitoring_middleware(request: Request, call_next):
+        """Middleware to collect request metrics and system performance data."""
+        import time
+        import psutil
+        from buttermilk.monitoring import get_metrics_collector
+        
+        start_time = time.time()
+        
+        # Update system metrics before processing request
+        try:
+            metrics_collector = get_metrics_collector()
+            memory = psutil.virtual_memory()
+            cpu_percent = psutil.cpu_percent()
+            
+            # Count active WebSocket connections (approximation)
+            websocket_connections = 0
+            if hasattr(request.app.state, 'flow_runner') and hasattr(request.app.state.flow_runner, 'session_manager'):
+                websocket_connections = len(request.app.state.flow_runner.session_manager.sessions)
+            
+            metrics_collector.update_system_metrics(
+                memory_mb=memory.used / 1024 / 1024,
+                cpu_percent=cpu_percent,
+                websocket_connections=websocket_connections
+            )
+        except Exception as e:
+            logger.debug(f"Error updating system metrics: {e}")
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Log request duration for performance monitoring
+        duration = time.time() - start_time
+        if duration > 1.0:  # Log slow requests
+            logger.info(f"Slow request: {request.method} {request.url.path} took {duration:.2f}s")
+        
+        return response
+
     # WebSocket endpoint - essential for frontend terminal functionality
     @flow_data_router.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -136,11 +192,18 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         if websocket.client_state == WebSocketState.CONNECTING:
             logger.debug(f"Accepting WebSocket connection for session {session_id}")
             await websocket.accept()
+        
         flow_runner: FlowRunner = websocket.app.state.flow_runner
         if not (session := await flow_runner.get_websocket_session_async(session_id=session_id, websocket=websocket)):
             logger.error(f"Session {session_id} not found.")
             await websocket.close()
             raise HTTPException(status_code=404, detail="Session not found")
+
+        # Start session metrics tracking
+        from buttermilk.monitoring import get_metrics_collector
+        metrics_collector = get_metrics_collector()
+        flow_name = getattr(session, 'flow_name', 'unknown')
+        metrics_collector.start_session_tracking(session_id, flow_name)
 
         task = None
         # Listen for messages from the client
@@ -149,6 +212,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         async for run_request in session.monitor_ui():
             try:
                 await asyncio.sleep(0.1)
+                # Track session activity
+                metrics_collector.update_session_activity(session_id)
+                
                 # This loop internally feeds the groupchat with messages from the client.
                 # The only message we receive is a run_request -- which we then
                 # use to create a new flow.
@@ -161,6 +227,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 logger.info(f"Client {session_id} disconnected.")
                 break
             except Exception as e:
+                # Track error in session metrics
+                metrics_collector.update_session_activity(session_id, error_occurred=True)
                 msg = f"Error receiving/processing client message for {session_id}: {e}"
                 raise FatalError(msg) from e
             finally:
@@ -168,6 +236,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         if task:
             await task
+
+        # End session tracking
+        metrics_collector.end_session_tracking(session_id)
 
         # Clean up the session when WebSocket disconnects
         try:
@@ -265,6 +336,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Set up templates
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+    # Add monitoring router immediately (production infrastructure)
+    app.include_router(monitoring_router)
+    logger.info("Monitoring router added for production observability")
+    
     # Defer heavy routers until first request
     lazy_manager.defer_router(flow_data_router, prefix="")
     lazy_manager.defer_router(mcp_router, prefix="")

@@ -5,6 +5,9 @@ explorer:
   agent_obj: EnhancedRagAgent
   description: "Research assistant optimized for exploratory and thematic discovery"
   
+  # Reference data configuration from flow parameters
+  data: ${...parameters.data}
+  
   parameters:
     enable_query_planning: true
     enable_result_synthesis: true

@@ -87,7 +87,7 @@ class HostAgent(Agent):
         **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
-        super().initialize(**kwargs)
+        await super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
         logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
 

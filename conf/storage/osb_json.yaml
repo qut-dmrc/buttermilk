@@ -1,5 +1,5 @@
 osb_json:
-  type: gcs
+  type: file
   path: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
   columns:
     record_id: record_id

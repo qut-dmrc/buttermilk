@@ -5,6 +5,9 @@ researcher:
   agent_obj: EnhancedRagAgent
   description: "Advanced research assistant with intelligent multi-field search capabilities"
   
+  # Reference data configuration from flow parameters
+  data: ${...parameters.data}
+  
   # Enhanced RAG specific parameters
   parameters:
     # Core functionality toggles

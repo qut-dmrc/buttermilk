@@ -122,37 +122,21 @@ class DataService:
             if not dataset_name:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
                 raise ValueError(f"dataset_name is required. Available datasets for flow '{flow_name}': {available_datasets}")
-            
+
             # Get the specified storage configuration
             if dataset_name not in flow_runner.flows[flow_name].storage:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
                 raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
-            
-            storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
-
-            # Convert OmegaConf/dict to proper StorageConfig
-            storage_config = DataService._convert_to_storage_config(storage_config_raw)
-            
-            # Ensure the dataset_name is set correctly in the config
-            if hasattr(storage_config, 'dataset_name') and dataset_name:
-                storage_config.dataset_name = dataset_name
 
             # Use unified storage system instead of deprecated create_data_loader
             from buttermilk._core.dmrc import get_bm
             bm = get_bm()
-            storage = bm.get_storage(storage_config)
-            
+            storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_name])
+
             for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
-                    # Add placeholder summary scores to metadata - in a real implementation,
-                    # this would query BigQuery for actual scores
-                    record.metadata["summary_scores"] = {
-                        "off_shelf_accuracy": 0.75,
-                        "custom_average": 0.635,
-                        "total_evaluations": 8,
-                        "has_detailed_responses": True
-                    }
+                    raise NotImplementedError
 
                 records.append(record)
 
@@ -269,7 +253,7 @@ class DataService:
             from buttermilk._core.dmrc import get_bm
             bm = get_bm()
             storage = bm.get_storage(storage_config)
-            
+
             for record in storage:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata
@@ -309,16 +293,16 @@ class DataService:
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
                 raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
-            
+
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
                 raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
-            
+
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
-            
+
             if not dataset_id:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:
@@ -438,16 +422,16 @@ class DataService:
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
                 raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
-            
+
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
                 raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
-            
+
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
-            
+
             if not dataset_id:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:

@@ -14,7 +14,11 @@ defaults:
   - /agents/host@osb.observers:
     - ra  # Research assistant host for multi-agent coordination
   # Data source configuration
-  - /storage@osb.storage: osb
+  - /storage@osb.storage: 
+    - osb_json
+  # specify the vector store for agents
+  - /storage@osb.parameters.data: osb_vector
+    
 
 osb:
   # Core flow configuration

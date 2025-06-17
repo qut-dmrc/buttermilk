@@ -3,6 +3,9 @@ fact_checker:
   agent_obj: EnhancedRagAgent
   description: "Fact-checking assistant that searches across titles and metadata for verification"
   
+  # Reference data configuration from flow parameters
+  data: ${...parameters.data}
+  
   parameters:
     enable_query_planning: true
     enable_result_synthesis: true
