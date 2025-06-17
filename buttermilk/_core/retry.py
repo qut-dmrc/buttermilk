@@ -12,7 +12,7 @@ from anthropic._exceptions import (
     RateLimitError as AnthropicRateLimitError,
     ServiceUnavailableError as AnthropicServiceUnavailableError,
 )
-from google.api_core.exceptions import TooManyRequests
+from google.api_core.exceptions import TooManyRequests, ResourceExhausted
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
@@ -74,6 +74,7 @@ class RetryWrapper(BaseModel):
                     # ModelError,
                     # ReplicateError,
                     TooManyRequests,
+                    ResourceExhausted,
                     ConnectionResetError,
                     ConnectionError,
                     ConnectionAbortedError,

@@ -34,6 +34,8 @@ from buttermilk._core.config import DataSouce
 from buttermilk._core.storage_config import MultiFieldEmbeddingConfig
 from buttermilk._core.types import Record
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
+from buttermilk._core.retry import RetryWrapper  # Add retry functionality
+from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk.utils.utils import ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
@@ -312,10 +314,16 @@ class ChromaDBEmbeddings(DataSouce):
     # New deduplication configuration (Breaking Change)
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(default="both")
     
+    # Retry configuration for embedding API calls
+    embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
+    embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries")
+    embedding_max_wait_seconds: float = Field(default=120.0, description="Max wait between embedding retries")
+    embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between successful embedding calls")
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
+    _retry_wrapper: RetryWrapper = PrivateAttr()
     _embedding_function: Callable = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
     _original_remote_path: str | None = PrivateAttr(default=None)
@@ -339,6 +347,18 @@ class ChromaDBEmbeddings(DataSouce):
 
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = TextEmbeddingModel.from_pretrained(self.embedding_model)
+        
+        # Wrap embedding model with retry logic
+        self._retry_wrapper = RetryWrapper(
+            client=self._embedding_model,
+            max_retries=self.embedding_max_retries,
+            min_wait_seconds=self.embedding_min_wait_seconds,
+            max_wait_seconds=self.embedding_max_wait_seconds,
+            cooldown_seconds=self.embedding_cooldown_seconds,
+            jitter_seconds=2.0,  # Add some jitter for quota management
+        )
+        logger.info(f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff")
+        
         self._embedding_function = VertexAIEmbeddingFunction(
             embedding_model=self.embedding_model,
             dimensionality=self.dimensionality,
@@ -1594,29 +1614,44 @@ class ChromaDBEmbeddings(DataSouce):
 
         pq.write_table(table, file_path, compression="snappy")
 
+    def _convert_embedding_errors(self, exc: Exception) -> None:
+        """Convert embedding-specific errors to RateLimit exceptions for retry handling."""
+        error_str = str(exc).lower()
+        if any(keyword in error_str for keyword in ["quota", "rate limit", "429", "too many requests"]):
+            raise RateLimit(str(exc)) from exc
+
     async def _run_embedding_task(
         self,
         chunk_input: TextEmbeddingInput,
         index: int,
     ) -> tuple[int, list[float | int] | None]:
-        """Helper coroutine to run a single embedding task and handle errors."""
+        """Helper coroutine to run a single embedding task with retry logic."""
         async with self._embedding_semaphore:
             kwargs = dict(
                 output_dimensionality=self.dimensionality,
                 auto_truncate=False,
             )
+            
+            async def _embedding_call():
+                """Wrapper function to add error conversion."""
+                try:
+                    return await self._embedding_model.get_embeddings_async([chunk_input], **kwargs)
+                except Exception as exc:
+                    # Convert quota/rate limit errors to RateLimit exceptions
+                    self._convert_embedding_errors(exc)
+                    raise  # Re-raise if not a quota error
+            
             try:
-                embeddings_result: list[TextEmbedding] = await self._embedding_model.get_embeddings_async(
-                    [chunk_input],
-                    **kwargs,
-                )
+                # Use retry wrapper for embedding calls to handle quota errors
+                embeddings_result: list[TextEmbedding] = await self._retry_wrapper._execute_with_retry(_embedding_call)
+                
                 if embeddings_result:
                     return index, embeddings_result[0].values
                 logger.warning(f"No embedding result returned for input {index}.")
                 return index, None
             except Exception as exc:
                 logger.error(
-                    f"Error getting embedding for input {index}: {exc} {exc.args=}",
+                    f"Error getting embedding for input {index} after {self.embedding_max_retries} retries: {exc} {exc.args=}",
                 )
                 return index, None
 

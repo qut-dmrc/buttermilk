@@ -70,6 +70,10 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
 
         elif isinstance(e, HTTPError) and (e.code in {400, 429}):
             raise RateLimit(*e.args)
+            
+        # Handle Google Vertex AI quota/rate limit errors
+        elif hasattr(e, 'reason') and ("quota" in str(e).lower() or "rate limit" in str(e).lower()):
+            raise RateLimit(str(e))
 
     except Exception as secondary_error:
         logger.warning(
