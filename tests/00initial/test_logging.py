@@ -24,6 +24,7 @@ def bm_instance(tmp_path) -> BM:
     # You might need to adjust parameters depending on what your tests need
     # Ensure that the save_dir_base is a temporary path
     test_bm = BM(
+        platform="test",  # Required field
         name="test_bm_instance",
         job="test_job",
         save_dir_base=str(tmp_path),  # Use pytest's tmp_path for a unique temp dir
@@ -122,6 +123,7 @@ def test_cloud_logging_with_context_vars(MockCloudLoggingHandler, tmp_path):
     mock_log_client = MagicMock()
 
     cloud_bm = BM(
+        platform="test",  # Required field
         name="test_cloud_bm",
         job="test_cloud_job",
         save_dir_base=str(tmp_path),

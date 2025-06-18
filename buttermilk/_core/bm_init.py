@@ -307,12 +307,16 @@ class BM(SessionInfo):
         """Performs setup tasks immediately after Pydantic model initialization.
 
         This includes:
+        - Validating logger configuration early to fail fast
         - Constructing the full `save_dir` path based on `save_dir_base` and session info.
         - Setting up logging (console and potentially cloud logging).
         - Saving the initial configuration to a JSON file in `save_dir`.
         - Starting an asynchronous task to fetch the machine's IP address.
         - Logging into configured cloud providers.
         """
+        # Early validation of logger configuration to fail fast
+        self._validate_logger_config()
+        
         # Construct full save directory path
         save_dir_path = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
         self.save_dir = str(save_dir_path)  # Store as string
@@ -490,7 +494,20 @@ class BM(SessionInfo):
                 logger.addHandler(cloudHandler)
                 logger.debug("Cloud logging handler added")
             except Exception as e:
-                logger.warning(f"Failed to setup cloud logging: {e}")
+                # Provide better error messages distinguishing between config and service issues
+                if "project" in str(e).lower() or "location" in str(e).lower():
+                    logger.error(
+                        f"Cloud logging setup failed due to configuration issue: {e}. "
+                        f"Logger config: type={self.logger_cfg.type}, "
+                        f"project={getattr(self.logger_cfg, 'project', 'MISSING')}, "
+                        f"location={getattr(self.logger_cfg, 'location', 'MISSING')}"
+                    )
+                else:
+                    logger.warning(
+                        f"Cloud logging setup failed (service may be unavailable): {e}. "
+                        f"Continuing with local logging only. "
+                        f"Check your GCP credentials and service availability."
+                    )
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -710,6 +727,42 @@ class BM(SessionInfo):
             self._credentials_cached = creds
         return self._credentials_cached
 
+    def _validate_logger_config(self) -> None:
+        """Validate logger configuration early during initialization to fail fast.
+        
+        This prevents late failures during cloud logging setup and provides
+        clear error messages for configuration issues.
+        
+        Raises:
+            ValueError: If logger configuration is invalid with specific details.
+        """
+        if not self.logger_cfg:
+            return  # No logger config is valid (uses local logging)
+            
+        if self.logger_cfg.type == "gcp":
+            missing_fields = []
+            
+            if not hasattr(self.logger_cfg, "project") or not self.logger_cfg.project:
+                missing_fields.append("project")
+            if not hasattr(self.logger_cfg, "location") or not self.logger_cfg.location:
+                missing_fields.append("location")
+                
+            if missing_fields:
+                fields_str = ", ".join(f"logger_cfg.{field}" for field in missing_fields)
+                raise ValueError(
+                    f"GCP logger configuration is missing required fields: {fields_str}. "
+                    f"Please ensure your configuration includes these fields in the logger_cfg section."
+                )
+                
+        elif self.logger_cfg.type == "local":
+            # Local logging has no specific requirements
+            pass
+        else:
+            raise ValueError(
+                f"Unsupported logger type: '{self.logger_cfg.type}'. "
+                f"Supported types are: 'gcp', 'local'"
+            )
+
     def setup_logging(self, verbose: bool = False) -> None:
         """Sets up logging for the Buttermilk application.
 
@@ -731,12 +784,7 @@ class BM(SessionInfo):
 
         import coloredlogs  # For colored console output
 
-        # Validate GCP logger configuration if enabled
-        if self.logger_cfg and self.logger_cfg.type == "gcp":
-            if not hasattr(self.logger_cfg, "project") or not self.logger_cfg.project:
-                raise RuntimeError("GCP logger configuration (logger_cfg.project) is missing or empty.")
-            if not hasattr(self.logger_cfg, "location") or not self.logger_cfg.location:
-                raise RuntimeError("GCP logger configuration (logger_cfg.location) is missing or empty.")
+        # Logger config validation is now done in _validate_logger_config() during initialization
 
         # Clear existing handlers from the root logger to avoid duplicate logs
         root_logger = logging.getLogger()
