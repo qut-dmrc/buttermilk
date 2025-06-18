@@ -24,7 +24,10 @@ from datetime import UTC, datetime
 from typing import Any, Self, TYPE_CHECKING
 
 import shortuuid  # For generating unique IDs
-import weave  # For tracing capabilities
+try:
+    import weave  # For tracing capabilities
+except ImportError:
+    weave = None
 from pydantic import (
     BaseModel,
     ConfigDict,

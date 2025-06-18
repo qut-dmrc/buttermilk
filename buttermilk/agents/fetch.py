@@ -16,7 +16,10 @@ from typing import Any
 
 import pydantic  # Pydantic core
 import regex as re  # Regular expression operations
-from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
+try:
+    from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
+except ImportError:
+    FunctionTool = None
 from shortuuid import uuid  # For generating short unique IDs
 
 from buttermilk._core.agent import Agent, AgentOutput, CancellationToken  # Buttermilk base agent and types

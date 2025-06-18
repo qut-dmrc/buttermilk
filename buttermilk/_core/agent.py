@@ -16,8 +16,15 @@ from collections.abc import Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any
 
-import weave  # For tracing
-from weave.trace.weave_client import Call, WeaveObject
+try:
+    import weave  # For tracing
+except ImportError:
+    weave = None
+try:
+    from weave.trace.weave_client import Call, WeaveObject
+except ImportError:
+    Call = None
+    WeaveObject = None
 
 if TYPE_CHECKING:
     pass

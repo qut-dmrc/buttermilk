@@ -18,7 +18,8 @@ defaults:
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration
-  - /storage@trans.storage: tja
+  - /storage@trans.storage: 
+    - tja
   - /storage@trans.parameters.save: flows
 
 trans:

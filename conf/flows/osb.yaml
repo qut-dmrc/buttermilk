@@ -18,6 +18,7 @@ defaults:
     - osb_json
   # specify the vector store for agents
   - /storage@osb.parameters.data: osb_vector
+  - /storage@osb.parameters.save: flows
     
 
 osb:
