@@ -74,3 +74,9 @@ Adopt a test-driven development approach. Create failing unit tests before every
 * Don't write disposable test scripts; write pytest unittests instead in /tests
 * Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
 * Don't put validation code in main methods if possible; prefer using pydantic v2 validation, and use pydantic objects for all configuration classes.
+
+## Development Memories
+
+* Run python and pytest with `uv run ...`
+* The BM() class, usually instatantiated as `bm`, is a critical component of all buttermilk projects. It handles logging and authentication, as well as providing many convenience methods that embed strong MLOps default dest practices. It is accessed with the get_bm() method and should be instantiated and singleton saved with set_bm() as the first substantive step of any run.
+* Use `uv run python -m butttermilk.runner.cli ... -c job` to view the config as compiled

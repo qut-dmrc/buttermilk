@@ -331,8 +331,10 @@ class HostAgent(Agent):
             StepRequest: The next step request in the sequence.
 
         """
-        for role in self._participants.keys():
-            yield StepRequest(role=role, content=f"Executing step for {role}")
+        for role, description in self._participants.items():
+            # Create more descriptive step content using the participant description
+            step_description = f"Executing {role.lower()} step: {description}"
+            yield StepRequest(role=role, content=step_description)
         yield StepRequest(role=END, content="Sequence completed.")
 
     async def _run_flow(self, message: ConductorRequest) -> None:

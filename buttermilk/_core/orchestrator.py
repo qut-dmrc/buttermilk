@@ -42,6 +42,7 @@ from buttermilk import buttermilk as bm  # Global Buttermilk instance for framew
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
     AgentVariants,
+    DataSourceConfig,
     SaveInfo,  # Added SaveInfo
 )
 from buttermilk._core.storage_config import BaseStorageConfig  # Storage configuration models
@@ -121,7 +122,7 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, BaseStorageConfig] = Field(
+    storage: Mapping[str, DataSourceConfig | StorageConfig] = Field(
         default_factory=dict,
         description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )
@@ -164,10 +165,7 @@ class OrchestratorProtocol(BaseModel):
             if isinstance(storage, dict):
                 validated_storage = {}
                 for name, config in storage.items():
-                    if isinstance(config, (DataSourceConfig, StorageConfig)):
-                        # Already a proper config object
-                        validated_storage[name] = config
-                    elif isinstance(config, dict):
+                    if isinstance(config, dict):
                         # Try to determine which type to create based on fields
                         # StorageConfig-specific fields
                         storage_specific_fields = {"auto_create", "clustering_fields", "multi_field_embedding"}
@@ -179,7 +177,7 @@ class OrchestratorProtocol(BaseModel):
                         # that StorageFactory handles, create StorageConfig
                         if has_storage_fields or config.get("type") in ["bigquery", "chromadb", "vector", "gcs", "s3"]:
                             try:
-                                validated_storage[name] = StorageConfig(**config)
+                                validated_storage[name] = BaseStorageConfig(**config)
                             except Exception as e:
                                 # Fall back to DataSourceConfig if StorageConfig fails
                                 logger.debug(f"Failed to create StorageConfig for '{name}', " f"falling back to DataSourceConfig: {e}")

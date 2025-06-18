@@ -8,17 +8,15 @@ This agent provides advanced RAG capabilities that go beyond simple vector simil
 4. Configurable search strategies per use case
 """
 
-import asyncio
-import json
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
 from buttermilk.debug.error_capture import ErrorCapture, capture_enhanced_rag_errors, safe_isinstance_check
 
-from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput
+from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk.agents.llm import LLMAgent
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.agents.rag.enhanced_search import EnhancedVectorSearch
@@ -30,7 +28,7 @@ from buttermilk.agents.rag.search_planning import (
 )
 
 
-class EnhancedRagAgent(Agent):
+class EnhancedRagAgent(LLMAgent):
     """
     Enhanced RAG Agent with intelligent search capabilities.
 
@@ -58,7 +56,6 @@ class EnhancedRagAgent(Agent):
     def __init__(self, **data):
         super().__init__(**data)
         self._enhanced_search: Optional[EnhancedVectorSearch] = None
-        self._llm_client = None  # Will be initialized from agent's LLM connection
         self._error_capture = ErrorCapture(capture_locals=True)
 
     async def _initialize_search_tools(self) -> None:
@@ -81,36 +78,13 @@ class EnhancedRagAgent(Agent):
 
             vectorstore = await bm.get_storage_async(storage_config)
 
-            # Initialize enhanced search with vectorstore and LLM
-            self._enhanced_search = EnhancedVectorSearch(vectorstore=vectorstore, llm_client=self._get_llm_client())
+            # Initialize enhanced search with vectorstore and LLM client from parent
+            from buttermilk import buttermilk as bm_instance
+
+            model_client = bm_instance.llms.get_autogen_chat_client(self._model)
+            self._enhanced_search = EnhancedVectorSearch(vectorstore=vectorstore, llm_client=model_client)
 
             logger.info(f"Enhanced RAG agent initialized with vectorstore: {vectorstore.collection_name}")
-
-    def _get_llm_client(self):
-        """Get LLM client for query planning and synthesis."""
-        # Connect to Buttermilk's LLM infrastructure
-        if self._llm_client is None:
-            try:
-                from buttermilk._core.dmrc import get_bm
-
-                bm = get_bm()
-
-                # Use the planning model if specified, otherwise use default
-                model_name = self.planning_model if hasattr(self, "planning_model") and self.planning_model else None
-
-                # Get LLM client from BM instance
-                if hasattr(bm, "llm") and bm.llm:
-                    self._llm_client = RealLLMClient(bm.llm, model_name)
-                    logger.info(f"Enhanced RAG connected to LLM: {model_name or 'default'}")
-                else:
-                    logger.warning("No LLM available, using mock client for enhanced RAG")
-                    self._llm_client = MockLLMClient()
-
-            except Exception as e:
-                logger.warning(f"Failed to connect to LLM, using mock client: {e}")
-                self._llm_client = MockLLMClient()
-
-        return self._llm_client
 
     async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
         """
@@ -175,10 +149,9 @@ class EnhancedRagAgent(Agent):
                 "agent_id": getattr(self, 'agent_id', 'unknown'),
                 "message_inputs": getattr(message, 'inputs', {}) if hasattr(message, 'inputs') else {}
             })
-            
+
             logger.error(f"Enhanced RAG agent error: {e}")
-            logger.error(f"Error context: {error_context.model_dump()}")
-            
+
             return AgentOutput(agent_id=self.agent_id, outputs=f"Search failed: {str(e)}", metadata={"error": str(e), "error_context": error_context.model_dump()})
 
     def _extract_query(self, message: AgentInput) -> str:
@@ -265,100 +238,6 @@ class EnhancedRagAgent(Agent):
         explanation_parts.append(f"Results Found: {results.total_found}")
 
         return " | ".join(explanation_parts)
-
-
-class RealLLMClient:
-    """Real LLM client that connects to Buttermilk's LLM infrastructure."""
-
-    def __init__(self, llm_instance, model_name: Optional[str] = None):
-        """Initialize with Buttermilk LLM instance."""
-        self.llm = llm_instance
-        self.model_name = model_name
-
-    async def generate_async(self, prompt: str) -> str:
-        """Generate response using Buttermilk's LLM infrastructure."""
-        try:
-            # Use the LLM instance to generate response
-            if hasattr(self.llm, "agenerate") or hasattr(self.llm, "generate_async"):
-                # Try async generation first
-                if hasattr(self.llm, "agenerate"):
-                    response = await self.llm.agenerate([prompt])
-                    return response.generations[0][0].text
-                elif hasattr(self.llm, "generate_async"):
-                    response = await self.llm.generate_async(prompt)
-                    return response
-            elif hasattr(self.llm, "generate"):
-                # Fallback to sync generation
-                response = await asyncio.to_thread(self.llm.generate, prompt)
-                if hasattr(response, "generations"):
-                    return response.generations[0][0].text
-                else:
-                    return str(response)
-            else:
-                # If no generate method found, try calling directly
-                response = await asyncio.to_thread(self.llm, prompt)
-                return str(response)
-
-        except Exception as e:
-            logger.warning(f"Real LLM generation failed, falling back to mock: {e}")
-            # Fallback to mock responses
-            mock_client = MockLLMClient()
-            return await mock_client.generate_async(prompt)
-
-
-class MockLLMClient:
-    """Mock LLM client for demonstration purposes."""
-
-    async def generate_async(self, prompt: str) -> str:
-        """Mock LLM response generation."""
-        if "Analyze this user query" in prompt:
-            # Extract query from prompt for more realistic mock
-            query_start = prompt.find('Query: "') + 8
-            query_end = prompt.find('"', query_start)
-            query = prompt[query_start:query_end] if query_start > 7 and query_end > query_start else "unknown query"
-
-            # More realistic mock analysis based on query content
-            key_concepts = query.lower().split()[:3]  # Take first 3 words as concepts
-
-            # Determine strategies based on query keywords
-            strategies = ["semantic"]
-            if any(word in query.lower() for word in ["title", "name", "called"]):
-                strategies.append("title")
-            if any(word in query.lower() for word in ["summary", "overview", "about"]):
-                strategies.append("summary")
-            if any(word in query.lower() for word in ["case", "number", "date", "when"]):
-                strategies.append("metadata")
-
-            strategies.append("hybrid")  # Always include hybrid
-
-            return json.dumps(
-                {
-                    "intent": f"User wants information about {query[:50]}...",
-                    "query_type": "factual" if "what" in query.lower() or "how" in query.lower() else "exploratory",
-                    "key_concepts": key_concepts,
-                    "suggested_strategies": strategies[:3],  # Limit to 3 strategies
-                    "metadata_hints": {},
-                    "reformulated_queries": [f"information about {' '.join(key_concepts)}"],
-                    "expected_answer_type": "information",
-                }
-            )
-        elif "Synthesize and rank" in prompt:
-            # More realistic synthesis based on results
-            return json.dumps(
-                {
-                    "synthesis_summary": "Found relevant information across multiple sources with varying relevance",
-                    "key_themes": ["primary topic", "related concepts", "supporting information"],
-                    "ranked_results": [
-                        {"result_index": 0, "rank": 1, "relevance_explanation": "Directly addresses the main query"},
-                        {"result_index": 1, "rank": 2, "relevance_explanation": "Provides supporting context"},
-                        {"result_index": 2, "rank": 3, "relevance_explanation": "Contains related information"},
-                    ],
-                    "confidence_score": 0.75,
-                    "missing_information": "Additional context may be helpful",
-                }
-            )
-        else:
-            return "Mock LLM response for enhanced RAG"
 
 
 # Enhanced RAG Tool Configuration

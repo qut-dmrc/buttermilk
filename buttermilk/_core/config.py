@@ -75,19 +75,19 @@ Allowed values:
 class CloudProviderCfg(BaseModel):
     """Base configuration for components interacting with cloud providers or specific storage types.
 
+    This class handles different cloud provider types with their specific requirements.
+    Uses dynamic validation based on the provider type rather than rigid field requirements.
+
     Attributes:
         type (CloudProvider): The type of cloud provider or storage.
+        project (str | None): GCP project ID (required for GCP-based providers).
+        location (str | None): Cloud region/location (required for specific services).
         model_config (ConfigDict): Pydantic model configuration.
-            - `exclude_none`: True - Exclude fields with None values during serialization.
-            - `arbitrary_types_allowed`: True - Allow arbitrary types.
-            - `populate_by_name`: True - Allow population by field name (alias support).
-            - `extra`: "allow" - Allow extra fields not explicitly defined.
-            - `exclude_unset`: True - Exclude fields that were not explicitly set.
-            - `include_extra`: True - Include extra fields during serialization.
-
     """
 
     type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
+    project: str | None = Field(default=None, description="Cloud project ID")
+    location: str | None = Field(default=None, description="Cloud region/location")
 
     model_config = ConfigDict(
         exclude_none=True,
@@ -97,6 +97,41 @@ class CloudProviderCfg(BaseModel):
         exclude_unset=True,
         include_extra=True,
     )
+
+
+class LoggerConfig(CloudProviderCfg):
+    """Specialized cloud provider configuration for logging with strict validation.
+    
+    This extends CloudProviderCfg with specific validation requirements
+    for logging configurations, which need both project and location for GCP.
+    """
+    
+    @model_validator(mode='after')
+    def validate_logger_requirements(self) -> 'LoggerConfig':
+        """Validate that required fields are present for logger configurations."""
+        if self.type == "gcp":
+            missing_fields = []
+            if not self.project:
+                missing_fields.append("project")
+            if not self.location:
+                missing_fields.append("location")
+                
+            if missing_fields:
+                fields_str = ", ".join(missing_fields)
+                raise ValueError(
+                    f"GCP logger configuration requires these fields: {fields_str}. "
+                    f"Please ensure your logger_cfg includes all required fields."
+                )
+        elif self.type == "local":
+            # Local logging has no requirements
+            pass
+        else:
+            raise ValueError(
+                f"Unsupported logger type: '{self.type}'. "
+                f"Supported logger types are: 'gcp', 'local'"
+            )
+        
+        return self
 
 
 class SaveInfo(CloudProviderCfg):
