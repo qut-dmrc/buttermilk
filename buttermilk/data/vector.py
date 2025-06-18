@@ -30,7 +30,7 @@ from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
     logger,
 )
-from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.storage_config import MultiFieldEmbeddingConfig
 from buttermilk._core.types import Record
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
@@ -290,7 +290,7 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
 
 
 # --- Core Embedding and DB Interaction Class ---
-class ChromaDBEmbeddings(DataSourceConfig):
+class ChromaDBEmbeddings(VectorStorageConfig):
     """Handles configuration, embedding model interaction, and ChromaDB connection."""
     type: Literal["chromadb"] = "chromadb"
     model_config = pydantic.ConfigDict(extra="ignore")

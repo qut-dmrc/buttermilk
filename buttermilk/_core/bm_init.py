@@ -40,7 +40,8 @@ from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
 from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
-from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing  # Config models
+from buttermilk._core.config import CloudProviderCfg, Tracing  # Config models
+from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
@@ -216,9 +217,9 @@ class BM(SessionInfo):
         default_factory=Tracing,  # Default to Tracing() which might have enabled=False
         description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
     )
-    datasets: dict[str, DataSourceConfig] = Field(
+    datasets: dict[str, BaseStorageConfig] = Field(
         default_factory=dict,
-        description="Dictionary of predefined data source configurations.",
+        description="Dictionary of predefined storage configurations.",
     )
     save_dir_base: str = Field(
         default_factory=mkdtemp,  # Creates a new temporary directory by default

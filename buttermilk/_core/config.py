@@ -221,6 +221,10 @@ class SaveInfo(CloudProviderCfg):
 
 class DataSourceConfig(BaseModel):
     """Configuration for defining a data source for agents or other components.
+    
+    **DEPRECATED**: This class is deprecated and will be removed in a future version.
+    Use BaseStorageConfig and its type-specific subclasses (VectorStorageConfig, 
+    BigQueryStorageConfig, etc.) from buttermilk._core.storage_config instead.
 
     Specifies the type of data source, path or query details, filtering,
     joining, and other parameters for data retrieval and preparation.
@@ -372,6 +376,18 @@ class DataSourceConfig(BaseModel):
         exclude_none=True,
         exclude_unset=True,
     )
+    
+    def __init__(self, **data):
+        """Initialize DataSourceConfig with deprecation warning."""
+        import warnings
+        warnings.warn(
+            "DataSourceConfig is deprecated and will be removed in a future version. "
+            "Use BaseStorageConfig and its type-specific subclasses from "
+            "buttermilk._core.storage_config instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        super().__init__(**data)
 
 
 
@@ -457,10 +473,33 @@ class ToolConfig(BaseModel):
         default="",
         description="Identifier or path to the Python callable/object implementing the tool.",
     )
-    data: Mapping[str, DataSourceConfig] = Field(
+    data: Mapping[str, Any] = Field(
         default_factory=dict,  # Changed from list to dict as per typical usage patterns
-        description="Specifications for data sources the tool should load, keyed by a name/alias.",
+        description="Specifications for storage backends the tool should load, keyed by a name/alias. Use BaseStorageConfig types.",
     )
+
+    @field_validator("data", mode="after")
+    @classmethod
+    def validate_storage_configs(cls, v: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Convert YAML dictionaries to BaseStorageConfig objects."""
+        if not v:
+            return v
+            
+        from buttermilk._core.storage_config import StorageFactory
+        
+        converted = {}
+        for key, config in v.items():
+            if isinstance(config, dict):
+                # Convert dict from YAML to appropriate BaseStorageConfig subclass
+                try:
+                    converted[key] = StorageFactory.create_config(config)
+                except Exception as e:
+                    logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+                    converted[key] = config
+            else:
+                # Already a BaseStorageConfig object or other type
+                converted[key] = config
+        return converted
 
     def get_functions(self) -> list[Any]:
         """Generates function definitions for this tool, typically for an LLM.
@@ -593,9 +632,9 @@ class AgentConfig(BaseModel):
         default_factory=list,
         description="Configuration for tools (functions) that the agent can potentially use.",
     )
-    data: Mapping[str, DataSourceConfig] = Field(
+    data: Mapping[str, Any] = Field(
         default_factory=dict,
-        description="Configuration for data sources the agent might need access to, keyed by a descriptive name.",
+        description="Configuration for storage backends the agent might need access to, keyed by a descriptive name. Use BaseStorageConfig types.",
         alias="mapping_data",  # For serialization/deserialization consistency if needed
     )
     parameters: dict[str, Any] = Field(
@@ -640,6 +679,29 @@ class AgentConfig(BaseModel):
         "parameters", "inputs", "outputs", "data",  # Added data
         mode="before",
     )(convert_omegaconf_objects)
+
+    @field_validator("data", mode="after")
+    @classmethod
+    def validate_storage_configs(cls, v: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Convert YAML dictionaries to BaseStorageConfig objects."""
+        if not v:
+            return v
+            
+        from buttermilk._core.storage_config import StorageFactory
+        
+        converted = {}
+        for key, config in v.items():
+            if isinstance(config, dict):
+                # Convert dict from YAML to appropriate BaseStorageConfig subclass
+                try:
+                    converted[key] = StorageFactory.create_config(config)
+                except Exception as e:
+                    logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+                    converted[key] = config
+            else:
+                # Already a BaseStorageConfig object or other type
+                converted[key] = config
+        return converted
 
     @computed_field(repr=False)  # repr=False to avoid circularity if used in name_components
     @property

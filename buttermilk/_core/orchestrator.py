@@ -39,9 +39,9 @@ from buttermilk import buttermilk as bm  # Global Buttermilk instance for framew
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
     AgentVariants,
-    DataSourceConfig,
     SaveInfo,  # Added SaveInfo
 )
+from buttermilk._core.storage_config import BaseStorageConfig  # Storage configuration models
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.log import logger
@@ -77,9 +77,9 @@ class OrchestratorProtocol(BaseModel):
         save (SaveInfo | None): Optional configuration for saving the results of
             the flow (e.g., to a file, database, or cloud storage). If None,
             results might not be persisted automatically by the orchestrator.
-        storage (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
-            names for input data sources and values are `DataSourceConfig` objects
-            defining how to load and configure each input data source for the flow.
+        storage (Mapping[str, BaseStorageConfig]): A mapping where keys are descriptive
+            names for input storage backends and values are `BaseStorageConfig` objects
+            defining how to load and configure each input storage backend for the flow.
             This is specifically for data that feeds INTO the flow.
         agents (Mapping[str, AgentVariants]): A mapping where keys are agent role
             names (typically in uppercase, e.g., "SUMMARIZER") and values are
@@ -102,7 +102,7 @@ class OrchestratorProtocol(BaseModel):
 
     """
 
-    orchestrator: str|None = Field(
+    orchestrator: str | None = Field(
         default=None,
         description="Name or identifier of the orchestrator object/class to use for this flow.",
     )
@@ -118,9 +118,9 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, DataSourceConfig | StorageConfig] = Field(
+    storage: Mapping[str, BaseStorageConfig] = Field(
         default_factory=dict,
-        description="Configuration for input data sources to be loaded for the flow, keyed by a descriptive name.",
+        description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )
     agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
@@ -149,7 +149,7 @@ class OrchestratorProtocol(BaseModel):
     @classmethod
     def validate_storage_configs(cls, data: Any) -> Any:
         """Convert storage configurations to appropriate types.
-        
+
         This validator ensures that storage configurations are properly converted
         to either DataSourceConfig or StorageConfig objects. It handles:
         1. Raw dictionaries from YAML/Hydra
@@ -167,28 +167,19 @@ class OrchestratorProtocol(BaseModel):
                     elif isinstance(config, dict):
                         # Try to determine which type to create based on fields
                         # StorageConfig-specific fields
-                        storage_specific_fields = {
-                            "auto_create", "clustering_fields", "multi_field_embedding"
-                        }
-                        
+                        storage_specific_fields = {"auto_create", "clustering_fields", "multi_field_embedding"}
+
                         # Check if any StorageConfig-specific fields are present
-                        has_storage_fields = any(
-                            field in config for field in storage_specific_fields
-                        )
-                        
+                        has_storage_fields = any(field in config for field in storage_specific_fields)
+
                         # If it has fields specific to StorageConfig, or if type is one
                         # that StorageFactory handles, create StorageConfig
-                        if has_storage_fields or config.get("type") in [
-                            "bigquery", "chromadb", "vector", "gcs", "s3"
-                        ]:
+                        if has_storage_fields or config.get("type") in ["bigquery", "chromadb", "vector", "gcs", "s3"]:
                             try:
                                 validated_storage[name] = StorageConfig(**config)
                             except Exception as e:
                                 # Fall back to DataSourceConfig if StorageConfig fails
-                                logger.debug(
-                                    f"Failed to create StorageConfig for '{name}', "
-                                    f"falling back to DataSourceConfig: {e}"
-                                )
+                                logger.debug(f"Failed to create StorageConfig for '{name}', " f"falling back to DataSourceConfig: {e}")
                                 validated_storage[name] = DataSourceConfig(**config)
                         else:
                             # Default to DataSourceConfig for backward compatibility
@@ -196,9 +187,9 @@ class OrchestratorProtocol(BaseModel):
                     else:
                         # Pass through as-is, let Pydantic handle validation
                         validated_storage[name] = config
-                
+
                 data["storage"] = validated_storage
-        
+
         return data
 
     model_config = ConfigDict(
@@ -331,7 +322,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                         # Filter out None values to allow StorageConfig defaults
                         config_dict = {k: v for k, v in config.items() if v is not None}
                         storage_config = StorageConfig(**config_dict)
-                    
+
                     # Use unified storage system instead of deprecated create_data_loader
                     storage = bm.get_storage(storage_config)
                     self._input_loaders[source_name] = storage
@@ -599,6 +590,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             that takes a `FlowMessage` as input and performs the publishing action.
 
         """
+
         async def publish_callback(message: FlowMessage) -> None:
             """Default no-op publish callback. Subclasses should implement actual publishing logic."""
             logger.debug(f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}")
