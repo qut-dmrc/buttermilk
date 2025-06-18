@@ -119,7 +119,7 @@ class SessionInfo(BaseModel):
 
     """
 
-    platform: str = Field(default="local", description="Platform where the session is running (e.g., 'local', 'gcp').")
+    platform: str = Field(description="Platform where the session is running (e.g., 'local', 'gcp').")
     name: str = Field(..., description="User-defined name for the current session or project.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
     run_id: str = Field(default_factory=_make_run_id, description="Unique identifier for this execution run.")
@@ -337,15 +337,15 @@ class BM(SessionInfo):
         )
         
         if gcp_cloud_cfg:
-            # Try both 'project_id' (config field) and 'project' (legacy field)
-            project_id = getattr(gcp_cloud_cfg, "project_id", None) or getattr(gcp_cloud_cfg, "project", None)
+            # Get project_id from config
+            project_id = getattr(gcp_cloud_cfg, "project_id", None)
             quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
 
             if project_id:
-                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
+                os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
 
             if quota_project_id:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
                 
             logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
@@ -942,17 +942,18 @@ class BM(SessionInfo):
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        elif isinstance(config, dict):
-            # Convert dict/OmegaConf to StorageConfig object
-            config_dict = dict(config)  # Convert OmegaConf to plain dict if needed
-            config = StorageConfig(**config_dict)
         elif not isinstance(config, StorageConfig):
-            # Handle other config types (like OmegaConf objects)
+            # Convert OmegaConf objects to StorageConfig
+            # This is necessary for Hydra integration
             try:
-                config_dict = dict(config)
-                config = StorageConfig(**config_dict)
-            except Exception as e:
-                raise ValueError(f"Cannot convert config to StorageConfig: {e}") from e
+                from omegaconf import DictConfig
+                if isinstance(config, DictConfig):
+                    config_dict = OmegaConf.to_container(config, resolve=True)
+                    config = StorageConfig(**config_dict)
+                else:
+                    raise ValueError(f"Config must be a StorageConfig or OmegaConf DictConfig, got {type(config)}")
+            except ImportError:
+                raise ValueError("Config must be a StorageConfig object") from None
 
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory

@@ -146,7 +146,7 @@ class CloudManager:
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 
-        project = getattr(logger_cfg, "project_id", None) or getattr(logger_cfg, "project", None)
+        project = getattr(logger_cfg, "project_id", None)
         if not project:
             raise RuntimeError("Logger config missing 'project' attribute")
 
@@ -171,8 +171,8 @@ class CloudManager:
         """Initialize Vertex AI connection."""
         from vertexai import init as aiplatform_init
 
-        # Ensure required attributes exist - try both field name variants
-        project = getattr(cloud, "project_id", None) or getattr(cloud, "project", None)
+        # Ensure required attributes exist
+        project = getattr(cloud, "project_id", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 

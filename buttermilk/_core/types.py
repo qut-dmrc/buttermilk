@@ -92,7 +92,7 @@ class Record(BaseModel):
         default="text/plain",
         description="Primary MIME type of the content.",
     )
-    
+
     # Vector processing fields (optional, for enhanced functionality)
     file_path: str | None = Field(
         default=None,
@@ -129,12 +129,12 @@ class Record(BaseModel):
     @property
     def text_content(self) -> str:
         """Unified text access for vector processing.
-        
+
         Returns the best available text representation:
         1. content (if it's a string) - main content field
         2. alt_text (as fallback for non-text content)
         3. string representation of content (for multimodal)
-        
+
         Returns:
             str: Text content suitable for vector processing.
         """
@@ -147,88 +147,27 @@ class Record(BaseModel):
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
         """Custom model_dump that excludes computed fields by default.
-        
+
         For simple text content, text_content duplicates content, so we exclude it
         unless explicitly requested. For multimodal content, users can include it
         by passing exclude=None or exclude={other_fields}.
         """
         # Get current exclude set
-        current_exclude = kwargs.get('exclude', set())
+        current_exclude = kwargs.get("exclude", set())
         if current_exclude is None:
             current_exclude = set()
         elif isinstance(current_exclude, (list, tuple)):
             current_exclude = set(current_exclude)
         elif not isinstance(current_exclude, set):
             current_exclude = {current_exclude}
-        
+
         # Add computed fields to exclusion for simple text content
         if isinstance(self.content, str):
             # For simple string content, text_content is redundant
-            current_exclude.update({'text_content', 'title', 'images'})
-        
-        kwargs['exclude'] = current_exclude
-        return super().model_dump(**kwargs)
+            current_exclude.update({"text_content", "title", "images"})
 
-    @classmethod
-    def from_input_document(cls, doc: Any) -> "Record":
-        """Convert InputDocument to Record (no data loss).
-        
-        Args:
-            doc: InputDocument instance (or object with compatible fields)
-            
-        Returns:
-            Record: Enhanced Record with all InputDocument data preserved
-        """
-        # Handle both actual InputDocument objects and dict-like objects
-        if hasattr(doc, 'model_dump'):
-            doc_dict = doc.model_dump()
-        else:
-            doc_dict = doc if isinstance(doc, dict) else doc.__dict__
-            
-        # Extract title from the object or dict
-        title = getattr(doc, 'title', None) or doc_dict.get('title', '')
-        
-        # Create metadata with title
-        metadata = doc_dict.get('metadata', {}).copy()
-        if title:
-            metadata['title'] = title
-            
-        return cls(
-            record_id=doc_dict.get('record_id', ''),
-            content=doc_dict.get('full_text', ''),
-            file_path=doc_dict.get('file_path'),
-            chunks=doc_dict.get('chunks', []),
-            chunks_path=doc_dict.get('chunks_path'),
-            metadata=metadata,
-            uri=doc_dict.get('record_path'),  # Map record_path to uri
-        )
-    
-    def to_input_document(self) -> Any:
-        """Convert Record to InputDocument format (backwards compatibility).
-        
-        This method provides backwards compatibility by converting the enhanced
-        Record back to InputDocument format when needed.
-        
-        Returns:
-            dict: InputDocument-compatible dictionary
-        """
-        import warnings
-        warnings.warn(
-            "to_input_document() is deprecated. Use Record directly for vector operations.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        
-        return {
-            'record_id': self.record_id,
-            'title': self.title or f"Record {self.record_id}",
-            'full_text': self.text_content,
-            'file_path': self.file_path or '',
-            'record_path': self.uri or '',
-            'chunks_path': self.chunks_path or '',
-            'chunks': self.chunks,
-            'metadata': self.metadata,
-        }
+        kwargs["exclude"] = current_exclude
+        return super().model_dump(**kwargs)
 
     def as_markdown(self) -> str:
         """Combines metadata and text content into a single string.
@@ -295,13 +234,13 @@ class Record(BaseModel):
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 
-    @field_validator('content')
+    @field_validator("content")
     @classmethod
     def validate_content(cls, v):
         """Validate that content is not empty or None."""
         if v is None:
             raise ValueError("Content cannot be None - Record must have meaningful content")
-        
+
         if isinstance(v, str):
             if not v.strip():
                 raise ValueError("Content cannot be empty string - Record must have meaningful content")
@@ -319,7 +258,7 @@ class Record(BaseModel):
                     break
             if not has_meaningful_content:
                 raise ValueError("Content sequence must contain at least one meaningful item")
-        
+
         return v
 
     @model_validator(mode="after")

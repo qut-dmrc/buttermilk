@@ -95,7 +95,6 @@ class LLMConfig(BaseModel):
     )
     obj: str = Field(..., description="Name of the model object to instantiate")
     api_type: str = Field(
-        default="openai",
         description="Type of API to use (e.g. openai, vertex, azure)",
     )
     api_key: str | None = Field(

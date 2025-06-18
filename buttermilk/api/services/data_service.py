@@ -76,7 +76,6 @@ class DataService:
             List[str]: The list of models
 
         """
-        return ["lite", "full"]
         try:
             return list(flow_runner.flows[flow_name].parameters.get("model", []))
         except Exception as e:
@@ -136,7 +135,7 @@ class DataService:
             for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
-                    raise NotImplementedError
+                    raise NotImplementedError("Score inclusion feature is not yet implemented")
 
                 records.append(record)
 
@@ -160,15 +159,7 @@ class DataService:
             List[Dict[str, Any]]: The list of history entries
 
         """
-        try:
-            # This is a placeholder for actual history retrieval
-            # In a real implementation, this would query a data store
-
-            # For the demo, return empty list
-            return []
-        except Exception as e:
-            logger.warning(f"Error getting run history: {e}")
-            return []
+        raise NotImplementedError("Run history retrieval is not yet implemented")
 
     @staticmethod
     def safely_get_session_data(websocket_manager, session_id: str) -> dict[str, Any]:

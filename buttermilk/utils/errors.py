@@ -89,17 +89,19 @@ def try_extract_vertex_error(e):
         for resp in e.responses:
             try:
                 info.append(resp.to_dict()["prompt_feedback"])
-            except:
-                pass
+            except (KeyError, AttributeError) as err:
+                logger.debug(f"Could not extract prompt_feedback from response: {err}")
             for cand in resp.candidates:
                 candidate = {}
                 try:
                     candidate["finish_reason"] = cand.finish_reason
                     candidate["partial"] = cand.parts.content
-                except:
+                except (AttributeError, IndexError) as err:
+                    logger.debug(f"Could not extract candidate info: {err}")
                     continue
                 if candidate:
                     info.append(candidate)
-    except:
+    except Exception as e:
+        logger.debug(f"Failed to extract vertex error details: {type(e).__name__}: {e}")
         return ""
     return info

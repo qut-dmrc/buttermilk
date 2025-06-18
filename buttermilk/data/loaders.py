@@ -449,7 +449,18 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
     elif config.type == "plaintext":
         return PlaintextDataLoader(config)
     elif config.type in ["bigquery", "bq"]:
-        from buttermilk.data.bigquery_loader import BigQueryRecordLoader
-        return BigQueryRecordLoader(**config.model_dump())
+        # Use new unified storage system
+        from buttermilk._core.dmrc import get_bm
+        from buttermilk._core.storage_config import StorageConfig
+        
+        # Convert DataSourceConfig to StorageConfig
+        storage_config = StorageConfig(
+            type="bigquery",
+            **config.model_dump(exclude={"type"})
+        )
+        
+        bm = get_bm()
+        storage = bm.get_storage(storage_config)
+        return DataLoaderWrapper(storage)
     else:
         raise ValueError(f"Unsupported data source type: {config.type}")
