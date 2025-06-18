@@ -16,11 +16,19 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
-import openai
-from anthropic import (
-    AnthropicVertex,  # Client for Anthropic models on Vertex AI
-    AsyncAnthropicVertex,
-)
+# Conditional imports for LLM libraries that may not be available
+try:
+    import openai
+except ImportError:
+    openai = None
+try:
+    from anthropic import (
+        AnthropicVertex,  # Client for Anthropic models on Vertex AI
+        AsyncAnthropicVertex,
+    )
+except ImportError:
+    AnthropicVertex = None
+    AsyncAnthropicVertex = None
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
 from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling

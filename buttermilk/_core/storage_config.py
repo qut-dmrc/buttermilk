@@ -172,6 +172,10 @@ class BigQueryStorageConfig(BaseStorageConfig):
         default=7,
         description="For time-series data, retrieve from the last N days."
     )
+    split_type: str | None = Field(
+        default=None,
+        description="Data split type for datasets (e.g., 'train', 'test', 'validation')."
+    )
     
     @model_validator(mode="after")
     def set_project_id_from_env(self) -> "BigQueryStorageConfig":
