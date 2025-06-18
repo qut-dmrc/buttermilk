@@ -30,7 +30,7 @@ import logging
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
-from typing import Any
+from typing import Any, Union
 
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
@@ -942,31 +942,31 @@ class BM(SessionInfo):
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        elif not isinstance(config, StorageConfig):
+        elif not isinstance(config, BaseStorageConfig):
             # Convert OmegaConf objects to StorageConfig
             # This is necessary for Hydra integration
             try:
-                from omegaconf import DictConfig
+                from omegaconf import DictConfig, OmegaConf
                 if isinstance(config, DictConfig):
                     config_dict = OmegaConf.to_container(config, resolve=True)
-                    config = StorageConfig(**config_dict)
+                    config = StorageFactory.create_config(config_dict)
                 else:
-                    raise ValueError(f"Config must be a StorageConfig or OmegaConf DictConfig, got {type(config)}")
+                    raise ValueError(f"Config must be a BaseStorageConfig or OmegaConf DictConfig, got {type(config)}")
             except ImportError:
-                raise ValueError("Config must be a StorageConfig object") from None
+                raise ValueError("Config must be a BaseStorageConfig object") from None
 
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory
         return StorageFactory.create_storage(config, self)
 
-    async def get_storage_async(self, config: StorageConfig | dict | None = None) -> Any:
+    async def get_storage_async(self, config: Union[BaseStorageConfig, dict] | None = None) -> Any:
         """Async factory method that creates and auto-initializes storage instances.
         
         For ChromaDB with remote storage (gs://, s3://, etc.), this automatically calls
         ensure_cache_initialized() so the storage is ready for immediate use.
         
         Args:
-            config: Storage configuration (StorageConfig object, dict, or None)
+            config: Storage configuration (BaseStorageConfig object, dict, or None)
             
         Returns:
             Fully initialized storage instance ready for use

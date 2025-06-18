@@ -303,6 +303,37 @@ class StorageFactory:
     """Factory for creating storage instances based on configuration."""
     
     @staticmethod
+    def create_config(config_dict: dict) -> BaseStorageConfig:
+        """Create appropriate config type based on the 'type' field in the dictionary.
+        
+        Args:
+            config_dict: Dictionary with configuration values including 'type'
+            
+        Returns:
+            Appropriate BaseStorageConfig subclass instance
+            
+        Raises:
+            ValueError: If type is missing or not supported
+        """
+        if not isinstance(config_dict, dict):
+            raise ValueError(f"Expected dict, got {type(config_dict)}")
+            
+        storage_type = config_dict.get('type')
+        if not storage_type:
+            raise ValueError("Missing 'type' field in storage configuration")
+            
+        if storage_type == 'bigquery':
+            return BigQueryStorageConfig(**config_dict)
+        elif storage_type in ['file', 'local', 'gcs', 's3', 'plaintext']:
+            return FileStorageConfig(**config_dict)
+        elif storage_type in ['chromadb', 'vector']:
+            return VectorStorageConfig(**config_dict)
+        elif storage_type == 'huggingface':
+            return HuggingFaceStorageConfig(**config_dict)
+        else:
+            return GeneratorStorageConfig(**config_dict)
+    
+    @staticmethod
     def create_storage(config: Union[StorageConfig, BaseStorageConfig], bm_instance=None):
         """Create storage instance based on configuration type.
         
@@ -321,17 +352,9 @@ class StorageFactory:
         
         # Convert dict (from OmegaConf) to appropriate config type
         if isinstance(config, dict):
-            storage_type = config.get('type')
-            if storage_type == 'bigquery':
-                config = BigQueryStorageConfig(**config)
-            elif storage_type in ['file', 'local', 'gcs', 's3', 'plaintext']:
-                config = FileStorageConfig(**config)
-            elif storage_type in ['chromadb', 'vector']:
-                config = VectorStorageConfig(**config)
-            elif storage_type == 'huggingface':
-                config = HuggingFaceStorageConfig(**config)
-            else:
-                config = GeneratorStorageConfig(**config)
+            config = StorageFactory.create_config(config)
+            
+        storage_type = config.type
         
         storage_type = config.type
         
