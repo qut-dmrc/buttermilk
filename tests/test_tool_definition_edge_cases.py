@@ -416,7 +416,7 @@ class TestUnifiedRequestEdgeCases:
             inputs={"value": "test"}
         )
         
-        with pytest.raises(ValueError, match="is not a registered tool"):
+        with pytest.raises(ValueError, match="Tool regular_method not found"):
             await agent.handle_unified_request(request)
     
     async def test_tool_with_validation_error(self):
