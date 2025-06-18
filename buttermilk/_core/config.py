@@ -253,6 +253,7 @@ class DataSourceConfig(BaseModel):
     """
 
     max_records_per_group: int = Field(
+        default=-1,
         description="Maximum records to process per group if grouping is applied. -1 for no limit.",
     )
     type: Literal[
@@ -271,6 +272,7 @@ class DataSourceConfig(BaseModel):
         description="Path to the data source (e.g., file path, BigQuery table ID, URL). Depends on 'type'.",
     )
     glob: str = Field(
+        default="**/*",
         description="Glob pattern for matching files if type is 'file'.",
     )
     filter: Mapping[str, str | Sequence[str] | None] | None = Field(
@@ -301,6 +303,7 @@ class DataSourceConfig(BaseModel):
         ),
     )
     last_n_days: int = Field(
+        default=7,
         description="For time-series data, retrieve from the last N days.",
     )
     db: Mapping[str, str] = Field(
@@ -334,6 +337,7 @@ class DataSourceConfig(BaseModel):
         description="Name or path of embedding model (for 'chromadb'/vector search).",
     )
     dimensionality: int = Field(
+        default=-1,
         description="Dimensionality of embeddings, if applicable.",
     )
     persist_directory: str = Field(
@@ -347,6 +351,7 @@ class DataSourceConfig(BaseModel):
         default="", description="Name/subset for HuggingFace datasets.",
     )
     split: str = Field(
+        default="train",
         description="Split for HuggingFace datasets (e.g., 'train', 'test').",
     )
 
@@ -382,20 +387,28 @@ class BigQueryConfig(BaseModel):
         description="Google Cloud project ID. If None, uses default from credentials."
     )
     dataset_id: str = Field(
+        default="buttermilk",
         description="BigQuery dataset ID."
     )
     table_id: str = Field(
+        default="records",
         description="BigQuery table ID."
     )
     randomize: bool = Field(
+        default=True,
         description="Whether to randomize query results."
     )
     batch_size: int = Field(
+        default=1000,
         ge=1,
         description="Batch size for operations."
     )
-    auto_create: bool = Field(description="Whether to auto-create tables if they don't exist.")
+    auto_create: bool = Field(
+        default=True,
+        description="Whether to auto-create tables if they don't exist."
+    )
     clustering_fields: list[str] = Field(
+        default=["record_id", "dataset_name"],
         description="Default clustering fields for new tables."
     )
 
@@ -493,7 +506,7 @@ class Tracing(BaseModel):
 
     """
 
-    enabled: bool = Field(description="Enable or disable tracing.")
+    enabled: bool = Field(default=False, description="Enable or disable tracing.")
     api_key: str = Field(default="", description="API key for the tracing provider.")
     provider: str = Field(default="", description="Name of the tracing provider (e.g., 'langfuse', 'weave').")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
@@ -591,6 +604,7 @@ class AgentConfig(BaseModel):
     )
 
     name_components: list[str] = Field(
+        default=["role", "unique_identifier"],
         description="List of attribute names or JMESPath expressions to construct the 'agent_name'.",
         exclude=False,  # Ensure it's included in model_dump etc.
     )
