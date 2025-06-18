@@ -1,9 +1,9 @@
-"""Storage configuration classes for unified storage operations."""
+"""Storage configuration classes with type-specific schemas."""
 
 import os
-from typing import Any, Literal
+from typing import Any, Literal, Union, Annotated
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator, Discriminator
 
 from buttermilk._core.log import logger
 
@@ -44,77 +44,20 @@ class MultiFieldEmbeddingConfig(BaseModel):
     )
 
 
-class StorageConfig(BaseModel):
-    """Unified configuration for storage operations (read and write).
-
-    This class consolidates configuration for both data loading and saving operations,
-    replacing the separate DataSourceConfig and SaveInfo classes with a single,
-    consistent configuration approach.
-
+class BaseStorageConfig(BaseModel):
+    """Base configuration for all storage operations.
     
-    Attributes:
-        type: The storage backend type
-        project_id: Cloud project ID (auto-detected from environment if not provided)
-        dataset_id: Dataset/database identifier
-        table_id: Table/collection identifier
-        path: File path or URI for file-based storage
-        schema_path: Path to schema definition file
-        dataset_name: Logical dataset name for filtering/grouping
-        split_type: Data split type (train/test/val)
-        randomize: Whether to randomize query results
-        batch_size: Batch size for operations
-        auto_create: Whether to auto-create storage if it doesn't exist
-        clustering_fields: Fields to use for clustering (BigQuery)
-        db: Database-specific configuration parameters
-        filter: Filtering criteria for data operations
-        columns: Column selection/transformation mapping
-        limit: Maximum number of records to process
+    Contains common fields shared across all storage types.
     """
 
     # Core identification
-    type: Literal[
-        "bigquery", "file", "gcs", "s3", "local",
-        "chromadb", "vector", "plaintext", "generator",
-        "huggingface", "job", "outputs"
-    ] = Field(description="Storage backend type")
+    type: str = Field(description="Storage backend type")
 
-    # Cloud/database configuration
-    project_id: str | None = Field(
-        default=None,
-        description="Cloud project ID (auto-detected from GOOGLE_CLOUD_PROJECT if not provided)"
-    )
-    dataset_id: str | None = Field(
-        default=None,
-        description="Dataset/database identifier"
-    )
-    table_id: str | None = Field(
-        default=None,
-        description="Table/collection identifier"
-    )
-
-    # Path-based storage
-    path: str | None = Field(
-        default=None,
-        description="File path or URI for storage location"
-    )
-
-    # Schema and structure
-    schema_path: str | None = Field(
-        default=None,
-        description="Path to schema definition file"
-    )
-
-    # Data organization
+    # Common fields across all storage types
     dataset_name: str | None = Field(
         default=None,
         description="Logical dataset name for filtering/grouping"
     )
-    split_type: str | None = Field(
-        default=None,
-        description="Data split type (train/test/val)"
-    )
-
-    # Operation configuration
     randomize: bool = Field(
         default=True,
         description="Whether to randomize query results"
@@ -128,17 +71,7 @@ class StorageConfig(BaseModel):
         default=True,
         description="Whether to auto-create storage if it doesn't exist"
     )
-    clustering_fields: list[str] = Field(
-        default=["record_id", "dataset_name"],
-        description="Fields to use for clustering (BigQuery)"
-    )
-
-    # Provider-specific configuration
-    db: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Database-specific configuration parameters"
-    )
-
+    
     # Data filtering and selection
     filter: dict[str, Any] = Field(
         default_factory=dict,
@@ -157,15 +90,71 @@ class StorageConfig(BaseModel):
         default=None,
         description="Maximum number of records to process"
     )
+    
+    # Generic fields that some storage types may use
+    name: str = Field(
+        default="",
+        description="Name identifier for the storage configuration."
+    )
+    schema_path: str | None = Field(
+        default=None,
+        description="Path to schema definition file"
+    )
+    uri: str | None = Field(
+        default=None,
+        description="URI for data source (alternative to path for some storage types)"
+    )
+    
+    # Provider-specific configuration
+    db: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Database-specific configuration parameters"
+    )
 
-    # Additional fields from DataSourceConfig for compatibility
+    model_config = {
+        "extra": "forbid",
+        "arbitrary_types_allowed": False,
+        "populate_by_name": True,
+    }
+    
+    def merge_defaults(self, defaults):
+        """Merge this config with default values, prioritizing this config's values."""
+        exclude_fields = set()
+        merged_data = defaults.model_dump(exclude=exclude_fields)
+        merged_data.update(self.model_dump(exclude=exclude_fields))
+        # Return the same type as self
+        return self.__class__(**merged_data)
+
+
+# Type-specific storage configuration classes
+
+class BigQueryStorageConfig(BaseStorageConfig):
+    """Configuration for BigQuery storage operations."""
+    
+    type: Literal["bigquery"] = Field(default="bigquery", description="Storage backend type")
+    
+    # BigQuery-specific fields
+    project_id: str | None = Field(
+        default=None,
+        description="Cloud project ID (auto-detected from GOOGLE_CLOUD_PROJECT if not provided)"
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="Dataset identifier"
+    )
+    table_id: str | None = Field(
+        default=None,
+        description="Table identifier"
+    )
+    clustering_fields: list[str] = Field(
+        default=["record_id", "dataset_name"],
+        description="Fields to use for clustering"
+    )
+    
+    # Data organization specific to BigQuery
     max_records_per_group: int = Field(
         default=-1,
-        description="Maximum records to process per group if grouping is applied. -1 for no limit."
-    )
-    glob: str = Field(
-        default="**/*",
-        description="Glob pattern for matching files if type is 'file'."
+        description="Maximum records to process per group. -1 for no limit."
     )
     join: dict[str, str] = Field(
         default_factory=dict,
@@ -183,37 +172,68 @@ class StorageConfig(BaseModel):
         default=7,
         description="For time-series data, retrieve from the last N days."
     )
-    name: str = Field(
-        default="",
-        description="Name identifier for the storage configuration."
-    )
-    split: str = Field(
-        default="train",
-        description="Data split identifier (train/test/val)."
-    )
+    
+    @model_validator(mode="after")
+    def set_project_id_from_env(self) -> "BigQueryStorageConfig":
+        """Set project_id from environment if not already set."""
+        if not self.project_id:
+            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        return self
 
-    # File-based storage specific
+    @computed_field
+    @property
+    def full_table_id(self) -> str | None:
+        """Compute full BigQuery table identifier from constituent parts."""
+        if all([self.project_id, self.dataset_id, self.table_id]):
+            return f"{self.project_id}.{self.dataset_id}.{self.table_id}"
+        return None
+
+
+class FileStorageConfig(BaseStorageConfig):
+    """Configuration for file-based storage operations."""
+    
+    type: Literal["file", "local", "gcs", "s3", "plaintext"] = Field(description="Storage backend type")
+    
+    # File-specific fields  
+    path: str | None = Field(
+        default=None,
+        description="File path or URI for storage location"
+    )
+    glob: str = Field(
+        default="**/*",
+        description="Glob pattern for matching files."
+    )
+    max_records_per_group: int = Field(
+        default=-1,
+        description="Maximum records to process per group. -1 for no limit."
+    )
     index: list[str] | None = Field(
         default=None,
         description="Columns to use as an index"
     )
+    
 
-    # ChromaDB/Vector storage specific
+class VectorStorageConfig(BaseStorageConfig):
+    """Configuration for vector database storage operations."""
+    
+    type: Literal["chromadb", "vector"] = Field(description="Storage backend type")
+    
+    # Vector storage specific fields
     persist_directory: str | None = Field(
         default=None,
-        description="Directory for persisting data (for ChromaDB or file-based vector stores)"
+        description="Directory for persisting vector data"
     )
     collection_name: str | None = Field(
         default=None,
-        description="Name of the collection for ChromaDB"
+        description="Name of the collection"
     )
     embedding_model: str | None = Field(
         default=None,
-        description="Name or path of embedding model (for ChromaDB/vector search)"
+        description="Name or path of embedding model"
     )
     dimensionality: int | None = Field(
         default=None,
-        description="Dimensionality of embeddings, if applicable"
+        description="Dimensionality of embeddings"
     )
     
     # Multi-field embedding configuration
@@ -225,49 +245,43 @@ class StorageConfig(BaseModel):
         )
     )
 
-    # Generic URI field for various storage types
-    uri: str | None = Field(
+
+class HuggingFaceStorageConfig(BaseStorageConfig):
+    """Configuration for HuggingFace dataset storage operations."""
+    
+    type: Literal["huggingface"] = Field(default="huggingface", description="Storage backend type")
+    
+    # HuggingFace specific fields
+    dataset_id: str | None = Field(
         default=None,
-        description="URI for data source (alternative to path for some storage types)"
+        description="HuggingFace dataset identifier"
     )
+    split: str = Field(
+        default="train",
+        description="Data split identifier (train/test/val)."
+    )
+    
 
-    model_config = {
-        "extra": "forbid",
-        "arbitrary_types_allowed": False,
-        "populate_by_name": True,
-    }
-
-    @model_validator(mode="after")
-    def set_project_id_from_env(self) -> "StorageConfig":
-        """Set project_id from environment if not already set."""
-        if not self.project_id:
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        return self
-
-    @computed_field
-    @property
-    def full_table_id(self) -> str | None:
-        """Compute full BigQuery table identifier from constituent parts.
-
-        The full table ID is always computed from project_id, dataset_id, and table_id.
-        This ensures consistency and prevents conflicts between direct full_table_id
-        specification and constituent parts.
-
-        Returns:
-            Fully qualified table ID in format 'project.dataset.table' or None if any part is missing
-        """
-        if all([self.project_id, self.dataset_id, self.table_id]):
-            return f"{self.project_id}.{self.dataset_id}.{self.table_id}"
-        return None
-
-    def merge_defaults(self, defaults: "StorageConfig") -> "StorageConfig":
-        """Merge this config with default values, prioritizing this config's values."""
-        exclude_fields = {"full_table_id"}
-        merged_data = defaults.model_dump(exclude=exclude_fields)
-        merged_data.update(self.model_dump(exclude=exclude_fields))
-        return StorageConfig(**merged_data)
+class GeneratorStorageConfig(BaseStorageConfig):
+    """Configuration for generator-based storage operations."""
+    
+    type: Literal["generator", "job", "outputs"] = Field(description="Storage backend type")
 
 
+# Discriminated union for all storage config types
+StorageConfig = Annotated[
+    Union[
+        BigQueryStorageConfig,
+        FileStorageConfig, 
+        VectorStorageConfig,
+        HuggingFaceStorageConfig,
+        GeneratorStorageConfig
+    ],
+    Field(discriminator="type")
+]
+
+
+# Legacy compatibility - keep BigQueryDefaults for existing code
 class BigQueryDefaults(BaseModel):
     """Default configuration values specifically for BigQuery operations."""
 
@@ -278,10 +292,9 @@ class BigQueryDefaults(BaseModel):
     auto_create: bool = Field(default=True)
     clustering_fields: list[str] = Field(default=["record_id", "dataset_name"])
 
-    def to_storage_config(self) -> StorageConfig:
-        """Convert to a StorageConfig object."""
-        return StorageConfig(
-            type="bigquery",
+    def to_storage_config(self) -> BigQueryStorageConfig:
+        """Convert to a BigQueryStorageConfig object."""
+        return BigQueryStorageConfig(
             **self.model_dump()
         )
 
@@ -290,7 +303,7 @@ class StorageFactory:
     """Factory for creating storage instances based on configuration."""
     
     @staticmethod
-    def create_storage(config: StorageConfig, bm_instance=None):
+    def create_storage(config: Union[StorageConfig, BaseStorageConfig], bm_instance=None):
         """Create storage instance based on configuration type.
         
         Args:
@@ -302,9 +315,23 @@ class StorageFactory:
         """
         from buttermilk.data.vector import ChromaDBEmbeddings
         
-        # Ensure we have a proper StorageConfig instance
-        if not isinstance(config, StorageConfig):
-            raise ValueError(f"Expected StorageConfig instance, got {type(config)}")
+        # Handle both new type-specific configs and legacy unified configs
+        if not isinstance(config, (BaseStorageConfig, dict)):
+            raise ValueError(f"Expected StorageConfig or dict instance, got {type(config)}")
+        
+        # Convert dict (from OmegaConf) to appropriate config type
+        if isinstance(config, dict):
+            storage_type = config.get('type')
+            if storage_type == 'bigquery':
+                config = BigQueryStorageConfig(**config)
+            elif storage_type in ['file', 'local', 'gcs', 's3', 'plaintext']:
+                config = FileStorageConfig(**config)
+            elif storage_type in ['chromadb', 'vector']:
+                config = VectorStorageConfig(**config)
+            elif storage_type == 'huggingface':
+                config = HuggingFaceStorageConfig(**config)
+            else:
+                config = GeneratorStorageConfig(**config)
         
         storage_type = config.type
         
@@ -315,19 +342,20 @@ class StorageFactory:
             from buttermilk.storage.file import FileStorage
             return FileStorage(config, bm_instance)
         elif storage_type == "chromadb":
-            # Convert StorageConfig to ChromaDBEmbeddings parameters
+            # Convert VectorStorageConfig to ChromaDBEmbeddings parameters
             chromadb_params = {
-                'collection_name': config.collection_name or 'default_collection',
-                'persist_directory': config.persist_directory or './data/chromadb',
-                'embedding_model': config.embedding_model or 'gemini-embedding-001',
-                'dimensionality': config.dimensionality or 3072,
+                'collection_name': getattr(config, 'collection_name', None) or 'default_collection',
+                'persist_directory': getattr(config, 'persist_directory', None) or './data/chromadb',
+                'embedding_model': getattr(config, 'embedding_model', None) or 'gemini-embedding-001',
+                'dimensionality': getattr(config, 'dimensionality', None) or 3072,
             }
             
             # Add multi-field embedding configuration if specified
-            if config.multi_field_embedding:
+            multi_field_embedding = getattr(config, 'multi_field_embedding', None)
+            if multi_field_embedding:
                 try:
                     # Parse multi-field config into proper Pydantic model
-                    multi_field_config = MultiFieldEmbeddingConfig(**config.multi_field_embedding)
+                    multi_field_config = MultiFieldEmbeddingConfig(**multi_field_embedding)
                     chromadb_params['multi_field_config'] = multi_field_config
                 except Exception as e:
                     logger.warning(f"Invalid multi_field_embedding config, using default: {e}")
@@ -345,9 +373,11 @@ class StorageFactory:
             # Use FileStorage with plaintext-specific configuration
             from buttermilk.storage.file import FileStorage
             # For plaintext, we typically use glob patterns
-            if not config.glob or config.glob == "**/*":
+            glob_pattern = getattr(config, 'glob', None)
+            if not glob_pattern or glob_pattern == "**/*":
                 # Set default glob for text files
-                config.glob = "**/*.txt"
+                if hasattr(config, 'glob'):
+                    config.glob = "**/*.txt"
             return FileStorage(config, bm_instance)
         else:
             raise ValueError(f"Unsupported storage type: {storage_type}")

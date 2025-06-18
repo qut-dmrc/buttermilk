@@ -1,10 +1,10 @@
 # Default file storage configuration template
 # Can be used for local development or file-based workflows
 
-type: file
-batch_size: 100
-auto_create: true
+defaults:
+  - /storage/defaults/file
 
+# Override any defaults as needed
 # Path can be overridden by specific datasets
 # Supports both local paths and cloud URIs (gs://, s3://, etc.)
 path: ${oc.env:BUTTERMILK_DATA_PATH,./data/}

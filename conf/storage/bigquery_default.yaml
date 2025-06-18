@@ -1,12 +1,8 @@
 # Default BigQuery storage configuration template
 # Can be inherited by specific datasets
 
-type: bigquery
+defaults:
+  - /storage/defaults/bigquery
+
+# Override any defaults as needed
 dataset_id: ${bm.infrastructure.clouds.0.bigquery_dataset}  # Reference infrastructure config
-table_id: records
-randomize: true
-batch_size: 1000
-auto_create: true
-clustering_fields: 
-  - record_id
-  - dataset_name

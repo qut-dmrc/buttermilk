@@ -1,11 +1,12 @@
+defaults:
+  - /storage/defaults/vector
+
 osb_vector:
-  type: chromadb
+  # Override vector defaults for OSB-specific settings
   persist_directory: "gs://prosocial-dev/data/osb/chromadb"
   collection_name: "osb_fulltext"
-  embedding_model: "gemini-embedding-001"
-  dimensionality: 3072
-  randomize: true  # Add missing StorageConfig field with default
-  batch_size: 1000  # Add missing StorageConfig field with default
+  
+  # OSB-specific multi-field embedding configuration
   multi_field_embedding:
     content_field: "content"  # fulltext for main content chunking
     chunk_size: 1200

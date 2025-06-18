@@ -1,5 +1,7 @@
+defaults:
+  - /storage/defaults/file
+
 osb_json:
-  type: file
   path: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
   columns:
     record_id: record_id

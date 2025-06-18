@@ -1,6 +1,8 @@
 
+defaults:
+  - /storage/defaults/file
+
 drag:
-  type: file
   path: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
   index:
     - record_id

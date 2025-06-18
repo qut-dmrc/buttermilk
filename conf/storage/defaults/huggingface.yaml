@@ -1,0 +1,9 @@
+# Default HuggingFace dataset storage configuration
+
+type: huggingface
+split: train
+
+# Common storage settings
+randomize: true
+batch_size: 1000
+auto_create: true
