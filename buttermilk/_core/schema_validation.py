@@ -181,7 +181,8 @@ def _coerce_value(schema: dict[str, Any], value: Any) -> Any:
     elif schema_type == "integer":
         if isinstance(value, str):
             try:
-                return int(value)
+                # Try converting to float first, then to int (handles "123.45")
+                return int(float(value))
             except ValueError:
                 return value
         elif isinstance(value, (int, float)):

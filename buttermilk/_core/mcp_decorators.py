@@ -55,11 +55,9 @@ class MCPRoute:
             "include_in_tools": self.include_in_tools
         }
         
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        
-        return wrapper
+        # Important: Don't wrap the function, just add metadata
+        # This preserves async functions properly
+        return func
 
 
 def tool(
@@ -209,7 +207,7 @@ def _type_to_json_schema(type_hint: Any) -> dict[str, Any]:
     Could be enhanced with more comprehensive type mapping.
     """
     import types
-    from typing import get_args, get_origin
+    from typing import get_args, get_origin, Union
     
     # Handle None type
     if type_hint is type(None):
@@ -243,8 +241,8 @@ def _type_to_json_schema(type_hint: Any) -> dict[str, Any]:
         elif origin is dict:
             return {"type": "object"}
         
-        elif origin is types.UnionType or (hasattr(types, "Union") and origin is getattr(types, "Union")):
-            # Handle Union types
+        elif origin is Union or (hasattr(types, "UnionType") and origin is getattr(types, "UnionType")):
+            # Handle Union types (works for both typing.Union and types.UnionType in 3.10+)
             args = get_args(type_hint)
             if len(args) == 2 and type(None) in args:
                 # Optional type

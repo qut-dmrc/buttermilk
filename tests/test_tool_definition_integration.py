@@ -25,15 +25,22 @@ class TestAgentWithTools(Agent):
         operation = message.inputs.get("operation", "default")
         
         if operation == "analyze":
-            result = await self.analyze_data(
-                data=message.inputs.get("data", ""),
-                format=message.inputs.get("format", "json")
-            )
+            # Don't call the tool method here - that's for direct tool invocation
+            # Just return a result for the operation
+            result = {
+                "analysis": f"Analyzed {len(message.inputs.get('data', ''))} characters",
+                "format": message.inputs.get("format", "json"),
+                "insights": ["insight1", "insight2"]
+            }
         elif operation == "search":
-            result = self.search(
-                query=message.inputs.get("query", ""),
-                limit=message.inputs.get("limit", 10)
-            )
+            # Don't call the tool method - just simulate the operation
+            query = message.inputs.get("query", "")
+            limit = message.inputs.get("limit", 10)
+            result = {
+                "query": query,
+                "results": [f"result_{i}" for i in range(min(limit, 5))],
+                "total": min(limit, 5)
+            }
         else:
             result = {"message": "No specific operation requested"}
         
@@ -191,15 +198,16 @@ class TestToolDefinitionIntegration:
         agent2 = TestLLMAgentWithTools(
             agent_name="assistant",
             model_name="test-model",
-            role="ASSISTANT"
+            role="ASSISTANT",
+            parameters={"model": "test-model"}
         )
-        agent2.parameters = {"model": "test-model"}
         
         # Create host
         host = StructuredLLMHostAgent(
             agent_name="host",
             model_name="test-model",
-            role="HOST"
+            role="HOST",
+            parameters={"model": "test-model"}
         )
         
         # Mock initialization

@@ -16,7 +16,7 @@ import uvicorn
 from buttermilk._core import AgentInput, logger
 from buttermilk._core.tool_definition import AgentToolDefinition, MCPServerConfig, UnifiedRequest
 from buttermilk._core.schema_validation import validate_tool_input, validate_tool_output
-from buttermilk.orchestrators import GroupChatOrchestrator
+from buttermilk._core.orchestrator import Orchestrator
 
 
 class MCPServerMode(str, Enum):
@@ -36,7 +36,7 @@ class MCPServer(Component):
     def __init__(
         self,
         config: MCPServerConfig | None = None,
-        orchestrator: GroupChatOrchestrator | None = None
+        orchestrator: Orchestrator | None = None
     ):
         """Initialize MCP server.
         

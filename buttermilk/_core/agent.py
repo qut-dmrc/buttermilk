@@ -788,16 +788,14 @@ class Agent(AgentConfig, ABC):
         
         if request.tool_name:
             # Route to specific tool
-            tool_method_name = request.tool_name
+            tool_name = request.tool_name
             
-            # Check if this agent has the requested tool
-            if hasattr(self, tool_method_name) and callable(getattr(self, tool_method_name)):
-                method = getattr(self, tool_method_name)
-                
-                # Check if it's a decorated tool
+            # First, try direct method name match
+            if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
+                method = getattr(self, tool_name)
                 if hasattr(method, "_tool_metadata") or hasattr(method, "_mcp_route"):
                     logger.debug(
-                        f"Agent {self.agent_name} executing tool {tool_method_name} "
+                        f"Agent {self.agent_name} executing tool {tool_name} "
                         f"with inputs: {request.inputs}"
                     )
                     
@@ -808,15 +806,34 @@ class Agent(AgentConfig, ABC):
                         result = method(**request.inputs)
                     
                     return result
-                else:
-                    raise ValueError(
-                        f"Method {tool_method_name} on agent {self.agent_name} "
-                        f"is not a registered tool"
-                    )
-            else:
-                raise ValueError(
-                    f"Tool {tool_method_name} not found on agent {self.agent_name}"
-                )
+            
+            # If direct match fails, search for methods with matching tool metadata
+            for attr_name in dir(self):
+                if attr_name.startswith("_"):
+                    continue
+                    
+                attr = getattr(self, attr_name)
+                if callable(attr):
+                    # Check if it has tool metadata with matching name
+                    if hasattr(attr, "_tool_metadata"):
+                        if attr._tool_metadata.get("name") == tool_name:
+                            logger.debug(
+                                f"Agent {self.agent_name} executing tool {tool_name} "
+                                f"(method: {attr_name}) with inputs: {request.inputs}"
+                            )
+                            
+                            # Execute the tool method
+                            if asyncio.iscoroutinefunction(attr):
+                                result = await attr(**request.inputs)
+                            else:
+                                result = attr(**request.inputs)
+                            
+                            return result
+            
+            # Tool not found
+            raise ValueError(
+                f"Tool {tool_name} not found on agent {self.agent_name}"
+            )
         else:
             # No specific tool - route to general _process method
             # Convert UnifiedRequest to AgentInput for backward compatibility
