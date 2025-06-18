@@ -27,7 +27,7 @@ except ImportError:
     WeaveObject = None
 
 if TYPE_CHECKING:
-    pass
+    from buttermilk._core.tool_definition import AgentToolDefinition
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -749,4 +749,19 @@ class Agent(AgentConfig, ABC):
             f"Context length: {len(updated_inputs.context)}, "
             f"Records count: {len(updated_inputs.records)}.",
         )
+        
         return updated_inputs
+    
+    def get_tool_definitions(self) -> list["AgentToolDefinition"]:
+        """Generate structured tool definitions for this agent.
+        
+        This method extracts tool definitions from methods decorated with
+        @tool or @MCPRoute decorators. It enables agents to automatically
+        expose their capabilities as structured tool definitions that can
+        be used by LLMs and MCP servers.
+        
+        Returns:
+            List of AgentToolDefinition objects representing this agent's tools.
+        """
+        from buttermilk._core.mcp_decorators import extract_tool_definitions
+        return extract_tool_definitions(self)
