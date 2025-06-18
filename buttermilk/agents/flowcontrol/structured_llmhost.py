@@ -4,6 +4,7 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 """
 
 import asyncio
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from autogen_core import CancellationToken

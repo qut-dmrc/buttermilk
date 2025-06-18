@@ -12,7 +12,7 @@ systems like Autogen.
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any
 
@@ -765,3 +765,72 @@ class Agent(AgentConfig, ABC):
         """
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
+    
+    async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
+        """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
+        
+        This method provides a unified interface for handling both tool-specific
+        requests and general agent requests, supporting the new structured
+        tool invocation system.
+        
+        Args:
+            request: UnifiedRequest containing target, inputs, context, and metadata
+            **kwargs: Additional keyword arguments passed to handlers
+            
+        Returns:
+            The result of the tool or process execution
+            
+        Raises:
+            ValueError: If the requested tool is not found
+            ProcessingError: If execution fails
+        """
+        from buttermilk._core.tool_definition import UnifiedRequest
+        
+        if request.tool_name:
+            # Route to specific tool
+            tool_method_name = request.tool_name
+            
+            # Check if this agent has the requested tool
+            if hasattr(self, tool_method_name) and callable(getattr(self, tool_method_name)):
+                method = getattr(self, tool_method_name)
+                
+                # Check if it's a decorated tool
+                if hasattr(method, "_tool_metadata") or hasattr(method, "_mcp_route"):
+                    logger.debug(
+                        f"Agent {self.agent_name} executing tool {tool_method_name} "
+                        f"with inputs: {request.inputs}"
+                    )
+                    
+                    # Execute the tool method
+                    if asyncio.iscoroutinefunction(method):
+                        result = await method(**request.inputs)
+                    else:
+                        result = method(**request.inputs)
+                    
+                    return result
+                else:
+                    raise ValueError(
+                        f"Method {tool_method_name} on agent {self.agent_name} "
+                        f"is not a registered tool"
+                    )
+            else:
+                raise ValueError(
+                    f"Tool {tool_method_name} not found on agent {self.agent_name}"
+                )
+        else:
+            # No specific tool - route to general _process method
+            # Convert UnifiedRequest to AgentInput for backward compatibility
+            agent_input = AgentInput(
+                inputs=request.inputs,
+                context=request.context.get("messages", []) if request.context else [],
+                parameters=request.metadata,
+                records=request.context.get("records", []) if request.context else []
+            )
+            
+            # Call the standard process method
+            result = await self._process(message=agent_input, **kwargs)
+            
+            # Extract outputs from AgentOutput if needed
+            if hasattr(result, "outputs"):
+                return result.outputs
+            return result

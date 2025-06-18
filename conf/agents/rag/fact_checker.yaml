@@ -6,6 +6,8 @@ fact_checker:
   # Reference data configuration from flow parameters
   data: ${...parameters.data}
   
+  variants:
+    model: ${llms.general}
   parameters:
     enable_query_planning: true
     enable_result_synthesis: true

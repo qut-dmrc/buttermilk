@@ -8,6 +8,9 @@ researcher:
   # Reference data configuration from flow parameters
   data: ${...parameters.data}
   
+  variants:
+    model: ${llms.general}
+    
   # Enhanced RAG specific parameters
   parameters:
     # Core functionality toggles
@@ -29,5 +32,5 @@ researcher:
     max_results_per_strategy: 5         # Maximum results per search strategy
     
     # LLM configuration (optional - defaults to agent's main LLM)
-    planning_model: null                # Model for query planning (null = use main model)
-    synthesis_model: null               # Model for result synthesis (null = use main model)
+    planning_model: sonnet                # Model for query planning (null = use main model)
+    synthesis_model: sonnet               # Model for result synthesis (null = use main model)
