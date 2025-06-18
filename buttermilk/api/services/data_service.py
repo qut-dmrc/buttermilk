@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Protocol
 
-from buttermilk._core.config import AgentConfig, DataSourceConfig
+from buttermilk._core.config import AgentConfig, DataSourceConfig, SessionConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
@@ -20,6 +20,9 @@ class FlowRunner(Protocol):
 
 class DataService:
     """Service for handling data-related operations"""
+    
+    # Session configuration with defaults from YAML config
+    _session_config = SessionConfig()
 
     @staticmethod
     def _convert_to_storage_config(storage_config_raw: Any) -> StorageConfig:
@@ -35,6 +38,11 @@ class DataService:
             return storage_config_raw
         elif isinstance(storage_config_raw, DataSourceConfig):
             # Convert legacy DataSourceConfig to StorageConfig
+            # TODO: Remove this backwards compatibility in next major version
+            logger.warning(
+                "DataSourceConfig is deprecated and will be removed in a future version. "
+                "Please use StorageConfig instead."
+            )
             config_dict = storage_config_raw.model_dump()
             return StorageConfig(**config_dict)
         elif hasattr(storage_config_raw, "__dict__"):
@@ -161,8 +169,8 @@ class DataService:
         """
         raise NotImplementedError("Run history retrieval is not yet implemented")
 
-    @staticmethod
-    def safely_get_session_data(websocket_manager, session_id: str) -> dict[str, Any]:
+    @classmethod
+    def safely_get_session_data(cls, websocket_manager, session_id: str) -> dict[str, Any]:
         """Safely get session data, ensuring default values if keys don't exist
 
         Args:
@@ -174,45 +182,33 @@ class DataService:
 
         """
         try:
+            # Get default values from configuration
+            defaults = cls._session_config.defaults.model_dump()
+            
             if not session_id or not hasattr(websocket_manager, "session_data"):
-                return {
-                    "scores": {},
-                    "outcomes": [],
-                    "pending_agents": [],
-                    "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-                }
+                return defaults
 
             session = websocket_manager.session_data.get(session_id)
             if not session:
-                return {
-                    "scores": {},
-                    "outcomes": [],
-                    "pending_agents": [],
-                    "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-                }
+                return defaults
 
-            # Ensure progress has all required fields with defaults
+            # Ensure progress has all required fields with defaults from config
             progress = session.get("progress", {})
-            progress.setdefault("current_step", 0)
-            progress.setdefault("total_steps", 100)
-            progress.setdefault("status", "waiting")
-            progress.setdefault("pending_agents", [])
+            progress_defaults = cls._session_config.defaults.progress.model_dump()
+            for key, default_value in progress_defaults.items():
+                progress.setdefault(key, default_value)
 
             # Sanitize the response to ensure all expected keys are present
             return {
-                "scores": {},      # This will be populated later by MessageService
-                "outcomes": [],    # This will be populated later by MessageService
-                "pending_agents": progress.get("pending_agents", []),
+                "scores": defaults["scores"],      # This will be populated later by MessageService
+                "outcomes": defaults["outcomes"],    # This will be populated later by MessageService
+                "pending_agents": progress.get("pending_agents", defaults["pending_agents"]),
                 "progress": progress,
             }
         except Exception as e:
             logger.warning(f"Error safely getting session data: {e}")
-            return {
-                "scores": {},
-                "outcomes": [],
-                "pending_agents": [],
-                "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-            }
+            # Return defaults from configuration on error
+            return cls._session_config.defaults.model_dump()
 
     @staticmethod
     async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_name: str | None = None) -> Record | None:
@@ -258,6 +254,66 @@ class DataService:
         except Exception as e:
             logger.warning(f"Error getting record {record_id} for flow {flow_name}: {e}")
             return None
+
+    @staticmethod
+    def _reconstruct_agent_trace_from_row(row: dict) -> AgentTrace:
+        """
+        Convenience method to reconstruct AgentTrace from database row.
+        
+        This method centralizes the logic for reconstructing AgentTrace objects
+        from database query results, eliminating code duplication.
+        
+        Args:
+            row: Database row containing AgentTrace data
+            
+        Returns:
+            AgentTrace object reconstructed from the row data
+            
+        Raises:
+            Exception: If reconstruction fails due to invalid data
+        """
+        import json
+        
+        # Parse JSON fields
+        agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
+        inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
+        outputs_data = row["outputs"]
+        metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
+        run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
+        messages_data = json.loads(row["messages"]) if row["messages"] else []
+        error_data = json.loads(row["error"]) if row["error"] else []
+
+        # Create AgentConfig
+        agent_config = AgentConfig(**agent_info_data)
+
+        # Create AgentInput
+        agent_input = AgentInput(
+            inputs=inputs_data.get("inputs", {}),
+            parameters=inputs_data.get("parameters", {}),
+            context=inputs_data.get("context", []),
+            records=[Record(**rec) for rec in inputs_data.get("records", [])],
+            parent_call_id=row.get("parent_call_id")
+        )
+
+        # Create AgentTrace
+        agent_trace = AgentTrace(
+            timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
+                     else datetime.datetime.fromisoformat(row["timestamp"]),
+            call_id=row["call_id"],
+            agent_id=agent_config.agent_id,
+            metadata=metadata_data,
+            outputs=outputs_data,
+            run_info=run_info_data,
+            agent_info=agent_config,
+            session_id=row["session_id"],
+            parent_call_id=row.get("parent_call_id"),
+            tracing_link=row.get("tracing_link"),
+            inputs=agent_input,
+            messages=messages_data,
+            error=error_data
+        )
+
+        return agent_trace
 
     @staticmethod
     async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[AgentTrace]:
@@ -334,49 +390,8 @@ class DataService:
             agent_traces = []
             for row in result:
                 try:
-                    # Reconstruct AgentTrace from the database row
-                    # Parse JSON fields
-                    import json
-                    agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
-                    inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
-                    outputs_data = row["outputs"]
-                    metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-                    run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
-                    messages_data = json.loads(row["messages"]) if row["messages"] else []
-                    error_data = json.loads(row["error"]) if row["error"] else []
-
-                    # Create AgentConfig
-                    agent_config = AgentConfig(**agent_info_data)
-
-                    # Create AgentInput
-                    agent_input = AgentInput(
-                        inputs=inputs_data.get("inputs", {}),
-                        parameters=inputs_data.get("parameters", {}),
-                        context=inputs_data.get("context", []),
-                        records=[Record(**rec) for rec in inputs_data.get("records", [])],
-                        parent_call_id=row.get("parent_call_id")
-                    )
-
-                    # Create AgentTrace
-                    agent_trace = AgentTrace(
-                        timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
-                                 else datetime.datetime.fromisoformat(row["timestamp"]),
-                        call_id=row["call_id"],
-                        agent_id=agent_config.agent_id,
-                        metadata=metadata_data,
-                        outputs=outputs_data,
-                        run_info=run_info_data,
-                        agent_info=agent_config,
-                        session_id=row["session_id"],
-                        parent_call_id=row.get("parent_call_id"),
-                        tracing_link=row.get("tracing_link"),
-                        inputs=agent_input,
-                        messages=messages_data,
-                        error=error_data
-                    )
-
+                    agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
-
                 except Exception as e:
                     logger.warning(f"Error reconstructing AgentTrace from row: {e}")
                     continue
@@ -464,48 +479,8 @@ class DataService:
             agent_traces = []
             for row in result:
                 try:
-                    # Reconstruct AgentTrace from the database row (same logic as get_scores_for_record)
-                    import json
-                    agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
-                    inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
-                    outputs_data = row["outputs"]
-                    metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-                    run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
-                    messages_data = json.loads(row["messages"]) if row["messages"] else []
-                    error_data = json.loads(row["error"]) if row["error"] else []
-
-                    # Create AgentConfig
-                    agent_config = AgentConfig(**agent_info_data)
-
-                    # Create AgentInput
-                    agent_input = AgentInput(
-                        inputs=inputs_data.get("inputs", {}),
-                        parameters=inputs_data.get("parameters", {}),
-                        context=inputs_data.get("context", []),
-                        records=[Record(**rec) for rec in inputs_data.get("records", [])],
-                        parent_call_id=row.get("parent_call_id")
-                    )
-
-                    # Create AgentTrace
-                    agent_trace = AgentTrace(
-                        timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
-                                 else datetime.datetime.fromisoformat(row["timestamp"]),
-                        call_id=row["call_id"],
-                        agent_id=agent_config.agent_id,  # Use the correct attribute name
-                        metadata=metadata_data,
-                        outputs=outputs_data,
-                        run_info=run_info_data,
-                        agent_info=agent_config,
-                        session_id=row["session_id"],
-                        parent_call_id=row.get("parent_call_id"),
-                        tracing_link=row.get("tracing_link"),
-                        inputs=agent_input,
-                        messages=messages_data,
-                        error=error_data
-                    )
-
+                    agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
-
                 except Exception as e:
                     logger.warning(f"Error reconstructing AgentTrace from row: {e}")
                     continue

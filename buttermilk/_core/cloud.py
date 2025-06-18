@@ -1,12 +1,21 @@
 """Cloud provider client management and connection utilities."""
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
-from google.cloud import bigquery, storage
-from google.cloud.logging_v2.client import Client as CloudLoggingClient
+
+# Optional Google Cloud imports - fail gracefully if not available
+try:
+    from google.cloud import bigquery, storage
+    from google.cloud.logging_v2.client import Client as CloudLoggingClient
+    GOOGLE_CLOUD_AVAILABLE = True
+except ImportError:
+    bigquery = None
+    storage = None
+    CloudLoggingClient = None
+    GOOGLE_CLOUD_AVAILABLE = False
 
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.log import logger
@@ -85,16 +94,20 @@ class CloudManager:
             raise RuntimeError(f"Failed to obtain GCP credentials: {e}") from e
 
     @cached_property
-    def gcs(self) -> storage.Client:
+    def gcs(self) -> Optional[Any]:
         """Get Google Cloud Storage client instance.
 
         Returns:
-            Authenticated GCS client
+            Authenticated GCS client or None if Google Cloud not available
 
         Raises:
             RuntimeError: If client initialization fails
 
         """
+        if not GOOGLE_CLOUD_AVAILABLE:
+            logger.warning("Google Cloud libraries not available. GCS client unavailable.")
+            return None
+            
         if not self._gcp_project:
             # Ensure credentials are loaded to get project ID
             _ = self.gcp_credentials
@@ -108,16 +121,20 @@ class CloudManager:
             raise RuntimeError(f"Failed to initialize GCS client: {e}") from e
 
     @cached_property
-    def bq(self) -> bigquery.Client:
+    def bq(self) -> Optional[Any]:
         """Get Google BigQuery client instance.
 
         Returns:
-            Authenticated BigQuery client
+            Authenticated BigQuery client or None if Google Cloud not available
 
         Raises:
             RuntimeError: If client initialization fails
 
         """
+        if not GOOGLE_CLOUD_AVAILABLE:
+            logger.warning("Google Cloud libraries not available. BigQuery client unavailable.")
+            return None
+            
         if not self._gcp_project:
             # Ensure credentials are loaded to get project ID
             _ = self.gcp_credentials
@@ -130,7 +147,7 @@ class CloudManager:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize BigQuery client: {e}") from e
 
-    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> CloudLoggingClient:
+    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Optional[Any]:
         """Get Google Cloud Logging client instance.
 
         Args:
@@ -143,6 +160,10 @@ class CloudManager:
             RuntimeError: If client initialization fails
 
         """
+        if not GOOGLE_CLOUD_AVAILABLE:
+            logger.warning("Google Cloud libraries not available. Cloud Logging client unavailable.")
+            return None
+            
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 

@@ -10,6 +10,9 @@ from pathlib import Path
 from buttermilk._core.log import logger
 from .mcp_client import MCPFlowTester
 from .models import StartupTestResult
+from .gcp_logs import GCPLogAnalyzer, analyze_current_issue
+from .error_capture import analyze_type_checking_errors
+from .config_validator import validate_configuration
 
 
 @click.group()
@@ -317,6 +320,299 @@ def test_flow_comprehensive(flow, queries_file, host, port, timeout, output):
     
     # Set exit code based on overall status
     if report.overall_status == "unhealthy":
+        sys.exit(1)
+
+
+@debug.command()
+@click.option('--minutes-back', default=30, help='How many minutes back to analyze logs')
+@click.option('--project-id', help='GCP project ID (auto-detected if not provided)')
+@click.option('--include-warnings', is_flag=True, help='Include warning-level logs in analysis')
+def analyze_logs(minutes_back, project_id, include_warnings):
+    """Analyze GCP logs for Enhanced RAG agent and startup issues."""
+    click.echo("🔍 ANALYZING GCP LOGS FOR BUTTERMILK ISSUES")
+    click.echo("=" * 50)
+    
+    analyzer = GCPLogAnalyzer(project_id=project_id)
+    
+    # Check if gcloud is available
+    try:
+        subprocess.run(["gcloud", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        click.echo("❌ gcloud CLI not found. Please install Google Cloud SDK.")
+        sys.exit(1)
+    
+    # Analyze startup issues
+    click.echo(f"📊 Analyzing daemon startup (last {minutes_back} minutes)...")
+    startup_analysis = analyzer.analyze_daemon_startup(minutes_back=minutes_back)
+    
+    click.echo(f"   Total log entries: {startup_analysis.total_entries}")
+    click.echo(f"   Errors: {startup_analysis.error_count}")
+    click.echo(f"   Warnings: {startup_analysis.warning_count}")
+    
+    if startup_analysis.startup_issues:
+        click.echo("\n🚨 STARTUP ISSUES:")
+        for issue in startup_analysis.startup_issues[:5]:
+            click.echo(f"   {issue}")
+    
+    if startup_analysis.key_errors:
+        click.echo("\n❌ KEY ERRORS:")
+        for error in startup_analysis.key_errors[:3]:
+            click.echo(f"   {error}")
+    
+    # Analyze Enhanced RAG specific issues
+    click.echo(f"\n🎯 Analyzing Enhanced RAG agent issues...")
+    rag_analysis = analyzer.analyze_agent_errors("enhanced", minutes_back=minutes_back)
+    
+    if rag_analysis.agent_errors:
+        click.echo(f"   Found {len(rag_analysis.agent_errors)} agent errors")
+        for error in rag_analysis.agent_errors[:3]:
+            click.echo(f"   {error}")
+    else:
+        click.echo("   No Enhanced RAG specific errors found")
+    
+    # Show type checking analysis
+    type_analysis = analyze_type_checking_errors()
+    if type_analysis["total_type_errors"] > 0:
+        click.echo(f"\n💻 TYPE CHECKING ERRORS: {type_analysis['total_type_errors']}")
+        for rec in type_analysis["recommendations"]:
+            click.echo(f"   Issue: {rec['issue']}")
+            click.echo(f"   Fix: {rec['fix']}")
+
+
+@debug.command()
+@click.option('--filter', help='Log filter expression for GCP logs')
+def stream_logs(filter):
+    """Stream GCP logs in real-time for debugging."""
+    click.echo("🔍 STREAMING GCP LOGS (Press Ctrl+C to stop)")
+    click.echo("=" * 50)
+    
+    analyzer = GCPLogAnalyzer()
+    
+    # Check if gcloud is available
+    try:
+        subprocess.run(["gcloud", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        click.echo("❌ gcloud CLI not found. Please install Google Cloud SDK.")
+        sys.exit(1)
+    
+    try:
+        analyzer.stream_logs_realtime(filter_expression=filter)
+    except KeyboardInterrupt:
+        click.echo("\n✅ Log streaming stopped")
+
+
+@debug.command()
+@click.option('--flow', default='osb', help='Flow to test and debug')
+@click.option('--query', default='Does hate speech have to be explicit to be prohibited?', help='Test query')
+@click.option('--logs-minutes', default=15, help='Minutes of logs to analyze')
+@click.option('--comprehensive', is_flag=True, help='Run full debugging suite')
+def diagnose_issue(flow, query, logs_minutes, comprehensive):
+    """Complete diagnostic suite for the Enhanced RAG agent issue."""
+    click.echo("🩺 COMPLETE ENHANCED RAG AGENT DIAGNOSTIC")
+    click.echo("=" * 60)
+    
+    # Step 1: Analyze recent logs
+    click.echo("1️⃣ Analyzing recent GCP logs...")
+    analyzer = GCPLogAnalyzer()
+    startup_analysis = analyzer.analyze_daemon_startup(minutes_back=logs_minutes)
+    
+    if startup_analysis.startup_issues:
+        click.echo(f"   🚨 Found {len(startup_analysis.startup_issues)} startup issues")
+        for issue in startup_analysis.startup_issues[:3]:
+            click.echo(f"      {issue}")
+    else:
+        click.echo("   ✅ No startup issues in recent logs")
+    
+    # Step 2: Test API health
+    click.echo("\n2️⃣ Testing API health...")
+    client = MCPFlowTester()
+    health = client.health_check()
+    
+    if health.api_reachable:
+        click.echo(f"   ✅ API reachable (response time: {health.response_time:.2f}s)")
+        click.echo(f"   📊 Available flows: {', '.join(health.available_flows)}")
+    else:
+        click.echo(f"   ❌ API not reachable: {health.error_details}")
+        
+        # Try to start daemon if not running
+        click.echo("\n🚀 Attempting to start daemon...")
+        try:
+            start_cmd = [
+                'uv', 'run', 'python', '-m', 'buttermilk.runner.cli',
+                f'+flows=[{flow}]',
+                '+run=api',
+                '+llms=full'
+            ]
+            
+            click.echo(f"   Running: {' '.join(start_cmd)}")
+            
+            # Start in background and check for immediate errors
+            process = subprocess.Popen(
+                start_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            # Check first few lines for immediate errors
+            for i in range(10):
+                line = process.stdout.readline()
+                if not line:
+                    break
+                
+                click.echo(f"   📝 {line.strip()}")
+                
+                if "Enhanced RAG agent error" in line:
+                    click.echo(f"   🎯 Found Enhanced RAG error: {line.strip()}")
+                    break
+                elif "Subscripted generics" in line:
+                    click.echo(f"   🎯 Found type checking error: {line.strip()}")
+                    break
+                elif "ValidationError" in line:
+                    click.echo(f"   🎯 Found validation error: {line.strip()}")
+                    break
+                elif "Application startup complete" in line:
+                    click.echo("   ✅ Startup appears successful")
+                    break
+            
+            # Cleanup
+            process.terminate()
+            
+        except Exception as e:
+            click.echo(f"   ❌ Failed to start daemon: {e}")
+    
+    # Step 3: Test specific flow if API is running
+    if health.api_reachable and flow in health.available_flows:
+        click.echo(f"\n3️⃣ Testing {flow} flow with query...")
+        click.echo(f"   Query: {query}")
+        
+        if flow == "osb":
+            result = client.test_osb_vector_query(query)
+        else:
+            result = client.test_mcp_flow_start(flow, query)
+        
+        if result.status == "success":
+            click.echo(f"   ✅ Flow executed successfully ({result.response_time:.2f}s)")
+        else:
+            click.echo(f"   ❌ Flow failed: {result.error_details}")
+    
+    # Step 4: Analyze type checking errors
+    click.echo("\n4️⃣ Analyzing type checking errors...")
+    type_analysis = analyze_type_checking_errors()
+    
+    if type_analysis["total_type_errors"] > 0:
+        click.echo(f"   🚨 Found {type_analysis['total_type_errors']} type checking errors")
+        for rec in type_analysis["recommendations"]:
+            click.echo(f"   💡 {rec['issue']}: {rec['fix']}")
+    else:
+        click.echo("   ✅ No type checking errors captured")
+    
+    # Step 5: Comprehensive testing if requested
+    if comprehensive:
+        click.echo("\n5️⃣ Running comprehensive flow test...")
+        if health.api_reachable and flow in health.available_flows:
+            report = client.test_flow_comprehensive(flow, [query])
+            click.echo(f"   Overall Status: {report.overall_status}")
+            
+            failed_tests = [r for r in report.mcp_test_results if r.status != "success"]
+            if failed_tests:
+                click.echo(f"   ❌ {len(failed_tests)} tests failed")
+                for test in failed_tests[:3]:
+                    click.echo(f"      {test.endpoint}: {test.error_details}")
+        else:
+            click.echo("   ⏭️ Skipping comprehensive tests (API not available)")
+    
+    # Summary and recommendations
+    click.echo("\n📋 SUMMARY AND RECOMMENDATIONS")
+    click.echo("=" * 40)
+    
+    if startup_analysis.startup_issues:
+        click.echo("🔧 Next steps for startup issues:")
+        click.echo("   1. Check Enhanced RAG agent initialization code")
+        click.echo("   2. Look for isinstance() calls with subscripted generics")
+        click.echo("   3. Add error capture to agent initialization")
+    
+    if not health.api_reachable:
+        click.echo("🔧 Next steps for API issues:")
+        click.echo("   1. Check daemon startup logs with --verbose")
+        click.echo("   2. Verify configuration files are valid")
+        click.echo("   3. Test with minimal configuration first")
+    
+    if type_analysis["total_type_errors"] > 0:
+        click.echo("🔧 Next steps for type checking:")
+        click.echo("   1. Replace isinstance(obj, List[str]) with isinstance(obj, list)")
+        click.echo("   2. Use TYPE_CHECKING guard for typing-only imports")
+        click.echo("   3. Test fixes with isolated unit tests")
+
+
+@debug.command()
+@click.option('--config-path', default='/workspaces/buttermilk/conf', help='Path to configuration directory')
+@click.option('--output', help='Output file for validation report (JSON)')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed validation results')
+def validate_config(config_path, output, verbose):
+    """Validate configuration files and dependencies."""
+    click.echo("🔧 VALIDATING BUTTERMILK CONFIGURATION")
+    click.echo("=" * 50)
+    
+    # Run validation
+    report = validate_configuration(config_path)
+    
+    # Display summary
+    click.echo(f"📊 Validation Summary:")
+    click.echo(f"   Files checked: {report.total_files_checked}")
+    click.echo(f"   Errors: {len(report.errors)}")
+    click.echo(f"   Warnings: {len(report.warnings)}")
+    click.echo(f"   Info issues: {len(report.info)}")
+    click.echo(f"   Passed checks: {len(report.passed_checks)}")
+    click.echo(f"   Dependency issues: {len(report.dependency_issues)}")
+    
+    # Show errors
+    if report.errors:
+        click.echo(f"\n❌ ERRORS ({len(report.errors)}):")
+        for error in report.errors:
+            click.echo(f"   • {error.component}.{error.field}: {error.message}")
+            if error.suggestion and verbose:
+                click.echo(f"     💡 {error.suggestion}")
+            if error.file_path and verbose:
+                click.echo(f"     📁 {error.file_path}")
+    
+    # Show warnings if verbose or if there are errors
+    if report.warnings and (verbose or report.errors):
+        click.echo(f"\n⚠️  WARNINGS ({len(report.warnings)}):")
+        for warning in report.warnings[:10]:  # Limit warnings
+            click.echo(f"   • {warning.component}.{warning.field}: {warning.message}")
+            if warning.suggestion and verbose:
+                click.echo(f"     💡 {warning.suggestion}")
+    
+    # Show dependency issues
+    if report.dependency_issues:
+        click.echo(f"\n📦 DEPENDENCY ISSUES ({len(report.dependency_issues)}):")
+        for dep_issue in report.dependency_issues:
+            click.echo(f"   • {dep_issue}")
+    
+    # Show some passed checks if verbose
+    if verbose and report.passed_checks:
+        click.echo(f"\n✅ SOME PASSED CHECKS:")
+        for check in report.passed_checks[:5]:
+            click.echo(f"   • {check}")
+        if len(report.passed_checks) > 5:
+            click.echo(f"   ... and {len(report.passed_checks) - 5} more")
+    
+    # Save output if requested
+    if output:
+        output_path = Path(output)
+        output_path.write_text(report.model_dump_json(indent=2))
+        click.echo(f"\n💾 Validation report saved to: {output_path}")
+    
+    # Overall status
+    if report.is_valid:
+        click.echo("\n🎉 CONFIGURATION VALID - No errors found!")
+    else:
+        click.echo(f"\n💥 CONFIGURATION INVALID - {len(report.errors)} errors need fixing")
+        click.echo("   Use --verbose for detailed suggestions")
+    
+    # Set exit code
+    if not report.is_valid:
         sys.exit(1)
 
 

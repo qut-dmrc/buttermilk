@@ -26,8 +26,16 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from pdfminer.high_level import extract_text
-from pdfminer.layout import LAParams
+
+# Optional PDF imports - fail gracefully if not available
+try:
+    from pdfminer.high_level import extract_text
+    from pdfminer.layout import LAParams
+    PDFMINER_AVAILABLE = True
+except ImportError:
+    extract_text = None
+    LAParams = None
+    PDFMINER_AVAILABLE = False
 
 from .._core.log import logger
 
@@ -508,6 +516,10 @@ def extract_url_regex(text):
 
 
 def get_pdf_text(file: str | IOBase) -> str | None:
+    if not PDFMINER_AVAILABLE:
+        logger.error("PDFMiner not available. Cannot extract text from PDF.")
+        return None
+        
     try:
         return extract_text(file, laparams=LAParams())
     except Exception as e:

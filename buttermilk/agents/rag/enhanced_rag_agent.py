@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
+from buttermilk.debug.error_capture import ErrorCapture, capture_enhanced_rag_errors, safe_isinstance_check
+
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput
@@ -57,30 +59,32 @@ class EnhancedRagAgent(Agent):
         super().__init__(**data)
         self._enhanced_search: Optional[EnhancedVectorSearch] = None
         self._llm_client = None  # Will be initialized from agent's LLM connection
+        self._error_capture = ErrorCapture(capture_locals=True)
 
     async def _initialize_search_tools(self) -> None:
         """Initialize enhanced search tools with vectorstore and LLM."""
-        if self._enhanced_search is not None:
-            return
+        with self._error_capture.capture_context("initialize_search_tools", agent_type="enhanced_rag"):
+            if self._enhanced_search is not None:
+                return
 
-        # Get vectorstore from data configuration
-        if not self.data:
-            raise ValueError("Enhanced RAG agent requires data configuration with vectorstore")
+            # Get vectorstore from data configuration
+            if not self.data:
+                raise ValueError("Enhanced RAG agent requires data configuration with vectorstore")
 
-        # Load vectorstore from first data source
-        from buttermilk._core.dmrc import get_bm
+            # Load vectorstore from first data source
+            from buttermilk._core.dmrc import get_bm
 
-        bm = get_bm()
+            bm = get_bm()
 
-        vectorstore_key = list(self.data.keys())[0]
-        storage_config = self.data[vectorstore_key]
+            vectorstore_key = list(self.data.keys())[0]
+            storage_config = self.data[vectorstore_key]
 
-        vectorstore = await bm.get_storage_async(storage_config)
+            vectorstore = await bm.get_storage_async(storage_config)
 
-        # Initialize enhanced search with vectorstore and LLM
-        self._enhanced_search = EnhancedVectorSearch(vectorstore=vectorstore, llm_client=self._get_llm_client())
+            # Initialize enhanced search with vectorstore and LLM
+            self._enhanced_search = EnhancedVectorSearch(vectorstore=vectorstore, llm_client=self._get_llm_client())
 
-        logger.info(f"Enhanced RAG agent initialized with vectorstore: {vectorstore.collection_name}")
+            logger.info(f"Enhanced RAG agent initialized with vectorstore: {vectorstore.collection_name}")
 
     def _get_llm_client(self):
         """Get LLM client for query planning and synthesis."""
@@ -119,52 +123,63 @@ class EnhancedRagAgent(Agent):
             AgentOutput with search results and synthesized response
         """
         try:
-            await self._initialize_search_tools()
+            with self._error_capture.capture_context("process_query", agent_type="enhanced_rag", message_type=type(message).__name__):
+                await self._initialize_search_tools()
 
-            # Extract query from input
-            query = self._extract_query(message)
-            if not query:
-                return AgentOutput(
-                    agent_id=self.agent_id, outputs="No query provided. Please provide a search query.", metadata={"error": "missing_query"}
-                )
+                # Extract query from input
+                query = self._extract_query(message)
+                if not query:
+                    return AgentOutput(
+                        agent_id=self.agent_id, outputs="No query provided. Please provide a search query.", metadata={"error": "missing_query"}
+                    )
 
-            # Step 1: Create search plan (if enabled)
-            if self.enable_query_planning:
-                search_plan = await self._enhanced_search.create_search_plan(query)
-                logger.info(f"Created search plan: {search_plan.primary_strategy} + {len(search_plan.secondary_strategies)} secondary")
-            else:
-                # Fallback to basic semantic search
-                search_plan = SearchPlan(
-                    query=query,
-                    intent="Basic search query",
-                    primary_strategy=SearchStrategy.SEMANTIC,
-                    max_results_per_strategy=self.max_results_per_strategy,
-                    confidence_threshold=self.confidence_threshold,
-                )
+                # Step 1: Create search plan (if enabled)
+                if self.enable_query_planning:
+                    search_plan = await self._enhanced_search.create_search_plan(query)
+                    logger.info(f"Created search plan: {search_plan.primary_strategy} + {len(search_plan.secondary_strategies)} secondary")
+                else:
+                    # Fallback to basic semantic search
+                    search_plan = SearchPlan(
+                        query=query,
+                        intent="Basic search query",
+                        primary_strategy=SearchStrategy.SEMANTIC,
+                        max_results_per_strategy=self.max_results_per_strategy,
+                        confidence_threshold=self.confidence_threshold,
+                    )
 
-            # Step 2: Execute search plan
-            search_results = await self._enhanced_search.execute_search_plan(search_plan)
+                # Step 2: Execute search plan
+                search_results = await self._enhanced_search.execute_search_plan(search_plan)
 
-            # Step 3: Generate response
-            response = await self._generate_response(query, search_results)
+                # Step 3: Generate response
+                response = await self._generate_response(query, search_results)
 
-            # Step 4: Prepare output
-            output_metadata = {
-                "query": query,
-                "total_results": search_results.total_found,
-                "strategies_used": [s.value for s in search_results.strategies_used],
-                "confidence_score": search_results.confidence_score,
-                "key_themes": search_results.key_themes,
-            }
+                # Step 4: Prepare output
+                output_metadata = {
+                    "query": query,
+                    "total_results": search_results.total_found,
+                    "strategies_used": [s.value for s in search_results.strategies_used],
+                    "confidence_score": search_results.confidence_score,
+                    "key_themes": search_results.key_themes,
+                }
 
-            if self.include_search_explanation:
-                output_metadata["search_explanation"] = self._create_search_explanation(search_plan, search_results)
+                if self.include_search_explanation:
+                    output_metadata["search_explanation"] = self._create_search_explanation(search_plan, search_results)
 
-            return AgentOutput(agent_id=self.agent_id, outputs=response, metadata=output_metadata)
+                return AgentOutput(agent_id=self.agent_id, outputs=response, metadata=output_metadata)
 
         except Exception as e:
+            # Capture the error with full context
+            error_context = self._error_capture.capture_error(e, {
+                "component": "enhanced_rag_agent",
+                "operation": "process_query",
+                "agent_id": getattr(self, 'agent_id', 'unknown'),
+                "message_inputs": getattr(message, 'inputs', {}) if hasattr(message, 'inputs') else {}
+            })
+            
             logger.error(f"Enhanced RAG agent error: {e}")
-            return AgentOutput(agent_id=self.agent_id, outputs=f"Search failed: {str(e)}", metadata={"error": str(e)})
+            logger.error(f"Error context: {error_context.model_dump()}")
+            
+            return AgentOutput(agent_id=self.agent_id, outputs=f"Search failed: {str(e)}", metadata={"error": str(e), "error_context": error_context.model_dump()})
 
     def _extract_query(self, message: AgentInput) -> str:
         """Extract search query from AgentInput."""

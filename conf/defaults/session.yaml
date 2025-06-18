@@ -1,0 +1,19 @@
+# Default session configuration for Buttermilk flows
+# These defaults replace hardcoded values in the API services
+
+# Default session progress configuration
+progress:
+  current_step: 0
+  total_steps: 100
+  status: "waiting"
+  
+# Default empty data structures for new sessions
+scores: {}
+outcomes: []
+pending_agents: []
+
+# Session timeout and cleanup settings
+session:
+  timeout_minutes: 60
+  cleanup_interval_minutes: 15
+  max_concurrent_sessions: 50

@@ -12,7 +12,16 @@ from pathlib import Path  # For path manipulation
 from typing import TYPE_CHECKING, Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
+
+# Optional autogen imports - fail gracefully if not available
+try:
+    from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
+    AUTOGEN_AVAILABLE = True
+except ImportError:
+    AssistantMessage = None
+    UserMessage = None
+    AUTOGEN_AVAILABLE = False
+    
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
@@ -333,7 +342,7 @@ class Record(BaseModel):
         """
         return self.metadata.get("title")
 
-    def as_message(self, role: Literal["user", "assistant"] = "user") -> UserMessage | AssistantMessage:
+    def as_message(self, role: Literal["user", "assistant"] = "user") -> Any:
         """Converts the `Record` into an Autogen `UserMessage` or `AssistantMessage`.
 
         This is useful for integrating Buttermilk records directly into Autogen
@@ -344,10 +353,16 @@ class Record(BaseModel):
                 resulting message. Defaults to "user".
 
         Returns:
-            UserMessage | AssistantMessage: An Autogen message object populated
-            with the record's content and ID.
+            Autogen message object populated with the record's content and ID.
+            Returns None if Autogen is not available.
 
         """
+        if not AUTOGEN_AVAILABLE:
+            # Import logger here to avoid circular imports
+            from buttermilk._core.log import logger
+            logger.warning("Autogen not available. Cannot create message object.")
+            return None
+            
         if role == "assistant":
             # Assistant message content should likely be string representation
             return AssistantMessage(content=self.as_markdown, source=self.record_id)

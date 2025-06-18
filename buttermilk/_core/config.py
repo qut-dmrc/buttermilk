@@ -17,7 +17,14 @@ from typing import (
 
 import cloudpathlib  # For handling cloud storage paths
 import jmespath  # For JSON query language processing
-from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
+
+# Optional BigQuery import - fail gracefully if not available
+try:
+    from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
+    BIGQUERY_SCHEMA_AVAILABLE = True
+except ImportError:
+    SchemaField = None
+    BIGQUERY_SCHEMA_AVAILABLE = False
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -107,7 +114,7 @@ class SaveInfo(CloudProviderCfg):
             `BQ_SCHEMA_DIR` if not an absolute path.
         dataset (str | None): The name of the dataset or equivalent grouping
             (e.g., a BigQuery dataset name, a directory path).
-        _loaded_schema (list[SchemaField]): A private attribute to cache the loaded
+        _loaded_schema (list): A private attribute to cache the loaded
             BigQuery schema once read from `db_schema`.
 
     """
@@ -126,7 +133,7 @@ class SaveInfo(CloudProviderCfg):
         description="Name of the dataset or equivalent (e.g., BigQuery dataset, directory path).",
     )
 
-    _loaded_schema: list[SchemaField] = PrivateAttr(default_factory=list)
+    _loaded_schema: list = PrivateAttr(default_factory=list)
 
     @field_validator("db_schema")
     @classmethod
@@ -181,17 +188,20 @@ class SaveInfo(CloudProviderCfg):
 
     @computed_field
     @property
-    def bq_schema(self) -> list[SchemaField]:
+    def bq_schema(self) -> list:
         """Loads and returns the BigQuery schema from the `db_schema` file path.
 
         The schema is loaded on first access and cached in `_loaded_schema`.
 
         Returns:
-            list[SchemaField]: A list of `SchemaField` objects representing the
-                BigQuery schema.
+            list: A list of BigQuery schema objects (SchemaField if available).
 
         """
         if not self._loaded_schema:
+            if not BIGQUERY_SCHEMA_AVAILABLE:
+                logger.warning("BigQuery libraries not available. Cannot load schema.")
+                return []
+                
             from buttermilk import buttermilk as bm  # Lazy import to avoid circular deps
 
             # Ensure bm.bq is available; it might not be if only core is used.
@@ -912,3 +922,29 @@ class AgentVariants(AgentConfig):
             raise FatalError(msg)
 
         return generated_configs
+
+
+class SessionProgressConfig(BaseModel):
+    """Configuration for session progress tracking."""
+    
+    current_step: int = Field(default=0, description="Current step in the session")
+    total_steps: int = Field(default=100, description="Total steps in the session")
+    status: str = Field(default="waiting", description="Current session status")
+
+
+class SessionDefaultsConfig(BaseModel):
+    """Default configuration for session data structures."""
+    
+    progress: SessionProgressConfig = Field(default_factory=SessionProgressConfig)
+    scores: dict[str, Any] = Field(default_factory=dict, description="Default scores structure")
+    outcomes: list[Any] = Field(default_factory=list, description="Default outcomes list")
+    pending_agents: list[str] = Field(default_factory=list, description="Default pending agents list")
+
+
+class SessionConfig(BaseModel):
+    """Configuration for session management."""
+    
+    timeout_minutes: int = Field(default=60, description="Session timeout in minutes")
+    cleanup_interval_minutes: int = Field(default=15, description="Cleanup interval in minutes")
+    max_concurrent_sessions: int = Field(default=50, description="Maximum concurrent sessions")
+    defaults: SessionDefaultsConfig = Field(default_factory=SessionDefaultsConfig)
