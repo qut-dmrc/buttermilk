@@ -215,12 +215,12 @@ class TestToolDefinitionIntegration:
             "ANALYZER": agent1,
             "ASSISTANT": agent2
         }
-        host.tools = {}
+        host.tools = []  # tools should be a list
         host.parameters = {"model": "test-model"}
         host.callback_to_groupchat = AsyncMock()
         
-        # Initialize host
-        await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
+        # Initialize host using the public method
+        await host.initialize(callback_to_groupchat=host.callback_to_groupchat)
         
         # Check tools were registered
         tool_names = [tool.name for tool in host._tools_list]

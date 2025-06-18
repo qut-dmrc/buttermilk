@@ -127,7 +127,7 @@ class TestEndToEndFlows:
         
         # Setup host with agents
         host._participants = mock_agents
-        host.tools = {}
+        host.tools = []  # tools should be a list
         host.callback_to_groupchat = AsyncMock()
         
         # Track all StepRequests
