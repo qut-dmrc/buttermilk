@@ -17,6 +17,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Making multiple small fixes instead of one root cause fix
 - Suggesting "try this" without a systematic plan
 - Modifying code without first writing tests that demonstrate the problem
+- **CRITICAL**: Changing Pydantic model validation settings (like `extra="forbid"` to `extra="allow"`) when encountering validation errors
+- **CRITICAL**: Making "quick fixes" to suppress errors instead of understanding why they occur
+
+### Never Make These Superficial Fixes
+- Changing `extra="forbid"` to `extra="allow"` in Pydantic models when encountering "extra_forbidden" errors
+- Adding try/except blocks to suppress validation errors without understanding the root cause
+- Modifying type annotations to be more permissive (like `Any`) to bypass type checking
+- Adding `# type: ignore` comments without understanding why the type checker is failing
+
+### When You Encounter Validation Errors
+1. **Trace the Data Flow**: Understand how data flows from YAML → Hydra → Pydantic models
+2. **Identify the Conversion Point**: Find where the conversion should happen (field validators, factory methods, etc.)
+3. **Fix at the Right Level**: Apply fixes where the data transformation should logically occur
+4. **Test the Fix**: Ensure the fix works for the actual use case, not just the immediate error
 
 ### When Debugging Complex Issues
 - Create GitHub issues with comprehensive analysis
