@@ -24,6 +24,7 @@ dependencies = [
     "coloredlogs<16.0.0,>=15.0.1",
     "google-cloud-logging<4.0.0,>=3.11.2",
     "json-repair<1.0.0,>=0.28.3",
+    "jsonschema<5.0.0,>=4.0.0",
     "boto3<2.0.0,>=1.35.7",
     "azure-ai-contentsafety<2.0.0,>=1.0.0",
     "azure-cognitiveservices-vision-contentmoderator<2.0.0,>=1.0.0",
