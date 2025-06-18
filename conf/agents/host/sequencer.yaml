@@ -1,3 +1,5 @@
+# Traditional sequencer host agent
+# For tool-based coordination, use structured_sequencer instead
 host:
   role: HOST
   name: "🎯 Sequencer"
