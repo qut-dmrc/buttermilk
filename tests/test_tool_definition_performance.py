@@ -309,12 +309,36 @@ class TestUnifiedRequestPerformance:
         """Test performance with concurrent requests."""
         agent = BenchmarkAgent(agent_name="bench", model_name="test", role="BENCH")
         
-        # Create many requests
+        # Create many requests matching tool signatures
         requests = []
         for i in range(100):
+            tool_num = (i % 10) + 1
+            
+            # Match inputs to tool signatures
+            if tool_num == 1:
+                inputs = {"param": f"test_{i}"}
+            elif tool_num == 2:
+                inputs = {"x": i, "y": i+1}
+            elif tool_num == 3:
+                inputs = {"data": {"index": i, "value": f"test_{i}"}}
+            elif tool_num == 4:
+                inputs = {"items": [f"item_{j}" for j in range(i % 5)]}
+            elif tool_num == 5:
+                inputs = {"value": float(i)}
+            elif tool_num == 6:
+                inputs = {"a": "A", "b": str(i), "c": "C"}
+            elif tool_num == 7:
+                inputs = {"enabled": i % 2 == 0}
+            elif tool_num == 8:
+                inputs = {"config": {"setting": i, "mode": "test"}}
+            elif tool_num == 9:
+                inputs = {"count": i % 20}
+            else:  # tool_10
+                inputs = {"text": f"text_{i}", "repeat": (i % 3) + 1}
+            
             req = UnifiedRequest(
-                target=f"bench.tool_{(i % 10) + 1}",
-                inputs={"param": f"test_{i}"} if i % 10 == 0 else {"x": i, "y": i+1}
+                target=f"bench.tool_{tool_num}",
+                inputs=inputs
             )
             requests.append(req)
         
