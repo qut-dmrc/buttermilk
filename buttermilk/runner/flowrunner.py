@@ -10,7 +10,7 @@ from typing import Any
 import shortuuid
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 
@@ -702,6 +702,36 @@ class FlowRunner(BaseModel):
     # New session management
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
+
+    @field_validator("flows", mode="before")
+    @classmethod
+    def validate_flows(cls, v):
+        """Convert OmegaConf flow configurations to Orchestrator instances."""
+        if not v:
+            return v
+        
+        from buttermilk._core.orchestrator import Orchestrator
+        from omegaconf import DictConfig, OmegaConf
+        
+        converted_flows = {}
+        for flow_name, flow_config in v.items():
+            if isinstance(flow_config, DictConfig):
+                # Convert OmegaConf to dict and validate as Orchestrator
+                flow_dict = OmegaConf.to_container(flow_config, resolve=True)
+                # Import the specific orchestrator class
+                orchestrator_class_path = flow_dict.get('orchestrator')
+                if orchestrator_class_path:
+                    module_path, class_name = orchestrator_class_path.rsplit('.', 1)
+                    import importlib
+                    module = importlib.import_module(module_path)
+                    orchestrator_class = getattr(module, class_name)
+                    converted_flows[flow_name] = orchestrator_class.model_validate(flow_dict)
+                else:
+                    # Fallback to generic Orchestrator class
+                    converted_flows[flow_name] = flow_dict
+            else:
+                converted_flows[flow_name] = flow_config
+        return converted_flows
 
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""

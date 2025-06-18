@@ -70,8 +70,10 @@ def main(conf: DictConfig) -> None:
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
         raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
-    flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
-    flow_runner.flows = conf.flows
+    # Create FlowRunner with proper validation of flows
+    flow_runner_data = conf.run.copy() if hasattr(conf.run, 'copy') else dict(conf.run)
+    flow_runner_data['flows'] = conf.flows
+    flow_runner: FlowRunner = FlowRunner.model_validate(flow_runner_data)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
