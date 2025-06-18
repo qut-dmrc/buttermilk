@@ -43,11 +43,20 @@ from buttermilk._core.cloud import CloudManager  # Manages cloud provider connec
 from buttermilk._core.config import CloudProviderCfg, Tracing  # Config models
 from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
-from buttermilk._core.llms import LLMs  # Manages LLM clients
+try:
+    from buttermilk._core.llms import LLMs  # Manages LLM clients
+except ImportError:
+    LLMs = None
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
-from buttermilk._core.query import QueryRunner  # For running SQL queries
+try:
+    from buttermilk._core.query import QueryRunner  # For running SQL queries
+except ImportError:
+    QueryRunner = None
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
-from buttermilk.utils import save  # Utility for saving data
+try:
+    from buttermilk.utils import save  # Utility for saving data
+except ImportError:
+    save = None
 from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults, BaseStorageConfig, StorageFactory  # Unified storage config
 
 # Constants for configuration keys

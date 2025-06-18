@@ -18,8 +18,12 @@ from typing import Any, Union
 import numpy as np
 import shortuuid  # For generating unique IDs
 
-# Import Autogen types used as base or components
-from autogen_core.models import FunctionExecutionResult, LLMMessage
+# Import Autogen types used as base or components - conditional import
+try:
+    from autogen_core.models import FunctionExecutionResult, LLMMessage
+except ImportError:
+    FunctionExecutionResult = None
+    LLMMessage = None
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -731,13 +735,14 @@ class FlowProgressUpdate(FlowMessage):
 # --- Tool / Function Call Messages ---
 
 
-class ToolOutput(FunctionExecutionResult):
-    """Represents the result of a tool (function) execution performed by an agent.
+if FunctionExecutionResult is not None:
+    class ToolOutput(FunctionExecutionResult):
+        """Represents the result of a tool (function) execution performed by an agent.
 
-    This class inherits from Autogen's `FunctionExecutionResult`, which typically
-    includes fields like `call_id` (for the function call), `function_name`, and
-    `content` (the stringified result of the function). It adds Buttermilk-specific
-    context or alternative ways to structure results.
+        This class inherits from Autogen's `FunctionExecutionResult`, which typically
+        includes fields like `call_id` (for the function call), `function_name`, and
+        `content` (the stringified result of the function). It adds Buttermilk-specific
+        context or alternative ways to structure results.
 
     Attributes:
         results (Any): The raw or structured result from the tool execution. This
@@ -779,8 +784,16 @@ class ToolOutput(FunctionExecutionResult):
         default="unknown",
         description="ID of the corresponding tool call request that this output answers.",
     )
-    # is_error might be a useful addition if not in base class, e.g.:
-    # is_error: bool = Field(default=False, description="True if the tool execution resulted in an error.")
+        # is_error might be a useful addition if not in base class, e.g.:
+        # is_error: bool = Field(default=False, description="True if the tool execution resulted in an error.")
+else:
+    # Fallback when autogen is not available
+    class ToolOutput(BaseModel):
+        """Fallback ToolOutput when autogen is not available."""
+        call_id: str = ""
+        function_name: str = ""
+        content: str = ""
+        results: Any = None
 
 
 # --- Status & Coordination Messages ---

@@ -67,9 +67,8 @@ def construct_dict_from_schema(
         "NULL" or empty string after punctuation removal).
 
     Args:
-        schema (list[bigquery.SchemaField | dict[str, Any]]): A list representing the
-            BigQuery schema. Each item can be a `google.cloud.bigquery.SchemaField`
-            object or a dictionary with keys like 'name', 'type', and optionally
+        schema (list): A list representing the BigQuery schema. Each item can be a 
+            SchemaField object or a dictionary with keys like 'name', 'type', and optionally
             'fields' (for nested schemas) and 'mode' (for REPEATED fields).
         data_dict (dict[str, Any]): The input data dictionary to transform.
         remove_extra_fields (bool): If True (default), keys in `data_dict` that
@@ -240,8 +239,8 @@ class TableWriter(BaseModel):
         destination (str | None): The fully qualified BigQuery table ID in the
             format "project.dataset.table". If provided, it's used to derive
             `project_id`, `dataset_id`, and `table_id` if they are not set.
-        bq_schema (list[bigquery.SchemaField] | str | None): The BigQuery table schema.
-            Can be a list of `SchemaField` objects or a path to a JSON schema file.
+        bq_schema (list | str | None): The BigQuery table schema.
+            Can be a list of SchemaField objects or a path to a JSON schema file.
             If a path string is provided, it's loaded into `SchemaField` objects.
         stream (str | None): The write stream name to use. Defaults to "_default",
             which is the default stream for a table in the Storage Write API.
@@ -265,7 +264,7 @@ class TableWriter(BaseModel):
         default=None,
         description="Optional. Fully qualified table ID (project.dataset.table). Used if component IDs not set."
     )
-    bq_schema: list[bigquery.SchemaField] | None = Field( # Changed from str to list[SchemaField] for clarity post-validation
+    bq_schema: list | None = Field( # Changed from str to list for compatibility when bigquery is not available
         default=None,
         description="BigQuery table schema as list of SchemaFields or path to JSON schema file."
     )
@@ -289,7 +288,7 @@ class TableWriter(BaseModel):
 
     @pydantic.field_validator("bq_schema", mode="before")
     @classmethod
-    def load_schema_from_path(cls, v: Any) -> list[bigquery.SchemaField] | Any: # Allow Any to pass through if already list
+    def load_schema_from_path(cls, v: Any) -> list | Any: # Allow Any to pass through if already list
         """Pydantic validator to load a BigQuery schema from a JSON file path if a string is provided.
 
         Args:
@@ -297,8 +296,8 @@ class TableWriter(BaseModel):
                If already a list (presumably of `SchemaField`), it's passed through.
 
         Returns:
-            list[bigquery.SchemaField] | Any: The loaded schema as a list of `SchemaField`
-            objects, or the original value if not a string path.
+            list | Any: The loaded schema as a list of SchemaField objects, 
+            or the original value if not a string path.
 
         Raises:
             TypeError: If `v` is a string path but schema loading fails.
@@ -422,7 +421,7 @@ class TableWriter(BaseModel):
 
         # Apply schema transformations and ensure serializability
         if self.bq_schema:
-            if not (isinstance(self.bq_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in self.bq_schema)):
+            if bigquery is not None and not (isinstance(self.bq_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in self.bq_schema)):
                  raise TypeError(f"TableWriter.bq_schema must be a list of bigquery.SchemaField. Got: {type(self.bq_schema)}")
             prepared_batch = [construct_dict_from_schema(self.bq_schema, row) for row in prepared_batch]
 

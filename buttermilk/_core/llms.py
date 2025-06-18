@@ -29,18 +29,40 @@ try:
 except ImportError:
     AnthropicVertex = None
     AsyncAnthropicVertex = None
-from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
-from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
-from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
-from autogen_ext.models.openai import (  # Autogen OpenAI clients
-    AzureOpenAIChatCompletionClient,
-    OpenAIChatCompletionClient,
-)
-from autogen_ext.models.openai._transformation.registry import (
-    _find_model_family,  # Helper for model family detection
-)
-from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
+# Conditional imports for autogen libraries that may not be available
+try:
+    from autogen_core import CancellationToken, FunctionCall  # Autogen core types
+    from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
+    from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
+    from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
+    from autogen_ext.models.openai import (  # Autogen OpenAI clients
+        AzureOpenAIChatCompletionClient,
+        OpenAIChatCompletionClient,
+    )
+    from autogen_ext.models.openai._transformation.registry import (
+        _find_model_family,  # Helper for model family detection
+    )
+    AUTOGEN_AVAILABLE = True
+except ImportError:
+    # Mock the autogen types for when they're not available
+    CancellationToken = None
+    FunctionCall = None
+    ChatCompletionClient = None
+    CreateResult = None
+    LLMMessage = None
+    ModelFamily = None
+    ModelInfo = None
+    Tool = None
+    ToolSchema = None
+    AnthropicChatCompletionClient = None
+    AzureOpenAIChatCompletionClient = None
+    OpenAIChatCompletionClient = None
+    _find_model_family = None
+    AUTOGEN_AVAILABLE = False
+try:
+    from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
+except ImportError:
+    GeminiChatCompletionClient = None
 from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configuration
 
 
