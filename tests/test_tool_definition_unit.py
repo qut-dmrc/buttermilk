@@ -6,7 +6,9 @@ Tests the AgentToolDefinition, decorators, and schema validation utilities.
 import pytest
 from typing import Any, Literal
 
-from buttermilk._core import Agent, AgentInput, AgentOutput
+from buttermilk._core import AgentInput
+from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentOutput
 from buttermilk._core.tool_definition import (
     AgentToolDefinition,
     MCPServerConfig,
