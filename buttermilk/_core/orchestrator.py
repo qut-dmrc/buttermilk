@@ -118,7 +118,7 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, DataSourceConfig] = Field(
+    storage: Mapping[str, DataSourceConfig | StorageConfig] = Field(
         default_factory=dict,
         description="Configuration for input data sources to be loaded for the flow, keyed by a descriptive name.",
     )
@@ -144,6 +144,62 @@ class OrchestratorProtocol(BaseModel):
     )(
         convert_omegaconf_objects
     )  # type: ignore
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_storage_configs(cls, data: Any) -> Any:
+        """Convert storage configurations to appropriate types.
+        
+        This validator ensures that storage configurations are properly converted
+        to either DataSourceConfig or StorageConfig objects. It handles:
+        1. Raw dictionaries from YAML/Hydra
+        2. Discriminated unions based on available fields
+        3. Backward compatibility with DataSourceConfig
+        """
+        if isinstance(data, dict) and "storage" in data:
+            storage = data.get("storage", {})
+            if isinstance(storage, dict):
+                validated_storage = {}
+                for name, config in storage.items():
+                    if isinstance(config, (DataSourceConfig, StorageConfig)):
+                        # Already a proper config object
+                        validated_storage[name] = config
+                    elif isinstance(config, dict):
+                        # Try to determine which type to create based on fields
+                        # StorageConfig-specific fields
+                        storage_specific_fields = {
+                            "auto_create", "clustering_fields", "multi_field_embedding"
+                        }
+                        
+                        # Check if any StorageConfig-specific fields are present
+                        has_storage_fields = any(
+                            field in config for field in storage_specific_fields
+                        )
+                        
+                        # If it has fields specific to StorageConfig, or if type is one
+                        # that StorageFactory handles, create StorageConfig
+                        if has_storage_fields or config.get("type") in [
+                            "bigquery", "chromadb", "vector", "gcs", "s3"
+                        ]:
+                            try:
+                                validated_storage[name] = StorageConfig(**config)
+                            except Exception as e:
+                                # Fall back to DataSourceConfig if StorageConfig fails
+                                logger.debug(
+                                    f"Failed to create StorageConfig for '{name}', "
+                                    f"falling back to DataSourceConfig: {e}"
+                                )
+                                validated_storage[name] = DataSourceConfig(**config)
+                        else:
+                            # Default to DataSourceConfig for backward compatibility
+                            validated_storage[name] = DataSourceConfig(**config)
+                    else:
+                        # Pass through as-is, let Pydantic handle validation
+                        validated_storage[name] = config
+                
+                data["storage"] = validated_storage
+        
+        return data
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,  # Allows for flexibility if some configs are complex types
