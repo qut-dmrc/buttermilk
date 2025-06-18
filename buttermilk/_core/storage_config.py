@@ -310,6 +310,8 @@ class StorageFactory:
     def create_config(config_dict: dict) -> BaseStorageConfig:
         """Create appropriate config type based on the 'type' field in the dictionary.
         
+        Uses the discriminated union to properly validate and create the correct subclass.
+        
         Args:
             config_dict: Dictionary with configuration values including 'type'
             
@@ -325,17 +327,12 @@ class StorageFactory:
         storage_type = config_dict.get('type')
         if not storage_type:
             raise ValueError("Missing 'type' field in storage configuration")
-            
-        if storage_type == 'bigquery':
-            return BigQueryStorageConfig(**config_dict)
-        elif storage_type in ['file', 'local', 'gcs', 's3', 'plaintext']:
-            return FileStorageConfig(**config_dict)
-        elif storage_type in ['chromadb', 'vector']:
-            return VectorStorageConfig(**config_dict)
-        elif storage_type == 'huggingface':
-            return HuggingFaceStorageConfig(**config_dict)
-        else:
-            return GeneratorStorageConfig(**config_dict)
+        
+        # Use the discriminated union for proper validation
+        from pydantic import TypeAdapter
+        
+        adapter = TypeAdapter(StorageConfig)
+        return adapter.validate_python(config_dict)
     
     @staticmethod
     def create_storage(config: Union[StorageConfig, BaseStorageConfig], bm_instance=None):
