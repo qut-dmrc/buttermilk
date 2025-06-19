@@ -122,7 +122,7 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, DataSourceConfig | BaseStorageConfig | StorageConfig] = Field(
+    storage: Mapping[str, BaseStorageConfig | StorageConfig] = Field(
         default_factory=dict,
         description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )

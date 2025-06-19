@@ -411,7 +411,7 @@ class DataSourceConfig(BaseModel):
         exclude_none=True,
         exclude_unset=True,
     )
-    
+
     def __init__(self, **data):
         """Initialize DataSourceConfig with deprecation warning."""
         import warnings
@@ -423,7 +423,6 @@ class DataSourceConfig(BaseModel):
             stacklevel=2
         )
         super().__init__(**data)
-
 
 
 class BigQueryConfig(BaseModel):
@@ -482,7 +481,6 @@ class BigQueryConfig(BaseModel):
     )
 
 
-
 class ToolConfig(BaseModel):
     """Configuration for a tool (function) that an agent can use.
 
@@ -494,8 +492,8 @@ class ToolConfig(BaseModel):
             often used in prompts for LLMs to understand when to use the tool.
         tool_obj (str): The identifier or path to the actual Python callable or
             object that implements the tool's logic.
-        data (Mapping[str, DataSourceConfig]): A mapping where keys are names/aliases
-            for data sources and values are `DataSourceConfig` objects defining
+        data (Mapping[str, StorageConfig]): A mapping where keys are names/aliases
+            for data sources and values are `StorageConfig` objects defining
             how to load that data. This allows tools to dynamically access data.
 
     """
@@ -519,9 +517,9 @@ class ToolConfig(BaseModel):
         """Convert YAML dictionaries to BaseStorageConfig objects."""
         if not v:
             return v
-            
+
         from buttermilk._core.storage_config import StorageFactory
-        
+
         converted = {}
         for key, config in v.items():
             if isinstance(config, dict):
@@ -617,7 +615,7 @@ class AgentConfig(BaseModel):
             and capabilities.
         tools (list[ToolConfig]): A list of `ToolConfig` objects, defining the
             tools (functions) available to this agent.
-        data (Mapping[str, DataSourceConfig]): Configuration for data sources the
+        data (Mapping[str, StorageConfig]): Configuration for data sources the
             agent might need to access, keyed by a descriptive name.
             Serialized as `mapping_data`.
         parameters (dict[str, Any]): Agent-specific configuration parameters that
@@ -721,9 +719,9 @@ class AgentConfig(BaseModel):
         """Convert YAML dictionaries to BaseStorageConfig objects."""
         if not v:
             return v
-            
+
         from buttermilk._core.storage_config import StorageFactory
-        
+
         converted = {}
         for key, config in v.items():
             if isinstance(config, dict):

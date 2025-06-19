@@ -167,12 +167,6 @@ class MessageService:
                         record_id=data.pop("record_id", None),
                         parameters=data,
                     )
-                    # Enhance for OSB flow if needed
-                    if run_request.flow == "osb":
-                        from buttermilk.api.osb_message_enhancements import enhance_run_request_if_osb
-                        # Need to pass original data which includes type and flow
-                        original_data = {"type": message_type, "flow": run_request.flow, **data}
-                        run_request = enhance_run_request_if_osb(run_request, original_data)
                     return run_request
                 case "pull_task":
                     from buttermilk.api.job_queue import JobQueueClient

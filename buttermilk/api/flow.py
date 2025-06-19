@@ -39,6 +39,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """Lifespan event handler for startup and shutdown events.
         """
         try:
+
+            # API functions might take a few more seconds
+            asyncio.get_event_loop().slow_callback_duration = 2
+            
             # Complete BM initialization in the FastAPI event loop
             if hasattr(app.state, "bm"):
                 await app.state.bm._background_init()
@@ -211,6 +215,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         token = session_id_var.set(session_id)
         async for run_request in session.monitor_ui():
             try:
+                logger.info(f"Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
                 await asyncio.sleep(0.1)
                 # Track session activity
                 metrics_collector.update_session_activity(session_id)
@@ -218,6 +223,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 # This loop internally feeds the groupchat with messages from the client.
                 # The only message we receive is a run_request -- which we then
                 # use to create a new flow.
+                logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
                 task = asyncio.create_task(flow_runner.run_flow(
                     run_request=run_request,
                     wait_for_completion=False,

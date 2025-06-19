@@ -75,13 +75,15 @@ async def test_osb_flow_with_empty_criteria():
     # Process through MessageService
     result = await MessageService.process_message_from_ui(frontend_message.copy())
     
-    # Should still process but with empty query
+    # Should still process without setting empty query fields
     assert isinstance(result, RunRequest)
     assert result.flow == "osb"
     
-    # Empty criteria should map to empty query
-    assert result.parameters.get("query") == ""
-    assert result.parameters.get("osb_query") == ""
+    # Empty criteria should remain but not create query fields
+    assert result.parameters.get("criteria") == ""
+    # Query fields should not be set for empty values
+    assert "query" not in result.parameters or result.parameters.get("query") == ""
+    assert "osb_query" not in result.parameters or result.parameters.get("osb_query") == ""
 
 
 @pytest.mark.anyio

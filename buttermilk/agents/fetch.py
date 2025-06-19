@@ -54,7 +54,7 @@ class FetchRecord(ToolConfig):
     and convert content from a given `uri`.
 
     The `data` attribute (from `ToolConfig`) can be configured with
-    `DataSourceConfig` instances. `load_data` populates `_data_sources` from these.
+    `StorageConfig` instances. `load_data` populates `_data_sources` from these.
 
     Attributes:
         _data_sources (dict[str, DataLoader]): Private attribute storing loaded data sources,
@@ -93,7 +93,7 @@ class FetchRecord(ToolConfig):
                     storage_config = StorageConfig(**dict(config))
                 else:
                     storage_config = StorageConfig(**config)
-                
+
                 # Use unified storage system instead of deprecated create_data_loader
                 from buttermilk._core.dmrc import get_bm
                 bm = get_bm()
@@ -219,9 +219,9 @@ class FetchRecord(ToolConfig):
         # If record is None here, it means neither record_id nor uri was set, which contradicts the assertion.
         # For safety, though, if we somehow end up here without a record:
         if original_uri:
-             raise ProcessingError(f"Record not found for URI: {original_uri}")
+            raise ProcessingError(f"Record not found for URI: {original_uri}")
         if original_record_id:
-             raise ProcessingError(f"Record not found for ID: {original_record_id}")
+            raise ProcessingError(f"Record not found for ID: {original_record_id}")
         # Fallback if prompt didn't yield URI or ID.
         raise ProcessingError("Record not found, and no URI or ID was effectively specified for the fetch attempt.")
 

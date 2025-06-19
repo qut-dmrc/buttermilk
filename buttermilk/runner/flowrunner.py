@@ -260,12 +260,14 @@ class FlowRunContext(BaseModel):
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
+                    logger.debug(f"No message returned from process_message_from_ui for data: {data}")
                     continue
 
                 if isinstance(message, RunRequest):
                     # Generate a request to run the flow with the new parameters
                     message.callback_to_ui = self.send_message_to_ui
                     message.session_id = self.session_id
+                    logger.info(f"Yielding RunRequest for flow '{message.flow}' in session {self.session_id}")
 
                     yield message
                 elif not self.callback_to_groupchat:

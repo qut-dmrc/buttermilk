@@ -67,6 +67,9 @@ def main(conf: DictConfig) -> None:
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
 
+    # General functions might take a few more seconds
+    asyncio.get_event_loop().slow_callback_duration = 10
+
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
         case "console":
@@ -194,6 +197,10 @@ def main(conf: DictConfig) -> None:
             from buttermilk.runner.slackbot import initialize_slack_bot  # Slack bot initialization utility
 
             event_loop = asyncio.get_event_loop()
+
+            # General functoins might take a few more seconds
+            event_loop.slow_callback_duration = 10
+
             # Queue for managing asyncio tasks created by Slack event handlers
             orchestrator_tasks = asyncio.Queue()  # type: ignore
 

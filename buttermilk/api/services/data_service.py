@@ -20,39 +20,9 @@ class FlowRunner(Protocol):
 
 class DataService:
     """Service for handling data-related operations"""
-    
+
     # Session configuration with defaults from YAML config
     _session_config = SessionConfig()
-
-    @staticmethod
-    def _convert_to_storage_config(storage_config_raw: Any) -> StorageConfig:
-        """Convert raw configuration (OmegaConf, dict, etc.) to StorageConfig.
-        
-        Args:
-            storage_config_raw: Raw storage configuration from flow definition
-            
-        Returns:
-            StorageConfig: Properly validated configuration object
-        """
-        if isinstance(storage_config_raw, StorageConfig):
-            return storage_config_raw
-        elif isinstance(storage_config_raw, DataSourceConfig):
-            # Convert legacy DataSourceConfig to StorageConfig
-            # TODO: Remove this backwards compatibility in next major version
-            logger.warning(
-                "DataSourceConfig is deprecated and will be removed in a future version. "
-                "Please use StorageConfig instead."
-            )
-            config_dict = storage_config_raw.model_dump()
-            return StorageConfig(**config_dict)
-        elif hasattr(storage_config_raw, "__dict__"):
-            # Handle OmegaConf objects
-            return StorageConfig(**dict(storage_config_raw))
-        elif isinstance(storage_config_raw, dict):
-            return StorageConfig(**storage_config_raw)
-        else:
-            # Fallback: try to convert to dict first
-            return StorageConfig(**dict(storage_config_raw))
 
     @staticmethod
     async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
@@ -184,7 +154,7 @@ class DataService:
         try:
             # Get default values from configuration
             defaults = cls._session_config.defaults.model_dump()
-            
+
             if not session_id or not hasattr(websocket_manager, "session_data"):
                 return defaults
 
@@ -233,13 +203,10 @@ class DataService:
                 # Fallback to first storage configuration for backward compatibility
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
-            # Convert OmegaConf/dict to proper StorageConfig
-            storage_config = DataService._convert_to_storage_config(storage_config_raw)
-
             # Use unified storage system instead of deprecated create_data_loader
             from buttermilk._core.dmrc import get_bm
             bm = get_bm()
-            storage = bm.get_storage(storage_config)
+            storage = bm.get_storage(storage_config_raw)
 
             for record in storage:
                 if record.record_id == record_id:
@@ -273,7 +240,7 @@ class DataService:
             Exception: If reconstruction fails due to invalid data
         """
         import json
-        
+
         # Parse JSON fields
         agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
         inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}

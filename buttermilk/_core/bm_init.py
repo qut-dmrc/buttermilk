@@ -190,7 +190,7 @@ class BM(SessionInfo):
         clouds (list[CloudProviderCfg]): List of configurations for different cloud
             providers to be initialized (e.g., GCP, Azure).
         tracing (Tracing | None): Configuration for tracing (e.g., Langfuse, Weave).
-        datasets (dict[str, DataSourceConfig]): A dictionary of predefined data source
+        datasets (dict[str, StorageConfig]): A dictionary of predefined data source
             configurations accessible via the `BM` instance.
         save_dir_base (str): The base directory under which session-specific save
             directories will be created. Defaults to a new temporary directory.
