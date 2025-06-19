@@ -4,10 +4,10 @@
 
 ### Flows (12 total)
 1. **Core flows**: osb, tox, trans (keep these)
-2. **Test/demo flows**: simple, test, enhanced_rag_demo, z (remove/consolidate)
+2. **Test/demo flows**: simple, test, enhanced_rag_demo, z (consolidate into a new generic rag flow)
 3. **Duplicate flows**: tox_allinone (merge into tox)
 4. **Specialized flows**: judger, ingest (evaluate for removal)
-5. **Criteria flows**: criteria/hate, criteria/trans (merge into parent flows)
+5. **Criteria flows**: criteria/hate, criteria/trans (keep as options for parent flows)
 
 ### Host Agents (5 configurations)
 1. **sequencer.yaml** - Simple sequence-based execution
@@ -115,35 +115,6 @@ templates/
     └── journalism.jinja2    # All journalism criteria
 ```
 
-### 4. Common Components
-
-#### /base/common_agents.yaml
-```yaml
-judge:
-  _target_: /agents/judge
-  parameters:
-    template: ${templates.judge}
-    
-synth:
-  _target_: /agents/synth
-  parameters:
-    template: ${templates.synthesis}
-    
-differences:
-  _target_: /agents/differences
-```
-
-#### /base/common_observers.yaml
-```yaml
-spy:
-  _target_: /agents/spy
-  
-owl:
-  _target_: /agents/owl
-  
-scorer:
-  _target_: /agents/scorer
-```
 
 ## Implementation Steps
 
