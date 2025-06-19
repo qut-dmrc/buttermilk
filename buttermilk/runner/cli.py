@@ -55,20 +55,17 @@ def main(conf: DictConfig) -> None:
             parameters like `flow`, `record_id`, `prompt` for console mode.
 
     """
-    # Resolve OmegaConf to a plain Python dictionary for Pydantic model instantiation
-    resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
+    OmegaConf.resolve(conf)
+    bm = hydra.utils.instantiate(conf.bm)
 
-    # Initialize the global Buttermilk instance (bm) with its configuration section
-    if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
-        raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-    bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    # bm = BM.model_validate(objs.bm)  # type: ignore # Assuming dict matches BM fields
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
-    flow_runner: FlowRunner = FlowRunner.model_validate(conf.flows)
+    flow_runner = FlowRunner.model_validate(conf.run)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:

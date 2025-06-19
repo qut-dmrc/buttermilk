@@ -64,7 +64,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "+flows=[trans, tox, osb]",
+        "+flows=[trans, osb]",
         "+run=api",
         "+llms=full",
       ],

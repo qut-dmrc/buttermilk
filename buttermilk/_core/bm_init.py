@@ -270,23 +270,23 @@ class BM(SessionInfo):
             f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
         )
 
-    @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
-    @classmethod
-    def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Removes the `_target_` attribute commonly added by Hydra from input values.
+    # @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
+    # @classmethod
+    # def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+    #     """Removes the `_target_` attribute commonly added by Hydra from input values.
 
-        This is a pre-validation step to clean up configuration data before
-        it's parsed by Pydantic.
+    #     This is a pre-validation step to clean up configuration data before
+    #     it's parsed by Pydantic.
 
-        Args:
-            values: The dictionary of raw input values for the model.
+    #     Args:
+    #         values: The dictionary of raw input values for the model.
 
-        Returns:
-            dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
+    #     Returns:
+    #         dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
 
-        """
-        values.pop("_target_", None)  # Remove if exists, do nothing otherwise
-        return values
+    #     """
+    #     values.pop("_target_", None)  # Remove if exists, do nothing otherwise
+    #     return values
 
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
@@ -339,16 +339,16 @@ class BM(SessionInfo):
         to ensure they're available before any cloud operations.
         """
         import os
-        
+
         if not self.clouds:
             return
-            
-        # Find GCP cloud config 
+
+        # Find GCP cloud config
         gcp_cloud_cfg = next(
             (c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"),
             None,
         )
-        
+
         if gcp_cloud_cfg:
             # Get project_id from config
             project_id = getattr(gcp_cloud_cfg, "project_id", None)
@@ -359,7 +359,7 @@ class BM(SessionInfo):
 
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
-                
+
             logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
     def _schedule_background_init(self) -> None:
@@ -1007,7 +1007,7 @@ class BM(SessionInfo):
         """
         # Create storage instance using sync method
         storage = self.get_storage(config)
-        
+
         # Auto-initialize if it's ChromaDB with remote storage
         if hasattr(storage, 'ensure_cache_initialized'):
             # Check if it's remote storage requiring initialization
@@ -1016,7 +1016,7 @@ class BM(SessionInfo):
                     logger.info(f"🔄 Auto-initializing remote storage: {storage.persist_directory}")
                     await storage.ensure_cache_initialized()
                     logger.info("✅ Storage ready for use")
-        
+
         return storage
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:

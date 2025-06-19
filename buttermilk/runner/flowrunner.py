@@ -691,7 +691,7 @@ class FlowRunner(BaseModel):
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
+    flows: dict[str, OrchestratorProtocol]
 
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
@@ -703,35 +703,31 @@ class FlowRunner(BaseModel):
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
 
-    @field_validator("flows", mode="before")
-    @classmethod
-    def validate_flows(cls, v):
-        """Convert OmegaConf flow configurations to Orchestrator instances."""
-        if not v:
-            return v
-        
-        from buttermilk._core.orchestrator import Orchestrator
-        from omegaconf import DictConfig, OmegaConf
-        
-        converted_flows = {}
-        for flow_name, flow_config in v.items():
-            if isinstance(flow_config, DictConfig):
-                # Convert OmegaConf to dict and validate as Orchestrator
-                flow_dict = OmegaConf.to_container(flow_config, resolve=True)
-                # Import the specific orchestrator class
-                orchestrator_class_path = flow_dict.get('orchestrator')
-                if orchestrator_class_path:
-                    module_path, class_name = orchestrator_class_path.rsplit('.', 1)
-                    import importlib
-                    module = importlib.import_module(module_path)
-                    orchestrator_class = getattr(module, class_name)
-                    converted_flows[flow_name] = orchestrator_class.model_validate(flow_dict)
-                else:
-                    # Fallback to generic Orchestrator class
-                    converted_flows[flow_name] = flow_dict
-            else:
-                converted_flows[flow_name] = flow_config
-        return converted_flows
+    # I think we comment this out because in flowrunner, we deal with Configs, not instantiated orchestrators. We instantiate later.
+    # @field_validator("flows", mode="before")
+    # @classmethod
+    # def validate_flows(cls, v):
+    #     """Convert OmegaConf flow configurations to Orchestrator instances."""
+    #     if not v:
+    #         return v
+
+    #     from buttermilk._core.orchestrator import OrchestratorProtocol
+    #     from omegaconf import DictConfig, OmegaConf
+
+    #     converted_flows = {}
+    #     for flow_name, flow_config in v.items():
+
+    #         orchestrator_class_path = flow_config.orchestrator
+    #         if orchestrator_class_path:
+    #             module_path, class_name = orchestrator_class_path.rsplit(".", 1)
+    #             import importlib
+
+    #             module = importlib.import_module(module_path)
+    #             orchestrator_class = getattr(module, class_name)
+    #             converted_flows[flow_name] = orchestrator_class.model_validate(flow_config)
+    #         else:
+    #             converted_flows[flow_name] = Orchestrator.model_validate(flow_config)
+    #     return converted_flows
 
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""
@@ -837,7 +833,7 @@ class FlowRunner(BaseModel):
         import time
         start_time = time.time()
         success = False
-        
+
         try:
             from buttermilk.monitoring import get_metrics_collector
             metrics_collector = get_metrics_collector()
@@ -894,7 +890,7 @@ class FlowRunner(BaseModel):
                     )
                 except Exception as e:
                     logger.debug(f"Failed to record flow execution metrics: {e}")
-            
+
             if wait_for_completion:
                 # Clean up after completion if we were waiting
                 await self.session_manager.cleanup_session(run_request.session_id)

@@ -12,7 +12,7 @@ defaults:
     - fact_checker
     - explorer
   # Observer agents for coordination
-  - /agents/host@osb.observers:
+  - /agents@osb.observers:
     - host/llm_host
   # Data source configuration
   - /storage@osb.storage: 
