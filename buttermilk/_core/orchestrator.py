@@ -122,7 +122,7 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, DataSourceConfig | StorageConfig] = Field(
+    storage: Mapping[str, DataSourceConfig | BaseStorageConfig | StorageConfig] = Field(
         default_factory=dict,
         description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )
@@ -175,9 +175,11 @@ class OrchestratorProtocol(BaseModel):
 
                         # If it has fields specific to StorageConfig, or if type is one
                         # that StorageFactory handles, create StorageConfig
-                        if has_storage_fields or config.get("type") in ["bigquery", "chromadb", "vector", "gcs", "s3"]:
+                        if has_storage_fields or config.get("type") in ["bigquery", "bq", "chromadb", "vector", "gcs", "s3", "file", "plaintext", "local", "huggingface", "generator", "job", "outputs"]:
                             try:
-                                validated_storage[name] = BaseStorageConfig(**config)
+                                # Use StorageFactory to create proper storage config with discriminated union
+                                from buttermilk._core.storage_config import StorageFactory
+                                validated_storage[name] = StorageFactory.create_config(config)
                             except Exception as e:
                                 # Fall back to DataSourceConfig if StorageConfig fails
                                 logger.debug(f"Failed to create StorageConfig for '{name}', " f"falling back to DataSourceConfig: {e}")
