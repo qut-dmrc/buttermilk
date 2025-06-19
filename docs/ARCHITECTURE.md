@@ -38,16 +38,27 @@ Buttermilk is a framework for building reproducible, traceable, and HASS-researc
 
 #### HOST Agents
 - **HostAgent**: Base coordinator for group chats and flow control
+- **SequenceHostAgent**: Executes agents in a predefined sequence
 - **LLMHostAgent**: Uses LLM to decide next steps dynamically (uses natural language)
 - **StructuredLLMHostAgent** (NEW): Refactored LLMHost using tool definitions
   - Discovers tools from participant agents automatically
   - Provides tools to LLM for direct invocation
   - Maintains backward compatibility with agents without tools
+  - Consolidates previous variations (assistant, explorer, ra, selector) into a single configurable agent
 
 #### Configuration System
 - Hydra/OmegaConf based configuration
 - YAML files define agents, flows, and orchestrators
 - No manual dictionary configuration allowed
+
+##### Available Host Configurations
+- **`host/llm_host`**: Intelligent coordinator using StructuredLLMHostAgent
+  - Adaptive execution mode where LLM decides workflow
+  - Supports tool discovery from participant agents
+  - Configurable via templates (e.g., `panel_host`)
+- **`host/sequence_host`**: Sequential execution of agents in predefined order
+  - Deterministic workflow execution
+  - No LLM overhead for simple pipelines
 
 ### Data Flow
 1. YAML configuration → Hydra → OmegaConf objects
@@ -119,17 +130,17 @@ buttermilk/
 
 ### Moving from Natural Language to Tool Definitions
 1. **Agents**: Add `@tool` decorators to methods (existing code continues to work)
-2. **Flows**: Replace `sequencer` with `structured_sequencer` in configs
+2. **Flows**: Update host configurations to use `StructuredLLMHostAgent` via `llm_host.yaml`
 3. **Testing**: Use provided test utilities to verify tool schemas
 4. **Gradual adoption**: Mix legacy and tool-based agents in same flow
 
 ### Example Migration
 ```yaml
-# Before
-- /agents/host@flow.observers.host: sequencer
+# Before (using legacy natural language host)
+- /agents/host@flow.observers.host: host/llm_host  # (when agent_obj was LLMHostAgent)
 
-# After  
-- /agents/host@flow.observers.host: structured_sequencer
+# After (using structured tool-based host)
+- /agents/host@flow.observers.host: host/llm_host  # (now uses StructuredLLMHostAgent)
 ```
 
 ## Future Considerations
