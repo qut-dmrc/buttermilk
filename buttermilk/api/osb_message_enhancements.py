@@ -16,7 +16,7 @@ Key principles:
 """
 
 from typing import Any, Dict, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from buttermilk._core.log import logger
 from buttermilk._core.config import RunRequest
@@ -48,7 +48,8 @@ class OSBQueryMessage(BaseModel):
     enable_streaming_response: bool = Field(default=True, description="Stream partial responses")
     max_processing_time: int = Field(default=60, description="Maximum processing time in seconds")
     
-    @validator('query')
+    @field_validator('query')
+    @classmethod
     def validate_query_length(cls, v):
         """Validate query length according to OSB configuration."""
         if len(v) > 2000:  # From osb.yaml max_query_length
@@ -57,7 +58,8 @@ class OSBQueryMessage(BaseModel):
             raise ValueError("Query cannot be empty")
         return v.strip()
     
-    @validator('case_priority')
+    @field_validator('case_priority')
+    @classmethod
     def validate_priority(cls, v):
         """Validate case priority levels."""
         valid_priorities = ["low", "medium", "high", "critical"]
@@ -181,31 +183,76 @@ class OSBMessageProcessor:
             return run_request
         
         try:
-            # Map 'criteria' to 'query' for OSB compatibility
-            if 'criteria' in run_request.parameters and 'query' not in original_data:
-                original_data['query'] = run_request.parameters.get('criteria', '')
-                logger.debug(f"Mapped 'criteria' to 'query' for OSB flow: {original_data['query'][:100]}")
+            # The query is in run_request.parameters, not original_data
+            # because process_message_from_ui puts everything in parameters
+            query = run_request.parameters.get('query', '')
             
-            # Parse OSB-specific fields from original data
-            osb_message = OSBQueryMessage(**original_data)
+            # Also check for 'criteria' as a fallback
+            if not query and 'criteria' in run_request.parameters:
+                query = run_request.parameters.get('criteria', '')
+                logger.debug(f"Using 'criteria' as query for OSB flow: {query[:100] if query else '(empty)'}")
+            
+            # Set the prompt field on RunRequest for consistency
+            run_request.prompt = query
+            
+            # Build the OSB message data from run_request.parameters
+            osb_data = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": query or "",  # Ensure query is at least empty string
+                # Extract OSB-specific fields from parameters
+                "case_number": run_request.parameters.get('case_number'),
+                "case_priority": run_request.parameters.get('case_priority', 'medium'),
+                "content_type": run_request.parameters.get('content_type'),
+                "platform": run_request.parameters.get('platform'),
+                "user_context": run_request.parameters.get('user_context'),
+                "enable_multi_agent_synthesis": run_request.parameters.get('enable_multi_agent_synthesis', True),
+                "enable_cross_validation": run_request.parameters.get('enable_cross_validation', True),
+                "enable_precedent_analysis": run_request.parameters.get('enable_precedent_analysis', True),
+                "include_policy_references": run_request.parameters.get('include_policy_references', True),
+                "enable_streaming_response": run_request.parameters.get('enable_streaming_response', True),
+                "max_processing_time": run_request.parameters.get('max_processing_time', 60),
+            }
+            
+            # Try to parse OSB-specific fields
+            try:
+                osb_message = OSBQueryMessage(**osb_data)
+            except ValueError as e:
+                # If validation fails (e.g., empty query), proceed with basic mapping
+                logger.warning(f"OSB message validation failed: {e}. Proceeding with basic parameter mapping.")
+                osb_message = None
             
             # Add OSB-specific parameters to the RunRequest
-            osb_parameters = {
-                "case_number": osb_message.case_number,
-                "case_priority": osb_message.case_priority,
-                "content_type": osb_message.content_type,
-                "platform": osb_message.platform,
-                "user_context": osb_message.user_context,
-                "enable_multi_agent_synthesis": osb_message.enable_multi_agent_synthesis,
-                "enable_cross_validation": osb_message.enable_cross_validation,
-                "enable_precedent_analysis": osb_message.enable_precedent_analysis,
-                "include_policy_references": osb_message.include_policy_references,
-                "enable_streaming_response": osb_message.enable_streaming_response,
-                "max_processing_time": osb_message.max_processing_time,
-                "osb_query": osb_message.query,
-                # Also keep 'query' for compatibility with agents that might use it
-                "query": osb_message.query
-            }
+            if osb_message:
+                osb_parameters = {
+                    "case_number": osb_message.case_number,
+                    "case_priority": osb_message.case_priority,
+                    "content_type": osb_message.content_type,
+                    "platform": osb_message.platform,
+                    "user_context": osb_message.user_context,
+                    "enable_multi_agent_synthesis": osb_message.enable_multi_agent_synthesis,
+                    "enable_cross_validation": osb_message.enable_cross_validation,
+                    "enable_precedent_analysis": osb_message.enable_precedent_analysis,
+                    "include_policy_references": osb_message.include_policy_references,
+                    "enable_streaming_response": osb_message.enable_streaming_response,
+                    "max_processing_time": osb_message.max_processing_time,
+                    "osb_query": osb_message.query,
+                    # Also keep 'query' for compatibility with agents that might use it
+                    "query": osb_message.query,
+                    # Also set 'criteria' for backwards compatibility
+                    "criteria": osb_message.query
+                }
+            else:
+                # Basic parameter mapping when validation fails
+                osb_parameters = {
+                    "query": query or "",
+                    "osb_query": query or "",
+                    "criteria": query or "",
+                    "case_priority": run_request.parameters.get('case_priority', 'medium'),
+                    # Keep other parameters from request
+                    **{k: v for k, v in run_request.parameters.items() 
+                       if k not in ['query', 'osb_query', 'criteria']}
+                }
             
             # Merge with existing parameters
             enhanced_parameters = {**run_request.parameters, **osb_parameters}
@@ -213,16 +260,18 @@ class OSBMessageProcessor:
             # Create enhanced RunRequest
             enhanced_request = run_request.model_copy(update={"parameters": enhanced_parameters})
             
-            logger.info(f"Enhanced RunRequest for OSB flow with query: {osb_message.query[:100]}")
+            logger.info(f"Enhanced RunRequest for OSB flow with query: {query[:100] if query else '(empty)'}")
             return enhanced_request
             
         except Exception as e:
             logger.error(f"Error enhancing RunRequest for OSB: {e}")
-            # If enhancement fails, at least map criteria to query
-            if 'criteria' in run_request.parameters:
-                run_request.parameters['query'] = run_request.parameters.get('criteria', '')
-                run_request.parameters['osb_query'] = run_request.parameters.get('criteria', '')
-                logger.info(f"Fallback: Mapped criteria to query for OSB flow")
+            # If enhancement fails, ensure query/criteria mapping
+            query = run_request.parameters.get('query', run_request.parameters.get('criteria', ''))
+            if query:
+                run_request.parameters['query'] = query
+                run_request.parameters['osb_query'] = query
+                run_request.parameters['criteria'] = query
+                logger.info(f"Fallback: Set query/criteria for OSB flow: {query[:100]}")
             return run_request
     
     @staticmethod

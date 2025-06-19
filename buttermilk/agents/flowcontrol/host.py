@@ -360,6 +360,24 @@ class HostAgent(Agent):
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
+        
+        # Extract initial query/prompt from ConductorRequest if available
+        # The orchestrator puts the entire RunRequest in message.inputs
+        self._initial_query = None
+        if hasattr(message, 'inputs') and isinstance(message.inputs, dict):
+            # Check for query in various locations
+            self._initial_query = (
+                message.inputs.get('prompt') or 
+                message.inputs.get('query') or 
+                message.inputs.get('parameters', {}).get('query') or
+                message.inputs.get('parameters', {}).get('prompt') or
+                message.inputs.get('parameters', {}).get('criteria')
+            )
+            if self._initial_query:
+                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
+        
+        # Store the initial inputs for potential use by subclasses
+        self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
 
         # Rerun initialization to set up the group chat
         await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
@@ -456,6 +474,13 @@ class HostAgent(Agent):
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
                 logger.debug(f"Host executing MANAGER step without setting _step_starting: {step.role}")
+                # Convert StepRequest to UIMessage for frontend display
+                ui_message = UIMessage(
+                    content=step.content or "What would you like to do?",
+                    options=None,  # No specific options, just free text response
+                )
+                await self.callback_to_groupchat(ui_message)
+                return  # Don't send the StepRequest itself
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 

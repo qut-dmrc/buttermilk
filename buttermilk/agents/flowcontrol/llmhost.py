@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator
 from buttermilk._core import AgentTrace, StepRequest
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
+from buttermilk._core.contract import AgentInput, AgentOutput, GroupchatMessageTypes
 from buttermilk._core.log import logger
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -78,37 +78,91 @@ class LLMHostAgent(LLMAgent, HostAgent):
     async def _initialize(self, callback_to_groupchat: Any) -> None:
         await super()._initialize(callback_to_groupchat=callback_to_groupchat)
 
-        # Assemble our list of participants as tools
+        # Collect tool definitions from all participant agents
+        self._participant_tools = {}
+        for role, agent in self._participants.items():
+            if hasattr(agent, "tool_definitions"):
+                agent_tools = agent.tool_definitions
+                if agent_tools:
+                    self._participant_tools[role] = agent_tools
+                    logger.info(f"Host collected {len(agent_tools)} tools from {role}")
+
+        # Create a generic call_on_agent tool
         participant_names = list(self._participants.keys())
-        # Define the enum type dynamically
         RoleEnumType = StrEnum("RoleEnumType", {name: name for name in participant_names})
 
         async def _call_on_agent(role: RoleEnumType, prompt: str) -> None:
             """Call on another agent to perform an action."""
-            # Create a new message for the agent
+            # Create a StepRequest to be sent via groupchat
             choice = StepRequest(role=role, inputs={"prompt": prompt})
             logger.info(f"Host {self.agent_name} calling on agent: {role} with prompt: {prompt}")
-            # Send the message to the agent
             await self.callback_to_groupchat(choice)
 
         tool = FunctionTool(
             func=_call_on_agent,
             description="Call on another agent to perform an action.",
         )
+        
+        # Initialize tools list with custom tools and generic call_on_agent
         self._tools_list = []
         if self.tools:
-            # reinitialize the tools list
             self._tools_list = create_tool_functions(self.tools)
         self._tools_list.append(tool)
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
-        # First, say hello to the user
-        await asyncio.sleep(3)  # we need to let the group chat initialize
-        yield StepRequest(
-            role=MANAGER,
-            content="Hi! What would you like to do?",
-        )
+        # First, check if we have an initial query from the ConductorRequest
+        initial_query = getattr(self, '_initial_query', None)
+        
+        if initial_query:
+            # We have an initial query, so process it immediately
+            logger.info(f"LLMHostAgent {self.agent_name} processing initial query: {initial_query[:100]}...")
+            
+            # Create an AgentInput with the initial query
+            initial_input = AgentInput(
+                inputs={
+                    "prompt": initial_query,
+                    "query": initial_query,  # Also set query for compatibility
+                    "participants": self._participants,
+                    "user_feedback": []
+                },
+                parameters=getattr(self, '_initial_inputs', {}).get('parameters', {})
+            )
+            
+            # Process the initial query to determine the first agent to call
+            try:
+                result = await self.__call__(message=initial_input)
+                
+                if isinstance(result, AgentOutput) and isinstance(result.outputs, CallOnAgent):
+                    # Create the first step based on LLM's decision
+                    explanation = f"Based on your query, calling {result.outputs.role}: {result.outputs.prompt}"
+                    first_step = StepRequest(
+                        role=result.outputs.role, 
+                        inputs={"prompt": result.outputs.prompt, "query": initial_query},
+                        content=explanation
+                    )
+                    yield first_step
+                else:
+                    # If LLM didn't return a proper CallOnAgent, send to MANAGER
+                    yield StepRequest(
+                        role=MANAGER,
+                        content=f"Processing your request: {initial_query}",
+                    )
+            except Exception as e:
+                logger.error(f"Error processing initial query: {e}")
+                # Fall back to sending the query to MANAGER
+                yield StepRequest(
+                    role=MANAGER,
+                    content=f"I'll help you with: {initial_query}",
+                )
+        else:
+            # No initial query, so start with a greeting
+            await asyncio.sleep(3)  # we need to let the group chat initialize
+            yield StepRequest(
+                role=MANAGER,
+                content="Hi! What would you like to do?",
+            )
+        
         while True:
             # wait for the _listen method to add a proposed step to the queue
             # This is a blocking call, so it will wait until a message is received
