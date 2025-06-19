@@ -593,6 +593,9 @@ class ConductorRequest(AgentInput):
             roles (e.g., "SUMMARIZER", "REVIEWER") and values are descriptions
             of their purposes or capabilities. This helps the Conductor understand
             the available agents and their functions. This is a mandatory field.
+        participant_tools (Mapping[str, list[dict[str, Any]]]): Optional mapping of
+            participant roles to their tool definitions. Each tool definition includes
+            name, description, and schema information.
 
     """
 
@@ -600,7 +603,10 @@ class ConductorRequest(AgentInput):
         ...,  # Mandatory field
         description="Mapping of chat participant roles to their purpose descriptions (e.g., {'SUMMARIZER': 'Summarizes text'}).",
     )
-    # No additional fields specific to ConductorRequest currently defined beyond AgentInput.
+    participant_tools: Mapping[str, list[dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="Mapping of participant roles to their tool definitions (e.g., {'RESEARCHER': [{'name': 'search', 'description': '...'}]}).",
+    )
 
 
 class UIMessage(FlowMessage):

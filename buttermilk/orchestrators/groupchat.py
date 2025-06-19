@@ -154,8 +154,42 @@ class AutogenOrchestrator(Orchestrator):
         # Send a welcome message to the UI
         await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
 
-        # Start up the host agent
-        await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
+        # Collect tool definitions from registered agents
+        participant_tools = {}
+        logger.info(f"Collecting tools from {len(self._agent_registry)} registered agents")
+        for agent_id, agent_instance in self._agent_registry.items():
+            if hasattr(agent_instance, 'role') and hasattr(agent_instance, 'get_tool_definitions'):
+                role = agent_instance.role.upper()
+                try:
+                    tool_defs = agent_instance.get_tool_definitions()
+                    if tool_defs:
+                        # Convert tool definitions to dict format
+                        participant_tools[role] = [
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.input_schema,
+                                "output_schema": tool.output_schema
+                            }
+                            for tool in tool_defs
+                        ]
+                        logger.info(f"Collected {len(tool_defs)} tool definitions from {role}: {[t['name'] for t in participant_tools[role]]}")
+                    else:
+                        logger.debug(f"No tool definitions found for {role}")
+                except Exception as e:
+                    logger.warning(f"Failed to get tool definitions from {role}: {e}")
+            else:
+                logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions")
+        
+        # Start up the host agent with participants and their tools
+        await self._runtime.publish_message(
+            ConductorRequest(
+                inputs=request.model_dump(), 
+                participants=self._participants,
+                participant_tools=participant_tools
+            ), 
+            topic_id=DefaultTopicId(type=CONDUCTOR)
+        )
 
         return termination_handler, interrupt_handler
 

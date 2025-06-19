@@ -51,6 +51,7 @@ class HostAgent(Agent):
     # Track count of pending tasks per agent ID
     _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))  # Corrected duplicate definition
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
+    _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
@@ -387,6 +388,11 @@ class HostAgent(Agent):
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
+        
+        # Store participant tools if provided
+        if hasattr(message, 'participant_tools'):
+            self._participant_tools = message.participant_tools
+            logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
         
         # Extract initial query/prompt from ConductorRequest if available
         # The orchestrator puts the entire RunRequest in message.inputs

@@ -66,27 +66,37 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         agent_tools = []
 
         for role, description in self._participants.items():
-            # Since participants contains role->description mappings (not agent instances),
-            # we create a default tool for each participant based on their role and description
-            logger.debug(f"Creating default tool for role {role}")
-
-            # Create a default tool for this role
-            default_tool = AgentToolDefinition(
-                name=f"call_{role.lower()}",
-                description=f"Send a request to the {role} agent: {description}",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "prompt": {
-                            "type": "string",
-                            "description": f"The request or question for the {role} agent"
-                        }
+            # Check if we have specific tool definitions for this role
+            if hasattr(self, '_participant_tools') and role in self._participant_tools:
+                logger.debug(f"Using provided tool definitions for role {role}")
+                tool_defs = []
+                for tool_dict in self._participant_tools[role]:
+                    tool_def = AgentToolDefinition(
+                        name=tool_dict['name'],
+                        description=tool_dict['description'],
+                        input_schema=tool_dict.get('input_schema', {}),
+                        output_schema=tool_dict.get('output_schema', {})
+                    )
+                    tool_defs.append(tool_def)
+            else:
+                # Create a default tool for this role
+                logger.debug(f"Creating default tool for role {role}")
+                default_tool = AgentToolDefinition(
+                    name=f"call_{role.lower()}",
+                    description=f"Send a request to the {role} agent: {description}",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": f"The request or question for the {role} agent"
+                            }
+                        },
+                        "required": ["prompt"]
                     },
-                    "required": ["prompt"]
-                },
-                output_schema={"type": "object"}
-            )
-            tool_defs = [default_tool]
+                    output_schema={"type": "object"}
+                )
+                tool_defs = [default_tool]
 
             # Create FunctionTool for each tool definition
             for tool_def in tool_defs:
@@ -257,10 +267,18 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                         # Find the agent role that owns this tool
                         agent_role = None
                         for role, description in self._participants.items():
-                            # Since we only have default tools in the format "call_{role}",
-                            # check if the tool_name matches this pattern
-                            if f"call_{role.lower()}" == tool_name.lower():
+                            # Check if we have specific tools for this role
+                            if hasattr(self, '_participant_tools') and role in self._participant_tools:
+                                # Check if any of the role's tools match the requested tool
+                                for tool_dict in self._participant_tools[role]:
+                                    if tool_dict['name'].lower() == tool_name.lower():
+                                        agent_role = role
+                                        break
+                            # Also check default tool pattern
+                            elif f"call_{role.lower()}" == tool_name.lower():
                                 agent_role = role
+                                break
+                            if agent_role:
                                 break
 
                         if agent_role:
