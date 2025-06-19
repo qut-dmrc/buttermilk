@@ -58,34 +58,28 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         # Collect tool definitions from all participant agents
         agent_tools = []
         
-        for role, agent in self._participants.items():
-            # Skip non-agent participants
-            if not hasattr(agent, 'get_tool_definitions'):
-                logger.debug(f"Participant {role} does not support tool definitions")
-                continue
+        for role, description in self._participants.items():
+            # Since participants contains role->description mappings (not agent instances),
+            # we create a default tool for each participant based on their role and description
+            logger.debug(f"Creating default tool for role {role}")
             
-            # Get tool definitions from the agent
-            tool_defs = agent.get_tool_definitions()
-            
-            if not tool_defs:
-                # If agent has no explicit tools, create a default one
-                logger.debug(f"Creating default tool for agent {role}")
-                default_tool = AgentToolDefinition(
-                    name=f"call_{role.lower()}",
-                    description=f"Send a request to the {role} agent",
-                    input_schema={
-                        "type": "object",
-                        "properties": {
-                            "prompt": {
-                                "type": "string",
-                                "description": "The request or question for the agent"
-                            }
-                        },
-                        "required": ["prompt"]
+            # Create a default tool for this role
+            default_tool = AgentToolDefinition(
+                name=f"call_{role.lower()}",
+                description=f"Send a request to the {role} agent: {description}",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": f"The request or question for the {role} agent"
+                        }
                     },
-                    output_schema={"type": "object"}
-                )
-                tool_defs = [default_tool]
+                    "required": ["prompt"]
+                },
+                output_schema={"type": "object"}
+            )
+            tool_defs = [default_tool]
             
             # Create FunctionTool for each tool definition
             for tool_def in tool_defs:
@@ -233,7 +227,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             )
             
             if result:
-                # The LLM should have called a tool, which will have already
+                # The LLM may have called a tool, which will have already
                 # sent the appropriate StepRequest via the tool's callback
                 logger.debug(
                     f"LLM response processed. Result type: {type(result)}"
@@ -246,6 +240,43 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     output_content = str(result.outputs)
                     if "END" in output_content.upper() or "DONE" in output_content.upper():
                         await self._proposed_step.put(StepRequest(role=END))
+                    # Check if outputs contains a tool_code call (dict format)
+                    elif isinstance(result.outputs, dict) and "tool_code" in result.outputs:
+                        # Handle tool_code call format
+                        tool_code = result.outputs.get("tool_code")
+                        tool_name = result.outputs.get("tool_name", tool_code)
+                        parameters = result.outputs.get("parameters", {})
+                        
+                        # Find the agent role that owns this tool
+                        agent_role = None
+                        for role, description in self._participants.items():
+                            # Since we only have default tools in the format "call_{role}",
+                            # check if the tool_name matches this pattern
+                            if f"call_{role.lower()}" == tool_name.lower():
+                                agent_role = role
+                                break
+                        
+                        if agent_role:
+                            # Create StepRequest for the tool call
+                            step_request = StepRequest(
+                                role=agent_role,
+                                inputs={
+                                    "tool": tool_name,
+                                    "tool_inputs": parameters
+                                }
+                            )
+                            logger.info(
+                                f"Host {self.agent_name} handling tool_code call: "
+                                f"{agent_role}.{tool_name} with parameters: {parameters}"
+                            )
+                            await self._proposed_step.put(step_request)
+                        else:
+                            logger.warning(
+                                f"No agent found for tool_code: {tool_code}. "
+                                f"Available participants: {list(self._participants.keys())}"
+                            )
+                            # Pass response to manager if no agent found
+                            await self.callback_to_groupchat(result)
                     else:
                         # Otherwise just pass the response to the manager
                         await self.callback_to_groupchat(result)

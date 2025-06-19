@@ -170,8 +170,11 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Registering agents with Autogen runtime...")
 
         # Add flow's static parameters to the request parameters
-        # Create list of participants in the group chat
-        self._participants = {v.role: v.description for k, v in self.agents.items()}
+        # Create list of participants in the group chat - include both agents AND observers
+        self._participants = {
+            **{v.role: v.description for k, v in self.agents.items()},
+            **{v.role: v.description for k, v in self.observers.items()}
+        }
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
@@ -217,7 +220,6 @@ class AutogenOrchestrator(Orchestrator):
                         factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
 
-                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'")
 
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.
@@ -237,7 +239,7 @@ class AutogenOrchestrator(Orchestrator):
                         agent_type=agent_type,
                     ),
                 )
-                logger.debug(f"Agent type '{agent_type}' subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
+                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
 
                 registered_for_role.append((agent_type, variant_config))
 

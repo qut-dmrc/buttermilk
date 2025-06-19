@@ -162,7 +162,8 @@ class TestStructuredLLMHostListen:
         host = StructuredLLMHostAgent(
             agent_name="host",
             model_name="test-model",
-            role="host"
+            role="host",
+            parameters={"model": "test-model"}  # Add required parameters
         )
         
         # Mock dependencies
@@ -170,50 +171,56 @@ class TestStructuredLLMHostListen:
         host._tools_list = []
         host._participants = {"ANALYST": Mock()}
         host.callback_to_groupchat = AsyncMock()
-        host.invoke = AsyncMock()
         
         return host
     
     @pytest.mark.asyncio
     async def test_listen_manager_message(self, mock_host):
         """Test processing manager messages."""
-        message = ManagerMessage(content="Analyze this data", source="user")
+        message = ManagerMessage(content="Analyze this data")
         
         # Mock invoke to return a trace
         mock_trace = Mock()
         mock_trace.outputs = "Analysis complete"
-        mock_host.invoke.return_value = mock_trace
         
-        await mock_host._listen(
-            message=message,
-            cancellation_token=None,
-            source="test",
-            public_callback=AsyncMock(),
-            message_callback=AsyncMock()
-        )
-        
-        # Should have called invoke
-        mock_host.invoke.assert_called_once()
-        call_args = mock_host.invoke.call_args[1]["message"]
-        assert isinstance(call_args, AgentInput)
-        assert call_args.inputs["prompt"] == "Analyze this data"
-        assert call_args.inputs["participants"] == ["ANALYST"]
+        # Use patch to mock the invoke method at the class level
+        from unittest.mock import patch
+        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = mock_trace
+            
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
+            
+            # Should have called invoke
+            mock_invoke.assert_called_once()
+            call_args = mock_invoke.call_args[1]["message"]
+            assert isinstance(call_args, AgentInput)
+            assert call_args.inputs["prompt"] == "Analyze this data"
+            assert call_args.inputs["participants"] == ["ANALYST"]
     
     @pytest.mark.asyncio
     async def test_listen_skip_command_messages(self, mock_host):
         """Test that command messages are skipped."""
-        message = ManagerMessage(content="/command test", source="user")
+        message = ManagerMessage(content="/command test")
         
-        await mock_host._listen(
-            message=message,
-            cancellation_token=None,
-            source="test",
-            public_callback=AsyncMock(),
-            message_callback=AsyncMock()
-        )
-        
-        # Should not invoke
-        mock_host.invoke.assert_not_called()
+        # Use patch to mock the invoke method and verify it's not called
+        from unittest.mock import patch
+        with patch.object(mock_host, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
+            
+            # Should not invoke
+            mock_invoke.assert_not_called()
     
     @pytest.mark.asyncio
     async def test_listen_clear_pending_steps(self, mock_host):
@@ -222,41 +229,129 @@ class TestStructuredLLMHostListen:
         await mock_host._proposed_step.put(StepRequest(role="OLD"))
         await mock_host._proposed_step.put(StepRequest(role="OLD2"))
         
-        message = ManagerMessage(content="New request", source="user")
-        mock_host.invoke.return_value = Mock(outputs="Done")
+        message = ManagerMessage(content="New request")
         
-        await mock_host._listen(
-            message=message,
-            cancellation_token=None,
-            source="test",
-            public_callback=AsyncMock(),
-            message_callback=AsyncMock()
-        )
-        
-        # Queue should be empty
-        assert mock_host._proposed_step.empty()
+        # Use patch to mock the invoke method at the class level
+        from unittest.mock import patch
+        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = Mock(outputs="Done")
+            
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
+            
+            # Queue should be empty
+            assert mock_host._proposed_step.empty()
     
     @pytest.mark.asyncio
     async def test_listen_handle_end_response(self, mock_host):
         """Test handling of END responses from LLM."""
-        message = ManagerMessage(content="I'm done", source="user")
+        message = ManagerMessage(content="I'm done")
         
         # Mock invoke to return END indication
         mock_trace = Mock()
         mock_trace.outputs = "I think we're DONE here"
-        mock_host.invoke.return_value = mock_trace
         
-        await mock_host._listen(
-            message=message,
-            cancellation_token=None,
-            source="test",
-            public_callback=AsyncMock(),
-            message_callback=AsyncMock()
-        )
+        # Use patch to mock the invoke method at the class level
+        from unittest.mock import patch
+        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = mock_trace
+            
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
         
         # Should have added END step to queue
         step = await mock_host._proposed_step.get()
         assert step.role == END
+    
+    @pytest.mark.asyncio
+    async def test_tool_code_handling(self, mock_host):
+        """Test handling of tool_code dict format from LLM."""
+        # Setup participants with tools
+        tool_def = AgentToolDefinition(
+            name="oversight_board_case_search",
+            description="Search oversight board cases",
+            input_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"]
+            },
+            output_schema={"type": "object"}
+        )
+        search_agent = MockAgent("search_agent", [tool_def])
+        mock_host._participants = {"SEARCH_AGENT": search_agent}
+        
+        message = ManagerMessage(content="Search for ICCPR Article 20")
+        
+        # Mock invoke to return tool_code format
+        from buttermilk._core.contract import AgentTrace
+        mock_trace = Mock(spec=AgentTrace)
+        mock_trace.outputs = {
+            'tool_code': 'oversight_board_case_search',
+            'tool_name': 'oversight_board_case_search',
+            'parameters': {'query': 'ICCPR Article 20 and incitement to discrimination'}
+        }
+        
+        # Use patch to mock the invoke method at the class level
+        from unittest.mock import patch
+        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = mock_trace
+            
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
+        
+        # Should have added step to queue
+        step = await mock_host._proposed_step.get()
+        assert step.role == "SEARCH_AGENT"
+        assert step.inputs["tool"] == "oversight_board_case_search"
+        assert step.inputs["tool_inputs"] == {'query': 'ICCPR Article 20 and incitement to discrimination'}
+    
+    @pytest.mark.asyncio
+    async def test_tool_code_no_matching_agent(self, mock_host):
+        """Test handling when no agent owns the requested tool."""
+        mock_host._participants = {"OTHER_AGENT": MockAgent("other", [])}
+        
+        message = ManagerMessage(content="Search for something")
+        
+        # Mock invoke to return tool_code for non-existent tool
+        from buttermilk._core.contract import AgentTrace
+        mock_trace = Mock(spec=AgentTrace)
+        mock_trace.outputs = {
+            'tool_code': 'NonExistentTool',
+            'parameters': {'data': 'test'}
+        }
+        
+        # Use patch to mock the invoke method at the class level
+        from unittest.mock import patch
+        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = mock_trace
+            
+            await mock_host._listen(
+                message=message,
+                cancellation_token=None,
+                source="test",
+                public_callback=AsyncMock(),
+                message_callback=AsyncMock()
+            )
+        
+        # Should pass response to groupchat instead
+        mock_host.callback_to_groupchat.assert_called_with(mock_trace)
+        # Queue should be empty
+        assert mock_host._proposed_step.empty()
 
 
 class TestStructuredLLMHostTools:

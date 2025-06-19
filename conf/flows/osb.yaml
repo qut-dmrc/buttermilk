@@ -24,79 +24,12 @@ defaults:
 
 osb:
   # Core flow configuration
-  orchestrator: AutogenOrchestrator
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
   name: "OSB Interactive Flow"
   description: "Production-quality interactive group chat experience for querying OSB vector store with multi-agent analysis"
 
   # Flow parameters
-  parameters:
-    # Enhanced RAG specific settings
-    enable_multi_agent_synthesis: true     # Combine insights from multiple agents
-    enable_cross_validation: true          # Fact-checker validates researcher findings
-    enable_thematic_exploration: true      # Explorer discovers related themes
-    
-    # Additional parameters for structured coordination
-    enable_tool_discovery: true      # Automatically discover agent tools
-    tool_execution_timeout: 30       # Timeout for individual tool calls
-    
-    # Enhanced debugging for tool usage
-    log_tool_calls: true            # Log all tool invocations
-    show_tool_schemas: true         # Display available tool schemas in UI
-    
-    # Search optimization
-    adaptive_search_strategy: true         # Adapt search strategy based on query type
-    result_diversity_threshold: 0.3        # Ensure diverse results across agents
-    
-    # UI and interaction
-    show_search_strategies: true           # Display search strategies used
-    show_confidence_scores: true           # Display confidence in results
-    enable_follow_up_suggestions: true     # Suggest follow-up questions
-    
-    # Quality assurance
-    minimum_sources: 2                     # Require multiple sources for claims
-    cross_reference_threshold: 0.8         # Threshold for cross-referencing results
-
-    # WebSocket and Session Management (Production Features)
-    session_management:
-      enable_websocket_sessions: true      # Enable WebSocket-based interactive sessions
-      session_timeout: 3600                # 1 hour session timeout (seconds)
-      max_concurrent_sessions: 25          # Support for 25 concurrent OSB sessions
-      enable_session_isolation: true       # Isolate sessions for security and performance
-      websocket_heartbeat_interval: 30     # WebSocket heartbeat every 30 seconds
-      reconnection_grace_period: 300       # 5 minutes to reconnect before session cleanup
-      
-    # Performance and Scalability
-    performance:
-      enable_response_streaming: true      # Stream partial responses for long queries
-      max_query_length: 2000              # Maximum characters in OSB query
-      response_timeout: 60                 # Maximum time for agent response (seconds)
-      enable_result_caching: true         # Cache common OSB query results
-      cache_ttl: 1800                     # Cache time-to-live: 30 minutes
-      
-    # Error Handling and Reliability  
-    error_handling:
-      max_retries: 3                      # Maximum retries for failed operations
-      retry_backoff_factor: 2             # Exponential backoff for retries
-      enable_graceful_degradation: true   # Continue with partial results on agent failure
-      fallback_response_timeout: 30       # Fallback timeout for degraded mode
-      
-    # OSB-Specific Features
-    osb_features:
-      enable_case_tracking: true          # Track OSB case numbers and metadata
-      enable_policy_references: true      # Include policy document references
-      enable_precedent_analysis: true     # Cross-reference with similar cases
-      enable_collaborative_review: true   # Support multiple reviewers per case
-      export_formats: ["json", "pdf", "csv"]  # Available export formats
-      
-    # Monitoring and Observability
-    monitoring:
-      enable_query_analytics: true        # Track query patterns and performance
-      enable_agent_performance_metrics: true  # Monitor individual agent response times
-      enable_user_interaction_tracking: true  # Track user interaction patterns
-      log_level: "INFO"                   # Logging level for OSB operations
-      enable_audit_trail: true           # Maintain audit trail for compliance
-
-  # These will be populated by the defaults
+  parameters: {}
   agents: {}
   observers: {}
   storage: {}

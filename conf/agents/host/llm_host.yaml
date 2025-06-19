@@ -9,7 +9,6 @@ llm_host:
     human_in_loop: ${run.human_in_loop}
     execution_mode: "adaptive"  # LLM decides execution flow
     template: panel_host  # Configurable template
-  inputs:
     task: |
       You are the HOST, an intelligent coordinator that helps the MANAGER with their tasks.
       - Use the available agent tools to assist the MANAGER
