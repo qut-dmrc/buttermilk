@@ -151,6 +151,16 @@ class AutogenOrchestrator(Orchestrator):
         # does it need a second to spin up?
         await asyncio.sleep(1)
 
+        # Send a broadcast message to initialize all agents subscribed to the group chat
+        logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
+        await self._runtime.publish_message(
+            FlowEvent(source="orchestrator", content="Initializing group chat participants"),
+            topic_id=self._topic
+        )
+        
+        # Give agents a moment to initialize
+        await asyncio.sleep(0.5)
+
         # Send a welcome message to the UI
         await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
 
@@ -182,12 +192,15 @@ class AutogenOrchestrator(Orchestrator):
                 logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions")
         
         # Start up the host agent with participants and their tools
+        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())}")
+        conductor_request = ConductorRequest(
+            inputs=request.model_dump(), 
+            participants=self._participants,
+            participant_tools=participant_tools
+        )
+        logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
         await self._runtime.publish_message(
-            ConductorRequest(
-                inputs=request.model_dump(), 
-                participants=self._participants,
-                participant_tools=participant_tools
-            ), 
+            conductor_request, 
             topic_id=DefaultTopicId(type=CONDUCTOR)
         )
 
@@ -205,10 +218,12 @@ class AutogenOrchestrator(Orchestrator):
 
         # Add flow's static parameters to the request parameters
         # Create list of participants in the group chat - include both agents AND observers
+        logger.info(f"Creating participants from {len(self.agents)} agents and {len(self.observers)} observers")
         self._participants = {
             **{v.role: v.description for k, v in self.agents.items()},
             **{v.role: v.description for k, v in self.observers.items()}
         }
+        logger.info(f"Created participants dictionary with {len(self._participants)} entries: {list(self._participants.keys())}")
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []

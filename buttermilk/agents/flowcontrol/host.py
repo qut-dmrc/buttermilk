@@ -198,6 +198,7 @@ class HostAgent(Agent):
 
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
+            logger.info(f"Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
             if self._conductor_task and not self._conductor_task.done():
                 logger.warning(f"Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
@@ -381,7 +382,9 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_name} starting flow execution.")
 
         # Initialize participants from the request
+        logger.debug(f"Host {self.agent_name} updating participants from ConductorRequest: {message.participants}")
         self._participants.update(message.participants)
+        logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
         if not self._participants:
             msg = "Host received ConductorRequest with no participants."
             logger.error(f"{msg} Aborting.")
