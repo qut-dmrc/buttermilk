@@ -1,4 +1,4 @@
-host:
+assistant:
   role: HOST
   name: "🎯 Assistant"
   description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
@@ -7,5 +7,8 @@ host:
     template: panel_host
     model: ${llms.host}
     human_in_loop: ${run.human_in_loop}
-    task: Ask the MANAGER for input and assign an agent to the task. Repeat.
-  inputs: {}
+    task: |
+      Help the MANAGER with their query. 
+      - Use the available agent tools to assist the MANAGER
+      - Monitor progress and adapt the workflow based on results
+      - Synthesize findings from multiple agents when needed

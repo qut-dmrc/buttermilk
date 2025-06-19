@@ -19,6 +19,7 @@ from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk.agents.llm import LLMAgent
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk._core.mcp_decorators import tool
 from buttermilk.agents.rag.enhanced_search import EnhancedVectorSearch
 from buttermilk.agents.rag.search_planning import (
     SearchPlan,
@@ -86,6 +87,28 @@ class EnhancedRagAgent(LLMAgent):
 
             logger.info(f"Enhanced RAG agent initialized with vectorstore: {vectorstore.collection_name}")
 
+    @tool(name="search", description="Search the knowledge base with an intelligent RAG system")
+    async def search(self, query: str, max_results: int = 10) -> str:
+        """Search the knowledge base using enhanced RAG capabilities.
+        
+        Args:
+            query: The search query or question
+            max_results: Maximum number of results to return
+            
+        Returns:
+            A synthesized response based on the search results
+        """
+        # Create an AgentInput for backward compatibility
+        message = AgentInput(
+            inputs={"query": query, "max_results": max_results}
+        )
+        
+        # Use the existing _process logic
+        result = await self._process(message=message)
+        
+        # Return just the output string for tool compatibility
+        return result.outputs if isinstance(result.outputs, str) else str(result.outputs)
+    
     async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
         """
         Process user query with enhanced RAG capabilities.
@@ -156,15 +179,17 @@ class EnhancedRagAgent(LLMAgent):
 
     def _extract_query(self, message: AgentInput) -> str:
         """Extract search query from AgentInput."""
-        # Try different input formats
-        if hasattr(message, "content") and message.content:
-            return str(message.content)
-        elif message.inputs.get("query"):
+        # Try different input formats from message.inputs
+        if message.inputs.get("query"):
             return str(message.inputs["query"])
         elif message.inputs.get("question"):
             return str(message.inputs["question"])
         elif message.inputs.get("search"):
             return str(message.inputs["search"])
+        elif message.inputs.get("text"):
+            return str(message.inputs["text"])
+        elif message.inputs.get("content"):
+            return str(message.inputs["content"])
         else:
             # Use first non-empty input value
             for key, value in message.inputs.items():

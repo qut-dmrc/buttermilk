@@ -14,7 +14,6 @@ defaults:
   # Observer agents for coordination
   - /agents/host@osb.observers:
     - assistant
-    # - ra  # Research assistant host for multi-agent coordination
   # Data source configuration
   - /storage@osb.storage: 
     - osb_json
@@ -35,6 +34,14 @@ osb:
     enable_multi_agent_synthesis: true     # Combine insights from multiple agents
     enable_cross_validation: true          # Fact-checker validates researcher findings
     enable_thematic_exploration: true      # Explorer discovers related themes
+    
+    # Additional parameters for structured coordination
+    enable_tool_discovery: true      # Automatically discover agent tools
+    tool_execution_timeout: 30       # Timeout for individual tool calls
+    
+    # Enhanced debugging for tool usage
+    log_tool_calls: true            # Log all tool invocations
+    show_tool_schemas: true         # Display available tool schemas in UI
     
     # Search optimization
     adaptive_search_strategy: true         # Adapt search strategy based on query type
