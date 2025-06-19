@@ -55,6 +55,12 @@ Buttermilk is a framework for building reproducible, traceable, and HASS-researc
 3. Agents process AgentInput → AgentOutput
 4. AgentTrace captures full execution history
 
+### Configuration Validation
+- **Storage Configs**: Orchestrator uses StorageFactory.create_config() for discriminated union validation
+- **Logger Configs**: LoggerConfig validators ensure required fields (project, location) for GCP
+- **Agent Configs**: AgentConfig validates tool definitions and parameters
+- **Early Validation**: All config validation happens during initialization, not at runtime
+
 ## Technology Stack
 - **Language**: Python 3.10+
 - **Core Dependencies**:
@@ -85,13 +91,15 @@ buttermilk/
 ## Testing Strategy
 - Unit tests for all core components
 - Integration tests for agent communication
-- pytest with async support
+- pytest with async support (pytest-asyncio)
 - Test files mirror source structure in `tests/`
+- Config validation tests ensure early failure with clear messages
 
 ## Development Commands
 - Run Python: `uv run python ...`
 - Run tests: `uv run pytest ...`
 - View config: `uv run python -m buttermilk.runner.cli ... -c job`
+- Add dev dependencies: `uv add --dev <package>`
 
 ## Development Guidelines
 - Follow test-driven development
