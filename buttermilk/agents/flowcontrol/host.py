@@ -334,7 +334,34 @@ class HostAgent(Agent):
         for role, description in self._participants.items():
             # Create more descriptive step content using the participant description
             step_description = f"Executing {role.lower()} step: {description}"
-            yield StepRequest(role=role, content=step_description)
+            
+            # Create StepRequest with initial parameters if available
+            step_inputs = {}
+            step_parameters = {}
+            
+            # Add initial query/prompt if available
+            if hasattr(self, '_initial_query') and self._initial_query:
+                step_inputs['query'] = self._initial_query
+                step_inputs['prompt'] = self._initial_query
+            
+            # Add any parameters from the initial inputs
+            if hasattr(self, '_initial_inputs') and isinstance(self._initial_inputs, dict):
+                # Extract parameters from the initial inputs
+                if 'parameters' in self._initial_inputs:
+                    step_parameters.update(self._initial_inputs['parameters'])
+                
+                # Also check for direct prompt in initial inputs
+                if 'prompt' in self._initial_inputs and 'prompt' not in step_inputs:
+                    step_inputs['prompt'] = self._initial_inputs['prompt']
+                if 'query' in self._initial_inputs and 'query' not in step_inputs:
+                    step_inputs['query'] = self._initial_inputs['query']
+            
+            yield StepRequest(
+                role=role, 
+                content=step_description,
+                inputs=step_inputs,
+                parameters=step_parameters
+            )
         yield StepRequest(role=END, content="Sequence completed.")
 
     async def _run_flow(self, message: ConductorRequest) -> None:
@@ -364,20 +391,35 @@ class HostAgent(Agent):
         # Extract initial query/prompt from ConductorRequest if available
         # The orchestrator puts the entire RunRequest in message.inputs
         self._initial_query = None
+        self._initial_parameters = {}
+        
         if hasattr(message, 'inputs') and isinstance(message.inputs, dict):
-            # Check for query in various locations
+            # Store the initial inputs for use by subclasses and _sequence
+            self._initial_inputs = message.inputs
+            
+            # Extract parameters if present
+            if 'parameters' in message.inputs and isinstance(message.inputs['parameters'], dict):
+                self._initial_parameters = message.inputs['parameters']
+            
+            # Check for query/prompt in various locations
+            # Priority: direct prompt field > parameters.query > parameters.prompt > parameters.criteria
             self._initial_query = (
                 message.inputs.get('prompt') or 
                 message.inputs.get('query') or 
-                message.inputs.get('parameters', {}).get('query') or
-                message.inputs.get('parameters', {}).get('prompt') or
-                message.inputs.get('parameters', {}).get('criteria')
+                self._initial_parameters.get('query') or
+                self._initial_parameters.get('prompt') or
+                self._initial_parameters.get('criteria')
             )
+            
             if self._initial_query:
                 logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-        
-        # Store the initial inputs for potential use by subclasses
-        self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
+            
+            # Log the parameters for debugging
+            if self._initial_parameters:
+                logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+        else:
+            # No inputs provided
+            self._initial_inputs = {}
 
         # Rerun initialization to set up the group chat
         await self.initialize(callback_to_groupchat=self.callback_to_groupchat)

@@ -19,7 +19,10 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def conductor_request() -> ConductorRequest:
     """Provides a sample ConductorRequest."""
-    return ConductorRequest(inputs={"participants": {"AGENT1": {}, "AGENT2": {}}, "task": "test"}, prompt="Get next step")
+    return ConductorRequest(
+        participants={"AGENT1": "Agent 1 description", "AGENT2": "Agent 2 description"},
+        inputs={"prompt": "Get next step", "task": "test"}
+    )
 
 
 # --- Sequencer Tests ---
@@ -30,8 +33,9 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     """Test Sequencer._get_next_step returns the next step from its generator.
     """
     # Arrange
-    sequencer = HostAgent(role="SEQUENCER", name="Test Seq", description="test")
-    await sequencer.initialize()  # Initialize to set up generator
+    sequencer = HostAgent(role="SEQUENCER", agent_name="Test Seq", agent_id="test-seq")
+    mock_callback = AsyncMock()
+    await sequencer.initialize(callback_to_groupchat=mock_callback)  # Initialize to set up generator
 
     # Mock the internal generator to control the output
     async def mock_generator():
