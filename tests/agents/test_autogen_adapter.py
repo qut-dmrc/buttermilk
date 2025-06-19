@@ -19,9 +19,8 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     TaskProcessingStarted,
 )
-from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 from buttermilk.agents.flowcontrol.host import HostAgent
-from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -87,36 +86,21 @@ class TestAutogenAgentAdapter:
         assert adapter.is_manager, "HostAgent should be identified as a manager"
 
     async def test_adapter_initialization_with_host(self):
-        """Test adapter initialization with an LLMHostAgent."""
+        """Test adapter initialization with a StructuredLLMHostAgent."""
         host_config = AgentConfig(role="HOST", name="Test Host", description="Test Host", parameters={"model": "mock_model"})
         with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
             adapter = AutogenAgentAdapter(
                 topic_type="test_topic",
-                agent_cls=LLMHostAgent,
+                agent_cls=StructuredLLMHostAgent,
                 agent_cfg=host_config,
             )
             await adapter.agent.initialize(callback_to_groupchat=AsyncMock())  # Initialize agent
 
-        assert isinstance(adapter.agent, LLMHostAgent)
+        assert isinstance(adapter.agent, StructuredLLMHostAgent)
         assert adapter.agent.role == "host"
         assert adapter.topic_id.type == "test_topic"
-        assert adapter.is_manager, "LLMHostAgent should be identified as a manager"
+        assert adapter.is_manager, "StructuredLLMHostAgent should be identified as a manager"
 
-    async def test_adapter_initialization_with_explorer(self):
-        """Test adapter initialization with an ExplorerHost agent."""
-        explorer_config = AgentConfig(role="EXPLORER", name="Test Explorer", description="Test Explorer", parameters={"model": "mock_model"})
-        with patch("buttermilk.buttermilk.llms.get_autogen_chat_client", return_value=MagicMock()):
-            adapter = AutogenAgentAdapter(
-                topic_type="test_topic",
-                agent_cls=ExplorerHost,
-                agent_cfg=explorer_config,
-            )
-            await adapter.agent.initialize()  # Initialize agent
-
-        assert isinstance(adapter.agent, ExplorerHost)
-        assert adapter.agent.role == "explorer"
-        assert adapter.topic_id.type == "test_topic"
-        assert adapter.is_manager, "ExplorerHost should be identified as a manager"
 
     # --- Handler Tests ---
 

@@ -26,17 +26,17 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
     This agent replaces natural language agent descriptions with structured
     tool definitions, enabling more reliable and type-safe agent invocation.
     """
-    
+
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
     _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
     max_user_confirmation_time: int = Field(
         default=7200,
         description="Maximum time to wait for agent responses in seconds",
     )
-    
+
     # Override the output model - we don't need CallOnAgent anymore
     _output_model = None  # Let the LLM use tool calling directly
-    
+
     def _clear_pending_steps(self) -> None:
         """Clear all pending steps from the queue."""
         while not self._proposed_step.empty():
@@ -45,24 +45,31 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 logger.debug("Cleared pending step from queue due to new manager request")
             except asyncio.QueueEmpty:
                 break
-    
+
     async def initialize(self, callback_to_groupchat: Any, **kwargs: Any) -> None:
         """Initialize the host agent."""
         await super().initialize(callback_to_groupchat=callback_to_groupchat, **kwargs)
         await self._initialize(callback_to_groupchat=callback_to_groupchat)
-    
+
     async def _initialize(self, callback_to_groupchat: Any) -> None:
         """Initialize the host with structured tool definitions from participants."""
         # Note: super().initialize() is already called in our initialize() method
-        
+
+        # Check if participants are available yet
+        if not self._participants:
+            logger.warning(f"No participants available during {self.agent_name} initialization. Tools will be set up when participants are available.")
+            # Initialize empty tools list to avoid AttributeError later
+            self._tools_list = []
+            return
+
         # Collect tool definitions from all participant agents
         agent_tools = []
-        
+
         for role, description in self._participants.items():
             # Since participants contains role->description mappings (not agent instances),
             # we create a default tool for each participant based on their role and description
             logger.debug(f"Creating default tool for role {role}")
-            
+
             # Create a default tool for this role
             default_tool = AgentToolDefinition(
                 name=f"call_{role.lower()}",
@@ -80,7 +87,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 output_schema={"type": "object"}
             )
             tool_defs = [default_tool]
-            
+
             # Create FunctionTool for each tool definition
             for tool_def in tool_defs:
                 # Create a closure to capture the role and tool name
@@ -88,7 +95,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     # Extract parameters from schema
                     properties = input_schema.get("properties", {})
                     required = input_schema.get("required", [])
-                    
+
                     # Build a function with explicit parameters based on schema
                     # For simplicity, we'll handle common cases
                     if len(properties) == 1 and "prompt" in properties:
@@ -125,37 +132,37 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                             )
                             await self.callback_to_groupchat(choice)
                             return {"status": "sent"}
-                    
+
                     return call_agent_tool
-                
+
                 # Create the actual tool function
                 tool_func = create_agent_tool(role, tool_def.name, tool_def.input_schema)
-                
+
                 # Create FunctionTool with proper schema
                 function_tool = FunctionTool(
                     func=tool_func,
                     name=f"{role.lower()}.{tool_def.name}",
                     description=tool_def.description
                 )
-                
+
                 agent_tools.append(function_tool)
                 logger.debug(f"Registered tool: {role.lower()}.{tool_def.name}")
-        
+
         # Initialize tools list
         self._tools_list = []
         if self.tools:
             # Add any configured tools
             from buttermilk.utils._tools import create_tool_functions
             self._tools_list = create_tool_functions(self.tools)
-        
+
         # Add all agent tools
         self._tools_list.extend(agent_tools)
-        
+
         logger.info(
             f"Structured LLMHost initialized with {len(agent_tools)} agent tools "
             f"from {len(self._participants)} participants"
         )
-    
+
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
         # First, say hello to the user
@@ -164,16 +171,16 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             role=MANAGER,
             content="Hi! What would you like to do?",
         )
-        
+
         while True:
             # Wait for the _listen method to add a proposed step to the queue
             task = await self._proposed_step.get()
             yield task
-            
+
             # Check if this is an END task to break the loop
             if task.role == END:
                 break
-    
+
     async def _listen(
         self,
         message: GroupchatMessageTypes,
@@ -194,22 +201,22 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             message_callback=message_callback,
             **kwargs,
         )
-        
+
         if isinstance(message, ManagerMessage):
             # Skip command messages
             if message.content and str(message.content).startswith(COMMAND_SYMBOL):
                 return
-            
+
             # Skip empty messages
             if not message.content:
                 logger.debug(f"Manager message received with empty content, skipping")
                 return
-            
+
             # Clear any pending steps since the manager has a new request
             self._clear_pending_steps()
-            
+
             logger.info(f"Manager interrupted with new request: {message.content}")
-            
+
             # Use the LLM with structured tools to determine next step
             # The template should be configured to use tool calling
             result = await self.invoke(
@@ -225,14 +232,14 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 cancellation_token=cancellation_token,
                 **kwargs
             )
-            
+
             if result:
                 # The LLM may have called a tool, which will have already
                 # sent the appropriate StepRequest via the tool's callback
                 logger.debug(
                     f"LLM response processed. Result type: {type(result)}"
                 )
-                
+
                 # If for some reason we get a direct response without tool use,
                 # handle it gracefully
                 if isinstance(result, AgentTrace) and result.outputs:
@@ -246,7 +253,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                         tool_code = result.outputs.get("tool_code")
                         tool_name = result.outputs.get("tool_name", tool_code)
                         parameters = result.outputs.get("parameters", {})
-                        
+
                         # Find the agent role that owns this tool
                         agent_role = None
                         for role, description in self._participants.items():
@@ -255,7 +262,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                             if f"call_{role.lower()}" == tool_name.lower():
                                 agent_role = role
                                 break
-                        
+
                         if agent_role:
                             # Create StepRequest for the tool call
                             step_request = StepRequest(
@@ -271,10 +278,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                             )
                             await self._proposed_step.put(step_request)
                         else:
-                            logger.warning(
-                                f"No agent found for tool_code: {tool_code}. "
-                                f"Available participants: {list(self._participants.keys())}"
-                            )
+                            logger.warning(f"No agent found for tool_code: {tool_code}. Available participants: {list(self._participants.keys())}")
                             # Pass response to manager if no agent found
                             await self.callback_to_groupchat(result)
                     else:
