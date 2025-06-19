@@ -13,7 +13,7 @@ defaults:
     - explorer
   # Observer agents for coordination
   - /agents/host@osb.observers:
-    - assistant
+    - host/llm_host
   # Data source configuration
   - /storage@osb.storage: 
     - osb_json
@@ -24,7 +24,7 @@ defaults:
 
 osb:
   # Core flow configuration
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  orchestrator: AutogenOrchestrator
   name: "OSB Interactive Flow"
   description: "Production-quality interactive group chat experience for querying OSB vector store with multi-agent analysis"
 

@@ -6,7 +6,7 @@ defaults:
     - synth
   - /agents@observers:
     - scorer
-    - host/sequencer
+    - host/sequence_host
   - _self_
 
 

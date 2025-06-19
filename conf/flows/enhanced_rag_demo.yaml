@@ -8,7 +8,7 @@ defaults:
   - /agents@agents.fact_checker: enhanced_rag/enhanced_fact_checker
   - /agents@agents.explorer: enhanced_rag/enhanced_explorer
   # Observer agents
-  - /agents@observers.host: host/ra  # Using research assistant host
+  - /agents@observers.host: host/llm_host  # Using intelligent LLM host
   # Data source configuration
   - /storage@storage: osb
 

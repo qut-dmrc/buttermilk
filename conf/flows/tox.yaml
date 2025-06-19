@@ -1,7 +1,6 @@
 
 # COMMENTED OUT # @package _global_
 defaults:
-  - /storage: drag
   - _self_
   - /agents@tox.agents.judge: judge
   - /agents@tox.agents.synth: synth
@@ -9,8 +8,8 @@ defaults:
   - /agents@tox.observers.owl: owl
   - /agents@tox.observers.scorer: scorer
   - /agents@tox.observers.spy: spy
-  - /agents@tox.observers.host_sequencer: host/sequencer
-  - /storage@tox.storage: tox_bigquery
+  - /agents@tox.observers.host_sequencer: host/sequence_host
+  - /storage@tox.storage: tox_train
   - /storage@tox.parameters.save: flows
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator

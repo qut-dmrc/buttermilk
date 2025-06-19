@@ -14,7 +14,7 @@ defaults:
     - owl
     - scorer
     - fetch
-    - host/sequencer
+    - host/sequence_host
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
   # Data source configuration
@@ -24,7 +24,7 @@ defaults:
 
 trans:
   # Core flow configuration
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  orchestrator: AutogenOrchestrator
   name: "trans"
   description: "Journalism quality assessment for trans issues reporting"
 

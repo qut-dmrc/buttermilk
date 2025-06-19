@@ -68,12 +68,7 @@ def main(conf: DictConfig) -> None:
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
-    if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
-        raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
-    # Create FlowRunner with proper validation of flows
-    flow_runner_data = conf.run.copy() if hasattr(conf.run, 'copy') else dict(conf.run)
-    flow_runner_data['flows'] = conf.flows
-    flow_runner: FlowRunner = FlowRunner.model_validate(flow_runner_data)
+    flow_runner: FlowRunner = FlowRunner.model_validate(conf.flows)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
