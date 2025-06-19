@@ -181,6 +181,11 @@ class OSBMessageProcessor:
             return run_request
         
         try:
+            # Map 'criteria' to 'query' for OSB compatibility
+            if 'criteria' in run_request.parameters and 'query' not in original_data:
+                original_data['query'] = run_request.parameters.get('criteria', '')
+                logger.debug(f"Mapped 'criteria' to 'query' for OSB flow: {original_data['query'][:100]}")
+            
             # Parse OSB-specific fields from original data
             osb_message = OSBQueryMessage(**original_data)
             
@@ -197,7 +202,9 @@ class OSBMessageProcessor:
                 "include_policy_references": osb_message.include_policy_references,
                 "enable_streaming_response": osb_message.enable_streaming_response,
                 "max_processing_time": osb_message.max_processing_time,
-                "osb_query": osb_message.query
+                "osb_query": osb_message.query,
+                # Also keep 'query' for compatibility with agents that might use it
+                "query": osb_message.query
             }
             
             # Merge with existing parameters
@@ -206,11 +213,16 @@ class OSBMessageProcessor:
             # Create enhanced RunRequest
             enhanced_request = run_request.model_copy(update={"parameters": enhanced_parameters})
             
-            logger.info(f"Enhanced RunRequest for OSB flow with case_number: {osb_message.case_number}")
+            logger.info(f"Enhanced RunRequest for OSB flow with query: {osb_message.query[:100]}")
             return enhanced_request
             
         except Exception as e:
             logger.error(f"Error enhancing RunRequest for OSB: {e}")
+            # If enhancement fails, at least map criteria to query
+            if 'criteria' in run_request.parameters:
+                run_request.parameters['query'] = run_request.parameters.get('criteria', '')
+                run_request.parameters['osb_query'] = run_request.parameters.get('criteria', '')
+                logger.info(f"Fallback: Mapped criteria to query for OSB flow")
             return run_request
     
     @staticmethod
