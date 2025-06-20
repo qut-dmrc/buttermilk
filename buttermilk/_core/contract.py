@@ -13,7 +13,7 @@ messages for user interaction (`UIMessage`, `ManagerMessage`).
 import datetime
 import uuid
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import Any, Literal, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
@@ -882,6 +882,71 @@ class HeartBeat(BaseModel):
     go_next: bool = Field(..., description="Signal indicating if the recipient should proceed or a condition is met.")
 
 
+class AgentAnnouncement(FlowEvent):
+    """Agent self-announcement message containing configuration and capabilities.
+    
+    Used for dynamic agent discovery and registration in group chats. Agents send
+    this message when joining, leaving, or updating their status. Host agents
+    collect these announcements to maintain a registry of available agents and
+    their capabilities.
+    
+    Attributes:
+        agent_config (AgentConfig): Complete agent configuration including role,
+            description, parameters, and other settings.
+        available_tools (list[str]): List of tool names/endpoints this agent can
+            respond to. Defaults to empty list.
+        supported_message_types (list[str]): OOBMessage types this agent handles.
+            Defaults to empty list.
+        status (Literal["joining", "active", "leaving"]): Current agent status
+            in the group chat. Defaults to "joining".
+        announcement_type (Literal["initial", "response", "update"]): Type of
+            announcement - initial when joining, response to host request, or
+            update for status changes.
+        responding_to (str | None): agent_id of host being responded to (for
+            response type announcements). Defaults to None.
+    
+    """
+    
+    # Agent identification and configuration
+    agent_config: AgentConfig = Field(..., description="Complete agent configuration")
+    
+    # Capabilities
+    available_tools: list[str] = Field(
+        default_factory=list,
+        description="List of tool names/endpoints this agent can respond to"
+    )
+    supported_message_types: list[str] = Field(
+        default_factory=list,
+        description="OOBMessage types this agent handles"
+    )
+    
+    # Status
+    status: Literal["joining", "active", "leaving"] = Field(
+        default="joining",
+        description="Current agent status in the group chat"
+    )
+    
+    # Metadata
+    announcement_type: Literal["initial", "response", "update"] = Field(
+        ...,
+        description="Type of announcement (initial when joining, response to host, update for changes)"
+    )
+    responding_to: str | None = Field(
+        default=None,
+        description="agent_id of host being responded to (for response type)"
+    )
+    
+    def model_post_init(self, __context) -> None:
+        """Set agent_info to match agent_config after initialization."""
+        super().model_post_init(__context)
+        # Ensure agent_info matches agent_config
+        object.__setattr__(self, 'agent_info', self.agent_config)
+    
+    def __str__(self) -> str:
+        """Returns a formatted string representation of the announcement."""
+        return f"AgentAnnouncement[{self.agent_config.agent_id}]: {self.announcement_type} - {self.status}"
+
+
 # --- Message Union Types ---
 
 OOBMessages = Union[
@@ -894,6 +959,7 @@ OOBMessages = Union[
     StepRequest,
     ProceedToNextTaskSignal,
     HeartBeat,
+    AgentAnnouncement,
 ]
 """A type alias for messages considered Out-Of-Band (OOB).
 
