@@ -21,6 +21,7 @@ from buttermilk import logger
 from buttermilk._core.agent import AgentInput, OOBMessages
 from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
+    AgentAnnouncement,  # Agent announcement messages
     AgentTrace,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
@@ -170,6 +171,7 @@ FormattableMessages = Union[
     QualScore,
     JudgeReasons,
     FlowMessage, ResearchResult,
+    AgentAnnouncement,  # Added for agent announcements
 ]
 # TODO: Add other relevant FlowMessage subtypes if needed for formatting.
 
@@ -334,13 +336,103 @@ class CLIUserAgent(UIAgent):
                         result.append(f"{preview}...", style="dim white")
                     content_added = True
 
-            elif isinstance(message, UIMessage):
-                result.append("REQ: ", style="bright_yellow")
+            elif isinstance(message, AgentAnnouncement):
+                # Format agent announcements
+                ann_type = getattr(message, "announcement_type", "unknown")
+                status = getattr(message, "status", "unknown")
+                
+                # Choose icon and color based on announcement type and status
+                if ann_type == "initial":
+                    icon = "🆕"
+                    color = "green" if status == "joining" else "yellow"
+                elif ann_type == "response":
+                    icon = "↩️"
+                    color = "bright_blue"
+                elif ann_type == "update":
+                    icon = "🔄"
+                    color = "yellow" if status == "leaving" else "bright_blue"
+                else:
+                    icon = "📢"
+                    color = "white"
+                
+                result.append(f"{icon} ", style=color)
+                result.append(f"[{status.upper()}] ", style=color)
+                
+                # Show agent role and tools
+                if hasattr(message, "agent_config") and message.agent_config:
+                    role = getattr(message.agent_config, "role", "UNKNOWN")
+                    result.append(f"{role} ", style="bold")
+                
+                # Show available tools if any
+                tools = getattr(message, "available_tools", [])
+                if tools:
+                    tools_str = ", ".join(tools[:3])  # Show first 3 tools
+                    if len(tools) > 3:
+                        tools_str += f" +{len(tools)-3}"
+                    result.append(f"[{tools_str}] ", style="dim cyan")
+                
+                # Show content
                 content = getattr(message, "content", "")
-                content_preview = content[:150].replace("\n", " ") if content else "No content"
-                result.append(content_preview, style="white")
-                if len(content) > 150:
-                    result.append("...", style="dim")
+                if content:
+                    result.append(content[:100], style="white")
+                
+                content_added = True
+
+            elif isinstance(message, UIMessage):
+                # Check if this is an agent list command response
+                registry = getattr(message, "agent_registry_summary", None)
+                if registry:
+                    # Special formatting for agent registry display
+                    result.append("📋 AGENTS: ", style="bright_yellow")
+                    result.append(f"{len(registry)} active", style="white")
+                    
+                    # If content is "!agents" or similar, show detailed list
+                    content = getattr(message, "content", "")
+                    if "!agents" in content.lower() or "agent" in content.lower():
+                        # Add line break for detailed view
+                        result.append("\n", style="")
+                        
+                        # Show each agent in registry
+                        for agent_id, info in list(registry.items())[:5]:  # Show first 5
+                            role = info.get("role", "UNKNOWN")
+                            status = info.get("status", "unknown")
+                            tools = info.get("tools", [])
+                            model = info.get("model", "")
+                            
+                            # Indent for sub-items
+                            result.append(" " * 25 + "├ ", style="dim")
+                            
+                            # Agent icon and name
+                            agent_icon = get_agent_icon(role)
+                            result.append(f"{agent_icon} {role}", style="bold white")
+                            
+                            # Status indicator
+                            status_color = "green" if status == "active" else "yellow"
+                            result.append(f" [{status}]", style=status_color)
+                            
+                            # Model tag if available
+                            if model:
+                                model_tag = get_model_tag(type('obj', (), {'agent_info': type('info', (), {'parameters': type('params', (), {'model': model})})})())
+                                if model_tag:
+                                    result.append(f" {model_tag}", style="dim")
+                            
+                            # Tools summary
+                            if tools:
+                                tools_str = f" ({len(tools)} tools)"
+                                result.append(tools_str, style="dim cyan")
+                            
+                            result.append("\n", style="")
+                        
+                        if len(registry) > 5:
+                            result.append(" " * 25 + f"└ ... and {len(registry)-5} more\n", style="dim")
+                else:
+                    # Standard UIMessage formatting
+                    result.append("REQ: ", style="bright_yellow")
+                    content = getattr(message, "content", "")
+                    content_preview = content[:150].replace("\n", " ") if content else "No content"
+                    result.append(content_preview, style="white")
+                    if len(content) > 150:
+                        result.append("...", style="dim")
                 content_added = True
 
             elif isinstance(message, TaskProcessingStarted):
@@ -405,7 +497,7 @@ class CLIUserAgent(UIAgent):
         """Displays messages received from other agents on the console."""
         logger.debug(f"{self.agent_name} received message from {source} via _listen.")
         # Format and display the message using the helper function.
-        self.callback_to_ui(message)
+        await self.callback_to_ui(message, source=source)
 
     async def _handle_events(
         self,
@@ -426,7 +518,7 @@ class CLIUserAgent(UIAgent):
                 # Only show failed tasks
                 if formatted_msg := self._fmt_msg(message, source=source):
                     self._console.print(formatted_msg)
-        elif isinstance(message, (UIMessage, ToolOutput)):
+        elif isinstance(message, (UIMessage, ToolOutput, AgentAnnouncement)):
             if formatted_msg := self._fmt_msg(message, source=source):
                 self._console.print(formatted_msg)
         else:
@@ -447,8 +539,11 @@ class CLIUserAgent(UIAgent):
                 display_prompt = f"[{format_timestamp()}] 👤 user             │ "
                 user_input = await ainput(display_prompt)
 
+                # Handle special commands
+                input_lower = user_input.strip().lower()
+                
                 # Handle exit command
-                if user_input.strip().lower() == "exit":
+                if input_lower == "exit":
                     logger.info("User requested exit.")
                     # TODO: How to signal exit cleanly to the orchestrator? Raising KeyboardInterrupt might be harsh.
                     # Maybe send a specific ManagerMessage or signal?
@@ -457,6 +552,19 @@ class CLIUserAgent(UIAgent):
                     # Send a special message via callback?
                     # await self.callback_to_groupchat(ManagerMessage(confirm=False, prompt="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
+                
+                # Handle agent list command
+                elif input_lower in ["!agents", "!list", "!who"]:
+                    logger.info("User requested agent list.")
+                    # Send a special message requesting agent list
+                    response = ManagerMessage(
+                        confirm=False, 
+                        interrupt=False, 
+                        content="!agents",
+                        request_agent_list=True  # Special flag for agent list request
+                    )
+                    await self.callback_to_groupchat(response)
+                    continue
 
                 # Handle confirmation/negation based on input
                 cleaned_input = re.sub(r"\W", "", user_input).lower()
@@ -540,7 +648,7 @@ class CLIUserAgent(UIAgent):
             welcome_text.append("⚙ ", style="white")
             welcome_text.append("system".ljust(16), style="yellow")
             welcome_text.append(" │ ", style="dim")
-            welcome_text.append("Console UI initialized. Type 'exit' to quit, empty line to confirm, 'n'/'q' to cancel.", style="green")
+            welcome_text.append("Console UI initialized. Commands: 'exit' to quit, '!agents' to list agents, empty line to confirm, 'n'/'q' to cancel.", style="green")
             self._console.print(welcome_text)
 
             # Start the background task to poll for console input.
