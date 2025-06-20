@@ -11,6 +11,7 @@ from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
 from buttermilk._core.contract import (
+    AgentAnnouncement,
     AgentInput,
     AgentOutput,
     AgentTrace,
@@ -53,6 +54,16 @@ class HostAgent(Agent):
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
     _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
+    
+    # Agent registry attributes
+    agent_registry: dict[str, AgentAnnouncement] = Field(
+        default_factory=dict,
+        description="Registry of active agents and their announcements"
+    )
+    tool_registry: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Mapping of tool names to agent IDs that provide them"
+    )
     # Additional configuration
     max_wait_time: int = Field(
         default=240,
@@ -91,6 +102,82 @@ class HostAgent(Agent):
         await super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
         logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
+
+    # --- Agent Registry Methods ---
+
+    def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+        """Update registry with agent announcement.
+        
+        Args:
+            announcement: The agent announcement to process.
+        """
+        agent_id = announcement.agent_config.agent_id
+        
+        if announcement.status == "leaving":
+            # Remove agent from registry
+            self.agent_registry.pop(agent_id, None)
+            # Remove from tool registry
+            for tool_list in self.tool_registry.values():
+                if agent_id in tool_list:
+                    tool_list.remove(agent_id)
+            logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
+        else:
+            # Add or update agent in registry
+            self.agent_registry[agent_id] = announcement
+            # Update tool registry
+            for tool in announcement.available_tools:
+                if tool not in self.tool_registry:
+                    self.tool_registry[tool] = []
+                if agent_id not in self.tool_registry[tool]:
+                    self.tool_registry[tool].append(agent_id)
+            logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+    
+    def create_registry_summary(self) -> dict[str, Any]:
+        """Create a summary of the agent registry for UI display.
+        
+        Returns:
+            dict: Summary containing active agents, available tools, and counts.
+        """
+        active_agents = []
+        for agent_id, announcement in self.agent_registry.items():
+            agent_info = {
+                "agent_id": agent_id,
+                "role": announcement.agent_config.role,
+                "description": announcement.agent_config.description,
+                "tools": announcement.available_tools,
+                "model": announcement.agent_config.parameters.get("model")
+            }
+            active_agents.append(agent_info)
+        
+        return {
+            "active_agents": active_agents,
+            "available_tools": dict(self.tool_registry),  # Convert defaultdict to dict
+            "total_agents": len(self.agent_registry)
+        }
+    
+    def create_ui_message_with_registry(
+        self,
+        content: str,
+        options: bool | list[str] | None = None,
+        **kwargs: Any
+    ) -> UIMessage:
+        """Create a UI message that includes the agent registry summary.
+        
+        Args:
+            content: The message content.
+            options: Optional interaction options.
+            **kwargs: Additional UIMessage fields.
+            
+        Returns:
+            UIMessage: UI message with registry summary.
+        """
+        registry_summary = self.create_registry_summary()
+        return UIMessage(
+            content=content,
+            options=options,
+            agent_registry_summary=registry_summary,
+            **kwargs
+        )
 
     async def _listen(
         self,
@@ -132,6 +219,14 @@ class HostAgent(Agent):
         elif isinstance(message, FlowProgressUpdate):
             logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
             return  # Do not proceed to log
+        
+        # Handle AgentAnnouncement messages
+        elif isinstance(message, AgentAnnouncement):
+            logger.info(f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}")
+            self.update_agent_registry(message)
+            # Don't add to conversation history
+            return
+            
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 

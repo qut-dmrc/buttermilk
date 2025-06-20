@@ -635,9 +635,9 @@ class UIMessage(FlowMessage):
         default=None,
         description="The reasoning text for the completion if available. Used for reasoning model and additional text content besides function calls.",
     )
-    thought: str | None = Field(
+    agent_registry_summary: dict[str, Any] | None = Field(
         default=None,
-        description="The reasoning text for the completion if available. Used for reasoning model and additional text content besides function calls.",
+        description="Summary of available agents and their capabilities from the host agent's registry.",
     )
 
 
