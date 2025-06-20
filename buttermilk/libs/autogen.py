@@ -116,7 +116,17 @@ class AutogenAgentAdapter(RoutedAgent):
         super().__init__(description=self.agent.description)
 
         # This allows UI agents, for example, to send user input back into the Autogen flow.
-        init_task = self.agent.initialize(callback_to_groupchat=self._make_publish_callback())
+        # Check if agent supports announcements
+        if hasattr(self.agent, 'initialize_with_announcement'):
+            # Initialize with announcement capability
+            init_task = self.agent.initialize_with_announcement(
+                callback_to_groupchat=self._make_publish_callback(),
+                public_callback=self._make_publish_callback()
+            )
+        else:
+            # Standard initialization
+            init_task = self.agent.initialize(callback_to_groupchat=self._make_publish_callback())
+        
         task = asyncio.create_task(init_task)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
@@ -178,10 +188,27 @@ class AutogenAgentAdapter(RoutedAgent):
         
         # Cleanup the wrapped agent
         try:
-            await self.agent.cleanup()
+            # Store the announcement callback if agent supports it
+            if hasattr(self.agent, '_announcement_callback'):
+                self.agent._announcement_callback = self._make_publish_callback()
+            
+            # Check if agent supports cleanup with announcement
+            if hasattr(self.agent, 'cleanup_with_announcement'):
+                await self.agent.cleanup_with_announcement()
+            else:
+                await self.agent.cleanup()
+            
             logger.debug(f"Agent {self.agent.agent_name} cleanup completed")
         except Exception as e:
             logger.warning(f"Error during agent cleanup for {self.agent.agent_name}: {e}")
+
+    async def on_unregister(self) -> None:
+        """Called when the agent is being unregistered from the runtime.
+        
+        This is the proper place to send leaving announcements.
+        """
+        logger.debug(f"Agent {self.agent.agent_name} being unregistered")
+        await self.cleanup()
 
     @message_handler
     async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:

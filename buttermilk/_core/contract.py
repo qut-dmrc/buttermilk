@@ -984,6 +984,7 @@ GroupchatMessageTypes = Union[
     ManagerMessage,  # If manager responses are broadcasted
     # AgentInput, # AgentInput is usually direct, not a "group chat" message
     Record,  # If raw records are shared
+    AgentAnnouncement,  # Agent announcements for dynamic discovery
 ]
 """A type alias for messages typically shared among participating agents in a group chat or multi-agent setup.
 
