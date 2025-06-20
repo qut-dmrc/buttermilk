@@ -200,3 +200,6 @@ cython_debug/
 
 *.pickle
 .runs/
+tests/frontend/junit-results.xml
+tests/frontend/test-results.json
+tests/frontend/playwright-report
