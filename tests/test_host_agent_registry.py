@@ -27,13 +27,15 @@ class TestHostAgentRegistry:
     @pytest.mark.asyncio
     async def test_host_agent_initializes_registry(self, host_agent):
         """Test that host agent initializes agent and tool registries."""
-        # Verify registries are initialized
-        assert hasattr(host_agent, "agent_registry")
-        assert hasattr(host_agent, "tool_registry")
-        assert isinstance(host_agent.agent_registry, dict)
-        assert isinstance(host_agent.tool_registry, dict)
-        assert len(host_agent.agent_registry) == 0
-        assert len(host_agent.tool_registry) == 0
+        # Verify registries are initialized (private attributes)
+        assert hasattr(host_agent, "_agent_registry")
+        assert hasattr(host_agent, "_tool_registry")
+        assert hasattr(host_agent, "_registry_lock")
+        assert isinstance(host_agent._agent_registry, dict)
+        assert isinstance(host_agent._tool_registry, dict)
+        assert isinstance(host_agent._registry_lock, asyncio.Lock)
+        assert len(host_agent._agent_registry) == 0
+        assert len(host_agent._tool_registry) == 0
     
     @pytest.mark.asyncio
     async def test_update_agent_registry_joining(self, host_agent):
@@ -54,7 +56,7 @@ class TestHostAgentRegistry:
         )
         
         # Update registry
-        host_agent.update_agent_registry(announcement)
+        await host_agent.update_agent_registry(announcement)
         
         # Verify agent was added
         assert "JUDGE-judge123" in host_agent.agent_registry
@@ -125,7 +127,7 @@ class TestHostAgentRegistry:
             status="joining",
             announcement_type="initial"
         )
-        host_agent.update_agent_registry(announcement1)
+        await host_agent.update_agent_registry(announcement1)
         
         # Add second agent with "analyze" tool
         agent2_config = AgentConfig(
@@ -140,20 +142,20 @@ class TestHostAgentRegistry:
             status="joining",
             announcement_type="initial"
         )
-        host_agent.update_agent_registry(announcement2)
+        await host_agent.update_agent_registry(announcement2)
         
         # Verify both agents are in registry
-        assert "ANALYST-analyst1" in host_agent.agent_registry
-        assert "ANALYST-analyst2" in host_agent.agent_registry
+        assert "ANALYST-analyst1" in host_agent._agent_registry
+        assert "ANALYST-analyst2" in host_agent._agent_registry
         
         # Verify analyze tool has both agents
-        assert len(host_agent.tool_registry["analyze"]) == 2
-        assert "ANALYST-analyst1" in host_agent.tool_registry["analyze"]
-        assert "ANALYST-analyst2" in host_agent.tool_registry["analyze"]
+        assert len(host_agent._tool_registry["analyze"]) == 2
+        assert "ANALYST-analyst1" in host_agent._tool_registry["analyze"]
+        assert "ANALYST-analyst2" in host_agent._tool_registry["analyze"]
         
         # Verify unique tools
-        assert len(host_agent.tool_registry["summarize"]) == 1
-        assert len(host_agent.tool_registry["report"]) == 1
+        assert len(host_agent._tool_registry["summarize"]) == 1
+        assert len(host_agent._tool_registry["report"]) == 1
     
     @pytest.mark.asyncio
     async def test_create_registry_summary(self, host_agent):
@@ -179,7 +181,7 @@ class TestHostAgentRegistry:
                 status="active",
                 announcement_type="initial"
             )
-            host_agent.update_agent_registry(announcement)
+            await host_agent.update_agent_registry(announcement)
         
         # Create summary
         summary = host_agent.create_registry_summary()
@@ -207,6 +209,26 @@ class TestHostAgentRegistry:
         assert "JUDGE-judge1" in summary["available_tools"]["score"]
         assert len(summary["available_tools"]["fetch"]) == 1
         assert "FETCH-fetch1" in summary["available_tools"]["fetch"]
+        
+        # Test caching - second call should return cached result
+        summary2 = host_agent.create_registry_summary()
+        assert summary2 is summary  # Should be the exact same object
+        
+        # Test cache invalidation
+        new_config = AgentConfig(role="NEW", description="New agent", unique_identifier="new1")
+        new_announcement = AgentAnnouncement(
+            content="New agent",
+            agent_config=new_config,
+            available_tools=["new_tool"],
+            status="active",
+            announcement_type="initial"
+        )
+        await host_agent.update_agent_registry(new_announcement)
+        
+        # Summary should be different after registry update
+        summary3 = host_agent.create_registry_summary()
+        assert summary3 is not summary
+        assert summary3["total_agents"] == 4
     
     @pytest.mark.asyncio
     async def test_host_listens_for_announcements(self, host_agent):
@@ -308,7 +330,7 @@ class TestHostAgentRegistry:
             status="active",
             announcement_type="initial"
         )
-        host_agent.update_agent_registry(announcement)
+        await host_agent.update_agent_registry(announcement)
         
         # Create UI message with registry summary
         ui_message = host_agent.create_ui_message_with_registry(

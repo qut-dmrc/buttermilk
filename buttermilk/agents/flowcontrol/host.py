@@ -55,15 +55,11 @@ class HostAgent(Agent):
     _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     
-    # Agent registry attributes
-    agent_registry: dict[str, AgentAnnouncement] = Field(
-        default_factory=dict,
-        description="Registry of active agents and their announcements"
-    )
-    tool_registry: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description="Mapping of tool names to agent IDs that provide them"
-    )
+    # Agent registry attributes (runtime state, not configuration)
+    _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
+    _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
+    _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
+    _registry_summary_cache: dict[str, Any] | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
         default=240,
@@ -105,41 +101,55 @@ class HostAgent(Agent):
 
     # --- Agent Registry Methods ---
 
-    def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
         """Update registry with agent announcement.
+        
+        Thread-safe update of agent registry.
         
         Args:
             announcement: The agent announcement to process.
         """
-        agent_id = announcement.agent_config.agent_id
-        
-        if announcement.status == "leaving":
-            # Remove agent from registry
-            self.agent_registry.pop(agent_id, None)
-            # Remove from tool registry
-            for tool_list in self.tool_registry.values():
-                if agent_id in tool_list:
-                    tool_list.remove(agent_id)
-            logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
-        else:
-            # Add or update agent in registry
-            self.agent_registry[agent_id] = announcement
-            # Update tool registry
-            for tool in announcement.available_tools:
-                if tool not in self.tool_registry:
-                    self.tool_registry[tool] = []
-                if agent_id not in self.tool_registry[tool]:
-                    self.tool_registry[tool].append(agent_id)
-            logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+        async with self._registry_lock:
+            agent_id = announcement.agent_config.agent_id
+            
+            if announcement.status == "leaving":
+                # Remove agent from registry
+                self._agent_registry.pop(agent_id, None)
+                # Remove from tool registry and clean up empty entries
+                for tool, agent_list in list(self._tool_registry.items()):
+                    if agent_id in agent_list:
+                        agent_list.remove(agent_id)
+                        if not agent_list:  # Remove empty tool entries
+                            del self._tool_registry[tool]
+                logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
+            else:
+                # Add or update agent in registry
+                self._agent_registry[agent_id] = announcement
+                # Update tool registry
+                for tool in announcement.available_tools:
+                    if tool not in self._tool_registry:
+                        self._tool_registry[tool] = []
+                    if agent_id not in self._tool_registry[tool]:
+                        self._tool_registry[tool].append(agent_id)
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+            
+            # Invalidate cache
+            self._registry_summary_cache = None
     
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
         
+        Uses caching to avoid redundant computation.
+        
         Returns:
             dict: Summary containing active agents, available tools, and counts.
         """
+        # Return cached summary if available
+        if self._registry_summary_cache is not None:
+            return self._registry_summary_cache
+        
         active_agents = []
-        for agent_id, announcement in self.agent_registry.items():
+        for agent_id, announcement in self._agent_registry.items():
             agent_info = {
                 "agent_id": agent_id,
                 "role": announcement.agent_config.role,
@@ -149,11 +159,15 @@ class HostAgent(Agent):
             }
             active_agents.append(agent_info)
         
-        return {
+        summary = {
             "active_agents": active_agents,
-            "available_tools": dict(self.tool_registry),  # Convert defaultdict to dict
-            "total_agents": len(self.agent_registry)
+            "available_tools": dict(self._tool_registry),
+            "total_agents": len(self._agent_registry)
         }
+        
+        # Cache the summary
+        self._registry_summary_cache = summary
+        return summary
     
     def create_ui_message_with_registry(
         self,
@@ -223,7 +237,7 @@ class HostAgent(Agent):
         # Handle AgentAnnouncement messages
         elif isinstance(message, AgentAnnouncement):
             logger.info(f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}")
-            self.update_agent_registry(message)
+            await self.update_agent_registry(message)
             # Don't add to conversation history
             return
             

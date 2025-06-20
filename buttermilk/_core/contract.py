@@ -31,6 +31,7 @@ from pydantic import (
     Field,
     computed_field,
     field_validator,
+    model_validator,
 )
 
 from buttermilk._core.context import session_id_var
@@ -941,6 +942,15 @@ class AgentAnnouncement(FlowEvent):
         super().model_post_init(__context)
         # Ensure agent_info matches agent_config
         object.__setattr__(self, 'agent_info', self.agent_config)
+    
+    @model_validator(mode='after')
+    def validate_responding_to(self) -> 'AgentAnnouncement':
+        """Validate that responding_to is set appropriately based on announcement_type."""
+        if self.announcement_type == "response" and not self.responding_to:
+            raise ValueError("responding_to must be set for response type announcements")
+        if self.announcement_type != "response" and self.responding_to:
+            raise ValueError("responding_to should only be set for response type announcements")
+        return self
     
     def __str__(self) -> str:
         """Returns a formatted string representation of the announcement."""
