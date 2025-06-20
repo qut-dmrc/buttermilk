@@ -44,7 +44,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             asyncio.get_event_loop().slow_callback_duration = 2
             
             # Complete BM initialization in the FastAPI event loop
-            if hasattr(app.state, "bm"):
+            if hasattr(app.state, "bm") and hasattr(app.state.bm, "_background_init"):
                 await app.state.bm._background_init()
             
             # Initialize and start monitoring infrastructure

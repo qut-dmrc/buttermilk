@@ -37,6 +37,13 @@ Buttermilk is built around a few core concepts that help structure your research
 
 For a detailed explanation of these concepts, please see **[docs/concepts.md](docs/concepts.md)**.
 
+### Quick Start Guides
+
+*   **[docs/OSB_FLOW_QUICKSTART.md](docs/OSB_FLOW_QUICKSTART.md)**: Quick guide to running the OSB (Oversight Board) flow
+*   **[docs/CONFIGURATION_GUIDE.md](docs/CONFIGURATION_GUIDE.md)**: Comprehensive guide to Hydra configuration
+*   **[README_HYDRA_PATTERNS.md](README_HYDRA_PATTERNS.md)**: Common Hydra patterns and troubleshooting
+*   **[conf/examples/](conf/examples/)**: Example configuration files for common use cases
+
 ## Usage
 
 Buttermilk provides several components and features to facilitate HASS research:

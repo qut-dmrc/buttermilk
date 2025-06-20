@@ -50,7 +50,12 @@ uv run python -m buttermilk.runner.cli run=batch flow=tox_allinone
 ### Start the API server:
 
 ```bash
-uv run python -m buttermilk.runner.cli run=api
+# Create a configuration file first (see docs/CONFIGURATION_GUIDE.md)
+# Then run:
+uv run python -m buttermilk.runner.cli --config-name=your_api_config
+
+# Or use the example OSB API config:
+uv run python -m buttermilk.runner.cli --config-name=osb_api
 ```
 
 This will:

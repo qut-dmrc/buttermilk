@@ -97,16 +97,38 @@ def create_core_router() -> APIRouter:
         flow_name: str,
         request: Request,
         run_request: RunRequest | None = None,
-    ) -> StreamingResponse:
+        prompt: str | None = None,
+    ):
         """Run a flow with provided inputs - core functionality."""
         # Access state via request.app.state
         if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
             raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
 
-        # Use stream method with the flow runner
-        return StreamingResponse(
-            request.app.state.flow_runner.stream(run_request),
-            media_type="application/json",
-        )
+        # For GET requests, extract prompt from query parameters
+        if request.method == "GET":
+            prompt = request.query_params.get("prompt", "")
+            if not prompt:
+                raise HTTPException(status_code=400, detail="Prompt parameter required for GET requests")
+        
+        # Create RunRequest if not provided
+        if not run_request:
+            run_request = RunRequest(
+                flow=flow_name,
+                prompt=prompt or "",
+                ui_type="web",
+            )
+        
+        # For web UI, we should return session info so client can connect via WebSocket
+        # Create a session ID that the client can use
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        return {
+            "flow": flow_name,
+            "session_id": session_id,
+            "status": "ready",
+            "message": f"Flow '{flow_name}' ready. Connect via WebSocket to /ws/{session_id} to start.",
+            "websocket_url": f"/ws/{session_id}"
+        }
     
     return router

@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+  - local
+  - flows: 
+    - osb
+  - llms: lite
+  - run: batch
+
+bm:
+  name: batch_processor
+  job: batch_flows
+
+run:
+  mode: batch
+  ui: console
+  human_in_loop: false  # Automated processing
+  flows: ${flows}
+  name: ${bm.name}
+  job: ${bm.job}
+  # Batch-specific settings
+  max_records: 100
+  batch_size: 10
