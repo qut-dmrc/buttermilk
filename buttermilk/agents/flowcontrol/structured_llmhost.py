@@ -102,20 +102,20 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 tool_name = tool_dict['name']
                 # Create unique tool name to avoid duplicates
                 unique_tool_name = f"{role.lower()}.{tool_name}"
-                
+
                 # Skip if we've already seen this exact tool name
                 if unique_tool_name in tool_names_seen:
                     logger.debug(f"Skipping duplicate tool: {unique_tool_name}")
                     continue
-                    
+
                 tool_names_seen.add(unique_tool_name)
-                
+
                 # Create a closure to capture the role and tool name
                 def create_agent_tool(agent_role: str, tool_id: str, tool_schema: dict) -> Callable:
                     """Create a tool function that generates StepRequest messages."""
                     # Extract parameters from schema
                     properties = tool_schema.get("properties", {})
-                    
+
                     # Build a function with explicit parameters based on schema
                     # For simplicity, we'll handle common cases
                     if len(properties) == 1 and "prompt" in properties:
@@ -275,8 +275,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 if isinstance(result, AgentTrace) and result.outputs:
                     # Make step request from AgentTrace outputs
                     if isinstance(result.outputs, dict) and "tool_code" in result.outputs:
-                        # Handle tool_code call format
-                        # {"tool_code":"call_agent","tool_name":"call_agent","parameters":{"agent_name":"SearchAgent","step_description":"Search for Oversight Board cases that mention ICCPR Article 20 and incitement to discrimination.","initial_prompt":"Find Oversight Board cases that have considered ICCPR Article 20 and/or incitement to discrimination."}}
                         tool_name = result.outputs.get("tool_code", "")
                         parameters = result.outputs.get("parameters", {})
 
@@ -312,7 +310,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                             )
                             await self._proposed_step.put(step_request)
                         else:
-                            logger.warning(f"No agent found for tool_code: {tool_code}. Available participants: {list(self._participants.keys())}")
+                            logger.warning(f"No agent found for tool: {tool_name}. Available participants: {list(self._participants.keys())}")
                             # Pass response to manager if no agent found
                             await self.callback_to_groupchat(result)
                     else:
@@ -335,13 +333,13 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         result = await super()._handle_events(
             message, cancellation_token, public_callback, message_callback, **kwargs
         )
-        
+
         # Handle ConductorRequest specifically to rebuild tools
         if isinstance(message, ConductorRequest):
             # Check if participants changed
             old_participants = set(self._participants.keys())
             new_participants = set(message.participants.keys())
-            
+
             if old_participants != new_participants:
                 logger.info(
                     f"Participants changed from {old_participants} to {new_participants}, "
@@ -351,8 +349,8 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 self._participants.update(message.participants)
                 if hasattr(message, 'participant_tools'):
                     self._participant_tools = message.participant_tools
-                
+
                 # Rebuild the tools with new participants
                 await self._build_agent_tools()
-        
+
         return result

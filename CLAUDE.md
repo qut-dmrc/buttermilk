@@ -45,6 +45,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Minimal Viable Fixes**: Smallest change that solves root cause
 - **Embrace "I Don't Know Yet"**: Systematic analysis beats guessing
 
+## GitHub Repository Configuration
+
+The default GitHub repository for this project is `qut-dmrc/buttermilk`. When using the `gh` CLI tool, commands will default to this repository. You can use commands like:
+- `gh issue list`
+- `gh issue view <number>`
+- `gh pr list`
+- `gh pr create`
+
+Without needing to specify `--repo qut-dmrc/buttermilk` each time.
+
 ## Buttermilk Project Development Guidelines
 
 ### Overarching priorities

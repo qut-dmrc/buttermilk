@@ -144,7 +144,8 @@ export default defineConfig({
       command: 'npm run dev',
       url: 'http://localhost:5173',
       cwd: '../../buttermilk/frontend/chat',
-      reuseExistingServer: !process.env.CI,
+      // reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true, 
       timeout: 120000,
       env: {
         NODE_ENV: 'test',
@@ -155,7 +156,8 @@ export default defineConfig({
       command: 'python -m uvicorn buttermilk.api.flow:create_app --reload --host 0.0.0.0 --port 8000',
       url: 'http://localhost:8000',
       cwd: '../..',
-      reuseExistingServer: !process.env.CI,
+      // reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,  // Add this line
       timeout: 120000,
       env: {
         PYTHONPATH: '../../',

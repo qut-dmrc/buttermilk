@@ -1,0 +1,8 @@
+# GitHub CLI Configuration for Claude Code
+# This file configures the default repository for gh commands
+
+# Default repository for gh commands
+repository: qut-dmrc/buttermilk
+
+# Additional gh configurations
+default_branch: main

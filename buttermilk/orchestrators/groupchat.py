@@ -157,7 +157,7 @@ class AutogenOrchestrator(Orchestrator):
             FlowEvent(source="orchestrator", content="Initializing group chat participants"),
             topic_id=self._topic
         )
-        
+
         # Give agents a moment to initialize
         await asyncio.sleep(0.5)
 
@@ -190,15 +190,16 @@ class AutogenOrchestrator(Orchestrator):
                     logger.warning(f"Failed to get tool definitions from {role}: {e}")
             else:
                 logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions")
-        
+
         # Start up the host agent with participants and their tools
-        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())}")
+        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())} and tools: {list(participant_tools.keys())}")
         conductor_request = ConductorRequest(
             inputs=request.model_dump(), 
             participants=self._participants,
             participant_tools=participant_tools
         )
         logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
+        logger.debug(f"ConductorRequest details - tools: {participant_tools}")
         await self._runtime.publish_message(
             conductor_request, 
             topic_id=DefaultTopicId(type=CONDUCTOR)
@@ -268,7 +269,6 @@ class AutogenOrchestrator(Orchestrator):
                         type=variant_config.agent_id,  # Use the specific variant ID for registration
                         factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
-
 
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.
