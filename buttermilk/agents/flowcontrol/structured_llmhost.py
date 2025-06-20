@@ -14,7 +14,7 @@ from pydantic import Field, PrivateAttr
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentTrace, GroupchatMessageTypes
+from buttermilk._core.contract import AgentTrace, ConductorRequest, GroupchatMessageTypes, OOBMessages
 from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -58,33 +58,33 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         # Check if participants are available yet
         if not self._participants:
             logger.warning(f"No participants available during {self.agent_name} initialization. Tools will be set up when participants are available.")
-            # Initialize empty tools list to avoid AttributeError later
-            self._tools_list = []
             return
 
-        # Collect tool definitions from all participant agents
+        # Build agent tools from participants
+        await self._build_agent_tools()
+
+    async def _build_agent_tools(self) -> None:
+        """Build structured tool definitions from participants.
+        
+        This method creates FunctionTool objects for each participant's capabilities.
+        Each tool generates a StepRequest message addressed to STEP (not individual agents).
+        The tools are stored in _tools_list to be used by the parent LLMAgent class.
+        """
         agent_tools = []
+        tool_names_seen = set()  # Track tool names to avoid duplicates
 
         for role, description in self._participants.items():
             # Check if we have specific tool definitions for this role
             if hasattr(self, '_participant_tools') and role in self._participant_tools:
                 logger.debug(f"Using provided tool definitions for role {role}")
-                tool_defs = []
-                for tool_dict in self._participant_tools[role]:
-                    tool_def = AgentToolDefinition(
-                        name=tool_dict['name'],
-                        description=tool_dict['description'],
-                        input_schema=tool_dict.get('input_schema', {}),
-                        output_schema=tool_dict.get('output_schema', {})
-                    )
-                    tool_defs.append(tool_def)
+                tool_defs = self._participant_tools[role]
             else:
                 # Create a default tool for this role
                 logger.debug(f"Creating default tool for role {role}")
-                default_tool = AgentToolDefinition(
-                    name=f"call_{role.lower()}",
-                    description=f"Send a request to the {role} agent: {description}",
-                    input_schema={
+                tool_defs = [{
+                    'name': f"call_{role.lower()}",
+                    'description': f"Send a request to the {role} agent: {description}",
+                    'input_schema': {
                         "type": "object",
                         "properties": {
                             "prompt": {
@@ -94,83 +94,105 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                         },
                         "required": ["prompt"]
                     },
-                    output_schema={"type": "object"}
-                )
-                tool_defs = [default_tool]
+                    'output_schema': {"type": "object"}
+                }]
 
             # Create FunctionTool for each tool definition
-            for tool_def in tool_defs:
+            for tool_dict in tool_defs:
+                tool_name = tool_dict['name']
+                # Create unique tool name to avoid duplicates
+                unique_tool_name = f"{role.lower()}.{tool_name}"
+                
+                # Skip if we've already seen this exact tool name
+                if unique_tool_name in tool_names_seen:
+                    logger.debug(f"Skipping duplicate tool: {unique_tool_name}")
+                    continue
+                    
+                tool_names_seen.add(unique_tool_name)
+                
                 # Create a closure to capture the role and tool name
-                def create_agent_tool(role=role, tool_name=tool_def.name, input_schema=tool_def.input_schema):
+                def create_agent_tool(agent_role: str, tool_id: str, tool_schema: dict) -> Callable:
+                    """Create a tool function that generates StepRequest messages."""
                     # Extract parameters from schema
-                    properties = input_schema.get("properties", {})
-                    required = input_schema.get("required", [])
-
+                    properties = tool_schema.get("properties", {})
+                    
                     # Build a function with explicit parameters based on schema
                     # For simplicity, we'll handle common cases
                     if len(properties) == 1 and "prompt" in properties:
                         # Simple case: just a prompt parameter
-                        async def call_agent_tool(prompt: str) -> dict[str, Any]:
+                        async def call_agent_with_prompt(prompt: str) -> dict[str, Any]:
                             """Call a specific tool on an agent."""
-                            choice = StepRequest(
-                                role=role,
+                            # Create StepRequest addressed to STEP, not the individual agent
+                            step_request = StepRequest(
+                                role=agent_role,  # The agent role to invoke
                                 inputs={
-                                    "tool": tool_name,
+                                    "tool": tool_id,
                                     "tool_inputs": {"prompt": prompt}
                                 }
                             )
                             logger.info(
-                                f"Host {self.agent_name} calling {role}.{tool_name} "
-                                f"with prompt: {prompt}"
+                                f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
+                                f"with prompt: {prompt[:100]}..."
                             )
-                            await self.callback_to_groupchat(choice)
-                            return {"status": "sent"}
+                            # Put the step request in the queue for _sequence to yield
+                            await self._proposed_step.put(step_request)
+                            return {"status": "queued", "step": agent_role}
+                        return call_agent_with_prompt
                     else:
                         # Generic case: accept a dict of inputs
-                        async def call_agent_tool(inputs: dict[str, Any]) -> dict[str, Any]:
-                            """Call a specific tool on an agent."""
-                            choice = StepRequest(
-                                role=role,
+                        async def call_agent_with_inputs(**kwargs: Any) -> dict[str, Any]:
+                            """Call a specific tool on an agent with arbitrary inputs."""
+                            # Create StepRequest addressed to STEP
+                            step_request = StepRequest(
+                                role=agent_role,
                                 inputs={
-                                    "tool": tool_name,
-                                    "tool_inputs": inputs
+                                    "tool": tool_id,
+                                    "tool_inputs": kwargs
                                 }
                             )
                             logger.info(
-                                f"Host {self.agent_name} calling {role}.{tool_name} "
-                                f"with inputs: {inputs}"
+                                f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
+                                f"with inputs: {list(kwargs.keys())}"
                             )
-                            await self.callback_to_groupchat(choice)
-                            return {"status": "sent"}
-
-                    return call_agent_tool
+                            # Put the step request in the queue
+                            await self._proposed_step.put(step_request)
+                            return {"status": "queued", "step": agent_role}
+                        return call_agent_with_inputs
 
                 # Create the actual tool function
-                tool_func = create_agent_tool(role, tool_def.name, tool_def.input_schema)
+                tool_func = create_agent_tool(role, tool_name, tool_dict.get('input_schema', {}))
 
                 # Create FunctionTool with proper schema
                 function_tool = FunctionTool(
                     func=tool_func,
-                    name=f"{role.lower()}.{tool_def.name}",
-                    description=tool_def.description
+                    name=unique_tool_name,
+                    description=tool_dict['description']
                 )
 
                 agent_tools.append(function_tool)
-                logger.debug(f"Registered tool: {role.lower()}.{tool_def.name}")
+                logger.debug(f"Registered tool: {unique_tool_name}")
 
-        # Initialize tools list
-        self._tools_list = []
+        # Initialize tools list using parent class pattern
+        # First, load any configured tools from the agent config
         if self.tools:
-            # Add any configured tools
+            # This uses the parent class's tool loading mechanism
             from buttermilk.utils._tools import create_tool_functions
-            self._tools_list = create_tool_functions(self.tools)
+            configured_tools = create_tool_functions(self.tools)
+            # Start with configured tools
+            self._tools_list = configured_tools.copy()
+        else:
+            self._tools_list = []
 
-        # Add all agent tools
-        self._tools_list.extend(agent_tools)
+        # Add all agent tools, avoiding duplicates
+        for tool in agent_tools:
+            # Check if a tool with this name already exists
+            if not any(existing.name == tool.name for existing in self._tools_list):
+                self._tools_list.append(tool)
 
         logger.info(
             f"Structured LLMHost initialized with {len(agent_tools)} agent tools "
-            f"from {len(self._participants)} participants"
+            f"from {len(self._participants)} participants, "
+            f"total tools: {len(self._tools_list)}"
         )
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
@@ -250,18 +272,12 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     f"LLM response processed. Result type: {type(result)}"
                 )
 
-                # If for some reason we get a direct response without tool use,
-                # handle it gracefully
                 if isinstance(result, AgentTrace) and result.outputs:
-                    # Check if it's requesting to end
-                    output_content = str(result.outputs)
-                    if "END" in output_content.upper() or "DONE" in output_content.upper():
-                        await self._proposed_step.put(StepRequest(role=END))
-                    # Check if outputs contains a tool_code call (dict format)
-                    elif isinstance(result.outputs, dict) and "tool_code" in result.outputs:
+                    # Make step request from AgentTrace outputs
+                    if isinstance(result.outputs, dict) and "tool_code" in result.outputs:
                         # Handle tool_code call format
-                        tool_code = result.outputs.get("tool_code")
-                        tool_name = result.outputs.get("tool_name", tool_code)
+                        # {"tool_code":"call_agent","tool_name":"call_agent","parameters":{"agent_name":"SearchAgent","step_description":"Search for Oversight Board cases that mention ICCPR Article 20 and incitement to discrimination.","initial_prompt":"Find Oversight Board cases that have considered ICCPR Article 20 and/or incitement to discrimination."}}
+                        tool_name = result.outputs.get("tool_code", "")
                         parameters = result.outputs.get("parameters", {})
 
                         # Find the agent role that owns this tool
@@ -302,3 +318,41 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     else:
                         # Otherwise just pass the response to the manager
                         await self.callback_to_groupchat(result)
+
+    async def _handle_events(
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken,
+        public_callback: Callable,
+        message_callback: Callable,
+        **kwargs: Any,
+    ) -> OOBMessages | None:
+        """Handle special events and messages, including ConductorRequest.
+        
+        Override the parent class to rebuild tools when participants change.
+        """
+        # Call parent class handler first
+        result = await super()._handle_events(
+            message, cancellation_token, public_callback, message_callback, **kwargs
+        )
+        
+        # Handle ConductorRequest specifically to rebuild tools
+        if isinstance(message, ConductorRequest):
+            # Check if participants changed
+            old_participants = set(self._participants.keys())
+            new_participants = set(message.participants.keys())
+            
+            if old_participants != new_participants:
+                logger.info(
+                    f"Participants changed from {old_participants} to {new_participants}, "
+                    f"rebuilding agent tools"
+                )
+                # Update participants and participant tools
+                self._participants.update(message.participants)
+                if hasattr(message, 'participant_tools'):
+                    self._participant_tools = message.participant_tools
+                
+                # Rebuild the tools with new participants
+                await self._build_agent_tools()
+        
+        return result
