@@ -14,7 +14,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 try:
     import weave  # For tracing
@@ -44,6 +44,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages,
 from buttermilk._core.context import agent_id_var
 from buttermilk._core.contract import (
+    AgentAnnouncement,
     AgentInput,
     AgentOutput,  # Standard input message structure
     AgentTrace,
@@ -233,6 +234,125 @@ class Agent(AgentConfig, ABC):
                 self._heartbeat.get_nowait()
             except asyncio.QueueEmpty:
                 break
+
+    # --- Announcement Methods ---
+
+    def get_available_tools(self) -> list[str]:
+        """Get list of tool names this agent can respond to.
+        
+        Returns:
+            list[str]: List of tool names extracted from get_tool_definitions.
+        """
+        try:
+            tool_defs = self.get_tool_definitions()
+            return [tool.get("name") for tool in tool_defs if tool.get("name")]
+        except Exception:
+            return []
+    
+    def get_supported_message_types(self) -> list[str]:
+        """Get list of OOBMessage types this agent handles.
+        
+        Returns:
+            list[str]: List of supported message type names.
+        """
+        # Check if agent has defined supported messages
+        if hasattr(self, "_supported_oob_messages"):
+            return self._supported_oob_messages
+        return []
+    
+    def create_announcement(
+        self,
+        announcement_type: Literal["initial", "response", "update"],
+        status: Literal["joining", "active", "leaving"],
+        responding_to: str | None = None
+    ) -> AgentAnnouncement:
+        """Create an agent announcement message.
+        
+        Args:
+            announcement_type: Type of announcement (initial, response, update).
+            status: Current agent status (joining, active, leaving).
+            responding_to: Agent ID being responded to (for response type).
+            
+        Returns:
+            AgentAnnouncement: The announcement message.
+        """
+        content_map = {
+            "joining": f"Agent {self.agent_name} joining",
+            "active": f"Agent {self.agent_name} active",
+            "leaving": f"Agent {self.agent_name} leaving"
+        }
+        
+        return AgentAnnouncement(
+            content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
+            agent_config=self._cfg,
+            available_tools=self.get_available_tools(),
+            supported_message_types=self.get_supported_message_types(),
+            status=status,
+            announcement_type=announcement_type,
+            responding_to=responding_to,
+            source=self.agent_id
+        )
+    
+    async def send_announcement(
+        self,
+        public_callback: Callable[[Any], Awaitable[None]],
+        announcement_type: Literal["initial", "response", "update"],
+        status: Literal["joining", "active", "leaving"],
+        responding_to: str | None = None
+    ) -> None:
+        """Send an agent announcement message.
+        
+        Args:
+            public_callback: Callback to publish the announcement.
+            announcement_type: Type of announcement.
+            status: Current agent status.
+            responding_to: Agent ID being responded to (for response type).
+        """
+        try:
+            announcement = self.create_announcement(
+                announcement_type=announcement_type,
+                status=status,
+                responding_to=responding_to
+            )
+            await public_callback(announcement)
+            logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+        except Exception as e:
+            logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
+    
+    async def initialize_with_announcement(
+        self,
+        public_callback: Callable[[Any], Awaitable[None]] | None = None,
+        **kwargs: Any
+    ) -> None:
+        """Initialize agent and send joining announcement.
+        
+        Args:
+            public_callback: Optional callback to publish announcement.
+            **kwargs: Additional initialization parameters.
+        """
+        # Call base initialization
+        await self.initialize(**kwargs)
+        
+        # Send joining announcement if callback provided
+        if public_callback:
+            await self.send_announcement(
+                public_callback=public_callback,
+                announcement_type="initial",
+                status="joining"
+            )
+    
+    async def cleanup_with_announcement(self) -> None:
+        """Cleanup agent and send leaving announcement."""
+        # Send leaving announcement if we have a stored callback
+        if hasattr(self, "_announcement_callback") and self._announcement_callback:
+            await self.send_announcement(
+                public_callback=self._announcement_callback,
+                announcement_type="update",
+                status="leaving"
+            )
+        
+        # Call base cleanup
+        await self.cleanup()
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Resets the agent's internal state to its initial condition.
@@ -592,6 +712,20 @@ class Agent(AgentConfig, ABC):
         # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
+        
+        # Handle AgentAnnouncement messages
+        if isinstance(message, AgentAnnouncement):
+            # Check if this is from a host agent (initial announcement)
+            if (message.announcement_type == "initial" and 
+                message.agent_config.role in ["HOST", "ORCHESTRATOR"]):
+                # Respond to host announcement
+                await self.send_announcement(
+                    public_callback=public_callback,
+                    announcement_type="response",
+                    status="active",
+                    responding_to=message.agent_config.agent_id
+                )
+                logger.debug(f"Agent {self.agent_name} responded to host announcement from {message.agent_config.agent_id}")
 
     async def _handle_events(
         self,
