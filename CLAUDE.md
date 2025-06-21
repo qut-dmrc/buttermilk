@@ -83,6 +83,7 @@ Adopt a test-driven development approach. Create failing unit tests before every
 * Never change the general agent initialisation interface just to fix one agent
 * Don't write disposable test scripts; write pytest unittests instead in /tests
 * Don't add backwards compatibility when making changes. Make it work for our codebase, and don't support outdated approaches.
+* NEVER provide multiple formats for the same data (e.g., both camelCase and snake_case versions). Pick one format and use it consistently. This prevents ambiguity and confusion.
 * Don't put validation code in main methods if possible; prefer using pydantic v2 validation, and use pydantic objects for all configuration classes.
 
 ## Development Memories

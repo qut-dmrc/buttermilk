@@ -1,0 +1,21 @@
+defaults:
+  - _self_
+  - local
+  - flows: 
+    - test_simple
+  - llms: lite
+  - run: api
+
+bm:
+  name: bm_test_api
+  job: flows
+  tracing:
+    enabled: false  # Disable Weave
+
+run:
+  mode: api
+  ui: web
+  human_in_loop: true
+  flows: ${flows}
+  name: ${bm.name}
+  job: ${bm.job}

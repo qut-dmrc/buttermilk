@@ -94,9 +94,11 @@ async def get_session_endpoint(
         # Pre-create the session in the session manager if it exists
         # This ensures the WebSocket connection will find it
         if hasattr(flows, 'session_manager'):
-            # The session will be fully initialized when WebSocket connects
-            # For now, just return the ID
-            pass
+            # Ensure the session manager is started
+            await flows._ensure_session_manager_started()
+            # Pre-create the session so WebSocket can find it
+            await flows.session_manager.get_or_create_session(new_session_id, websocket=None)
+            logger.info(f"Pre-created session {new_session_id} in session manager")
         
         return JSONResponse({
             "sessionId": new_session_id,

@@ -1,0 +1,21 @@
+defaults:
+  - _self_
+  - local
+  - flows: 
+    - osb
+  - llms: lite
+  - run: api
+
+bm:
+  name: bm_api
+  job: flows
+  tracing:
+    enabled: false  # Disable Weave tracing
+
+run:
+  mode: api
+  ui: web
+  human_in_loop: true
+  flows: ${flows}
+  name: ${bm.name}
+  job: ${bm.job}

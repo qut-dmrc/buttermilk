@@ -1,0 +1,14 @@
+# Simple test flow without complex orchestration
+defaults:
+  - _self_
+
+test_simple:
+  orchestrator: buttermilk.orchestrators.mock_orchestrator.MockOrchestrator
+  name: "Simple Test Flow"
+  description: "Minimal flow for testing WebSocket communication"
+  
+  parameters: 
+    generate_announcements: true
+  agents: {}
+  observers: {}
+  storage: {}
