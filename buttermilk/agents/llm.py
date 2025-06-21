@@ -145,7 +145,7 @@ class LLMAgent(Agent):
         """
         if not self._model:
             return ""
-        
+
         model_lower = self._model.lower()
         if "gpt-4" in model_lower or "gpt4" in model_lower:
             return "GPT4"
@@ -292,7 +292,9 @@ class LLMAgent(Agent):
             error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
-        logger.debug(f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'.")
+        logger.debug(
+            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. Configured tools: {self._tools_list}."
+        )
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             model_client = bm.llms.get_autogen_chat_client(self._model)

@@ -831,6 +831,13 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # Ensure BM is fully initialized before running flow
+        from buttermilk._core.dmrc import get_bm
+        bm = get_bm()
+        if hasattr(bm, 'ensure_initialized'):
+            await bm.ensure_initialized()
+            logger.debug("BM initialization verified before flow execution")
+        
         # Initialize metrics tracking
         import time
         start_time = time.time()

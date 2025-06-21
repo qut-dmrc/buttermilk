@@ -64,11 +64,12 @@ def main(conf: DictConfig) -> None:
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
+    # Ensure BM is fully initialized before proceeding
+    asyncio.run(bm.ensure_initialized())
+    logger.info("BM initialization complete")
+
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
-
-    # General functions might take a few more seconds
-    asyncio.get_event_loop().slow_callback_duration = 10
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -110,6 +111,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Starting Streamlit interface...")
             try:
                 from buttermilk.web.streamlit_frontend.app import create_dashboard_app
+
                 # create_dashboard_app is expected to configure and run the Streamlit app.
                 # It might need access to flow_runner or specific flow configurations.
                 streamlit_app_manager = create_dashboard_app(flow_runner=flow_runner)  # Pass FlowRunner
@@ -141,7 +143,7 @@ def main(conf: DictConfig) -> None:
             uvicorn_config = uvicorn.Config(
                 app=fastapi_app,
                 host=str(conf.get("host", "0.0.0.0")),  # Host from config or default
-                port=int(conf.get("port", 8000)),    # Port from config or default
+                port=int(conf.get("port", 8000)),  # Port from config or default
                 reload=bool(conf.get("reload", False)),  # Hot reloading (dev only)
                 log_level=str(conf.get("log_level", "info")).lower(),
                 access_log=True,  # Enable access logs
@@ -166,6 +168,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Pub/Sub mode: Initializing Pub/Sub listener or batch CLI...")
             try:
                 from buttermilk.runner.batch_cli import main as batch_cli_main  # Assuming this handles pub/sub logic
+
                 # Pass the already loaded and resolved Hydra config.
                 # batch_cli_main might need adaptation if it expects to run @hydra.main itself.
                 batch_cli_main(conf)  # This call might be synchronous or start an async loop.
@@ -218,6 +221,7 @@ def main(conf: DictConfig) -> None:
                 # Register the specific Buttermilk command/event handlers with the Bolt app.
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 from buttermilk.runner.slackbot import register_handlers
+
                 await register_handlers(
                     slack_app=slack_bolt_app,
                     flows=flow_runner.flows,

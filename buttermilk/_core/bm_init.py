@@ -241,6 +241,8 @@ class BM(SessionInfo):
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
+    _initialization_complete: asyncio.Event = PrivateAttr(default=None)
+    _initialization_error: Exception | None = PrivateAttr(default=None)
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -301,6 +303,8 @@ class BM(SessionInfo):
 
         """
         super().__init__(**data)
+        self._initialization_complete = asyncio.Event()
+        self._initialization_error: Exception | None = None
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
@@ -374,35 +378,80 @@ class BM(SessionInfo):
         """
         try:
             loop = asyncio.get_event_loop()
-            asyncio.create_task(self._background_init())
-        except RuntimeError as e:
+            if loop.is_running():
+                asyncio.create_task(self._background_init())
+            else:
+                # Event loop exists but not running, run synchronously
+                logger.debug("Event loop not running, performing synchronous initialization")
+                self._sync_background_init()
+        except RuntimeError:
             # No current event loop, run synchronously
-            msg = "No event loop available, unable to schedule BM background initialisation."
-            logger.warning(msg)
-            # raise RuntimeError(msg) from e
+            logger.debug("No event loop available, performing synchronous initialization")
+            self._sync_background_init()
 
     async def _background_init(self) -> None:
         """Perform non-critical initialization operations in the background."""
         try:
-            # Save initial config (non-critical, can be deferred)
+            # Critical tasks that must complete before work begins
+            # 1. Ensure cloud authentication happens early
+            if hasattr(self, "_cloud_manager") or self.clouds:
+                logger.debug("Performing early cloud authentication...")
+                _ = self.cloud_manager  # Trigger lazy initialization and authentication
+
+            # 2. Initialize secret manager to start caching secrets
+            if self.secret_provider:
+                logger.debug("Initializing secret manager...")
+                _ = self.secret_manager  # Trigger lazy initialization
+
+            # 3. Save initial config (non-critical, but do it anyway)
             await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
 
-            # Start IP fetching task (already async)
+            # 4. Start IP fetching task (non-critical)
             self.start_fetch_ip_task()
 
-            # Defer cloud login - will happen on first cloud operation
-            logger.debug("Background initialization completed")
+            logger.info("Background initialization completed successfully")
+            self._initialization_complete.set()
         except Exception as e:
-            logger.warning(f"Error during background initialization: {e}")
+            logger.error(f"Error during background initialization: {e}")
+            self._initialization_error = e
+            self._initialization_complete.set()  # Set even on error so waiters don't hang
 
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""
         try:
+            # Critical synchronous initialization
+            if hasattr(self, "_cloud_manager") or self.clouds:
+                logger.debug("Performing synchronous cloud authentication...")
+                _ = self.cloud_manager  # Trigger initialization
+
+            if self.secret_provider:
+                logger.debug("Initializing secret manager synchronously...")
+                _ = self.secret_manager  # Trigger initialization
+
             self._save_initial_config()
-            # Note: IP fetching and cloud login will happen on first use
-            logger.debug("Synchronous background initialization completed")
+            logger.info("Synchronous background initialization completed")
+            # For sync path, mark as complete immediately
+            self._initialization_complete.set()
         except Exception as e:
-            logger.warning(f"Error during synchronous background initialization: {e}")
+            logger.error(f"Error during synchronous background initialization: {e}")
+            self._initialization_error = e
+            self._initialization_complete.set()
+
+    async def ensure_initialized(self) -> None:
+        """Ensure that BM initialization is complete before proceeding.
+
+        This method should be called before any operations that depend on:
+        - Cloud authentication being complete
+        - Secrets being available
+        - Save directory being properly configured
+
+        Raises:
+            RuntimeError: If initialization failed with an error
+        """
+        await self._initialization_complete.wait()
+        if self._initialization_error:
+            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
+        logger.debug("BM initialization verified complete")
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
@@ -475,8 +524,8 @@ class BM(SessionInfo):
                 cloud_logging_resource = gcp_logging.Resource(
                     type="generic_task",
                     labels={
-                        "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
-                        "location": getattr(self.logger_cfg, "location", "unknown-location"),
+                        "project": self.logger_cfg.project,
+                        "location": self.logger_cfg.location,
                         "namespace": self.name,
                         "job": self.job,
                         "task_id": self.run_id,
@@ -494,19 +543,12 @@ class BM(SessionInfo):
                 logger.debug("Cloud logging handler added")
             except Exception as e:
                 # Provide better error messages distinguishing between config and service issues
-                if "project" in str(e).lower() or "location" in str(e).lower():
-                    logger.error(
-                        f"Cloud logging setup failed due to configuration issue: {e}. "
-                        f"Logger config: type={self.logger_cfg.type}, "
-                        f"project={getattr(self.logger_cfg, 'project', 'MISSING')}, "
-                        f"location={getattr(self.logger_cfg, 'location', 'MISSING')}"
-                    )
-                else:
-                    logger.warning(
-                        f"Cloud logging setup failed (service may be unavailable): {e}. "
-                        f"Continuing with local logging only. "
-                        f"Check your GCP credentials and service availability."
-                    )
+                logger.error(
+                    f"Cloud logging setup failed due to configuration issue: {e}. "
+                    f"Logger config: type={self.logger_cfg.type}, "
+                    f"project={self.logger_cfg.project}, "
+                    f"location={self.logger_cfg.location}"
+                )
 
     @cached_property
     def secret_manager(self) -> SecretsManager:

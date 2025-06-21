@@ -6,16 +6,8 @@ from typing import Any, Optional
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
 
-# Optional Google Cloud imports - fail gracefully if not available
-try:
-    from google.cloud import bigquery, storage
-    from google.cloud.logging_v2.client import Client as CloudLoggingClient
-    GOOGLE_CLOUD_AVAILABLE = True
-except ImportError:
-    bigquery = None
-    storage = None
-    CloudLoggingClient = None
-    GOOGLE_CLOUD_AVAILABLE = False
+from google.cloud import bigquery, storage
+from google.cloud.logging_v2.client import Client as CloudLoggingClient
 
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.log import logger
@@ -104,10 +96,6 @@ class CloudManager:
             RuntimeError: If client initialization fails
 
         """
-        if not GOOGLE_CLOUD_AVAILABLE:
-            logger.warning("Google Cloud libraries not available. GCS client unavailable.")
-            return None
-            
         if not self._gcp_project:
             # Ensure credentials are loaded to get project ID
             _ = self.gcp_credentials
@@ -131,10 +119,6 @@ class CloudManager:
             RuntimeError: If client initialization fails
 
         """
-        if not GOOGLE_CLOUD_AVAILABLE:
-            logger.warning("Google Cloud libraries not available. BigQuery client unavailable.")
-            return None
-            
         if not self._gcp_project:
             # Ensure credentials are loaded to get project ID
             _ = self.gcp_credentials
@@ -160,14 +144,10 @@ class CloudManager:
             RuntimeError: If client initialization fails
 
         """
-        if not GOOGLE_CLOUD_AVAILABLE:
-            logger.warning("Google Cloud libraries not available. Cloud Logging client unavailable.")
-            return None
-            
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 
-        project = getattr(logger_cfg, "project_id", None)
+        project = logger_cfg.project
         if not project:
             raise RuntimeError("Logger config missing 'project' attribute")
 

@@ -122,13 +122,14 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                         # Simple case: just a prompt parameter
                         async def call_agent_with_prompt(prompt: str) -> dict[str, Any]:
                             """Call a specific tool on an agent."""
-                            # Create StepRequest addressed to STEP, not the individual agent
+                            # Create StepRequest with merged inputs
                             step_request = StepRequest(
                                 role=agent_role,  # The agent role to invoke
                                 inputs={
                                     "tool": tool_id,
-                                    "tool_inputs": {"prompt": prompt}
-                                }
+                                    "prompt": prompt  # Pass prompt directly in inputs
+                                },
+                                content=f"Invoking {tool_id} with prompt"
                             )
                             logger.info(
                                 f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
@@ -142,13 +143,14 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                         # Generic case: accept a dict of inputs
                         async def call_agent_with_inputs(**kwargs: Any) -> dict[str, Any]:
                             """Call a specific tool on an agent with arbitrary inputs."""
-                            # Create StepRequest addressed to STEP
+                            # Create StepRequest with merged inputs
+                            step_inputs = kwargs.copy()
+                            step_inputs["tool"] = tool_id
+                            
                             step_request = StepRequest(
                                 role=agent_role,
-                                inputs={
-                                    "tool": tool_id,
-                                    "tool_inputs": kwargs
-                                }
+                                inputs=step_inputs,
+                                content=f"Invoking {tool_id} with {len(kwargs)} parameters"
                             )
                             logger.info(
                                 f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
@@ -280,29 +282,45 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
                         # Find the agent role that owns this tool
                         agent_role = None
-                        for role, description in self._participants.items():
-                            # Check if we have specific tools for this role
-                            if hasattr(self, '_participant_tools') and role in self._participant_tools:
-                                # Check if any of the role's tools match the requested tool
-                                for tool_dict in self._participant_tools[role]:
-                                    if tool_dict['name'].lower() == tool_name.lower():
-                                        agent_role = role
-                                        break
-                            # Also check default tool pattern
-                            elif f"call_{role.lower()}" == tool_name.lower():
-                                agent_role = role
-                                break
-                            if agent_role:
-                                break
+                        
+                        # First check if the tool name has a role prefix (e.g., "researcher.case_search_tool")
+                        if '.' in tool_name:
+                            role_prefix, tool_suffix = tool_name.split('.', 1)
+                            # Check if this role exists in participants
+                            for role in self._participants.keys():
+                                if role.lower() == role_prefix.lower():
+                                    agent_role = role
+                                    # Update tool_name to just the suffix for matching
+                                    tool_name = tool_suffix
+                                    break
+                        
+                        # If we didn't find it via prefix, search through all participant tools
+                        if not agent_role:
+                            for role, description in self._participants.items():
+                                # Check if we have specific tools for this role
+                                if hasattr(self, '_participant_tools') and role in self._participant_tools:
+                                    # Check if any of the role's tools match the requested tool
+                                    for tool_dict in self._participant_tools[role]:
+                                        if tool_dict['name'].lower() == tool_name.lower():
+                                            agent_role = role
+                                            break
+                                # Also check default tool pattern
+                                elif f"call_{role.lower()}" == tool_name.lower():
+                                    agent_role = role
+                                    break
+                                if agent_role:
+                                    break
 
                         if agent_role:
                             # Create StepRequest for the tool call
+                            # Merge tool name and parameters into inputs for the agent
+                            step_inputs = parameters.copy() if parameters else {}
+                            step_inputs["tool"] = tool_name
+                            
                             step_request = StepRequest(
                                 role=agent_role,
-                                inputs={
-                                    "tool": tool_name,
-                                    "tool_inputs": parameters
-                                }
+                                inputs=step_inputs,
+                                content=f"Invoking {tool_name} with parameters: {list(parameters.keys()) if parameters else 'none'}"
                             )
                             logger.info(
                                 f"Host {self.agent_name} handling tool_code call: "
@@ -310,9 +328,25 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                             )
                             await self._proposed_step.put(step_request)
                         else:
-                            logger.warning(f"No agent found for tool: {tool_name}. Available participants: {list(self._participants.keys())}")
-                            # Pass response to manager if no agent found
-                            await self.callback_to_groupchat(result)
+                            logger.warning(
+                                f"No agent found for tool: {tool_name}. "
+                                f"Available participants: {list(self._participants.keys())}. "
+                                f"Tool was looking for role: {agent_role}"
+                            )
+                            # Send error message to user
+                            error_msg = (
+                                f"I tried to use the tool '{tool_name}' which should invoke the {agent_role} agent, "
+                                f"but that agent is not currently available. "
+                                f"Available agents are: {', '.join(self._participants.keys()) if self._participants else 'none'}."
+                            )
+                            error_trace = AgentTrace(
+                                agent_id=self.agent_id,
+                                agent_type=self.agent_type,
+                                agent_name=self.agent_name,
+                                content=error_msg,
+                                tool_calls=result.tool_calls if hasattr(result, 'tool_calls') else None,
+                            )
+                            await self.callback_to_groupchat(error_trace)
                     else:
                         # Otherwise just pass the response to the manager
                         await self.callback_to_groupchat(result)
@@ -336,21 +370,21 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
         # Handle ConductorRequest specifically to rebuild tools
         if isinstance(message, ConductorRequest):
-            # Check if participants changed
-            old_participants = set(self._participants.keys())
-            new_participants = set(message.participants.keys())
-
-            if old_participants != new_participants:
+            # The parent class already updates participants in _run_flow,
+            # but we need to handle participant_tools separately
+            if hasattr(message, 'participant_tools') and message.participant_tools:
+                self._participant_tools = message.participant_tools
                 logger.info(
-                    f"Participants changed from {old_participants} to {new_participants}, "
-                    f"rebuilding agent tools"
+                    f"Received participant_tools for {len(message.participant_tools)} roles: "
+                    f"{list(message.participant_tools.keys())}"
                 )
-                # Update participants and participant tools
-                self._participants.update(message.participants)
-                if hasattr(message, 'participant_tools'):
-                    self._participant_tools = message.participant_tools
 
-                # Rebuild the tools with new participants
-                await self._build_agent_tools()
+            # Always rebuild tools after receiving ConductorRequest
+            # to ensure we have the latest participant information
+            logger.info(
+                f"Rebuilding agent tools with {len(self._participants)} participants: "
+                f"{list(self._participants.keys())}"
+            )
+            await self._build_agent_tools()
 
         return result
