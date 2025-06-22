@@ -9,19 +9,20 @@ from typing import Any
 
 from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
-from pydantic import Field, PrivateAttr
+from pydantic import PrivateAttr
 
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentAnnouncement, AgentTrace, GroupchatMessageTypes, OOBMessages
+from buttermilk._core.contract import AgentAnnouncement, GroupchatMessageTypes
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
+from buttermilk.utils._tools import create_tool_functions
 
 
 class StructuredLLMHostAgent(LLMAgent, HostAgent):
     """Host agent that uses structured tool definitions for agent coordination.
-    
+
     This agent replaces natural language agent descriptions with structured
     tool definitions, enabling more reliable and type-safe agent invocation.
     """
@@ -49,21 +50,26 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
     async def _initialize(self, callback_to_groupchat: Any) -> None:
         """Initialize the host with agent-provided tool definitions."""
         # Note: super().initialize() is already called in our initialize() method
-        
-        # Tools will be built automatically as agents announce themselves
+
+        # Build initial tools (may be empty if no agents announced yet)
+        await self._build_agent_tools()
+
+        # Tools will be rebuilt automatically as agents announce themselves
         # No need to wait for participants list - we use the agent registry instead
-        logger.debug(f"StructuredLLMHost {self.agent_name} initialized. Tools will be built from agent announcements.")
+        logger.debug(f"StructuredLLMHost {self.agent_name} initialized with {len(self._tools_list)} tools. More tools will be built from agent announcements.")
 
     async def _build_agent_tools(self) -> None:
         """Build tools from agent-provided tool definitions.
-        
-        This simplified method creates FunctionTool objects directly from
-        agent announcements. Each agent provides its own tool definition
-        in the announcement, following the agent-centric principle.
+
+        This simplified method creates FunctionTool objects from both:
+        1. Agent announcements (real-time updates)
+        2. Initial participant tools (from ConductorRequest)
+
+        This ensures tools are available even before all agents have announced.
         """
         agent_tools = []
 
-        # Use the agent registry that's already being populated via announcements
+        # First, build tools from agent announcements (most up-to-date)
         for agent_id, announcement in self._agent_registry.items():
             if not announcement.tool_definition:
                 logger.debug(f"No tool definition provided by agent {agent_id}, skipping")
@@ -91,17 +97,54 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
             # Create FunctionTool using agent-provided definition
             tool = FunctionTool(
-                func=create_tool_func(agent_role, tool_def['name']),
-                name=tool_def['name'],
-                description=tool_def['description']
+                func=create_tool_func(agent_role, tool_def["name"]),
+                name=tool_def["name"],
+                description=tool_def["description"]
             )
             agent_tools.append(tool)
             logger.debug(f"Registered tool from announcement: {tool_def['name']} for {agent_role}")
 
+        # Second, build tools from initial participant tools (from ConductorRequest)
+        # This ensures we have tools even before agents announce themselves
+        if hasattr(self, "_participant_tools") and self._participant_tools:
+            for role, tool_definitions in self._participant_tools.items():
+
+                for tool_def in tool_definitions:
+                    tool_name = tool_def.get("name", f"call_{role.lower()}")
+
+                    # Skip if we already have this tool from announcements
+                    if any(tool.name == tool_name for tool in agent_tools):
+                        continue
+
+                    # Create closure for participant tool
+                    def create_participant_tool_func(target_role: str, target_tool_name: str):
+                        async def call_participant(**kwargs: Any) -> dict[str, Any]:
+                            """Call a participant using initial tool definition."""
+                            step_request = StepRequest(
+                                role=target_role,
+                                inputs=kwargs,
+                                content=f"Invoking {target_tool_name} on {target_role}"
+                            )
+                            logger.info(
+                                f"Host {self.agent_name} invoking {target_role} via participant tool {target_tool_name} "
+                                f"with inputs: {list(kwargs.keys())}"
+                            )
+                            await self._proposed_step.put(step_request)
+                            return {"status": "queued", "agent": target_role}
+                        return call_participant
+
+                    # Create FunctionTool from participant tool definition
+                    tool = FunctionTool(
+                        func=create_participant_tool_func(role, tool_name),
+                        name=tool_name,
+                        description=tool_def.get("description", f"Call {role} agent")
+                    )
+                    agent_tools.append(tool)
+                    logger.debug(f"Registered tool from participant_tools: {tool_name} for {role}")
+
         # Initialize tools list using parent class pattern
         # First, load any configured tools from the agent config
         if self.tools:
-            from buttermilk.utils._tools import create_tool_functions
             configured_tools = create_tool_functions(self.tools)
             self._tools_list = configured_tools.copy()
         else:
@@ -112,10 +155,11 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             if not any(existing.name == tool.name for existing in self._tools_list):
                 self._tools_list.append(tool)
 
+        tool_names = [tool.name for tool in self._tools_list]
         logger.info(
             f"Structured LLMHost built {len(agent_tools)} agent tools "
             f"from {len(self._agent_registry)} announced agents, "
-            f"total tools: {len(self._tools_list)}"
+            f"total tools: {len(self._tools_list)} - {tool_names}"
         )
 
     async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:

@@ -292,8 +292,10 @@ class LLMAgent(Agent):
             error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
+        tool_names = [getattr(tool, 'name', str(tool)) for tool in self._tools_list]
         logger.debug(
-            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. Configured tools: {self._tools_list}."
+            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. "
+            f"Configured tools ({len(self._tools_list)}): {tool_names}"
         )
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
