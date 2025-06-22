@@ -104,9 +104,9 @@
       "justMyCode": true,
       "args": [
         "+run=console",
-        "flows=[trans,simple,z]",
+        "flows=[trans,simple,osb]",
         "+flow=${input:flow}",
-        "llms=full",
+        "llms=lite",
         "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",

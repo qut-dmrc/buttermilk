@@ -455,7 +455,7 @@ class AutoGenWrapper(RetryWrapper):
             # `ToolOutput.call_id` should store this.
             tool_output_instance = ToolOutput(
                 call_id=call.id,  # This is the crucial tool_call_id
-                function_name=tool.name,  # From the tool definition
+                name=tool.name,  # From the tool definition (autogen uses 'name', not 'function_name')
                 content=content_str,  # Stringified result
                 results=single_result,  # Raw result
                 args=arguments,  # Arguments passed to the tool

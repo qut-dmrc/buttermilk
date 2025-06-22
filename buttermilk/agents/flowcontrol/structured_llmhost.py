@@ -14,8 +14,7 @@ from pydantic import Field, PrivateAttr
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentTrace, ConductorRequest, GroupchatMessageTypes, OOBMessages
-from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk._core.contract import AgentAnnouncement, AgentTrace, GroupchatMessageTypes, OOBMessages
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 
@@ -29,10 +28,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
     _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
-    max_user_confirmation_time: int = Field(
-        default=7200,
-        description="Maximum time to wait for agent responses in seconds",
-    )
 
     # Override the output model - we don't need CallOnAgent anymore
     _output_model = None  # Let the LLM use tool calling directly
@@ -52,150 +47,83 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         await self._initialize(callback_to_groupchat=callback_to_groupchat)
 
     async def _initialize(self, callback_to_groupchat: Any) -> None:
-        """Initialize the host with structured tool definitions from participants."""
+        """Initialize the host with agent-provided tool definitions."""
         # Note: super().initialize() is already called in our initialize() method
-
-        # Check if participants are available yet
-        if not self._participants:
-            logger.warning(f"No participants available during {self.agent_name} initialization. Tools will be set up when participants are available.")
-            return
-
-        # Build agent tools from participants
-        await self._build_agent_tools()
+        
+        # Tools will be built automatically as agents announce themselves
+        # No need to wait for participants list - we use the agent registry instead
+        logger.debug(f"StructuredLLMHost {self.agent_name} initialized. Tools will be built from agent announcements.")
 
     async def _build_agent_tools(self) -> None:
-        """Build structured tool definitions from participants.
+        """Build tools from agent-provided tool definitions.
         
-        This method creates FunctionTool objects for each participant's capabilities.
-        Each tool generates a StepRequest message addressed to STEP (not individual agents).
-        The tools are stored in _tools_list to be used by the parent LLMAgent class.
+        This simplified method creates FunctionTool objects directly from
+        agent announcements. Each agent provides its own tool definition
+        in the announcement, following the agent-centric principle.
         """
         agent_tools = []
-        tool_names_seen = set()  # Track tool names to avoid duplicates
 
-        for role, description in self._participants.items():
-            # Check if we have specific tool definitions for this role
-            if hasattr(self, '_participant_tools') and role in self._participant_tools:
-                logger.debug(f"Using provided tool definitions for role {role}")
-                tool_defs = self._participant_tools[role]
-            else:
-                # Create a default tool for this role
-                logger.debug(f"Creating default tool for role {role}")
-                tool_defs = [{
-                    'name': f"call_{role.lower()}",
-                    'description': f"Send a request to the {role} agent: {description}",
-                    'input_schema': {
-                        "type": "object",
-                        "properties": {
-                            "prompt": {
-                                "type": "string",
-                                "description": f"The request or question for the {role} agent"
-                            }
-                        },
-                        "required": ["prompt"]
-                    },
-                    'output_schema': {"type": "object"}
-                }]
+        # Use the agent registry that's already being populated via announcements
+        for agent_id, announcement in self._agent_registry.items():
+            if not announcement.tool_definition:
+                logger.debug(f"No tool definition provided by agent {agent_id}, skipping")
+                continue
 
-            # Create FunctionTool for each tool definition
-            for tool_dict in tool_defs:
-                tool_name = tool_dict['name']
-                # Create unique tool name to avoid duplicates
-                unique_tool_name = f"{role.lower()}.{tool_name}"
+            tool_def = announcement.tool_definition
+            agent_role = announcement.agent_config.role
 
-                # Skip if we've already seen this exact tool name
-                if unique_tool_name in tool_names_seen:
-                    logger.debug(f"Skipping duplicate tool: {unique_tool_name}")
-                    continue
+            # Create closure to capture agent role
+            def create_tool_func(target_role: str, tool_name: str):
+                async def call_agent(**kwargs: Any) -> dict[str, Any]:
+                    """Call an agent using its tool definition."""
+                    step_request = StepRequest(
+                        role=target_role,
+                        inputs=kwargs,
+                        content=f"Invoking {tool_name} on {target_role}"
+                    )
+                    logger.info(
+                        f"Host {self.agent_name} invoking {target_role} via tool {tool_name} "
+                        f"with inputs: {list(kwargs.keys())}"
+                    )
+                    await self._proposed_step.put(step_request)
+                    return {"status": "queued", "agent": target_role}
+                return call_agent
 
-                tool_names_seen.add(unique_tool_name)
-
-                # Create a closure to capture the role and tool name
-                def create_agent_tool(agent_role: str, tool_id: str, tool_schema: dict) -> Callable:
-                    """Create a tool function that generates StepRequest messages."""
-                    # Extract parameters from schema
-                    properties = tool_schema.get("properties", {})
-
-                    # Build a function with explicit parameters based on schema
-                    # For simplicity, we'll handle common cases
-                    if len(properties) == 1 and "prompt" in properties:
-                        # Simple case: just a prompt parameter
-                        async def call_agent_with_prompt(prompt: str) -> dict[str, Any]:
-                            """Call a specific tool on an agent."""
-                            # Create StepRequest with merged inputs
-                            step_request = StepRequest(
-                                role=agent_role,  # The agent role to invoke
-                                inputs={
-                                    "tool": tool_id,
-                                    "prompt": prompt  # Pass prompt directly in inputs
-                                },
-                                content=f"Invoking {tool_id} with prompt"
-                            )
-                            logger.info(
-                                f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
-                                f"with prompt: {prompt[:100]}..."
-                            )
-                            # Put the step request in the queue for _sequence to yield
-                            await self._proposed_step.put(step_request)
-                            return {"status": "queued", "step": agent_role}
-                        return call_agent_with_prompt
-                    else:
-                        # Generic case: accept a dict of inputs
-                        async def call_agent_with_inputs(**kwargs: Any) -> dict[str, Any]:
-                            """Call a specific tool on an agent with arbitrary inputs."""
-                            # Create StepRequest with merged inputs
-                            step_inputs = kwargs.copy()
-                            step_inputs["tool"] = tool_id
-                            
-                            step_request = StepRequest(
-                                role=agent_role,
-                                inputs=step_inputs,
-                                content=f"Invoking {tool_id} with {len(kwargs)} parameters"
-                            )
-                            logger.info(
-                                f"Host {self.agent_name} invoking {agent_role}.{tool_id} "
-                                f"with inputs: {list(kwargs.keys())}"
-                            )
-                            # Put the step request in the queue
-                            await self._proposed_step.put(step_request)
-                            return {"status": "queued", "step": agent_role}
-                        return call_agent_with_inputs
-
-                # Create the actual tool function
-                tool_func = create_agent_tool(role, tool_name, tool_dict.get('input_schema', {}))
-
-                # Create FunctionTool with proper schema
-                function_tool = FunctionTool(
-                    func=tool_func,
-                    name=unique_tool_name,
-                    description=tool_dict['description']
-                )
-
-                agent_tools.append(function_tool)
-                logger.debug(f"Registered tool: {unique_tool_name}")
+            # Create FunctionTool using agent-provided definition
+            tool = FunctionTool(
+                func=create_tool_func(agent_role, tool_def['name']),
+                name=tool_def['name'],
+                description=tool_def['description']
+            )
+            agent_tools.append(tool)
+            logger.debug(f"Registered tool from announcement: {tool_def['name']} for {agent_role}")
 
         # Initialize tools list using parent class pattern
         # First, load any configured tools from the agent config
         if self.tools:
-            # This uses the parent class's tool loading mechanism
             from buttermilk.utils._tools import create_tool_functions
             configured_tools = create_tool_functions(self.tools)
-            # Start with configured tools
             self._tools_list = configured_tools.copy()
         else:
             self._tools_list = []
 
         # Add all agent tools, avoiding duplicates
         for tool in agent_tools:
-            # Check if a tool with this name already exists
             if not any(existing.name == tool.name for existing in self._tools_list):
                 self._tools_list.append(tool)
 
         logger.info(
-            f"Structured LLMHost initialized with {len(agent_tools)} agent tools "
-            f"from {len(self._participants)} participants, "
+            f"Structured LLMHost built {len(agent_tools)} agent tools "
+            f"from {len(self._agent_registry)} announced agents, "
             f"total tools: {len(self._tools_list)}"
         )
+
+    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+        """Update registry and rebuild tools when agents announce."""
+        # Call parent class to handle the registry update
+        await super().update_agent_registry(announcement)
+        # Rebuild tools whenever registry changes
+        await self._build_agent_tools()
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
@@ -243,7 +171,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
             # Skip empty messages
             if not message.content:
-                logger.debug(f"Manager message received with empty content, skipping")
+                logger.debug("Manager message received with empty content, skipping")
                 return
 
             # Clear any pending steps since the manager has a new request
@@ -258,7 +186,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     inputs={
                         "user_feedback": self._user_feedback,
                         "prompt": str(message.content),
-                        "participants": list(self._participants.keys())
+                        "available_agents": [ann.agent_config.role for ann in self._agent_registry.values()]
                     }
                 ),
                 public_callback=public_callback,
@@ -271,120 +199,9 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 # The LLM may have called a tool, which will have already
                 # sent the appropriate StepRequest via the tool's callback
                 logger.debug(
-                    f"LLM response processed. Result type: {type(result)}"
+                    "LLM response processed. Tool calls handled automatically via FunctionTool callbacks."
                 )
 
-                if isinstance(result, AgentTrace) and result.outputs:
-                    # Make step request from AgentTrace outputs
-                    if isinstance(result.outputs, dict) and "tool_code" in result.outputs:
-                        tool_name = result.outputs.get("tool_code", "")
-                        parameters = result.outputs.get("parameters", {})
+                # Just pass the response to the manager
+                await self.callback_to_groupchat(result)
 
-                        # Find the agent role that owns this tool
-                        agent_role = None
-                        
-                        # First check if the tool name has a role prefix (e.g., "researcher.case_search_tool")
-                        if '.' in tool_name:
-                            role_prefix, tool_suffix = tool_name.split('.', 1)
-                            # Check if this role exists in participants
-                            for role in self._participants.keys():
-                                if role.lower() == role_prefix.lower():
-                                    agent_role = role
-                                    # Update tool_name to just the suffix for matching
-                                    tool_name = tool_suffix
-                                    break
-                        
-                        # If we didn't find it via prefix, search through all participant tools
-                        if not agent_role:
-                            for role, description in self._participants.items():
-                                # Check if we have specific tools for this role
-                                if hasattr(self, '_participant_tools') and role in self._participant_tools:
-                                    # Check if any of the role's tools match the requested tool
-                                    for tool_dict in self._participant_tools[role]:
-                                        if tool_dict['name'].lower() == tool_name.lower():
-                                            agent_role = role
-                                            break
-                                # Also check default tool pattern
-                                elif f"call_{role.lower()}" == tool_name.lower():
-                                    agent_role = role
-                                    break
-                                if agent_role:
-                                    break
-
-                        if agent_role:
-                            # Create StepRequest for the tool call
-                            # Merge tool name and parameters into inputs for the agent
-                            step_inputs = parameters.copy() if parameters else {}
-                            step_inputs["tool"] = tool_name
-                            
-                            step_request = StepRequest(
-                                role=agent_role,
-                                inputs=step_inputs,
-                                content=f"Invoking {tool_name} with parameters: {list(parameters.keys()) if parameters else 'none'}"
-                            )
-                            logger.info(
-                                f"Host {self.agent_name} handling tool_code call: "
-                                f"{agent_role}.{tool_name} with parameters: {parameters}"
-                            )
-                            await self._proposed_step.put(step_request)
-                        else:
-                            logger.warning(
-                                f"No agent found for tool: {tool_name}. "
-                                f"Available participants: {list(self._participants.keys())}. "
-                                f"Tool was looking for role: {agent_role}"
-                            )
-                            # Send error message to user
-                            error_msg = (
-                                f"I tried to use the tool '{tool_name}' which should invoke the {agent_role} agent, "
-                                f"but that agent is not currently available. "
-                                f"Available agents are: {', '.join(self._participants.keys()) if self._participants else 'none'}."
-                            )
-                            error_trace = AgentTrace(
-                                agent_id=self.agent_id,
-                                agent_type=self.agent_type,
-                                agent_name=self.agent_name,
-                                content=error_msg,
-                                tool_calls=result.tool_calls if hasattr(result, 'tool_calls') else None,
-                            )
-                            await self.callback_to_groupchat(error_trace)
-                    else:
-                        # Otherwise just pass the response to the manager
-                        await self.callback_to_groupchat(result)
-
-    async def _handle_events(
-        self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken,
-        public_callback: Callable,
-        message_callback: Callable,
-        **kwargs: Any,
-    ) -> OOBMessages | None:
-        """Handle special events and messages, including ConductorRequest.
-        
-        Override the parent class to rebuild tools when participants change.
-        """
-        # Call parent class handler first
-        result = await super()._handle_events(
-            message, cancellation_token, public_callback, message_callback, **kwargs
-        )
-
-        # Handle ConductorRequest specifically to rebuild tools
-        if isinstance(message, ConductorRequest):
-            # The parent class already updates participants in _run_flow,
-            # but we need to handle participant_tools separately
-            if hasattr(message, 'participant_tools') and message.participant_tools:
-                self._participant_tools = message.participant_tools
-                logger.info(
-                    f"Received participant_tools for {len(message.participant_tools)} roles: "
-                    f"{list(message.participant_tools.keys())}"
-                )
-
-            # Always rebuild tools after receiving ConductorRequest
-            # to ensure we have the latest participant information
-            logger.info(
-                f"Rebuilding agent tools with {len(self._participants)} participants: "
-                f"{list(self._participants.keys())}"
-            )
-            await self._build_agent_tools()
-
-        return result

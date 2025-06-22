@@ -41,7 +41,6 @@ class HostAgent(Agent):
     Uses a dictionary to count pending tasks per agent ID and a Condition variable
     for synchronization.
     """
-    
 
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
     callback_to_groupchat: Any = Field(default=None)
@@ -54,7 +53,7 @@ class HostAgent(Agent):
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
     _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
-    
+
     # Agent registry attributes (runtime state, not configuration)
     _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
     _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
@@ -78,7 +77,7 @@ class HostAgent(Agent):
         Gets the value from parameters dict, defaulting to True if not specified.
         """
         return self.parameters.get('human_in_loop', True)
-    
+
     @human_in_loop.setter
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
@@ -111,7 +110,7 @@ class HostAgent(Agent):
         """
         async with self._registry_lock:
             agent_id = announcement.agent_config.agent_id
-            
+
             if announcement.status == "leaving":
                 # Remove agent from registry
                 self._agent_registry.pop(agent_id, None)
@@ -132,10 +131,10 @@ class HostAgent(Agent):
                     if agent_id not in self._tool_registry[tool]:
                         self._tool_registry[tool].append(agent_id)
                 logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
-            
+
             # Invalidate cache
             self._registry_summary_cache = None
-    
+
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
         
@@ -147,7 +146,7 @@ class HostAgent(Agent):
         # Return cached summary if available
         if self._registry_summary_cache is not None:
             return self._registry_summary_cache
-        
+
         active_agents = []
         for agent_id, announcement in self._agent_registry.items():
             agent_info = {
@@ -158,17 +157,17 @@ class HostAgent(Agent):
                 "model": announcement.agent_config.parameters.get("model")
             }
             active_agents.append(agent_info)
-        
+
         summary = {
             "active_agents": active_agents,
             "available_tools": dict(self._tool_registry),
             "total_agents": len(self._agent_registry)
         }
-        
+
         # Cache the summary
         self._registry_summary_cache = summary
         return summary
-    
+
     def create_ui_message_with_registry(
         self,
         content: str,
@@ -233,14 +232,7 @@ class HostAgent(Agent):
         elif isinstance(message, FlowProgressUpdate):
             logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
             return  # Do not proceed to log
-        
-        # Handle AgentAnnouncement messages
-        elif isinstance(message, AgentAnnouncement):
-            logger.info(f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}")
-            await self.update_agent_registry(message)
-            # Don't add to conversation history
-            return
-            
+
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
@@ -321,6 +313,14 @@ class HostAgent(Agent):
             logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
             # Do nothing with progress updates received by the host
 
+        # Handle AgentAnnouncement messages
+        elif isinstance(message, AgentAnnouncement):
+            logger.info(
+                f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}"
+            )
+            await self.update_agent_registry(message)
+            # Don't add to conversation history
+            return
         return None  # Explicitly return None if no other value is returned
 
     async def request_user_confirmation(self, step: StepRequest) -> None:
@@ -445,28 +445,28 @@ class HostAgent(Agent):
         for role, description in self._participants.items():
             # Create more descriptive step content using the participant description
             step_description = f"Executing {role.lower()} step: {description}"
-            
+
             # Create StepRequest with initial parameters if available
             step_inputs = {}
             step_parameters = {}
-            
+
             # Add initial query/prompt if available
             if hasattr(self, '_initial_query') and self._initial_query:
                 step_inputs['query'] = self._initial_query
                 step_inputs['prompt'] = self._initial_query
-            
+
             # Add any parameters from the initial inputs
             if hasattr(self, '_initial_inputs') and isinstance(self._initial_inputs, dict):
                 # Extract parameters from the initial inputs
                 if 'parameters' in self._initial_inputs:
                     step_parameters.update(self._initial_inputs['parameters'])
-                
+
                 # Also check for direct prompt in initial inputs
                 if 'prompt' in self._initial_inputs and 'prompt' not in step_inputs:
                     step_inputs['prompt'] = self._initial_inputs['prompt']
                 if 'query' in self._initial_inputs and 'query' not in step_inputs:
                     step_inputs['query'] = self._initial_inputs['query']
-            
+
             yield StepRequest(
                 role=role, 
                 content=step_description,
@@ -500,25 +500,25 @@ class HostAgent(Agent):
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
-        
+
         # Store participant tools if provided
         if hasattr(message, 'participant_tools'):
             self._participant_tools = message.participant_tools
             logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
-        
+
         # Extract initial query/prompt from ConductorRequest if available
         # The orchestrator puts the entire RunRequest in message.inputs
         self._initial_query = None
         self._initial_parameters = {}
-        
+
         if hasattr(message, 'inputs') and isinstance(message.inputs, dict):
             # Store the initial inputs for use by subclasses and _sequence
             self._initial_inputs = message.inputs
-            
+
             # Extract parameters if present
             if 'parameters' in message.inputs and isinstance(message.inputs['parameters'], dict):
                 self._initial_parameters = message.inputs['parameters']
-            
+
             # Check for query/prompt in various locations
             # Priority: direct prompt field > parameters.query > parameters.prompt > parameters.criteria
             self._initial_query = (
@@ -528,10 +528,10 @@ class HostAgent(Agent):
                 self._initial_parameters.get('prompt') or
                 self._initial_parameters.get('criteria')
             )
-            
+
             if self._initial_query:
                 logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-            
+
             # Log the parameters for debugging
             if self._initial_parameters:
                 logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")

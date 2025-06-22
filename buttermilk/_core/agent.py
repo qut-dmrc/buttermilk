@@ -248,7 +248,7 @@ class Agent(AgentConfig, ABC):
             return [tool.get("name") for tool in tool_defs if tool.get("name")]
         except Exception:
             return []
-    
+
     def get_supported_message_types(self) -> list[str]:
         """Get list of OOBMessage types this agent handles.
         
@@ -259,7 +259,7 @@ class Agent(AgentConfig, ABC):
         if hasattr(self, "_supported_oob_messages"):
             return self._supported_oob_messages
         return []
-    
+
     def create_announcement(
         self,
         announcement_type: Literal["initial", "response", "update"],
@@ -281,18 +281,19 @@ class Agent(AgentConfig, ABC):
             "active": f"Agent {self.agent_name} active",
             "leaving": f"Agent {self.agent_name} leaving"
         }
-        
+
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=self.get_available_tools(),
             supported_message_types=self.get_supported_message_types(),
+            tool_definition=self.get_autogen_tool_definition(),
             status=status,
             announcement_type=announcement_type,
             responding_to=responding_to,
             source=self.agent_id
         )
-    
+
     async def send_announcement(
         self,
         public_callback: Callable[[Any], Awaitable[None]],
@@ -318,7 +319,7 @@ class Agent(AgentConfig, ABC):
             logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
         except Exception as e:
             logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
-    
+
     async def initialize_with_announcement(
         self,
         public_callback: Callable[[Any], Awaitable[None]] | None = None,
@@ -332,7 +333,7 @@ class Agent(AgentConfig, ABC):
         """
         # Call base initialization
         await self.initialize(**kwargs)
-        
+
         # Send joining announcement if callback provided
         if public_callback:
             await self.send_announcement(
@@ -340,7 +341,7 @@ class Agent(AgentConfig, ABC):
                 announcement_type="initial",
                 status="joining"
             )
-    
+
     async def cleanup_with_announcement(self) -> None:
         """Cleanup agent and send leaving announcement."""
         # Send leaving announcement if we have a stored callback
@@ -350,7 +351,7 @@ class Agent(AgentConfig, ABC):
                 announcement_type="update",
                 status="leaving"
             )
-        
+
         # Call base cleanup
         await self.cleanup()
 
@@ -712,7 +713,7 @@ class Agent(AgentConfig, ABC):
         # await self._model_context.add_message(AssistantMessage(content=output_str, source=source or self.agent_name))
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
-        
+
         # Handle AgentAnnouncement messages
         if isinstance(message, AgentAnnouncement):
             # Check if this is from a host agent (initial announcement)
@@ -883,9 +884,9 @@ class Agent(AgentConfig, ABC):
             f"Context length: {len(updated_inputs.context)}, "
             f"Records count: {len(updated_inputs.records)}.",
         )
-        
+
         return updated_inputs
-    
+
     def get_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Generate structured tool definitions for this agent.
         
@@ -899,7 +900,74 @@ class Agent(AgentConfig, ABC):
         """
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
+
+    def get_autogen_tool_definition(self) -> dict[str, Any]:
+        """Return autogen-compatible tool definition for this agent.
+        
+        This creates a standard tool definition that allows the agent to be
+        invoked as a tool by other agents. The tool definition follows 
+        Autogen's format and can be used by LLM hosts for structured tool calling.
+        
+        Returns:
+            dict: Autogen-compatible tool definition with name, description, 
+                  and input schema.
+        """
+        return {
+            'name': f"call_{self.role.lower()}",
+            'description': self._get_tool_description(),
+            'input_schema': self._get_agent_input_schema()
+        }
     
+    def _get_tool_description(self) -> str:
+        """Get the tool description for this agent.
+        
+        This creates a description that explains not just what the agent does,
+        but when it should be used. Agents can override this method to provide
+        more specific guidance for LLMs.
+        
+        Returns:
+            str: Description suitable for LLM tool selection.
+        """
+        # Check if agent has a tool-specific description in parameters
+        if hasattr(self, 'parameters') and self.parameters:
+            tool_desc = self.parameters.get('tool_description')
+            if tool_desc:
+                return tool_desc
+        
+        # Use agent description if available, otherwise create default
+        if self.description:
+            # Enhance the description with usage guidance
+            return f"Use this tool when you need to: {self.description.lower()}. " \
+                   f"Calls the {self.role} agent to handle {self.role.lower()}-specific tasks."
+        else:
+            # Fallback description
+            return f"Use this tool to invoke the {self.role} agent for {self.role.lower()}-related tasks and processing."
+
+    def _get_agent_input_schema(self) -> dict[str, Any]:
+        """Get input schema for this agent when used as a tool.
+        
+        Returns a JSON schema that describes what inputs this agent expects.
+        Agents can override this method to provide custom schemas.
+        
+        Returns:
+            dict: JSON schema for agent inputs.
+        """
+        # Check if agent has defined custom schema
+        if hasattr(self, 'input_schema'):
+            return self.input_schema
+
+        # Default schema with prompt parameter
+        return {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": f"Request or input for {self.role}"
+                }
+            },
+            "required": ["prompt"]
+        }
+
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
         
@@ -919,11 +987,11 @@ class Agent(AgentConfig, ABC):
             ProcessingError: If execution fails
         """
         from buttermilk._core.tool_definition import UnifiedRequest
-        
+
         if request.tool_name:
             # Route to specific tool
             tool_name = request.tool_name
-            
+
             # First, try direct method name match
             if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
                 method = getattr(self, tool_name)
@@ -932,20 +1000,20 @@ class Agent(AgentConfig, ABC):
                         f"Agent {self.agent_name} executing tool {tool_name} "
                         f"with inputs: {request.inputs}"
                     )
-                    
+
                     # Execute the tool method
                     if asyncio.iscoroutinefunction(method):
                         result = await method(**request.inputs)
                     else:
                         result = method(**request.inputs)
-                    
+
                     return result
-            
+
             # If direct match fails, search for methods with matching tool metadata
             for attr_name in dir(self):
                 if attr_name.startswith("_"):
                     continue
-                    
+
                 attr = getattr(self, attr_name)
                 if callable(attr):
                     # Check if it has tool metadata with matching name
@@ -955,15 +1023,15 @@ class Agent(AgentConfig, ABC):
                                 f"Agent {self.agent_name} executing tool {tool_name} "
                                 f"(method: {attr_name}) with inputs: {request.inputs}"
                             )
-                            
+
                             # Execute the tool method
                             if asyncio.iscoroutinefunction(attr):
                                 result = await attr(**request.inputs)
                             else:
                                 result = attr(**request.inputs)
-                            
+
                             return result
-            
+
             # Tool not found
             raise ValueError(
                 f"Tool {tool_name} not found on agent {self.agent_name}"
@@ -977,10 +1045,10 @@ class Agent(AgentConfig, ABC):
                 parameters=request.metadata,
                 records=request.context.get("records", []) if request.context else []
             )
-            
+
             # Call the standard process method
             result = await self._process(message=agent_input, **kwargs)
-            
+
             # Extract outputs from AgentOutput if needed
             if hasattr(result, "outputs"):
                 return result.outputs

@@ -798,7 +798,7 @@ else:
     class ToolOutput(BaseModel):
         """Fallback ToolOutput when autogen is not available."""
         call_id: str = ""
-        function_name: str = ""
+        name: str = ""  # Changed from function_name to match autogen's FunctionExecutionResult
         content: str = ""
         results: Any = None
 
@@ -907,10 +907,10 @@ class AgentAnnouncement(FlowEvent):
             response type announcements). Defaults to None.
     
     """
-    
+
     # Agent identification and configuration
     agent_config: AgentConfig = Field(..., description="Complete agent configuration")
-    
+
     # Capabilities
     available_tools: list[str] = Field(
         default_factory=list,
@@ -920,13 +920,14 @@ class AgentAnnouncement(FlowEvent):
         default_factory=list,
         description="OOBMessage types this agent handles"
     )
-    
+    tool_definition: dict[str, Any] = Field(default_factory=dict, description="Autogen-compatible tool definition for this agent")
+
     # Status
     status: Literal["joining", "active", "leaving"] = Field(
         default="joining",
         description="Current agent status in the group chat"
     )
-    
+
     # Metadata
     announcement_type: Literal["initial", "response", "update"] = Field(
         ...,
@@ -936,13 +937,13 @@ class AgentAnnouncement(FlowEvent):
         default=None,
         description="agent_id of host being responded to (for response type)"
     )
-    
+
     def model_post_init(self, __context) -> None:
         """Set agent_info to match agent_config after initialization."""
         super().model_post_init(__context)
         # Ensure agent_info matches agent_config
         object.__setattr__(self, 'agent_info', self.agent_config)
-    
+
     @model_validator(mode='after')
     def validate_responding_to(self) -> 'AgentAnnouncement':
         """Validate that responding_to is set appropriately based on announcement_type."""
@@ -951,7 +952,7 @@ class AgentAnnouncement(FlowEvent):
         if self.announcement_type != "response" and self.responding_to:
             raise ValueError("responding_to should only be set for response type announcements")
         return self
-    
+
     def __str__(self) -> str:
         """Returns a formatted string representation of the announcement."""
         return f"AgentAnnouncement[{self.agent_config.agent_id}]: {self.announcement_type} - {self.status}"
@@ -984,7 +985,6 @@ GroupchatMessageTypes = Union[
     ManagerMessage,  # If manager responses are broadcasted
     # AgentInput, # AgentInput is usually direct, not a "group chat" message
     Record,  # If raw records are shared
-    AgentAnnouncement,  # Agent announcements for dynamic discovery
 ]
 """A type alias for messages typically shared among participating agents in a group chat or multi-agent setup.
 
