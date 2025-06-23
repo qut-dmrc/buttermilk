@@ -68,98 +68,50 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
     async def _build_agent_tools(self) -> None:
         """Build tools from agent-provided tool definitions.
-
-        This simplified method creates FunctionTool objects from both:
-        1. Agent announcements (real-time updates)
-        2. Initial participant tools (from ConductorRequest)
-
-        This ensures tools are available even before all agents have announced.
+        
+        This method extracts actual @tool decorated methods from agents and wraps them
+        to send StepRequest messages, following the agent-centric approach.
         """
         agent_tools = []
 
-        # First, build tools from agent announcements (most up-to-date)
+        # Build tools from agent announcements 
         for agent_id, announcement in self._agent_registry.items():
-            if not announcement.tool_definition:
-                logger.debug(f"No tool definition provided by agent {agent_id}, skipping")
-                continue
-
-            tool_def = announcement.tool_definition
             agent_role = announcement.agent_config.role
-
-            # Create closure to capture agent role
-            def create_tool_func(target_role: str, tool_name: str):
-                async def call_agent(**kwargs: Any) -> None:
-                    """Call an agent using its tool definition."""
-                    step_request = StepRequest(role=target_role, inputs=kwargs, metadata={"tool_name": tool_name})
-
-                    logger.info(
-                        f"Host {self.agent_name} invoking {target_role} via tool {tool_name} "
-                        f"with inputs: {list(kwargs.keys())}"
-                    )
-
-                    # Queue the step request - orchestrator handles the rest
-                    await self._proposed_step.put(step_request)
-
-                return call_agent
-
-            # Create FunctionTool using agent-provided definition
-            tool = FunctionTool(
-                func=create_tool_func(agent_role, tool_def["name"]),
-                name=tool_def["name"],
-                description=tool_def["description"]
-            )
-            agent_tools.append(tool)
-            logger.debug(f"Registered tool from announcement: {tool_def['name']} for {agent_role}")
-
-        # Second, build tools from initial participant tools (from ConductorRequest)
-        # This ensures we have tools even before agents announce themselves
-        if hasattr(self, "_participant_tools") and self._participant_tools:
-            for role, tool_definitions in self._participant_tools.items():
-
-                for tool_def in tool_definitions:
-                    if "name" not in tool_def:
-                        raise ValueError(f"Tool definition for role '{role}' missing required 'name' field: {tool_def}")
-                    tool_name = tool_def["name"]
-
-                    # Skip if we already have this tool from announcements
-                    if any(tool.name == tool_name for tool in agent_tools):
-                        continue
-
-                    # Create closure for participant tool
-                    def create_participant_tool_func(target_role: str, target_tool_name: str):
-                        async def call_participant(**kwargs: Any) -> None:
-                            """Call a participant using initial tool definition."""
-                            step_request = StepRequest(
-                                role=target_role,
-                                inputs=kwargs,
-                                content=f"Invoking {target_tool_name} on {target_role}",
-                                metadata={"tool_name": target_tool_name}
-                            )
-
-                            logger.info(
-                                f"Host {self.agent_name} invoking {target_role} via participant tool {target_tool_name} "
-                                f"with inputs: {list(kwargs.keys())}"
-                            )
-
-                            # Queue the step request - orchestrator handles the rest
-                            await self._proposed_step.put(step_request)
-
-                        return call_participant
-
-                    # Create FunctionTool from participant tool definition
-                    if "description" not in tool_def:
-                        raise ValueError(f"Tool definition '{tool_name}' for role '{role}' missing required 'description' field: {tool_def}")
+            
+            # Get the actual agent instance to extract its tools
+            # We need to get the agent instance to access its @tool decorated methods
+            agent_instance = None
+            # TODO: We need a way to get the actual agent instance from the announcement
+            # For now, use the tool_definition as a fallback
+            
+            if announcement.tool_definition:
+                tool_def = announcement.tool_definition
+                
+                # Create wrapper function that sends StepRequest
+                def create_tool_wrapper(target_role: str, tool_name: str, tool_description: str):
+                    # Create function that matches the expected signature
+                    async def tool_wrapper(**kwargs: Any) -> None:
+                        """Wrapper that sends StepRequest to agent."""
+                        step_request = StepRequest(
+                            role=target_role,
+                            inputs=kwargs,
+                            metadata={"tool_name": tool_name}
+                        )
+                        logger.info(f"Host {self.agent_name} invoking {target_role} tool {tool_name}")
+                        await self._proposed_step.put(step_request)
                     
-                    tool = FunctionTool(
-                        func=create_participant_tool_func(role, tool_name),
-                        name=tool_name,
-                        description=tool_def["description"]
-                    )
-                    agent_tools.append(tool)
-                    logger.debug(f"Registered tool from participant_tools: {tool_name} for {role}")
+                    return tool_wrapper
+
+                # Create FunctionTool that wraps the agent call
+                tool = FunctionTool(
+                    func=create_tool_wrapper(agent_role, tool_def["name"], tool_def.get("description", "")),
+                    name=tool_def["name"],
+                    description=tool_def.get("description", f"Call {agent_role} agent")
+                )
+                agent_tools.append(tool)
+                logger.debug(f"Registered tool wrapper: {tool_def['name']} for {agent_role}")
 
         # Initialize tools list using parent class pattern
-        # First, load any configured tools from the agent config
         if self.tools:
             configured_tools = create_tool_functions(self.tools)
             self._tools_list = configured_tools.copy()

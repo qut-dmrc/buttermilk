@@ -275,12 +275,22 @@ class Agent(AgentConfig, ABC):
             "leaving": f"Agent {self.agent_name} leaving"
         }
 
+        # Get actual tool definitions from @tool decorated methods
+        tool_definitions = self.get_tool_definitions()
+        
+        # If agent has specific @tool methods, use the first one as primary tool
+        # Otherwise fall back to generic agent tool definition
+        if tool_definitions:
+            primary_tool = tool_definitions[0].to_autogen_tool_schema()
+        else:
+            primary_tool = self.get_autogen_tool_definition()
+
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=self.get_available_tools(),
             supported_message_types=self.get_supported_message_types(),
-            tool_definition=self.get_autogen_tool_definition(),
+            tool_definition=primary_tool,
             status=status,
             announcement_type=announcement_type,
             responding_to=responding_to,
