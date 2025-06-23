@@ -44,6 +44,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Test-First Debugging**: Failing tests → fix → passing tests
 - **Minimal Viable Fixes**: Smallest change that solves root cause
 - **Embrace "I Don't Know Yet"**: Systematic analysis beats guessing
+- **Always Commit and Document**: Commit changes immediately and update GitHub issues with progress/solutions
 
 ## GitHub Repository Configuration
 
@@ -70,6 +71,8 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 Always read the `docs/ARCHITECTURE.md` file before commencing work and remember to update it after you finish. The objective is to maintain a document that will give you important context about the project, including how components fit together. Where information is missing, discuss potential approaches with the user and get permission to proceed.
 
 Always assume you may be interrupted at any time. Use GitHub issues to track tasks, and commit your changes at every conceptual chunk of work. You don't need to ask permission to commit changes.
+
+**IMPORTANT**: Always commit code changes to git and update relevant GitHub issues with your progress and solutions. This ensures work is preserved and documented for future reference.
 
 Adopt a test-driven development approach. Create failing unit tests before every code change.
 
