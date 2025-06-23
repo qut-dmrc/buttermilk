@@ -370,6 +370,7 @@ class AutoGenWrapper(RetryWrapper):
                     # Create a standard message from tool output
                     result = FunctionExecutionResult(
                         call_id=tool_result.call_id,
+                        name=tool_result.name,  # Required field for FunctionExecutionResult
                         content=tool_result.content or "",  # Ensure content is not None
                         tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
                     )
