@@ -19,8 +19,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
+
 if TYPE_CHECKING:
     from buttermilk._core.tool_definition import AgentToolDefinition
+
+from autogen_core.tools import Tool
+
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -230,17 +234,13 @@ class Agent(AgentConfig, ABC):
 
     # --- Announcement Methods ---
 
-    def get_available_tools(self) -> list[str]:
-        """Get list of tool names this agent can respond to.
-        
+    def get_available_tools(self) -> list[Tool]:
+        """Get list of tools this agent can respond to.
+
         Returns:
-            list[str]: List of tool names extracted from get_tool_definitions.
+            list[Tool]: List of tools.
         """
-        try:
-            tool_defs = self.get_tool_definitions()
-            return [tool.get("name") for tool in tool_defs if tool.get("name")]
-        except Exception:
-            return []
+        return []
 
     def get_supported_message_types(self) -> list[str]:
         """Get list of OOBMessage types this agent handles.
@@ -910,7 +910,7 @@ class Agent(AgentConfig, ABC):
             'description': self._get_tool_description(),
             'input_schema': self._get_agent_input_schema()
         }
-    
+
     def _get_tool_description(self) -> str:
         """Get the tool description for this agent.
         
@@ -926,7 +926,7 @@ class Agent(AgentConfig, ABC):
             tool_desc = self.parameters.get('tool_description')
             if tool_desc:
                 return tool_desc
-        
+
         # Use agent description if available, otherwise create default
         if self.description:
             # Enhance the description with usage guidance

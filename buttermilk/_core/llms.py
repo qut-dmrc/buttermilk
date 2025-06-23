@@ -34,7 +34,7 @@ from autogen_core.models import (
     FunctionExecutionResultMessage,
     FunctionExecutionResult,
 )
-from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
+from autogen_core.tools import Tool  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
@@ -233,7 +233,7 @@ class AutoGenWrapper(RetryWrapper):
     async def create(
         self,
         messages: Sequence[LLMMessage],
-        tools: Sequence[Tool | ToolSchema] = [],
+        tools: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
@@ -248,7 +248,7 @@ class AutoGenWrapper(RetryWrapper):
         Args:
             messages: A sequence of `LLMMessage` objects representing the
                 conversation history.
-            tools: An optional sequence of `Tool` or `ToolSchema` objects that
+            tools: An optional sequence of `Tool` objects that
                 the LLM can call.
             schema: An optional Pydantic `BaseModel` subclass. If provided and
                 the model supports structured output (`model_info.structured_output`),
@@ -319,7 +319,7 @@ class AutoGenWrapper(RetryWrapper):
         self,
         messages: list[LLMMessage],  # Made mutable for extending with tool results
         cancellation_token: CancellationToken | None,
-        tools_list: Sequence[Tool | ToolSchema] = [],
+        tools_list: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
     ) -> CreateResult:
         """Manages a chat interaction, including potential tool calls and responses.
@@ -333,7 +333,7 @@ class AutoGenWrapper(RetryWrapper):
             messages: A list of `LLMMessage` objects forming the conversation.
                 This list will be mutated if tool calls occur.
             cancellation_token: A `CancellationToken` for the operation.
-            tools_list: An optional sequence of `Tool` or `ToolSchema` objects
+            tools_list: An optional sequence of `Tool` objects
                 available for the LLM to call.
             schema: An optional Pydantic `BaseModel` subclass for structured output
                 requests (if no tools are called).
@@ -371,8 +371,7 @@ class AutoGenWrapper(RetryWrapper):
                     result = FunctionExecutionResult(
                         call_id=tool_result.call_id,
                         name=tool_result.name,  # Required field for FunctionExecutionResult
-                        content=tool_result.content or "",  # Ensure content is not None
-                        tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
+                        content=tool_result.content,
                     )
                     tool_results.append(result)
 
@@ -443,14 +442,14 @@ class AutoGenWrapper(RetryWrapper):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[Tool | ToolSchema],  # Changed to Sequence and allow ToolSchema
+        tools_list: Sequence[Tool],
         cancellation_token: CancellationToken | None,
     ) -> list[list[ToolOutput]]:  # Return type is list of lists, as one call might yield multiple outputs
         """Executes a list of tool calls concurrently.
 
         Args:
             calls: A list of `FunctionCall` objects from the LLM.
-            tools_list: The list of available `Tool` or `ToolSchema` objects.
+            tools_list: The list of available `Tool`  objects.
             cancellation_token: A `CancellationToken` for the operations.
 
         Returns:
@@ -461,19 +460,12 @@ class AutoGenWrapper(RetryWrapper):
         tasks = []
         for call in calls:
             # Find the tool by name from the tools_list.
-            # tools_list can contain Tool or ToolSchema, ensure we find a runnable Tool.
             tool_definition = next((t for t in tools_list if t.name == call.name), None)
 
             if tool_definition is None:
                 # Handle case where tool is not found (e.g., log error, return error ToolOutput)
                 # For now, assert, but a more robust error handling might be needed.
                 raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
-
-            # We need an actual Tool instance to call _call_tool, which expects Tool.run_json
-            # If tool_definition is a ToolSchema, it cannot be directly run.
-            # This assumes tools_list primarily contains executable Tool instances.
-            if not isinstance(tool_definition, Tool):
-                raise ProcessingError(f"Tool definition for '{call.name}' is a schema, not a runnable Tool instance.")
 
             tasks.append(self._call_tool(call, tool_definition, cancellation_token))
 

@@ -20,7 +20,7 @@ from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (  # Autogen message and model types
     AssistantMessage,
 )
-from autogen_core.tools import FunctionTool, Tool, ToolSchema  # Autogen tool types
+from autogen_core.tools import Tool  # Autogen tool types
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance for framework access
@@ -83,7 +83,7 @@ class LLMAgent(Agent):
         description="If True, raises ProcessingError if prompt template parameters are missing. Otherwise, warns and proceeds.",
     )
 
-    _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(default_factory=list)
+    _tools_list: list[Tool] = PrivateAttr(default_factory=list)
     _model: str = PrivateAttr(default="")
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     # Subclasses should override this if they expect specific structured output

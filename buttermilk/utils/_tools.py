@@ -1,10 +1,10 @@
 from autogen_core import FunctionCall
-from autogen_core.tools import FunctionTool, Tool, ToolSchema
+from autogen_core.tools import FunctionTool, Tool
 
 from buttermilk._core.config import ToolConfig
 
 
-def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
+def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall | Tool | FunctionTool]:
     """Instantiate tools and return their wrapped entry functions."""
     _fns = []
     for cfg in tool_cfg:

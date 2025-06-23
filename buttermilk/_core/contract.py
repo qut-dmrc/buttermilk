@@ -747,9 +747,8 @@ class FlowProgressUpdate(FlowMessage):
 # --- Tool / Function Call Messages ---
 
 
-if FunctionExecutionResult is not None:
-    class ToolOutput(FunctionExecutionResult):
-        """Represents the result of a tool (function) execution performed by an agent.
+class ToolOutput(FunctionExecutionResult):
+    """Represents the result of a tool (function) execution performed by an agent.
 
         This class inherits from Autogen's `FunctionExecutionResult`, which typically
         includes fields like `call_id` (for the function call), `function_name`, and
@@ -796,16 +795,8 @@ if FunctionExecutionResult is not None:
         default="unknown",
         description="ID of the corresponding tool call request that this output answers.",
     )
-        # is_error might be a useful addition if not in base class, e.g.:
-        # is_error: bool = Field(default=False, description="True if the tool execution resulted in an error.")
-else:
-    # Fallback when autogen is not available
-    class ToolOutput(BaseModel):
-        """Fallback ToolOutput when autogen is not available."""
-        call_id: str = ""
-        name: str = ""  # Changed from function_name to match autogen's FunctionExecutionResult
-        content: str = ""
-        results: Any = None
+    # is_error might be a useful addition if not in base class, e.g.:
+    # is_error: bool = Field(default=False, description="True if the tool execution resulted in an error.")
 
 
 # --- Status & Coordination Messages ---

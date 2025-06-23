@@ -101,7 +101,8 @@ class MCPServerConfig(BaseModel):
 class UnifiedRequest(BaseModel):
     """Single request format for all agent/tool invocations.
     
-    This consolidates AgentInput, ToolInput, and StepRequest into a single structure.
+    This consolidates AgentInput, ToolInput, and StepRequest into a single structure
+    and supports both groupchat and MCP invocation contexts.
     """
     
     target: str = Field(
@@ -131,3 +132,69 @@ class UnifiedRequest(BaseModel):
         """Extract tool name from target if specified."""
         parts = self.target.split(".")
         return parts[1] if len(parts) > 1 else None
+    
+    @property
+    def is_mcp_request(self) -> bool:
+        """Check if this request originated from MCP."""
+        return self.metadata.get("source") == "mcp" or "mcp_route" in self.metadata
+    
+    @property
+    def is_groupchat_request(self) -> bool:
+        """Check if this request originated from groupchat."""
+        return self.metadata.get("source") == "groupchat" or "step_request" in self.metadata
+    
+    def to_agent_input(self) -> dict[str, Any]:
+        """Convert to AgentInput format for legacy compatibility."""
+        return {
+            "inputs": self.inputs,
+            "context": self.context,
+            "metadata": self.metadata
+        }
+    
+    @classmethod
+    def from_mcp_call(
+        cls, 
+        tool_name: str, 
+        parameters: dict[str, Any], 
+        agent_name: str | None = None
+    ) -> "UnifiedRequest":
+        """Create UnifiedRequest from MCP tool call.
+        
+        Args:
+            tool_name: Name of the tool being called
+            parameters: Tool parameters
+            agent_name: Optional agent name (will be inferred if not provided)
+            
+        Returns:
+            UnifiedRequest instance
+        """
+        target = f"{agent_name}.{tool_name}" if agent_name else tool_name
+        return cls(
+            target=target,
+            inputs=parameters,
+            metadata={"source": "mcp", "tool_name": tool_name}
+        )
+    
+    @classmethod
+    def from_groupchat_step(
+        cls,
+        agent_role: str,
+        inputs: dict[str, Any],
+        tool_name: str | None = None
+    ) -> "UnifiedRequest":
+        """Create UnifiedRequest from groupchat step request.
+        
+        Args:
+            agent_role: Role of the target agent
+            inputs: Input parameters
+            tool_name: Optional specific tool name
+            
+        Returns:
+            UnifiedRequest instance
+        """
+        target = f"{agent_role}.{tool_name}" if tool_name else agent_role
+        return cls(
+            target=target,
+            inputs=inputs,
+            metadata={"source": "groupchat", "agent_role": agent_role}
+        )

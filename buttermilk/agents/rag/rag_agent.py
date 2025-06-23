@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import ToolOutput
-from buttermilk.agents.llm import LLMAgent, Tool, ToolSchema
+from buttermilk.agents.llm import LLMAgent, Tool
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 import pydantic
@@ -246,7 +246,7 @@ class RagAgent(LLMAgent, ToolConfig):
         return self._tools_list
 
     @property
-    def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
+    def config(self) -> list[Tool]:
         """Provides the tool configuration for this agent.
 
         Returns:
