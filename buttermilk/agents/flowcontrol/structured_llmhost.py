@@ -29,9 +29,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
     _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
-    _step_results: dict[str, asyncio.Future] = PrivateAttr(default_factory=dict)
-    _pending_tool_calls: dict[str, dict] = PrivateAttr(default_factory=dict)  # Track by role + timestamp
-    _testing_mode: bool = PrivateAttr(default=False)  # For tests - don't wait for results
 
     # Override the output model - we don't need CallOnAgent anymore
     _output_model = None  # Let the LLM use tool calling directly
@@ -45,14 +42,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             except asyncio.QueueEmpty:
                 break
     
-    def set_testing_mode(self, enabled: bool = True) -> None:
-        """Enable or disable testing mode.
-        
-        In testing mode, tool calls return immediately with 'queued' status
-        instead of waiting for actual results. This is useful for unit tests.
-        """
-        self._testing_mode = enabled
-        
     def set_participant_tools_for_testing(self, participant_tools: dict[str, Any]) -> None:
         """Set participant tools for testing purposes.
         
@@ -60,28 +49,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         without going through the full orchestrator initialization.
         """
         self._participant_tools = participant_tools
-        
-    def _cleanup_expired_futures(self) -> None:
-        """Clean up any futures that have been hanging around too long."""
-        import time
-        current_time = time.time()
-        expired_keys = []
-        
-        for step_id, future in self._step_results.items():
-            if future.done():
-                expired_keys.append(step_id)
-            # Also check if future has been waiting too long (more than 60 seconds)
-            elif hasattr(future, '_created_at'):
-                if current_time - future._created_at > 60:
-                    expired_keys.append(step_id)
-                    if not future.done():
-                        future.cancel()
-        
-        for key in expired_keys:
-            self._step_results.pop(key, None)
-            
-        if expired_keys:
-            logger.debug(f"Cleaned up {len(expired_keys)} expired step futures")
 
     async def initialize(self, callback_to_groupchat: Any, **kwargs: Any) -> None:
         """Initialize the host agent."""
@@ -121,49 +88,23 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
             # Create closure to capture agent role
             def create_tool_func(target_role: str, tool_name: str):
-                async def call_agent(**kwargs: Any) -> dict[str, Any]:
+                async def call_agent(**kwargs: Any) -> None:
                     """Call an agent using its tool definition."""
-                    import shortuuid
-                    
-                    # Generate unique step ID
-                    step_id = f"step_{shortuuid.uuid()[:8]}"
-                    
                     step_request = StepRequest(
                         role=target_role,
                         inputs=kwargs,
                         content=f"Invoking {tool_name} on {target_role}",
-                        metadata={"step_id": step_id, "tool_name": tool_name}
+                        metadata={"tool_name": tool_name}
                     )
-                    
-                    # Create future to wait for result
-                    result_future = asyncio.Future()
-                    result_future._target_role = target_role  # Tag for fallback resolution
-                    result_future._created_at = __import__('time').time()  # Track creation time
-                    self._step_results[step_id] = result_future
                     
                     logger.info(
                         f"Host {self.agent_name} invoking {target_role} via tool {tool_name} "
-                        f"with inputs: {list(kwargs.keys())} (step_id: {step_id})"
+                        f"with inputs: {list(kwargs.keys())}"
                     )
                     
-                    # Queue the step request
+                    # Queue the step request - orchestrator handles the rest
                     await self._proposed_step.put(step_request)
                     
-                    # In testing mode, return immediately without waiting
-                    if self._testing_mode:
-                        return {"status": "queued", "agent": target_role, "step_id": step_id}
-                    
-                    # Wait for the actual result
-                    try:
-                        result = await asyncio.wait_for(result_future, timeout=30.0)
-                        return result
-                    except asyncio.TimeoutError:
-                        logger.error(f"Tool call {tool_name} timed out after 30 seconds")
-                        return {"error": "Tool call timed out", "tool": tool_name}
-                    finally:
-                        # Clean up the future
-                        self._step_results.pop(step_id, None)
-                        
                 return call_agent
 
             # Create FunctionTool using agent-provided definition
@@ -189,49 +130,23 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
                     # Create closure for participant tool
                     def create_participant_tool_func(target_role: str, target_tool_name: str):
-                        async def call_participant(**kwargs: Any) -> dict[str, Any]:
+                        async def call_participant(**kwargs: Any) -> None:
                             """Call a participant using initial tool definition."""
-                            import shortuuid
-                            
-                            # Generate unique step ID
-                            step_id = f"step_{shortuuid.uuid()[:8]}"
-                            
                             step_request = StepRequest(
                                 role=target_role,
                                 inputs=kwargs,
                                 content=f"Invoking {target_tool_name} on {target_role}",
-                                metadata={"step_id": step_id, "tool_name": target_tool_name}
+                                metadata={"tool_name": target_tool_name}
                             )
-                            
-                            # Create future to wait for result
-                            result_future = asyncio.Future()
-                            result_future._target_role = target_role  # Tag for fallback resolution
-                            result_future._created_at = __import__('time').time()  # Track creation time
-                            self._step_results[step_id] = result_future
                             
                             logger.info(
                                 f"Host {self.agent_name} invoking {target_role} via participant tool {target_tool_name} "
-                                f"with inputs: {list(kwargs.keys())} (step_id: {step_id})"
+                                f"with inputs: {list(kwargs.keys())}"
                             )
                             
-                            # Queue the step request
+                            # Queue the step request - orchestrator handles the rest
                             await self._proposed_step.put(step_request)
                             
-                            # In testing mode, return immediately without waiting
-                            if self._testing_mode:
-                                return {"status": "queued", "agent": target_role, "step_id": step_id}
-                            
-                            # Wait for the actual result
-                            try:
-                                result = await asyncio.wait_for(result_future, timeout=30.0)
-                                return result
-                            except asyncio.TimeoutError:
-                                logger.error(f"Tool call {target_tool_name} timed out after 30 seconds")
-                                return {"error": "Tool call timed out", "tool": target_tool_name}
-                            finally:
-                                # Clean up the future
-                                self._step_results.pop(step_id, None)
-                                
                         return call_participant
 
                     # Create FunctionTool from participant tool definition
@@ -270,66 +185,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         # Rebuild tools whenever registry changes
         await self._build_agent_tools()
 
-    async def _handle_step_completion(self, message: GroupchatMessageTypes) -> None:
-        """Handle step completion and resolve waiting futures."""
-        # Clean up expired futures first
-        self._cleanup_expired_futures()
-        
-        # Check for AgentTrace or AgentOutput that might contain step results
-        step_id = None
-        result_data = None
-        agent_role = None
-        
-        if isinstance(message, AgentTrace):
-            # Check if this trace has step metadata
-            if message.inputs and message.inputs.metadata:
-                step_id = message.inputs.metadata.get("step_id")
-                if step_id and message.outputs:
-                    result_data = message.outputs.outputs if hasattr(message.outputs, 'outputs') else message.outputs
-            
-            # Also get the agent role for fallback matching
-            if message.agent_info and hasattr(message.agent_info, 'role'):
-                agent_role = message.agent_info.role
-                
-        elif isinstance(message, AgentOutput):
-            # Check metadata for step ID
-            if hasattr(message, 'metadata') and message.metadata:
-                step_id = message.metadata.get("step_id")
-            
-            # Get agent role from the output
-            if hasattr(message, 'role'):
-                agent_role = message.role
-            elif hasattr(message, 'source'):
-                # Try to extract role from source
-                agent_role = message.source
-            
-            if message.outputs:
-                result_data = message.outputs
-        
-        # Primary approach: resolve by step_id
-        if step_id and step_id in self._step_results:
-            future = self._step_results[step_id]
-            if not future.done():
-                if result_data is not None:
-                    future.set_result(result_data)
-                    logger.debug(f"Resolved step result for {step_id}")
-                else:
-                    future.set_result({"status": "completed", "step_id": step_id})
-                    logger.debug(f"Resolved step {step_id} with default completion status")
-                return
-        
-        # Fallback approach: resolve by agent role (most recent pending call for this role)
-        if agent_role and result_data is not None:
-            # Find the most recent pending future for this role
-            for step_id, future in list(self._step_results.items()):
-                if not future.done():
-                    # Check if this future is for the same role
-                    # This is a heuristic - we track pending calls by role
-                    if hasattr(future, '_target_role') and future._target_role == agent_role:
-                        future.set_result(result_data)
-                        logger.debug(f"Resolved step result for role {agent_role} (step_id: {step_id})")
-                        return
-
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
         # First, say hello to the user
@@ -359,10 +214,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         **kwargs: Any,
     ) -> None:
         """Listen to messages and use structured tools to determine next steps."""
-        
-        # Check for step completion results first
-        await self._handle_step_completion(message)
-        
         # Save messages to context
         await super()._listen(
             message=message,
