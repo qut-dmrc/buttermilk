@@ -143,11 +143,82 @@ buttermilk/
 - /agents/host@flow.observers.host: host/llm_host  # (now uses StructuredLLMHostAgent)
 ```
 
+## AutoGen MCP Integration (NEW - Issue #94)
+
+### Problem Solved
+- **Complex Tool Construction**: Eliminated complicated tool construction code by using AutoGen's `Tool` interface
+- **Dual-Mode Operation**: Same agents now work in both groupchat and MCP contexts without code changes
+- **Industry Standards**: Replaced natural language agent descriptions with structured tool definitions
+
+### Core Components
+- **AutoGenMCPAdapter** (`buttermilk.mcp.autogen_adapter`): Main bridge between Buttermilk and AutoGen MCP
+  - Uses AutoGen's `McpWorkbench` for standard MCP protocol compliance
+  - Wraps agent tools as AutoGen `Tool` objects via `MCPToolAdapter`
+  - Integrates with tool discovery service for dynamic registration
+- **ToolDiscoveryService** (`buttermilk.mcp.tool_registry`): Dynamic tool discovery and management
+  - Automatically discovers tools from agent `@tool` decorators
+  - Provides callback system for real-time tool registration
+  - Maintains unified registry of all agent tools
+- **Enhanced UnifiedRequest**: Extended to support both MCP and groupchat contexts
+  - `from_mcp_call()` and `from_groupchat_step()` factory methods
+  - Context detection via `is_mcp_request` and `is_groupchat_request` properties
+- **MCPHostProvider**: Simplified API for MCP hosting capabilities
+  - High-level interface for registering agents and starting MCP services
+  - Handles orchestrator integration and tool management
+
+### Usage Patterns
+
+#### Dual-Mode Agent Definition
+```python
+class CalculatorAgent(Agent):
+    @tool
+    @MCPRoute("/calc/add")
+    def add(self, a: float, b: float) -> float:
+        return a + b
+
+    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
+        # Standard groupchat processing
+        return AgentOutput(...)
+```
+
+#### Groupchat Usage (Existing)
+```python
+# StructuredLLMHostAgent automatically discovers and uses tools
+host = StructuredLLMHostAgent(...)
+# Tools are available to LLM for structured calling
+```
+
+#### MCP Usage (New)
+```python
+# Expose agents as MCP tools
+mcp_provider = MCPHostProvider()
+mcp_provider.register_agent(calculator_agent)
+await mcp_provider.start()
+
+# External MCP clients can now discover and use tools
+result = await mcp_provider.invoke_tool("calc_agent.add", {"a": 5, "b": 3})
+```
+
+### Benefits
+- **Radical Simplification**: Agents are now simple with clean `_process()` method and `@tool` decorators
+- **Zero Code Changes**: Same agent works in both contexts without modifications
+- **Industry Standard**: Uses AutoGen's MCP implementation for compatibility
+- **Dynamic Discovery**: Tools automatically discovered from decorators
+- **Structured Tool Calling**: LLMs get proper schemas instead of natural language
+
+### Integration with Existing Systems
+- Fully backward compatible with existing groupchat flows
+- StructuredLLMHostAgent can use dynamically discovered tools
+- Existing agents can be incrementally migrated to use `@tool` decorators
+- No changes required to orchestrators or existing flows
+
 ## Future Considerations
 - ~~Phase 1: Tool Definition Framework~~ ✓ Complete
 - ~~Phase 2: MCP Server implementation~~ ✓ Complete
 - ~~Phase 3: Structured LLMHost~~ ✓ Complete
-- Remote agent access via MCP
+- ~~Phase 4: AutoGen MCP Integration~~ ✓ Complete (Issue #94)
+- Remote agent access via MCP (external Buttermilk instances)
 - Enhanced tool discovery and introspection
 - Tool versioning and deprecation
 - GraphQL API for tool queries
+- Integration with other MCP clients (VS Code, IDEs)
