@@ -16,53 +16,26 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
-# Conditional imports for LLM libraries that may not be available
-try:
-    import openai
-except ImportError:
-    openai = None
-try:
-    from anthropic import (
-        AnthropicVertex,  # Client for Anthropic models on Vertex AI
-        AsyncAnthropicVertex,
-    )
-except ImportError:
-    AnthropicVertex = None
-    AsyncAnthropicVertex = None
-# Conditional imports for autogen libraries that may not be available
-try:
-    from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-    from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
-    from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
-    from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
-    from autogen_ext.models.openai import (  # Autogen OpenAI clients
-        AzureOpenAIChatCompletionClient,
-        OpenAIChatCompletionClient,
-    )
-    from autogen_ext.models.openai._transformation.registry import (
-        _find_model_family,  # Helper for model family detection
-    )
-    AUTOGEN_AVAILABLE = True
-except ImportError:
-    # Mock the autogen types for when they're not available
-    CancellationToken = None
-    FunctionCall = None
-    ChatCompletionClient = None
-    CreateResult = None
-    LLMMessage = None
-    ModelFamily = None
-    ModelInfo = None
-    Tool = None
-    ToolSchema = None
-    AnthropicChatCompletionClient = None
-    AzureOpenAIChatCompletionClient = None
-    OpenAIChatCompletionClient = None
-    _find_model_family = None
-    AUTOGEN_AVAILABLE = False
-try:
-    from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
-except ImportError:
-    GeminiChatCompletionClient = None
+# Core LLM library imports - these are required dependencies
+import openai
+from anthropic import (
+    AnthropicVertex,  # Client for Anthropic models on Vertex AI
+    AsyncAnthropicVertex,
+)
+
+# Autogen library imports - these are required dependencies
+from autogen_core import CancellationToken, FunctionCall  # Autogen core types
+from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
+from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
+from autogen_ext.models.openai import (  # Autogen OpenAI clients
+    AzureOpenAIChatCompletionClient,
+    OpenAIChatCompletionClient,
+)
+from autogen_ext.models.openai._transformation.registry import (
+    _find_model_family,  # Helper for model family detection
+)
+from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
 from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configuration
 
 
@@ -79,15 +52,6 @@ from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exc
 from .retry import RetryWrapper  # Retry logic wrapper
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
-
-
-if TYPE_CHECKING:
-    _: list[Any] = [  # List of clients for type checking purposes
-        AzureOpenAIChatCompletionClient,
-        OpenAIChatCompletionClient,
-        GeminiChatCompletionClient,
-        AnthropicVertex,
-    ]
 
 
 class LLMConfig(BaseModel):
@@ -384,12 +348,16 @@ class AutoGenWrapper(RetryWrapper):
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
-
-            tool_outputs = await self._execute_tools(
-                calls=tool_calls,
-                tools_list=tools_list,
-                cancellation_token=cancellation_token,
-            )
+            try:
+                tool_outputs = await self._execute_tools(
+                    calls=tool_calls,
+                    tools_list=tools_list,
+                    cancellation_token=cancellation_token,
+                )
+            except Exception as e:
+                # If tool execution fails, we can log the error and return the original result
+                logger.error(f"Error executing tools: {e!s}")
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
             # Append tool results to the message history
             for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
                 for tool_result in tool_result_group:  # Each actual ToolOutput

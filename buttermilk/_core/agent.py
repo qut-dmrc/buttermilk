@@ -16,15 +16,8 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any, Literal
 
-try:
-    import weave  # For tracing
-except ImportError:
-    weave = None
-try:
-    from weave.trace.weave_client import Call, WeaveObject
-except ImportError:
-    Call = None
-    WeaveObject = None
+import weave  # For tracing - core dependency
+from weave.trace.weave_client import Call, WeaveObject
 
 if TYPE_CHECKING:
     from buttermilk._core.tool_definition import AgentToolDefinition
