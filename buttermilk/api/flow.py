@@ -246,16 +246,17 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         # End session tracking
         metrics_collector.end_session_tracking(session_id)
 
-        # Clean up the session when WebSocket disconnects
+        # Handle client disconnect - try reconnection first, cleanup only if needed
         try:
             if hasattr(flow_runner, 'session_manager'):
-                success = await flow_runner.session_manager.cleanup_session(session_id)
-                if success:
-                    logger.info(f"Cleaned up session {session_id} after WebSocket disconnect")
+                # Try to transition to RECONNECTING status instead of immediate cleanup
+                reconnect_enabled = await flow_runner.session_manager.handle_client_disconnect(session_id)
+                if reconnect_enabled:
+                    logger.info(f"Session {session_id} transitioned to RECONNECTING after WebSocket disconnect")
                 else:
-                    logger.debug(f"Session {session_id} not found during cleanup (may have already been cleaned up)")
+                    logger.info(f"Session {session_id} cleaned up after WebSocket disconnect (reconnection not applicable)")
         except Exception as e:
-            logger.warning(f"Error cleaning up session {session_id}: {e}")
+            logger.warning(f"Error handling session {session_id} disconnect: {e}")
 
         with contextlib.suppress(Exception):
             await websocket.close()

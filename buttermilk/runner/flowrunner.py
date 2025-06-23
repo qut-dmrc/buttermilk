@@ -280,6 +280,7 @@ class FlowRunContext(BaseModel):
             except WebSocketDisconnect:
                 logger.info(f"Client {self.session_id} disconnected.")
                 self.websocket = None
+                # Don't break immediately - let the session manager handle reconnection
                 break
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
@@ -645,6 +646,89 @@ class SessionManager:
 
         return health_info
 
+    async def handle_client_disconnect(self, session_id: str) -> bool:
+        """Handle client disconnect by transitioning to RECONNECTING status instead of immediate cleanup.
+        
+        Args:
+            session_id: The session that disconnected
+            
+        Returns:
+            True if session was transitioned to RECONNECTING, False if session was cleaned up
+        """
+        if session_id not in self.sessions:
+            logger.warning(f"Attempted to handle disconnect for non-existent session {session_id}")
+            return False
+
+        session = self.sessions[session_id]
+        
+        # Only allow reconnection for ACTIVE sessions
+        if session.status != SessionStatus.ACTIVE:
+            logger.info(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
+            await self.cleanup_session(session_id)
+            return False
+
+        # Transition to RECONNECTING status
+        success = await self._transition_session_status(session_id, SessionStatus.RECONNECTING)
+        if success:
+            # Clear the websocket but keep the session alive
+            session.websocket = None
+            # Clear active connections for this session
+            if session_id in self.active_connections:
+                self.active_connections[session_id].clear()
+            
+            logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
+            return True
+        else:
+            # Transition failed, clean up the session
+            await self.cleanup_session(session_id)
+            return False
+
+    async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
+        """Reconnect a client to an existing session in RECONNECTING status.
+        
+        Args:
+            session_id: The session to reconnect to
+            websocket: The new WebSocket connection
+            
+        Returns:
+            The session if reconnection was successful, None otherwise
+        """
+        if session_id not in self.sessions:
+            logger.warning(f"Attempted to reconnect to non-existent session {session_id}")
+            return None
+
+        session = self.sessions[session_id]
+        
+        # Only allow reconnection to sessions in RECONNECTING status
+        if session.status != SessionStatus.RECONNECTING:
+            logger.warning(f"Attempted to reconnect to session {session_id} in status {session.status.value}")
+            return None
+
+        # Check if session has expired
+        if session.is_expired():
+            logger.info(f"Session {session_id} has expired - cleaning up instead of reconnecting")
+            await self.cleanup_session(session_id)
+            return None
+
+        # Reconnect the session
+        session.websocket = websocket
+        session.add_websocket(websocket)
+        session.update_activity()
+        
+        # Add to active connections
+        if session_id not in self.active_connections:
+            self.active_connections[session_id] = set()
+        self.active_connections[session_id].add(websocket)
+
+        # Transition back to ACTIVE status
+        success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
+        if success:
+            logger.info(f"Successfully reconnected session {session_id}")
+            return session
+        else:
+            logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
+            return None
+
     async def _periodic_cleanup(self) -> None:
         """Background task that periodically cleans up expired sessions with enhanced logic."""
         while self._running:
@@ -667,6 +751,10 @@ class SessionManager:
                         time_since_completion = (datetime.now(UTC) - session.last_activity).total_seconds()
                         if time_since_completion > 300:  # 5 minutes grace period
                             cleanup_candidates.append((session_id, "completed_gracetime"))
+                    elif session.status == SessionStatus.RECONNECTING:
+                        # Clean up RECONNECTING sessions that have exceeded timeout
+                        if session.is_expired():
+                            cleanup_candidates.append((session_id, "reconnect_timeout"))
                     elif len(self.active_connections.get(session_id, set())) == 0:
                         # No active connections for extended period
                         time_since_activity = (datetime.now(UTC) - session.last_activity).total_seconds()
@@ -738,7 +826,7 @@ class FlowRunner(BaseModel):
             self._session_manager_started = True
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
-        """Get or create a session for the given session ID.
+        """Get or create a session for the given session ID, handling reconnection scenarios.
 
         Args:
             session_id: Unique identifier for the session
@@ -750,7 +838,27 @@ class FlowRunner(BaseModel):
         """
         await self._ensure_session_manager_started()
 
-        if session_id not in self.session_manager.sessions and not websocket:
+        # Check if this is a reconnection to an existing session
+        if session_id in self.session_manager.sessions:
+            existing_session = self.session_manager.sessions[session_id]
+            
+            # If session is in RECONNECTING status, attempt to reconnect
+            if existing_session.status == SessionStatus.RECONNECTING and websocket:
+                logger.info(f"Attempting to reconnect to session {session_id}")
+                reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
+                if reconnected_session:
+                    return reconnected_session
+                else:
+                    # Reconnection failed, fall through to create new session
+                    logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
+            elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
+                # Session is already active, just add the websocket
+                if websocket:
+                    existing_session.add_websocket(websocket)
+                return existing_session
+
+        # Create new session if no websocket provided or reconnection failed
+        if not websocket:
             return None
 
         session = await self.session_manager.get_or_create_session(session_id, websocket)
