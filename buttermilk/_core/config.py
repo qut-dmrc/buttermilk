@@ -18,13 +18,8 @@ from typing import (
 import cloudpathlib  # For handling cloud storage paths
 import jmespath  # For JSON query language processing
 
-# Optional BigQuery import - fail gracefully if not available
-try:
-    from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
-    BIGQUERY_SCHEMA_AVAILABLE = True
-except ImportError:
-    SchemaField = None
-    BIGQUERY_SCHEMA_AVAILABLE = False
+# BigQuery import - now a core dependency
+from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -233,10 +228,6 @@ class SaveInfo(CloudProviderCfg):
 
         """
         if not self._loaded_schema:
-            if not BIGQUERY_SCHEMA_AVAILABLE:
-                logger.warning("BigQuery libraries not available. Cannot load schema.")
-                return []
-                
             from buttermilk import buttermilk as bm  # Lazy import to avoid circular deps
 
             # Ensure bm.bq is available; it might not be if only core is used.

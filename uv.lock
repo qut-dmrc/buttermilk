@@ -1097,6 +1097,7 @@ dependencies = [
     { name = "fake-useragent" },
     { name = "flask-restx" },
     { name = "google-cloud-aiplatform" },
+    { name = "google-cloud-bigquery" },
     { name = "google-cloud-bigquery-storage" },
     { name = "google-cloud-language" },
     { name = "google-cloud-logging" },
@@ -1163,7 +1164,6 @@ dev = [
     { name = "cmap" },
     { name = "fsspec" },
     { name = "gcsfs" },
-    { name = "google-cloud-bigquery" },
     { name = "google-cloud-bigquery-storage" },
     { name = "google-cloud-pubsub" },
     { name = "google-cloud-storage" },
@@ -1228,6 +1228,7 @@ requires-dist = [
     { name = "fake-useragent", specifier = ">=2.0.3" },
     { name = "flask-restx", specifier = ">=1.3.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.74.0,<2.0.0" },
+    { name = "google-cloud-bigquery", specifier = ">=3.27.0,<4.0.0" },
     { name = "google-cloud-bigquery-storage", specifier = ">=2.27.0,<3.0.0" },
     { name = "google-cloud-language", specifier = ">=2.15.1,<3.0.0" },
     { name = "google-cloud-logging", specifier = ">=3.11.2,<4.0.0" },
@@ -1293,7 +1294,6 @@ dev = [
     { name = "cmap", specifier = ">=0.3.0,<1.0.0" },
     { name = "fsspec", specifier = ">=2024.6.1,<2025.0.0" },
     { name = "gcsfs", specifier = ">=2024.6.1,<2025.0.0" },
-    { name = "google-cloud-bigquery", specifier = ">=3.27.0,<4.0.0" },
     { name = "google-cloud-bigquery-storage", specifier = ">=2.27.0,<3.0.0" },
     { name = "google-cloud-pubsub", specifier = ">=2.27.1,<3.0.0" },
     { name = "google-cloud-storage", specifier = ">=2.19.0,<3.0.0" },
@@ -7553,6 +7553,7 @@ resolution-markers = [
 dependencies = [
     { name = "numpy", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/81/18/b06a83f0c5ee8cddbde5e3f3d0bb9b702abfa5136ef6d4620ff67df7eee5/scipy-1.16.0.tar.gz", hash = "sha256:b5ef54021e832869c8cfb03bc3bf20366cbcd426e02a58e8a58d7584dfbb8f62", size = 30581216, upload-time = "2025-06-22T16:27:55.782Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d9/f8/53fc4884df6b88afd5f5f00240bdc49fee2999c7eff3acf5953eb15bc6f8/scipy-1.16.0-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:deec06d831b8f6b5fb0b652433be6a09db29e996368ce5911faf673e78d20085", size = 36447362, upload-time = "2025-06-22T16:18:17.817Z" },
     { url = "https://files.pythonhosted.org/packages/c9/25/fad8aa228fa828705142a275fc593d701b1817c98361a2d6b526167d07bc/scipy-1.16.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:d30c0fe579bb901c61ab4bb7f3eeb7281f0d4c4a7b52dbf563c89da4fd2949be", size = 28547120, upload-time = "2025-06-22T16:18:24.117Z" },

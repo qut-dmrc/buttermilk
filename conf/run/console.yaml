@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - /local
+  - _self_
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
@@ -8,7 +9,7 @@ run:
   ui: console
   human_in_loop: true
 
-  name: ${bm.name}
-  job: ${bm.job}
+  name: bm_console
+  job: development
 
   flows: ${flows}
