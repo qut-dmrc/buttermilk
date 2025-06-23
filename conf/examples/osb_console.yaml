@@ -1,6 +1,10 @@
+# OSB Console Example Configuration
+# Run with: uv run python -m buttermilk.runner.cli +examples=osb_console
+# @package _global_
 defaults:
   - _self_
   - /local
+  - /run: console
   - /flows: 
     - osb
   - /llms: lite
@@ -8,12 +12,3 @@ defaults:
 bm:
   name: osb_console
   job: flows
-
-run:
-  _target_: buttermilk.runner.flowrunner.FlowRunner
-  mode: console
-  ui: console
-  human_in_loop: true
-  flows: ${flows}
-  name: ${bm.name}
-  job: ${bm.job}

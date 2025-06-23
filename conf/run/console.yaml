@@ -1,14 +1,14 @@
-# Batch execution configuration
+# @package _global_
 defaults:
   - /local
-  - _self_
-  # ... other defaults
-
-name: bm_console
-job: development
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: console
   ui: console
   human_in_loop: true
+
+  name: ${bm.name}
+  job: ${bm.job}
+
+  flows: ${flows}
