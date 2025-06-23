@@ -1,15 +1,16 @@
 defaults:
   - _self_
-  - local
-  - flows: 
+  - /local
+  - /flows: 
     - osb
-  - llms: lite
+  - /llms: lite
 
 bm:
   name: osb_console
   job: flows
 
 run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: console
   ui: console
   human_in_loop: true
