@@ -393,16 +393,14 @@ class AutoGenWrapper(RetryWrapper):
             # Append tool results to the message history
             for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
                 for tool_result in tool_result_group:  # Each actual ToolOutput
-                    if tool_result.messages:  # If ToolOutput itself provides messages (e.g. formatted result)
-                        messages.extend(tool_result.messages)
-                    else:  # Create a standard tool message if not provided by ToolOutput
-                        # This part might need adjustment based on how ToolOutput is structured
-                        # Assuming ToolOutput has content and tool_call_id
-                        messages.append(LLMMessage(
+                    # Create a standard message from tool output
+                    messages.append(
+                        LLMMessage(
                             role="tool",
                             content=tool_result.content or "",  # Ensure content is not None
                             tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
-                        ))
+                        )
+                    )
 
             # Call the LLM again with the tool results included in the history
             create_result = await self.create(
