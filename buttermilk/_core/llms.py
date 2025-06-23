@@ -48,6 +48,7 @@ def get_bm():
 
 from buttermilk._core.contract import ToolOutput  # Buttermilk contract for tool output
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
+from buttermilk._core.log import logger  # Buttermilk logger
 
 from .retry import RetryWrapper  # Retry logic wrapper
 
@@ -182,19 +183,18 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
 class ModelOutput(CreateResult):
-    """Extends Autogen's `CreateResult` to potentially include a hydrated Pydantic object.
+    """Extends Autogen's `CreateResult` with structured output parsing.
 
-    If the LLM call was configured to return structured output (e.g., JSON
-    parsable into a Pydantic model), this class can hold the parsed object.
+    Adds a parsed_object field to hold a Pydantic model instance when
+    the LLM returns structured JSON output that can be parsed.
 
     Attributes:
-        object (BaseModel | None): The Pydantic model instance hydrated from
-            the LLM's JSON or structured output. Defaults to None if no structured
-            output was requested or parsing failed.
+        parsed_object (BaseModel | None): The Pydantic model instance hydrated from
+            the LLM's JSON content. None if no structured output or parsing failed.
 
     """
 
-    object: BaseModel | None = Field(
+    parsed_object: BaseModel | None = Field(
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
@@ -280,9 +280,6 @@ class AutoGenWrapper(RetryWrapper):
             # Don't use json_output if tools are being called, as tool calling has its own format.
             if tools:
                 json_output_requested = False
-
-            # Langfuse tracing (currently commented out, but shows potential integration point)
-            # langfuse_context.update_current_observation(input=messages)
 
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call

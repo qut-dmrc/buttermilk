@@ -316,9 +316,9 @@ class LLMAgent(Agent):
         # 3. Parse the LLM response and create an AgentOutput
         parsed_object = None
         if schema := self._output_model:
-            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
+            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, schema):
                 # If client already parsed into the correct schema object
-                parsed_object = chat_result.object
+                parsed_object = chat_result.parsed_object
             elif isinstance(chat_result.content, str):
                 # If content is a string, try to parse/validate it against the schema
                 logger.debug(f"Agent {self.agent_name}: Attempting to parse LLM content into schema {schema.__name__}.")
@@ -356,7 +356,7 @@ class LLMAgent(Agent):
                 raise ProcessingError(f"Agent {self.agent_id} was unable to parse LLM response content of type: ({type(chat_result.content)}).")
 
         # Add agent role/name for context in logs/outputs
-        metadata = chat_result.model_dump(exclude={"content", "object"})
+        metadata = chat_result.model_dump(exclude={"content", "parsed_object"})
         metadata.update({"role": self.role, "name": self.agent_name})
 
         # Return an AgentOutput
