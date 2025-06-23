@@ -1,19 +1,21 @@
-host: gemini2flashlite
+host: gemini25flash
 
 cheap:
-  - gemini2flashlite
-  - o4mini
+  - sonnet
+  - gemini25flash
 
 general:
-  - gemini2flashlite
+  - gemini25flash
   - gpt41mini
-  - o4mini
+  - sonnet
 
 judgers:
+  - sonnet
   - gemini25flash
   - o4mini
 
 synthesisers:
   - gemini25flash
   - o4mini
+  - sonnet
 

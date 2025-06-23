@@ -356,7 +356,7 @@ class LLMAgent(Agent):
                 raise ProcessingError(f"Agent {self.agent_id} was unable to parse LLM response content of type: ({type(chat_result.content)}).")
 
         # Add agent role/name for context in logs/outputs
-        metadata = chat_result.model_dump(exclude={"content", "parsed_object"})
+        metadata = {k: v for k, v in vars(chat_result).items() if k not in {"content"}}
         metadata.update({"role": self.role, "name": self.agent_name})
 
         # Return an AgentOutput
