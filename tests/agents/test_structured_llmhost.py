@@ -23,6 +23,7 @@ class TestStructuredLLMHostAgent:
             parameters={"model": "gpt-4", "template": "test", "human_in_loop": False}
         )
         host.callback_to_groupchat = AsyncMock()
+        host.set_testing_mode(True)  # Enable testing mode for unit tests
         return host
 
     @pytest.fixture
