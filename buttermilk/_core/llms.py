@@ -25,7 +25,7 @@ from anthropic import (
 
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
+from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo, FunctionExecutionResultMessage
 from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
@@ -356,16 +356,20 @@ class AutoGenWrapper(RetryWrapper):
                 logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
             # Append tool results to the message history
+            tool_results = []
             for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
                 for tool_result in tool_result_group:  # Each actual ToolOutput
                     # Create a standard message from tool output
-                    messages.append(
-                        LLMMessage(
-                            role="tool",
-                            content=tool_result.content or "",  # Ensure content is not None
-                            tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
-                        )
+                    result = FunctionExecutionResult(
+                        call_id=tool_result.call_id,
+                        content=tool_result.content or "",  # Ensure content is not None
+                        tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
                     )
+                    tool_results.append(result)
+
+            tool_result_messages = FunctionExecutionResultMessage(content=tool_results)
+
+            messages = messages + [tool_result_messages]  # Append tool results to the message history
 
             # Call the LLM again with the tool results included in the history
             create_result = await self.create(

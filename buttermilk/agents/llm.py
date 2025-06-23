@@ -300,6 +300,10 @@ class LLMAgent(Agent):
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             model_client = bm.llms.get_autogen_chat_client(self._model)
+
+            # Debug the schema parameter
+            logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
+
             chat_result: CreateResult = await model_client.call_chat(
                 messages=llm_messages_to_send,
                 tools_list=self._tools_list,
