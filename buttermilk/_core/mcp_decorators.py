@@ -41,17 +41,27 @@ class MCPRoute:
             include_in_tools: Whether to include this in agent's tool list.
         """
         self.path = path
-        self.permissions = permissions or []
+        self.permissions = permissions if permissions is not None else []
         self.description = description
         self.include_in_tools = include_in_tools
     
     def __call__(self, func: F) -> F:
         """Apply decorator to function."""
         # Store MCP metadata on the function
+        # Use explicit path or generate from function name
+        path = self.path if self.path is not None else f"/{func.__name__}"
+        
+        # Use provided description, then fall back to docstring, then require it
+        description = self.description
+        if description is None:
+            description = func.__doc__
+        if not description:
+            raise ValueError(f"MCP route for function '{func.__name__}' must have a description or docstring")
+        
         func._mcp_route = {
-            "path": self.path or f"/{func.__name__}",
+            "path": path,
             "permissions": self.permissions,
-            "description": self.description or func.__doc__ or "",
+            "description": description,
             "include_in_tools": self.include_in_tools
         }
         

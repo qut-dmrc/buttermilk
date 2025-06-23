@@ -367,13 +367,14 @@ class AutoGenWrapper(RetryWrapper):
             tool_results = []
             for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
                 for tool_result in tool_result_group:  # Each actual ToolOutput
-                    # Create a standard message from tool output
-                    result = FunctionExecutionResult(
-                        call_id=tool_result.call_id,
-                        name=tool_result.name,  # Required field for FunctionExecutionResult
-                        content=tool_result.content,
-                    )
-                    tool_results.append(result)
+                    if tool_result.results or tool_result.messages:
+                        # Create a standard message from tool output
+                        result = FunctionExecutionResult(
+                            call_id=tool_result.call_id,
+                            name=tool_result.name,  # Required field for FunctionExecutionResult
+                            content=tool_result.content,
+                        )
+                        tool_results.append(result)
 
             tool_result_messages = FunctionExecutionResultMessage(content=tool_results)
 
@@ -408,6 +409,7 @@ class AutoGenWrapper(RetryWrapper):
 
         """
         arguments = json.loads(call.arguments)
+        arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
         # Autogen's Tool.run_json is expected to return a JSON-serializable result.
         # The structure of this result can vary. We need to adapt it to ToolOutput.
         tool_run_results = await tool.run_json(arguments, cancellation_token)

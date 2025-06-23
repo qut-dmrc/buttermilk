@@ -92,11 +92,13 @@ class LLMAgent(Agent):
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
         """Stores the LLM model client name from agent parameters."""
-        # Retrieves model name from 'parameters' section of agent config.
-        self._model = self.parameters.get("model")
+        # Model name must be provided - no fallbacks allowed
+        if "model" not in self.parameters:
+            raise ValueError(f"Agent {self.agent_id}: 'model' is required in agent parameters.")
+        
+        self._model = self.parameters["model"]
         if not self._model:
-            # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
-            raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
+            raise ValueError(f"Agent {self.agent_id}: 'model' parameter cannot be empty.")
 
         return self
 
@@ -204,15 +206,19 @@ class LLMAgent(Agent):
 
         """
         # Ensure context and records are lists if None
-        current_context = context or []
-        current_records = records or []
+        current_context = context if context is not None else []
+        current_records = records if records is not None else []
 
-        template_name = self.parameters.get("template", task_params.get("template", inputs.get("template")))
+        # Template name must be provided in parameters - no fallback chain allowed
+        if "template" not in self.parameters:
+            raise ProcessingError(f"Agent '{self.agent_id}': 'template' is required in agent parameters.")
+        
+        template_name = self.parameters["template"]
         if not template_name or not isinstance(template_name, str):
-            raise ProcessingError(f"Agent '{self.agent_id}': No valid template name provided in parameters or inputs.")
+            raise ProcessingError(f"Agent '{self.agent_id}': 'template' parameter must be a non-empty string.")
         logger.debug(f"Agent '{self.agent_name}': Using prompt template '{template_name}'.")
 
-        combined_params = {**(self.parameters or {}), **(task_params or {})}
+        combined_params = {**(self.parameters if self.parameters is not None else {}), **(task_params if task_params is not None else {})}
 
         rendered_template_str, unfilled_vars = load_template(
             template=template_name,
@@ -278,8 +284,8 @@ class LLMAgent(Agent):
 
         try:
             llm_messages_to_send = await self._fill_template(
-                task_params=message.parameters or {},  # Ensure dict
-                inputs=message.inputs or {},       # Ensure dict
+                task_params=message.parameters if message.parameters is not None else {},
+                inputs=message.inputs if message.inputs is not None else {},
                 context=message.context,
                 records=message.records,
             )

@@ -74,9 +74,11 @@ class HostAgent(Agent):
     def human_in_loop(self) -> bool:
         """Whether to interact with the human/manager for step confirmation.
         
-        Gets the value from parameters dict, defaulting to True if not specified.
+        Must be explicitly configured in parameters - no defaults allowed.
         """
-        return self.parameters.get('human_in_loop', True)
+        if 'human_in_loop' not in self.parameters:
+            raise ValueError(f"Host agent '{self.agent_name}': 'human_in_loop' must be explicitly set in parameters")
+        return self.parameters['human_in_loop']
 
     @human_in_loop.setter
     def human_in_loop(self, value: bool) -> None:
@@ -154,7 +156,7 @@ class HostAgent(Agent):
                 "role": announcement.agent_config.role,
                 "description": announcement.agent_config.description,
                 "tools": announcement.available_tools,
-                "model": announcement.agent_config.parameters.get("model")
+                "model": announcement.agent_config.parameters.get("model") if announcement.agent_config.parameters else None
             }
             active_agents.append(agent_info)
 
@@ -519,15 +521,18 @@ class HostAgent(Agent):
             if 'parameters' in message.inputs and isinstance(message.inputs['parameters'], dict):
                 self._initial_parameters = message.inputs['parameters']
 
-            # Check for query/prompt in various locations
-            # Priority: direct prompt field > parameters.query > parameters.prompt > parameters.criteria
-            self._initial_query = (
-                message.inputs.get('prompt') or 
-                message.inputs.get('query') or 
-                self._initial_parameters.get('query') or
-                self._initial_parameters.get('prompt') or
-                self._initial_parameters.get('criteria')
-            )
+            # Check for query/prompt - require explicit field, no fallback chain
+            self._initial_query = None
+            if 'prompt' in message.inputs:
+                self._initial_query = message.inputs['prompt']
+            elif 'query' in message.inputs:
+                self._initial_query = message.inputs['query']
+            elif 'query' in self._initial_parameters:
+                self._initial_query = self._initial_parameters['query']
+            elif 'prompt' in self._initial_parameters:
+                self._initial_query = self._initial_parameters['prompt']
+            elif 'criteria' in self._initial_parameters:
+                self._initial_query = self._initial_parameters['criteria']
 
             if self._initial_query:
                 logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")

@@ -152,41 +152,26 @@ class OrchestratorProtocol(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def validate_storage_configs(cls, data: Any) -> Any:
-        """Convert storage configurations to appropriate types.
+        """Convert storage configurations using StorageFactory.
 
         This validator ensures that storage configurations are properly converted
-        to either DataSourceConfig or StorageConfig objects. It handles:
-        1. Raw dictionaries from YAML/Hydra
-        2. Discriminated unions based on available fields
-        3. Backward compatibility with DataSourceConfig
+        using the StorageFactory. No fallbacks or backwards compatibility allowed.
         """
         if isinstance(data, dict) and "storage" in data:
-            storage = data.get("storage", {})
+            if "storage" not in data:
+                raise ValueError("'storage' field is required in orchestrator configuration")
+                
+            storage = data["storage"]
             if isinstance(storage, dict):
                 validated_storage = {}
                 for name, config in storage.items():
                     if isinstance(config, dict):
-                        # Try to determine which type to create based on fields
-                        # StorageConfig-specific fields
-                        storage_specific_fields = {"auto_create", "clustering_fields", "multi_field_embedding"}
-
-                        # Check if any StorageConfig-specific fields are present
-                        has_storage_fields = any(field in config for field in storage_specific_fields)
-
-                        # If it has fields specific to StorageConfig, or if type is one
-                        # that StorageFactory handles, create StorageConfig
-                        if has_storage_fields or config.get("type") in ["bigquery", "bq", "chromadb", "vector", "gcs", "s3", "file", "plaintext", "local", "huggingface", "generator", "job", "outputs"]:
-                            try:
-                                # Use StorageFactory to create proper storage config with discriminated union
-                                from buttermilk._core.storage_config import StorageFactory
-                                validated_storage[name] = StorageFactory.create_config(config)
-                            except Exception as e:
-                                # Fall back to DataSourceConfig if StorageConfig fails
-                                logger.warning(f"Failed to create StorageConfig for '{name}', " f"falling back to DataSourceConfig: {e}")
-                                validated_storage[name] = DataSourceConfig(**config)
-                        else:
-                            # Default to DataSourceConfig for backward compatibility
-                            validated_storage[name] = DataSourceConfig(**config)
+                        # Use StorageFactory to create proper storage config
+                        from buttermilk._core.storage_config import StorageFactory
+                        try:
+                            validated_storage[name] = StorageFactory.create_config(config)
+                        except Exception as e:
+                            raise ValueError(f"Failed to create storage config for '{name}': {e}") from e
                     else:
                         # Pass through as-is, let Pydantic handle validation
                         validated_storage[name] = config
@@ -308,47 +293,32 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self.storage:  # Only load if data sources are configured
             for source_name, config in self.storage.items():
                 try:
-                    # Convert config to proper StorageConfig subclass if needed
+                    # Convert config to proper StorageConfig - no fallbacks allowed
                     if isinstance(config, BaseStorageConfig):
                         # Already a proper storage config
                         storage_config = config
-                    elif isinstance(config, DataSourceConfig):
-                        # Convert legacy DataSourceConfig to proper StorageConfig
-                        # DataSourceConfig is already usable as-is for backward compatibility
-                        storage_config = config
                     else:
-                        # Handle OmegaConf objects and regular dicts
+                        # Convert dict/OmegaConf to StorageConfig using factory
+                        if hasattr(config, "to_container"):
+                            # OmegaConf object - convert to dict
+                            config_dict = config.to_container()
+                        elif isinstance(config, dict):
+                            # Regular dict
+                            config_dict = config
+                        else:
+                            raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
+                        
+                        # Use StorageFactory to create the proper subclass
+                        from buttermilk._core.storage_config import StorageFactory
                         try:
-                            # Convert to dict (works for OmegaConf DictConfig and regular dicts)
-                            if hasattr(config, "to_container"):
-                                # OmegaConf object - convert to dict
-                                config_dict = config.to_container()
-                            else:
-                                # Regular dict
-                                config_dict = dict(config)
-                            
-                            # Filter out None values to allow StorageConfig defaults
-                            config_dict = {k: v for k, v in config_dict.items() if v is not None}
-                            # Use StorageFactory to create the proper subclass
-                            from buttermilk._core.storage_config import StorageFactory
                             storage_config = StorageFactory.create_config(config_dict)
                         except Exception as e:
-                            logger.warning(f"Failed to convert config to StorageConfig: {e}")
-                            # Last resort - treat as DataSourceConfig
-                            storage_config = DataSourceConfig(**dict(config))
+                            raise ValueError(f"Failed to create storage config for '{source_name}': {e}") from e
 
-                    # Use unified storage system instead of deprecated create_data_loader
-                    if isinstance(storage_config, DataSourceConfig):
-                        # Legacy DataSourceConfig - use old data loader approach
-                        from buttermilk.data.loaders import create_data_loader
-                        loader = create_data_loader(storage_config)
-                        self._input_loaders[source_name] = loader
-                        logger.debug(f"Created data loader for source '{source_name}': {type(loader).__name__}")
-                    else:
-                        # New BaseStorageConfig - use storage factory
-                        storage = bm.get_storage(storage_config)
-                        self._input_loaders[source_name] = storage
-                        logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
+                    # Use unified storage system
+                    storage = bm.get_storage(storage_config)
+                    self._input_loaders[source_name] = storage
+                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
                 except Exception as e:
                     logger.error(f"Failed to create storage for source '{source_name}': {e}")
                     raise
