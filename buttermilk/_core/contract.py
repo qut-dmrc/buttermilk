@@ -19,11 +19,16 @@ import numpy as np
 import shortuuid  # For generating unique IDs
 
 # Import Autogen types used as base or components - conditional import
-try:
-    from autogen_core.models import FunctionExecutionResult, LLMMessage
-except ImportError:
-    FunctionExecutionResult = None
-    LLMMessage = None
+from autogen_core.models import FunctionExecutionResult, LLMMessage
+from autogen_core.models import (
+    ChatCompletionClient,
+    CreateResult,
+    LLMMessage,
+    ModelFamily,
+    ModelInfo,
+    FunctionExecutionResultMessage,
+    FunctionExecutionResult,
+)
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
 from pydantic import (
     BaseModel,

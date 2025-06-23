@@ -25,7 +25,15 @@ from anthropic import (
 
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo, FunctionExecutionResultMessage
+from autogen_core.models import (
+    ChatCompletionClient,
+    CreateResult,
+    LLMMessage,
+    ModelFamily,
+    ModelInfo,
+    FunctionExecutionResultMessage,
+    FunctionExecutionResult,
+)
 from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
