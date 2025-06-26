@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk._core.contract import ConductorRequest, StepRequest
 from autogen_core.tools import FunctionTool
+from autogen_core import CancellationToken
+from buttermilk.agents.flowcontrol.structured_llmhost import AgentToolWrapper
 
 
 class TestStructuredLLMHostAgent:
@@ -114,9 +116,9 @@ class TestStructuredLLMHostAgent:
         assert "analyze" in tool_names
         assert "write" in tool_names
         
-        # Verify all tools are FunctionTool instances
+        # Verify all tools are FunctionTool or AgentToolWrapper instances
         for tool in mock_host._tools_list:
-            assert isinstance(tool, FunctionTool)
+            assert isinstance(tool, (FunctionTool, AgentToolWrapper))
 
     @pytest.mark.asyncio
     async def test_build_agent_tools_default_only(self, mock_host, sample_participants):
@@ -176,12 +178,11 @@ class TestStructuredLLMHostAgent:
         
         assert search_tool is not None
         
-        # Invoke the tool - access the wrapped function directly
-        # FunctionTool stores the function internally, we need to call it directly
-        result = await search_tool._func(query="test query", max_results=5)
+        # Invoke the tool using run_json method
+        result = await search_tool.run_json({"query": "test query", "max_results": 5}, CancellationToken())
         
-        # Verify result is None (no fake status returned)
-        assert result is None
+        # Verify result is an empty dict (AgentToolWrapper returns {})
+        assert result == {}
         
         # Verify StepRequest was queued
         assert not mock_host._proposed_step.empty()
@@ -207,10 +208,10 @@ class TestStructuredLLMHostAgent:
         assert reviewer_tool is not None
         
         # Invoke with prompt
-        result = await reviewer_tool._func(prompt="Please review this content")
+        result = await reviewer_tool.run_json({"prompt": "Please review this content"}, CancellationToken())
         
-        # Verify
-        assert result is None
+        # Verify result is an empty dict (AgentToolWrapper returns {})
+        assert result == {}
         step = await mock_host._proposed_step.get()
         assert step.role == "REVIEWER"
         assert step.inputs["prompt"] == "Please review this content"
@@ -292,10 +293,10 @@ class TestStructuredLLMHostAgent:
         assert write_tool is not None
         
         # Invoke with multiple parameters
-        result = await write_tool._func(topic="AI Ethics", style="academic")
+        result = await write_tool.run_json({"topic": "AI Ethics", "style": "academic"}, CancellationToken())
         
-        # Verify
-        assert result is None
+        # Verify result is an empty dict (AgentToolWrapper returns {})
+        assert result == {}
         step = await mock_host._proposed_step.get()
         assert step.role == "WRITER"
         assert step.inputs["topic"] == "AI Ethics"

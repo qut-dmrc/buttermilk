@@ -5,11 +5,11 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 
 import asyncio
 from collections.abc import AsyncGenerator, Callable
-from typing import Any
+from typing import Any, Type
 
 from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool
-from pydantic import PrivateAttr
+from autogen_core.tools import FunctionTool, BaseTool
+from pydantic import BaseModel, PrivateAttr, create_model, Field
 
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
@@ -18,6 +18,91 @@ from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
+
+
+class AgentToolWrapper(BaseTool[BaseModel, BaseModel]):
+    """Custom tool wrapper for agent invocations that preserves parameter schemas."""
+    
+    def __init__(
+        self,
+        agent_role: str,
+        tool_name: str,
+        tool_description: str,
+        input_schema: dict[str, Any],
+        proposed_step_queue: asyncio.Queue[StepRequest],
+        host_agent_name: str
+    ):
+        # Create a Pydantic model from the input schema
+        properties = input_schema.get("properties", {})
+        required = set(input_schema.get("required", []))
+        
+        # Build field definitions for the Pydantic model
+        field_definitions = {}
+        for prop_name, prop_schema in properties.items():
+            prop_type = self._json_schema_to_python_type(prop_schema)
+            is_required = prop_name in required
+            default = ... if is_required else prop_schema.get("default", None)
+            description = prop_schema.get("description", "")
+            
+            field_definitions[prop_name] = (prop_type, Field(default=default, description=description))
+        
+        # Create the args model dynamically
+        args_model = create_model(
+            f"{tool_name}_args",
+            **field_definitions
+        )
+        
+        # Initialize the base tool
+        super().__init__(
+            args_type=args_model,
+            return_type=BaseModel,  # We return None but need a BaseModel type
+            name=tool_name,
+            description=tool_description
+        )
+        
+        self.agent_role = agent_role
+        self.proposed_step_queue = proposed_step_queue
+        self.host_agent_name = host_agent_name
+    
+    def _json_schema_to_python_type(self, schema: dict[str, Any]) -> Type:
+        """Convert JSON schema type to Python type."""
+        type_str = schema.get("type", "string")
+        
+        if type_str == "string":
+            if "enum" in schema:
+                # For simplicity, return str even for enums
+                return str
+            return str
+        elif type_str == "integer":
+            return int
+        elif type_str == "number":
+            return float
+        elif type_str == "boolean":
+            return bool
+        elif type_str == "array":
+            # For simplicity, return list without item type
+            return list
+        elif type_str == "object":
+            # For simplicity, return dict
+            return dict
+        else:
+            return Any
+    
+    async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> Any:
+        """Execute the tool by sending a StepRequest to the target agent."""
+        # Convert args model to dict
+        inputs = args.model_dump()
+        
+        step_request = StepRequest(
+            role=self.agent_role,
+            inputs=inputs,
+            metadata={"tool_name": self.name}
+        )
+        logger.info(f"Host {self.host_agent_name} invoking {self.agent_role} tool {self.name}")
+        await self.proposed_step_queue.put(step_request)
+        
+        # Return empty dict as we don't have a meaningful return value
+        return {}
 
 
 class StructuredLLMHostAgent(LLMAgent, HostAgent):
@@ -80,26 +165,21 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             if announcement.tool_definition:
                 tool_def = announcement.tool_definition
                 
-                # Create wrapper function that sends StepRequest
-                def create_tool_wrapper(target_role: str, tool_name: str, tool_description: str):
-                    # Create function that matches the expected signature
-                    async def tool_wrapper(**kwargs: Any) -> None:
-                        """Wrapper that sends StepRequest to agent."""
-                        step_request = StepRequest(
-                            role=target_role,
-                            inputs=kwargs,
-                            metadata={"tool_name": tool_name}
-                        )
-                        logger.info(f"Host {self.agent_name} invoking {target_role} tool {tool_name}")
-                        await self._proposed_step.put(step_request)
-                    
-                    return tool_wrapper
+                # Get input schema from tool definition
+                input_schema = tool_def.get("input_schema", {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                })
 
-                # Create FunctionTool that wraps the agent call
-                tool = FunctionTool(
-                    func=create_tool_wrapper(agent_role, tool_def["name"], tool_def.get("description", "")),
-                    description=tool_def.get("description", f"Call {agent_role} agent"),
-                    name=tool_def["name"]
+                # Create custom tool wrapper that preserves parameter schemas
+                tool = AgentToolWrapper(
+                    agent_role=agent_role,
+                    tool_name=tool_def["name"],
+                    tool_description=tool_def.get("description", f"Call {agent_role} agent"),
+                    input_schema=input_schema,
+                    proposed_step_queue=self._proposed_step,
+                    host_agent_name=self.agent_name
                 )
                 agent_tools.append(tool)
                 logger.debug(f"Registered tool wrapper: {tool_def['name']} for {agent_role}")
