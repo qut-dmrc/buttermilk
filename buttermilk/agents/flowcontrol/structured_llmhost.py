@@ -42,13 +42,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             except asyncio.QueueEmpty:
                 break
 
-    def set_participant_tools_for_testing(self, participant_tools: dict[str, Any]) -> None:
-        """Set participant tools for testing purposes.
-        
-        This method allows tests to populate the _participant_tools directly
-        without going through the full orchestrator initialization.
-        """
-        self._participant_tools = participant_tools
 
     async def initialize(self, callback_to_groupchat: Any, **kwargs: Any) -> None:
         """Initialize the host agent."""
@@ -105,8 +98,8 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 # Create FunctionTool that wraps the agent call
                 tool = FunctionTool(
                     func=create_tool_wrapper(agent_role, tool_def["name"], tool_def.get("description", "")),
-                    name=tool_def["name"],
-                    description=tool_def.get("description", f"Call {agent_role} agent")
+                    description=tool_def.get("description", f"Call {agent_role} agent"),
+                    name=tool_def["name"]
                 )
                 agent_tools.append(tool)
                 logger.debug(f"Registered tool wrapper: {tool_def['name']} for {agent_role}")

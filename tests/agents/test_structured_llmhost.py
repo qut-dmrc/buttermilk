@@ -82,12 +82,27 @@ class TestStructuredLLMHostAgent:
     @pytest.mark.asyncio
     async def test_build_agent_tools_with_definitions(self, mock_host, sample_participants, sample_participant_tools):
         """Test building tools when participants have specific tool definitions."""
-        # Setup
-        mock_host._participants = sample_participants
-        mock_host._participant_tools = sample_participant_tools
+        # Setup - Create agent announcements with tool definitions
+        from buttermilk._core.contract import AgentAnnouncement
+        from buttermilk._core.config import AgentConfig
         
-        # Execute
-        await mock_host._build_agent_tools()
+        # Create announcements for each agent with their tools
+        for role, tools in sample_participant_tools.items():
+            for tool_def in tools:
+                agent_config = AgentConfig(
+                    agent_id=f"{role}-test-{tool_def['name']}",
+                    role=role,
+                    description=sample_participants.get(role, "")
+                )
+                announcement = AgentAnnouncement(
+                    agent_config=agent_config,
+                    tool_definition=tool_def,
+                    status="active",
+                    announcement_type="initial",
+                    content=f"{role} agent announcing with {tool_def['name']} tool"
+                )
+                # Add to registry
+                await mock_host.update_agent_registry(announcement)
         
         # Verify tool count
         # Should have 3 tools: 2 for RESEARCHER, 1 for WRITER
@@ -106,27 +121,51 @@ class TestStructuredLLMHostAgent:
     @pytest.mark.asyncio
     async def test_build_agent_tools_default_only(self, mock_host, sample_participants):
         """Test building tools when no specific tool definitions exist."""
-        # Setup - participants but no tool definitions
-        mock_host._participants = sample_participants
-        mock_host._participant_tools = {}
+        # Setup - Create agent announcements without tool definitions
+        from buttermilk._core.contract import AgentAnnouncement
+        from buttermilk._core.config import AgentConfig
         
-        # Execute
-        await mock_host._build_agent_tools()
+        for role, description in sample_participants.items():
+            agent_config = AgentConfig(
+                agent_id=f"{role}-test",
+                role=role,
+                description=description
+            )
+            announcement = AgentAnnouncement(
+                agent_config=agent_config,
+                tool_definition={},  # No tool definition
+                status="active",
+                announcement_type="initial",
+                content=f"{role} agent announcing"
+            )
+            # Add to registry  
+            await mock_host.update_agent_registry(announcement)
         
-        # Verify that no tools are created when no participant tools exist
-        # and no agents have announced themselves
-        
-        # Verify that no tools are created when no participant tools exist
-        # and no agents have announced themselves
+        # Verify that no tools are created when agents have no tool definitions
         assert len(mock_host._tools_list) == 0
 
     @pytest.mark.asyncio
     async def test_tool_invocation_queues_step_request(self, mock_host, sample_participants, sample_participant_tools):
         """Test that invoking a tool queues a StepRequest."""
-        # Setup
-        mock_host._participants = sample_participants
-        mock_host._participant_tools = sample_participant_tools
-        await mock_host._build_agent_tools()
+        # Setup - Create agent announcements with tool definitions
+        from buttermilk._core.contract import AgentAnnouncement
+        from buttermilk._core.config import AgentConfig
+        
+        # Create announcement for RESEARCHER with search tool
+        search_tool_def = sample_participant_tools["RESEARCHER"][0]  # search tool
+        agent_config = AgentConfig(
+            agent_id="RESEARCHER-test",
+            role="RESEARCHER",
+            description=sample_participants["RESEARCHER"]
+        )
+        announcement = AgentAnnouncement(
+            agent_config=agent_config,
+            tool_definition=search_tool_def,
+            status="active",
+            announcement_type="initial",
+            content="RESEARCHER agent announcing with search tool"
+        )
+        await mock_host.update_agent_registry(announcement)
         
         # Find the search tool
         search_tool = None
@@ -137,7 +176,8 @@ class TestStructuredLLMHostAgent:
         
         assert search_tool is not None
         
-        # Invoke the tool
+        # Invoke the tool - access the wrapped function directly
+        # FunctionTool stores the function internally, we need to call it directly
         result = await search_tool._func(query="test query", max_results=5)
         
         # Verify result is None (no fake status returned)
@@ -179,75 +219,68 @@ class TestStructuredLLMHostAgent:
     @pytest.mark.asyncio
     async def test_duplicate_tool_filtering(self, mock_host):
         """Test that duplicate tools are filtered out."""
-        # Setup with duplicate tool names
-        mock_host._participants = {"AGENT1": "First agent", "AGENT2": "Second agent"}
-        mock_host._participant_tools = {
-            "AGENT1": [{"name": "search", "description": "Search 1", "input_schema": {}}],
-            "AGENT2": [{"name": "search", "description": "Search 2", "input_schema": {}}]
-        }
+        # Setup - Create agent announcements with duplicate tool names
+        from buttermilk._core.contract import AgentAnnouncement
+        from buttermilk._core.config import AgentConfig
         
-        # Execute
-        await mock_host._build_agent_tools()
+        # Create two agents with the same tool name
+        for i, (agent_id, desc) in enumerate([("AGENT1", "First agent"), ("AGENT2", "Second agent")]):
+            agent_config = AgentConfig(
+                agent_id=f"{agent_id}-test",
+                role=agent_id,
+                description=desc
+            )
+            tool_def = {
+                "name": "search",
+                "description": f"Search {i+1}",
+                "input_schema": {}
+            }
+            announcement = AgentAnnouncement(
+                agent_config=agent_config,
+                tool_definition=tool_def,
+                status="active",
+                announcement_type="initial",
+                content=f"{agent_id} agent announcing with search tool"
+            )
+            await mock_host.update_agent_registry(announcement)
         
         # Verify unique tool names
         tool_names = [tool.name for tool in mock_host._tools_list]
         assert "search" in tool_names
         assert len(tool_names) == 1  # Only one search tool, not duplicated
 
-    @pytest.mark.asyncio
-    async def test_handle_events_rebuilds_tools(self, mock_host, sample_participants):
-        """Test that _handle_events rebuilds tools when participants change."""
-        # Initial setup
-        initial_participants = {"AGENT1": "First agent"}
-        mock_host._participants = initial_participants.copy()
-        await mock_host._build_agent_tools()
-        initial_tool_count = len(mock_host._tools_list)
-        
-        # Create ConductorRequest with new participants
-        conductor_request = ConductorRequest(
-            inputs={},
-            participants=sample_participants,
-            participant_tools={}
-        )
-        
-        # Mock parent class _handle_events
-        with patch.object(StructuredLLMHostAgent.__bases__[1], '_handle_events', new_callable=AsyncMock) as mock_parent:
-            mock_parent.return_value = None
-            
-            # Execute
-            await mock_host._handle_events(
-                conductor_request,
-                cancellation_token=MagicMock(),
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
-            )
-        
-        # Verify tools were rebuilt
-        assert len(mock_host._tools_list) != initial_tool_count
-        # Participants should be updated (original + new ones)
-        assert "AGENT1" in mock_host._participants  # Original kept
-        assert "RESEARCHER" in mock_host._participants  # New added
-
-
     @pytest.mark.asyncio 
     async def test_no_participants_initialization(self, mock_host):
-        """Test initialization when no participants are available."""
-        # Setup with no participants
-        mock_host._participants = {}
-        
-        # Execute initialization
+        """Test initialization when no agents have announced themselves."""
+        # Execute initialization with empty registry (no agents announced)
         await mock_host._initialize(callback_to_groupchat=AsyncMock())
         
-        # Verify no tools were created
-        assert not hasattr(mock_host, '_tools_list') or len(mock_host._tools_list) == 0
+        # Verify tools list was initialized but empty
+        assert hasattr(mock_host, '_tools_list')
+        assert len(mock_host._tools_list) == 0
 
     @pytest.mark.asyncio
     async def test_generic_input_tool_invocation(self, mock_host, sample_participant_tools):
         """Test invoking a tool with multiple parameters."""
-        # Setup
-        mock_host._participants = {"WRITER": "Creates content"}
-        mock_host._participant_tools = {"WRITER": sample_participant_tools["WRITER"]}
-        await mock_host._build_agent_tools()
+        # Setup - Create agent announcement with tool definition
+        from buttermilk._core.contract import AgentAnnouncement
+        from buttermilk._core.config import AgentConfig
+        
+        # Create announcement for WRITER with write tool
+        write_tool_def = sample_participant_tools["WRITER"][0]  # write tool
+        agent_config = AgentConfig(
+            agent_id="WRITER-test",
+            role="WRITER",
+            description="Creates content"
+        )
+        announcement = AgentAnnouncement(
+            agent_config=agent_config,
+            tool_definition=write_tool_def,
+            status="active",
+            announcement_type="initial",
+            content="WRITER agent announcing with write tool"
+        )
+        await mock_host.update_agent_registry(announcement)
         
         # Find write tool
         write_tool = None
