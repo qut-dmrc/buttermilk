@@ -251,7 +251,6 @@ class LLMAgent(Agent):
         logger.debug(f"Agent '{self.agent_name}': Template '{template_name}' rendered into {len(llm_messages)} messages for LLM.")
         return llm_messages
 
-    # This is the primary method subclasses should override.
     async def _process(self, *, message: AgentInput,
         cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Core processing logic: fills template, calls LLM, makes AgentOutput.
@@ -279,8 +278,6 @@ class LLMAgent(Agent):
 
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
-        if not isinstance(message, AgentInput):  # Should be guaranteed by type hint, but defensive
-            raise ProcessingError(f"Agent '{self.agent_id}': _process called with non-AgentInput message type: {type(message)}")
 
         try:
             llm_messages_to_send = await self._fill_template(
@@ -326,7 +323,7 @@ class LLMAgent(Agent):
         # 3. Parse the LLM response and create an AgentOutput
         parsed_object = None
         if schema := self._output_model:
-            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, schema):
+            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, self._output_model):
                 # If client already parsed into the correct schema object
                 parsed_object = chat_result.parsed_object
             elif isinstance(chat_result.content, str):

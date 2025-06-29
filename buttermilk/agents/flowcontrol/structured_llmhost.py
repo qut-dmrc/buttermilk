@@ -4,12 +4,13 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 """
 
 import asyncio
+import json
 from collections.abc import AsyncGenerator, Callable
-from typing import Any, Type
+from typing import Any
 
 from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool, BaseTool
-from pydantic import BaseModel, PrivateAttr, create_model, Field
+from autogen_core.tools import Tool
+from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
@@ -20,89 +21,61 @@ from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
 
 
-class AgentToolWrapper(BaseTool[BaseModel, BaseModel]):
-    """Custom tool wrapper for agent invocations that preserves parameter schemas."""
+class AgentProxyTool(Tool):
+    """Simple tool that proxies calls to agents via StepRequest."""
     
     def __init__(
-        self,
-        agent_role: str,
-        tool_name: str,
-        tool_description: str,
-        input_schema: dict[str, Any],
+        self, 
+        role: str,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
         proposed_step_queue: asyncio.Queue[StepRequest],
         host_agent_name: str
     ):
-        # Create a Pydantic model from the input schema
-        properties = input_schema.get("properties", {})
-        required = set(input_schema.get("required", []))
-        
-        # Build field definitions for the Pydantic model
-        field_definitions = {}
-        for prop_name, prop_schema in properties.items():
-            prop_type = self._json_schema_to_python_type(prop_schema)
-            is_required = prop_name in required
-            default = ... if is_required else prop_schema.get("default", None)
-            description = prop_schema.get("description", "")
-            
-            field_definitions[prop_name] = (prop_type, Field(default=default, description=description))
-        
-        # Create the args model dynamically
-        args_model = create_model(
-            f"{tool_name}_args",
-            **field_definitions
-        )
-        
-        # Initialize the base tool
+        # Initialize base Tool
         super().__init__(
-            args_type=args_model,
-            return_type=BaseModel,  # We return None but need a BaseModel type
-            name=tool_name,
-            description=tool_description
+            args_type=BaseModel,
+            return_type=dict
         )
-        
-        self.agent_role = agent_role
+        self._name = name
+        self._description = description
+        self.role = role
+        self.parameters = parameters  # Store the OpenAI-style parameters
         self.proposed_step_queue = proposed_step_queue
         self.host_agent_name = host_agent_name
     
-    def _json_schema_to_python_type(self, schema: dict[str, Any]) -> Type:
-        """Convert JSON schema type to Python type."""
-        type_str = schema.get("type", "string")
-        
-        if type_str == "string":
-            if "enum" in schema:
-                # For simplicity, return str even for enums
-                return str
-            return str
-        elif type_str == "integer":
-            return int
-        elif type_str == "number":
-            return float
-        elif type_str == "boolean":
-            return bool
-        elif type_str == "array":
-            # For simplicity, return list without item type
-            return list
-        elif type_str == "object":
-            # For simplicity, return dict
-            return dict
-        else:
-            return Any
+    @property
+    def name(self) -> str:
+        return self._name
     
-    async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> Any:
+    @property
+    def description(self) -> str:
+        return self._description
+    
+    @property
+    def schema(self) -> dict[str, Any]:
+        """Return the OpenAI-style tool schema."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.parameters
+        }
+    
+    async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
         """Execute the tool by sending a StepRequest to the target agent."""
-        # Convert args model to dict
-        inputs = args.model_dump()
+        # Parse the JSON args
+        inputs = json.loads(args_json) if args_json else {}
         
         step_request = StepRequest(
-            role=self.agent_role,
+            role=self.role,
             inputs=inputs,
             metadata={"tool_name": self.name}
         )
-        logger.info(f"Host {self.host_agent_name} invoking {self.agent_role} tool {self.name}")
+        logger.info(f"Host {self.host_agent_name} invoking {self.role} tool {self.name}")
         await self.proposed_step_queue.put(step_request)
         
-        # Return empty dict as we don't have a meaningful return value
-        return {}
+        return json.dumps({"status": "queued", "agent": self.role})
 
 
 class StructuredLLMHostAgent(LLMAgent, HostAgent):
@@ -141,8 +114,8 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
     async def _build_agent_tools(self) -> None:
         """Build tools from agent-provided tool definitions.
         
-        This method extracts actual @tool decorated methods from agents and wraps them
-        to send StepRequest messages, following the agent-centric approach.
+        This method uses the tool definitions already created by agents and wraps them
+        with a lightweight proxy to send StepRequest messages through the groupchat.
         """
         agent_tools = []
 
@@ -150,25 +123,23 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         for agent_id, announcement in self._agent_registry.items():
             agent_role = announcement.agent_config.role
 
-            if tool_def :=  announcement.tool_definition:
-                # Get input schema from tool definition
-                input_schema = tool_def.get("input_schema", {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                })
-
-                # Create custom tool wrapper that preserves parameter schemas
-                tool = AgentToolWrapper(
-                    agent_role=agent_role,
-                    tool_name=tool_def["name"],
-                    tool_description=tool_def.get("description", f"Call {agent_role} agent"),
-                    input_schema=input_schema,
+            if tool_def := announcement.tool_definition:
+                # Create a simple proxy tool that uses the agent's schema directly
+                tool = AgentProxyTool(
+                    role=agent_role,
+                    name=tool_def["name"],
+                    description=tool_def.get("description", f"Call {agent_role} agent"),
+                    parameters=tool_def.get("input_schema", {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }),
                     proposed_step_queue=self._proposed_step,
                     host_agent_name=self.agent_name
                 )
+                
                 agent_tools.append(tool)
-                logger.debug(f"Registered tool wrapper: {tool_def['name']} for {agent_role}")
+                logger.debug(f"Registered tool: {tool_def['name']} for {agent_role}")
 
         # Initialize tools list using parent class pattern
         if self.tools:
@@ -198,7 +169,8 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
-        # First, say hello to the user
+        # First, say hello to the user, and send a message to all other participants
+        # to trigger them to announce.
         await asyncio.sleep(3)  # Let the group chat initialize
         yield StepRequest(
             role=MANAGER,
