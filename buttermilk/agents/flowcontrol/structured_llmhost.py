@@ -7,14 +7,17 @@ import asyncio
 from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
-from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool, ToolSchema
+from autogen_core import CancellationToken, FunctionCall
+from autogen_core.models import CreateResult, ModelOutput
+from autogen_core.tools import ToolSchema
 from pydantic import PrivateAttr
 
+from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace, GroupchatMessageTypes
+from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace, ErrorEvent, GroupchatMessageTypes
+from buttermilk._core.errors import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
@@ -29,6 +32,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
     _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
+    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
 
     # Override the output model - we don't need CallOnAgent anymore
     _output_model = None  # Let the LLM use tool calling directly
@@ -54,65 +58,36 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         logger.debug(f"StructuredLLMHost {self.agent_name} initialized with {len(self._tools_list)} tools. More tools will be built from agent announcements.")
 
     async def _build_agent_tools(self) -> None:
-        """Build tools from agent-provided tool definitions.
+        """Build tool schemas from agent-provided tool definitions.
         
-        This method uses the tool definitions already created by agents and wraps them
-        with FunctionTool to send StepRequest messages through the groupchat.
+        This method collects tool schemas from agents but does NOT create executable tools.
+        Instead, it stores the schemas to pass to the LLM, and we'll handle tool calls
+        by converting them to StepRequests.
         """
-        agent_tools = []
+        tool_schemas = []
 
-        # Build tools from agent announcements
+        # Collect tool schemas from agent announcements
         for agent_id, announcement in self._agent_registry.items():
             agent_role = announcement.agent_config.role
 
             if tool_def := announcement.tool_definition:
-                # Create a closure that captures the agent role and tool info
-                def create_agent_caller(role: str, tool_name: str):
-                    async def call_agent(**kwargs: Any) -> dict[str, Any]:
-                        """Call an agent through the groupchat by sending a StepRequest."""
-                        step_request = StepRequest(
-                            role=role,
-                            inputs=kwargs,
-                            metadata={"tool_name": tool_name}
-                        )
-                        logger.info(f"Host {self.agent_name} invoking {role} tool {tool_name}")
-                        await self._proposed_step.put(step_request)
-                        return {"status": "queued", "agent": role}
-                    
-                    # Set function attributes for better tool introspection
-                    call_agent.__name__ = tool_name
-                    call_agent.__doc__ = f"Call the {role} agent"
-                    return call_agent
-                
-                # Create FunctionTool using autogen's built-in functionality
-                agent_func = create_agent_caller(agent_role, tool_def['name'])
-                tool = FunctionTool(
-                    func=agent_func,
-                    name=tool_def['name'],
-                    description=tool_def.get('description', f"Call {agent_role} agent")
-                )
-                
-                agent_tools.append(tool)
-                logger.debug(f"Registered tool: {tool_def['name']} for {agent_role}")
+                # Store the schema directly - no wrapping needed
+                tool_schemas.append(tool_def)
+                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
 
-        # Initialize tools list using parent class pattern
+        # Store schemas separately from executable tools
+        self._tool_schemas = tool_schemas
+
+        # Initialize executable tools from config (if any)
         if self.tools:
             configured_tools = create_tool_functions(self.tools)
-            # Now returns list[Tool] consistently
             self._tools_list = configured_tools
         else:
             self._tools_list = []
 
-        # Add all agent tools, avoiding duplicates
-        for tool in agent_tools:
-            if not any(existing.name == tool.name for existing in self._tools_list):
-                self._tools_list.append(tool)
-
-        tool_names = [tool.name for tool in self._tools_list]
         logger.info(
-            f"Structured LLMHost built {len(agent_tools)} agent tools "
-            f"from {len(self._agent_registry)} announced agents, "
-            f"total tools: {len(self._tools_list)} - {tool_names}"
+            f"Structured LLMHost collected {len(tool_schemas)} tool schemas "
+            f"from {len(self._agent_registry)} announced agents"
         )
 
     async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
@@ -199,3 +174,98 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
                 # Just pass the response to the manager
                 await self.callback_to_groupchat(result)
+    
+    async def _process(self, *, message: AgentInput,
+        cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+        """Override to handle tool calls by routing them to agents instead of executing.
+        
+        This override bypasses the automatic tool execution in the parent class.
+        Instead, when the LLM calls a tool, we convert it to a StepRequest and
+        queue it for the appropriate agent to handle.
+        """
+        logger.debug(f"StructuredLLMHost '{self.agent_name}' starting _process")
+
+        # Fill the template as usual
+        try:
+            llm_messages_to_send = await self._fill_template(
+                task_params=message.parameters or {},
+                inputs=message.inputs or {},
+                context=message.context,
+                records=message.records,
+            )
+        except Exception as e:
+            logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")
+            error_event = ErrorEvent(source=self.agent_id, content=str(e))
+            return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, outputs=error_event)
+
+        # Get the LLM client
+        model_client = bm.llms.get_autogen_chat_client(self._model)
+        
+        # Call create() directly with tool schemas (not executable tools)
+        # This returns FunctionCall objects without executing them
+        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
+        
+        try:
+            create_result: CreateResult = await model_client.create(
+                messages=llm_messages_to_send,
+                tools=self._tool_schemas,  # Pass schemas, not executable tools
+                cancellation_token=cancellation_token,
+            )
+        except Exception as llm_error:
+            msg = f"StructuredLLMHost {self.agent_id}: Error during LLM call: {llm_error}"
+            logger.error(msg)
+            raise ProcessingError(msg) from llm_error
+
+        # Check if the LLM returned tool calls
+        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+            tool_calls: list[FunctionCall] = create_result.content
+            logger.info(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
+            
+            # Convert each tool call to a StepRequest
+            for call in tool_calls:
+                # Find which agent handles this tool
+                agent_role = None
+                for agent_id, announcement in self._agent_registry.items():
+                    if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
+                        agent_role = announcement.agent_config.role
+                        break
+                
+                if not agent_role:
+                    logger.warning(f"No agent found for tool: {call.name}")
+                    continue
+                
+                # Parse the arguments
+                import json
+                try:
+                    arguments = json.loads(call.arguments)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                    continue
+                
+                # Create StepRequest for this tool call
+                step_request = StepRequest(
+                    role=agent_role,
+                    inputs=arguments,
+                    metadata={"tool_name": call.name, "tool_call_id": call.id}
+                )
+                
+                logger.info(f"StructuredLLMHost routing tool call {call.name} to {agent_role}")
+                await self._proposed_step.put(step_request)
+            
+            # Return a simple acknowledgment
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=f"Routing {len(tool_calls)} tool calls to agents",
+                metadata={"tool_calls": len(tool_calls)}
+            )
+        
+        # If no tool calls, return the LLM response as usual
+        return AgentOutput(
+            agent_id=self.agent_id,
+            outputs=create_result.content,
+            metadata={
+                "model": self._model,
+                "finish_reason": create_result.finish_reason,
+                "usage": create_result.usage.model_dump() if create_result.usage else None
+            }
+        )

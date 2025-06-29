@@ -412,7 +412,7 @@ class AutoGenWrapper(RetryWrapper):
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
         # Autogen's Tool.run_json is expected to return a JSON-serializable result.
         # The structure of this result can vary. We need to adapt it to ToolOutput.
-        tool_run_results = await tool.run_json(arguments, cancellation_token)
+        tool_run_results = await tool.run(arguments, cancellation_token)
 
         # Ensure results is a list, as a tool might conceptually return multiple outputs
         if not isinstance(tool_run_results, list):
