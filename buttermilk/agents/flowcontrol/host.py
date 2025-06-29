@@ -5,6 +5,7 @@ from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
+from autogen_core.tools import ToolSchema
 from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
@@ -58,6 +59,10 @@ class HostAgent(Agent):
     _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
     _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
     _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
+    
+    # Tool schemas for LLM-based hosts
+    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
+    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
     _registry_summary_cache: dict[str, Any] | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
@@ -136,6 +141,34 @@ class HostAgent(Agent):
 
             # Invalidate cache
             self._registry_summary_cache = None
+        
+        # Rebuild tool schemas when agents announce (for LLM-based hosts)
+        await self._build_agent_tools()
+
+    async def _build_agent_tools(self) -> None:
+        """Build tool schemas from agent-provided tool definitions.
+        
+        This method collects tool schemas from agents for LLM-based decision making.
+        Base HostAgent doesn't use these, but subclasses like StructuredLLMHostAgent do.
+        """
+        tool_schemas = []
+
+        # Collect tool schemas from agent announcements
+        for agent_id, announcement in self._agent_registry.items():
+            agent_role = announcement.agent_config.role
+
+            if tool_def := announcement.tool_definition:
+                # Store the schema directly - no wrapping needed
+                tool_schemas.append(tool_def)
+                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
+
+        # Store schemas for LLM-based hosts
+        self._tool_schemas = tool_schemas
+        
+        logger.info(
+            f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
+            f"from {len(self._agent_registry)} announced agents"
+        )
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
@@ -650,7 +683,56 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
-        # A non-LLM host will return a StepRequest
-
+        """Process messages. 
+        
+        Base implementation returns an error since non-LLM hosts don't process direct inputs.
+        Subclasses that support LLM-based processing should override this method.
+        """
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
         return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
+    
+    async def _route_tool_calls_to_agents(
+        self,
+        tool_calls: list[Any],  # FunctionCall objects
+    ) -> None:
+        """Route tool calls to the appropriate agents as StepRequests.
+        
+        This is a helper method that can be used by LLM-based host subclasses
+        to convert tool calls into StepRequests for the appropriate agents.
+        """
+        import json
+        
+        for call in tool_calls:
+            # Find which agent handles this tool
+            agent_role = None
+            for agent_id, announcement in self._agent_registry.items():
+                if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
+                    agent_role = announcement.agent_config.role
+                    break
+
+            if not agent_role:
+                logger.warning(f"No agent found for tool: {call.name}")
+                continue
+
+            # Parse the arguments
+            try:
+                arguments = json.loads(call.arguments)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                continue
+
+            # Create StepRequest for this tool call
+            step_request = StepRequest(
+                role=agent_role,
+                inputs=arguments,
+                metadata={"tool_name": call.name, "tool_call_id": call.id}
+            )
+
+            logger.info(f"Host routing tool call {call.name} to {agent_role}")
+            
+            # Queue it if we have a queue
+            if hasattr(self, '_proposed_step'):
+                await self._proposed_step.put(step_request)
+
+            # Send it out regardless
+            await self.callback_to_groupchat(step_request)

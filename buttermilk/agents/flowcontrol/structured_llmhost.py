@@ -9,14 +9,13 @@ from typing import Any
 
 from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import CreateResult
-from autogen_core.tools import ToolSchema
 from pydantic import PrivateAttr
 
 from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace, ErrorEvent, GroupchatMessageTypes
+from buttermilk._core.contract import AgentOutput, ErrorEvent, GroupchatMessageTypes
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -26,13 +25,13 @@ from buttermilk.utils._tools import create_tool_functions
 class StructuredLLMHostAgent(HostAgent, LLMAgent):
     """Host agent that uses structured tool definitions for agent coordination.
 
-    This agent replaces natural language agent descriptions with structured
-    tool definitions, enabling more reliable and type-safe agent invocation.
+    This agent uses an LLM to select which agents to invoke based on structured
+    tool definitions provided by agents. The main difference from the base HostAgent
+    is that this uses an LLM to dynamically select agents instead of following
+    a predefined sequence.
     """
 
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
-    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
-    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
 
     # Override the output model - we don't need CallOnAgent anymore
     _output_model = None  # Let the LLM use tool calling directly
@@ -50,57 +49,22 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         """Initialize the host agent."""
         await super().initialize(callback_to_groupchat=callback_to_groupchat, **kwargs)
 
-        # Build initial tools (may be empty if no agents announced yet)
-        await self._build_agent_tools()
-
-        # Tools will be rebuilt automatically as agents announce themselves
-        # No need to wait for participants list - we use the agent registry instead
-        logger.debug(f"StructuredLLMHost {self.agent_name} initialized with {len(self._tools_list)} tools. More tools will be built from agent announcements.")
-
-    async def _build_agent_tools(self) -> None:
-        """Build tool schemas from agent-provided tool definitions.
-        
-        This method collects tool schemas from agents but does NOT create executable tools.
-        Instead, it stores the schemas to pass to the LLM, and we'll handle tool calls
-        by converting them to StepRequests.
-        """
-        tool_schemas = []
-
-        # Collect tool schemas from agent announcements
-        for agent_id, announcement in self._agent_registry.items():
-            agent_role = announcement.agent_config.role
-
-            if tool_def := announcement.tool_definition:
-                # Store the schema directly - no wrapping needed
-                tool_schemas.append(tool_def)
-                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
-
-        # Store schemas separately from executable tools
-        self._tool_schemas = tool_schemas
-
-        # Initialize executable tools from config (if any)
+        # Initialize empty tools list
         if self.tools:
-            configured_tools = create_tool_functions(self.tools)
-            self._tools_list = configured_tools
+            self._tools_list = create_tool_functions(self.tools)
         else:
             self._tools_list = []
 
-        logger.info(
-            f"Structured LLMHost collected {len(tool_schemas)} tool schemas "
-            f"from {len(self._agent_registry)} announced agents"
-        )
-
-    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
-        """Update registry and rebuild tools when agents announce."""
-        # Call parent class to handle the registry update
-        await super().update_agent_registry(announcement)
-        # Rebuild tools whenever registry changes
-        await self._build_agent_tools()
+        logger.debug(f"StructuredLLMHost {self.agent_name} initialized with {len(self._tools_list)} configured tools.")
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
-        """Generate a sequence of steps to execute."""
-        # First, say hello to the user, and send a message to all other participants
-        # to trigger them to announce.
+        """Generate a sequence of steps to execute.
+        
+        Unlike the base class which follows a predefined sequence,
+        this implementation uses a queue-based approach where the LLM
+        decides which agent to invoke next.
+        """
+        # First, say hello to the user
         await asyncio.sleep(3)  # Let the group chat initialize
         yield StepRequest(
             role=MANAGER,
@@ -108,7 +72,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         )
 
         while True:
-            # Wait for the _listen method to add a proposed step to the queue
+            # Wait for the _listen method (via LLM) to add a proposed step to the queue
             task = await self._proposed_step.get()
             yield task
 
@@ -220,39 +184,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             tool_calls: list[FunctionCall] = create_result.content
             logger.info(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
 
-            # Convert each tool call to a StepRequest
-            for call in tool_calls:
-                # Find which agent handles this tool
-                agent_role = None
-                for agent_id, announcement in self._agent_registry.items():
-                    if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
-                        agent_role = announcement.agent_config.role
-                        break
-
-                if not agent_role:
-                    logger.warning(f"No agent found for tool: {call.name}")
-                    continue
-
-                # Parse the arguments
-                import json
-                try:
-                    arguments = json.loads(call.arguments)
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse tool arguments: {call.arguments}")
-                    continue
-
-                # Create StepRequest for this tool call
-                step_request = StepRequest(
-                    role=agent_role,
-                    inputs=arguments,
-                    metadata={"tool_name": call.name, "tool_call_id": call.id}
-                )
-
-                logger.info(f"StructuredLLMHost routing tool call {call.name} to {agent_role}")
-                await self._proposed_step.put(step_request)
-
-                # alternatively, send out the step request
-                await self.callback_to_groupchat(step_request)
+            # Use the base class helper to route tool calls
+            await self._route_tool_calls_to_agents(tool_calls)
 
             # Return a simple acknowledgment
             return AgentOutput(

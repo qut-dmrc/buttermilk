@@ -68,8 +68,8 @@ class TestStructuredLLMHostInitialization:
         """Test initialization collects tools from agents."""
         host = StructuredLLMHostAgent(
             agent_name="host",
-            model_name="test-model",
-            role="host"
+            role="host",
+            parameters={"model": "test-model"}
         )
         
         # Mock the parent class initialization
@@ -96,8 +96,8 @@ class TestStructuredLLMHostInitialization:
         """Test default tool creation for agents without tools."""
         host = StructuredLLMHostAgent(
             agent_name="host",
-            model_name="test-model",
-            role="host"
+            role="host",
+            parameters={"model": "test-model"}
         )
         
         # Only agent without tools
@@ -122,8 +122,8 @@ class TestStructuredLLMHostSequence:
         """Test the sequence generator."""
         host = StructuredLLMHostAgent(
             agent_name="host",
-            model_name="test-model",
-            role="host"
+            role="host",
+            parameters={"model": "test-model"}
         )
         
         # Add test steps to queue
@@ -356,8 +356,8 @@ class TestStructuredLLMHostTools:
         """Test that tool functions are created correctly."""
         host = StructuredLLMHostAgent(
             agent_name="host",
-            model_name="test-model",
-            role="host"
+            role="host",
+            parameters={"model": "test-model"}
         )
         
         # Create a mock agent with a tool
