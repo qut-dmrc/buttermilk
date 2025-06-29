@@ -72,7 +72,28 @@ Always read the `docs/ARCHITECTURE.md` file before commencing work and remember 
 
 Always assume you may be interrupted at any time. Use GitHub issues to track tasks, and commit your changes at every conceptual chunk of work. You don't need to ask permission to commit changes.
 
-**IMPORTANT**: Always commit code changes to git and update relevant GitHub issues with your progress and solutions. This ensures work is preserved and documented for future reference.
+### 🚨 CRITICAL: Git Commits and GitHub Issues 🚨
+**BEFORE COMMITTING ANY CHANGES:**
+1. Check for related GitHub issues: `gh issue list --search "relevant keywords"`
+2. If no issue exists, consider creating one: `gh issue create`
+3. Commit your changes with a descriptive message
+4. **IMMEDIATELY AFTER COMMITTING**: Update the GitHub issue with:
+   - A comment describing what was changed
+   - The commit hash
+   - Any remaining work or follow-up tasks
+   - Close the issue if the work is complete
+
+**Example workflow:**
+```bash
+# Before starting work
+gh issue list --search "initialize announcement"
+# Work on the changes...
+# After making changes
+git add -A && git commit -m "refactor: Consolidate initialization methods"
+gh issue comment <issue-number> --body "Completed refactoring of initialization methods in commit abc123"
+```
+
+This ensures work is preserved and documented for future reference.
 
 Adopt a test-driven development approach. Create failing unit tests before every code change.
 
