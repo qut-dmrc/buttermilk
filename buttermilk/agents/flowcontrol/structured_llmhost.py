@@ -23,7 +23,7 @@ from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
 
 
-class StructuredLLMHostAgent(LLMAgent, HostAgent):
+class StructuredLLMHostAgent(HostAgent, LLMAgent):
     """Host agent that uses structured tool definitions for agent coordination.
 
     This agent replaces natural language agent descriptions with structured
@@ -174,7 +174,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
                 # Just pass the response to the manager
                 await self.callback_to_groupchat(result)
-    
+
     async def _process(self, *, message: AgentInput,
         cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Override to handle tool calls by routing them to agents instead of executing.
@@ -200,11 +200,11 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
 
         # Get the LLM client
         model_client = bm.llms.get_autogen_chat_client(self._model)
-        
+
         # Call create() directly with tool schemas (not executable tools)
         # This returns FunctionCall objects without executing them
         logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
-        
+
         try:
             create_result: CreateResult = await model_client.create(
                 messages=llm_messages_to_send,
@@ -220,7 +220,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
             logger.info(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
-            
+
             # Convert each tool call to a StepRequest
             for call in tool_calls:
                 # Find which agent handles this tool
@@ -229,11 +229,11 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
                         agent_role = announcement.agent_config.role
                         break
-                
+
                 if not agent_role:
                     logger.warning(f"No agent found for tool: {call.name}")
                     continue
-                
+
                 # Parse the arguments
                 import json
                 try:
@@ -241,24 +241,24 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 except json.JSONDecodeError:
                     logger.error(f"Failed to parse tool arguments: {call.arguments}")
                     continue
-                
+
                 # Create StepRequest for this tool call
                 step_request = StepRequest(
                     role=agent_role,
                     inputs=arguments,
                     metadata={"tool_name": call.name, "tool_call_id": call.id}
                 )
-                
+
                 logger.info(f"StructuredLLMHost routing tool call {call.name} to {agent_role}")
                 await self._proposed_step.put(step_request)
-            
+
             # Return a simple acknowledgment
             return AgentOutput(
                 agent_id=self.agent_id,
                 outputs=f"Routing {len(tool_calls)} tool calls to agents",
                 metadata={"tool_calls": len(tool_calls)}
             )
-        
+
         # If no tool calls, return the LLM response as usual
         return AgentOutput(
             agent_id=self.agent_id,
