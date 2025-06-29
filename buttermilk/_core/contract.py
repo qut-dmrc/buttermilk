@@ -51,6 +51,23 @@ from .types import Record  # Core data types like Record
 # --- General Communication & Base Messages ---
 
 
+class BaseAgentInputModel(BaseModel):
+    """Base model for agent inputs that can be subclassed for specific agent needs.
+    
+    This provides a strongly-typed alternative to the generic dict[str, Any] in AgentInput.inputs.
+    Agents can subclass this to define their specific input requirements.
+    """
+    prompt: str = Field(
+        ...,
+        description="The main request or input prompt for the agent"
+    )
+    
+    model_config = ConfigDict(
+        extra="forbid",  # Strict by default, subclasses can override
+        validate_assignment=True
+    )
+
+
 class FlowEvent(BaseModel):
     """Base model for simple, general-purpose event messages within the flow.
 

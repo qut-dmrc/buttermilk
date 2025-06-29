@@ -4,13 +4,12 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 """
 
 import asyncio
-import json
 from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from autogen_core import CancellationToken
-from autogen_core.tools import Tool, ToolSchema
-from pydantic import BaseModel, PrivateAttr
+from autogen_core.tools import FunctionTool, ToolSchema
+from pydantic import PrivateAttr
 
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
@@ -19,55 +18,6 @@ from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
-
-
-class AgentProxyTool(Tool):
-    """Simple tool that proxies calls to agents via StepRequest."""
-    
-    def __init__(
-        self, 
-        role: str,
-        tool_schema: ToolSchema,
-        proposed_step_queue: asyncio.Queue[StepRequest],
-        host_agent_name: str
-    ):
-        # Initialize base Tool
-        super().__init__(
-            args_type=BaseModel,
-            return_type=dict
-        )
-        self.role = role
-        self.tool_schema = tool_schema
-        self.proposed_step_queue = proposed_step_queue
-        self.host_agent_name = host_agent_name
-    
-    @property
-    def name(self) -> str:
-        return self.tool_schema["name"]
-    
-    @property
-    def description(self) -> str:
-        return self.tool_schema.get("description", f"Call {self.role} agent")
-    
-    @property
-    def schema(self) -> ToolSchema:
-        """Return the autogen ToolSchema directly."""
-        return self.tool_schema
-    
-    async def run_json(self, args: str, cancellation_token: CancellationToken) -> str:
-        """Execute the tool by sending a StepRequest to the target agent."""
-        # Parse the JSON args
-        inputs = json.loads(args) if args else {}
-        
-        step_request = StepRequest(
-            role=self.role,
-            inputs=inputs,
-            metadata={"tool_name": self.name}
-        )
-        logger.info(f"Host {self.host_agent_name} invoking {self.role} tool {self.name}")
-        await self.proposed_step_queue.put(step_request)
-        
-        return json.dumps({"status": "queued", "agent": self.role})
 
 
 class StructuredLLMHostAgent(LLMAgent, HostAgent):
@@ -107,7 +57,7 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         """Build tools from agent-provided tool definitions.
         
         This method uses the tool definitions already created by agents and wraps them
-        with a lightweight proxy to send StepRequest messages through the groupchat.
+        with FunctionTool to send StepRequest messages through the groupchat.
         """
         agent_tools = []
 
@@ -116,21 +66,40 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             agent_role = announcement.agent_config.role
 
             if tool_def := announcement.tool_definition:
-                # Create a simple proxy tool that uses the agent's schema directly
-                tool = AgentProxyTool(
-                    role=agent_role,
-                    tool_schema=tool_def,
-                    proposed_step_queue=self._proposed_step,
-                    host_agent_name=self.agent_name
+                # Create a closure that captures the agent role and tool info
+                def create_agent_caller(role: str, tool_name: str):
+                    async def call_agent(**kwargs: Any) -> dict[str, Any]:
+                        """Call an agent through the groupchat by sending a StepRequest."""
+                        step_request = StepRequest(
+                            role=role,
+                            inputs=kwargs,
+                            metadata={"tool_name": tool_name}
+                        )
+                        logger.info(f"Host {self.agent_name} invoking {role} tool {tool_name}")
+                        await self._proposed_step.put(step_request)
+                        return {"status": "queued", "agent": role}
+                    
+                    # Set function attributes for better tool introspection
+                    call_agent.__name__ = tool_name
+                    call_agent.__doc__ = f"Call the {role} agent"
+                    return call_agent
+                
+                # Create FunctionTool using autogen's built-in functionality
+                agent_func = create_agent_caller(agent_role, tool_def['name'])
+                tool = FunctionTool(
+                    func=agent_func,
+                    name=tool_def['name'],
+                    description=tool_def.get('description', f"Call {agent_role} agent")
                 )
-
+                
                 agent_tools.append(tool)
                 logger.debug(f"Registered tool: {tool_def['name']} for {agent_role}")
 
         # Initialize tools list using parent class pattern
         if self.tools:
             configured_tools = create_tool_functions(self.tools)
-            self._tools_list = configured_tools.copy()
+            # Now returns list[Tool] consistently
+            self._tools_list = configured_tools
         else:
             self._tools_list = []
 

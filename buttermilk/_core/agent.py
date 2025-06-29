@@ -30,6 +30,8 @@ from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import (
+    BaseModel,
+    Field,
     PrivateAttr,
     computed_field,
 )
@@ -939,21 +941,18 @@ class Agent(AgentConfig, ABC):
         Returns:
             dict: JSON schema for agent inputs.
         """
-        # Check if agent has defined custom schema
+        # Check if agent has defined a custom input model class
+        if hasattr(self, 'input_model_class') and issubclass(self.input_model_class, BaseModel):
+            # Use Pydantic's built-in schema generation
+            return self.input_model_class.model_json_schema()
+        
+        # Check if agent has defined custom schema directly
         if hasattr(self, 'input_schema'):
             return self.input_schema
 
-        # Default schema with prompt parameter
-        return {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": f"Request or input for {self.role}"
-                }
-            },
-            "required": ["prompt"]
-        }
+        # Default to BaseAgentInputModel schema
+        from buttermilk._core.contract import BaseAgentInputModel
+        return BaseAgentInputModel.model_json_schema()
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.

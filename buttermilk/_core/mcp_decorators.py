@@ -211,63 +211,31 @@ def _create_tool_definition_from_method(
 
 
 def _type_to_json_schema(type_hint: Any) -> dict[str, Any]:
-    """Convert Python type hint to JSON schema.
+    """Convert Python type hint to JSON schema using Pydantic's TypeAdapter.
     
-    This is a simplified implementation that handles common cases.
-    Could be enhanced with more comprehensive type mapping.
+    This uses Pydantic's built-in type conversion capabilities for accurate
+    and comprehensive schema generation.
     """
-    import types
-    from typing import get_args, get_origin, Union
+    from pydantic import TypeAdapter
     
-    # Handle None type
+    # Handle None type explicitly
     if type_hint is type(None):
         return {"type": "null"}
     
-    # Handle basic types
-    basic_type_map = {
-        str: {"type": "string"},
-        int: {"type": "integer"},
-        float: {"type": "number"},
-        bool: {"type": "boolean"},
-        list: {"type": "array"},
-        dict: {"type": "object"},
-    }
-    
-    if type_hint in basic_type_map:
-        return basic_type_map[type_hint]
-    
-    # Handle generic types (List[str], Dict[str, Any], etc.)
-    origin = get_origin(type_hint)
-    if origin is not None:
-        if origin is list:
-            args = get_args(type_hint)
-            if args:
-                return {
-                    "type": "array",
-                    "items": _type_to_json_schema(args[0])
-                }
-            return {"type": "array"}
-        
-        elif origin is dict:
-            return {"type": "object"}
-        
-        elif origin is Union or (hasattr(types, "UnionType") and origin is getattr(types, "UnionType")):
-            # Handle Union types (works for both typing.Union and types.UnionType in 3.10+)
-            args = get_args(type_hint)
-            if len(args) == 2 and type(None) in args:
-                # Optional type
-                non_none_type = args[0] if args[1] is type(None) else args[1]
-                schema = _type_to_json_schema(non_none_type)
-                return {**schema, "nullable": True}
-            else:
-                # General union - use anyOf
-                return {
-                    "anyOf": [_type_to_json_schema(arg) for arg in args]
-                }
-    
-    # Handle Pydantic models
+    # Handle Pydantic models directly
     if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
         return type_hint.model_json_schema()
     
-    # Default fallback
-    return {"type": "string"}
+    try:
+        # Use Pydantic's TypeAdapter for automatic schema generation
+        adapter = TypeAdapter(type_hint)
+        schema = adapter.json_schema()
+        
+        # Clean up the schema - remove $defs if empty
+        if "$defs" in schema and not schema["$defs"]:
+            del schema["$defs"]
+            
+        return schema
+    except Exception:
+        # Fallback for types that Pydantic can't handle
+        return {"type": "string"}
