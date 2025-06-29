@@ -5,113 +5,110 @@ import asyncio
 from unittest.mock import Mock, AsyncMock, MagicMock
 from typing import Any
 
+from autogen_core.tools import ToolSchema
 from buttermilk._core import AgentInput, StepRequest
 from buttermilk._core.agent import ManagerMessage
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import END, MANAGER
-from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk._core.contract import AgentAnnouncement
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
-
-
-class MockAgent:
-    """Mock agent with tool definitions."""
-    
-    def __init__(self, name: str, tools: list[AgentToolDefinition] | None = None):
-        self.agent_name = name
-        self._tools = tools or []
-    
-    def get_tool_definitions(self) -> list[AgentToolDefinition]:
-        """Return tool definitions."""
-        return self._tools
 
 
 class TestStructuredLLMHostInitialization:
     """Test initialization of structured LLMHost."""
     
-    @pytest.fixture
-    def mock_participants(self):
-        """Create mock participants with tool definitions."""
-        # Agent with explicit tools
-        agent1_tools = [
-            AgentToolDefinition(
-                name="analyze",
-                description="Analyze data",
-                input_schema={
-                    "type": "object",
-                    "properties": {"data": {"type": "string"}},
-                    "required": ["data"]
-                },
-                output_schema={"type": "object"}
-            ),
-            AgentToolDefinition(
-                name="summarize",
-                description="Summarize text",
-                input_schema={
-                    "type": "object",
-                    "properties": {"text": {"type": "string"}},
-                    "required": ["text"]
-                },
-                output_schema={"type": "string"}
-            )
-        ]
-        
-        # Agent without tools (should get default)
-        agent2_tools = []
-        
+    def create_tool_schema(self, name: str, description: str) -> ToolSchema:
+        """Create a mock ToolSchema."""
         return {
-            "ANALYST": MockAgent("analyst", agent1_tools),
-            "WRITER": MockAgent("writer", agent2_tools),
-            "MANAGER": Mock(spec=[])  # Non-agent participant
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The query to process"}
+                },
+                "required": ["query"]
+            }
         }
     
-    @pytest.mark.asyncio
-    async def test_initialize_with_agent_tools(self, mock_participants):
-        """Test initialization collects tools from agents."""
-        host = StructuredLLMHostAgent(
-            agent_name="host",
-            role="host",
-            parameters={"model": "test-model"}
+    def create_agent_announcement(self, agent_id: str, role: str, tool_def: ToolSchema | None = None) -> AgentAnnouncement:
+        """Create a mock AgentAnnouncement."""
+        config = AgentConfig(
+            agent_id=agent_id,
+            role=role,
+            agent_name=agent_id.lower(),
+            description=f"{role} agent"
         )
-        
-        # Mock the parent class initialization
-        host._participants = mock_participants
-        host.tools = {}
-        host.parameters = {"model": "test-model"}
-        host.callback_to_groupchat = AsyncMock()
-        
-        # Initialize
-        await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
-        
-        # Should have tools from agents
-        # 2 tools from ANALYST + 1 default tool for WRITER = 3 total
-        assert len(host._tools_list) == 3
-        
-        # Check tool names
-        tool_names = [tool.name for tool in host._tools_list]
-        assert "analyst.analyze" in tool_names
-        assert "analyst.summarize" in tool_names
-        assert "call_writer" in tool_names
+        return AgentAnnouncement(
+            agent_config=config,
+            available_tools=[tool_def["name"]] if tool_def else [],
+            tool_definition=tool_def,
+            status="active",
+            announcement_type="initial",
+            content=f"{role} agent joining the group"
+        )
     
     @pytest.mark.asyncio
-    async def test_default_tool_creation(self, mock_participants):
-        """Test default tool creation for agents without tools."""
+    async def test_agent_registry_with_tools(self):
+        """Test that agent announcements with tools are properly registered."""
         host = StructuredLLMHostAgent(
             agent_name="host",
             role="host",
-            parameters={"model": "test-model"}
+            parameters={"model": "test-model", "human_in_loop": False}
         )
         
-        # Only agent without tools
-        host._participants = {"WRITER": mock_participants["WRITER"]}
-        host.tools = {}
-        host.parameters = {"model": "test-model"}
+        # Initialize minimal state
         host.callback_to_groupchat = AsyncMock()
+        await host.initialize(callback_to_groupchat=host.callback_to_groupchat)
         
-        await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
+        # Create agent announcements
+        search_tool = self.create_tool_schema("search_cases", "Search for oversight board cases")
+        analyze_tool = self.create_tool_schema("analyze_data", "Analyze collected data")
         
-        # Should have one default tool
-        assert len(host._tools_list) == 1
-        assert host._tools_list[0].name == "call_writer"
-        assert "Send a request to the WRITER agent" in host._tools_list[0].description
+        search_announcement = self.create_agent_announcement("search-001", "SEARCH_AGENT", search_tool)
+        analyze_announcement = self.create_agent_announcement("analyze-001", "ANALYST", analyze_tool)
+        
+        # Update registry with announcements
+        await host.update_agent_registry(search_announcement)
+        await host.update_agent_registry(analyze_announcement)
+        
+        # Check that tools were collected
+        assert len(host._tool_schemas) == 2
+        tool_names = [schema["name"] for schema in host._tool_schemas]
+        assert "search_cases" in tool_names
+        assert "analyze_data" in tool_names
+    
+    @pytest.mark.asyncio
+    async def test_agent_leaving_removes_tools(self):
+        """Test that agent leaving removes their tools."""
+        host = StructuredLLMHostAgent(
+            agent_name="host",
+            role="host",
+            parameters={"model": "test-model", "human_in_loop": False}
+        )
+        
+        host.callback_to_groupchat = AsyncMock()
+        await host.initialize(callback_to_groupchat=host.callback_to_groupchat)
+        
+        # Add agent with tool
+        tool = self.create_tool_schema("process", "Process data")
+        announcement = self.create_agent_announcement("proc-001", "PROCESSOR", tool)
+        await host.update_agent_registry(announcement)
+        
+        assert len(host._tool_schemas) == 1
+        
+        # Agent leaves
+        leaving_announcement = AgentAnnouncement(
+            agent_config=announcement.agent_config,
+            available_tools=[],
+            status="leaving",
+            announcement_type="update",
+            content="Agent leaving"
+        )
+        await host.update_agent_registry(leaving_announcement)
+        
+        # Tool should be removed
+        assert len(host._tool_schemas) == 0
 
 
 class TestStructuredLLMHostSequence:
@@ -123,7 +120,7 @@ class TestStructuredLLMHostSequence:
         host = StructuredLLMHostAgent(
             agent_name="host",
             role="host",
-            parameters={"model": "test-model"}
+            parameters={"model": "test-model", "human_in_loop": False}
         )
         
         # Add test steps to queue
@@ -161,15 +158,15 @@ class TestStructuredLLMHostListen:
         """Create a mock host with initialized state."""
         host = StructuredLLMHostAgent(
             agent_name="host",
-            model_name="test-model",
             role="host",
-            parameters={"model": "test-model"}  # Add required parameters
+            parameters={"model": "test-model", "human_in_loop": False}
         )
         
         # Mock dependencies
         host._model = "test-model"
         host._tools_list = []
-        host._participants = {"ANALYST": Mock()}
+        host._tool_schemas = []
+        host._agent_registry = {}
         host.callback_to_groupchat = AsyncMock()
         
         return host
@@ -200,25 +197,28 @@ class TestStructuredLLMHostListen:
             call_args = mock_invoke.call_args[1]["message"]
             assert isinstance(call_args, AgentInput)
             assert call_args.inputs["prompt"] == "Analyze this data"
-            assert call_args.inputs["participants"] == ["ANALYST"]
+            # No longer passing participants list
+            assert "user_feedback" in call_args.inputs
     
     @pytest.mark.asyncio
     async def test_listen_skip_command_messages(self, mock_host):
         """Test that command messages are skipped."""
         message = ManagerMessage(content="/command test")
         
-        # Use patch to mock the invoke method and verify it's not called
-        from unittest.mock import patch
-        with patch.object(mock_host, 'invoke', new_callable=AsyncMock) as mock_invoke:
-            await mock_host._listen(
-                message=message,
-                cancellation_token=None,
-                source="test",
-                public_callback=AsyncMock()
-            )
-            
-            # Should not invoke
-            mock_invoke.assert_not_called()
+        # Add a step to the queue before the command
+        await mock_host._proposed_step.put(StepRequest(role="TEST"))
+        
+        await mock_host._listen(
+            message=message,
+            cancellation_token=None,
+            source="test",
+            public_callback=AsyncMock()
+        )
+        
+        # Queue should still have the original step (not cleared)
+        assert not mock_host._proposed_step.empty()
+        step = await mock_host._proposed_step.get()
+        assert step.role == "TEST"
     
     @pytest.mark.asyncio
     async def test_listen_clear_pending_steps(self, mock_host):
@@ -270,130 +270,237 @@ class TestStructuredLLMHostListen:
         assert step.role == END
     
     @pytest.mark.asyncio
-    async def test_tool_code_handling(self, mock_host):
-        """Test handling of tool_code dict format from LLM."""
-        # Setup participants with tools
-        tool_def = AgentToolDefinition(
-            name="oversight_board_case_search",
-            description="Search oversight board cases",
-            input_schema={
+    async def test_process_routes_tool_calls(self, mock_host):
+        """Test that _process routes tool calls to agents."""
+        # Setup agent registry with tool
+        from buttermilk._core.config import AgentConfig
+        from buttermilk._core.contract import AgentAnnouncement
+        
+        tool_schema: ToolSchema = {
+            "name": "search_cases",
+            "description": "Search oversight board cases",
+            "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
                 "required": ["query"]
-            },
-            output_schema={"type": "object"}
-        )
-        search_agent = MockAgent("search_agent", [tool_def])
-        mock_host._participants = {"SEARCH_AGENT": search_agent}
-        
-        message = ManagerMessage(content="Search for ICCPR Article 20")
-        
-        # Mock invoke to return tool_code format
-        from buttermilk._core.contract import AgentTrace
-        mock_trace = Mock(spec=AgentTrace)
-        mock_trace.outputs = {
-            'tool_code': 'oversight_board_case_search',
-            'tool_name': 'oversight_board_case_search',
-            'parameters': {'query': 'ICCPR Article 20 and incitement to discrimination'}
+            }
         }
         
-        # Use patch to mock the invoke method at the class level
-        from unittest.mock import patch
-        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
-            mock_invoke.return_value = mock_trace
-            
-            await mock_host._listen(
-                message=message,
-                cancellation_token=None,
-                source="test",
-                public_callback=AsyncMock()
-            )
+        agent_config = AgentConfig(
+            agent_id="search-001",
+            role="SEARCH_AGENT",
+            agent_name="search",
+            description="Search agent"
+        )
         
-        # Should have added step to queue
-        step = await mock_host._proposed_step.get()
-        assert step.role == "SEARCH_AGENT"
-        assert step.inputs["tool"] == "oversight_board_case_search"
-        assert step.inputs["tool_inputs"] == {'query': 'ICCPR Article 20 and incitement to discrimination'}
+        announcement = AgentAnnouncement(
+            agent_config=agent_config,
+            available_tools=["search_cases"],
+            tool_definition=tool_schema,
+            status="active",
+            announcement_type="initial",
+            content="Search agent joining"
+        )
+        
+        mock_host._agent_registry = {"search-001": announcement}
+        mock_host._tool_schemas = [tool_schema]
+        
+        # Mock the LLM to return tool calls
+        from autogen_core import FunctionCall
+        from autogen_core.models import CreateResult
+        
+        tool_call = FunctionCall(
+            id="call-123",
+            name="search_cases",
+            arguments='{"query": "ICCPR Article 20"}'
+        )
+        
+        # Patch the necessary methods
+        from unittest.mock import patch
+        with patch.object(mock_host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+            mock_fill.return_value = [Mock()]  # Return mock messages
+            
+            with patch('buttermilk.buttermilk.get_bm') as mock_get_bm:
+                mock_bm = Mock()
+                mock_llms = Mock()
+                mock_bm.llms = mock_llms
+                mock_get_bm.return_value = mock_bm
+                
+                mock_llms.get_autogen_chat_client.return_value = mock_client
+                mock_client = Mock()
+                mock_client.create = AsyncMock(return_value=CreateResult(
+                    content=[tool_call],
+                    finish_reason="tool_calls",
+                    usage=None,
+                    cached=False
+                ))
+                mock_get_client.return_value = mock_client
+                
+                # Call _process
+                result = await mock_host._process(
+                    message=AgentInput(inputs={"prompt": "Search for cases"}),
+                    cancellation_token=None
+                )
+                
+                # Should have routed the tool call
+                assert "Routing 1 tool calls" in result.outputs
+                
+                # Check that step was queued
+                step = await mock_host._proposed_step.get()
+                assert step.role == "SEARCH_AGENT"
+                assert step.inputs["query"] == "ICCPR Article 20"
     
     @pytest.mark.asyncio
-    async def test_tool_code_no_matching_agent(self, mock_host):
+    async def test_no_matching_agent_for_tool(self, mock_host):
         """Test handling when no agent owns the requested tool."""
-        mock_host._participants = {"OTHER_AGENT": MockAgent("other", [])}
+        # Empty agent registry
+        mock_host._agent_registry = {}
+        mock_host._tool_schemas = []
         
-        message = ManagerMessage(content="Search for something")
+        # Mock the LLM to return a tool call for non-existent tool
+        from autogen_core import FunctionCall
+        from autogen_core.models import CreateResult
         
-        # Mock invoke to return tool_code for non-existent tool
-        from buttermilk._core.contract import AgentTrace
-        mock_trace = Mock(spec=AgentTrace)
-        mock_trace.outputs = {
-            'tool_code': 'NonExistentTool',
-            'parameters': {'data': 'test'}
-        }
+        tool_call = FunctionCall(
+            id="call-456",
+            name="NonExistentTool",
+            arguments='{"data": "test"}'
+        )
         
-        # Use patch to mock the invoke method at the class level
         from unittest.mock import patch
-        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
-            mock_invoke.return_value = mock_trace
+        with patch.object(mock_host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+            mock_fill.return_value = [Mock()]
             
-            await mock_host._listen(
-                message=message,
-                cancellation_token=None,
-                source="test",
-                public_callback=AsyncMock()
-            )
-        
-        # Should pass response to groupchat instead
-        mock_host.callback_to_groupchat.assert_called_with(mock_trace)
-        # Queue should be empty
-        assert mock_host._proposed_step.empty()
+            with patch('buttermilk.buttermilk.get_bm') as mock_get_bm:
+                mock_bm = Mock()
+                mock_llms = Mock()
+                mock_bm.llms = mock_llms
+                mock_get_bm.return_value = mock_bm
+                
+                mock_llms.get_autogen_chat_client.return_value = mock_client
+                mock_client = Mock()
+                mock_client.create = AsyncMock(return_value=CreateResult(
+                    content=[tool_call],
+                    finish_reason="tool_calls",
+                    usage=None,
+                    cached=False
+                ))
+                mock_get_client.return_value = mock_client
+                
+                # Call _process
+                result = await mock_host._process(
+                    message=AgentInput(inputs={"prompt": "Do something"}),
+                    cancellation_token=None
+                )
+                
+                # Should still return success but queue should be empty
+                assert "Routing 1 tool calls" in result.outputs
+                assert mock_host._proposed_step.empty()
 
 
 class TestStructuredLLMHostTools:
     """Test tool handling in structured LLMHost."""
     
     @pytest.mark.asyncio
-    async def test_tool_function_creation(self):
-        """Test that tool functions are created correctly."""
+    async def test_tool_routing_to_agents(self):
+        """Test that tool calls are routed to correct agents."""
         host = StructuredLLMHostAgent(
             agent_name="host",
             role="host",
-            parameters={"model": "test-model"}
+            parameters={"model": "test-model", "human_in_loop": False}
         )
         
-        # Create a mock agent with a tool
-        tool_def = AgentToolDefinition(
-            name="process",
-            description="Process data",
-            input_schema={
-                "type": "object",
-                "properties": {"input": {"type": "string"}},
-                "required": ["input"]
-            },
-            output_schema={"type": "object"}
-        )
-        
-        agent = MockAgent("processor", [tool_def])
-        host._participants = {"PROCESSOR": agent}
-        host.tools = {}
-        host.parameters = {"model": "test-model"}
         host.callback_to_groupchat = AsyncMock()
+        await host.initialize(callback_to_groupchat=host.callback_to_groupchat)
         
-        await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
+        # Create multiple agents with tools
+        from buttermilk._core.config import AgentConfig
+        from buttermilk._core.contract import AgentAnnouncement
         
-        # Should have created function tool
-        assert len(host._tools_list) == 1
-        tool = host._tools_list[0]
-        assert tool.name == "processor.process"
-        assert tool.description == "Process data"
+        # Search agent
+        search_tool: ToolSchema = {
+            "name": "search",
+            "description": "Search for information",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"]
+            }
+        }
+        search_config = AgentConfig(
+            agent_id="search-001",
+            role="SEARCH",
+            agent_name="search",
+            description="Search agent"
+        )
+        search_announcement = AgentAnnouncement(
+            agent_config=search_config,
+            available_tools=["search"],
+            tool_definition=search_tool,
+            status="active",
+            announcement_type="initial",
+            content="Search agent joining"
+        )
         
-        # Test calling the tool function
-        # The function should create a StepRequest
-        await tool._func(input="test data")
+        # Analyze agent
+        analyze_tool: ToolSchema = {
+            "name": "analyze",
+            "description": "Analyze data",
+            "parameters": {
+                "type": "object",
+                "properties": {"data": {"type": "string"}},
+                "required": ["data"]
+            }
+        }
+        analyze_config = AgentConfig(
+            agent_id="analyze-001",
+            role="ANALYZER",
+            agent_name="analyzer",
+            description="Analyzer agent"
+        )
+        analyze_announcement = AgentAnnouncement(
+            agent_config=analyze_config,
+            available_tools=["analyze"],
+            tool_definition=analyze_tool,
+            status="active",
+            announcement_type="initial",
+            content="Analyzer agent joining"
+        )
         
-        # Verify callback was called with StepRequest
-        host.callback_to_groupchat.assert_called_once()
-        step_request = host.callback_to_groupchat.call_args[0][0]
-        assert isinstance(step_request, StepRequest)
-        assert step_request.role == "PROCESSOR"
-        assert step_request.inputs["tool"] == "process"
-        assert step_request.inputs["tool_inputs"] == {"input": "test data"}
+        # Register agents
+        await host.update_agent_registry(search_announcement)
+        await host.update_agent_registry(analyze_announcement)
+        
+        # Test routing tool calls
+        from autogen_core import FunctionCall
+        
+        search_call = FunctionCall(
+            id="call-1",
+            name="search",
+            arguments='{"query": "test search"}'
+        )
+        analyze_call = FunctionCall(
+            id="call-2",
+            name="analyze",
+            arguments='{"data": "test data"}'
+        )
+        
+        # Route the calls
+        await host._route_tool_calls_to_agents([search_call, analyze_call])
+        
+        # Should have called callback twice with StepRequests
+        assert host.callback_to_groupchat.call_count == 2
+        
+        # Check first call (search)
+        first_call = host.callback_to_groupchat.call_args_list[0][0][0]
+        assert isinstance(first_call, StepRequest)
+        assert first_call.role == "SEARCH"
+        assert first_call.inputs["query"] == "test search"
+        assert first_call.metadata["tool_name"] == "search"
+        
+        # Check second call (analyze)
+        second_call = host.callback_to_groupchat.call_args_list[1][0][0]
+        assert isinstance(second_call, StepRequest)
+        assert second_call.role == "ANALYZER"
+        assert second_call.inputs["data"] == "test data"
+        assert second_call.metadata["tool_name"] == "analyze"
