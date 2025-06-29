@@ -157,12 +157,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                     inputs={
                         "user_feedback": self._user_feedback,
                         "prompt": str(message.content),
-                        "available_agents": [ann.agent_config.role for ann in self._agent_registry.values()]
                     }
                 ),
                 public_callback=public_callback,
                 cancellation_token=cancellation_token,
-                **kwargs
+                **kwargs,
             )
 
             if result:
@@ -252,6 +251,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 logger.info(f"StructuredLLMHost routing tool call {call.name} to {agent_role}")
                 await self._proposed_step.put(step_request)
 
+                # alternatively, send out the step request
+                await self.callback_to_groupchat(step_request)
+
             # Return a simple acknowledgment
             return AgentOutput(
                 agent_id=self.agent_id,
@@ -266,6 +268,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             metadata={
                 "model": self._model,
                 "finish_reason": create_result.finish_reason,
-                "usage": create_result.usage.model_dump() if create_result.usage else None
-            }
+                "usage": create_result.usage if create_result.usage else None,
+            },
         )
