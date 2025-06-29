@@ -8,7 +8,7 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from autogen_core import CancellationToken, FunctionCall
-from autogen_core.models import CreateResult, ModelOutput
+from autogen_core.models import CreateResult
 from autogen_core.tools import ToolSchema
 from pydantic import PrivateAttr
 
@@ -17,7 +17,7 @@ from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentAnnouncement, AgentOutput, AgentTrace, ErrorEvent, GroupchatMessageTypes
-from buttermilk._core.errors import ProcessingError
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
