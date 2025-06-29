@@ -507,40 +507,34 @@ class HostAgent(Agent):
             logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
 
         # Extract initial query/prompt from ConductorRequest if available
-        # The orchestrator puts the entire RunRequest in message.inputs
-        self._initial_query = None
-        self._initial_parameters = {}
-
-        if hasattr(message, 'inputs') and isinstance(message.inputs, dict):
-            # Store the initial inputs for use by subclasses and _sequence
-            self._initial_inputs = message.inputs
-
-            # Extract parameters if present
-            if 'parameters' in message.inputs and isinstance(message.inputs['parameters'], dict):
-                self._initial_parameters = message.inputs['parameters']
-
-            # Check for query/prompt - require explicit field, no fallback chain
-            self._initial_query = None
-            if 'prompt' in message.inputs:
-                self._initial_query = message.inputs['prompt']
-            elif 'query' in message.inputs:
-                self._initial_query = message.inputs['query']
-            elif 'query' in self._initial_parameters:
-                self._initial_query = self._initial_parameters['query']
-            elif 'prompt' in self._initial_parameters:
-                self._initial_query = self._initial_parameters['prompt']
-            elif 'criteria' in self._initial_parameters:
-                self._initial_query = self._initial_parameters['criteria']
-
+        # Parse inputs using the typed model for cleaner extraction
+        from buttermilk._core.contract import HostInputModel
+        
+        # Store the raw inputs for backward compatibility
+        self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
+        
+        try:
+            # Parse inputs into our typed model
+            if isinstance(self._initial_inputs, dict):
+                host_inputs = HostInputModel(**self._initial_inputs)
+            else:
+                host_inputs = HostInputModel()
+            
+            # Extract fields cleanly
+            self._initial_query = host_inputs.initial_query
+            self._initial_parameters = host_inputs.parameters
+            
             if self._initial_query:
                 logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-
-            # Log the parameters for debugging
+            
             if self._initial_parameters:
                 logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
-        else:
-            # No inputs provided
-            self._initial_inputs = {}
+                
+        except Exception as e:
+            # If parsing fails, fall back to empty values
+            logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
+            self._initial_query = None
+            self._initial_parameters = {}
 
         # Rerun initialization to set up the group chat
         await self.initialize(callback_to_groupchat=self.callback_to_groupchat)

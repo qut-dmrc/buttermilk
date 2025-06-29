@@ -604,6 +604,55 @@ class AgentTrace(FlowMessage, AgentOutput):
 
 # --- Manager / Conductor / UI Interaction Messages ---
 
+class HostInputModel(BaseAgentInputModel):
+    """Strongly typed input model for Host agents.
+    
+    This provides a cleaner interface than digging through nested dicts.
+    Host agents can expect these fields in their inputs.
+    """
+    # Override prompt as optional for host agents
+    prompt: str | None = Field(
+        default=None,
+        description="The main request or query (also checks 'query' field)"
+    )
+    query: str | None = Field(
+        default=None,
+        description="Alternative to prompt for the main request"
+    )
+    criteria: str | None = Field(
+        default=None,
+        description="Alternative field for search/filter criteria"
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional parameters for the host"
+    )
+    
+    @property
+    def initial_query(self) -> str | None:
+        """Get the initial query from any of the possible fields."""
+        # Check direct fields first
+        if self.prompt:
+            return self.prompt
+        if self.query:
+            return self.query
+        if self.criteria:
+            return self.criteria
+        
+        # Check in parameters as fallback
+        if self.parameters:
+            return (self.parameters.get('prompt') or 
+                    self.parameters.get('query') or 
+                    self.parameters.get('criteria'))
+        
+        return None
+    
+    model_config = ConfigDict(
+        extra="allow",  # Allow additional fields for flexibility
+        validate_assignment=True
+    )
+
+
 class ConductorRequest(AgentInput):
     """A request message sent *to* a CONDUCTOR agent.
 
