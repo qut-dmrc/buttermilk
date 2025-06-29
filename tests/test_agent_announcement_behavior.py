@@ -104,7 +104,6 @@ class TestAgentAnnouncementBehavior:
         """Test that agent responds when receiving a host announcement."""
         # Create mock callbacks
         public_callback = AsyncMock()
-        message_callback = AsyncMock()
         
         # Create a host announcement
         host_config = AgentConfig(
@@ -125,8 +124,7 @@ class TestAgentAnnouncementBehavior:
             message=host_announcement,
             cancellation_token=MagicMock(),
             source="HOST-host123",
-            public_callback=public_callback,
-            message_callback=message_callback
+            public_callback=public_callback
         )
         
         # Verify response announcement was sent
@@ -144,7 +142,6 @@ class TestAgentAnnouncementBehavior:
         """Test that agent ignores announcements from non-host agents."""
         # Create mock callbacks
         public_callback = AsyncMock()
-        message_callback = AsyncMock()
         
         # Create a non-host announcement
         other_config = AgentConfig(
@@ -165,8 +162,7 @@ class TestAgentAnnouncementBehavior:
             message=other_announcement,
             cancellation_token=MagicMock(),
             source="JUDGE-judge123",
-            public_callback=public_callback,
-            message_callback=message_callback
+            public_callback=public_callback
         )
         
         # Verify no response was sent
@@ -231,7 +227,6 @@ class TestAgentAnnouncementBehavior:
         """Test that agent can announce during invoke when callback is stored."""
         # Create mock callbacks
         public_callback = AsyncMock()
-        message_callback = AsyncMock()
         
         # First initialize with announcement to store the callback
         await mock_agent.initialize_with_announcement(public_callback=public_callback)
@@ -245,8 +240,7 @@ class TestAgentAnnouncementBehavior:
         # Invoke the agent
         result = await mock_agent.invoke(
             message=test_input,
-            public_callback=public_callback,
-            message_callback=message_callback
+            public_callback=public_callback
         )
         
         # Find announcement calls (should have initial announcement)

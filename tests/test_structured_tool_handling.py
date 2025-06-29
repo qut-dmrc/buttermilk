@@ -93,8 +93,7 @@ class TestStructuredToolHandling:
         await host._handle_events(
             message=conductor_request,
             cancellation_token=Mock(),
-            public_callback=Mock(),
-            message_callback=Mock()
+            public_callback=Mock()
         )
         
         # Verify tools were built
@@ -145,8 +144,7 @@ class TestStructuredToolHandling:
             message=mock_llm_response,
             cancellation_token=Mock(),
             source="",
-            public_callback=Mock(),
-            message_callback=Mock()
+            public_callback=Mock()
         )
         
         # Verify StepRequest was created correctly
@@ -233,8 +231,7 @@ class TestStructuredToolHandling:
             message=mock_llm_response,
             cancellation_token=Mock(),
             source="",
-            public_callback=Mock(),
-            message_callback=Mock()
+            public_callback=Mock()
         )
         
         # Verify error message was sent

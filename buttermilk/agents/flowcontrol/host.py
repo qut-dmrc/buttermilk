@@ -201,7 +201,6 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> None:
         """Listen to messages in the group chat and maintain conversation history."""
@@ -243,7 +242,6 @@ class HostAgent(Agent):
         message: OOBMessages,
         cancellation_token: CancellationToken,
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> OOBMessages | None:
         """Handle special events and messages."""

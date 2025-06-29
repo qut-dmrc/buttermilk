@@ -235,7 +235,6 @@ class TestHostAgentRegistry:
         """Test that host agent processes announcement messages in _listen."""
         # Mock callbacks
         public_callback = AsyncMock()
-        message_callback = AsyncMock()
         
         # Initialize host
         await host_agent.initialize(callback_to_groupchat=AsyncMock())
@@ -259,8 +258,7 @@ class TestHostAgentRegistry:
             message=announcement,
             cancellation_token=MagicMock(),
             source="WORKER-worker1",
-            public_callback=public_callback,
-            message_callback=message_callback
+            public_callback=public_callback
         )
         
         # Verify agent was registered
@@ -307,7 +305,6 @@ class TestHostAgentRegistry:
             cancellation_token=MagicMock(),
             source="RESPONDER-resp1",
             public_callback=public_callback,
-            message_callback=AsyncMock()
         )
         
         # Verify responder was registered

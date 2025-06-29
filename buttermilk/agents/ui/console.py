@@ -491,7 +491,6 @@ class CLIUserAgent(UIAgent):
         cancellation_token: CancellationToken | None = None,
         source: str = "",
         public_callback: Callable | None = None,  # Usually unused by UI agent in listen
-        message_callback: Callable | None = None,  # Usually unused by UI agent in listen
         **kwargs,
     ) -> None:
         """Displays messages received from other agents on the console."""

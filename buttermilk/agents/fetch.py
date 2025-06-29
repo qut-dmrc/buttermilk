@@ -258,7 +258,6 @@ class FetchAgent(FetchRecord, Agent):
         cancellation_token: CancellationToken | None = None,  # Standard arg
         source: str = "",  # Standard arg
         public_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
-        message_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
         **kwargs: Any,  # Standard arg
     ) -> None:
         """Listens for `AgentInput` messages and attempts to fetch a record if URI/ID is provided.
@@ -279,7 +278,6 @@ class FetchAgent(FetchRecord, Agent):
             source: Identifier of the message sender.
             public_callback: Optional callback function to publish results (e.g.,
                 the fetched `Record` wrapped in `AgentOutput`).
-            message_callback: Optional callback (typically not used by `_listen`).
             **kwargs: Additional keyword arguments.
 
         """

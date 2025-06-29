@@ -32,7 +32,7 @@ class MockButtermilkAgent:
         self.get_supported_message_types = MagicMock(return_value=["UIMessage"])
         self.create_announcement = MagicMock()
         self.send_announcement = AsyncMock()
-        self.initialize_with_announcement = AsyncMock()
+        self.initialize = AsyncMock()
         self.cleanup_with_announcement = AsyncMock()
         self.cleanup = AsyncMock()
         self._heartbeat = MagicMock()
@@ -148,7 +148,7 @@ class TestGroupChatAnnouncementIntegration:
                 announcements_sent.append(message)
         
         # Initialize with announcement
-        await host_agent.initialize_with_announcement(
+        await host_agent.initialize(
             callback_to_groupchat=mock_runtime.publish_message,
             public_callback=capture_announcement
         )

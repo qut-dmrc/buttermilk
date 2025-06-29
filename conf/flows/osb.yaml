@@ -6,11 +6,10 @@ defaults:
   - _self_
   # Enhanced RAG agents for OSB analysis
   - /agents/rag@osb.agents: 
-    - ragzot
     - researcher
-    - policy_analyst
-    - fact_checker
-    - explorer
+    # - policy_analyst
+    # - fact_checker
+    # - explorer
   # Observer agents for coordination
   - /agents@osb.observers:
     - host/llm_host
@@ -26,7 +25,7 @@ osb:
   # Core flow configuration
   orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
   name: "OSB Interactive Flow"
-  description: "Production-quality interactive group chat experience for querying OSB vector store with multi-agent analysis"
+  description: "Interactive group chat experience for querying OSB vector store with multi-agent analysis"
 
   # Flow parameters
   parameters: {}

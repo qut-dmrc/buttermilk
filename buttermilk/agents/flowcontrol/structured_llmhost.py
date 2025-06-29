@@ -127,15 +127,9 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             except asyncio.QueueEmpty:
                 break
 
-
     async def initialize(self, callback_to_groupchat: Any, **kwargs: Any) -> None:
         """Initialize the host agent."""
         await super().initialize(callback_to_groupchat=callback_to_groupchat, **kwargs)
-        await self._initialize(callback_to_groupchat=callback_to_groupchat)
-
-    async def _initialize(self, callback_to_groupchat: Any) -> None:
-        """Initialize the host with agent-provided tool definitions."""
-        # Note: super().initialize() is already called in our initialize() method
 
         # Build initial tools (may be empty if no agents announced yet)
         await self._build_agent_tools()
@@ -152,19 +146,11 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         """
         agent_tools = []
 
-        # Build tools from agent announcements 
+        # Build tools from agent announcements
         for agent_id, announcement in self._agent_registry.items():
             agent_role = announcement.agent_config.role
-            
-            # Get the actual agent instance to extract its tools
-            # We need to get the agent instance to access its @tool decorated methods
-            agent_instance = None
-            # TODO: We need a way to get the actual agent instance from the announcement
-            # For now, use the tool_definition as a fallback
-            
-            if announcement.tool_definition:
-                tool_def = announcement.tool_definition
-                
+
+            if tool_def :=  announcement.tool_definition:
                 # Get input schema from tool definition
                 input_schema = tool_def.get("input_schema", {
                     "type": "object",
@@ -235,7 +221,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> None:
         """Listen to messages and use structured tools to determine next steps."""
@@ -245,7 +230,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
             cancellation_token=cancellation_token,
             source=source,
             public_callback=public_callback,
-            message_callback=message_callback,
             **kwargs,
         )
 
@@ -275,7 +259,6 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                     }
                 ),
                 public_callback=public_callback,
-                message_callback=message_callback,
                 cancellation_token=cancellation_token,
                 **kwargs
             )

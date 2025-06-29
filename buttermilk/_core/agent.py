@@ -154,6 +154,7 @@ class Agent(AgentConfig, ABC):
     _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _heartbeat: asyncio.Queue[bool | None] = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
+    _announcement_callback: Callable[[Any], Awaitable[None]] | None = PrivateAttr(default=None)
 
     model_config = {  # Pydantic Model Configuration
         "extra": "ignore",
@@ -187,21 +188,6 @@ class Agent(AgentConfig, ABC):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-    async def initialize(self, **kwargs: Any) -> None:
-        """Initializes agent state or resources. Called once by the orchestrator.
-
-        Subclasses can override this method to perform asynchronous setup tasks
-        such as loading models, establishing connections to external services,
-        or initializing complex state. The base implementation is a no-op.
-
-        Args:
-            **kwargs: Arbitrary keyword arguments that might be passed by the
-                orchestrator or calling context, providing additional setup parameters.
-
-        """
-        logger.debug(f"Agent {self.agent_name}: Base initialize.")
-        # Set the agent ID in the context variable for tracing
-        agent_id_var.set(self.agent_id)
 
     async def cleanup(self) -> None:
         """Cleanup agent resources and state.
@@ -323,22 +309,30 @@ class Agent(AgentConfig, ABC):
         except Exception as e:
             logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
 
-    async def initialize_with_announcement(
+    async def initialize(
         self,
         public_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any
     ) -> None:
-        """Initialize agent and send joining announcement.
+        """Initializes agent state or resources and optionally sends joining announcement.
+
+        Called once by the orchestrator. Subclasses can override this method to perform 
+        asynchronous setup tasks such as loading models, establishing connections to external 
+        services, or initializing complex state.
         
         Args:
             public_callback: Optional callback to publish announcement.
-            **kwargs: Additional initialization parameters.
+            **kwargs: Arbitrary keyword arguments that might be passed by the
+                orchestrator or calling context, providing additional setup parameters.
         """
-        # Call base initialization
-        await self.initialize(**kwargs)
+        logger.debug(f"Agent {self.agent_name}: Base initialize.")
+        # Set the agent ID in the context variable for tracing
+        agent_id_var.set(self.agent_id)
 
-        # Send joining announcement if callback provided
+        # Store callback for cleanup if provided
         if public_callback:
+            self._announcement_callback = public_callback
+            # Send joining announcement
             await self.send_announcement(
                 public_callback=public_callback,
                 announcement_type="initial",
@@ -483,7 +477,6 @@ class Agent(AgentConfig, ABC):
         self,
         message: AgentInput,
         public_callback: Callable[[Any], Awaitable[None]],
-        message_callback: Callable[[Any], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentTrace:
@@ -508,8 +501,6 @@ class Agent(AgentConfig, ABC):
             message: The initial `AgentInput` message for the agent.
             public_callback: An asynchronous callback function to publish messages
                 (like status updates, traces) to a general or public topic.
-            message_callback: An asynchronous callback function to publish messages
-                back to a topic associated with the incoming message (less commonly used).
             cancellation_token: An optional `CancellationToken` to signal if the
                 operation should be aborted. (Currently not deeply integrated into the core loop).
             **kwargs: Additional keyword arguments that might be passed by the caller.
@@ -620,7 +611,6 @@ class Agent(AgentConfig, ABC):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable[[Any], Awaitable[None]],
-        message_callback: Callable[[Any], Awaitable[None]],
         **kwargs: Any,
     ) -> None:
         """Handle passively received messages from other agents or sources.
@@ -643,9 +633,6 @@ class Agent(AgentConfig, ABC):
             source: A string identifier for the sender or source of the message.
             public_callback: An asynchronous callback function to publish messages
                 to a general or public topic. (Currently not used in base implementation).
-            message_callback: An asynchronous callback function to publish messages
-                back to a topic associated with the incoming message. (Currently not
-                used in base implementation).
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         """
@@ -736,7 +723,6 @@ class Agent(AgentConfig, ABC):
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable[[Any], Awaitable[None]] | None = None,
-        message_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band (OOB) control messages.
@@ -757,8 +743,6 @@ class Agent(AgentConfig, ABC):
                 event handling should be aborted.
             public_callback: An optional asynchronous callback for publishing
                 general responses or events.
-            message_callback: An optional asynchronous callback for publishing
-                responses specific to the incoming message's context/topic.
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         Returns:

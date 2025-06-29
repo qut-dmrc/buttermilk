@@ -116,16 +116,11 @@ class AutogenAgentAdapter(RoutedAgent):
         super().__init__(description=self.agent.description)
 
         # This allows UI agents, for example, to send user input back into the Autogen flow.
-        # Check if agent supports announcements
-        if hasattr(self.agent, 'initialize_with_announcement'):
-            # Initialize with announcement capability
-            init_task = self.agent.initialize_with_announcement(
-                callback_to_groupchat=self._make_publish_callback(),
-                public_callback=self._make_publish_callback()
-            )
-        else:
-            # Standard initialization
-            init_task = self.agent.initialize(callback_to_groupchat=self._make_publish_callback())
+        # Initialize with announcement capability
+        init_task = self.agent.initialize(
+            callback_to_groupchat=self._make_publish_callback(),
+            public_callback=self._make_publish_callback()
+        )
         
         task = asyncio.create_task(init_task)
         self._background_tasks.add(task)
@@ -247,7 +242,6 @@ class AutogenAgentAdapter(RoutedAgent):
                 message=message,
                 cancellation_token=ctx.cancellation_token,
                 public_callback=public_callback,  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
@@ -284,7 +278,6 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             else:
                 # Delegate to the agent's _handle_events method.
@@ -293,7 +286,6 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             logger.debug(f"Agent {self.agent.agent_name} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__ if response else 'N/A'}")
 
@@ -337,7 +329,6 @@ class AutogenAgentAdapter(RoutedAgent):
                 cancellation_token=ctx.cancellation_token,
                 # Provide callbacks for the agent to publish messages back if needed during execution.
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.agent_name} completed invocation. Output type: {type(output).__name__}")

@@ -127,7 +127,6 @@ class TestAutogenAgentAdapter:
         assert call_kwargs.get("message") == conductor_request
         assert call_kwargs.get("cancellation_token") == mock_message_context.cancellation_token
         assert callable(call_kwargs.get("public_callback"))
-        assert callable(call_kwargs.get("message_callback"))
         assert call_kwargs.get("source") == "test_sender"
         assert result == mock_response
         adapter.publish_message.assert_not_called()

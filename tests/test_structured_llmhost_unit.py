@@ -192,8 +192,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
             
             # Should have called invoke
@@ -215,8 +214,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
             
             # Should not invoke
@@ -240,8 +238,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
             
             # Queue should be empty
@@ -265,8 +262,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
         
         # Should have added END step to queue
@@ -310,8 +306,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
         
         # Should have added step to queue
@@ -344,8 +339,7 @@ class TestStructuredLLMHostListen:
                 message=message,
                 cancellation_token=None,
                 source="test",
-                public_callback=AsyncMock(),
-                message_callback=AsyncMock()
+                public_callback=AsyncMock()
             )
         
         # Should pass response to groupchat instead
