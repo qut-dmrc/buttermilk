@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from autogen_core import CancellationToken
-from autogen_core.tools import Tool
+from autogen_core.tools import Tool, ToolSchema
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import AgentInput, StepRequest, logger
@@ -27,9 +27,7 @@ class AgentProxyTool(Tool):
     def __init__(
         self, 
         role: str,
-        name: str,
-        description: str,
-        parameters: dict[str, Any],
+        tool_schema: ToolSchema,
         proposed_step_queue: asyncio.Queue[StepRequest],
         host_agent_name: str
     ):
@@ -38,34 +36,28 @@ class AgentProxyTool(Tool):
             args_type=BaseModel,
             return_type=dict
         )
-        self._name = name
-        self._description = description
         self.role = role
-        self.parameters = parameters  # Store the OpenAI-style parameters
+        self.tool_schema = tool_schema
         self.proposed_step_queue = proposed_step_queue
         self.host_agent_name = host_agent_name
     
     @property
     def name(self) -> str:
-        return self._name
+        return self.tool_schema["name"]
     
     @property
     def description(self) -> str:
-        return self._description
+        return self.tool_schema.get("description", f"Call {self.role} agent")
     
     @property
-    def schema(self) -> dict[str, Any]:
-        """Return the OpenAI-style tool schema."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.parameters
-        }
+    def schema(self) -> ToolSchema:
+        """Return the autogen ToolSchema directly."""
+        return self.tool_schema
     
-    async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
+    async def run_json(self, args: str, cancellation_token: CancellationToken) -> str:
         """Execute the tool by sending a StepRequest to the target agent."""
         # Parse the JSON args
-        inputs = json.loads(args_json) if args_json else {}
+        inputs = json.loads(args) if args else {}
         
         step_request = StepRequest(
             role=self.role,
@@ -127,17 +119,11 @@ class StructuredLLMHostAgent(LLMAgent, HostAgent):
                 # Create a simple proxy tool that uses the agent's schema directly
                 tool = AgentProxyTool(
                     role=agent_role,
-                    name=tool_def["name"],
-                    description=tool_def.get("description", f"Call {agent_role} agent"),
-                    parameters=tool_def.get("input_schema", {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }),
+                    tool_schema=tool_def,
                     proposed_step_queue=self._proposed_step,
                     host_agent_name=self.agent_name
                 )
-                
+
                 agent_tools.append(tool)
                 logger.debug(f"Registered tool: {tool_def['name']} for {agent_role}")
 

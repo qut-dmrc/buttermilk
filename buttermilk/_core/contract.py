@@ -29,6 +29,7 @@ from autogen_core.models import (
     FunctionExecutionResultMessage,
     FunctionExecutionResult,
 )
+from autogen_core.tools import ToolSchema
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -916,7 +917,7 @@ class AgentAnnouncement(FlowEvent):
         default_factory=list,
         description="OOBMessage types this agent handles"
     )
-    tool_definition: dict[str, Any] = Field(default_factory=dict, description="Autogen-compatible tool definition for this agent")
+    tool_definition: ToolSchema | None = Field(default=None, description="Autogen-compatible tool definition for this agent")
 
     # Status
     status: Literal["joining", "active", "leaving"] = Field(

@@ -23,7 +23,7 @@ from weave.trace.weave_client import Call, WeaveObject
 if TYPE_CHECKING:
     from buttermilk._core.tool_definition import AgentToolDefinition
 
-from autogen_core.tools import Tool
+from autogen_core.tools import Tool, ToolSchema
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
@@ -888,7 +888,7 @@ class Agent(AgentConfig, ABC):
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
 
-    def get_autogen_tool_definition(self) -> dict[str, Any]:
+    def get_autogen_tool_definition(self) -> ToolSchema:
         """Return autogen-compatible tool definition for this agent.
         
         This creates a standard tool definition that allows the agent to be
@@ -896,14 +896,14 @@ class Agent(AgentConfig, ABC):
         Autogen's format and can be used by LLM hosts for structured tool calling.
         
         Returns:
-            dict: Autogen-compatible tool definition with name, description, 
-                  and input schema.
+            ToolSchema: Autogen-compatible tool definition with name, description, 
+                        and parameters.
         """
-        return {
-            'name': f"call_{self.role.lower()}",
-            'description': self._get_tool_description(),
-            'input_schema': self._get_agent_input_schema()
-        }
+        return ToolSchema(
+            name=f"call_{self.role.lower()}",
+            description=self._get_tool_description(),
+            parameters=self._get_agent_input_schema()
+        )
 
     def _get_tool_description(self) -> str:
         """Get the tool description for this agent.
