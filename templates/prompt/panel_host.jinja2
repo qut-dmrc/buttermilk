@@ -26,11 +26,6 @@ Available tools will be provided in the tool definitions. Always use the exact t
 OBJECTIVE:
 {{ task }}
 
-{% if participants %}
-AVAILABLE PARTICIPANT ROLES:
-{{ participants | pprint }}
-{% endif %}
-
 {% if exploration_path %}
 CURRENT EXPLORATION STATUS:
 Steps taken so far: {{ exploration_path | join(" -> ") }}

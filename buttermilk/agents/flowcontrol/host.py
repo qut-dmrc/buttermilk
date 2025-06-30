@@ -728,7 +728,9 @@ class HostAgent(Agent):
                 metadata={"tool_name": call.name, "tool_call_id": call.id}
             )
 
-            logger.info(f"Host routing tool call {call.name} to {agent_role}")
+            # Create a more descriptive log message
+            tool_desc = self._describe_tool_call(call.name, arguments)
+            logger.info(f"Host routing to {agent_role}: {tool_desc}")
             
             # Queue it if we have a queue
             if hasattr(self, '_proposed_step'):
@@ -736,3 +738,42 @@ class HostAgent(Agent):
 
             # Send it out regardless
             await self.callback_to_groupchat(step_request)
+    
+    def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
+        """Generate a concise description of a tool call.
+        
+        Args:
+            tool_name: Name of the tool being called
+            arguments: Parsed arguments for the tool
+            
+        Returns:
+            str: A human-readable description
+        """
+        # Common patterns for better descriptions
+        if "query" in arguments:
+            query = str(arguments["query"])
+            return f"{tool_name}('{query[:40]}{'...' if len(query) > 40 else ''}')"
+        elif "message" in arguments:
+            msg = str(arguments["message"])
+            return f"{tool_name}('{msg[:40]}{'...' if len(msg) > 40 else ''}')"
+        elif "content" in arguments:
+            content = str(arguments["content"])
+            return f"{tool_name}('{content[:40]}{'...' if len(content) > 40 else ''}')"
+        elif "target" in arguments:
+            return f"{tool_name}(target='{arguments['target']}')"
+        elif "inputs" in arguments and isinstance(arguments["inputs"], dict):
+            # Handle nested inputs
+            if "query" in arguments["inputs"]:
+                query = str(arguments["inputs"]["query"])
+                return f"{tool_name}(query='{query[:30]}{'...' if len(query) > 30 else ''}')"
+            else:
+                return f"{tool_name}({len(arguments['inputs'])} inputs)"
+        else:
+            # Show first meaningful argument
+            for key, value in arguments.items():
+                if key not in ["metadata", "context", "options"]:
+                    val_str = str(value)
+                    return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
+            
+            # Fallback
+            return f"{tool_name}({len(arguments)} args)"

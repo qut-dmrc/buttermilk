@@ -187,10 +187,13 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             # Use the base class helper to route tool calls
             await self._route_tool_calls_to_agents(tool_calls)
 
-            # Return a simple acknowledgment
+            # Create a more informative summary of the tool calls
+            summary = self._create_tool_call_summary(tool_calls)
+            
+            # Return a descriptive acknowledgment
             return AgentOutput(
                 agent_id=self.agent_id,
-                outputs=f"Routing {len(tool_calls)} tool calls to agents",
+                outputs=summary,
                 metadata={"tool_calls": len(tool_calls)}
             )
 
@@ -204,3 +207,50 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 "usage": create_result.usage if create_result.usage else None,
             },
         )
+    
+    def _create_tool_call_summary(self, tool_calls: list[FunctionCall]) -> str:
+        """Create a human-readable summary of tool calls.
+        
+        Args:
+            tool_calls: List of FunctionCall objects
+            
+        Returns:
+            str: A concise summary of what tools are being called
+        """
+        if not tool_calls:
+            return "No tool calls requested"
+        
+        if len(tool_calls) == 1:
+            call = tool_calls[0]
+            # Try to extract a meaningful description from the tool name and arguments
+            tool_name = call.name
+            
+            # Try to parse arguments for key information
+            try:
+                import json
+                args = json.loads(call.arguments)
+                
+                # Common patterns for better descriptions
+                if "query" in args:
+                    return f"Searching for: {args['query'][:50]}{'...' if len(str(args['query'])) > 50 else ''}"
+                elif "message" in args or "content" in args:
+                    msg = args.get("message", args.get("content", ""))
+                    return f"Processing: {str(msg)[:50]}{'...' if len(str(msg)) > 50 else ''}"
+                elif "target" in args:
+                    return f"Targeting {args['target']} with {tool_name}"
+                else:
+                    # Generic single tool call
+                    return f"Calling {tool_name}"
+            except:
+                return f"Calling {tool_name}"
+        
+        # Multiple tool calls - group by type if possible
+        tool_names = [call.name for call in tool_calls]
+        unique_tools = list(dict.fromkeys(tool_names))  # Preserve order while removing duplicates
+        
+        if len(unique_tools) == 1:
+            return f"Making {len(tool_calls)} {unique_tools[0]} calls"
+        elif len(unique_tools) <= 3:
+            return f"Calling: {', '.join(unique_tools)}"
+        else:
+            return f"Orchestrating {len(tool_calls)} tool calls across {len(unique_tools)} tools"

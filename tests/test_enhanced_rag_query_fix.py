@@ -14,19 +14,36 @@ class TestEnhancedRAGQueryFix:
     @pytest.fixture
     def mock_rag_agent(self):
         """Create a mock enhanced RAG agent."""
-        with patch('buttermilk.agents.rag.enhanced_rag_agent.EnhancedVectorSearch'):
+        # Mock the data configuration for ChromaDB
+        with patch('buttermilk.agents.rag.rag_agent.ChromaDBEmbeddings'):
             agent = EnhancedRagAgent(
                 agent_name="test_rag",
                 model_name="test-model",
                 role="RAG",
-                parameters={"model": "test-model"}
+                parameters={"model": "test-model"},
+                data={
+                    "chromadb": {
+                        "type": "chromadb",
+                        "collection_name": "test_collection"
+                    }
+                }
             )
             
-            # Mock the search components
-            agent._enhanced_search = Mock()
-            agent._enhanced_search.create_search_plan = AsyncMock()
-            agent._enhanced_search.execute_search_plan = AsyncMock()
-            agent._generate_response = AsyncMock(return_value="Test response")
+            # Mock the ChromaDB components
+            agent._chromadb = Mock()
+            agent._vectorstore = Mock()
+            agent.ensure_chromadb_ready = AsyncMock()
+            
+            # Mock the query_db method from parent
+            from buttermilk._core.contract import ToolOutput
+            agent._query_db = AsyncMock(return_value=ToolOutput(
+                name="test_rag",
+                call_id="",
+                content="Test results",
+                results=[],
+                args={"query": "test"},
+                messages=[]
+            ))
             
             return agent
     
@@ -73,99 +90,138 @@ class TestEnhancedRAGQueryFix:
         assert query == ""
     
     @pytest.mark.asyncio
-    async def test_search_tool_method(self, mock_rag_agent):
-        """Test the new @tool decorated search method."""
-        # Mock the search plan and results
-        from buttermilk.agents.rag.search_planning import SearchPlan, SearchResults, SearchStrategy
+    async def test_semantic_search_tool_method(self, mock_rag_agent):
+        """Test the @tool decorated semantic_search method."""
+        # Call the semantic search tool
+        result = await mock_rag_agent.semantic_search(query="test query", n_results=5)
         
-        mock_plan = SearchPlan(
-            query="test query",
-            intent="Test search",
-            primary_strategy=SearchStrategy.SEMANTIC,
-            max_results_per_strategy=10,
-            confidence_threshold=0.7
-        )
+        # Parse result
+        import json
+        result_data = json.loads(result)
         
-        mock_results = SearchResults(
-            query="test query",
-            plan=mock_plan,
-            results=[],
-            total_found=0,
-            strategies_used=[SearchStrategy.SEMANTIC],
-            confidence_score=0.0,
-            key_themes=[]
-        )
+        # Verify result structure
+        assert "query" in result_data
+        assert result_data["query"] == "test query"
+        assert "results" in result_data
+        assert "total_found" in result_data
         
-        mock_rag_agent._enhanced_search.create_search_plan.return_value = mock_plan
-        mock_rag_agent._enhanced_search.execute_search_plan.return_value = mock_results
-        
-        # Call the tool method
-        result = await mock_rag_agent.search(query="test query", max_results=5)
-        
-        # Verify result
-        assert result == "Test response"
-        
-        # Verify the search was called with correct query
-        mock_rag_agent._enhanced_search.create_search_plan.assert_called_once()
-        call_args = mock_rag_agent._enhanced_search.create_search_plan.call_args[0]
-        assert call_args[0] == "test query"
+        # Verify the parent's _query_db was called
+        mock_rag_agent._query_db.assert_called_once_with("test query")
     
     @pytest.mark.asyncio
     async def test_unified_request_handling(self, mock_rag_agent):
         """Test that UnifiedRequest is properly handled."""
-        # Create a UnifiedRequest
+        # Create a UnifiedRequest for semantic_search
         request = UnifiedRequest(
-            target="test_rag.search",
-            inputs={"query": "unified test query"},
+            target="test_rag.semantic_search",
+            inputs={"query": "unified test query", "n_results": 5},
             context={},
             metadata={}
         )
         
-        # Mock the search components
-        from buttermilk.agents.rag.search_planning import SearchPlan, SearchResults, SearchStrategy
-        
-        mock_plan = SearchPlan(
-            query="unified test query",
-            intent="Test search",
-            primary_strategy=SearchStrategy.SEMANTIC,
-            max_results_per_strategy=10,
-            confidence_threshold=0.7
-        )
-        
-        mock_results = SearchResults(
-            query="unified test query",
-            plan=mock_plan,
-            results=[],
-            total_found=0,
-            strategies_used=[SearchStrategy.SEMANTIC],
-            confidence_score=0.0,
-            key_themes=[]
-        )
-        
-        mock_rag_agent._enhanced_search.create_search_plan.return_value = mock_plan
-        mock_rag_agent._enhanced_search.execute_search_plan.return_value = mock_results
-        
         # Handle the unified request
         result = await mock_rag_agent.handle_unified_request(request)
         
-        # Should return the string output
-        assert result == "Test response"
+        # Parse result
+        import json
+        result_data = json.loads(result)
+        
+        # Should return JSON with search results
+        assert "query" in result_data
+        assert result_data["query"] == "unified test query"
     
-    def test_tool_definition_exists(self, mock_rag_agent):
-        """Test that the search tool is properly defined."""
+    def test_tool_definitions_exist(self, mock_rag_agent):
+        """Test that the search tools are properly defined."""
         tools = mock_rag_agent.get_tool_definitions()
         
-        # Should have at least the search tool
-        assert len(tools) >= 1
+        # Should have multiple search tools
+        assert len(tools) >= 5  # At least 5 search-related tools
         
-        # Find the search tool
-        search_tool = None
+        # Check for expected tools
+        tool_names = {tool.name for tool in tools}
+        expected_tools = {
+            "semantic_search",
+            "field_search",
+            "hybrid_search",
+            "analyze_query",
+            "create_search_plan",
+            "execute_search_plan"
+        }
+        
+        # Find semantic_search tool specifically
+        semantic_tool = None
         for tool in tools:
-            if tool.name == "search":
-                search_tool = tool
+            if tool.name == "semantic_search":
+                semantic_tool = tool
                 break
         
-        assert search_tool is not None
-        assert search_tool.description == "Search the knowledge base with an intelligent RAG system"
-        assert "query" in search_tool.input_schema["properties"]
-        assert "max_results" in search_tool.input_schema["properties"]
+        assert semantic_tool is not None
+        assert "query" in semantic_tool.input_schema["properties"]
+        assert "n_results" in semantic_tool.input_schema["properties"]
+        
+        # Verify all expected tools are present
+        for expected in expected_tools:
+            assert expected in tool_names, f"Missing tool: {expected}"
+    
+    @pytest.mark.asyncio
+    async def test_analyze_query_tool(self, mock_rag_agent):
+        """Test the analyze_query tool method."""
+        result = await mock_rag_agent.analyze_query("What are the legal implications?")
+        
+        import json
+        analysis = json.loads(result)
+        
+        # Verify result structure
+        assert "query" in analysis
+        assert "intent" in analysis
+        assert "query_type" in analysis
+        assert "key_concepts" in analysis
+        assert "suggested_strategies" in analysis
+        assert analysis["query"] == "What are the legal implications?"
+    
+    @pytest.mark.asyncio
+    async def test_create_search_plan_tool(self, mock_rag_agent):
+        """Test the create_search_plan tool method."""
+        result = await mock_rag_agent.create_search_plan("Find technical documentation")
+        
+        import json
+        plan = json.loads(result)
+        
+        # Verify plan structure
+        assert "query" in plan
+        assert "intent" in plan
+        assert "primary_strategy" in plan
+        assert "secondary_strategies" in plan
+        assert "metadata_filters" in plan
+        assert plan["query"] == "Find technical documentation"
+    
+    @pytest.mark.asyncio
+    async def test_hybrid_search_tool(self, mock_rag_agent):
+        """Test the hybrid_search tool method."""
+        # Mock field_search to return different results
+        async def mock_field_search(query, content_type, n_results, metadata_filters=None):
+            import json
+            return json.dumps({
+                "query": query,
+                "results": [{
+                    "chunk_id": f"{content_type}_1",
+                    "document_id": f"doc_{content_type}_1",
+                    "content": f"Test {content_type} content"
+                }],
+                "total_found": 1
+            })
+        
+        mock_rag_agent.field_search = mock_field_search
+        
+        result = await mock_rag_agent.hybrid_search("test hybrid query", n_results=10)
+        
+        import json
+        result_data = json.loads(result)
+        
+        # Verify result structure
+        assert "query" in result_data
+        assert "results" in result_data
+        assert "total_found" in result_data
+        assert "search_type" in result_data
+        assert result_data["search_type"] == "hybrid"
+        assert result_data["query"] == "test hybrid query"
