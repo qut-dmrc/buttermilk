@@ -138,36 +138,3 @@ class RagZot(RagAgent):
 
     _output_model: type[pydantic.BaseModel] | None = ZoteroResearchResult
     _ref_result_class: type[RefResult] = ZoteroRefResult  # Use Zotero-specific result class
-
-    @pydantic.model_validator(mode="after")
-    def _load_zotero_tools(self) -> Self:
-        """Initialize Zotero-specific tools and configurations.
-
-        Extends the base RagAgent initialization with Zotero-specific setup.
-
-        Returns:
-            Self: The initialized RagZot instance.
-        """
-        # Call parent initialization first
-        super()._load_tools()
-
-        # Override the search tool with Zotero-specific description
-        if hasattr(self, "_tools_list") and self._tools_list:
-            # Update the search tool description for Zotero context
-            search_tool = self._tools_list[0]  # Should be the search tool from parent
-            # FunctionTool properties are read-only, so we need to recreate it
-            from autogen_core.tools import FunctionTool
-            
-            self._tools_list[0] = FunctionTool(
-                name="search_zotero_knowledge_base",
-                description=(
-                    self.description or
-                    "Searches a Zotero-based academic knowledge base for relevant research literature. "
-                    "Returns formatted text chunks with academic citations and metadata."
-                ),
-                func=self.fetch,
-                strict=False,
-            )
-
-        logger.info(f"RagZot '{self.agent_id}': Zotero-specific search tool configured.")
-        return self

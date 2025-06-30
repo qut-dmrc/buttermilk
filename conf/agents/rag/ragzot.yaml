@@ -3,8 +3,17 @@ researcher:
   name_components: ["🧑‍💻", "role", "model", "template", "unique_identifier"]
   agent_obj: RagZot
   description: A research assistant that provides relevant information from an academic knowledge base. Should be called upon frequently during a conversation and before analysis to help provide information for other agents.
-  data: ${...data}
+  
+  # Reference data configuration from flow parameters - REQUIRED for RagAgent/RagZot
+  data: ${...parameters.data}
+  
   variants:
     model: ${llms.general}
   parameters:
     template: rag_academic
+    # RagAgent parameters (optional, these are defaults)
+    n_results: 20              # Number of search results
+    no_duplicates: false       # Filter for unique documents
+    max_queries: 5             # Maximum concurrent queries
+    # Model is required
+    model: ${llms.general}

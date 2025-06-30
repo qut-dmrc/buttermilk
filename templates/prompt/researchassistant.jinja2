@@ -11,15 +11,28 @@ You lead a team of research assistants. Your MANAGER will ask you questions; you
 OBJECTIVE:
 {{ task }}
 
-placeholder:
-{{ context }}
-
-user:
-{% if prompt %}
-{{prompt}}
+{% if exploration_path %}
+CURRENT EXPLORATION STATUS:
+Steps taken so far: {{ exploration_path | join(" -> ") }}
+{% else %}
+No steps taken yet.
 {% endif %}
+
+{% if results %}
+Results from previous steps:
+{{ results | pprint }}
+{% endif %}
+
 {% if user_feedback %}
 Recent MANAGER feedback/guidance:
 {% for feedback in user_feedback[-3:] %} - {{ feedback }}
 {% endfor %}
+{% endif %}
+
+placeholder:
+{{ context }}
+
+{% if prompt %}
+user:
+{{prompt}}
 {% endif %}

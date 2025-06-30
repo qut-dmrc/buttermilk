@@ -1,9 +1,7 @@
-# Enhanced Researcher Agent Configuration
-# Primary research agent with full enhanced capabilities
 researcher:
-  role: "ENHANCED_RESEARCHER"
-  agent_obj: EnhancedRagAgent
-  description: "Advanced research assistant with intelligent multi-field search capabilities"
+  role: RESEARCHER
+  agent_obj: RagAgent
+  description: "Scholarly research assistant"
   
   # Reference data configuration from flow parameters
   data: ${...parameters.data}
@@ -11,26 +9,12 @@ researcher:
   variants:
     model: ${llms.general}
     
-  # Enhanced RAG specific parameters
+  # Basic RAG parameters
   parameters:
-    # Core functionality toggles
-    enable_query_planning: true          # Use LLM to analyze queries and plan searches
-    enable_result_synthesis: true       # Use LLM to synthesize and rank results
-    include_search_explanation: true    # Include search strategy explanation in responses
-    
     # Search configuration
-    search_strategies:                   # Available search strategies
-      - "semantic"                       # Vector similarity across all content
-      - "title"                         # Search document titles only
-      - "summary"                       # Search document summaries only
-      - "content"                       # Search main document content only
-      - "metadata"                      # Search using metadata filters
-      - "hybrid"                        # Combine multiple search approaches
+    n_results: 10                # Number of search results to retrieve
+    no_duplicates: true          # Filter for unique parent documents
+    max_queries: 3               # Maximum concurrent queries
     
-    max_search_rounds: 3                # Maximum number of search strategies to try
-    confidence_threshold: 0.5           # Minimum similarity threshold for results
-    max_results_per_strategy: 5         # Maximum results per search strategy
-    
-    # LLM configuration (optional - defaults to agent's main LLM)
-    planning_model: sonnet                # Model for query planning (null = use main model)
-    synthesis_model: sonnet               # Model for result synthesis (null = use main model)
+    # Model is required
+    model: ${llms.general}

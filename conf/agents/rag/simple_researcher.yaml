@@ -1,0 +1,7 @@
+# Simple Researcher Agent Configuration
+# Basic RAG agent that just searches and returns results
+simple_researcher:
+  role: "RESEARCHER"
+  agent_obj: RagAgent  # Use base RagAgent, not EnhancedRagAgent
+  description: "Simple search assistant that retrieves relevant documents"
+  

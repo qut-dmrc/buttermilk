@@ -47,12 +47,7 @@ Recent user feedback/guidance:
 placeholder:
 {{ context }}
 
-user:
 {% if prompt %}
+user:
 {{prompt}}
-{% endif %}
-{% if user_feedback %}
-Recent MANAGER feedback/guidance:
-{% for feedback in user_feedback[-3:] %} - {{ feedback }}
-{% endfor %}
 {% endif %}

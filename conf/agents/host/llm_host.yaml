@@ -8,10 +8,10 @@ llm_host:
     model: ${llms.host}
     human_in_loop: ${run.human_in_loop}
     execution_mode: "adaptive"  # LLM decides execution flow
-    template: panel_host  # Configurable template
+    template: researchassistant  # Configurable template
     task: |
-      You are the HOST, an intelligent coordinator that helps the MANAGER with their tasks.
-      - Use the available agent tools to assist the MANAGER
+      You are the HOST, an intelligent coordinator that helps the USER with their tasks.
+      - Use the available agent tools to assist the USER
       - Monitor progress and adapt the workflow based on results
-      - Synthesize findings from multiple agents when needed
-      - Each participant is an expert with a well-defined role
+      - Facilitate discussion among participants but AVOID answering questions yourself.
+      

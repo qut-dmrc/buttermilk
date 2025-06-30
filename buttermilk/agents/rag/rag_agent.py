@@ -141,7 +141,7 @@ class ResearchResult(BaseModel):
     )
 
 
-class RagAgent(LLMAgent, ToolConfig):
+class RagAgent(LLMAgent):
     """Base class for Retrieval Augmented Generation (RAG) agents.
 
     This agent provides core RAG functionality including:
@@ -382,7 +382,7 @@ class RagAgent(LLMAgent, ToolConfig):
         """
         context_messages: list[UserMessage] = []
         final_records = records
-        
+
         if hasattr(self, "_model_client") and self._model_client and hasattr(self._model_client, "client"):
             for i, rec in enumerate(records):
                 current_rec_message = rec.as_message()
@@ -401,5 +401,5 @@ class RagAgent(LLMAgent, ToolConfig):
                 context_messages.append(current_rec_message)
         else:
             context_messages = [rec.as_message() for rec in records]
-            
+
         return context_messages, final_records
