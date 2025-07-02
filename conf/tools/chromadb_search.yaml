@@ -1,21 +1,6 @@
-# ChromaDB Search Tool Configurations
 
-# OSB vector search tool
-osb_search:
+# ChromaDB Search Tool Configurations
+chromadb_search:
   _target_: buttermilk.tools.chromadb_search.ChromaDBSearchTool
-  collection_name: ${storage.osb_vector.collection_name}
-  persist_directory: ${storage.osb_vector.persist_directory}
-  embedding_model: ${storage.osb_vector.embedding_model}
-  dimensionality: ${storage.osb_vector.dimensionality}
   n_results: 10
   no_duplicates: true
-
-# Generic search tool template
-default_search:
-  _target_: buttermilk.tools.chromadb_search.ChromaDBSearchTool
-  collection_name: "default"
-  persist_directory: "./data/chromadb"
-  embedding_model: "vertex"
-  dimensionality: 768
-  n_results: 10
-  no_duplicates: false

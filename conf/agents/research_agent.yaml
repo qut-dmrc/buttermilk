@@ -4,8 +4,8 @@ research_agent:
   agent_obj: LLMAgent  # Just a standard LLM agent
   description: "Research assistant that searches and synthesizes information"
   
-  # Tools configuration - reference the ChromaDB search tool
-  tools: ${...parameters.search_tool}
+  # Tools configuration - main flow configuration needs to insert a reference the ChromaDB search tool
+  tools: {}
   
   variants:
     model: ${llms.general}

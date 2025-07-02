@@ -1,20 +1,21 @@
+# @package zot
+
 # Enhanced RAG Demo Flow - Composable version
 # Uses Hydra's composition to pull in reusable components
 
 defaults:
   - _self_
-  # Enhanced RAG agents
-  - /agents@zot.agents: 
-    - rag/ragzot
   # Observer agents
-  - /agents@zot.observers: 
+  - /agents@observers: 
     - host/llm_host # Using intelligent LLM host
-  # Data source configuration
-  - /storage@zot.parameters.data: zot
-  - /storage@zot.parameters.save: flows
+  - /agents: 
+    - research_agent
+  - /tools@agents.research_agent.tools: 
+    - chromadb_search
+  - /storage@agents.research_agent.tools.chromadb_search: zot
+  - /storage@parameters.save: flows
 
-zot:
-  # Core flow configuration
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  name: "Enhanced RAG for Zotero DB"
-  description: "Answer academic questions from scholarly database"
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "Enhanced RAG for Zotero DB"
+description: "Answer academic questions from scholarly database"

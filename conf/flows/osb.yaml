@@ -1,49 +1,30 @@
+# @package osb
+
 # OSB Interactive Flow - Clean Architecture
 # Production-ready interactive group chat experience for OSB vector store queries
 # Uses modular ChromaDB search tool with synthesis agent
 
 defaults:
   - _self_
-  # Load the OSB search tool
-  - /tools@osb.parameters.search_tool: chromadb_search/osb_search
-  # Load the research agent with search tool
-  - /agents@osb.agents: 
-    - research_agent
-  # Observer agents for coordination
-  - /agents@osb.observers:
+  - /agents@observers:
     - host/llm_host
-  # Data source configuration
-  - /storage@osb.storage: 
-    - osb_json
-    - osb_vector
-  - /storage@osb.parameters.save: flows
+  - /agents: 
+    - research_agent
+  - /tools@agents.research_agent.tools: 
+    - chromadb_search
+  # Data source configuration for search tool
+  - /storage@agents.research_agent.tools.chromadb_search: osb_vector
+  - /storage@parameters.save: flows
     
 
-osb:
-  # Core flow configuration
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  name: "OSB Interactive Flow"
-  description: "Interactive group chat for querying OSB vector store with clean tool/agent separation"
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "OSB Interactive Flow"
+description: "Interactive group chat for querying OSB vector store with clean tool/agent separation"
 
-  # Flow parameters
-  parameters:
-    # Customize the research agent's task for OSB
-    task: "Search and synthesize information from the OSB (Online Safety Bill) policy database"
-    
-    # Host coordination prompt
-    assistant_prompt: |
-      You are coordinating research into OSB (Online Safety Bill) policies and guidelines.
-      
-      Direct queries to the RESEARCHER who will:
-      - Search the OSB vector database
-      - Find relevant policies and guidelines
-      - Synthesize findings into clear explanations
-      
-      Focus on helping users understand OSB requirements and implications.
-    
-    human_in_loop: true
-    websocket: true
-    
-  agents: {}
-  observers: {}
-  storage: {}
+# Flow parameters
+parameters: {}
+agents: {}
+observers: {}
+tools: {}
+storage: {}
