@@ -65,19 +65,20 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             logger.error(f"Failed to initialize ChromaDBSearchTool: {e}")
             raise
     
-    async def search(self, query: str, n_results: Optional[int] = None) -> list[SearchResult]:
+    async def search(self, query: str, n_results: int = 10) -> list[SearchResult]:
         """Search the ChromaDB collection.
         
         Args:
             query: Natural language search query
-            n_results: Number of results (overrides default)
+            n_results: Number of results to return
             
         Returns:
             List of SearchResult objects
         """
         await self.initialize()
         
-        num_results = n_results or self.n_results
+        # Use provided n_results or fall back to instance default
+        num_results = n_results if n_results > 0 else self.n_results
         
         # Query ChromaDB
         results = self.collection.query(
@@ -118,12 +119,12 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         
         return search_results
     
-    async def search_with_output(self, query: str, n_results: Optional[int] = None) -> ToolOutput:
+    async def search_with_output(self, query: str, n_results: int = 10) -> ToolOutput:
         """Search and return results as ToolOutput for agent integration.
         
         Args:
             query: Natural language search query
-            n_results: Number of results (overrides default)
+            n_results: Number of results to return
             
         Returns:
             ToolOutput with formatted results
@@ -143,7 +144,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             call_id="",
             content="\n---\n".join(formatted_content) if formatted_content else "No results found.",
             results=results,
-            args={"query": query, "n_results": n_results or self.n_results},
+            args={"query": query, "n_results": n_results},
             messages=[UserMessage(content=str(r.content), source="search_result") for r in results],
             is_error=False
         )

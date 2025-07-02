@@ -15,6 +15,8 @@ workflow.
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Self
 
 import pydantic
+import hydra
+
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, SystemMessage, UserMessage
 
@@ -123,8 +125,12 @@ class LLMAgent(Agent, AgentConfig):
         # `self.tools` is populated by AgentConfig based on Hydra config.
         if self.tools:
             logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
+
+            # Instantiate tools here if they are OmegaConf objects
+            _tool_objects = hydra.utils.instantiate(self.tools)
+            
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            self._tools_list = create_tool_functions(self.tools)
+            self._tools_list = create_tool_functions(_tool_objects)
         else:
             logger.debug(f"Agent '{self.agent_name}': No tools configured.")
             self._tools_list = []
