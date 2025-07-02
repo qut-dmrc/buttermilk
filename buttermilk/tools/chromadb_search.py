@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from autogen_core.tools import FunctionTool
 from chromadb import Collection
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
@@ -29,30 +29,25 @@ class SearchResult(BaseModel):
     score: Optional[float] = Field(None, description="Similarity score")
 
 
-class ChromaDBSearchTool(ToolConfig):
+class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
     """Standalone ChromaDB search tool.
     
     This tool provides vector search capabilities for any ChromaDB instance.
-    It can be configured with a data source and used by any agent.
+    It inherits all configuration from ChromaDBEmbeddings to ensure compatibility
+    with the same YAML configs used for embedding creation.
     """
     
-    # Configuration
-    collection_name: str = Field(..., description="Name of the ChromaDB collection")
-    persist_directory: str = Field(..., description="ChromaDB persistence directory")
-    embedding_model: str = Field(default="vertex", description="Embedding model to use")
-    dimensionality: int = Field(default=768, description="Embedding dimensionality")
+    # Allow extra fields from YAML config to be ignored and arbitrary types
+    model_config = ConfigDict(extra="ignore", arbitrary_types_allowed=True)
     
-    # Search parameters
+    # Search-specific parameters (in addition to those inherited from ChromaDBEmbeddings)
     n_results: int = Field(default=10, description="Number of results per search")
     no_duplicates: bool = Field(default=False, description="Filter for unique documents")
     
-    # Internal state
-    _chromadb: Optional[ChromaDBEmbeddings] = None
-    _collection: Optional[Collection] = None
+    # Override these as we're not creating a storage config
+    description: str = Field(default="ChromaDB vector search tool", description="Tool description")
+    tool_obj: str = Field(default="chromadb_search", description="Tool identifier")
     _initialized: bool = False
-    
-    class Config:
-        arbitrary_types_allowed = True
     
     async def initialize(self) -> None:
         """Initialize the ChromaDB connection."""
@@ -60,18 +55,8 @@ class ChromaDBSearchTool(ToolConfig):
             return
             
         try:
-            # Create ChromaDB config
-            config = {
-                "type": "chromadb",
-                "collection_name": self.collection_name,
-                "persist_directory": self.persist_directory,
-                "embedding_model": self.embedding_model,
-                "dimensionality": self.dimensionality
-            }
-            
-            self._chromadb = ChromaDBEmbeddings(**config)
-            await self._chromadb.ensure_cache_initialized()
-            self._collection = self._chromadb.collection
+            # Use the inherited ChromaDBEmbeddings initialization
+            await self.ensure_cache_initialized()
             self._initialized = True
             
             logger.info(f"ChromaDBSearchTool initialized with collection: {self.collection_name}")
@@ -95,7 +80,7 @@ class ChromaDBSearchTool(ToolConfig):
         num_results = n_results or self.n_results
         
         # Query ChromaDB
-        results = self._collection.query(
+        results = self.collection.query(
             query_texts=[query],
             n_results=num_results * 3 if self.no_duplicates else num_results,
             include=["documents", "metadatas", "distances"]
