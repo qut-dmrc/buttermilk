@@ -1,4 +1,4 @@
-# @package zot
+# @package flows.zot
 
 # Enhanced RAG Demo Flow - Composable version
 # Uses Hydra's composition to pull in reusable components
