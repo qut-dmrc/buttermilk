@@ -281,13 +281,6 @@ class AutoGenWrapper(RetryWrapper):
             json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
             if is_valid_schema_type and self.model_info.get("structured_output", False):
                 json_output_requested = schema  # type: ignore # Pass the schema for structured output
-            elif self.model_info.get("json_output", False):
-                # If schema not provided for structured output, but model supports generic JSON mode
-                json_output_requested = True
-
-            # Don't use json_output if tools are being called, as tool calling has its own format.
-            if tools:
-                json_output_requested = False
 
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
