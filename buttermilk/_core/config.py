@@ -604,8 +604,9 @@ class AgentConfig(BaseModel):
             'DATA_EXTRACTOR', 'SUMMARIZER'). Automatically converted to uppercase.
         description (str): A human-readable explanation of the agent's purpose
             and capabilities.
-        tools (list[ToolConfig]): A list of `ToolConfig` objects, defining the
-            tools (functions) available to this agent.
+        tools (dict[str, Any]): A dictionary of tool configurations, defining the
+            tools (functions) available to this agent, keyed by tool name.
+            Can be ToolConfig objects or direct tool instances.
         data (Mapping[str, StorageConfig]): Configuration for data sources the
             agent might need to access, keyed by a descriptive name.
             Serialized as `mapping_data`.
@@ -652,9 +653,9 @@ class AgentConfig(BaseModel):
     )
 
     # Behavior & Connections
-    tools: list[ToolConfig] = Field(
-        default_factory=list,
-        description="Configuration for tools (functions) that the agent can potentially use.",
+    tools: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Configuration for tools (functions) that the agent can potentially use, keyed by tool name. Can be ToolConfig objects or direct tool instances.",
     )
     data: Mapping[str, Any] = Field(
         default_factory=dict,
