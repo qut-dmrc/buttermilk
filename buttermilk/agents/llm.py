@@ -15,19 +15,19 @@ workflow.
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Self
 
 import pydantic
-from autogen_core import AssistantMessage, CancellationToken
-from autogen_core.models import CreateResult, LLMMessage, ModelOutput, SystemMessage, UserMessage
+from autogen_core import CancellationToken
+from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, SystemMessage, UserMessage
 
-from buttermilk import _globals
 from buttermilk import buttermilk as bm
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import AgentConfig, ToolConfig
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ProcessingError
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
+from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import ModelOutput
 from buttermilk._core.types import Record
 from buttermilk.utils._tools import create_tool_functions
-from buttermilk.utils.jinjafytext import make_messages, parse_string_to_pydantic
-from buttermilk.utils.templating import load_template
+from buttermilk.utils.templating import load_template, make_messages
 
 if TYPE_CHECKING:
     from autogen_core.tools import Tool
@@ -344,8 +344,13 @@ class LLMAgent(Agent, AgentConfig):
                 # Try to parse the string response
                 logger.debug(f"Agent {self.agent_name}: Attempting to parse string response into {schema.__name__}")
                 try:
-                    parsed_object = parse_string_to_pydantic(schema, chat_result.content)
-                    logger.debug(f"Agent {self.agent_name}: Successfully parsed response into {schema.__name__}")
+                    # Parse JSON string and validate with Pydantic model
+                    from buttermilk.utils.json_parser import ChatParser
+                    parser = ChatParser()
+                    parsed_dict = parser.parse(chat_result.content)
+                    parsed_object = schema(**parsed_dict) if isinstance(parsed_dict, dict) else None
+                    if parsed_object:
+                        logger.debug(f"Agent {self.agent_name}: Successfully parsed response into {schema.__name__}")
                 except Exception as parse_error:
                     logger.error(
                         f"Agent {self.agent_id}: Failed to parse LLM response into {schema.__name__}: {parse_error}",
