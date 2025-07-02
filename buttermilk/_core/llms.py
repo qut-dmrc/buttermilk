@@ -356,18 +356,18 @@ class AutoGenWrapper(RetryWrapper):
                 # If tool execution fails, we can log the error and return the original result
                 logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
-            # Append tool results to the message history
+            # Convert ToolOutput to FunctionExecutionResult for the message history
             tool_results = []
             for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
                 for tool_result in tool_result_group:  # Each actual ToolOutput
-                    if tool_result.results or tool_result.messages:
-                        # Create a standard message from tool output
-                        result = FunctionExecutionResult(
-                            call_id=tool_result.call_id,
-                            name=tool_result.name,  # Required field for FunctionExecutionResult
-                            content=tool_result.content,
-                        )
-                        tool_results.append(result)
+                    # Since ToolOutput extends FunctionExecutionResult, we can use it directly
+                    # But for clarity and to avoid extra fields, create a clean FunctionExecutionResult
+                    result = FunctionExecutionResult(
+                        call_id=tool_result.call_id,
+                        name=tool_result.name,
+                        content=tool_result.content,
+                    )
+                    tool_results.append(result)
 
             tool_result_messages = FunctionExecutionResultMessage(content=tool_results)
 
@@ -404,34 +404,21 @@ class AutoGenWrapper(RetryWrapper):
         arguments = json.loads(call.arguments)
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
         # Use run_json which accepts a dict of arguments
-        tool_run_results = await tool.run_json(arguments, cancellation_token)
-
-        # Ensure results is a list, as a tool might conceptually return multiple outputs
-        if not isinstance(tool_run_results, list):
-            tool_run_results = [tool_run_results]
-
-        outputs: list[ToolOutput] = []
-        for single_result in tool_run_results:
-            # Adapt the result to the ToolOutput schema
-            # ToolOutput expects 'content' (stringified result) and 'call_id'
-            # It also has 'results' (Any), 'messages' (list[LLMMessage]), 'args'.
-
-            # Default content is stringified result
-            content_str = json.dumps(single_result) if not isinstance(single_result, str) else single_result
-
-            # Create a ToolOutput instance
-            # Note: `call.id` is the `tool_call_id` needed by OpenAI API for tool messages.
-            # `ToolOutput.call_id` should store this.
-            tool_output_instance = ToolOutput(
-                call_id=call.id,  # This is the crucial tool_call_id
-                name=tool.name,  # From the tool definition (autogen uses 'name', not 'function_name')
-                content=content_str,  # Stringified result
-                results=single_result,  # Raw result
-                args=arguments,  # Arguments passed to the tool
-                # messages: if the tool itself wants to craft specific LLMMessages
-            )
-            outputs.append(tool_output_instance)
-        return outputs
+        result = await tool.run_json(arguments, cancellation_token)
+        
+        # Get string representation using autogen's built-in method
+        content_str = tool.return_value_as_string(result)
+        
+        # Create a single ToolOutput (autogen tools return single results, not lists)
+        tool_output = ToolOutput(
+            call_id=call.id,
+            name=tool.name,
+            content=content_str,
+            results=result,
+            args=arguments
+        )
+        
+        return [tool_output]  # Return as list for compatibility with existing interface
 
     async def _execute_tools(
         self,
