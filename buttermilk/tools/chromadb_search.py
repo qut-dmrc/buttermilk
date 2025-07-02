@@ -29,7 +29,7 @@ class SearchResult(BaseModel):
     score: Optional[float] = Field(None, description="Similarity score")
 
 
-class ChromaDBSearchTool(BaseModel, ToolConfig):
+class ChromaDBSearchTool(ToolConfig):
     """Standalone ChromaDB search tool.
     
     This tool provides vector search capabilities for any ChromaDB instance.

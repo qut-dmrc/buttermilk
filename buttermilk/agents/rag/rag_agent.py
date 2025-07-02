@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import ToolOutput
-from buttermilk.agents.llm import LLMAgent, Tool
+from buttermilk.agents.llm import LLMAgent
+from autogen_core.tools import Tool
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 import pydantic

@@ -152,9 +152,9 @@ class LLMAgent(Agent, AgentConfig):
         """
         if not self._model:
             return ""
-        
+
         model_lower = self._model.lower()
-        
+
         # Common model patterns
         if "gpt-4" in model_lower:
             return "GPT4"
@@ -217,7 +217,7 @@ class LLMAgent(Agent, AgentConfig):
         # Template name must be provided in parameters - no fallback chain allowed
         if "template" not in self.parameters:
             raise ProcessingError(f"Agent '{self.agent_id}': 'template' is required in agent parameters.")
-        
+
         template_name = self.parameters["template"]
         if not template_name or not isinstance(template_name, str):
             raise ProcessingError(f"Agent '{self.agent_id}': 'template' parameter must be a non-empty string.")
@@ -310,7 +310,7 @@ class LLMAgent(Agent, AgentConfig):
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
         tool_names = [getattr(tool, 'name', str(tool)) for tool in self._tools_list]
-        logger.debug(
+        logger.info(
             f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. "
             f"Configured tools ({len(self._tools_list)}): {tool_names}"
         )
@@ -388,7 +388,7 @@ class LLMAgent(Agent, AgentConfig):
         if chat_result.usage:
             output_metadata["usage"] = chat_result.usage
 
-        logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
+        logger.info(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
         return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
 
     async def _sequence(self) -> AsyncGenerator[Any, None]:
