@@ -21,7 +21,7 @@ from buttermilk._core.agent import AgentInput, AgentTrace
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import FlowMessage, UIMessage
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk.agents.rag.enhanced_rag_agent import EnhancedRagAgent
+from buttermilk.agents.rag import RagAgent
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 from buttermilk.runner.flowrunner import FlowRunContext, SessionStatus
 
