@@ -13,8 +13,6 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
-from buttermilk._core.contract import ToolOutput
-from buttermilk._core.types import UserMessage
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 
@@ -119,35 +117,27 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         
         return search_results
     
-    async def search_with_output(self, query: str, n_results: int = 10) -> ToolOutput:
-        """Search and return results as ToolOutput for agent integration.
+    async def search_with_output(self, query: str, n_results: int = 10) -> str:
+        """Search and return formatted results as a string.
         
         Args:
             query: Natural language search query
             n_results: Number of results to return
             
         Returns:
-            ToolOutput with formatted results
+            Formatted string with search results
         """
         results = await self.search(query, n_results)
         
         # Format results for display
-        formatted_content = []
+        formatted_parts = []
         for i, result in enumerate(results):
-            formatted_content.append(
+            formatted_parts.append(
                 f"**Result {i+1}** (Doc: {result.document_title or result.document_id})\n"
-                f"{result.content}\n"
+                f"{result.content}"
             )
         
-        return ToolOutput(
-            name="chromadb_search",
-            call_id="",
-            content="\n---\n".join(formatted_content) if formatted_content else "No results found.",
-            results=results,
-            args={"query": query, "n_results": n_results},
-            messages=[UserMessage(content=str(r.content), source="search_result") for r in results],
-            is_error=False
-        )
+        return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
     
     def get_tool(self) -> FunctionTool:
         """Get this as an autogen FunctionTool.

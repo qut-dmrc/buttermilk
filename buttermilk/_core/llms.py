@@ -54,7 +54,7 @@ def get_bm():
     return _get_bm()
 
 
-from buttermilk._core.contract import ToolOutput  # Buttermilk contract for tool output
+# ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
 
@@ -237,7 +237,7 @@ class AutoGenWrapper(RetryWrapper):
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> CreateResult | list[ToolOutput]:
+    ) -> CreateResult:
         """Creates a chat completion using the wrapped client, with retry and structured output handling.
 
         This method attempts to make a chat completion call. It determines if
@@ -258,11 +258,8 @@ class AutoGenWrapper(RetryWrapper):
                 client's `create` method.
 
         Returns:
-            CreateResult | list[ToolOutput]: If the call is successful and does not
-                involve tool calls, returns a `CreateResult`. If tool calls are
-                made, it might return a list of `ToolOutput` (though current Autogen
-                `create` typically returns `CreateResult` with `FunctionCall` list).
-                The exact return type can depend on the underlying client and scenario.
+            CreateResult: The result from the LLM, potentially including tool calls
+                or the final response after tool execution.
 
         Raises:
             ProcessingError: If the LLM returns an empty response or an unexpected
@@ -356,20 +353,8 @@ class AutoGenWrapper(RetryWrapper):
                 # If tool execution fails, we can log the error and return the original result
                 logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
-            # Convert ToolOutput to FunctionExecutionResult for the message history
-            tool_results = []
-            for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
-                for tool_result in tool_result_group:  # Each actual ToolOutput
-                    # Since ToolOutput extends FunctionExecutionResult, we can use it directly
-                    # But for clarity and to avoid extra fields, create a clean FunctionExecutionResult
-                    result = FunctionExecutionResult(
-                        call_id=tool_result.call_id,
-                        name=tool_result.name,
-                        content=tool_result.content,
-                    )
-                    tool_results.append(result)
-
-            tool_result_messages = FunctionExecutionResultMessage(content=tool_results)
+            # Tool results are already FunctionExecutionResult objects
+            tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
 
             messages = messages + [tool_result_messages]  # Append tool results to the message history
 
@@ -385,75 +370,59 @@ class AutoGenWrapper(RetryWrapper):
     async def _call_tool(
         self,
         call: FunctionCall,
-        tool: Tool,  # Assuming 'tool' is an instance of Autogen's Tool
+        tool: Tool,
         cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        """Executes a single tool call and formats its result.
+    ) -> FunctionExecutionResult:
+        """Executes a single tool call and returns the result.
 
         Args:
-            call: The `FunctionCall` object from the LLM, containing the
-                tool name and arguments.
-            tool: The `Tool` object that matches `call.name`.
-            cancellation_token: A `CancellationToken` for the operation.
+            call: The FunctionCall from the LLM
+            tool: The Tool object that matches call.name
+            cancellation_token: Optional cancellation token
 
         Returns:
-            list[ToolOutput]: A list containing one or more `ToolOutput` objects.
-                A single tool execution might produce multiple outputs.
-
+            FunctionExecutionResult ready to be sent back to the LLM
         """
         arguments = json.loads(call.arguments)
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
-        # Use run_json which accepts a dict of arguments
+        
+        # Execute the tool
         result = await tool.run_json(arguments, cancellation_token)
         
-        # Get string representation using autogen's built-in method
-        content_str = tool.return_value_as_string(result)
-        
-        # Create a single ToolOutput (autogen tools return single results, not lists)
-        tool_output = ToolOutput(
+        # Return autogen's native type directly
+        return FunctionExecutionResult(
             call_id=call.id,
             name=tool.name,
-            content=content_str,
-            results=result,
-            args=arguments
+            content=tool.return_value_as_string(result)
         )
-        
-        return [tool_output]  # Return as list for compatibility with existing interface
 
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
         tools_list: Sequence[Tool],
         cancellation_token: CancellationToken | None,
-    ) -> list[list[ToolOutput]]:  # Return type is list of lists, as one call might yield multiple outputs
+    ) -> list[FunctionExecutionResult]:
         """Executes a list of tool calls concurrently.
 
         Args:
-            calls: A list of `FunctionCall` objects from the LLM.
-            tools_list: The list of available `Tool`  objects.
-            cancellation_token: A `CancellationToken` for the operations.
+            calls: List of FunctionCall objects from the LLM
+            tools_list: List of available Tool objects
+            cancellation_token: Optional cancellation token
 
         Returns:
-            list[list[ToolOutput]]: A list where each inner list contains the
-                `ToolOutput`(s) from one corresponding tool call.
-
+            List of FunctionExecutionResult objects
         """
         tasks = []
         for call in calls:
-            # Find the tool by name from the tools_list.
-            tool_definition = next((t for t in tools_list if t.name == call.name), None)
-
-            if tool_definition is None:
-                # Handle case where tool is not found (e.g., log error, return error ToolOutput)
-                # For now, assert, but a more robust error handling might be needed.
+            # Find the tool by name
+            tool = next((t for t in tools_list if t.name == call.name), None)
+            if tool is None:
                 raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
+            
+            tasks.append(self._call_tool(call, tool, cancellation_token))
 
-            tasks.append(self._call_tool(call, tool_definition, cancellation_token))
-
-        # Execute all scheduled tool calls concurrently.
-        results_list_of_lists: list[list[ToolOutput]] = await asyncio.gather(*tasks)
-
-        return results_list_of_lists
+        # Execute all tool calls concurrently
+        return await asyncio.gather(*tasks)
 
 
 class LLMs(BaseModel):
