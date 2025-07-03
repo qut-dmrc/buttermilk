@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - local
+  - defaults/data_source
   - llms@bm.llms: lite
   - storage@bm.storage: []
 
@@ -8,3 +9,4 @@ bm:
   _target_: buttermilk._core.bm_init.BM
   name: ${run.name}
   job: ${run.job}
+  platform: 

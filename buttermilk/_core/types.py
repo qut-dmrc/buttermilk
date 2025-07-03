@@ -9,10 +9,19 @@ different components of Buttermilk.
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from pathlib import Path  # For path manipulation
-from typing import Any, Literal, Self  # Standard typing utilities
+from typing import TYPE_CHECKING, Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
+
+# Optional autogen imports - fail gracefully if not available
+try:
+    from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
+    AUTOGEN_AVAILABLE = True
+except ImportError:
+    AssistantMessage = None
+    UserMessage = None
+    AUTOGEN_AVAILABLE = False
+    
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
@@ -24,6 +33,10 @@ from pydantic import (
     field_validator,  # For custom field validation
     model_validator,  # For model-level validation
 )
+
+# Conditional imports to avoid circular dependencies
+if TYPE_CHECKING:
+    from buttermilk.data.vector import ChunkedDocument
 
 
 class Record(BaseModel):
@@ -89,6 +102,20 @@ class Record(BaseModel):
         description="Primary MIME type of the content.",
     )
 
+    # Vector processing fields (optional, for enhanced functionality)
+    file_path: str | None = Field(
+        default=None,
+        description="Source file path for the record (used in vector processing).",
+    )
+    chunks: list[Any] = Field(
+        default_factory=list,
+        description="Vector chunks created from this record (lazy-loaded).",
+    )
+    chunks_path: str | None = Field(
+        default=None,
+        description="Path to PyArrow file containing chunks and embeddings.",
+    )
+
     @computed_field
     @property
     def images(self) -> list[Image] | None:
@@ -106,6 +133,50 @@ class Record(BaseModel):
                 if isinstance(item, Image):
                     images_found.append(item)
         return images_found or None
+
+    @computed_field
+    @property
+    def text_content(self) -> str:
+        """Unified text access for vector processing.
+
+        Returns the best available text representation:
+        1. content (if it's a string) - main content field
+        2. alt_text (as fallback for non-text content)
+        3. string representation of content (for multimodal)
+
+        Returns:
+            str: Text content suitable for vector processing.
+        """
+        if isinstance(self.content, str) and self.content.strip():
+            return self.content
+        elif self.alt_text and self.alt_text.strip():
+            return self.alt_text
+        else:
+            return str(self.content)
+
+    def model_dump(self, **kwargs) -> dict[str, Any]:
+        """Custom model_dump that excludes computed fields by default.
+
+        For simple text content, text_content duplicates content, so we exclude it
+        unless explicitly requested. For multimodal content, users can include it
+        by passing exclude=None or exclude={other_fields}.
+        """
+        # Get current exclude set
+        current_exclude = kwargs.get("exclude", set())
+        if current_exclude is None:
+            current_exclude = set()
+        elif isinstance(current_exclude, (list, tuple)):
+            current_exclude = set(current_exclude)
+        elif not isinstance(current_exclude, set):
+            current_exclude = {current_exclude}
+
+        # Add computed fields to exclusion for simple text content
+        if isinstance(self.content, str):
+            # For simple string content, text_content is redundant
+            current_exclude.update({"text_content", "title", "images"})
+
+        kwargs["exclude"] = current_exclude
+        return super().model_dump(**kwargs)
 
     def as_markdown(self) -> str:
         """Combines metadata and text content into a single string.
@@ -168,9 +239,36 @@ class Record(BaseModel):
         populate_by_name=True,  # Allow population by field name or alias
         exclude_unset=True,  # Exclude fields not explicitly set during serialization
         exclude_none=True,  # Exclude fields with None values during serialization
-        exclude={"title", "images"},  # Exclude computed properties from model_dump
+        exclude={"title", "images", "text_content"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v):
+        """Validate that content is not empty or None."""
+        if v is None:
+            raise ValueError("Content cannot be None - Record must have meaningful content")
+
+        if isinstance(v, str):
+            if not v.strip():
+                raise ValueError("Content cannot be empty string - Record must have meaningful content")
+        elif isinstance(v, Sequence):
+            if not v:
+                raise ValueError("Content sequence cannot be empty - Record must have meaningful content")
+            # Check that at least one item in sequence is meaningful
+            has_meaningful_content = False
+            for item in v:
+                if isinstance(item, str) and item.strip():
+                    has_meaningful_content = True
+                    break
+                elif not isinstance(item, str):  # Image or other content
+                    has_meaningful_content = True
+                    break
+            if not has_meaningful_content:
+                raise ValueError("Content sequence must contain at least one meaningful item")
+
+        return v
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -244,7 +342,7 @@ class Record(BaseModel):
         """
         return self.metadata.get("title")
 
-    def as_message(self, role: Literal["user", "assistant"] = "user") -> UserMessage | AssistantMessage:
+    def as_message(self, role: Literal["user", "assistant"] = "user") -> Any:
         """Converts the `Record` into an Autogen `UserMessage` or `AssistantMessage`.
 
         This is useful for integrating Buttermilk records directly into Autogen
@@ -255,10 +353,16 @@ class Record(BaseModel):
                 resulting message. Defaults to "user".
 
         Returns:
-            UserMessage | AssistantMessage: An Autogen message object populated
-            with the record's content and ID.
+            Autogen message object populated with the record's content and ID.
+            Returns None if Autogen is not available.
 
         """
+        if not AUTOGEN_AVAILABLE:
+            # Import logger here to avoid circular imports
+            from buttermilk._core.log import logger
+            logger.warning("Autogen not available. Cannot create message object.")
+            return None
+            
         if role == "assistant":
             # Assistant message content should likely be string representation
             return AssistantMessage(content=self.as_markdown, source=self.record_id)

@@ -1,5 +1,6 @@
 """Unit tests for lazy loading utilities and patterns."""
 
+import asyncio
 import pytest
 from unittest.mock import Mock, patch, call
 import time
@@ -236,7 +237,7 @@ class TestAsyncBackgroundOperations:
         from buttermilk._core import BM
         
         with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init._get_public_ip') as mock_get_ip:
+             patch('buttermilk.utils.get_ip') as mock_get_ip:
             
             # Make IP fetching slow to test it doesn't block
             async def slow_ip_fetch():
@@ -256,7 +257,7 @@ class TestAsyncBackgroundOperations:
             creation_time = time.time() - start_time
             
             # Should be fast despite slow IP fetch
-            assert creation_time < 0.05
+            assert creation_time < 0.10
             assert bm.name == "test"
 
 

@@ -406,6 +406,42 @@ def load_template(
     return rendered_string, set(collected_undefined_vars)
 
 
+def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
+    """Remove duplicate messages from a list while preserving order.
+    
+    Duplicates are identified by having the same role, content, and source.
+    The first occurrence of each unique message is preserved.
+    
+    Args:
+        messages: List of LLMMessage objects to deduplicate
+        
+    Returns:
+        List of LLMMessage objects with duplicates removed
+    """
+    seen = set()
+    deduplicated = []
+    
+    for msg in messages:
+        # Create a hashable identifier for the message
+        # Use role, content, and source (if available) as the key
+        msg_key = (
+            type(msg).__name__,  # Message type (SystemMessage, UserMessage, etc.)
+            getattr(msg, 'content', ''),
+            getattr(msg, 'source', None)
+        )
+        
+        if msg_key not in seen:
+            seen.add(msg_key)
+            deduplicated.append(msg)
+        else:
+            logger.debug(f"Removing duplicate message: {type(msg).__name__} with content: {getattr(msg, 'content', '')[:50]}...")
+    
+    if len(deduplicated) < len(messages):
+        logger.info(f"Removed {len(messages) - len(deduplicated)} duplicate messages from llm_messages_to_send")
+    
+    return deduplicated
+
+
 def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     context: list[LLMMessage] | None = None,  # Optional conversation history
@@ -501,4 +537,5 @@ def make_messages(
         else:  # Unrecognized role
             logger.warning(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message. Content: '{content_str[:100]}...' Message ignored.")
 
-    return output_messages
+    # Deduplicate messages before returning
+    return _deduplicate_messages(output_messages)

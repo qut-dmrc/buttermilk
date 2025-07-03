@@ -1,0 +1,17 @@
+# LLM-based host that delegates using structured tools
+# This is the consolidated version of assistant/explorer/ra hosts
+llm_host:
+  role: HOST
+  name: "Intelligent Coordinator"
+  agent_obj: StructuredLLMHostAgent
+  parameters:
+    model: ${llms.host}
+    human_in_loop: ${run.human_in_loop}
+    execution_mode: "adaptive"  # LLM decides execution flow
+    template: researchassistant  # Configurable template
+    task: |
+      You are the HOST, an intelligent coordinator that helps the USER with their tasks.
+      - Use the available agent tools to assist the USER
+      - Monitor progress and adapt the workflow based on results
+      - Facilitate discussion among participants but AVOID answering questions yourself.
+      

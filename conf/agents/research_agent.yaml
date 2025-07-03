@@ -1,0 +1,22 @@
+# Research Agent - Clean separation of search tool and synthesis agent
+research_agent:
+  role: "RESEARCHER"
+  agent_obj: LLMAgent  # Just a standard LLM agent
+  description: "Research assistant that searches and synthesizes information"
+  
+  # Tools configuration - main flow configuration needs to insert a reference the ChromaDB search tool
+  tools: {}
+  
+  variants:
+    model: ${llms.general}
+    
+  parameters:
+    # Use the research synthesis template
+    template: research_synthesis
+    
+    # Standard LLM parameters
+    model: ${llms.general}
+    temperature: 0.7
+    
+    # Optional: Control synthesis behavior through the prompt
+    task: "Help users find and understand information from the knowledge base"

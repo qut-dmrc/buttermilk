@@ -70,6 +70,10 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
 
         elif isinstance(e, HTTPError) and (e.code in {400, 429}):
             raise RateLimit(*e.args)
+            
+        # Handle Google Vertex AI quota/rate limit errors
+        elif hasattr(e, 'reason') and ("quota" in str(e).lower() or "rate limit" in str(e).lower()):
+            raise RateLimit(str(e))
 
     except Exception as secondary_error:
         logger.warning(
@@ -85,17 +89,19 @@ def try_extract_vertex_error(e):
         for resp in e.responses:
             try:
                 info.append(resp.to_dict()["prompt_feedback"])
-            except:
-                pass
+            except (KeyError, AttributeError) as err:
+                logger.debug(f"Could not extract prompt_feedback from response: {err}")
             for cand in resp.candidates:
                 candidate = {}
                 try:
                     candidate["finish_reason"] = cand.finish_reason
                     candidate["partial"] = cand.parts.content
-                except:
+                except (AttributeError, IndexError) as err:
+                    logger.debug(f"Could not extract candidate info: {err}")
                     continue
                 if candidate:
                     info.append(candidate)
-    except:
+    except Exception as e:
+        logger.debug(f"Failed to extract vertex error details: {type(e).__name__}: {e}")
         return ""
     return info

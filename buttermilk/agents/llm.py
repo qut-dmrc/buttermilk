@@ -1,114 +1,122 @@
-"""Defines `LLMAgent`, a base class for Buttermilk agents that interact with Language Models.
+"""LLM-based Agent for Buttermilk.
 
-This module provides the core `LLMAgent` class, which extends the base `Agent`
-to include functionalities specific to LLM interactions. These include:
--   Initializing an LLM client based on configuration.
--   Loading and managing tools (functions) that the LLM can call.
--   Rendering prompt templates (supporting Jinja2 and Prompty formats).
--   Executing calls to the LLM API.
--   Parsing the LLM's response, with optional validation against a Pydantic schema
-    if structured output is expected.
--   Constructing standardized `AgentTrace` messages to record the interaction.
+This module provides the `LLMAgent` class, a foundational agent that integrates
+with large language models (LLMs) to process tasks. It extends the base `Agent`
+class with the ability to:
+1. Fill prompt templates with input data and conversation context
+2. Call LLMs with the rendered prompts
+3. Parse structured outputs from LLM responses
+
+`LLMAgent` serves as a base class for more specialized agents that require
+LLM interaction, handling the core template rendering and LLM communication
+workflow.
 """
 
-from typing import Any, Self  # For type hinting, Type for Pydantic model hinting
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Self
 
-import pydantic  # Pydantic core
+import pydantic
+import hydra
 
-# Import Autogen components used for type hints and LLM interaction
-from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import (  # Autogen message and model types
-    AssistantMessage,
-)
-from autogen_core.tools import FunctionTool, Tool, ToolSchema  # Autogen tool types
-from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
+from autogen_core import CancellationToken
+from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, SystemMessage, UserMessage
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance for framework access
-
-# Buttermilk core imports
-from buttermilk._core.agent import Agent, UserMessage  # Base agent and message types
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    ErrorEvent,
-    LLMMessage,  # Type hint for message lists
-)
+from buttermilk import buttermilk as bm
+from buttermilk import logger
+from buttermilk._core.agent import Agent
+from buttermilk._core.config import AgentConfig, ToolConfig
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput  # LLM client wrapper and results
-from buttermilk._core.log import logger
-from buttermilk._core.types import Record  # Data record type
-from buttermilk.utils._tools import create_tool_functions  # Tool handling utility
-from buttermilk.utils.json_parser import ChatParser  # JSON parsing utility
-from buttermilk.utils.templating import (
-    SystemMessage,
-    _parse_prompty,  # Prompty parsing utility
-    load_template,  # Template loading utility
-    make_messages,  # Message list creation utility
-)
+from buttermilk._core.llms import ModelOutput
+from buttermilk._core.types import Record
+from buttermilk.utils._tools import create_tool_functions
+from buttermilk.utils.templating import load_template, make_messages
+
+if TYPE_CHECKING:
+    from autogen_core.tools import Tool
 
 
-class LLMAgent(Agent):
-    """Base class for Buttermilk agents that interact with Large Language Models (LLMs).
+class LLMAgent(Agent, AgentConfig):
+    """Agent that uses an LLM for text processing and generation.
 
-    This class provides a foundational structure for agents that need to communicate
-    with LLMs. It handles common tasks such as initializing the LLM client,
-    loading and preparing tools for the LLM to use, rendering prompt templates
-    (supporting Jinja2 and Prompty formats through utilities), making calls to
-    the LLM API (via an `AutoGenWrapper`), and parsing the LLM's response.
-    It can also validate structured JSON output from the LLM against a specified
-    Pydantic model.
+    `LLMAgent` extends the base `Agent` class to add LLM-powered capabilities.
+    It manages the complete workflow of:
+    1. Loading and rendering prompt templates with provided data
+    2. Communicating with LLMs through the global LLM manager
+    3. Parsing and validating LLM responses
 
-    Subclasses typically need to:
-    -   Define the `_output_model` class attribute if they expect structured output
-        from the LLM that should be parsed into a specific Pydantic model.
-    -   Implement specific message handlers (e.g., methods decorated with
-        `@buttermilk_handler`) that prepare an `AgentInput` and then call the
-        `self.invoke()` method (which in turn calls `self._process()`) to interact
-        with the LLM.
-    -   Provide agent-specific configuration (like the LLM model name, prompt
-        template name, operational parameters, and tool definitions) through
-        Hydra configuration files, which are mapped to `AgentConfig`.
+    The agent can work with both unstructured text responses and structured
+    outputs (when `_output_model` is specified as a Pydantic model).
+
+    Configuration (from `AgentConfig`):
+        template: Name of the prompt template to use (required in parameters)
+        model: Name of the LLM model to use (e.g., 'gpt-4', 'claude-3')
+        temperature: LLM temperature parameter for response variability
+        fail_on_unfilled_parameters: Whether to fail if template variables are missing
+        tools: List of tools (functions) the agent can use
 
     Attributes:
-        fail_on_unfilled_parameters: If True, raise error if template vars aren't filled.
-        _tools_list: List of tools available to the LLM.
-        _model: Name of the LLM model to use.
-        _output_model: Optional Pydantic model to validate/parse the LLM output against.
-        _json_parser: Utility for parsing JSON strings.
+        _model (str): The name/identifier of the LLM model this agent uses.
+        _output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
+            for structured output parsing.
+        _tools_list (list[Tool]): List of Autogen-compatible tool objects.
+        fail_on_unfilled_parameters (bool): If True, raises an error when
+            template variables are missing from inputs.
 
+    Example:
+        ```python
+        agent = LLMAgent(
+            agent_name="Analyzer",
+            role="TEXT_ANALYZER",
+            parameters={"template": "analysis_prompt", "model": "gpt-4"},
+            fail_on_unfilled_parameters=True
+        )
+        
+        result = await agent.invoke(
+            AgentInput(inputs={"text": "Hello world"})
+        )
+        ```
     """
 
-    fail_on_unfilled_parameters: bool = Field(
-        default=True,
-        description="If True, raises ProcessingError if prompt template parameters are missing. Otherwise, warns and proceeds.",
+    # LLM-specific configurations
+    _model: str = pydantic.PrivateAttr(default="")
+    _output_model: type[pydantic.BaseModel] | None = pydantic.PrivateAttr(default=None)
+    _tools_list: list["Tool"] = pydantic.PrivateAttr(default_factory=list)
+
+    # Control behavior
+    fail_on_unfilled_parameters: bool = pydantic.Field(
+        default=False,
+        description="If True, the agent will fail when template variables are missing from inputs.",
     )
 
-    _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(default_factory=list)
-    _model: str = PrivateAttr(default="")
-    _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
-    # Subclasses should override this if they expect specific structured output
-    _output_model: type[BaseModel] | None = PrivateAttr(default=None)
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize an LLMAgent with the provided configuration.
 
-    @pydantic.model_validator(mode="after")
-    def init_model(self) -> Self:
-        """Stores the LLM model client name from agent parameters."""
-        # Retrieves model name from 'parameters' section of agent config.
-        self._model = self.parameters.get("model")
-        if not self._model:
-            # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
-            raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
+        Extracts the model name from parameters and stores it in `_model`.
+        The actual model initialization happens in `init_model()`.
 
-        return self
+        Args:
+            **kwargs: Configuration parameters passed to AgentConfig.
+                Must include 'model' in parameters.
+
+        Raises:
+            ValueError: If 'model' is not specified in parameters.
+        """
+        super().__init__(**kwargs)
+        # Keep _model for backward compatibility, but use parameters['model'] as source of truth
+        if "model" in self.parameters:
+            self._model = self.parameters["model"]
+        else:
+            raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
-        """Loads and prepares tools defined in the agent configuration.
+        """Loads tool configurations and converts them to Autogen-compatible tools.
 
         This Pydantic validator runs after the agent model is created.
         It checks `self.tools` (an `AgentConfig` field, typically populated from
         Hydra configuration) and uses `create_tool_functions` to convert these
         tool definitions into a list of Autogen-compatible tool objects
-        (e.g., `FunctionTool`). The result is stored in `self._tools_list`.
+        (`_tools_list`).
 
         Returns:
             Self: The agent instance with `_tools_list` populated.
@@ -117,8 +125,12 @@ class LLMAgent(Agent):
         # `self.tools` is populated by AgentConfig based on Hydra config.
         if self.tools:
             logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
+
+            # Instantiate tools here if they are OmegaConf objects
+            _tool_objects = hydra.utils.instantiate(self.tools)
+            
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            self._tools_list = create_tool_functions(self.tools)
+            self._tools_list = create_tool_functions(_tool_objects)
         else:
             logger.debug(f"Agent '{self.agent_name}': No tools configured.")
             self._tools_list = []
@@ -130,31 +142,32 @@ class LLMAgent(Agent):
         Extends the base agent display name to include model tag for UI consistency.
         
         Returns:
-            str: The display name with model tag (e.g., "judge abc123[GPT4]")
+            str: Display name with model tag appended
         """
+        base_name = super().get_display_name()
         model_tag = self._get_model_tag()
         if model_tag:
-            return f"{self.agent_name}[{model_tag}]"
-        return self.agent_name
+            return f"{base_name} [{model_tag}]"
+        return base_name
 
     def _get_model_tag(self) -> str:
-        """Extract model identifier for display purposes.
+        """Extract a short tag from the model name for display purposes.
         
         Returns:
-            str: Short model identifier (e.g., "GPT4", "SNNT", "GEMN")
+            str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
         """
         if not self._model:
             return ""
-        
+
         model_lower = self._model.lower()
-        if "gpt-4" in model_lower or "gpt4" in model_lower:
+
+        # Common model patterns
+        if "gpt-4" in model_lower:
             return "GPT4"
-        elif "gpt-3" in model_lower:
+        elif "gpt-3.5" in model_lower:
             return "GPT3"
-        elif "o3" in model_lower:
-            return "O3"
         elif "sonnet" in model_lower:
-            return "SNNT"
+            return "SONN"
         elif "opus" in model_lower:
             return "OPUS"
         elif "haiku" in model_lower:
@@ -204,20 +217,33 @@ class LLMAgent(Agent):
 
         """
         # Ensure context and records are lists if None
-        current_context = context or []
-        current_records = records or []
+        current_context = context if context is not None else []
+        current_records = records if records is not None else []
 
-        template_name = self.parameters.get("template", task_params.get("template", inputs.get("template")))
+        # Template name must be provided in parameters - no fallback chain allowed
+        if "template" not in self.parameters:
+            raise ProcessingError(f"Agent '{self.agent_id}': 'template' is required in agent parameters.")
+
+        template_name = self.parameters["template"]
         if not template_name or not isinstance(template_name, str):
-            raise ProcessingError(f"Agent '{self.agent_id}': No valid template name provided in parameters or inputs.")
+            raise ProcessingError(f"Agent '{self.agent_id}': 'template' parameter must be a non-empty string.")
         logger.debug(f"Agent '{self.agent_name}': Using prompt template '{template_name}'.")
 
-        combined_params = {**(self.parameters or {}), **(task_params or {})}
+        combined_params = {**(self.parameters if self.parameters is not None else {}), **(task_params if task_params is not None else {})}
+
+        # Check if prompt is already in context to avoid duplication
+        # If the last message in context has the same content as the prompt, don't include it again
+        filtered_inputs = inputs.copy() if inputs else {}
+        if current_context and "prompt" in filtered_inputs:
+            last_context_msg = current_context[-1]
+            if isinstance(last_context_msg, UserMessage) and last_context_msg.content == filtered_inputs["prompt"]:
+                logger.debug(f"Agent '{self.agent_name}': Removing duplicate prompt from inputs (already in context)")
+                del filtered_inputs["prompt"]
 
         rendered_template_str, unfilled_vars = load_template(
             template=template_name,
             parameters=combined_params,
-            untrusted_inputs=inputs,
+            untrusted_inputs=filtered_inputs,
         )
 
         try:
@@ -245,7 +271,6 @@ class LLMAgent(Agent):
         logger.debug(f"Agent '{self.agent_name}': Template '{template_name}' rendered into {len(llm_messages)} messages for LLM.")
         return llm_messages
 
-    # This is the primary method subclasses should override.
     async def _process(self, *, message: AgentInput,
         cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Core processing logic: fills template, calls LLM, makes AgentOutput.
@@ -273,13 +298,11 @@ class LLMAgent(Agent):
 
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
-        if not isinstance(message, AgentInput):  # Should be guaranteed by type hint, but defensive
-            raise ProcessingError(f"Agent '{self.agent_id}': _process called with non-AgentInput message type: {type(message)}")
 
         try:
             llm_messages_to_send = await self._fill_template(
-                task_params=message.parameters or {},  # Ensure dict
-                inputs=message.inputs or {},       # Ensure dict
+                task_params=message.parameters if message.parameters is not None else {},
+                inputs=message.inputs if message.inputs is not None else {},
                 context=message.context,
                 records=message.records,
             )
@@ -292,10 +315,18 @@ class LLMAgent(Agent):
             error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
-        logger.debug(f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'.")
+        tool_names = [getattr(tool, 'name', str(tool)) for tool in self._tools_list]
+        logger.info(
+            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. "
+            f"Configured tools ({len(self._tools_list)}): {tool_names}"
+        )
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             model_client = bm.llms.get_autogen_chat_client(self._model)
+
+            # Debug the schema parameter
+            logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
+
             chat_result: CreateResult = await model_client.call_chat(
                 messages=llm_messages_to_send,
                 tools_list=self._tools_list,
@@ -312,73 +343,69 @@ class LLMAgent(Agent):
         # 3. Parse the LLM response and create an AgentOutput
         parsed_object = None
         if schema := self._output_model:
-            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
+            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, self._output_model):
                 # If client already parsed into the correct schema object
-                parsed_object = chat_result.object
+                parsed_object = chat_result.parsed_object
             elif isinstance(chat_result.content, str):
-                # If content is a string, try to parse/validate it against the schema
-                logger.debug(f"Agent {self.agent_name}: Attempting to parse LLM content into schema {schema.__name__}.")
+                # Try to parse the string response
+                logger.debug(f"Agent {self.agent_name}: Attempting to parse string response into {schema.__name__}")
                 try:
-                    # Use Pydantic's model_validate_json for robust parsing from JSON string.
-                    parsed_object = schema.model_validate_json(chat_result.content)
-                    logger.debug(f"Agent {self.agent_name}: Successfully parsed content into schema {schema.__name__}.")
-                except Exception as e:
-                    # Log schema validation/parsing error
-                    parse_error = f"Error parsing LLM response into {schema.__name__}: {e}."
-                    logger.debug(f"Agent {self.agent_name}: {parse_error}")
-            else:
-                # Content is not string and not pre-parsed object, schema validation fails.
-                parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
-                raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
+                    # Parse JSON string and validate with Pydantic model
+                    from buttermilk.utils.json_parser import ChatParser
+                    parser = ChatParser()
+                    parsed_dict = parser.parse(chat_result.content)
+                    parsed_object = schema(**parsed_dict) if isinstance(parsed_dict, dict) else None
+                    if parsed_object:
+                        logger.debug(f"Agent {self.agent_name}: Successfully parsed response into {schema.__name__}")
+                except Exception as parse_error:
+                    logger.error(
+                        f"Agent {self.agent_id}: Failed to parse LLM response into {schema.__name__}: {parse_error}",
+                        exc_info=True
+                    )
+                    # Don't raise - fall back to string response
+                    logger.warning(f"Agent {self.agent_name}: Falling back to string response due to parsing error")
+                    parsed_object = None
+            elif hasattr(chat_result.content, 'model_dump'):
+                # Already a Pydantic object, but might be wrong type
+                if isinstance(chat_result.content, self._output_model):
+                    parsed_object = chat_result.content
+                else:
+                    logger.warning(
+                        f"Agent {self.agent_name}: Response is {type(chat_result.content).__name__}, "
+                        f"expected {self._output_model.__name__}"
+                    )
 
-        if parsed_object is None:
-            if isinstance(chat_result.content, str):
-                # If no schema or schema validation failed, try parsing as generic JSON
-                logger.debug(f"Agent {self.agent_name}: Attempting generic JSON parsing of LLM content.")
-                try:
-                    parsed_object = self._json_parser.parse(chat_result.content)
-                    logger.debug(f"Agent {self.agent_name}: Successfully parsed content as generic JSON.")
-                except ProcessingError:
-                    # If generic JSON parsing also fails, treat as a chat message
-                    if isinstance(chat_result, (AssistantMessage, SystemMessage, UserMessage)):
-                        # If the content is already an AssistantMessage, use it directly
-                        parsed_object = chat_result
-                    else:
-                        parsed_object = AssistantMessage(content=chat_result.content,
-                                                   thought=chat_result.thought,
-                                                   source=self.agent_id)
-            else:
-                # Content is not parseable
-                raise ProcessingError(f"Agent {self.agent_id} was unable to parse LLM response content of type: ({type(chat_result.content)}).")
+        # Use parsed object if available, otherwise fall back to content
+        final_output = parsed_object if parsed_object is not None else chat_result.content
 
-        # Add agent role/name for context in logs/outputs
-        metadata = chat_result.model_dump(exclude={"content", "object"})
-        metadata.update({"role": self.role, "name": self.agent_name})
+        # Store the model context if available
+        if hasattr(model_client, '_current_messages'):
+            self._model_context = model_client._current_messages
 
-        # Return an AgentOutput
-        response = AgentOutput(agent_id=self.agent_id,
-            metadata=metadata,
-            outputs=parsed_object,
-        )
+        # Prepare metadata for AgentOutput
+        output_metadata = {
+            "agent_name": self.agent_name,
+            "agent_id": self.agent_id,
+            "agent_model": self._model,
+            "finish_reason": chat_result.finish_reason,
+        }
 
-        logger.debug(f"Agent {self.agent_name} finished _process.")
-        return response
+        # Only add usage if present
+        if chat_result.usage:
+            output_metadata["usage"] = chat_result.usage
 
-    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """Reset any LLM-specific state for the agent.
+        logger.info(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
+        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
 
-        Calls the `super().on_reset()` from the base `Agent` class to clear
-        common state like records, model context, and data. Subclasses of
-        `LLMAgent` can override this to add further reset logic specific to
-        their needs (e.g., clearing LLM-specific caches or stateful tool instances).
+    async def _sequence(self) -> AsyncGenerator[Any, None]:
+        """Not implemented for LLMAgent.
 
-        Args:
-            cancellation_token: An optional `CancellationToken` to signal if
-                the reset operation should be aborted.
+        LLMAgent does not use the sequencing functionality from the base Agent class.
+        This method is a placeholder to satisfy the abstract base class requirement.
+
+        Yields:
+            Never yields anything.
 
         """
-        await super().on_reset(cancellation_token=cancellation_token)
-        # Add any LLMAgent-specific state reset here if needed in the future.
-        # For example, if LLMAgent maintained a specific type of conversation history
-        # or cached LLM responses that need clearing beyond what base Agent.on_reset does.
-        logger.debug(f"LLMAgent '{self.agent_name}' state reset (invoked super().on_reset).")
+        # LLMAgent doesn't typically use _sequence, but must implement it
+        yield  # This makes it a generator but doesn't yield any actual values

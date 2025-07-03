@@ -90,7 +90,12 @@ class AutogenAgentAdapter(RoutedAgent):
         elif agent_cls and agent_cfg:
             # Instantiate the agent using the provided class and config.
             try:
-                self.agent = agent_cls(**agent_cfg)
+                # Convert AgentConfig to dict if needed
+                if hasattr(agent_cfg, 'model_dump'):
+                    config_dict = agent_cfg.model_dump()
+                else:
+                    config_dict = agent_cfg
+                self.agent = agent_cls(**config_dict)
                 logger.debug(f"Adapter instantiated agent: {self.agent.agent_name} ({agent_cls.__name__})")
                 if registration_callback:
                     registration_callback(self.agent.agent_id, self.agent)
@@ -111,7 +116,12 @@ class AutogenAgentAdapter(RoutedAgent):
         super().__init__(description=self.agent.description)
 
         # This allows UI agents, for example, to send user input back into the Autogen flow.
-        init_task = self.agent.initialize(callback_to_groupchat=self._make_publish_callback())
+        # Initialize with announcement capability
+        init_task = self.agent.initialize(
+            callback_to_groupchat=self._make_publish_callback(),
+            public_callback=self._make_publish_callback()
+        )
+        
         task = asyncio.create_task(init_task)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
@@ -173,10 +183,27 @@ class AutogenAgentAdapter(RoutedAgent):
         
         # Cleanup the wrapped agent
         try:
-            await self.agent.cleanup()
+            # Store the announcement callback if agent supports it
+            if hasattr(self.agent, '_announcement_callback'):
+                self.agent._announcement_callback = self._make_publish_callback()
+            
+            # Check if agent supports cleanup with announcement
+            if hasattr(self.agent, 'cleanup_with_announcement'):
+                await self.agent.cleanup_with_announcement()
+            else:
+                await self.agent.cleanup()
+            
             logger.debug(f"Agent {self.agent.agent_name} cleanup completed")
         except Exception as e:
             logger.warning(f"Error during agent cleanup for {self.agent.agent_name}: {e}")
+
+    async def on_unregister(self) -> None:
+        """Called when the agent is being unregistered from the runtime.
+        
+        This is the proper place to send leaving announcements.
+        """
+        logger.debug(f"Agent {self.agent.agent_name} being unregistered")
+        await self.cleanup()
 
     @message_handler
     async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:
@@ -215,7 +242,6 @@ class AutogenAgentAdapter(RoutedAgent):
                 message=message,
                 cancellation_token=ctx.cancellation_token,
                 public_callback=public_callback,  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
@@ -252,7 +278,6 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             else:
                 # Delegate to the agent's _handle_events method.
@@ -261,7 +286,6 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             logger.debug(f"Agent {self.agent.agent_name} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__ if response else 'N/A'}")
 
@@ -305,7 +329,6 @@ class AutogenAgentAdapter(RoutedAgent):
                 cancellation_token=ctx.cancellation_token,
                 # Provide callbacks for the agent to publish messages back if needed during execution.
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.agent_name} completed invocation. Output type: {type(output).__name__}")

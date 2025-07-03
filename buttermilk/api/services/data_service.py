@@ -1,12 +1,12 @@
 import datetime
 from typing import Any, Protocol
 
-from buttermilk._core.config import AgentConfig, DataSourceConfig
+from buttermilk._core.config import AgentConfig, DataSourceConfig, SessionConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
+from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
-from buttermilk.data.loaders import create_data_loader
 
 
 class FlowRunner(Protocol):
@@ -21,26 +21,8 @@ class FlowRunner(Protocol):
 class DataService:
     """Service for handling data-related operations"""
 
-    @staticmethod
-    def _convert_to_data_source_config(storage_config_raw: Any) -> DataSourceConfig:
-        """Convert raw configuration (OmegaConf, dict, etc.) to DataSourceConfig.
-        
-        Args:
-            storage_config_raw: Raw storage configuration from flow definition
-            
-        Returns:
-            DataSourceConfig: Properly validated configuration object
-        """
-        if isinstance(storage_config_raw, DataSourceConfig):
-            return storage_config_raw
-        elif hasattr(storage_config_raw, "__dict__"):
-            # Handle OmegaConf objects
-            return DataSourceConfig(**dict(storage_config_raw))
-        elif isinstance(storage_config_raw, dict):
-            return DataSourceConfig(**storage_config_raw)
-        else:
-            # Fallback: try to convert to dict first
-            return DataSourceConfig(**dict(storage_config_raw))
+    # Session configuration with defaults from YAML config
+    _session_config = SessionConfig()
 
     @staticmethod
     async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
@@ -72,7 +54,6 @@ class DataService:
             List[str]: The list of models
 
         """
-        return ["lite", "full"]
         try:
             return list(flow_runner.flows[flow_name].parameters.get("model", []))
         except Exception as e:
@@ -118,33 +99,21 @@ class DataService:
             if not dataset_name:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
                 raise ValueError(f"dataset_name is required. Available datasets for flow '{flow_name}': {available_datasets}")
-            
+
             # Get the specified storage configuration
             if dataset_name not in flow_runner.flows[flow_name].storage:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
                 raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
-            
-            storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
 
-            # Convert OmegaConf/dict to proper DataSourceConfig
-            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
-            
-            # Ensure the dataset_name is set correctly in the config
-            if hasattr(storage_config, 'dataset_name') and dataset_name:
-                storage_config.dataset_name = dataset_name
+            # Use unified storage system instead of deprecated create_data_loader
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_name])
 
-            loader = create_data_loader(storage_config)
-            for record in loader:
+            for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
-                    # Add placeholder summary scores to metadata - in a real implementation,
-                    # this would query BigQuery for actual scores
-                    record.metadata["summary_scores"] = {
-                        "off_shelf_accuracy": 0.75,
-                        "custom_average": 0.635,
-                        "total_evaluations": 8,
-                        "has_detailed_responses": True
-                    }
+                    raise NotImplementedError("Score inclusion feature is not yet implemented")
 
                 records.append(record)
 
@@ -168,18 +137,10 @@ class DataService:
             List[Dict[str, Any]]: The list of history entries
 
         """
-        try:
-            # This is a placeholder for actual history retrieval
-            # In a real implementation, this would query a data store
+        raise NotImplementedError("Run history retrieval is not yet implemented")
 
-            # For the demo, return empty list
-            return []
-        except Exception as e:
-            logger.warning(f"Error getting run history: {e}")
-            return []
-
-    @staticmethod
-    def safely_get_session_data(websocket_manager, session_id: str) -> dict[str, Any]:
+    @classmethod
+    def safely_get_session_data(cls, websocket_manager, session_id: str) -> dict[str, Any]:
         """Safely get session data, ensuring default values if keys don't exist
 
         Args:
@@ -191,45 +152,33 @@ class DataService:
 
         """
         try:
+            # Get default values from configuration
+            defaults = cls._session_config.defaults.model_dump()
+
             if not session_id or not hasattr(websocket_manager, "session_data"):
-                return {
-                    "scores": {},
-                    "outcomes": [],
-                    "pending_agents": [],
-                    "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-                }
+                return defaults
 
             session = websocket_manager.session_data.get(session_id)
             if not session:
-                return {
-                    "scores": {},
-                    "outcomes": [],
-                    "pending_agents": [],
-                    "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-                }
+                return defaults
 
-            # Ensure progress has all required fields with defaults
+            # Ensure progress has all required fields with defaults from config
             progress = session.get("progress", {})
-            progress.setdefault("current_step", 0)
-            progress.setdefault("total_steps", 100)
-            progress.setdefault("status", "waiting")
-            progress.setdefault("pending_agents", [])
+            progress_defaults = cls._session_config.defaults.progress.model_dump()
+            for key, default_value in progress_defaults.items():
+                progress.setdefault(key, default_value)
 
             # Sanitize the response to ensure all expected keys are present
             return {
-                "scores": {},      # This will be populated later by MessageService
-                "outcomes": [],    # This will be populated later by MessageService
-                "pending_agents": progress.get("pending_agents", []),
+                "scores": defaults["scores"],      # This will be populated later by MessageService
+                "outcomes": defaults["outcomes"],    # This will be populated later by MessageService
+                "pending_agents": progress.get("pending_agents", defaults["pending_agents"]),
                 "progress": progress,
             }
         except Exception as e:
             logger.warning(f"Error safely getting session data: {e}")
-            return {
-                "scores": {},
-                "outcomes": [],
-                "pending_agents": [],
-                "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-            }
+            # Return defaults from configuration on error
+            return cls._session_config.defaults.model_dump()
 
     @staticmethod
     async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_name: str | None = None) -> Record | None:
@@ -254,11 +203,12 @@ class DataService:
                 # Fallback to first storage configuration for backward compatibility
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
-            # Convert OmegaConf/dict to proper DataSourceConfig
-            storage_config = DataService._convert_to_data_source_config(storage_config_raw)
+            # Use unified storage system instead of deprecated create_data_loader
+            from buttermilk._core.dmrc import get_bm
+            bm = get_bm()
+            storage = bm.get_storage(storage_config_raw)
 
-            loader = create_data_loader(storage_config)
-            for record in loader:
+            for record in storage:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata
                     record.metadata.update({
@@ -271,6 +221,66 @@ class DataService:
         except Exception as e:
             logger.warning(f"Error getting record {record_id} for flow {flow_name}: {e}")
             return None
+
+    @staticmethod
+    def _reconstruct_agent_trace_from_row(row: dict) -> AgentTrace:
+        """
+        Convenience method to reconstruct AgentTrace from database row.
+        
+        This method centralizes the logic for reconstructing AgentTrace objects
+        from database query results, eliminating code duplication.
+        
+        Args:
+            row: Database row containing AgentTrace data
+            
+        Returns:
+            AgentTrace object reconstructed from the row data
+            
+        Raises:
+            Exception: If reconstruction fails due to invalid data
+        """
+        import json
+
+        # Parse JSON fields
+        agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
+        inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
+        outputs_data = row["outputs"]
+        metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
+        run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
+        messages_data = json.loads(row["messages"]) if row["messages"] else []
+        error_data = json.loads(row["error"]) if row["error"] else []
+
+        # Create AgentConfig
+        agent_config = AgentConfig(**agent_info_data)
+
+        # Create AgentInput
+        agent_input = AgentInput(
+            inputs=inputs_data.get("inputs", {}),
+            parameters=inputs_data.get("parameters", {}),
+            context=inputs_data.get("context", []),
+            records=[Record(**rec) for rec in inputs_data.get("records", [])],
+            parent_call_id=row.get("parent_call_id")
+        )
+
+        # Create AgentTrace
+        agent_trace = AgentTrace(
+            timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
+                     else datetime.datetime.fromisoformat(row["timestamp"]),
+            call_id=row["call_id"],
+            agent_id=agent_config.agent_id,
+            metadata=metadata_data,
+            outputs=outputs_data,
+            run_info=run_info_data,
+            agent_info=agent_config,
+            session_id=row["session_id"],
+            parent_call_id=row.get("parent_call_id"),
+            tracing_link=row.get("tracing_link"),
+            inputs=agent_input,
+            messages=messages_data,
+            error=error_data
+        )
+
+        return agent_trace
 
     @staticmethod
     async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[AgentTrace]:
@@ -297,16 +307,16 @@ class DataService:
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
                 raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
-            
+
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
                 raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
-            
+
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
-            
+
             if not dataset_id:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:
@@ -347,49 +357,8 @@ class DataService:
             agent_traces = []
             for row in result:
                 try:
-                    # Reconstruct AgentTrace from the database row
-                    # Parse JSON fields
-                    import json
-                    agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
-                    inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
-                    outputs_data = row["outputs"]
-                    metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-                    run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
-                    messages_data = json.loads(row["messages"]) if row["messages"] else []
-                    error_data = json.loads(row["error"]) if row["error"] else []
-
-                    # Create AgentConfig
-                    agent_config = AgentConfig(**agent_info_data)
-
-                    # Create AgentInput
-                    agent_input = AgentInput(
-                        inputs=inputs_data.get("inputs", {}),
-                        parameters=inputs_data.get("parameters", {}),
-                        context=inputs_data.get("context", []),
-                        records=[Record(**rec) for rec in inputs_data.get("records", [])],
-                        parent_call_id=row.get("parent_call_id")
-                    )
-
-                    # Create AgentTrace
-                    agent_trace = AgentTrace(
-                        timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
-                                 else datetime.datetime.fromisoformat(row["timestamp"]),
-                        call_id=row["call_id"],
-                        agent_id=agent_config.agent_id,
-                        metadata=metadata_data,
-                        outputs=outputs_data,
-                        run_info=run_info_data,
-                        agent_info=agent_config,
-                        session_id=row["session_id"],
-                        parent_call_id=row.get("parent_call_id"),
-                        tracing_link=row.get("tracing_link"),
-                        inputs=agent_input,
-                        messages=messages_data,
-                        error=error_data
-                    )
-
+                    agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
-
                 except Exception as e:
                     logger.warning(f"Error reconstructing AgentTrace from row: {e}")
                     continue
@@ -426,16 +395,16 @@ class DataService:
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
                 raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
-            
+
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
                 raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
-            
+
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
-            
+
             if not dataset_id:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:
@@ -477,48 +446,8 @@ class DataService:
             agent_traces = []
             for row in result:
                 try:
-                    # Reconstruct AgentTrace from the database row (same logic as get_scores_for_record)
-                    import json
-                    agent_info_data = json.loads(row["agent_info"]) if row["agent_info"] else {}
-                    inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
-                    outputs_data = row["outputs"]
-                    metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-                    run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
-                    messages_data = json.loads(row["messages"]) if row["messages"] else []
-                    error_data = json.loads(row["error"]) if row["error"] else []
-
-                    # Create AgentConfig
-                    agent_config = AgentConfig(**agent_info_data)
-
-                    # Create AgentInput
-                    agent_input = AgentInput(
-                        inputs=inputs_data.get("inputs", {}),
-                        parameters=inputs_data.get("parameters", {}),
-                        context=inputs_data.get("context", []),
-                        records=[Record(**rec) for rec in inputs_data.get("records", [])],
-                        parent_call_id=row.get("parent_call_id")
-                    )
-
-                    # Create AgentTrace
-                    agent_trace = AgentTrace(
-                        timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
-                                 else datetime.datetime.fromisoformat(row["timestamp"]),
-                        call_id=row["call_id"],
-                        agent_id=agent_config.agent_id,  # Use the correct attribute name
-                        metadata=metadata_data,
-                        outputs=outputs_data,
-                        run_info=run_info_data,
-                        agent_info=agent_config,
-                        session_id=row["session_id"],
-                        parent_call_id=row.get("parent_call_id"),
-                        tracing_link=row.get("tracing_link"),
-                        inputs=agent_input,
-                        messages=messages_data,
-                        error=error_data
-                    )
-
+                    agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
-
                 except Exception as e:
                     logger.warning(f"Error reconstructing AgentTrace from row: {e}")
                     continue

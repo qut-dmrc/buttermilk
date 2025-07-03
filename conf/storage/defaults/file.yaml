@@ -1,0 +1,14 @@
+# Default file storage configuration
+# For local files, cloud storage (GCS, S3), and plaintext
+
+type: file
+path: ${oc.env:BUTTERMILK_DATA_PATH,./data/}
+glob: "**/*"
+
+# File-specific settings
+max_records_per_group: -1
+
+# Common storage settings
+randomize: true
+batch_size: 100
+auto_create: true

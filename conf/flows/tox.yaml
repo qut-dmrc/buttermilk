@@ -1,24 +1,25 @@
 
 # COMMENTED OUT # @package _global_
 defaults:
-  - /storage: drag
   - _self_
-  - /agents@agents.judge: judge
-  - /agents@agents.synth: synth
-  - /agents@agents.differences: differences
-  - /agents@observers.owl: owl
-  - /agents@observers.scorer: scorer
-  - /agents@observers.spy: spy
-  - /agents@observers.host_sequencer: host/sequencer
-  - /storage@storage: tox_bigquery
+  - /agents@tox.agents.judge: judge
+  - /agents@tox.agents.synth: synth
+  - /agents@tox.agents.differences: differences
+  - /agents@tox.observers.owl: owl
+  - /agents@tox.observers.scorer: scorer
+  - /agents@tox.observers.spy: spy
+  - /agents@tox.observers.host_sequencer: host/sequence_host
+  - /storage@tox.storage: tox_train
+  - /storage@tox.parameters.save: flows
 
-orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-name: "tox"
-description: Applies toxicity criteria
-parameters:
-  human_in_loop: ${run.human_in_loop}
-  criteria:
-    - criteria_ordinary
-    - criteria_gelber
-    - criteria_hatefb_factorised
-  save: {..parameters.save}
+tox:
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  name: "tox"
+  description: Applies toxicity criteria
+  parameters:
+    human_in_loop: ${run.human_in_loop}
+    criteria:
+      - criteria_ordinary
+      - criteria_gelber
+      - criteria_hatefb_factorised
+    save: {}

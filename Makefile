@@ -9,6 +9,9 @@ all: test
 config:
 	uv run python -m buttermilk.runner.cli -c job
 
+api:
+	uv run python -m buttermilk.runner.cli flows=[osb,tox,trans] run=api
+
 # Run unit tests and generate a coverage report.
 coverage:
 	poetry run pytest --cov \

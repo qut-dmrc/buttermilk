@@ -1,0 +1,13 @@
+# Simple sequence-based host that executes steps in order
+# This is the consolidated version of the sequencer host
+sequence_host:
+  role: HOST
+  name: "Sequence Coordinator"
+  agent_obj: HostAgent
+  parameters:
+    human_in_loop: ${run.human_in_loop}
+    execution_mode: "sequential"  # Execute agents in defined order
+  inputs:
+    task: |
+      You are the HOST coordinating a sequential workflow.
+      Execute the steps in the defined order and collect results.

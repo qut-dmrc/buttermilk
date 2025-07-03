@@ -1,8 +1,12 @@
-# Import silence_logs early to suppress noisy log messages
-from buttermilk.utils.silence_logs import silence_task_logs
-
-# Suppress logs as early as possible during import
-silence_task_logs()
+# Import silence_logs early to suppress noisy log messages - conditional to avoid circular imports
+try:
+    from buttermilk.utils.silence_logs import silence_task_logs
+    # Suppress logs as early as possible during import
+    silence_task_logs()
+except ImportError:
+    # If we can't import silence_task_logs, create a no-op function
+    def silence_task_logs():
+        pass
 
 from buttermilk._core.dmrc import get_bm, set_bm
 

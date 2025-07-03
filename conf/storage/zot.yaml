@@ -1,7 +1,6 @@
-prosocial_zot:
-  type: chromadb
-  persist_directory: "gs://prosocial-dev/data/zotero-prosocial/files"
-  # persist_directory: ".cache/zot/files"
-  collection_name: "prosocial_zot"
-  embedding_model: "text-embedding-large-exp-03-07"
-  dimensionality: 3072
+type: chromadb
+persist_directory: "gs://prosocial-dev/data/zotero-prosocial/files"
+# persist_directory: ".cache/zot/files"
+collection_name: "prosocial_zot"
+embedding_model: "text-embedding-large-exp-03-07"
+dimensionality: 3072

@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
@@ -62,6 +63,53 @@ async def negotiate_response(
 
 
 # --- Routes ---
+
+@flow_data_router.get("/api/session")
+async def get_session_endpoint(
+    request: Request,
+    flows: Annotated[FlowRunner, Depends(get_flows)],
+    session_id: str = Query(None, description="Optional existing session ID to validate"),
+):
+    """Get or create a session for WebSocket connection."""
+    logger.debug(f"Session request received. Existing ID: {session_id}")
+    
+    try:
+        # If a session_id is provided, check if it exists
+        if session_id and hasattr(flows, 'session_manager'):
+            # Check if session exists and is valid
+            if session_id in flows.session_manager.sessions:
+                session = flows.session_manager.sessions[session_id]
+                if session.status.value in ["active", "initializing"]:
+                    logger.info(f"Returning existing session: {session_id}")
+                    return JSONResponse({
+                        "sessionId": session_id,
+                        "status": session.status.value,
+                        "created_at": session.created_at.isoformat() if hasattr(session, 'created_at') else None
+                    })
+        
+        # Create a new session ID
+        new_session_id = str(uuid.uuid4())
+        logger.info(f"Creating new session: {new_session_id}")
+        
+        # Pre-create the session in the session manager if it exists
+        # This ensures the WebSocket connection will find it
+        if hasattr(flows, 'session_manager'):
+            # Ensure the session manager is started
+            await flows._ensure_session_manager_started()
+            # Pre-create the session so WebSocket can find it
+            await flows.session_manager.get_or_create_session(new_session_id, websocket=None)
+            logger.info(f"Pre-created session {new_session_id} in session manager")
+        
+        return JSONResponse({
+            "sessionId": new_session_id,
+            "status": "new",
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in session endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create session")
+
 @flow_data_router.get("/api/flows")
 async def get_flows_endpoint(
     request: Request,

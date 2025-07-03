@@ -151,11 +151,59 @@ class AutogenOrchestrator(Orchestrator):
         # does it need a second to spin up?
         await asyncio.sleep(1)
 
+        # Send a broadcast message to initialize all agents subscribed to the group chat
+        logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
+        await self._runtime.publish_message(
+            FlowEvent(source="orchestrator", content="Initializing group chat participants"),
+            topic_id=self._topic
+        )
+
+        # Give agents a moment to initialize
+        await asyncio.sleep(0.5)
+
         # Send a welcome message to the UI
         await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
 
-        # Start up the host agent
-        await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
+        # Collect tool definitions from registered agents
+        participant_tools = {}
+        logger.info(f"Collecting tools from {len(self._agent_registry)} registered agents")
+        for agent_id, agent_instance in self._agent_registry.items():
+            if hasattr(agent_instance, 'role') and hasattr(agent_instance, 'get_tool_definitions'):
+                role = agent_instance.role.upper()
+                try:
+                    tool_defs = agent_instance.get_tool_definitions()
+                    if tool_defs:
+                        # Convert tool definitions to dict format
+                        participant_tools[role] = [
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.input_schema,
+                                "output_schema": tool.output_schema
+                            }
+                            for tool in tool_defs
+                        ]
+                        logger.info(f"Collected {len(tool_defs)} tool definitions from {role}: {[t['name'] for t in participant_tools[role]]}")
+                    else:
+                        logger.debug(f"No tool definitions found for {role}")
+                except Exception as e:
+                    logger.warning(f"Failed to get tool definitions from {role}: {e}")
+            else:
+                logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions")
+
+        # Start up the host agent with participants and their tools
+        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())} and tools: {list(participant_tools.keys())}")
+        conductor_request = ConductorRequest(
+            inputs=request.model_dump(), 
+            participants=self._participants,
+            participant_tools=participant_tools
+        )
+        logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
+        logger.debug(f"ConductorRequest details - tools: {participant_tools}")
+        await self._runtime.publish_message(
+            conductor_request, 
+            topic_id=DefaultTopicId(type=CONDUCTOR)
+        )
 
         return termination_handler, interrupt_handler
 
@@ -170,8 +218,13 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Registering agents with Autogen runtime...")
 
         # Add flow's static parameters to the request parameters
-        # Create list of participants in the group chat
-        self._participants = {v.role: v.description for k, v in self.agents.items()}
+        # Create list of participants in the group chat - include both agents AND observers
+        logger.info(f"Creating participants from {len(self.agents)} agents and {len(self.observers)} observers")
+        self._participants = {
+            **{v.role: v.description for k, v in self.agents.items()},
+            **{v.role: v.description for k, v in self.observers.items()}
+        }
+        logger.info(f"Created participants dictionary with {len(self._participants)} entries: {list(self._participants.keys())}")
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
@@ -217,8 +270,6 @@ class AutogenOrchestrator(Orchestrator):
                         factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
 
-                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'")
-
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.
                 await self._runtime.add_subscription(
@@ -237,7 +288,7 @@ class AutogenOrchestrator(Orchestrator):
                         agent_type=agent_type,
                     ),
                 )
-                logger.debug(f"Agent type '{agent_type}' subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
+                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
 
                 registered_for_role.append((agent_type, variant_config))
 

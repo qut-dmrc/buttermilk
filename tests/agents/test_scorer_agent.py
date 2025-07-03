@@ -18,10 +18,10 @@ from buttermilk.agents.judge import JudgeReasons  # Judge output model
 
 
 # Mock weave globally for all tests in this module
-# We patch the actual location where 'weave' is imported and used within the codebase (buttermilk.bm)
+# We patch the actual location where 'weave' is imported and used within the codebase (buttermilk.buttermilk)
 @pytest.fixture(autouse=True)
 def mock_global_weave():
-    with patch("buttermilk.bm.bm.weave", new_callable=MagicMock) as mock_weave:
+    with patch("buttermilk.buttermilk.weave", new_callable=MagicMock) as mock_weave:
         mock_call = MagicMock()
         mock_call.id = "mock_call_id_global"
         mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")

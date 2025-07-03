@@ -84,7 +84,6 @@ class SlackUIAgent(UIAgent):
         cancellation_token: CancellationToken | None = None,
         source: str = "",
         public_callback: Callable | None = None,
-        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -288,7 +287,6 @@ class SlackUIAgent(UIAgent):
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
-        message_callback: Callable = None,
         source: str = "unknown",
         **kwargs,
     ) -> OOBMessages:

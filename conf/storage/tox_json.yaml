@@ -2,6 +2,14 @@
 drag:
   type: file
   path: gs://prosocial-dev/data/osb_drag_toxic_train.jsonl
+  glob: "**/*"
+  max_records_per_group: -1
+  
+  # Common storage settings
+  randomize: true
+  batch_size: 100
+  auto_create: true
+  
   index:
     - record_id
   columns:

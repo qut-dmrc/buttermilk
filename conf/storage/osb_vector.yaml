@@ -1,9 +1,30 @@
 
-osb:
-  type: vector
-  uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
-  db:
-    type: chromadb
-    embeddings: gs://prosocial-public/osb/04_osb_embeddings_vertex-005.json
-    model: text-embedding-005
-    store: ".chromadb"
+type: chromadb
+persist_directory: "gs://prosocial-dev/data/osb/chromadb"
+collection_name: "osb_fulltext"
+embedding_model: "gemini-embedding-001"
+dimensionality: 3072
+
+# Common storage settings
+randomize: true
+batch_size: 1000
+auto_create: true
+
+# OSB-specific multi-field embedding configuration
+multi_field_embedding:
+  content_field: "content"  # fulltext for main content chunking
+  chunk_size: 1200
+  chunk_overlap: 400
+  additional_fields:
+    - source_field: "title"
+      chunk_type: "title"
+      min_length: 10
+    - source_field: "description"  # actual case description
+      chunk_type: "case_description"
+      min_length: 50
+    - source_field: "reasons"  # array of reasons - will be joined
+      chunk_type: "reasoning"
+      min_length: 100
+    - source_field: "recommendations"  # array of recommendations
+      chunk_type: "recommendations"
+      min_length: 50

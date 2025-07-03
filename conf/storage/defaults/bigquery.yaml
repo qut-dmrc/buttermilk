@@ -1,0 +1,17 @@
+# Default BigQuery storage configuration
+
+type: bigquery
+dataset_id: ${bm.infrastructure.clouds.0.bigquery_dataset}
+table_id: records
+
+# BigQuery-specific settings
+clustering_fields: 
+  - record_id
+  - dataset_name
+max_records_per_group: -1
+last_n_days: 7
+
+# Common storage settings
+randomize: true
+batch_size: 1000
+auto_create: true

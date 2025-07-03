@@ -10,7 +10,8 @@ import pytest
 from buttermilk._core.agent import AgentInput, AgentTrace
 from buttermilk._core.contract import ConductorRequest, StepRequest
 from buttermilk._core.constants import END
-from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredStructuredLLMHostAgent
+from buttermilk.agents.flowcontrol.host import HostAgent
 
 pytestmark = pytest.mark.anyio
 
@@ -18,7 +19,10 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def conductor_request() -> ConductorRequest:
     """Provides a sample ConductorRequest."""
-    return ConductorRequest(inputs={"participants": {"AGENT1": {}, "AGENT2": {}}, "task": "test"}, prompt="Get next step")
+    return ConductorRequest(
+        participants={"AGENT1": "Agent 1 description", "AGENT2": "Agent 2 description"},
+        inputs={"prompt": "Get next step", "task": "test"}
+    )
 
 
 # --- Sequencer Tests ---
@@ -29,8 +33,9 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     """Test Sequencer._get_next_step returns the next step from its generator.
     """
     # Arrange
-    sequencer = Sequencer(role="SEQUENCER", name="Test Seq", description="test")
-    await sequencer.initialize()  # Initialize to set up generator
+    sequencer = HostAgent(role="SEQUENCER", agent_name="Test Seq", agent_id="test-seq")
+    mock_callback = AsyncMock()
+    await sequencer.initialize(callback_to_groupchat=mock_callback)  # Initialize to set up generator
 
     # Mock the internal generator to control the output
     async def mock_generator():
@@ -77,32 +82,32 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     assert sequencer._current_step == END
 
 
-# --- LLMHostAgent Tests ---
+# --- StructuredStructuredLLMHostAgent Tests ---
 
 
 @pytest.fixture
-def mock_llm_host_agent() -> LLMHostAgent:
-    """Fixture for a mocked LLMHostAgent."""
-    with patch.object(LLMHostAgent, "__init__", return_value=None):
-        agent = LLMHostAgent()
-        agent.id = "mock-host-id"
-        agent.role = "host"
-        agent.description = "Mocked host"
-        agent._process = AsyncMock(name="_process")
-        agent._check_completions = AsyncMock(name="_check_completions")
-        agent._step_completion_event = asyncio.Event()
-        agent._current_step = "previous_step"
-        # Add other necessary attributes if needed by _get_next_step
-        agent.parameters = {}  # Mock parameters dict
-        agent._records = []
-        agent._model_context = MagicMock()  # Mock context if needed
-        agent._data = MagicMock()  # Mock data collector if needed
-        return agent
+def mock_llm_host_agent() -> StructuredLLMHostAgent:
+    """Fixture for a mocked StructuredLLMHostAgent."""
+    # Create a proper instance with minimal required fields
+    agent = StructuredLLMHostAgent(
+        role="host",
+        description="Mocked host agent"
+    )
+    # Mock the methods that need to be mocked
+    agent._process = AsyncMock(name="_process")
+    agent._check_completions = AsyncMock(name="_check_completions")
+    agent._step_completion_event = asyncio.Event()
+    agent._current_step = "previous_step"
+    # Add other necessary attributes if needed by _get_next_step
+    agent._records = []
+    agent._model_context = MagicMock()  # Mock context if needed
+    agent._data = MagicMock()  # Mock data collector if needed
+    return agent
 
 
 @pytest.mark.anyio
-async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
-    """Test LLMHostAgent._get_next_step calls _process to determine the next step.
+async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: StructuredLLMHostAgent, conductor_request: ConductorRequest):
+    """Test StructuredLLMHostAgent._get_next_step calls _process to determine the next step.
     """
     # Arrange
     expected_step = StepRequest(role="NEXT_AGENT", prompt="Do something", description="Next action")
@@ -123,7 +128,7 @@ async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: L
     assert isinstance(process_input_message, AgentInput)
     # Verify _process input contains relevant info from ConductorRequest (depends on _get_next_step logic)
     assert process_input_message.inputs == conductor_request.inputs
-    # LLMHostAgent._get_next_step should return the output from _process
+    # StructuredLLMHostAgent._get_next_step should return the output from _process
     assert result_output == mock_output_from_process
     # Verify completion tracking reset (assuming _process output is valid StepRequest)
     assert mock_llm_host_agent._current_step == "NEXT_AGENT"
@@ -131,8 +136,8 @@ async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: L
 
 
 @pytest.mark.anyio
-async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
-    """Test that LLMHostAgent._get_next_step avoids calling itself or MANAGER.
+async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: StructuredLLMHostAgent, conductor_request: ConductorRequest):
+    """Test that StructuredLLMHostAgent._get_next_step avoids calling itself or MANAGER.
     """
     # Arrange
     mock_llm_host_agent.role = "host"  # Set agent's own role

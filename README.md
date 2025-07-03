@@ -37,6 +37,13 @@ Buttermilk is built around a few core concepts that help structure your research
 
 For a detailed explanation of these concepts, please see **[docs/concepts.md](docs/concepts.md)**.
 
+### Quick Start Guides
+
+*   **[docs/OSB_FLOW_QUICKSTART.md](docs/OSB_FLOW_QUICKSTART.md)**: Quick guide to running the OSB (Oversight Board) flow
+*   **[docs/CONFIGURATION_GUIDE.md](docs/CONFIGURATION_GUIDE.md)**: Comprehensive guide to Hydra configuration
+*   **[README_HYDRA_PATTERNS.md](README_HYDRA_PATTERNS.md)**: Common Hydra patterns and troubleshooting
+*   **[conf/examples/](conf/examples/)**: Example configuration files for common use cases
+
 ## Usage
 
 Buttermilk provides several components and features to facilitate HASS research:
@@ -59,8 +66,11 @@ Future Development:
 
 Buttermilk is actively under development. We welcome contributions and feedback! If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au) to discuss ideas, planning, or how to contribute.
 
-For more details on core concepts, see **[docs/concepts.md](docs/concepts.md)**.
-For developer-focused information on code structure, see **[buttermilk/core_structure.md](buttermilk/core_structure.md)**.
+**For Contributors:**
+- **[docs/DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md)**: Required reading - development process and quality standards
+- **[CLAUDE.md](CLAUDE.md)**: Development guidelines for AI-assisted development
+- **[docs/concepts.md](docs/concepts.md)**: Core concepts and architecture
+- **[buttermilk/core_structure.md](buttermilk/core_structure.md)**: Code structure and patterns
 
 ## Contributing to Documentation
 

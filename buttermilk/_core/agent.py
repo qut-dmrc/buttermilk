@@ -12,20 +12,26 @@ systems like Autogen.
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-import weave  # For tracing
+import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
+
 if TYPE_CHECKING:
-    pass
+    from buttermilk._core.tool_definition import AgentToolDefinition
+
+from autogen_core.tools import Tool, ToolSchema
+
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import (
+    BaseModel,
+    Field,
     PrivateAttr,
     computed_field,
 )
@@ -37,6 +43,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages,
 from buttermilk._core.context import agent_id_var
 from buttermilk._core.contract import (
+    AgentAnnouncement,
     AgentInput,
     AgentOutput,  # Standard input message structure
     AgentTrace,
@@ -149,6 +156,7 @@ class Agent(AgentConfig, ABC):
     _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _heartbeat: asyncio.Queue[bool | None] = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
+    _announcement_callback: Callable[[Any], Awaitable[None]] | None = PrivateAttr(default=None)
 
     model_config = {  # Pydantic Model Configuration
         "extra": "ignore",
@@ -182,21 +190,6 @@ class Agent(AgentConfig, ABC):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-    async def initialize(self, **kwargs: Any) -> None:
-        """Initializes agent state or resources. Called once by the orchestrator.
-
-        Subclasses can override this method to perform asynchronous setup tasks
-        such as loading models, establishing connections to external services,
-        or initializing complex state. The base implementation is a no-op.
-
-        Args:
-            **kwargs: Arbitrary keyword arguments that might be passed by the
-                orchestrator or calling context, providing additional setup parameters.
-
-        """
-        logger.debug(f"Agent {self.agent_name}: Base initialize.")
-        # Set the agent ID in the context variable for tracing
-        agent_id_var.set(self.agent_id)
 
     async def cleanup(self) -> None:
         """Cleanup agent resources and state.
@@ -226,6 +219,140 @@ class Agent(AgentConfig, ABC):
                 self._heartbeat.get_nowait()
             except asyncio.QueueEmpty:
                 break
+
+    # --- Announcement Methods ---
+
+    def get_available_tools(self) -> list[Tool]:
+        """Get list of tools this agent can respond to.
+
+        Returns:
+            list[Tool]: List of tools.
+        """
+        return []
+
+    def get_supported_message_types(self) -> list[str]:
+        """Get list of OOBMessage types this agent handles.
+        
+        Returns:
+            list[str]: List of supported message type names.
+        """
+        # Check if agent has defined supported messages
+        if hasattr(self, "_supported_oob_messages"):
+            return self._supported_oob_messages
+        return []
+
+    def create_announcement(
+        self,
+        announcement_type: Literal["initial", "response", "update"],
+        status: Literal["joining", "active", "leaving"],
+        responding_to: str | None = None
+    ) -> AgentAnnouncement:
+        """Create an agent announcement message.
+        
+        Args:
+            announcement_type: Type of announcement (initial, response, update).
+            status: Current agent status (joining, active, leaving).
+            responding_to: Agent ID being responded to (for response type).
+            
+        Returns:
+            AgentAnnouncement: The announcement message.
+        """
+        content_map = {
+            "joining": f"Agent {self.agent_name} joining",
+            "active": f"Agent {self.agent_name} active",
+            "leaving": f"Agent {self.agent_name} leaving"
+        }
+
+        # Get actual tool definitions from @tool decorated methods
+        tool_definitions = self.get_tool_definitions()
+        
+        # If agent has specific @tool methods, use the first one as primary tool
+        # Otherwise fall back to generic agent tool definition
+        if tool_definitions:
+            primary_tool = tool_definitions[0].to_autogen_tool_schema()
+        else:
+            primary_tool = self.get_autogen_tool_definition()
+
+        return AgentAnnouncement(
+            content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
+            agent_config=self._cfg,
+            available_tools=self.get_available_tools(),
+            supported_message_types=self.get_supported_message_types(),
+            tool_definition=primary_tool,
+            status=status,
+            announcement_type=announcement_type,
+            responding_to=responding_to,
+            source=self.agent_id
+        )
+
+    async def send_announcement(
+        self,
+        public_callback: Callable[[Any], Awaitable[None]],
+        announcement_type: Literal["initial", "response", "update"],
+        status: Literal["joining", "active", "leaving"],
+        responding_to: str | None = None
+    ) -> None:
+        """Send an agent announcement message.
+        
+        Args:
+            public_callback: Callback to publish the announcement.
+            announcement_type: Type of announcement.
+            status: Current agent status.
+            responding_to: Agent ID being responded to (for response type).
+        """
+        try:
+            announcement = self.create_announcement(
+                announcement_type=announcement_type,
+                status=status,
+                responding_to=responding_to
+            )
+            await public_callback(announcement)
+            logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+        except Exception as e:
+            logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
+
+    async def initialize(
+        self,
+        public_callback: Callable[[Any], Awaitable[None]] | None = None,
+        **kwargs: Any
+    ) -> None:
+        """Initializes agent state or resources and optionally sends joining announcement.
+
+        Called once by the orchestrator. Subclasses can override this method to perform 
+        asynchronous setup tasks such as loading models, establishing connections to external 
+        services, or initializing complex state.
+        
+        Args:
+            public_callback: Optional callback to publish announcement.
+            **kwargs: Arbitrary keyword arguments that might be passed by the
+                orchestrator or calling context, providing additional setup parameters.
+        """
+        logger.debug(f"Agent {self.agent_name}: Base initialize.")
+        # Set the agent ID in the context variable for tracing
+        agent_id_var.set(self.agent_id)
+
+        # Store callback for cleanup if provided
+        if public_callback:
+            self._announcement_callback = public_callback
+            # Send joining announcement
+            await self.send_announcement(
+                public_callback=public_callback,
+                announcement_type="initial",
+                status="joining"
+            )
+
+    async def cleanup_with_announcement(self) -> None:
+        """Cleanup agent and send leaving announcement."""
+        # Send leaving announcement if we have a stored callback
+        if hasattr(self, "_announcement_callback") and self._announcement_callback:
+            await self.send_announcement(
+                public_callback=self._announcement_callback,
+                announcement_type="update",
+                status="leaving"
+            )
+
+        # Call base cleanup
+        await self.cleanup()
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Resets the agent's internal state to its initial condition.
@@ -352,7 +479,6 @@ class Agent(AgentConfig, ABC):
         self,
         message: AgentInput,
         public_callback: Callable[[Any], Awaitable[None]],
-        message_callback: Callable[[Any], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentTrace:
@@ -377,8 +503,6 @@ class Agent(AgentConfig, ABC):
             message: The initial `AgentInput` message for the agent.
             public_callback: An asynchronous callback function to publish messages
                 (like status updates, traces) to a general or public topic.
-            message_callback: An asynchronous callback function to publish messages
-                back to a topic associated with the incoming message (less commonly used).
             cancellation_token: An optional `CancellationToken` to signal if the
                 operation should be aborted. (Currently not deeply integrated into the core loop).
             **kwargs: Additional keyword arguments that might be passed by the caller.
@@ -489,7 +613,6 @@ class Agent(AgentConfig, ABC):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable[[Any], Awaitable[None]],
-        message_callback: Callable[[Any], Awaitable[None]],
         **kwargs: Any,
     ) -> None:
         """Handle passively received messages from other agents or sources.
@@ -512,9 +635,6 @@ class Agent(AgentConfig, ABC):
             source: A string identifier for the sender or source of the message.
             public_callback: An asynchronous callback function to publish messages
                 to a general or public topic. (Currently not used in base implementation).
-            message_callback: An asynchronous callback function to publish messages
-                back to a topic associated with the incoming message. (Currently not
-                used in base implementation).
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         """
@@ -586,12 +706,25 @@ class Agent(AgentConfig, ABC):
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
 
+        # Handle AgentAnnouncement messages
+        if isinstance(message, AgentAnnouncement):
+            # Check if this is from a host agent (initial announcement)
+            if (message.announcement_type == "initial" and 
+                message.agent_config.role in ["HOST", "ORCHESTRATOR"]):
+                # Respond to host announcement
+                await self.send_announcement(
+                    public_callback=public_callback,
+                    announcement_type="response",
+                    status="active",
+                    responding_to=message.agent_config.agent_id
+                )
+                logger.debug(f"Agent {self.agent_name} responded to host announcement from {message.agent_config.agent_id}")
+
     async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable[[Any], Awaitable[None]] | None = None,
-        message_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band (OOB) control messages.
@@ -612,8 +745,6 @@ class Agent(AgentConfig, ABC):
                 event handling should be aborted.
             public_callback: An optional asynchronous callback for publishing
                 general responses or events.
-            message_callback: An optional asynchronous callback for publishing
-                responses specific to the incoming message's context/topic.
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         Returns:
@@ -742,4 +873,169 @@ class Agent(AgentConfig, ABC):
             f"Context length: {len(updated_inputs.context)}, "
             f"Records count: {len(updated_inputs.records)}.",
         )
+
         return updated_inputs
+
+    def get_tool_definitions(self) -> list["AgentToolDefinition"]:
+        """Generate structured tool definitions for this agent.
+        
+        This method extracts tool definitions from methods decorated with
+        @tool or @MCPRoute decorators. It enables agents to automatically
+        expose their capabilities as structured tool definitions that can
+        be used by LLMs and MCP servers.
+        
+        Returns:
+            List of AgentToolDefinition objects representing this agent's tools.
+        """
+        from buttermilk._core.mcp_decorators import extract_tool_definitions
+        return extract_tool_definitions(self)
+
+    def get_autogen_tool_definition(self) -> ToolSchema:
+        """Return autogen-compatible tool definition for this agent.
+        
+        This creates a standard tool definition that allows the agent to be
+        invoked as a tool by other agents. The tool definition follows 
+        Autogen's format and can be used by LLM hosts for structured tool calling.
+        
+        Returns:
+            ToolSchema: Autogen-compatible tool definition with name, description, 
+                        and parameters.
+        """
+        return ToolSchema(
+            name=f"call_{self.role.lower()}",
+            description=self._get_tool_description(),
+            parameters=self._get_agent_input_schema()
+        )
+
+    def _get_tool_description(self) -> str:
+        """Get the tool description for this agent.
+        
+        This creates a description that explains not just what the agent does,
+        but when it should be used. Agents can override this method to provide
+        more specific guidance for LLMs.
+        
+        Returns:
+            str: Description suitable for LLM tool selection.
+        """
+        # Check if agent has a tool-specific description in parameters
+        if hasattr(self, 'parameters') and self.parameters:
+            tool_desc = self.parameters.get('tool_description')
+            if tool_desc:
+                return tool_desc
+
+        # Use agent description if available, otherwise create default
+        if self.description:
+            # Enhance the description with usage guidance
+            return f"Use this tool when you need to: {self.description.lower()}. " \
+                   f"Calls the {self.role} agent to handle {self.role.lower()}-specific tasks."
+        else:
+            # Fallback description
+            return f"Use this tool to invoke the {self.role} agent for {self.role.lower()}-related tasks and processing."
+
+    def _get_agent_input_schema(self) -> dict[str, Any]:
+        """Get input schema for this agent when used as a tool.
+        
+        Returns a JSON schema that describes what inputs this agent expects.
+        Agents can override this method to provide custom schemas.
+        
+        Returns:
+            dict: JSON schema for agent inputs.
+        """
+        # Check if agent has defined a custom input model class
+        if hasattr(self, 'input_model_class') and issubclass(self.input_model_class, BaseModel):
+            # Use Pydantic's built-in schema generation
+            return self.input_model_class.model_json_schema()
+        
+        # Check if agent has defined custom schema directly
+        if hasattr(self, 'input_schema'):
+            return self.input_schema
+
+        # Default to BaseAgentInputModel schema
+        from buttermilk._core.contract import BaseAgentInputModel
+        return BaseAgentInputModel.model_json_schema()
+
+    async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
+        """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
+        
+        This method provides a unified interface for handling both tool-specific
+        requests and general agent requests, supporting the new structured
+        tool invocation system.
+        
+        Args:
+            request: UnifiedRequest containing target, inputs, context, and metadata
+            **kwargs: Additional keyword arguments passed to handlers
+            
+        Returns:
+            The result of the tool or process execution
+            
+        Raises:
+            ValueError: If the requested tool is not found
+            ProcessingError: If execution fails
+        """
+        from buttermilk._core.tool_definition import UnifiedRequest
+
+        if request.tool_name:
+            # Route to specific tool
+            tool_name = request.tool_name
+
+            # First, try direct method name match
+            if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
+                method = getattr(self, tool_name)
+                if hasattr(method, "_tool_metadata") or hasattr(method, "_mcp_route"):
+                    logger.debug(
+                        f"Agent {self.agent_name} executing tool {tool_name} "
+                        f"with inputs: {request.inputs}"
+                    )
+
+                    # Execute the tool method
+                    if asyncio.iscoroutinefunction(method):
+                        result = await method(**request.inputs)
+                    else:
+                        result = method(**request.inputs)
+
+                    return result
+
+            # If direct match fails, search for methods with matching tool metadata
+            for attr_name in dir(self):
+                if attr_name.startswith("_"):
+                    continue
+
+                attr = getattr(self, attr_name)
+                if callable(attr):
+                    # Check if it has tool metadata with matching name
+                    if hasattr(attr, "_tool_metadata"):
+                        if attr._tool_metadata.get("name") == tool_name:
+                            logger.debug(
+                                f"Agent {self.agent_name} executing tool {tool_name} "
+                                f"(method: {attr_name}) with inputs: {request.inputs}"
+                            )
+
+                            # Execute the tool method
+                            if asyncio.iscoroutinefunction(attr):
+                                result = await attr(**request.inputs)
+                            else:
+                                result = attr(**request.inputs)
+
+                            return result
+
+            # Tool not found
+            raise ValueError(
+                f"Tool {tool_name} not found on agent {self.agent_name}"
+            )
+        else:
+            # No specific tool - route to general _process method
+            # Convert UnifiedRequest to AgentInput for backward compatibility
+            agent_input = AgentInput(
+                inputs=request.inputs,
+                context=request.context.get("messages", []) if request.context else [],
+                parameters=request.metadata,
+                records=request.context.get("records", []) if request.context else []
+            )
+
+            # Call the standard process method
+            result = await self._process(message=agent_input, **kwargs)
+
+            # Extract outputs from AgentOutput if needed
+            if hasattr(result, "outputs"):
+                return result.outputs
+            return result

@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import ToolOutput
-from buttermilk.agents.llm import LLMAgent, Tool, ToolSchema
+from buttermilk.agents.llm import LLMAgent
+from autogen_core.tools import Tool
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 import pydantic
@@ -141,7 +142,7 @@ class ResearchResult(BaseModel):
     )
 
 
-class RagAgent(LLMAgent, ToolConfig):
+class RagAgent(LLMAgent):
     """Base class for Retrieval Augmented Generation (RAG) agents.
 
     This agent provides core RAG functionality including:
@@ -162,6 +163,7 @@ class RagAgent(LLMAgent, ToolConfig):
     _chromadb: ChromaDBEmbeddings = PrivateAttr()
     _vectorstore: Collection = PrivateAttr()
     _output_model: type[BaseModel] | None = ResearchResult
+    _ref_result_class: type[RefResult] = RefResult  # Subclasses can override this
 
     # RAG configuration
     n_results: int = Field(
@@ -246,7 +248,7 @@ class RagAgent(LLMAgent, ToolConfig):
         return self._tools_list
 
     @property
-    def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
+    def config(self) -> list[Tool]:
         """Provides the tool configuration for this agent.
 
         Returns:
@@ -329,45 +331,16 @@ class RagAgent(LLMAgent, ToolConfig):
         num_ids_found = len(chroma_results["ids"][0])
         for i in range(num_ids_found):
             try:
-                parsed_records.append(RefResult.from_chroma(chroma_results, i))
+                parsed_records.append(self._ref_result_class.from_chroma(chroma_results, i))
             except Exception as e:
                 logger.warning(f"RagAgent '{self.agent_id}': Failed to parse ChromaDB item at index {i}: {e!s}")
                 continue
 
         # Filter for unique documents if requested
-        final_records: list[RefResult]
-        if self.no_duplicates:
-            unique_document_ids: set[str] = set()
-            filtered_records: list[RefResult] = []
-            for record in parsed_records:
-                if record.document_id not in unique_document_ids:
-                    filtered_records.append(record)
-                    unique_document_ids.add(record.document_id)
-                    if len(filtered_records) >= self.n_results:
-                        break
-            final_records = filtered_records
-        else:
-            final_records = parsed_records[:self.n_results]
+        final_records = self._filter_unique_documents(parsed_records) if self.no_duplicates else parsed_records[:self.n_results]
 
         # Create context messages for LLM
-        context_messages: list[UserMessage] = []
-        if hasattr(self, "_model_client") and self._model_client and hasattr(self._model_client, "client"):
-            for i, rec in enumerate(final_records):
-                current_rec_message = rec.as_message()
-                try:
-                    # Check token limits if available
-                    if hasattr(self._model_client.client, "remaining_tokens") and self._model_client.client.remaining_tokens(messages=context_messages + [current_rec_message]) < 5000:
-                        logger.warning(
-                            f"RagAgent '{self.agent_id}': Approaching token limit. "
-                            f"Truncating results from {len(final_records)} to {i}."
-                        )
-                        final_records = final_records[:i]
-                        break
-                except (AttributeError, KeyError):
-                    logger.debug(f"RagAgent '{self.agent_id}': Token limit checking not available.")
-                context_messages.append(current_rec_message)
-        else:
-            context_messages = [rec.as_message() for rec in final_records]
+        context_messages, final_records = self._create_context_messages(final_records)
 
         # Construct ToolOutput
         return ToolOutput(
@@ -379,3 +352,55 @@ class RagAgent(LLMAgent, ToolConfig):
             messages=context_messages,
             is_error=False,
         )
+
+    def _filter_unique_documents(self, records: list[RefResult]) -> list[RefResult]:
+        """Filter records to ensure unique parent documents.
+        
+        Args:
+            records: List of RefResult objects to filter
+            
+        Returns:
+            list[RefResult]: Filtered list with unique document IDs
+        """
+        unique_document_ids: set[str] = set()
+        filtered_records: list[RefResult] = []
+        for record in records:
+            if record.document_id not in unique_document_ids:
+                filtered_records.append(record)
+                unique_document_ids.add(record.document_id)
+                if len(filtered_records) >= self.n_results:
+                    break
+        return filtered_records
+
+    def _create_context_messages(self, records: list[RefResult]) -> tuple[list[UserMessage], list[RefResult]]:
+        """Create context messages from records with optional token limit checking.
+        
+        Args:
+            records: List of RefResult objects
+            
+        Returns:
+            tuple: (context_messages, potentially_truncated_records)
+        """
+        context_messages: list[UserMessage] = []
+        final_records = records
+
+        if hasattr(self, "_model_client") and self._model_client and hasattr(self._model_client, "client"):
+            for i, rec in enumerate(records):
+                current_rec_message = rec.as_message()
+                try:
+                    # Check token limits if available
+                    if hasattr(self._model_client.client, "remaining_tokens") and \
+                       self._model_client.client.remaining_tokens(messages=context_messages + [current_rec_message]) < 5000:
+                        logger.warning(
+                            f"RagAgent '{self.agent_id}': Approaching token limit. "
+                            f"Truncating results from {len(records)} to {i}."
+                        )
+                        final_records = records[:i]
+                        break
+                except (AttributeError, KeyError):
+                    logger.debug(f"RagAgent '{self.agent_id}': Token limit checking not available.")
+                context_messages.append(current_rec_message)
+        else:
+            context_messages = [rec.as_message() for rec in records]
+
+        return context_messages, final_records

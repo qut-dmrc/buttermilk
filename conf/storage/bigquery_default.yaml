@@ -10,3 +10,5 @@ auto_create: true
 clustering_fields: 
   - record_id
   - dataset_name
+max_records_per_group: -1
+last_n_days: 7

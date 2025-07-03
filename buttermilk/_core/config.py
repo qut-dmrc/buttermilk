@@ -17,6 +17,8 @@ from typing import (
 
 import cloudpathlib  # For handling cloud storage paths
 import jmespath  # For JSON query language processing
+
+# BigQuery import - now a core dependency
 from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
 from pydantic import (
     AfterValidator,
@@ -68,19 +70,19 @@ Allowed values:
 class CloudProviderCfg(BaseModel):
     """Base configuration for components interacting with cloud providers or specific storage types.
 
+    This class handles different cloud provider types with their specific requirements.
+    Uses dynamic validation based on the provider type rather than rigid field requirements.
+
     Attributes:
         type (CloudProvider): The type of cloud provider or storage.
+        project (str | None): GCP project ID (required for GCP-based providers).
+        location (str | None): Cloud region/location (required for specific services).
         model_config (ConfigDict): Pydantic model configuration.
-            - `exclude_none`: True - Exclude fields with None values during serialization.
-            - `arbitrary_types_allowed`: True - Allow arbitrary types.
-            - `populate_by_name`: True - Allow population by field name (alias support).
-            - `extra`: "allow" - Allow extra fields not explicitly defined.
-            - `exclude_unset`: True - Exclude fields that were not explicitly set.
-            - `include_extra`: True - Include extra fields during serialization.
-
     """
 
     type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
+    project: str | None = Field(default=None, description="Cloud project ID")
+    location: str | None = Field(default=None, description="Cloud region/location")
 
     model_config = ConfigDict(
         exclude_none=True,
@@ -90,6 +92,41 @@ class CloudProviderCfg(BaseModel):
         exclude_unset=True,
         include_extra=True,
     )
+
+
+class LoggerConfig(CloudProviderCfg):
+    """Specialized cloud provider configuration for logging with strict validation.
+    
+    This extends CloudProviderCfg with specific validation requirements
+    for logging configurations, which need both project and location for GCP.
+    """
+    
+    @model_validator(mode='after')
+    def validate_logger_requirements(self) -> 'LoggerConfig':
+        """Validate that required fields are present for logger configurations."""
+        if self.type == "gcp":
+            missing_fields = []
+            if not self.project:
+                missing_fields.append("project")
+            if not self.location:
+                missing_fields.append("location")
+                
+            if missing_fields:
+                fields_str = ", ".join(missing_fields)
+                raise ValueError(
+                    f"GCP logger configuration requires these fields: {fields_str}. "
+                    f"Please ensure your logger_cfg includes all required fields."
+                )
+        elif self.type == "local":
+            # Local logging has no requirements
+            pass
+        else:
+            raise ValueError(
+                f"Unsupported logger type: '{self.type}'. "
+                f"Supported logger types are: 'gcp', 'local'"
+            )
+        
+        return self
 
 
 class SaveInfo(CloudProviderCfg):
@@ -107,7 +144,7 @@ class SaveInfo(CloudProviderCfg):
             `BQ_SCHEMA_DIR` if not an absolute path.
         dataset (str | None): The name of the dataset or equivalent grouping
             (e.g., a BigQuery dataset name, a directory path).
-        _loaded_schema (list[SchemaField]): A private attribute to cache the loaded
+        _loaded_schema (list): A private attribute to cache the loaded
             BigQuery schema once read from `db_schema`.
 
     """
@@ -126,7 +163,7 @@ class SaveInfo(CloudProviderCfg):
         description="Name of the dataset or equivalent (e.g., BigQuery dataset, directory path).",
     )
 
-    _loaded_schema: list[SchemaField] = PrivateAttr(default_factory=list)
+    _loaded_schema: list = PrivateAttr(default_factory=list)
 
     @field_validator("db_schema")
     @classmethod
@@ -181,14 +218,13 @@ class SaveInfo(CloudProviderCfg):
 
     @computed_field
     @property
-    def bq_schema(self) -> list[SchemaField]:
+    def bq_schema(self) -> list:
         """Loads and returns the BigQuery schema from the `db_schema` file path.
 
         The schema is loaded on first access and cached in `_loaded_schema`.
 
         Returns:
-            list[SchemaField]: A list of `SchemaField` objects representing the
-                BigQuery schema.
+            list: A list of BigQuery schema objects (SchemaField if available).
 
         """
         if not self._loaded_schema:
@@ -211,6 +247,10 @@ class SaveInfo(CloudProviderCfg):
 
 class DataSourceConfig(BaseModel):
     """Configuration for defining a data source for agents or other components.
+    
+    **DEPRECATED**: This class is deprecated and will be removed in a future version.
+    Use BaseStorageConfig and its type-specific subclasses (VectorStorageConfig, 
+    BigQueryStorageConfig, etc.) from buttermilk._core.storage_config instead.
 
     Specifies the type of data source, path or query details, filtering,
     joining, and other parameters for data retrieval and preparation.
@@ -303,7 +343,8 @@ class DataSourceConfig(BaseModel):
         ),
     )
     last_n_days: int = Field(
-        default=7, description="For time-series data, retrieve from the last N days.",
+        default=7,
+        description="For time-series data, retrieve from the last N days.",
     )
     db: Mapping[str, str] = Field(
         default_factory=dict,
@@ -336,7 +377,8 @@ class DataSourceConfig(BaseModel):
         description="Name or path of embedding model (for 'chromadb'/vector search).",
     )
     dimensionality: int = Field(
-        default=-1, description="Dimensionality of embeddings, if applicable.",
+        default=-1,
+        description="Dimensionality of embeddings, if applicable.",
     )
     persist_directory: str = Field(
         default="",
@@ -349,7 +391,8 @@ class DataSourceConfig(BaseModel):
         default="", description="Name/subset for HuggingFace datasets.",
     )
     split: str = Field(
-        default="train", description="Split for HuggingFace datasets (e.g., 'train', 'test').",
+        default="train",
+        description="Split for HuggingFace datasets (e.g., 'train', 'test').",
     )
 
     model_config = ConfigDict(
@@ -360,12 +403,17 @@ class DataSourceConfig(BaseModel):
         exclude_unset=True,
     )
 
-
-class DataSouce(DataSourceConfig):
-    """Alias for `DataSourceConfig` for backward compatibility or alternative naming.
-
-    Refer to `DataSourceConfig` for detailed documentation.
-    """
+    def __init__(self, **data):
+        """Initialize DataSourceConfig with deprecation warning."""
+        import warnings
+        warnings.warn(
+            "DataSourceConfig is deprecated and will be removed in a future version. "
+            "Use BaseStorageConfig and its type-specific subclasses from "
+            "buttermilk._core.storage_config instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        super().__init__(**data)
 
 
 class BigQueryConfig(BaseModel):
@@ -406,7 +454,10 @@ class BigQueryConfig(BaseModel):
         ge=1,
         description="Batch size for operations."
     )
-    auto_create: bool = Field(default=True, description="Whether to auto-create tables if they don't exist.")
+    auto_create: bool = Field(
+        default=True,
+        description="Whether to auto-create tables if they don't exist."
+    )
     clustering_fields: list[str] = Field(
         default=["record_id", "dataset_name"],
         description="Default clustering fields for new tables."
@@ -420,13 +471,6 @@ class BigQueryConfig(BaseModel):
         exclude_unset=True,
     )
 
-    @model_validator(mode="after")
-    def set_project_id_from_env(self) -> "BigQueryConfig":
-        """Set project_id from environment if not already set."""
-        import os
-        self.project_id = self.project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
-        return self
-
 
 class ToolConfig(BaseModel):
     """Configuration for a tool (function) that an agent can use.
@@ -439,8 +483,8 @@ class ToolConfig(BaseModel):
             often used in prompts for LLMs to understand when to use the tool.
         tool_obj (str): The identifier or path to the actual Python callable or
             object that implements the tool's logic.
-        data (Mapping[str, DataSourceConfig]): A mapping where keys are names/aliases
-            for data sources and values are `DataSourceConfig` objects defining
+        data (Mapping[str, StorageConfig]): A mapping where keys are names/aliases
+            for data sources and values are `StorageConfig` objects defining
             how to load that data. This allows tools to dynamically access data.
 
     """
@@ -453,10 +497,33 @@ class ToolConfig(BaseModel):
         default="",
         description="Identifier or path to the Python callable/object implementing the tool.",
     )
-    data: Mapping[str, DataSourceConfig] = Field(
+    data: Mapping[str, Any] = Field(
         default_factory=dict,  # Changed from list to dict as per typical usage patterns
-        description="Specifications for data sources the tool should load, keyed by a name/alias.",
+        description="Specifications for storage backends the tool should load, keyed by a name/alias. Use BaseStorageConfig types.",
     )
+
+    @field_validator("data", mode="after")
+    @classmethod
+    def validate_storage_configs(cls, v: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Convert YAML dictionaries to BaseStorageConfig objects."""
+        if not v:
+            return v
+
+        from buttermilk._core.storage_config import StorageFactory
+
+        converted = {}
+        for key, config in v.items():
+            if isinstance(config, dict):
+                # Convert dict from YAML to appropriate BaseStorageConfig subclass
+                try:
+                    converted[key] = StorageFactory.create_config(config)
+                except Exception as e:
+                    logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+                    converted[key] = config
+            else:
+                # Already a BaseStorageConfig object or other type
+                converted[key] = config
+        return converted
 
     def get_functions(self) -> list[Any]:
         """Generates function definitions for this tool, typically for an LLM.
@@ -537,9 +604,10 @@ class AgentConfig(BaseModel):
             'DATA_EXTRACTOR', 'SUMMARIZER'). Automatically converted to uppercase.
         description (str): A human-readable explanation of the agent's purpose
             and capabilities.
-        tools (list[ToolConfig]): A list of `ToolConfig` objects, defining the
-            tools (functions) available to this agent.
-        data (Mapping[str, DataSourceConfig]): Configuration for data sources the
+        tools (dict[str, Any]): A dictionary of tool configurations, defining the
+            tools (functions) available to this agent, keyed by tool name.
+            Can be ToolConfig objects or direct tool instances.
+        data (Mapping[str, StorageConfig]): Configuration for data sources the
             agent might need to access, keyed by a descriptive name.
             Serialized as `mapping_data`.
         parameters (dict[str, Any]): Agent-specific configuration parameters that
@@ -585,13 +653,13 @@ class AgentConfig(BaseModel):
     )
 
     # Behavior & Connections
-    tools: list[ToolConfig] = Field(
-        default_factory=list,
-        description="Configuration for tools (functions) that the agent can potentially use.",
-    )
-    data: Mapping[str, DataSourceConfig] = Field(
+    tools: dict[str, Any] = Field(
         default_factory=dict,
-        description="Configuration for data sources the agent might need access to, keyed by a descriptive name.",
+        description="Configuration for tools (functions) that the agent can potentially use, keyed by tool name. Can be ToolConfig objects or direct tool instances.",
+    )
+    data: Mapping[str, Any] = Field(
+        default_factory=dict,
+        description="Configuration for storage backends the agent might need access to, keyed by a descriptive name. Use BaseStorageConfig types.",
         alias="mapping_data",  # For serialization/deserialization consistency if needed
     )
     parameters: dict[str, Any] = Field(
@@ -636,6 +704,29 @@ class AgentConfig(BaseModel):
         "parameters", "inputs", "outputs", "data",  # Added data
         mode="before",
     )(convert_omegaconf_objects)
+
+    @field_validator("data", mode="after")
+    @classmethod
+    def validate_storage_configs(cls, v: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Convert YAML dictionaries to BaseStorageConfig objects."""
+        if not v:
+            return v
+
+        from buttermilk._core.storage_config import StorageFactory
+
+        converted = {}
+        for key, config in v.items():
+            if isinstance(config, dict):
+                # Convert dict from YAML to appropriate BaseStorageConfig subclass
+                try:
+                    converted[key] = StorageFactory.create_config(config)
+                except Exception as e:
+                    logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+                    converted[key] = config
+            else:
+                # Already a BaseStorageConfig object or other type
+                converted[key] = config
+        return converted
 
     @computed_field(repr=False)  # repr=False to avoid circularity if used in name_components
     @property
@@ -895,7 +986,7 @@ class AgentVariants(AgentConfig):
                         k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields
                     }
 
-                    # Add 'parameters' back as it's a valid field in AgentConfig
+                    # Ensure 'parameters' contains the final merged parameters
                     filtered_cfg_dict["parameters"] = final_params
 
                     try:
@@ -918,3 +1009,29 @@ class AgentVariants(AgentConfig):
             raise FatalError(msg)
 
         return generated_configs
+
+
+class SessionProgressConfig(BaseModel):
+    """Configuration for session progress tracking."""
+    
+    current_step: int = Field(default=0, description="Current step in the session")
+    total_steps: int = Field(default=100, description="Total steps in the session")
+    status: str = Field(default="waiting", description="Current session status")
+
+
+class SessionDefaultsConfig(BaseModel):
+    """Default configuration for session data structures."""
+    
+    progress: SessionProgressConfig = Field(default_factory=SessionProgressConfig)
+    scores: dict[str, Any] = Field(default_factory=dict, description="Default scores structure")
+    outcomes: list[Any] = Field(default_factory=list, description="Default outcomes list")
+    pending_agents: list[str] = Field(default_factory=list, description="Default pending agents list")
+
+
+class SessionConfig(BaseModel):
+    """Configuration for session management."""
+    
+    timeout_minutes: int = Field(default=60, description="Session timeout in minutes")
+    cleanup_interval_minutes: int = Field(default=15, description="Cleanup interval in minutes")
+    max_concurrent_sessions: int = Field(default=50, description="Maximum concurrent sessions")
+    defaults: SessionDefaultsConfig = Field(default_factory=SessionDefaultsConfig)

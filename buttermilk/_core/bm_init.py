@@ -30,7 +30,7 @@ import logging
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
-from typing import Any
+from typing import Any, Union
 
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
@@ -40,14 +40,24 @@ from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
 from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
-from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing  # Config models
+from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
+from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
-from buttermilk._core.llms import LLMs  # Manages LLM clients
+try:
+    from buttermilk._core.llms import LLMs  # Manages LLM clients
+except ImportError:
+    LLMs = None
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
-from buttermilk._core.query import QueryRunner  # For running SQL queries
+try:
+    from buttermilk._core.query import QueryRunner  # For running SQL queries
+except ImportError:
+    QueryRunner = None
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
-from buttermilk.utils import save  # Utility for saving data
-from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults  # Unified storage config
+try:
+    from buttermilk.utils import save  # Utility for saving data
+except ImportError:
+    save = None
+from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults, BaseStorageConfig, StorageFactory  # Unified storage config
 
 # Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -119,7 +129,7 @@ class SessionInfo(BaseModel):
 
     """
 
-    platform: str = Field(default="local", description="Platform where the session is running (e.g., 'local', 'gcp').")
+    platform: str = Field(description="Platform where the session is running (e.g., 'local', 'gcp').")
     name: str = Field(..., description="User-defined name for the current session or project.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
     run_id: str = Field(default_factory=_make_run_id, description="Unique identifier for this execution run.")
@@ -180,7 +190,7 @@ class BM(SessionInfo):
         clouds (list[CloudProviderCfg]): List of configurations for different cloud
             providers to be initialized (e.g., GCP, Azure).
         tracing (Tracing | None): Configuration for tracing (e.g., Langfuse, Weave).
-        datasets (dict[str, DataSourceConfig]): A dictionary of predefined data source
+        datasets (dict[str, StorageConfig]): A dictionary of predefined data source
             configurations accessible via the `BM` instance.
         save_dir_base (str): The base directory under which session-specific save
             directories will be created. Defaults to a new temporary directory.
@@ -200,7 +210,7 @@ class BM(SessionInfo):
         default=None,
         description="Configuration for the secret provider (e.g., GCP Secret Manager, Azure Key Vault).",
     )
-    logger_cfg: CloudProviderCfg | None = Field(
+    logger_cfg: LoggerConfig | None = Field(
         default=None,
         description="Configuration for cloud-based logging (e.g., GCP Logging).",
     )
@@ -216,9 +226,9 @@ class BM(SessionInfo):
         default_factory=Tracing,  # Default to Tracing() which might have enabled=False
         description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
     )
-    datasets: dict[str, DataSourceConfig] = Field(
+    datasets: dict[str, BaseStorageConfig] = Field(
         default_factory=dict,
-        description="Dictionary of predefined data source configurations.",
+        description="Dictionary of predefined storage configurations.",
     )
     save_dir_base: str = Field(
         default_factory=mkdtemp,  # Creates a new temporary directory by default
@@ -231,6 +241,8 @@ class BM(SessionInfo):
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
+    _initialization_complete: asyncio.Event = PrivateAttr(default=None)
+    _initialization_error: Exception | None = PrivateAttr(default=None)
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -260,23 +272,23 @@ class BM(SessionInfo):
             f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
         )
 
-    @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
-    @classmethod
-    def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Removes the `_target_` attribute commonly added by Hydra from input values.
+    # @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
+    # @classmethod
+    # def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+    #     """Removes the `_target_` attribute commonly added by Hydra from input values.
 
-        This is a pre-validation step to clean up configuration data before
-        it's parsed by Pydantic.
+    #     This is a pre-validation step to clean up configuration data before
+    #     it's parsed by Pydantic.
 
-        Args:
-            values: The dictionary of raw input values for the model.
+    #     Args:
+    #         values: The dictionary of raw input values for the model.
 
-        Returns:
-            dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
+    #     Returns:
+    #         dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
 
-        """
-        values.pop("_target_", None)  # Remove if exists, do nothing otherwise
-        return values
+    #     """
+    #     values.pop("_target_", None)  # Remove if exists, do nothing otherwise
+    #     return values
 
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
@@ -291,6 +303,8 @@ class BM(SessionInfo):
 
         """
         super().__init__(**data)
+        self._initialization_complete = asyncio.Event()
+        self._initialization_error: Exception | None = None
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
@@ -302,6 +316,9 @@ class BM(SessionInfo):
         - Saving the initial configuration to a JSON file in `save_dir`.
         - Starting an asynchronous task to fetch the machine's IP address.
         - Logging into configured cloud providers.
+        
+        Note: Logger configuration validation is now handled by Pydantic model validators
+        in CloudProviderCfg, providing early validation with better error messages.
         """
         # Construct full save directory path
         save_dir_path = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
@@ -309,12 +326,45 @@ class BM(SessionInfo):
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
+        # Set GCP environment variables immediately (needed for GCS access)
+        self._setup_gcp_environment()
+
         # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
 
         # Defer non-critical operations to background tasks for faster startup
         self._schedule_background_init()
+
+    def _setup_gcp_environment(self) -> None:
+        """Set up GCP environment variables immediately for early GCS access.
+        
+        This extracts the environment variable setup from CloudManager 
+        to ensure they're available before any cloud operations.
+        """
+        import os
+
+        if not self.clouds:
+            return
+
+        # Find GCP cloud config
+        gcp_cloud_cfg = next(
+            (c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"),
+            None,
+        )
+
+        if gcp_cloud_cfg:
+            # Get project_id from config
+            project_id = getattr(gcp_cloud_cfg, "project_id", None)
+            quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
+
+            if project_id:
+                os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
+
+            if quota_project_id:
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
+
+            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
     def _schedule_background_init(self) -> None:
         """Schedule non-critical initialization tasks in the background.
@@ -328,35 +378,80 @@ class BM(SessionInfo):
         """
         try:
             loop = asyncio.get_event_loop()
-            asyncio.create_task(self._background_init())
-        except RuntimeError as e:
+            if loop.is_running():
+                asyncio.create_task(self._background_init())
+            else:
+                # Event loop exists but not running, run synchronously
+                logger.debug("Event loop not running, performing synchronous initialization")
+                self._sync_background_init()
+        except RuntimeError:
             # No current event loop, run synchronously
-            msg = "No event loop available, unable to schedule BM background initialisation."
-            logger.error(msg)
-            # raise RuntimeError(msg) from e
+            logger.debug("No event loop available, performing synchronous initialization")
+            self._sync_background_init()
 
     async def _background_init(self) -> None:
         """Perform non-critical initialization operations in the background."""
         try:
-            # Save initial config (non-critical, can be deferred)
+            # Critical tasks that must complete before work begins
+            # 1. Ensure cloud authentication happens early
+            if hasattr(self, "_cloud_manager") or self.clouds:
+                logger.debug("Performing early cloud authentication...")
+                _ = self.cloud_manager  # Trigger lazy initialization and authentication
+
+            # 2. Initialize secret manager to start caching secrets
+            if self.secret_provider:
+                logger.debug("Initializing secret manager...")
+                _ = self.secret_manager  # Trigger lazy initialization
+
+            # 3. Save initial config (non-critical, but do it anyway)
             await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
 
-            # Start IP fetching task (already async)
+            # 4. Start IP fetching task (non-critical)
             self.start_fetch_ip_task()
 
-            # Defer cloud login - will happen on first cloud operation
-            logger.debug("Background initialization completed")
+            logger.info("Background initialization completed successfully")
+            self._initialization_complete.set()
         except Exception as e:
-            logger.warning(f"Error during background initialization: {e}")
+            logger.error(f"Error during background initialization: {e}")
+            self._initialization_error = e
+            self._initialization_complete.set()  # Set even on error so waiters don't hang
 
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""
         try:
+            # Critical synchronous initialization
+            if hasattr(self, "_cloud_manager") or self.clouds:
+                logger.debug("Performing synchronous cloud authentication...")
+                _ = self.cloud_manager  # Trigger initialization
+
+            if self.secret_provider:
+                logger.debug("Initializing secret manager synchronously...")
+                _ = self.secret_manager  # Trigger initialization
+
             self._save_initial_config()
-            # Note: IP fetching and cloud login will happen on first use
-            logger.debug("Synchronous background initialization completed")
+            logger.info("Synchronous background initialization completed")
+            # For sync path, mark as complete immediately
+            self._initialization_complete.set()
         except Exception as e:
-            logger.warning(f"Error during synchronous background initialization: {e}")
+            logger.error(f"Error during synchronous background initialization: {e}")
+            self._initialization_error = e
+            self._initialization_complete.set()
+
+    async def ensure_initialized(self) -> None:
+        """Ensure that BM initialization is complete before proceeding.
+
+        This method should be called before any operations that depend on:
+        - Cloud authentication being complete
+        - Secrets being available
+        - Save directory being properly configured
+
+        Raises:
+            RuntimeError: If initialization failed with an error
+        """
+        await self._initialization_complete.wait()
+        if self._initialization_error:
+            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
+        logger.debug("BM initialization verified complete")
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
@@ -429,8 +524,8 @@ class BM(SessionInfo):
                 cloud_logging_resource = gcp_logging.Resource(
                     type="generic_task",
                     labels={
-                        "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
-                        "location": getattr(self.logger_cfg, "location", "unknown-location"),
+                        "project": self.logger_cfg.project,
+                        "location": self.logger_cfg.location,
                         "namespace": self.name,
                         "job": self.job,
                         "task_id": self.run_id,
@@ -447,7 +542,13 @@ class BM(SessionInfo):
                 logger.addHandler(cloudHandler)
                 logger.debug("Cloud logging handler added")
             except Exception as e:
-                logger.warning(f"Failed to setup cloud logging: {e}")
+                # Provide better error messages distinguishing between config and service issues
+                logger.error(
+                    f"Cloud logging setup failed due to configuration issue: {e}. "
+                    f"Logger config: type={self.logger_cfg.type}, "
+                    f"project={self.logger_cfg.project}, "
+                    f"location={self.logger_cfg.location}"
+                )
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -688,12 +789,7 @@ class BM(SessionInfo):
 
         import coloredlogs  # For colored console output
 
-        # Validate GCP logger configuration if enabled
-        if self.logger_cfg and self.logger_cfg.type == "gcp":
-            if not hasattr(self.logger_cfg, "project") or not self.logger_cfg.project:
-                raise RuntimeError("GCP logger configuration (logger_cfg.project) is missing or empty.")
-            if not hasattr(self.logger_cfg, "location") or not self.logger_cfg.location:
-                raise RuntimeError("GCP logger configuration (logger_cfg.location) is missing or empty.")
+        # Logger config validation is now done in _validate_logger_config() during initialization
 
         # Clear existing handlers from the root logger to avoid duplicate logs
         root_logger = logging.getLogger()
@@ -892,6 +988,9 @@ class BM(SessionInfo):
         Creates the appropriate storage class based on the configuration type,
         using this BM instance for client access and default configurations.
         
+        Note: For ChromaDB with remote storage, you must call ensure_cache_initialized()
+        before accessing the collection. Consider using get_storage_async() for auto-initialization.
+        
         Args:
             config: Storage configuration (StorageConfig object, dict, or None)
             
@@ -906,27 +1005,61 @@ class BM(SessionInfo):
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        elif isinstance(config, dict):
-            # Convert dict/OmegaConf to StorageConfig object
-            config_dict = dict(config)  # Convert OmegaConf to plain dict if needed
-            config = StorageConfig(**config_dict)
-        elif not isinstance(config, StorageConfig):
-            # Handle other config types (like OmegaConf objects)
+        elif not isinstance(config, BaseStorageConfig):
+            # Convert OmegaConf objects to StorageConfig
+            # This is necessary for Hydra integration
             try:
-                config_dict = dict(config)
-                config = StorageConfig(**config_dict)
-            except Exception as e:
-                raise ValueError(f"Cannot convert config to StorageConfig: {e}") from e
+                from omegaconf import DictConfig, OmegaConf
+                if isinstance(config, DictConfig):
+                    config_dict = OmegaConf.to_container(config, resolve=True)
+                    config = StorageFactory.create_config(config_dict)
+                else:
+                    raise ValueError(f"Config must be a BaseStorageConfig or OmegaConf DictConfig, got {type(config)}")
+            except ImportError:
+                raise ValueError("Config must be a BaseStorageConfig object") from None
 
-        # Create appropriate storage instance based on type
-        storage_type = config.type
+        # Use the storage factory to create the appropriate storage instance
+        from buttermilk._core.storage_config import StorageFactory
+        return StorageFactory.create_storage(config, self)
 
-        if storage_type in ["bigquery", "bq"]:
-            return BigQueryStorage(config, self)
-        elif storage_type in ["file", "local", "gcs", "s3"]:
-            return FileStorage(config, self)
-        else:
-            raise ValueError(f"Unsupported storage type: {storage_type}")
+    async def get_storage_async(self, config: Union[BaseStorageConfig, dict] | None = None) -> Any:
+        """Async factory method that creates and auto-initializes storage instances.
+        
+        For ChromaDB with remote storage (gs://, s3://, etc.), this automatically calls
+        ensure_cache_initialized() so the storage is ready for immediate use.
+        
+        Args:
+            config: Storage configuration (BaseStorageConfig object, dict, or None)
+            
+        Returns:
+            Fully initialized storage instance ready for use
+            
+        Raises:
+            ValueError: If storage type is not supported
+            
+        Example:
+            # Auto-initialized ChromaDB (recommended)
+            vectorstore = await bm.get_storage_async(cfg.storage.osb_vector)
+            count = vectorstore.collection.count()  # ✅ Works immediately
+            
+            # Compare with manual approach:
+            vectorstore = bm.get_storage(cfg.storage.osb_vector)
+            await vectorstore.ensure_cache_initialized()  # Extra step
+            count = vectorstore.collection.count()  # ✅ Works after init
+        """
+        # Create storage instance using sync method
+        storage = self.get_storage(config)
+
+        # Auto-initialize if it's ChromaDB with remote storage
+        if hasattr(storage, 'ensure_cache_initialized'):
+            # Check if it's remote storage requiring initialization
+            if hasattr(storage, 'persist_directory') and storage.persist_directory:
+                if storage.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
+                    logger.info(f"🔄 Auto-initializing remote storage: {storage.persist_directory}")
+                    await storage.ensure_cache_initialized()
+                    logger.info("✅ Storage ready for use")
+
+        return storage
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
         """Convenience method to create BigQuery storage with dataset name.

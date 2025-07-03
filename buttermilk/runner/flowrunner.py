@@ -10,7 +10,7 @@ from typing import Any
 import shortuuid
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 
@@ -260,12 +260,14 @@ class FlowRunContext(BaseModel):
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
+                    logger.debug(f"No message returned from process_message_from_ui for data: {data}")
                     continue
 
                 if isinstance(message, RunRequest):
                     # Generate a request to run the flow with the new parameters
                     message.callback_to_ui = self.send_message_to_ui
                     message.session_id = self.session_id
+                    logger.info(f"Yielding RunRequest for flow '{message.flow}' in session {self.session_id}")
 
                     yield message
                 elif not self.callback_to_groupchat:
@@ -278,6 +280,7 @@ class FlowRunContext(BaseModel):
             except WebSocketDisconnect:
                 logger.info(f"Client {self.session_id} disconnected.")
                 self.websocket = None
+                # Don't break immediately - let the session manager handle reconnection
                 break
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
@@ -643,6 +646,89 @@ class SessionManager:
 
         return health_info
 
+    async def handle_client_disconnect(self, session_id: str) -> bool:
+        """Handle client disconnect by transitioning to RECONNECTING status instead of immediate cleanup.
+        
+        Args:
+            session_id: The session that disconnected
+            
+        Returns:
+            True if session was transitioned to RECONNECTING, False if session was cleaned up
+        """
+        if session_id not in self.sessions:
+            logger.warning(f"Attempted to handle disconnect for non-existent session {session_id}")
+            return False
+
+        session = self.sessions[session_id]
+        
+        # Only allow reconnection for ACTIVE sessions
+        if session.status != SessionStatus.ACTIVE:
+            logger.info(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
+            await self.cleanup_session(session_id)
+            return False
+
+        # Transition to RECONNECTING status
+        success = await self._transition_session_status(session_id, SessionStatus.RECONNECTING)
+        if success:
+            # Clear the websocket but keep the session alive
+            session.websocket = None
+            # Clear active connections for this session
+            if session_id in self.active_connections:
+                self.active_connections[session_id].clear()
+            
+            logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
+            return True
+        else:
+            # Transition failed, clean up the session
+            await self.cleanup_session(session_id)
+            return False
+
+    async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
+        """Reconnect a client to an existing session in RECONNECTING status.
+        
+        Args:
+            session_id: The session to reconnect to
+            websocket: The new WebSocket connection
+            
+        Returns:
+            The session if reconnection was successful, None otherwise
+        """
+        if session_id not in self.sessions:
+            logger.warning(f"Attempted to reconnect to non-existent session {session_id}")
+            return None
+
+        session = self.sessions[session_id]
+        
+        # Only allow reconnection to sessions in RECONNECTING status
+        if session.status != SessionStatus.RECONNECTING:
+            logger.warning(f"Attempted to reconnect to session {session_id} in status {session.status.value}")
+            return None
+
+        # Check if session has expired
+        if session.is_expired():
+            logger.info(f"Session {session_id} has expired - cleaning up instead of reconnecting")
+            await self.cleanup_session(session_id)
+            return None
+
+        # Reconnect the session
+        session.websocket = websocket
+        session.add_websocket(websocket)
+        session.update_activity()
+        
+        # Add to active connections
+        if session_id not in self.active_connections:
+            self.active_connections[session_id] = set()
+        self.active_connections[session_id].add(websocket)
+
+        # Transition back to ACTIVE status
+        success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
+        if success:
+            logger.info(f"Successfully reconnected session {session_id}")
+            return session
+        else:
+            logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
+            return None
+
     async def _periodic_cleanup(self) -> None:
         """Background task that periodically cleans up expired sessions with enhanced logic."""
         while self._running:
@@ -665,6 +751,10 @@ class SessionManager:
                         time_since_completion = (datetime.now(UTC) - session.last_activity).total_seconds()
                         if time_since_completion > 300:  # 5 minutes grace period
                             cleanup_candidates.append((session_id, "completed_gracetime"))
+                    elif session.status == SessionStatus.RECONNECTING:
+                        # Clean up RECONNECTING sessions that have exceeded timeout
+                        if session.is_expired():
+                            cleanup_candidates.append((session_id, "reconnect_timeout"))
                     elif len(self.active_connections.get(session_id, set())) == 0:
                         # No active connections for extended period
                         time_since_activity = (datetime.now(UTC) - session.last_activity).total_seconds()
@@ -691,7 +781,7 @@ class FlowRunner(BaseModel):
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
+    flows: dict[str, OrchestratorProtocol]
 
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
@@ -703,6 +793,32 @@ class FlowRunner(BaseModel):
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
 
+    # I think we comment this out because in flowrunner, we deal with Configs, not instantiated orchestrators. We instantiate later.
+    # @field_validator("flows", mode="before")
+    # @classmethod
+    # def validate_flows(cls, v):
+    #     """Convert OmegaConf flow configurations to Orchestrator instances."""
+    #     if not v:
+    #         return v
+
+    #     from buttermilk._core.orchestrator import OrchestratorProtocol
+    #     from omegaconf import DictConfig, OmegaConf
+
+    #     converted_flows = {}
+    #     for flow_name, flow_config in v.items():
+
+    #         orchestrator_class_path = flow_config.orchestrator
+    #         if orchestrator_class_path:
+    #             module_path, class_name = orchestrator_class_path.rsplit(".", 1)
+    #             import importlib
+
+    #             module = importlib.import_module(module_path)
+    #             orchestrator_class = getattr(module, class_name)
+    #             converted_flows[flow_name] = orchestrator_class.model_validate(flow_config)
+    #         else:
+    #             converted_flows[flow_name] = Orchestrator.model_validate(flow_config)
+    #     return converted_flows
+
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""
         if not self._session_manager_started:
@@ -710,7 +826,7 @@ class FlowRunner(BaseModel):
             self._session_manager_started = True
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
-        """Get or create a session for the given session ID.
+        """Get or create a session for the given session ID, handling reconnection scenarios.
 
         Args:
             session_id: Unique identifier for the session
@@ -722,7 +838,27 @@ class FlowRunner(BaseModel):
         """
         await self._ensure_session_manager_started()
 
-        if session_id not in self.session_manager.sessions and not websocket:
+        # Check if this is a reconnection to an existing session
+        if session_id in self.session_manager.sessions:
+            existing_session = self.session_manager.sessions[session_id]
+            
+            # If session is in RECONNECTING status, attempt to reconnect
+            if existing_session.status == SessionStatus.RECONNECTING and websocket:
+                logger.info(f"Attempting to reconnect to session {session_id}")
+                reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
+                if reconnected_session:
+                    return reconnected_session
+                else:
+                    # Reconnection failed, fall through to create new session
+                    logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
+            elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
+                # Session is already active, just add the websocket
+                if websocket:
+                    existing_session.add_websocket(websocket)
+                return existing_session
+
+        # Create new session if no websocket provided or reconnection failed
+        if not websocket:
             return None
 
         session = await self.session_manager.get_or_create_session(session_id, websocket)
@@ -803,6 +939,25 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # Ensure BM is fully initialized before running flow
+        from buttermilk._core.dmrc import get_bm
+        bm = get_bm()
+        if hasattr(bm, 'ensure_initialized'):
+            await bm.ensure_initialized()
+            logger.debug("BM initialization verified before flow execution")
+        
+        # Initialize metrics tracking
+        import time
+        start_time = time.time()
+        success = False
+
+        try:
+            from buttermilk.monitoring import get_metrics_collector
+            metrics_collector = get_metrics_collector()
+        except Exception as e:
+            logger.debug(f"Failed to initialize metrics collector: {e}")
+            metrics_collector = None
+
         # Ensure session manager is started
         await self._ensure_session_manager_started()
 
@@ -834,12 +989,25 @@ class FlowRunner(BaseModel):
                 # Wait for the task
                 await _session.flow_task
                 await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.COMPLETED)
+                success = True
                 return
         except Exception as e:
             await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.ERROR)
             logger.error(f"Error running flow '{run_request.flow}': {e}")
             raise
         finally:
+            # Record flow execution metrics
+            if metrics_collector:
+                execution_time = time.time() - start_time
+                try:
+                    metrics_collector.record_flow_execution(
+                        flow_name=run_request.flow,
+                        execution_time=execution_time,
+                        success=success
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record flow execution metrics: {e}")
+
             if wait_for_completion:
                 # Clean up after completion if we were waiting
                 await self.session_manager.cleanup_session(run_request.session_id)

@@ -12,7 +12,11 @@ from pyzotero import zotero
 from buttermilk._core.log import logger
 
 # Import ChromaDBEmbeddings for type hinting
-from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument
+from buttermilk.data.vector import ChromaDBEmbeddings
+from buttermilk._core.types import Record
+
+# Import bm for credentials access
+from buttermilk._core.dmrc import get_bm
 
 # Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
 # and causes circular import issues. If they are in the same module or structure prevents
@@ -31,6 +35,7 @@ class ZotDownloader(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
+        bm = get_bm()
         self._zot = zotero.Zotero(
             library_id=self.library,
             library_type="group",
@@ -44,8 +49,8 @@ class ZotDownloader(BaseModel):
         self._vector_store = vectoriser
         logger.info("Vector store instance set for ZotDownloader.")
 
-    async def get_all_records(self, **kwargs) -> AsyncIterator[InputDocument]:
-        """Fetches Zotero items, checks existence, downloads, extracts, and yields InputDocuments."""
+    async def get_all_records(self, **kwargs) -> AsyncIterator[Record]:
+        """Fetches Zotero items, checks existence, downloads, extracts, and yields Records."""
         items = []
         try:
             # Fetch only parent items (books, articles), not attachments directly
@@ -135,8 +140,8 @@ class ZotDownloader(BaseModel):
             f"Finished Zotero processing. Processed: {processed_count}, Skipped (already exist): {skipped_count}",
         )
 
-    async def download_record(self, item) -> InputDocument | None:
-        """Downloads PDF, saves item JSON, and creates an InputDocument."""
+    async def download_record(self, item) -> Record | None:
+        """Downloads PDF, saves item JSON, and creates a Record."""
         key = item.get("key")
         title = item.get("data", {}).get("title", "Unknown Title")
         doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
@@ -176,13 +181,14 @@ class ZotDownloader(BaseModel):
                         f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
                     )
 
-                # --- Prepare InputDocument ---
-                metadata = {"doi_or_url": doi_or_url, "zotero_data": zotero_data}
-                record = InputDocument(
-                    file_path=pdf_file.as_posix(),
+                # --- Prepare Record ---
+                metadata = {"title": title, "doi_or_url": doi_or_url, "zotero_data": zotero_data}
+                record = Record(
                     record_id=key,
-                    title=title,
+                    content="",  # PDF text will be extracted later
+                    file_path=pdf_file.as_posix(),
                     metadata=metadata,
+                    uri=pdf_file.as_posix(),
                 )
                 return record
 
@@ -202,4 +208,4 @@ class ZotDownloader(BaseModel):
                 logger.error(
                     f"Failed to save item JSON for {key} (no PDF) to {json_file}: {json_e} {json_e.args=}",
                 )
-            return None  # Return None as no PDF means no InputDocument for embedding pipeline
+            return None  # Return None as no PDF means no Record for embedding pipeline

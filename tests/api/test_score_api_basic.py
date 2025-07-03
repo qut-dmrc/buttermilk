@@ -45,7 +45,7 @@ class TestScoreAPIBasics:
             "/api/flows/{flow}/records/{record_id}",
             "/api/flows/{flow}/records/{record_id}/scores", 
             "/api/flows/{flow}/records/{record_id}/responses",
-            "/api/records"
+            "/api/flows/{flow}/records"
         ]
         
         for route in expected_routes:
@@ -126,7 +126,7 @@ class TestAPISpecCompliance:
             "/api/flows/{flow}/records/{record_id}": "GET",
             "/api/flows/{flow}/records/{record_id}/scores": "GET", 
             "/api/flows/{flow}/records/{record_id}/responses": "GET",
-            "/api/records": "GET"
+            "/api/flows/{flow}/records": "GET"
         }
         
         actual_routes = {route.path: list(route.methods)[0] for route in flow_data_router.routes}

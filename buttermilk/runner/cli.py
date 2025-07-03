@@ -55,23 +55,21 @@ def main(conf: DictConfig) -> None:
             parameters like `flow`, `record_id`, `prompt` for console mode.
 
     """
-    # Resolve OmegaConf to a plain Python dictionary for Pydantic model instantiation
-    resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
+    OmegaConf.resolve(conf)
+    bm = hydra.utils.instantiate(conf.bm)
 
-    # Initialize the global Buttermilk instance (bm) with its configuration section
-    if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
-        raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-    bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+    # bm = BM.model_validate(objs.bm)  # type: ignore # Assuming dict matches BM fields
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
+    # Ensure BM is fully initialized before proceeding
+    asyncio.run(bm.ensure_initialized())
+    logger.info("BM initialization complete")
+
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
-    if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
-        raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
-    flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
-    flow_runner.flows = conf.flows
+    flow_runner = FlowRunner.model_validate(conf.run)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -113,6 +111,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Starting Streamlit interface...")
             try:
                 from buttermilk.web.streamlit_frontend.app import create_dashboard_app
+
                 # create_dashboard_app is expected to configure and run the Streamlit app.
                 # It might need access to flow_runner or specific flow configurations.
                 streamlit_app_manager = create_dashboard_app(flow_runner=flow_runner)  # Pass FlowRunner
@@ -144,7 +143,7 @@ def main(conf: DictConfig) -> None:
             uvicorn_config = uvicorn.Config(
                 app=fastapi_app,
                 host=str(conf.get("host", "0.0.0.0")),  # Host from config or default
-                port=int(conf.get("port", 8000)),    # Port from config or default
+                port=int(conf.get("port", 8000)),  # Port from config or default
                 reload=bool(conf.get("reload", False)),  # Hot reloading (dev only)
                 log_level=str(conf.get("log_level", "info")).lower(),
                 access_log=True,  # Enable access logs
@@ -169,6 +168,7 @@ def main(conf: DictConfig) -> None:
             logger.info("Pub/Sub mode: Initializing Pub/Sub listener or batch CLI...")
             try:
                 from buttermilk.runner.batch_cli import main as batch_cli_main  # Assuming this handles pub/sub logic
+
                 # Pass the already loaded and resolved Hydra config.
                 # batch_cli_main might need adaptation if it expects to run @hydra.main itself.
                 batch_cli_main(conf)  # This call might be synchronous or start an async loop.
@@ -200,6 +200,10 @@ def main(conf: DictConfig) -> None:
             from buttermilk.runner.slackbot import initialize_slack_bot  # Slack bot initialization utility
 
             event_loop = asyncio.get_event_loop()
+
+            # General functoins might take a few more seconds
+            event_loop.slow_callback_duration = 10
+
             # Queue for managing asyncio tasks created by Slack event handlers
             orchestrator_tasks = asyncio.Queue()  # type: ignore
 
@@ -217,6 +221,7 @@ def main(conf: DictConfig) -> None:
                 # Register the specific Buttermilk command/event handlers with the Bolt app.
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 from buttermilk.runner.slackbot import register_handlers
+
                 await register_handlers(
                     slack_app=slack_bolt_app,
                     flows=flow_runner.flows,

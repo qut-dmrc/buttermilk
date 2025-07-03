@@ -16,7 +16,10 @@ from typing import Any
 
 import pydantic  # Pydantic core
 import regex as re  # Regular expression operations
-from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
+try:
+    from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
+except ImportError:
+    FunctionTool = None
 from shortuuid import uuid  # For generating short unique IDs
 
 from buttermilk._core.agent import Agent, AgentOutput, CancellationToken  # Buttermilk base agent and types
@@ -29,7 +32,8 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record
-from buttermilk.data.loaders import DataLoader, create_data_loader
+from buttermilk.data.loaders import DataLoader
+from buttermilk._core.storage_config import StorageConfig
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
 
@@ -50,7 +54,7 @@ class FetchRecord(ToolConfig):
     and convert content from a given `uri`.
 
     The `data` attribute (from `ToolConfig`) can be configured with
-    `DataSourceConfig` instances. `load_data` populates `_data_sources` from these.
+    `StorageConfig` instances. `load_data` populates `_data_sources` from these.
 
     Attributes:
         _data_sources (dict[str, DataLoader]): Private attribute storing loaded data sources,
@@ -72,14 +76,29 @@ class FetchRecord(ToolConfig):
     async def load_data(self) -> None:
         """Loads and prepares data sources defined in `self.data`.
 
-        Populates the `self._data_sources` attribute with DataLoader instances,
+        Populates the `self._data_sources` attribute with storage instances,
         making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
         """
         if self.data:  # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
             self._data_sources = {}
             for key, config in self.data.items():
-                self._data_sources[key] = create_data_loader(config)
+                # Convert config to StorageConfig if needed
+                if hasattr(config, "model_dump"):
+                    # Handle DataSourceConfig or similar
+                    config_dict = config.model_dump()
+                    storage_config = StorageConfig(**config_dict)
+                elif hasattr(config, "__dict__"):
+                    # Handle OmegaConf objects
+                    storage_config = StorageConfig(**dict(config))
+                else:
+                    storage_config = StorageConfig(**config)
+
+                # Use unified storage system instead of deprecated create_data_loader
+                from buttermilk._core.dmrc import get_bm
+                bm = get_bm()
+                storage = bm.get_storage(storage_config)
+                self._data_sources[key] = storage
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
         """Retrieve a record by ID from loaded data sources.
@@ -200,9 +219,9 @@ class FetchRecord(ToolConfig):
         # If record is None here, it means neither record_id nor uri was set, which contradicts the assertion.
         # For safety, though, if we somehow end up here without a record:
         if original_uri:
-             raise ProcessingError(f"Record not found for URI: {original_uri}")
+            raise ProcessingError(f"Record not found for URI: {original_uri}")
         if original_record_id:
-             raise ProcessingError(f"Record not found for ID: {original_record_id}")
+            raise ProcessingError(f"Record not found for ID: {original_record_id}")
         # Fallback if prompt didn't yield URI or ID.
         raise ProcessingError("Record not found, and no URI or ID was effectively specified for the fetch attempt.")
 
@@ -239,7 +258,6 @@ class FetchAgent(FetchRecord, Agent):
         cancellation_token: CancellationToken | None = None,  # Standard arg
         source: str = "",  # Standard arg
         public_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
-        message_callback: Callable[[Any], Awaitable[None]] | None = None,  # Made optional
         **kwargs: Any,  # Standard arg
     ) -> None:
         """Listens for `AgentInput` messages and attempts to fetch a record if URI/ID is provided.
@@ -260,7 +278,6 @@ class FetchAgent(FetchRecord, Agent):
             source: Identifier of the message sender.
             public_callback: Optional callback function to publish results (e.g.,
                 the fetched `Record` wrapped in `AgentOutput`).
-            message_callback: Optional callback (typically not used by `_listen`).
             **kwargs: Additional keyword arguments.
 
         """

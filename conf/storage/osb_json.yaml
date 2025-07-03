@@ -1,0 +1,32 @@
+osb_json:
+  type: file
+  path: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
+  glob: "**/*"
+  max_records_per_group: -1
+  
+  # Common storage settings
+  randomize: true
+  batch_size: 100
+  auto_create: true
+  
+  columns:
+    record_id: record_id
+    content: fulltext  # Full text for vector processing
+    metadata: 
+      # Core case information
+      title: title
+      description: content  # Actual case description (different from fulltext)
+      result: result
+      type: type
+      location: location
+      case_date: case_date
+      
+      # Structured arrays (preserved as JSON)
+      topics: topics
+      standards: standards  
+      reasons: reasons
+      recommendations: recommendations
+      
+      # Process metadata
+      job_id: job_id
+      timestamp: timestamp

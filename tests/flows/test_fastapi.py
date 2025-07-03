@@ -58,6 +58,7 @@ async def test_run_flow(client: TestClient):
         }
 
 
+@pytest.mark.skip(reason="callback function no longer exists in buttermilk.api.flow")
 @pytest.mark.anyio
 async def test_pubsub_callback(client: TestClient, monkeypatch):
     async def mock_post(url: str, json: dict):

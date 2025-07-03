@@ -16,6 +16,30 @@ import cloudpathlib
 
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.log import logger
+
+
+class DataLoaderWrapper:
+    """Wrapper to provide DataLoader interface for storage objects."""
+    
+    def __init__(self, storage):
+        """Initialize wrapper with storage instance.
+        
+        Args:
+            storage: Storage instance to wrap
+        """
+        self.storage = storage
+        
+    def __iter__(self):
+        """Iterate over records in storage."""
+        return iter(self.storage)
+        
+    def __len__(self):
+        """Get number of records in storage."""
+        return len(self.storage)
+        
+    def get_all_records(self):
+        """Get all records (compatibility method)."""
+        return list(self.storage)
 from buttermilk._core.types import Record
 
 
@@ -346,6 +370,9 @@ class PlaintextDataLoader(DataLoader):
 
 def create_data_loader(config: DataSourceConfig) -> DataLoader:
     """Factory function to create appropriate DataLoader for given config.
+    
+    DEPRECATED: Use bm.get_storage() with StorageConfig instead for unified data access.
+    This function is provided for backwards compatibility during migration.
 
     Args:
         config: Data source configuration
@@ -356,6 +383,57 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
     Raises:
         ValueError: If data source type is not supported
     """
+    import warnings
+    warnings.warn(
+        "create_data_loader() is deprecated. Use bm.get_storage() with StorageConfig instead. "
+        "This provides unified data access with both read and write capabilities.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    # Try to use new storage system first
+    try:
+        from buttermilk._core.dmrc import get_bm
+        from buttermilk._core.storage_config import StorageConfig
+        
+        # Convert DataSourceConfig to StorageConfig
+        config_dict = config.model_dump()
+        
+        # Handle field differences between DataSourceConfig and StorageConfig
+        # Set StorageConfig defaults for fields that might be None in DataSourceConfig
+        storage_dict = {
+            'type': config_dict['type'],
+            'path': config_dict.get('path'),
+            'columns': config_dict.get('columns', {}),
+            'randomize': config_dict.get('randomize') if config_dict.get('randomize') is not None else True,
+            'batch_size': config_dict.get('batch_size') if config_dict.get('batch_size') is not None else 1000,
+            'limit': config_dict.get('limit'),
+            'name': config_dict.get('name', ''),
+            'split': config_dict.get('split', 'train'),
+        }
+        
+        # Add other fields that exist in both configs
+        for key, value in config_dict.items():
+            if key not in storage_dict and value is not None:
+                storage_dict[key] = value
+                
+        storage_config = StorageConfig(**storage_dict)
+        
+        bm = get_bm()
+        storage = bm.get_storage(storage_config)
+        
+        # Ensure storage implements DataLoader interface
+        if hasattr(storage, '__iter__') and hasattr(storage, '__len__'):
+            return storage
+        else:
+            # Wrap storage to provide DataLoader interface
+            return DataLoaderWrapper(storage)
+            
+    except Exception as e:
+        # Fallback to old implementation if new system fails
+        logger.warning(f"Failed to use new storage system, falling back to legacy loaders: {e}")
+    
+    # Legacy implementation (fallback)
     if config.type == "huggingface":
         return HuggingFaceDataLoader(config)
     elif config.type == "file":
@@ -371,7 +449,18 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
     elif config.type == "plaintext":
         return PlaintextDataLoader(config)
     elif config.type in ["bigquery", "bq"]:
-        from buttermilk.data.bigquery_loader import BigQueryRecordLoader
-        return BigQueryRecordLoader(**config.model_dump())
+        # Use new unified storage system
+        from buttermilk._core.dmrc import get_bm
+        from buttermilk._core.storage_config import StorageConfig
+        
+        # Convert DataSourceConfig to StorageConfig
+        storage_config = StorageConfig(
+            type="bigquery",
+            **config.model_dump(exclude={"type"})
+        )
+        
+        bm = get_bm()
+        storage = bm.get_storage(storage_config)
+        return DataLoaderWrapper(storage)
     else:
         raise ValueError(f"Unsupported data source type: {config.type}")

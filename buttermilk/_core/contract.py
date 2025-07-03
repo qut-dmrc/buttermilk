@@ -13,13 +13,23 @@ messages for user interaction (`UIMessage`, `ManagerMessage`).
 import datetime
 import uuid
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import Any, Literal, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
 
-# Import Autogen types used as base or components
+# Import Autogen types used as base or components - conditional import
 from autogen_core.models import FunctionExecutionResult, LLMMessage
+from autogen_core.models import (
+    ChatCompletionClient,
+    CreateResult,
+    LLMMessage,
+    ModelFamily,
+    ModelInfo,
+    FunctionExecutionResultMessage,
+    FunctionExecutionResult,
+)
+from autogen_core.tools import ToolSchema
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -27,6 +37,7 @@ from pydantic import (
     Field,
     computed_field,
     field_validator,
+    model_validator,
 )
 
 from buttermilk._core.context import session_id_var
@@ -38,6 +49,23 @@ from .log import logger  # Centralized logger
 from .types import Record  # Core data types like Record
 
 # --- General Communication & Base Messages ---
+
+
+class BaseAgentInputModel(BaseModel):
+    """Base model for agent inputs that can be subclassed for specific agent needs.
+    
+    This provides a strongly-typed alternative to the generic dict[str, Any] in AgentInput.inputs.
+    Agents can subclass this to define their specific input requirements.
+    """
+    prompt: str = Field(
+        ...,
+        description="The main request or input prompt for the agent"
+    )
+    
+    model_config = ConfigDict(
+        extra="forbid",  # Strict by default, subclasses can override
+        validate_assignment=True
+    )
 
 
 class FlowEvent(BaseModel):
@@ -576,6 +604,55 @@ class AgentTrace(FlowMessage, AgentOutput):
 
 # --- Manager / Conductor / UI Interaction Messages ---
 
+class HostInputModel(BaseAgentInputModel):
+    """Strongly typed input model for Host agents.
+    
+    This provides a cleaner interface than digging through nested dicts.
+    Host agents can expect these fields in their inputs.
+    """
+    # Override prompt as optional for host agents
+    prompt: str | None = Field(
+        default=None,
+        description="The main request or query (also checks 'query' field)"
+    )
+    query: str | None = Field(
+        default=None,
+        description="Alternative to prompt for the main request"
+    )
+    criteria: str | None = Field(
+        default=None,
+        description="Alternative field for search/filter criteria"
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional parameters for the host"
+    )
+    
+    @property
+    def initial_query(self) -> str | None:
+        """Get the initial query from any of the possible fields."""
+        # Check direct fields first
+        if self.prompt:
+            return self.prompt
+        if self.query:
+            return self.query
+        if self.criteria:
+            return self.criteria
+        
+        # Check in parameters as fallback
+        if self.parameters:
+            return (self.parameters.get('prompt') or 
+                    self.parameters.get('query') or 
+                    self.parameters.get('criteria'))
+        
+        return None
+    
+    model_config = ConfigDict(
+        extra="allow",  # Allow additional fields for flexibility
+        validate_assignment=True
+    )
+
+
 class ConductorRequest(AgentInput):
     """A request message sent *to* a CONDUCTOR agent.
 
@@ -589,6 +666,9 @@ class ConductorRequest(AgentInput):
             roles (e.g., "SUMMARIZER", "REVIEWER") and values are descriptions
             of their purposes or capabilities. This helps the Conductor understand
             the available agents and their functions. This is a mandatory field.
+        participant_tools (Mapping[str, list[dict[str, Any]]]): Optional mapping of
+            participant roles to their tool definitions. Each tool definition includes
+            name, description, and schema information.
 
     """
 
@@ -596,7 +676,10 @@ class ConductorRequest(AgentInput):
         ...,  # Mandatory field
         description="Mapping of chat participant roles to their purpose descriptions (e.g., {'SUMMARIZER': 'Summarizes text'}).",
     )
-    # No additional fields specific to ConductorRequest currently defined beyond AgentInput.
+    participant_tools: Mapping[str, list[dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="Mapping of participant roles to their tool definitions (e.g., {'RESEARCHER': [{'name': 'search', 'description': '...'}]}).",
+    )
 
 
 class UIMessage(FlowMessage):
@@ -625,9 +708,9 @@ class UIMessage(FlowMessage):
         default=None,
         description="The reasoning text for the completion if available. Used for reasoning model and additional text content besides function calls.",
     )
-    thought: str | None = Field(
+    agent_registry_summary: dict[str, Any] | None = Field(
         default=None,
-        description="The reasoning text for the completion if available. Used for reasoning model and additional text content besides function calls.",
+        description="Summary of available agents and their capabilities from the host agent's registry.",
     )
 
 
@@ -734,10 +817,10 @@ class FlowProgressUpdate(FlowMessage):
 class ToolOutput(FunctionExecutionResult):
     """Represents the result of a tool (function) execution performed by an agent.
 
-    This class inherits from Autogen's `FunctionExecutionResult`, which typically
-    includes fields like `call_id` (for the function call), `function_name`, and
-    `content` (the stringified result of the function). It adds Buttermilk-specific
-    context or alternative ways to structure results.
+        This class inherits from Autogen's `FunctionExecutionResult`, which typically
+        includes fields like `call_id` (for the function call), `function_name`, and
+        `content` (the stringified result of the function). It adds Buttermilk-specific
+        context or alternative ways to structure results.
 
     Attributes:
         results (Any): The raw or structured result from the tool execution. This
@@ -863,6 +946,81 @@ class HeartBeat(BaseModel):
     go_next: bool = Field(..., description="Signal indicating if the recipient should proceed or a condition is met.")
 
 
+class AgentAnnouncement(FlowEvent):
+    """Agent self-announcement message containing configuration and capabilities.
+    
+    Used for dynamic agent discovery and registration in group chats. Agents send
+    this message when joining, leaving, or updating their status. Host agents
+    collect these announcements to maintain a registry of available agents and
+    their capabilities.
+    
+    Attributes:
+        agent_config (AgentConfig): Complete agent configuration including role,
+            description, parameters, and other settings.
+        available_tools (list[str]): List of tool names/endpoints this agent can
+            respond to. Defaults to empty list.
+        supported_message_types (list[str]): OOBMessage types this agent handles.
+            Defaults to empty list.
+        status (Literal["joining", "active", "leaving"]): Current agent status
+            in the group chat. Defaults to "joining".
+        announcement_type (Literal["initial", "response", "update"]): Type of
+            announcement - initial when joining, response to host request, or
+            update for status changes.
+        responding_to (str | None): agent_id of host being responded to (for
+            response type announcements). Defaults to None.
+    
+    """
+
+    # Agent identification and configuration
+    agent_config: AgentConfig = Field(..., description="Complete agent configuration")
+
+    # Capabilities
+    available_tools: list[str] = Field(
+        default_factory=list,
+        description="List of tool names/endpoints this agent can respond to"
+    )
+    supported_message_types: list[str] = Field(
+        default_factory=list,
+        description="OOBMessage types this agent handles"
+    )
+    tool_definition: ToolSchema | None = Field(default=None, description="Autogen-compatible tool definition for this agent")
+
+    # Status
+    status: Literal["joining", "active", "leaving"] = Field(
+        default="joining",
+        description="Current agent status in the group chat"
+    )
+
+    # Metadata
+    announcement_type: Literal["initial", "response", "update"] = Field(
+        ...,
+        description="Type of announcement (initial when joining, response to host, update for changes)"
+    )
+    responding_to: str | None = Field(
+        default=None,
+        description="agent_id of host being responded to (for response type)"
+    )
+
+    def model_post_init(self, __context) -> None:
+        """Set agent_info to match agent_config after initialization."""
+        super().model_post_init(__context)
+        # Ensure agent_info matches agent_config
+        object.__setattr__(self, 'agent_info', self.agent_config)
+
+    @model_validator(mode='after')
+    def validate_responding_to(self) -> 'AgentAnnouncement':
+        """Validate that responding_to is set appropriately based on announcement_type."""
+        if self.announcement_type == "response" and not self.responding_to:
+            raise ValueError("responding_to must be set for response type announcements")
+        if self.announcement_type != "response" and self.responding_to:
+            raise ValueError("responding_to should only be set for response type announcements")
+        return self
+
+    def __str__(self) -> str:
+        """Returns a formatted string representation of the announcement."""
+        return f"AgentAnnouncement[{self.agent_config.agent_id}]: {self.announcement_type} - {self.status}"
+
+
 # --- Message Union Types ---
 
 OOBMessages = Union[
@@ -875,6 +1033,7 @@ OOBMessages = Union[
     StepRequest,
     ProceedToNextTaskSignal,
     HeartBeat,
+    AgentAnnouncement,
 ]
 """A type alias for messages considered Out-Of-Band (OOB).
 

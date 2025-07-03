@@ -18,8 +18,6 @@ from pydantic import BaseModel, PrivateAttr
 from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
-from buttermilk.toxicity.tox_data import toxic_record
-
 
 class JobQueueClient(BaseModel):
     """Client for interacting with the Google Pub/Sub job queue.
@@ -68,6 +66,9 @@ class JobQueueClient(BaseModel):
         Returns:
             RunRequest configured for toxicity testing
         """
+
+        from buttermilk.toxicity.tox_data import toxic_record
+
         record = toxic_record()
 
         data = {"ui_type": "web", "parameters": {"criteria": "criteria_ordinary"}}

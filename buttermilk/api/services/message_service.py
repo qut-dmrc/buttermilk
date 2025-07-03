@@ -24,7 +24,6 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
-from buttermilk.agents.flowcontrol.llmhost import CallOnAgent
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag.ragzot import ResearchResult
 
@@ -119,7 +118,7 @@ class MessageService:
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
                 message_type = "system_error"
-            elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted, CallOnAgent)):
+            elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
                 return None
             else:
                 logger.warning(f"Unknown message type: {type(message)}")

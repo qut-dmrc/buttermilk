@@ -1,0 +1,8 @@
+# Default configuration for DataSourceConfig
+# These defaults replace hardcoded values in buttermilk/_core/config.py
+
+max_records_per_group: -1  # -1 means no limit
+glob: "**/*"  # Default glob pattern for file matching
+last_n_days: 7  # For time-series data retrieval
+split: train  # Default split for HuggingFace datasets
+dimensionality: -1  # -1 means not applicable/auto-detect

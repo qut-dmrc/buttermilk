@@ -1,10 +1,11 @@
 """Cloud provider client management and connection utilities."""
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
+
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
 
@@ -34,7 +35,8 @@ class CloudManager:
 
         # Initialize environment variables if GCP config exists
         if self.gcp_cloud_cfg:
-            project_id = getattr(self.gcp_cloud_cfg, "project", None)
+            # Try both 'project_id' (config field) and 'project' (legacy field)
+            project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
             quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
             if project_id:
@@ -61,7 +63,8 @@ class CloudManager:
         if not self.gcp_cloud_cfg:
             raise RuntimeError("No GCP cloud configuration found")
 
-        project_id = getattr(self.gcp_cloud_cfg, "project", None)
+        # Try both 'project_id' (config field) and 'project' (legacy field)
+        project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
         quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
         if not project_id:
@@ -83,11 +86,11 @@ class CloudManager:
             raise RuntimeError(f"Failed to obtain GCP credentials: {e}") from e
 
     @cached_property
-    def gcs(self) -> storage.Client:
+    def gcs(self) -> Optional[Any]:
         """Get Google Cloud Storage client instance.
 
         Returns:
-            Authenticated GCS client
+            Authenticated GCS client or None if Google Cloud not available
 
         Raises:
             RuntimeError: If client initialization fails
@@ -106,11 +109,11 @@ class CloudManager:
             raise RuntimeError(f"Failed to initialize GCS client: {e}") from e
 
     @cached_property
-    def bq(self) -> bigquery.Client:
+    def bq(self) -> Optional[Any]:
         """Get Google BigQuery client instance.
 
         Returns:
-            Authenticated BigQuery client
+            Authenticated BigQuery client or None if Google Cloud not available
 
         Raises:
             RuntimeError: If client initialization fails
@@ -128,7 +131,7 @@ class CloudManager:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize BigQuery client: {e}") from e
 
-    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> CloudLoggingClient:
+    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Optional[Any]:
         """Get Google Cloud Logging client instance.
 
         Args:
@@ -144,7 +147,7 @@ class CloudManager:
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 
-        project = getattr(logger_cfg, "project", None)
+        project = logger_cfg.project
         if not project:
             raise RuntimeError("Logger config missing 'project' attribute")
 
@@ -170,7 +173,7 @@ class CloudManager:
         from vertexai import init as aiplatform_init
 
         # Ensure required attributes exist
-        project = getattr(cloud, "project", None)
+        project = getattr(cloud, "project_id", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 

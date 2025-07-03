@@ -16,14 +16,26 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
+# Core LLM library imports - these are required dependencies
 import openai
 from anthropic import (
     AnthropicVertex,  # Client for Anthropic models on Vertex AI
     AsyncAnthropicVertex,
 )
+
+# Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
-from autogen_core.tools import Tool, ToolSchema  # Autogen tool handling
+from autogen_core.models import (
+    ChatCompletionClient,
+    CreateResult,
+    LLMMessage,
+    ModelFamily,
+    ModelInfo,
+    FunctionExecutionResultMessage,
+    FunctionExecutionResult,
+)
+from autogen_core.models import AssistantMessage, UserMessage
+from autogen_core.tools import Tool  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
@@ -43,21 +55,13 @@ def get_bm():
     return _get_bm()
 
 
-from buttermilk._core.contract import ToolOutput  # Buttermilk contract for tool output
+# ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
+from buttermilk._core.log import logger  # Buttermilk logger
 
 from .retry import RetryWrapper  # Retry logic wrapper
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
-
-
-if TYPE_CHECKING:
-    _: list[Any] = [  # List of clients for type checking purposes
-        AzureOpenAIChatCompletionClient,
-        OpenAIChatCompletionClient,
-        GeminiChatCompletionClient,
-        AnthropicVertex,
-    ]
 
 
 class LLMConfig(BaseModel):
@@ -95,7 +99,6 @@ class LLMConfig(BaseModel):
     )
     obj: str = Field(..., description="Name of the model object to instantiate")
     api_type: str = Field(
-        default="openai",
         description="Type of API to use (e.g. openai, vertex, azure)",
     )
     api_key: str | None = Field(
@@ -189,19 +192,18 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
 class ModelOutput(CreateResult):
-    """Extends Autogen's `CreateResult` to potentially include a hydrated Pydantic object.
+    """Extends Autogen's `CreateResult` with structured output parsing.
 
-    If the LLM call was configured to return structured output (e.g., JSON
-    parsable into a Pydantic model), this class can hold the parsed object.
+    Adds a parsed_object field to hold a Pydantic model instance when
+    the LLM returns structured JSON output that can be parsed.
 
     Attributes:
-        object (BaseModel | None): The Pydantic model instance hydrated from
-            the LLM's JSON or structured output. Defaults to None if no structured
-            output was requested or parsing failed.
+        parsed_object (BaseModel | None): The Pydantic model instance hydrated from
+            the LLM's JSON content. None if no structured output or parsing failed.
 
     """
 
-    object: BaseModel | None = Field(
+    parsed_object: BaseModel | None = Field(
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
@@ -232,11 +234,11 @@ class AutoGenWrapper(RetryWrapper):
     async def create(
         self,
         messages: Sequence[LLMMessage],
-        tools: Sequence[Tool | ToolSchema] = [],
+        tools: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> CreateResult | list[ToolOutput]:
+    ) -> CreateResult:
         """Creates a chat completion using the wrapped client, with retry and structured output handling.
 
         This method attempts to make a chat completion call. It determines if
@@ -247,7 +249,7 @@ class AutoGenWrapper(RetryWrapper):
         Args:
             messages: A sequence of `LLMMessage` objects representing the
                 conversation history.
-            tools: An optional sequence of `Tool` or `ToolSchema` objects that
+            tools: An optional sequence of `Tool` objects that
                 the LLM can call.
             schema: An optional Pydantic `BaseModel` subclass. If provided and
                 the model supports structured output (`model_info.structured_output`),
@@ -257,11 +259,8 @@ class AutoGenWrapper(RetryWrapper):
                 client's `create` method.
 
         Returns:
-            CreateResult | list[ToolOutput]: If the call is successful and does not
-                involve tool calls, returns a `CreateResult`. If tool calls are
-                made, it might return a list of `ToolOutput` (though current Autogen
-                `create` typically returns `CreateResult` with `FunctionCall` list).
-                The exact return type can depend on the underlying client and scenario.
+            CreateResult: The result from the LLM, potentially including tool calls
+                or the final response after tool execution.
 
         Raises:
             ProcessingError: If the LLM returns an empty response or an unexpected
@@ -278,18 +277,8 @@ class AutoGenWrapper(RetryWrapper):
             )
 
             json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
-            if is_valid_schema_type and self.model_info.get("structured_output", False):
+            if is_valid_schema_type and getattr(self.model_info, "structured_output", False):
                 json_output_requested = schema  # type: ignore # Pass the schema for structured output
-            elif self.model_info.get("json_output", False):
-                # If schema not provided for structured output, but model supports generic JSON mode
-                json_output_requested = True
-
-            # Don't use json_output if tools are being called, as tool calling has its own format.
-            if tools:
-                json_output_requested = False
-
-            # Langfuse tracing (currently commented out, but shows potential integration point)
-            # langfuse_context.update_current_observation(input=messages)
 
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
@@ -321,7 +310,7 @@ class AutoGenWrapper(RetryWrapper):
         self,
         messages: list[LLMMessage],  # Made mutable for extending with tool results
         cancellation_token: CancellationToken | None,
-        tools_list: Sequence[Tool | ToolSchema] = [],
+        tools_list: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
     ) -> CreateResult:
         """Manages a chat interaction, including potential tool calls and responses.
@@ -335,7 +324,7 @@ class AutoGenWrapper(RetryWrapper):
             messages: A list of `LLMMessage` objects forming the conversation.
                 This list will be mutated if tool calls occur.
             cancellation_token: A `CancellationToken` for the operation.
-            tools_list: An optional sequence of `Tool` or `ToolSchema` objects
+            tools_list: An optional sequence of `Tool` objects
                 available for the LLM to call.
             schema: An optional Pydantic `BaseModel` subclass for structured output
                 requests (if no tools are called).
@@ -356,126 +345,95 @@ class AutoGenWrapper(RetryWrapper):
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
 
-            tool_outputs = await self._execute_tools(
-                calls=tool_calls,
-                tools_list=tools_list,
-                cancellation_token=cancellation_token,
-            )
-            # Append tool results to the message history
-            for tool_result_group in tool_outputs:  # _execute_tools returns list of lists
-                for tool_result in tool_result_group:  # Each actual ToolOutput
-                    if tool_result.messages:  # If ToolOutput itself provides messages (e.g. formatted result)
-                        messages.extend(tool_result.messages)
-                    else:  # Create a standard tool message if not provided by ToolOutput
-                        # This part might need adjustment based on how ToolOutput is structured
-                        # Assuming ToolOutput has content and tool_call_id
-                        messages.append(LLMMessage(
-                            role="tool",
-                            content=tool_result.content or "",  # Ensure content is not None
-                            tool_call_id=tool_result.call_id,  # Ensure call_id is the tool_call_id
-                        ))
+            # Add the assistant message with tool calls to the history
+            assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
+            messages = messages + [assistant_msg]
 
-            # Call the LLM again with the tool results included in the history
-            create_result = await self.create(
-                messages=messages,
-                cancellation_token=cancellation_token,
-                # No tools or schema passed here, assuming final response after tools
-            )
+            try:
+                tool_outputs = await self._execute_tools(
+                    calls=tool_calls,
+                    tools_list=tools_list,
+                    cancellation_token=cancellation_token,
+                )
+            except Exception as e:
+                # If tool execution fails, we can log the error and return the original result
+                logger.error(f"Error executing tools: {e!s}")
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
+
+            # Tool results are already FunctionExecutionResult objects
+            tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
+            messages = messages + [tool_result_messages]  # Append tool results to the message history
+
+            try:
+                # Call the LLM again with the tool results included in the history
+                create_result = await self.create(
+                    messages=messages,
+                    cancellation_token=cancellation_token,
+                    # No tools or schema passed here, assuming final response after tools
+                )
+            except Exception as e:
+                # If tool execution fails, we can log the error and return the original result
+                logger.error(f"Error executing tools: {e!s}")
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
         return create_result  # type: ignore # Expect CreateResult
 
     async def _call_tool(
         self,
         call: FunctionCall,
-        tool: Tool,  # Assuming 'tool' is an instance of Autogen's Tool
+        tool: Tool,
         cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        """Executes a single tool call and formats its result.
+    ) -> FunctionExecutionResult:
+        """Executes a single tool call and returns the result.
 
         Args:
-            call: The `FunctionCall` object from the LLM, containing the
-                tool name and arguments.
-            tool: The `Tool` object that matches `call.name`.
-            cancellation_token: A `CancellationToken` for the operation.
+            call: The FunctionCall from the LLM
+            tool: The Tool object that matches call.name
+            cancellation_token: Optional cancellation token
 
         Returns:
-            list[ToolOutput]: A list containing one or more `ToolOutput` objects.
-                A single tool execution might produce multiple outputs.
-
+            FunctionExecutionResult ready to be sent back to the LLM
         """
         arguments = json.loads(call.arguments)
-        # Autogen's Tool.run_json is expected to return a JSON-serializable result.
-        # The structure of this result can vary. We need to adapt it to ToolOutput.
-        tool_run_results = await tool.run_json(arguments, cancellation_token)
+        arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
 
-        # Ensure results is a list, as a tool might conceptually return multiple outputs
-        if not isinstance(tool_run_results, list):
-            tool_run_results = [tool_run_results]
+        # Execute the tool
+        result = await tool.run_json(arguments, cancellation_token)
 
-        outputs: list[ToolOutput] = []
-        for single_result in tool_run_results:
-            # Adapt the result to the ToolOutput schema
-            # ToolOutput expects 'content' (stringified result) and 'call_id'
-            # It also has 'results' (Any), 'messages' (list[LLMMessage]), 'args'.
-
-            # Default content is stringified result
-            content_str = json.dumps(single_result) if not isinstance(single_result, str) else single_result
-
-            # Create a ToolOutput instance
-            # Note: `call.id` is the `tool_call_id` needed by OpenAI API for tool messages.
-            # `ToolOutput.call_id` should store this.
-            tool_output_instance = ToolOutput(
-                call_id=call.id,  # This is the crucial tool_call_id
-                function_name=tool.name,  # From the tool definition
-                content=content_str,  # Stringified result
-                results=single_result,  # Raw result
-                args=arguments,  # Arguments passed to the tool
-                # messages: if the tool itself wants to craft specific LLMMessages
-            )
-            outputs.append(tool_output_instance)
-        return outputs
+        # Return autogen's native type directly
+        return FunctionExecutionResult(
+            call_id=call.id,
+            name=tool.name,
+            content=tool.return_value_as_string(result)
+        )
 
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[Tool | ToolSchema],  # Changed to Sequence and allow ToolSchema
+        tools_list: Sequence[Tool],
         cancellation_token: CancellationToken | None,
-    ) -> list[list[ToolOutput]]:  # Return type is list of lists, as one call might yield multiple outputs
+    ) -> list[FunctionExecutionResult]:
         """Executes a list of tool calls concurrently.
 
         Args:
-            calls: A list of `FunctionCall` objects from the LLM.
-            tools_list: The list of available `Tool` or `ToolSchema` objects.
-            cancellation_token: A `CancellationToken` for the operations.
+            calls: List of FunctionCall objects from the LLM
+            tools_list: List of available Tool objects
+            cancellation_token: Optional cancellation token
 
         Returns:
-            list[list[ToolOutput]]: A list where each inner list contains the
-                `ToolOutput`(s) from one corresponding tool call.
-
+            List of FunctionExecutionResult objects
         """
         tasks = []
         for call in calls:
-            # Find the tool by name from the tools_list.
-            # tools_list can contain Tool or ToolSchema, ensure we find a runnable Tool.
-            tool_definition = next((t for t in tools_list if t.name == call.name), None)
-
-            if tool_definition is None:
-                # Handle case where tool is not found (e.g., log error, return error ToolOutput)
-                # For now, assert, but a more robust error handling might be needed.
+            # Find the tool by name
+            tool = next((t for t in tools_list if t.name == call.name), None)
+            if tool is None:
                 raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
 
-            # We need an actual Tool instance to call _call_tool, which expects Tool.run_json
-            # If tool_definition is a ToolSchema, it cannot be directly run.
-            # This assumes tools_list primarily contains executable Tool instances.
-            if not isinstance(tool_definition, Tool):
-                raise ProcessingError(f"Tool definition for '{call.name}' is a schema, not a runnable Tool instance.")
+            tasks.append(self._call_tool(call, tool, cancellation_token))
 
-            tasks.append(self._call_tool(call, tool_definition, cancellation_token))
-
-        # Execute all scheduled tool calls concurrently.
-        results_list_of_lists: list[list[ToolOutput]] = await asyncio.gather(*tasks)
-
-        return results_list_of_lists
+        # Execute all tool calls concurrently
+        return await asyncio.gather(*tasks)
 
 
 class LLMs(BaseModel):
@@ -558,17 +516,18 @@ class LLMs(BaseModel):
 
         client_params: dict[str, Any] = {
             "base_url": config.base_url,
-            "model_info": config.model_info.model_copy(deep=True),  # Use a copy to avoid modifying original
+            "model_info": config.model_info,  # Keep as ModelInfo object for type safety
             "api_key": config.api_key,
             **config.configs,  # Add other configs from LLMConfig.configs
         }
 
-        family = client_params["model_info"].get("family", ModelFamily.UNKNOWN)
+        family = config.model_info.family if hasattr(config.model_info, 'family') else ModelFamily.UNKNOWN
         # Ensure model family is correctly registered or handled for Autogen
         if _find_model_family("openai", family) == ModelFamily.UNKNOWN:  # Check against openai as it's a common base
             # This logic might need adjustment based on how Autogen handles various families.
             # For non-OpenAI models, Autogen might require specific client types or family settings.
-            client_params["model_info"]["family"] = ModelFamily.UNKNOWN  # Or a specific family if known
+            # Note: We should not modify the ModelInfo object - it's immutable
+            logger.debug(f"Model family {family} not recognized by autogen, using as-is")
 
         api_type = config.api_type.lower()  # Normalize api_type
 
@@ -644,321 +603,4 @@ class LLMs(BaseModel):
 
     def __getitem__(self, __name: str) -> AutoGenWrapper:
         """Provides item-style access to LLM clients (e.g., `llms["my_model"]`)."""
-        return self.__getattr__(__name)
-
-
-from collections.abc import Sequence
-from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeVar
-
-from anthropic import (
-    AnthropicVertex,
-)
-from autogen_core import CancellationToken, FunctionCall
-from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelInfo
-from autogen_core.tools import Tool, ToolSchema
-from autogen_ext.models.openai import (
-    AzureOpenAIChatCompletionClient,
-    OpenAIChatCompletionClient,
-)
-from autogen_openaiext_client import GeminiChatCompletionClient
-from pydantic import BaseModel, ConfigDict, Field
-
-from .log import logger
-
-
-# Use a function for deferred import to avoid circular references
-def get_bm():
-    """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk._core.dmrc import get_bm as _get_bm
-    return _get_bm()
-
-
-from buttermilk._core.contract import ToolOutput
-
-from .retry import RetryWrapper
-
-_ = "ChatCompletionClient"
-
-
-if TYPE_CHECKING:
-    _: list[Any] = [
-        AzureOpenAIChatCompletionClient,
-        OpenAIChatCompletionClient,
-        GeminiChatCompletionClient,
-        AnthropicVertex,
-    ]
-
-
-class LLMConfig(BaseModel):
-    connection: str = Field(
-        ...,
-        description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)",
-    )
-    obj: str = Field(..., description="Name of the model object to instantiate")
-    api_type: str = Field(
-        default="openai",
-        description="Type of API to use (e.g. openai, vertex, azure)",
-    )
-    api_key: str | None = Field(
-        default=None,
-        description="API key to use for this model",
-    )
-    base_url: str | None = Field(default=None, description="Custom URL to call")
-
-    model_info: ModelInfo
-    configs: dict = Field(default={}, description="Options to pass to the constructor")
-
-
-class MLPlatformTypes(Enum):
-    openai = "openai"
-    google_genai = "google-genai"
-    google_vertexai = "google-vertexai"
-    anthropic = "anthropic"
-    llama = "llama"
-    azure = "azure"
-
-
-# Generate with:
-# ```sh
-# cat .cache/buttermilk/models.json | jq "keys[]"
-# ```
-CHATMODELS = [
-    "gemini25pro",
-    "gemini25flash",
-    "gpt41nano",
-    "gpt41mini",
-    "gpt41",
-    "o3mini",
-    "llama4maverick",
-    "llama32_90b",
-    "llama33_70b",
-    "haiku",
-    "sonnet",
-]
-CHEAP_CHAT_MODELS = [
-    "haiku",
-    "gemini25flash",
-    "o3mini",
-    "gpt41mini",
-    "llama31_8b",
-    "haiku",
-]
-MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
-
-
-class LLMClient(BaseModel):
-    client: Any
-    connection: str
-    parameters: dict = {}
-
-
-T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
-
-
-class ModelOutput(CreateResult):
-    object: BaseModel | None = Field(default=None, description="The hydrated object from JSON or structured output")
-
-
-class AutoGenWrapper(RetryWrapper):
-    """Wraps any ChatCompletionClient and adds rate limiting via a semaphore
-    plus robust retry logic for handling API failures.
-    """
-
-    client: ChatCompletionClient
-    model_info: ModelInfo
-
-    async def create(
-        self,
-        messages: Sequence[LLMMessage],
-        tools: Sequence[Tool | ToolSchema] = [],
-        schema: type[BaseModel] | None = None,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs: Any,
-    ) -> CreateResult:
-        """Rate-limited version of the underlying client's create method with retries"""
-        try:
-            is_valid_schema_type = (
-                schema is not None
-                and inspect.isclass(schema)
-                and issubclass(schema, BaseModel)
-                and schema is not BaseModel
-            )
-            if is_valid_schema_type and self.model_info.get("structured_output", False):
-                json_output = schema
-
-            else:
-                # By preference, pass a pydantic schema for structured output
-                # Otherwise, set json_output to True if the model supports it
-
-                # TODO: check if the word 'json' is in the system message or add a quick direction.
-                json_output = self.model_info.get("json_output", False)
-
-            # Don't use json_output if we're calling tools
-            if tools:
-                json_output = False
-
-            # Use the retry logic
-            create_result = await self._execute_with_retry(
-                self.client.create,
-                messages,
-                tools=tools,
-                json_output=json_output,
-                cancellation_token=cancellation_token,
-                extra_create_args=kwargs,
-            )
-            if not create_result.content:
-                logger.error(error_msg := "Empty response from LLM")
-                raise ProcessingError(error_msg)
-            if isinstance(create_result.content, str) and not create_result.content.strip():
-                logger.error(error_msg := "Empty response from LLM")
-                raise ProcessingError(error_msg)
-            if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
-                logger.error(error_msg := "Unexpected tool response from LLM")
-                raise ProcessingError(error_msg, create_result.content)
-        except openai.ContentFilterFinishReasonError as filter_error:
-            # Prompt or response was rejected by the content filter.
-            msg = f"Content filter blocked response: {filter_error}"
-            raise ProcessingError(msg) from filter_error
-        except Exception as e:
-            error_msg = f"Error during LLM call: {e}"
-            logger.error(error_msg)
-            raise ProcessingError(error_msg)
-        return create_result
-
-    async def call_chat(
-        self,
-        messages,
-        cancellation_token,
-        tools_list=[],
-        schema: type[BaseModel] | None = None,
-    ) -> CreateResult:
-        """Pass messages to the Chat LLM, run tools if required, and reflect."""
-        create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
-
-        if isinstance(create_result.content, list):
-            # Tool choices
-
-            tool_outputs = await self._execute_tools(
-                calls=create_result.content,
-                tools_list=tools_list,
-                cancellation_token=cancellation_token,
-            )
-            for tool_result in tool_outputs:
-                messages.extend(tool_result.messages)
-            create_result = await self.create(messages=messages, cancellation_token=cancellation_token)
-
-        return create_result
-
-    async def _call_tool(
-        self,
-        call: FunctionCall,
-        tool,
-        cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        # Run the tool and capture the result.
-        arguments = json.loads(call.arguments)
-        results = await tool.run_json(arguments, cancellation_token)
-
-        if not isinstance(results, list):
-            results = [results]
-        outputs = []
-        for result in results:
-            try:
-                result.name = tool.name
-                result.call_id = call.id
-            except:
-                pass
-            outputs.append(result)
-        return outputs
-
-    async def _execute_tools(
-        self,
-        calls: list[FunctionCall],
-        tools_list: list,
-        cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        """Execute the tools and return the results."""
-        tasks = []
-        for call in calls:
-            # Find the tool by name.
-            tool = next((tool for tool in tools_list if tool.name == call.name), None)
-            assert tool is not None
-            tasks.append(self._call_tool(call, tool, cancellation_token))
-
-        # Execute the tool calls.
-        results = await asyncio.gather(*tasks)
-
-        # flatten results
-        results = [record for result in results for record in result if record is not None]
-
-        return results
-
-
-class LLMs(BaseModel):
-    connections: dict[str, LLMConfig] = Field(
-        default=[],
-        description="A dict of dicts each specifying connection information and parameters for an LLM.",
-    )
-
-    autogen_models: dict[str, AutoGenWrapper] = Field(
-        default={},
-        description="Holds the instantiated model objects",
-    )
-
-    model_config = ConfigDict(use_enum_values=True)
-
-    @property
-    def all_model_names(self) -> Enum:
-        return Enum("AllModelNames", list(self.connections.keys()))
-
-    def get_autogen_chat_client(self, name) -> AutoGenWrapper:
-        from buttermilk._core.log import logger  # noqa
-
-        client: ChatCompletionClient = None
-
-        client_params = {}
-        client_params["base_url"] = self.connections[name].base_url
-        client_params["model_info"] = self.connections[name].model_info
-        client_params["api_key"] = self.connections[name].api_key
-        family = client_params["model_info"].get("family", ModelFamily.UNKNOWN)
-        if _find_model_family("openai", family) == ModelFamily.UNKNOWN:
-            # In future we may need to register a pipeline for models not explicitly
-            # supported by Autogen. Ideally it's fixed upstream, but user beware.
-            client_params["model_info"]["family"] = ModelFamily.UNKNOWN
-
-        # add in model parameters from the config dict
-        client_params.update(**self.connections[name].configs)
-        if self.connections[name].api_type == "azure":
-            client_params["azure_endpoint"] = client_params.pop("base_url")  # rename field
-            client = AzureOpenAIChatCompletionClient(**client_params)
-        elif self.connections[name].api_type == "google":
-            client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(
-                **client_params,
-            )
-        elif self.connections[name].api_type == "vertex":
-            client_params["api_key"] = get_bm().gcp_credentials.token
-            #             client = GeminiChatCompletionClient(**parameters)
-            client = OpenAIChatCompletionClient(
-                **client_params,
-            )
-
-        elif self.connections[name].api_type == "anthropic":
-            # token = credentials.refresh(google.auth.transport.requests.Request())
-            _vertex_params = {k: v for k, v in client_params.items() if k in ["region", "project_id"]}
-            _vertex_params["credentials"] = get_bm().gcp_credentials
-            _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-            client = AnthropicChatCompletionClient(**client_params)
-            client._client = _vertex_client  # type: ignore # replace client with vertexai version
-        else:
-            client = OpenAIChatCompletionClient(**client_params)
-
-        return AutoGenWrapper(client=client, model_info=client_params["model_info"])  # RETURN A NEW INSTANCE
-
-    def __getattr__(self, __name: str) -> AutoGenWrapper:
-        if __name not in self.connections:
-            raise AttributeError
-        return self.get_autogen_chat_client(__name)
-
-    def __getitem__(self, __name: str):
         return self.__getattr__(__name)

@@ -24,7 +24,10 @@ from datetime import UTC, datetime
 from typing import Any, Self, TYPE_CHECKING
 
 import shortuuid  # For generating unique IDs
-import weave  # For tracing capabilities
+try:
+    import weave  # For tracing capabilities
+except ImportError:
+    weave = None
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -42,6 +45,7 @@ from buttermilk._core.config import (  # Configuration models
     DataSourceConfig,
     SaveInfo,  # Added SaveInfo
 )
+from buttermilk._core.storage_config import BaseStorageConfig  # Storage configuration models
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.log import logger
@@ -50,7 +54,7 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.data.loaders import DataLoader, create_data_loader  # New data loading system
+from buttermilk.data.loaders import DataLoader  # Legacy data loading interface
 from buttermilk._core.storage_config import StorageConfig
 
 from buttermilk.utils.media import download_and_convert  # Media utilities
@@ -77,9 +81,9 @@ class OrchestratorProtocol(BaseModel):
         save (SaveInfo | None): Optional configuration for saving the results of
             the flow (e.g., to a file, database, or cloud storage). If None,
             results might not be persisted automatically by the orchestrator.
-        storage (Mapping[str, DataSourceConfig]): A mapping where keys are descriptive
-            names for input data sources and values are `DataSourceConfig` objects
-            defining how to load and configure each input data source for the flow.
+        storage (Mapping[str, BaseStorageConfig]): A mapping where keys are descriptive
+            names for input storage backends and values are `BaseStorageConfig` objects
+            defining how to load and configure each input storage backend for the flow.
             This is specifically for data that feeds INTO the flow.
         agents (Mapping[str, AgentVariants]): A mapping where keys are agent role
             names (typically in uppercase, e.g., "SUMMARIZER") and values are
@@ -102,7 +106,7 @@ class OrchestratorProtocol(BaseModel):
 
     """
 
-    orchestrator: str|None = Field(
+    orchestrator: str | None = Field(
         default=None,
         description="Name or identifier of the orchestrator object/class to use for this flow.",
     )
@@ -118,9 +122,9 @@ class OrchestratorProtocol(BaseModel):
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, DataSourceConfig] = Field(
+    storage: Mapping[str, BaseStorageConfig | StorageConfig] = Field(
         default_factory=dict,
-        description="Configuration for input data sources to be loaded for the flow, keyed by a descriptive name.",
+        description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )
     agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
@@ -144,6 +148,37 @@ class OrchestratorProtocol(BaseModel):
     )(
         convert_omegaconf_objects
     )  # type: ignore
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_storage_configs(cls, data: Any) -> Any:
+        """Convert storage configurations using StorageFactory.
+
+        This validator ensures that storage configurations are properly converted
+        using the StorageFactory. No fallbacks or backwards compatibility allowed.
+        """
+        if isinstance(data, dict) and "storage" in data:
+            if "storage" not in data:
+                raise ValueError("'storage' field is required in orchestrator configuration")
+                
+            storage = data["storage"]
+            if isinstance(storage, dict):
+                validated_storage = {}
+                for name, config in storage.items():
+                    if isinstance(config, dict):
+                        # Use StorageFactory to create proper storage config
+                        from buttermilk._core.storage_config import StorageFactory
+                        try:
+                            validated_storage[name] = StorageFactory.create_config(config)
+                        except Exception as e:
+                            raise ValueError(f"Failed to create storage config for '{name}': {e}") from e
+                    else:
+                        # Pass through as-is, let Pydantic handle validation
+                        validated_storage[name] = config
+
+                data["storage"] = validated_storage
+
+        return data
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,  # Allows for flexibility if some configs are complex types
@@ -248,9 +283,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
         return self
 
     async def load_data(self) -> None:
-        """Creates data loaders from the configured data sources.
+        """Creates storage instances from the configured data sources.
 
-        Initializes `self._input_loaders` by creating appropriate DataLoader
+        Initializes `self._input_loaders` by creating appropriate storage
         instances for each `DataSourceConfig` in `self.storage`.
         This method should be called before attempting to access data via
         `get_record_dataset` if data sources are defined.
@@ -258,13 +293,36 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self.storage:  # Only load if data sources are configured
             for source_name, config in self.storage.items():
                 try:
-                    loader = create_data_loader(config)
-                    self._input_loaders[source_name] = loader
-                    logger.debug(f"Created data loader for source '{source_name}': {type(loader).__name__}")
+                    # Convert config to proper StorageConfig - no fallbacks allowed
+                    if isinstance(config, BaseStorageConfig):
+                        # Already a proper storage config
+                        storage_config = config
+                    else:
+                        # Convert dict/OmegaConf to StorageConfig using factory
+                        if hasattr(config, "to_container"):
+                            # OmegaConf object - convert to dict
+                            config_dict = config.to_container()
+                        elif isinstance(config, dict):
+                            # Regular dict
+                            config_dict = config
+                        else:
+                            raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
+                        
+                        # Use StorageFactory to create the proper subclass
+                        from buttermilk._core.storage_config import StorageFactory
+                        try:
+                            storage_config = StorageFactory.create_config(config_dict)
+                        except Exception as e:
+                            raise ValueError(f"Failed to create storage config for '{source_name}': {e}") from e
+
+                    # Use unified storage system
+                    storage = bm.get_storage(storage_config)
+                    self._input_loaders[source_name] = storage
+                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
                 except Exception as e:
-                    logger.error(f"Failed to create data loader for source '{source_name}': {e}")
+                    logger.error(f"Failed to create storage for source '{source_name}': {e}")
                     raise
-            logger.info(f"Data loaders created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
+            logger.info(f"Storage instances created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
         else:
             logger.info(f"No data sources configured for orchestrator '{self.name}'.")
 
@@ -524,6 +582,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             that takes a `FlowMessage` as input and performs the publishing action.
 
         """
+
         async def publish_callback(message: FlowMessage) -> None:
             """Default no-op publish callback. Subclasses should implement actual publishing logic."""
             logger.debug(f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}")

@@ -1,44 +1,30 @@
+# @package flows.osb
+
+# OSB Interactive Flow - Clean Architecture
+# Production-ready interactive group chat experience for OSB vector store queries
+# Uses modular ChromaDB search tool with synthesis agent
+
 defaults:
   - _self_
-  - /data: osb_vector
-  - /agents@osb.agents.rag_agent: rag_generic
-  - /agents@osb.observers.host_ra: host/ra
+  - /agents@observers:
+    - host/llm_host
+  - /agents: 
+    - research_agent
+  - /tools@agents.research_agent.tools: 
+    - chromadb_search
+  # Data source configuration for search tool
+  - /storage@agents.research_agent.tools.chromadb_search: osb_vector
+  - /storage@parameters.save: flows
+    
 
-osb:
-  _target_: buttermilk.runner.flow.Flow
-  source: api development
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  description: OSB Research Assistant - Interactive RAG agent for Online Safety Bureau cases
-  parameters: {}
-  agents:
-    search:
-      _target_: LLMAgent
-      num_runs: 1
-      parameters: 
-        template: osb
-        formatting: json
-      variants:
-        model: ${llm}
-      data: osbcasessummary
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "OSB Interactive Flow"
+description: "Interactive group chat for querying OSB vector store with clean tool/agent separation"
 
-    synth:
-      _target_: LLMAgent
-      num_runs: 1
-      concurrency: 20
-      parameters:
-        template: synthesise
-        formatting: json
-      variants:
-        model: ${llm}
-      inputs:
-        answers: search
-        
-  storage:
-    osbcasessummary:
-      type: vector
-      uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
-      db:
-        type: chromadb
-        embeddings: gs://prosocial-public/osb/04_osb_embeddings_vertex-005.json
-        model: text-embedding-005
-        store: ".chromadb"
+# Flow parameters
+parameters: {}
+agents: {}
+observers: {}
+tools: {}
+storage: {}

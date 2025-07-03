@@ -1,0 +1,32 @@
+# Test configuration for OSB flow with API server
+
+defaults:
+  - _self_
+  - /local  # Use local configuration as base
+  - /flows/osb
+  - /llms: lite  # Use lite LLMs for speed
+  - /run: api
+
+bm:
+  name: test_osb_api
+  job: test_flows
+  platform: test
+  tracing:
+    enabled: false  # Disable Weave for faster tests
+  logger_cfg:
+    verbose: true  # Enable verbose logging for debugging
+    type: console  # Log to console instead of GCP
+  
+  # Override to use test-specific storage
+  run_info:
+    platform: test
+    save_dir_base: /tmp/buttermilk_test/
+
+run:
+  mode: api
+  ui: web
+  flows: 
+    - osb
+  name: test_osb_api
+  job: test_flows
+  human_in_loop: true  # Enable UI interaction for groupchat tests

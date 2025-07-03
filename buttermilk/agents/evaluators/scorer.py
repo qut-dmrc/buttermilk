@@ -195,7 +195,6 @@ class LLMScorer(LLMAgent):
         cancellation_token: CancellationToken | None = None,
         source: str = "",
         public_callback: Callable[[Any], Awaitable[None]] | None = None,
-        message_callback: Callable[[Any], Awaitable[None]] | None = None,  # Typically unused by listeners
         **kwargs: Any,
     ) -> None:
         """Listens for relevant `AgentTrace` messages and triggers the scoring process.
@@ -225,7 +224,6 @@ class LLMScorer(LLMAgent):
             source: The identifier of the agent that sent the `message`.
             public_callback: An asynchronous callback function used to publish
                 the scoring results (as an `AgentTrace`) back to the flow or UI.
-            message_callback: An asynchronous callback (typically unused by this listener).
             **kwargs: Additional keyword arguments.
 
         """
@@ -291,7 +289,6 @@ class LLMScorer(LLMAgent):
             await self.invoke(  # self.invoke calls self._process internally
                 message=scorer_agent_input,
                 public_callback=public_callback,
-                message_callback=message_callback,  # Pass along if needed
                 cancellation_token=cancellation_token,
                 **kwargs,
             )

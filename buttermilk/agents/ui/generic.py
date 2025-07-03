@@ -55,7 +55,6 @@ class UIAgent(Agent):
         message: AgentInput,
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,
-        message_callback: Callable | None = None,
         **kwargs,
     ) -> AgentOutput:
         """Process inputs from the orchestrator and interact with the UI.
@@ -64,7 +63,6 @@ class UIAgent(Agent):
             message: The input to process
             cancellation_token: Token for cancelling the operation
             public_callback: Callback for publishing messages to public topics
-            message_callback: Callback for publishing messages to specific topics
             **kwargs: Additional parameters
 
         Returns:
@@ -81,7 +79,6 @@ class UIAgent(Agent):
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,
-        message_callback: Callable | None = None,
         source: str = "",
         **kwargs,
     ) -> OOBMessages | None:
@@ -91,7 +88,6 @@ class UIAgent(Agent):
             message: The control message to process
             cancellation_token: Token for cancelling the operation
             public_callback: Callback for publishing messages to public topics
-            message_callback: Callback for publishing messages to specific topics
             source: Identifier of the message sender
             **kwargs: Additional parameters
 
@@ -112,7 +108,6 @@ class UIAgent(Agent):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> None:
         """Handles messages from other agents in the group chat.
@@ -122,7 +117,6 @@ class UIAgent(Agent):
             cancellation_token: Token for cancelling the operation
             source: Identifier of the message sender
             public_callback: Callback for publishing messages to public topics
-            message_callback: Callback for publishing messages to specific topics
             **kwargs: Additional parameters
 
         UI agents typically implement this to display messages to the user interface.

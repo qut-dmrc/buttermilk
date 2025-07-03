@@ -4,6 +4,7 @@ from cloudpathlib import AnyPath, CloudPath
 from google.cloud import aiplatform
 from shortuuid import uuid
 
+from buttermilk._core.log import logger
 from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
@@ -26,6 +27,12 @@ def test_save(bm):
 
 
 def test_upload_text(bm):
+    import pytest
+    
+    # Skip test if no clouds configured or no bucket available
+    if not bm.clouds or not hasattr(bm.clouds[0], 'bucket') or not bm.clouds[0].bucket:
+        pytest.skip("No cloud bucket configured for test")
+        
     uri = f"gs://{bm.clouds[0].bucket}/test_data/{uuid}.txt"
     return_uri = upload_text(data="test data", uri=uri)
     assert return_uri == uri
@@ -37,6 +44,12 @@ def test_upload_text(bm):
 
 
 def test_save_binary(bm):
+    import pytest
+    
+    # Skip test if no clouds configured or no bucket available
+    if not bm.clouds or not hasattr(bm.clouds[0], 'bucket') or not bm.clouds[0].bucket:
+        pytest.skip("No cloud bucket configured for test")
+        
     uri = f"gs://{bm.clouds[0].bucket}/test_data/{uuid}.txt"
     try:
         with open("tests/data/Rijksmuseum_(25621972346).jpg", "rb") as img:

@@ -12,7 +12,7 @@ from buttermilk.agents.llm import LLMAgent
 
 @pytest.fixture
 def request_paris() -> AgentInput:
-    return AgentInput(prompt="What is the capital of France?")
+    return AgentInput(inputs={"prompt": "What is the capital of France?"})
 
 
 @pytest.fixture

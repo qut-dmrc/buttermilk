@@ -1,0 +1,13 @@
+# Default vector storage configuration
+# For ChromaDB and other vector databases
+
+type: chromadb
+persist_directory: ${oc.env:BUTTERMILK_VECTOR_PATH,./data/chromadb}
+collection_name: default_collection
+embedding_model: gemini-embedding-001
+dimensionality: 3072
+
+# Common storage settings
+randomize: true
+batch_size: 1000
+auto_create: true

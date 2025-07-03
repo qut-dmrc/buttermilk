@@ -5,12 +5,14 @@ from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
+from autogen_core.tools import ToolSchema
 from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
 from buttermilk._core.contract import (
+    AgentAnnouncement,
     AgentInput,
     AgentOutput,
     AgentTrace,
@@ -40,7 +42,6 @@ class HostAgent(Agent):
     Uses a dictionary to count pending tasks per agent ID and a Condition variable
     for synchronization.
     """
-    
 
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
     callback_to_groupchat: Any = Field(default=None)
@@ -51,7 +52,18 @@ class HostAgent(Agent):
     # Track count of pending tasks per agent ID
     _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))  # Corrected duplicate definition
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
+    _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
+
+    # Agent registry attributes (runtime state, not configuration)
+    _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
+    _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
+    _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
+    
+    # Tool schemas for LLM-based hosts
+    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
+    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
+    _registry_summary_cache: dict[str, Any] | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
         default=240,
@@ -67,10 +79,12 @@ class HostAgent(Agent):
     def human_in_loop(self) -> bool:
         """Whether to interact with the human/manager for step confirmation.
         
-        Gets the value from parameters dict, defaulting to True if not specified.
+        Must be explicitly configured in parameters - no defaults allowed.
         """
-        return self.parameters.get('human_in_loop', True)
-    
+        if 'human_in_loop' not in self.parameters:
+            raise ValueError(f"Host agent '{self.agent_name}': 'human_in_loop' must be explicitly set in parameters")
+        return self.parameters['human_in_loop']
+
     @human_in_loop.setter
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
@@ -87,9 +101,131 @@ class HostAgent(Agent):
         **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
-        super().initialize(**kwargs)
+        await super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
         logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
+
+    # --- Agent Registry Methods ---
+
+    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+        """Update registry with agent announcement.
+        
+        Thread-safe update of agent registry.
+        
+        Args:
+            announcement: The agent announcement to process.
+        """
+        async with self._registry_lock:
+            agent_id = announcement.agent_config.agent_id
+
+            if announcement.status == "leaving":
+                # Remove agent from registry
+                self._agent_registry.pop(agent_id, None)
+                # Remove from tool registry and clean up empty entries
+                for tool, agent_list in list(self._tool_registry.items()):
+                    if agent_id in agent_list:
+                        agent_list.remove(agent_id)
+                        if not agent_list:  # Remove empty tool entries
+                            del self._tool_registry[tool]
+                logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
+            else:
+                # Add or update agent in registry
+                self._agent_registry[agent_id] = announcement
+                # Update tool registry
+                for tool in announcement.available_tools:
+                    if tool not in self._tool_registry:
+                        self._tool_registry[tool] = []
+                    if agent_id not in self._tool_registry[tool]:
+                        self._tool_registry[tool].append(agent_id)
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+
+            # Invalidate cache
+            self._registry_summary_cache = None
+        
+        # Rebuild tool schemas when agents announce (for LLM-based hosts)
+        await self._build_agent_tools()
+
+    async def _build_agent_tools(self) -> None:
+        """Build tool schemas from agent-provided tool definitions.
+        
+        This method collects tool schemas from agents for LLM-based decision making.
+        Base HostAgent doesn't use these, but subclasses like StructuredLLMHostAgent do.
+        """
+        tool_schemas = []
+
+        # Collect tool schemas from agent announcements
+        for agent_id, announcement in self._agent_registry.items():
+            agent_role = announcement.agent_config.role
+
+            if tool_def := announcement.tool_definition:
+                # Store the schema directly - no wrapping needed
+                tool_schemas.append(tool_def)
+                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
+
+        # Store schemas for LLM-based hosts
+        self._tool_schemas = tool_schemas
+        
+        logger.info(
+            f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
+            f"from {len(self._agent_registry)} announced agents"
+        )
+
+    def create_registry_summary(self) -> dict[str, Any]:
+        """Create a summary of the agent registry for UI display.
+        
+        Uses caching to avoid redundant computation.
+        
+        Returns:
+            dict: Summary containing active agents, available tools, and counts.
+        """
+        # Return cached summary if available
+        if self._registry_summary_cache is not None:
+            return self._registry_summary_cache
+
+        active_agents = []
+        for agent_id, announcement in self._agent_registry.items():
+            agent_info = {
+                "agent_id": agent_id,
+                "role": announcement.agent_config.role,
+                "description": announcement.agent_config.description,
+                "tools": announcement.available_tools,
+                "model": announcement.agent_config.parameters.get("model") if announcement.agent_config.parameters else None
+            }
+            active_agents.append(agent_info)
+
+        summary = {
+            "active_agents": active_agents,
+            "available_tools": dict(self._tool_registry),
+            "total_agents": len(self._agent_registry)
+        }
+
+        # Cache the summary
+        self._registry_summary_cache = summary
+        return summary
+
+    def create_ui_message_with_registry(
+        self,
+        content: str,
+        options: bool | list[str] | None = None,
+        **kwargs: Any
+    ) -> UIMessage:
+        """Create a UI message that includes the agent registry summary.
+        
+        Args:
+            content: The message content.
+            options: Optional interaction options.
+            **kwargs: Additional UIMessage fields.
+            
+        Returns:
+            UIMessage: UI message with registry summary.
+        """
+        registry_summary = self.create_registry_summary()
+        return UIMessage(
+            content=content,
+            options=options,
+            agent_registry_summary=registry_summary,
+            **kwargs
+        )
 
     async def _listen(
         self,
@@ -98,7 +234,6 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken,
         source: str = "",
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> None:
         """Listen to messages in the group chat and maintain conversation history."""
@@ -131,6 +266,7 @@ class HostAgent(Agent):
         elif isinstance(message, FlowProgressUpdate):
             logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
             return  # Do not proceed to log
+
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
@@ -139,7 +275,6 @@ class HostAgent(Agent):
         message: OOBMessages,
         cancellation_token: CancellationToken,
         public_callback: Callable,
-        message_callback: Callable,
         **kwargs: Any,
     ) -> OOBMessages | None:
         """Handle special events and messages."""
@@ -197,6 +332,7 @@ class HostAgent(Agent):
 
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
+            logger.info(f"Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
             if self._conductor_task and not self._conductor_task.done():
                 logger.warning(f"Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
@@ -210,6 +346,14 @@ class HostAgent(Agent):
             logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
             # Do nothing with progress updates received by the host
 
+        # Handle AgentAnnouncement messages
+        elif isinstance(message, AgentAnnouncement):
+            logger.info(
+                f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}"
+            )
+            await self.update_agent_registry(message)
+            # Don't add to conversation history
+            return
         return None  # Explicitly return None if no other value is returned
 
     async def request_user_confirmation(self, step: StepRequest) -> None:
@@ -331,8 +475,37 @@ class HostAgent(Agent):
             StepRequest: The next step request in the sequence.
 
         """
-        for role in self._participants.keys():
-            yield StepRequest(role=role, content=f"Executing step for {role}")
+        for role, description in self._participants.items():
+            # Create more descriptive step content using the participant description
+            step_description = f"Executing {role.lower()} step: {description}"
+
+            # Create StepRequest with initial parameters if available
+            step_inputs = {}
+            step_parameters = {}
+
+            # Add initial query/prompt if available
+            if hasattr(self, '_initial_query') and self._initial_query:
+                step_inputs['query'] = self._initial_query
+                step_inputs['prompt'] = self._initial_query
+
+            # Add any parameters from the initial inputs
+            if hasattr(self, '_initial_inputs') and isinstance(self._initial_inputs, dict):
+                # Extract parameters from the initial inputs
+                if 'parameters' in self._initial_inputs:
+                    step_parameters.update(self._initial_inputs['parameters'])
+
+                # Also check for direct prompt in initial inputs
+                if 'prompt' in self._initial_inputs and 'prompt' not in step_inputs:
+                    step_inputs['prompt'] = self._initial_inputs['prompt']
+                if 'query' in self._initial_inputs and 'query' not in step_inputs:
+                    step_inputs['query'] = self._initial_inputs['query']
+
+            yield StepRequest(
+                role=role, 
+                content=step_description,
+                inputs=step_inputs,
+                parameters=step_parameters
+            )
         yield StepRequest(role=END, content="Sequence completed.")
 
     async def _run_flow(self, message: ConductorRequest) -> None:
@@ -351,13 +524,50 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_name} starting flow execution.")
 
         # Initialize participants from the request
+        logger.debug(f"Host {self.agent_name} updating participants from ConductorRequest: {message.participants}")
         self._participants.update(message.participants)
+        logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
         if not self._participants:
             msg = "Host received ConductorRequest with no participants."
             logger.error(f"{msg} Aborting.")
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
+
+        # Store participant tools if provided
+        if hasattr(message, 'participant_tools'):
+            self._participant_tools = message.participant_tools
+            logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
+
+        # Extract initial query/prompt from ConductorRequest if available
+        # Parse inputs using the typed model for cleaner extraction
+        from buttermilk._core.contract import HostInputModel
+        
+        # Store the raw inputs for backward compatibility
+        self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
+        
+        try:
+            # Parse inputs into our typed model
+            if isinstance(self._initial_inputs, dict):
+                host_inputs = HostInputModel(**self._initial_inputs)
+            else:
+                host_inputs = HostInputModel()
+            
+            # Extract fields cleanly
+            self._initial_query = host_inputs.initial_query
+            self._initial_parameters = host_inputs.parameters
+            
+            if self._initial_query:
+                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
+            
+            if self._initial_parameters:
+                logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+                
+        except Exception as e:
+            # If parsing fails, fall back to empty values
+            logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
+            self._initial_query = None
+            self._initial_parameters = {}
 
         # Rerun initialization to set up the group chat
         await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
@@ -454,6 +664,13 @@ class HostAgent(Agent):
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
                 logger.debug(f"Host executing MANAGER step without setting _step_starting: {step.role}")
+                # Convert StepRequest to UIMessage for frontend display
+                ui_message = UIMessage(
+                    content=step.content or "What would you like to do?",
+                    options=None,  # No specific options, just free text response
+                )
+                await self.callback_to_groupchat(ui_message)
+                return  # Don't send the StepRequest itself
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 
@@ -466,7 +683,97 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
-        # A non-LLM host will return a StepRequest
-
+        """Process messages. 
+        
+        Base implementation returns an error since non-LLM hosts don't process direct inputs.
+        Subclasses that support LLM-based processing should override this method.
+        """
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
         return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
+    
+    async def _route_tool_calls_to_agents(
+        self,
+        tool_calls: list[Any],  # FunctionCall objects
+    ) -> None:
+        """Route tool calls to the appropriate agents as StepRequests.
+        
+        This is a helper method that can be used by LLM-based host subclasses
+        to convert tool calls into StepRequests for the appropriate agents.
+        """
+        import json
+        
+        for call in tool_calls:
+            # Find which agent handles this tool
+            agent_role = None
+            for agent_id, announcement in self._agent_registry.items():
+                if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
+                    agent_role = announcement.agent_config.role
+                    break
+
+            if not agent_role:
+                logger.warning(f"No agent found for tool: {call.name}")
+                continue
+
+            # Parse the arguments
+            try:
+                arguments = json.loads(call.arguments)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                continue
+
+            # Create StepRequest for this tool call
+            step_request = StepRequest(
+                role=agent_role,
+                inputs=arguments,
+                metadata={"tool_name": call.name, "tool_call_id": call.id}
+            )
+
+            # Create a more descriptive log message
+            tool_desc = self._describe_tool_call(call.name, arguments)
+            logger.info(f"Host routing to {agent_role}: {tool_desc}")
+            
+            # Queue it if we have a queue
+            if hasattr(self, '_proposed_step'):
+                await self._proposed_step.put(step_request)
+
+            # Send it out regardless
+            await self.callback_to_groupchat(step_request)
+    
+    def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
+        """Generate a concise description of a tool call.
+        
+        Args:
+            tool_name: Name of the tool being called
+            arguments: Parsed arguments for the tool
+            
+        Returns:
+            str: A human-readable description
+        """
+        # Common patterns for better descriptions
+        if "query" in arguments:
+            query = str(arguments["query"])
+            return f"{tool_name}('{query[:40]}{'...' if len(query) > 40 else ''}')"
+        elif "message" in arguments:
+            msg = str(arguments["message"])
+            return f"{tool_name}('{msg[:40]}{'...' if len(msg) > 40 else ''}')"
+        elif "content" in arguments:
+            content = str(arguments["content"])
+            return f"{tool_name}('{content[:40]}{'...' if len(content) > 40 else ''}')"
+        elif "target" in arguments:
+            return f"{tool_name}(target='{arguments['target']}')"
+        elif "inputs" in arguments and isinstance(arguments["inputs"], dict):
+            # Handle nested inputs
+            if "query" in arguments["inputs"]:
+                query = str(arguments["inputs"]["query"])
+                return f"{tool_name}(query='{query[:30]}{'...' if len(query) > 30 else ''}')"
+            else:
+                return f"{tool_name}({len(arguments['inputs'])} inputs)"
+        else:
+            # Show first meaningful argument
+            for key, value in arguments.items():
+                if key not in ["metadata", "context", "options"]:
+                    val_str = str(value)
+                    return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
+            
+            # Fallback
+            return f"{tool_name}({len(arguments)} args)"

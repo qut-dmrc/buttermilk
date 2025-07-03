@@ -19,7 +19,7 @@
       "args": [
         "buttermilk.api.flow:app",
         "--reload",
-        "+flows=[mock,simple,osb,hate,trans,describer]",
+        "+flows=[mock,osb,hate,trans,describer]",
         "llms=lite"
       ],
       "jinja": true
@@ -64,7 +64,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "+flows=[trans, tox_allinone]",
+        "+flows=[trans,zot,osb]",
         "+run=api",
         "+llms=full",
       ],
@@ -85,7 +85,6 @@
   "args": [
     "+run=batch",
     "run.mode=batch_run",
-    "flows=[trans]",
     "llms=full",
   ],
   "envFile": "${workspaceFolder}/.env",
@@ -104,9 +103,9 @@
       "justMyCode": true,
       "args": [
         "+run=console",
-        "flows=[trans,simple,z]",
+        "+flows=[trans,zot,osb]",
         "+flow=${input:flow}",
-        "llms=full",
+        "llms=lite",
         "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",
