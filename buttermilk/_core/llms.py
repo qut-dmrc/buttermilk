@@ -343,6 +343,14 @@ class AutoGenWrapper(RetryWrapper):
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
+            
+            # Add the assistant message with tool calls to the history
+            assistant_msg = AssistantMessage(
+                content=tool_calls,
+                source=self.model  # Track which model made the tool calls
+            )
+            messages = messages + [assistant_msg]
+            
             try:
                 tool_outputs = await self._execute_tools(
                     calls=tool_calls,
@@ -353,17 +361,22 @@ class AutoGenWrapper(RetryWrapper):
                 # If tool execution fails, we can log the error and return the original result
                 logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
+            
             # Tool results are already FunctionExecutionResult objects
             tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
-
             messages = messages + [tool_result_messages]  # Append tool results to the message history
 
-            # Call the LLM again with the tool results included in the history
-            create_result = await self.create(
-                messages=messages,
-                cancellation_token=cancellation_token,
-                # No tools or schema passed here, assuming final response after tools
-            )
+            try:
+                # Call the LLM again with the tool results included in the history
+                create_result = await self.create(
+                    messages=messages,
+                    cancellation_token=cancellation_token,
+                    # No tools or schema passed here, assuming final response after tools
+                )
+            except Exception as e:
+                # If tool execution fails, we can log the error and return the original result
+                logger.error(f"Error executing tools: {e!s}")
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
         return create_result  # type: ignore # Expect CreateResult
 
@@ -385,10 +398,10 @@ class AutoGenWrapper(RetryWrapper):
         """
         arguments = json.loads(call.arguments)
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
-        
+
         # Execute the tool
         result = await tool.run_json(arguments, cancellation_token)
-        
+
         # Return autogen's native type directly
         return FunctionExecutionResult(
             call_id=call.id,
@@ -418,7 +431,7 @@ class AutoGenWrapper(RetryWrapper):
             tool = next((t for t in tools_list if t.name == call.name), None)
             if tool is None:
                 raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
-            
+
             tasks.append(self._call_tool(call, tool, cancellation_token))
 
         # Execute all tool calls concurrently
