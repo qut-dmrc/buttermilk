@@ -1,0 +1,18 @@
+# Simplified RAG agent configuration
+# Uses external search tools and templates for orchestration
+
+defaults:
+  - base
+
+rag_agent:
+  role: "RESEARCHER"
+  agent_obj: buttermilk.agents.rag.RagAgent
+  tools:
+    - search_vector_database  # Configure this tool separately
+  parameters:
+    template: research_synthesis_with_citations
+    model: ${llms.haiku}  # Can use any available model
+    description: |
+      Research agent that searches the knowledge base and provides
+      synthesized responses with proper citations.
+  data: {}  # No embedded data sources - uses tools instead
