@@ -3,13 +3,13 @@
 
 defaults:
   - _self_
-  # Load the research agent
+  # Load the RAG agent with structured outputs
   - /agents@clean_rag.agents: 
-    - research_agent
+    - rag_agent
   # Load search tool into the agent's tools dict
-  - /tools@clean_rag.agents.research_agent.tools.search: chromadb_search
+  - /tools@clean_rag.agents.rag_agent.tools.search: chromadb_search
   # Configure the search tool with OSB vector store
-  - /storage@clean_rag.agents.research_agent.tools.search: osb_vector
+  - /storage@clean_rag.agents.rag_agent.tools.search: osb_vector
   # Host for coordination
   - /agents@clean_rag.observers:
     - host/llm_host
