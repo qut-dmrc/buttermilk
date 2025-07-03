@@ -277,7 +277,7 @@ class AutoGenWrapper(RetryWrapper):
             )
 
             json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
-            if is_valid_schema_type and self.model_info.get("structured_output", False):
+            if is_valid_schema_type and getattr(self.model_info, "structured_output", False):
                 json_output_requested = schema  # type: ignore # Pass the schema for structured output
 
             create_result = await self._execute_with_retry(
@@ -344,14 +344,11 @@ class AutoGenWrapper(RetryWrapper):
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
-            
+
             # Add the assistant message with tool calls to the history
-            assistant_msg = AssistantMessage(
-                content=tool_calls,
-                source=self.model_info.model if hasattr(self, 'model_info') and self.model_info else "assistant"
-            )
+            assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
             messages = messages + [assistant_msg]
-            
+
             try:
                 tool_outputs = await self._execute_tools(
                     calls=tool_calls,
@@ -362,7 +359,7 @@ class AutoGenWrapper(RetryWrapper):
                 # If tool execution fails, we can log the error and return the original result
                 logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
-            
+
             # Tool results are already FunctionExecutionResult objects
             tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
             messages = messages + [tool_result_messages]  # Append tool results to the message history
@@ -519,17 +516,18 @@ class LLMs(BaseModel):
 
         client_params: dict[str, Any] = {
             "base_url": config.base_url,
-            "model_info": config.model_info.model_copy(deep=True) if hasattr(config.model_info, 'model_copy') else dict(config.model_info),  # Use a copy to avoid modifying original
+            "model_info": config.model_info,  # Keep as ModelInfo object for type safety
             "api_key": config.api_key,
             **config.configs,  # Add other configs from LLMConfig.configs
         }
 
-        family = client_params["model_info"].get("family", ModelFamily.UNKNOWN)
+        family = config.model_info.family if hasattr(config.model_info, 'family') else ModelFamily.UNKNOWN
         # Ensure model family is correctly registered or handled for Autogen
         if _find_model_family("openai", family) == ModelFamily.UNKNOWN:  # Check against openai as it's a common base
             # This logic might need adjustment based on how Autogen handles various families.
             # For non-OpenAI models, Autogen might require specific client types or family settings.
-            client_params["model_info"]["family"] = ModelFamily.UNKNOWN  # Or a specific family if known
+            # Note: We should not modify the ModelInfo object - it's immutable
+            logger.debug(f"Model family {family} not recognized by autogen, using as-is")
 
         api_type = config.api_type.lower()  # Normalize api_type
 
