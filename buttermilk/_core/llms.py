@@ -34,6 +34,7 @@ from autogen_core.models import (
     FunctionExecutionResultMessage,
     FunctionExecutionResult,
 )
+from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
@@ -347,7 +348,7 @@ class AutoGenWrapper(RetryWrapper):
             # Add the assistant message with tool calls to the history
             assistant_msg = AssistantMessage(
                 content=tool_calls,
-                source=self.model  # Track which model made the tool calls
+                source=self.model_info.model if hasattr(self, 'model_info') and self.model_info else "assistant"
             )
             messages = messages + [assistant_msg]
             
