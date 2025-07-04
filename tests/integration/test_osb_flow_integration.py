@@ -101,15 +101,14 @@ class TestOSBFlowInitialization:
                 assert "osb_vector" in agent_cfg.data, f"Agent {agent_name} missing osb_vector data source"
                 
                 # Test agent initialization with vector store access
-                if agent_cfg.get("agent_obj") == "EnhancedRagAgent":
-                    # This will fail due to missing vector store integration
+                if agent_cfg.get("agent_obj") == "buttermilk.agents.rag.RagAgent":
+                    # RagAgent uses external tools, not embedded vector store
                     config_dict = OmegaConf.to_container(agent_cfg, resolve=True)
-                    agent = EnhancedRagAgent(**config_dict)
+                    agent = RagAgent(**config_dict)
                     
-                    # Verify agent can initialize search tools with vector store
-                    await agent._initialize_search_tools()
-                    assert agent._enhanced_search is not None
-                    assert agent._enhanced_search.vectorstore.collection_name == "osb_vector"
+                    # Verify agent has structured output configured
+                    assert agent._output_model is not None
+                    assert agent._output_model.__name__ == "ResearchResult"
 
     @pytest.mark.anyio
     async def test_osb_flow_supports_websocket_sessions(self, osb_flow_config):

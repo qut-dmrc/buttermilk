@@ -25,7 +25,7 @@ from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
-from buttermilk.agents.rag.ragzot import ResearchResult
+from buttermilk.agents.rag import ResearchResult
 
 PREVIEW_LENGTH = 200
 
