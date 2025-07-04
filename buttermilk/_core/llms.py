@@ -277,7 +277,7 @@ class AutoGenWrapper(RetryWrapper):
             )
 
             json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
-            if is_valid_schema_type and getattr(self.model_info, "structured_output", False):
+            if is_valid_schema_type and self.model_info.get("structured_output"):
                 json_output_requested = schema  # type: ignore # Pass the schema for structured output
 
             create_result = await self._execute_with_retry(
@@ -369,7 +369,7 @@ class AutoGenWrapper(RetryWrapper):
                 create_result = await self.create(
                     messages=messages,
                     cancellation_token=cancellation_token,
-                    # No tools or schema passed here, assuming final response after tools
+                    schema=schema,
                 )
             except Exception as e:
                 # If tool execution fails, we can log the error and return the original result

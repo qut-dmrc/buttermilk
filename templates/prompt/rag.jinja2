@@ -28,10 +28,9 @@ You are a research assistant with access to a vector database search tool.
 - Sometimes, search results are garbled. Make sure you filter out illegible results and format all results appropriately in your response.
 
 # Placeholder:
-{{records}}
-
-# Placeholder:
 {{context}}
 
+{% if prompt %}
 # User:
 {{prompt}}
+{% endif %}

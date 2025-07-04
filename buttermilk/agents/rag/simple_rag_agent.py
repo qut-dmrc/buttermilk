@@ -29,7 +29,7 @@ class ResearchResult(BaseModel):
     )
     response: str = Field(
         ...,
-        description="The synthesized textual response from the LLM.",
+        description="The synthesized textual response.",
     )
 
 
