@@ -84,7 +84,7 @@ class LLMAgent(Agent, AgentConfig):
 
     # Control behavior
     fail_on_unfilled_parameters: bool = pydantic.Field(
-        default=False,
+        default=True,
         description="If True, the agent will fail when template variables are missing from inputs.",
     )
 
@@ -102,10 +102,7 @@ class LLMAgent(Agent, AgentConfig):
             ValueError: If 'model' is not specified in parameters.
         """
         super().__init__(**kwargs)
-        # Keep _model for backward compatibility, but use parameters['model'] as source of truth
-        if "model" in self.parameters:
-            self._model = self.parameters["model"]
-        else:
+        if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
 
     @pydantic.model_validator(mode="after")
@@ -128,7 +125,7 @@ class LLMAgent(Agent, AgentConfig):
 
             # Instantiate tools here if they are OmegaConf objects
             _tool_objects = hydra.utils.instantiate(self.tools)
-            
+
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
             self._tools_list = create_tool_functions(_tool_objects)
         else:
@@ -156,10 +153,10 @@ class LLMAgent(Agent, AgentConfig):
         Returns:
             str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
         """
-        if not self._model:
+        if not self.parameters['model']:
             return ""
 
-        model_lower = self._model.lower()
+        model_lower = self.parameters["model"].lower()
 
         # Common model patterns
         if "gpt-4" in model_lower:
@@ -317,12 +314,12 @@ class LLMAgent(Agent, AgentConfig):
 
         tool_names = [getattr(tool, 'name', str(tool)) for tool in self._tools_list]
         logger.info(
-            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'. "
+            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
             f"Configured tools ({len(self._tools_list)}): {tool_names}"
         )
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-            model_client = bm.llms.get_autogen_chat_client(self._model)
+            model_client = bm.llms.get_autogen_chat_client(self.parameters['model'])
 
             # Debug the schema parameter
             logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
@@ -334,10 +331,12 @@ class LLMAgent(Agent, AgentConfig):
                 schema=self._output_model,  # Pass expected Pydantic schema for structured output
             )
             llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
-            logger.debug(f"Agent {self.agent_name}: Received response from model '{self._model}'. Finish reason: {chat_result.finish_reason}")
+            logger.debug(
+                f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}"
+            )
         except Exception as llm_error:
             # Catch errors during the actual LLM call
-            msg = f"Agent {self.agent_id}: Error during LLM call to '{self._model}': {llm_error}"
+            msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
             raise ProcessingError(msg) from llm_error
 
         # 3. Parse the LLM response and create an AgentOutput
@@ -386,7 +385,7 @@ class LLMAgent(Agent, AgentConfig):
         output_metadata = {
             "agent_name": self.agent_name,
             "agent_id": self.agent_id,
-            "agent_model": self._model,
+            "agent_model": self.parameters["model"],
             "finish_reason": chat_result.finish_reason,
         }
 

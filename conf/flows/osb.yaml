@@ -9,11 +9,11 @@ defaults:
   - /agents@observers:
     - host/llm_host
   - /agents: 
-    - rag_agent  # Use new RagAgent for structured outputs with citations
-  - /tools@agents.rag_agent.tools: 
+    - rag  # Use new RagAgent for structured outputs with citations
+  - /tools@agents.rag.tools: 
     - chromadb_search
   # Data source configuration for search tool
-  - /storage@agents.rag_agent.tools.chromadb_search: osb_vector
+  - /storage@agents.rag.tools.chromadb_search: osb_vector
   - /storage@parameters.save: flows
     
 

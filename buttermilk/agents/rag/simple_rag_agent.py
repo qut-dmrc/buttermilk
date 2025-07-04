@@ -48,19 +48,6 @@ class RagAgent(LLMAgent):
     3. Synthesizing the response
     4. Returning in ResearchResult format
     """
-    
+
     # Force structured output - can be overridden by subclasses
-    _output_model: type[BaseModel] = ResearchResult
-    
-    # Default template that handles citation extraction
-    default_template: str = "research_synthesis_with_citations"
-    
-    def __init__(self, **data: Any) -> None:
-        """Initialize with default template if not specified."""
-        # Ensure template is set for proper citation handling
-        parameters = data.get('parameters', {})
-        if 'template' not in parameters:
-            parameters['template'] = self.default_template
-            data['parameters'] = parameters
-            
-        super().__init__(**data)
+    _output_model: type[BaseModel] | None = ResearchResult

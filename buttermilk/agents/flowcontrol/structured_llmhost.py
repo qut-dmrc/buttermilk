@@ -162,7 +162,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, outputs=error_event)
 
         # Get the LLM client
-        model_client = bm.llms.get_autogen_chat_client(self._model)
+        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
         # Call create() directly with tool schemas (not executable tools)
         # This returns FunctionCall objects without executing them
@@ -189,7 +189,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
             # Create a more informative summary of the tool calls
             summary = self._create_tool_call_summary(tool_calls)
-            
+
             # Return a descriptive acknowledgment
             return AgentOutput(
                 agent_id=self.agent_id,
@@ -202,12 +202,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             agent_id=self.agent_id,
             outputs=create_result.content,
             metadata={
-                "model": self._model,
+                "model": self.parameters["model"],
                 "finish_reason": create_result.finish_reason,
                 "usage": create_result.usage if create_result.usage else None,
             },
         )
-    
+
     def _create_tool_call_summary(self, tool_calls: list[FunctionCall]) -> str:
         """Create a human-readable summary of tool calls.
         
@@ -219,17 +219,17 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         """
         if not tool_calls:
             return "No tool calls requested"
-        
+
         if len(tool_calls) == 1:
             call = tool_calls[0]
             # Try to extract a meaningful description from the tool name and arguments
             tool_name = call.name
-            
+
             # Try to parse arguments for key information
             try:
                 import json
                 args = json.loads(call.arguments)
-                
+
                 # Common patterns for better descriptions
                 if "query" in args:
                     return f"Searching for: {args['query'][:50]}{'...' if len(str(args['query'])) > 50 else ''}"
@@ -243,11 +243,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                     return f"Calling {tool_name}"
             except:
                 return f"Calling {tool_name}"
-        
+
         # Multiple tool calls - group by type if possible
         tool_names = [call.name for call in tool_calls]
         unique_tools = list(dict.fromkeys(tool_names))  # Preserve order while removing duplicates
-        
+
         if len(unique_tools) == 1:
             return f"Making {len(tool_calls)} {unique_tools[0]} calls"
         elif len(unique_tools) <= 3:

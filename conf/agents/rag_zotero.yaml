@@ -1,17 +1,13 @@
 # Zotero-specific RAG agent configuration
 # Provides academic citation formatting
 
-defaults:
-  - base
-
 rag_zotero:
   role: "ZOTERO_RESEARCHER"  
-  agent_obj: buttermilk.agents.rag.RagZotero
-  tools:
-    - search_vector_database  # Should point to Zotero vector store
+  agent_obj: RagZotero
+  tools: {}
   parameters:
-    template: research_synthesis_with_citations
-    model: ${llms.sonnet}  # Can use a more capable model for academic work
+    template: rag
+    model: ${llms.general}
     description: |
       Academic research agent that searches Zotero library and provides
       properly formatted academic responses with full citations.

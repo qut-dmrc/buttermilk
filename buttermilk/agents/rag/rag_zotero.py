@@ -50,5 +50,3 @@ class RagZotero(RagAgent):
     # Override output model for Zotero-specific formatting
     _output_model: type[BaseModel] = ZoteroResearchResult
     
-    # Use the same template - autogen handles the structured output
-    default_template: str = "research_synthesis_with_citations"

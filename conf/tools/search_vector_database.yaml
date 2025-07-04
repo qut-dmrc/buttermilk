@@ -1,8 +1,0 @@
-# Alias for ChromaDB search tool with expected name
-# This ensures agents can reference "search_vector_database" in their tools list
-
-defaults:
-  - chromadb_search
-
-# The ChromaDBSearchTool.get_tool() method already returns
-# a FunctionTool with name="search_vector_database"
