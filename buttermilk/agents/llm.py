@@ -361,9 +361,10 @@ class LLMAgent(Agent, AgentConfig):
                         f"Agent {self.agent_id}: Failed to parse LLM response into {schema.__name__}: {parse_error}",
                         exc_info=True
                     )
-                    # Don't raise - fall back to string response
-                    logger.warning(f"Agent {self.agent_name}: Falling back to string response due to parsing error")
-                    parsed_object = None
+                    # Raise error - no fallback for structured outputs
+                    raise ProcessingError(
+                        f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}"
+                    ) from parse_error
             elif hasattr(chat_result.content, 'model_dump'):
                 # Already a Pydantic object, but might be wrong type
                 if isinstance(chat_result.content, self._output_model):
@@ -374,8 +375,16 @@ class LLMAgent(Agent, AgentConfig):
                         f"expected {self._output_model.__name__}"
                     )
 
-        # Use parsed object if available, otherwise fall back to content
-        final_output = parsed_object if parsed_object is not None else chat_result.content
+        # For structured outputs, require parsed object
+        if self._output_model:
+            if parsed_object is None:
+                raise ProcessingError(
+                    f"Agent {self.agent_name} requires structured output of type {self._output_model.__name__} but parsing failed"
+                )
+            final_output = parsed_object
+        else:
+            # Only use raw content if no output model specified
+            final_output = chat_result.content
 
         # Store the model context if available
         if hasattr(model_client, '_current_messages'):

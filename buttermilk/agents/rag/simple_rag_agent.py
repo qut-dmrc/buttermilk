@@ -51,3 +51,16 @@ class RagAgent(LLMAgent):
 
     # Force structured output - can be overridden by subclasses
     _output_model: type[BaseModel] | None = ResearchResult
+    
+    # Default template that handles citation extraction
+    default_template: str = "rag"
+    
+    def __init__(self, **data: Any) -> None:
+        """Initialize with default template if not specified."""
+        # Ensure template is set for proper citation handling
+        parameters = data.get('parameters', {})
+        if 'template' not in parameters:
+            parameters['template'] = self.default_template
+            data['parameters'] = parameters
+            
+        super().__init__(**data)

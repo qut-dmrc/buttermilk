@@ -117,17 +117,17 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         
         return search_results
     
-    async def search_with_output(self, query: str, n_results: int = 10) -> str:
+    async def search_with_output(self, query: str) -> str:
         """Search and return formatted results as a string.
         
         Args:
             query: Natural language search query
-            n_results: Number of results to return
             
         Returns:
             Formatted string with search results
         """
-        results = await self.search(query, n_results)
+        # Use instance default for n_results
+        results = await self.search(query, self.n_results)
         
         # Format results for display
         formatted_parts = []
@@ -152,7 +152,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
                 "Returns text chunks that match the query semantically."
             ),
             func=self.search_with_output,
-            strict=False
+            strict=True
         )
     
     @property
