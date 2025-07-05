@@ -535,85 +535,56 @@ class LLMs(BaseModel):
         client: ChatCompletionClient | None = None  # Initialize client as None
 
         client_params: dict[str, Any] = {
-            "base_url": config.base_url,
-            "model_info": config.model_info,  # Keep as ModelInfo object for type safety
+            "model": config.obj,
             "api_key": config.api_key,
-            **config.configs,  # Add other configs from LLMConfig.configs
+            **config.configs,
         }
-
-        family = config.model_info.family if hasattr(config.model_info, 'family') else ModelFamily.UNKNOWN
-        # Ensure model family is correctly registered or handled for Autogen
-        if _find_model_family("openai", family) == ModelFamily.UNKNOWN:  # Check against openai as it's a common base
-            # This logic might need adjustment based on how Autogen handles various families.
-            # For non-OpenAI models, Autogen might require specific client types or family settings.
-            # Note: We should not modify the ModelInfo object - it's immutable
-            logger.debug(f"Model family {family} not recognized by autogen, using as-is")
 
         api_type = config.api_type.lower()  # Normalize api_type
 
         if api_type == "azure":
-            client_params["azure_endpoint"] = client_params.pop("base_url", None)  # Rename field for Azure client
-            client = AzureOpenAIChatCompletionClient(**client_params)
-        elif api_type in {"google", "google_genai"}:  # Assuming "google" might mean Gemini API
-            # For GeminiChatCompletionClient, specific setup might be needed.
-            # Current Autogen might use OpenAIChatCompletionClient as a wrapper for some non-OpenAI models if configured.
-            # This part needs to align with how GeminiChatCompletionClient is expected to be used.
-            # If GeminiChatCompletionClient is a direct wrapper:
-            # client = GeminiChatCompletionClient(**client_params)
-            # Or if it's accessed via OpenAIChatCompletionClient with specific base_url/api_type:
-            client = OpenAIChatCompletionClient(**client_params)
+            client = AzureOpenAIChatCompletionClient(
+                azure_endpoint=config.base_url, **client_params
+            )
+        elif api_type in {"google", "google_genai"}:
+            client = GeminiChatCompletionClient(**client_params)
         elif api_type in {"vertex", "google_vertexai"}:
-            # Vertex AI often uses application default credentials or specific service account keys.
-            # API key might be a token for Vertex.
             bm_instance = get_bm()  # Get Buttermilk global instance
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available in Buttermilk instance for Vertex AI.")
-            client_params["api_key"] = bm_instance.gcp_credentials.token  # Use token for Vertex
 
-            # Depending on the actual model (e.g., Gemini on Vertex, Claude on Vertex)
-            # The client instantiation will differ.
-            # For Gemini on Vertex via Autogen's OpenAI client compatibility:
-            # client = OpenAIChatCompletionClient(**client_params)
-            # For Anthropic Claude on Vertex:
-            if "claude" in config.obj.lower():  # Simple check for Claude model name
+            if "claude" in config.obj.lower():
                 _vertex_params = {
-                    "region": client_params.pop("region", None) or bm_instance.gcp_project_region,  # Get region
-                    "project_id": client_params.pop("project_id", None) or bm_instance.gcp_project_id,  # Get project_id
+                    "region": bm_instance.gcp_project_region,
+                    "project_id": bm_instance.gcp_project_id,
                     "credentials": bm_instance.gcp_credentials,
                 }
-                # Remove None values to avoid passing them to AsyncAnthropicVertex
+                _vertex_params.update(config.configs)
                 _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
 
                 try:
                     _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-                    # Autogen's AnthropicChatCompletionClient needs to be initialized
-                    # then its internal _client replaced.
-                    anthropic_client_params = client_params.copy()
-                    # Ensure 'model' is passed for Anthropic client
-                    anthropic_client_params.setdefault("model", config.obj)
-                    client = AnthropicChatCompletionClient(**anthropic_client_params)
-                    client._client = _vertex_client  # type: ignore # Replace internal client
+                    client = AnthropicChatCompletionClient(**client_params)
+                    client._client = _vertex_client
                 except Exception as e:
                     logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                     raise
-            else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini)
-                 client = OpenAIChatCompletionClient(**client_params)
+            else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini, Llama)
+                client = OpenAIChatCompletionClient(
+                    base_url=config.base_url, **client_params
+                )
 
         elif api_type == "anthropic":  # Direct Anthropic API (not via Vertex)
-            # This would use autogen_ext.models.anthropic.AnthropicChatCompletionClient directly
-            # Ensure 'model' parameter is correctly passed from config.obj or client_params
-            client_params.setdefault("model", config.obj)
             client = AnthropicChatCompletionClient(**client_params)
         else:  # Default to OpenAIChatCompletionClient for "openai" or unknown types
-            client = OpenAIChatCompletionClient(**client_params)
+            client = OpenAIChatCompletionClient(base_url=config.base_url, **client_params)
 
         if client is None:  # Should not happen if logic is correct
             raise ProcessingError(f"Could not instantiate LLM client for '{name}' with api_type '{api_type}'.")
 
         # Wrap with AutoGenWrapper
-        wrapped_client = AutoGenWrapper(client=client, model_info=client_params["model_info"])
-        # self.autogen_models[name] = wrapped_client # Cache the client
-        return wrapped_client  # Return a new instance as per original logic (or cached if uncommented)
+        wrapped_client = AutoGenWrapper(client=client, model_info=config.model_info)
+        return wrapped_client
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
