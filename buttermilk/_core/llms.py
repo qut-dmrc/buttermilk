@@ -140,18 +140,18 @@ class MLPlatformTypes(Enum):
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHATMODELS = [
-    "gemini25pro",
-    "gemini25flash",
+    "llama4maverick",
+    "llama33_70b",
+    "llama32_90b",
+    "o3mini",
+    "gpt41",
     "gpt41nano",
     "gpt41mini",
-    "gpt41",
-    "o3mini",
-    "llama4maverick",
-    "llama32_90b",
-    "llama33_70b",
+    "sonnet",
     "opus",
     "haiku",
-    "sonnet",
+    "gemini25pro",
+    "gemini25flash",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
@@ -535,7 +535,7 @@ class LLMs(BaseModel):
         client: ChatCompletionClient | None = None  # Initialize client as None
 
         client_params: dict[str, Any] = {
-            "model": config.obj,
+            "model": config.configs.get("model", config.obj),  # Use model from configs if available
             "api_key": config.api_key,
             **config.configs,
         }
@@ -547,37 +547,101 @@ class LLMs(BaseModel):
                 azure_endpoint=config.base_url, **client_params
             )
         elif api_type in {"google", "google_genai"}:
-            client = GeminiChatCompletionClient(**client_params)
+            # Check if it's using OpenAI-compatible endpoint
+            if config.base_url and "openai" in config.base_url:
+                client = OpenAIChatCompletionClient(
+                    base_url=config.base_url, 
+                    model_info=config.model_info,  # Pass model_info explicitly for custom models
+                    **client_params
+                )
+            else:
+                client = GeminiChatCompletionClient(**client_params)
         elif api_type in {"vertex", "google_vertexai"}:
             bm_instance = get_bm()  # Get Buttermilk global instance
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available in Buttermilk instance for Vertex AI.")
 
-            if "claude" in config.obj.lower():
+            if "anthropic" in config.obj.lower() or "claude" in config.configs.get("model", "").lower():
+                # Get region and project_id from config.configs
                 _vertex_params = {
-                    "region": bm_instance.gcp_project_region,
-                    "project_id": bm_instance.gcp_project_id,
+                    "region": config.configs.get("region"),
+                    "project_id": config.configs.get("project_id"),
                     "credentials": bm_instance.gcp_credentials,
                 }
-                _vertex_params.update(config.configs)
+                # AsyncAnthropicVertex doesn't need additional parameters from configs
                 _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
 
                 try:
                     _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-                    client = AnthropicChatCompletionClient(**client_params)
+                    # For Vertex, remove api_key from client_params as auth is via GCP
+                    vertex_client_params = client_params.copy()
+                    vertex_client_params.pop("api_key", None)
+                    logger.debug(f"Creating AnthropicChatCompletionClient wrapper for Vertex with params: {vertex_client_params}")
+                    client = AnthropicChatCompletionClient(**vertex_client_params)
                     client._client = _vertex_client
                 except Exception as e:
                     logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                     raise
             else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini, Llama)
+                # For Vertex models, use OAuth2 bearer token for authentication
+                vertex_params = client_params.copy()
+                
+                # Set up headers with bearer token using BM's token method
+                headers = {
+                    "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}"
+                }
+                
+                # For Vertex endpoints, we need a dummy API key to satisfy OpenAI client validation
+                # The actual auth is done via the Authorization header
+                if vertex_params.get("api_key") is None:
+                    vertex_params["api_key"] = "dummy-key-for-vertex"
+                    
+                # Add default_headers to vertex_params
+                vertex_params["default_headers"] = headers
+                
                 client = OpenAIChatCompletionClient(
-                    base_url=config.base_url, **client_params
+                    base_url=config.base_url,
+                    model_info=config.model_info,  # Pass model_info for custom models
+                    **vertex_params
                 )
 
         elif api_type == "anthropic":  # Direct Anthropic API (not via Vertex)
-            client = AnthropicChatCompletionClient(**client_params)
+            # Check if this is actually Anthropic via Vertex based on connection type
+            if config.connection == "VertexServerless" and "anthropic" in config.obj.lower():
+                # This is Anthropic via Vertex, not direct Anthropic
+                bm_instance = get_bm()
+                if not bm_instance.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
+                
+                # Get region and project_id from config.configs
+                _vertex_params = {
+                    "region": config.configs.get("region"),
+                    "project_id": config.configs.get("project_id"),
+                    "credentials": bm_instance.gcp_credentials,
+                }
+                # AsyncAnthropicVertex doesn't need additional parameters from configs
+                _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
+
+                try:
+                    _vertex_client = AsyncAnthropicVertex(**_vertex_params)
+                    # For Vertex, remove api_key from client_params as auth is via GCP
+                    vertex_client_params = client_params.copy()
+                    vertex_client_params.pop("api_key", None)
+                    logger.debug(f"Creating AnthropicChatCompletionClient wrapper for Vertex with params: {vertex_client_params}")
+                    client = AnthropicChatCompletionClient(**vertex_client_params)
+                    client._client = _vertex_client
+                except Exception as e:
+                    logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
+                    raise
+            else:
+                # Direct Anthropic API
+                client = AnthropicChatCompletionClient(**client_params)
         else:  # Default to OpenAIChatCompletionClient for "openai" or unknown types
-            client = OpenAIChatCompletionClient(base_url=config.base_url, **client_params)
+            client = OpenAIChatCompletionClient(
+                base_url=config.base_url,
+                model_info=config.model_info,  # Pass model_info for custom models
+                **client_params
+            )
 
         if client is None:  # Should not happen if logic is correct
             raise ProcessingError(f"Could not instantiate LLM client for '{name}' with api_type '{api_type}'.")

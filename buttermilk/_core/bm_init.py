@@ -708,6 +708,16 @@ class BM(SessionInfo):
         """
         return self.cloud_manager.gcp_credentials
 
+    def get_gcp_access_token(self) -> str:
+        """Get a valid GCP access token, refreshing if needed.
+        
+        Delegates to `self.cloud_manager.get_access_token()`.
+        
+        Returns:
+            str: A valid OAuth2 access token
+        """
+        return self.cloud_manager.get_access_token()
+
     @property
     def gcs(self) -> Any:  # Type hint could be storage.Client
         """Provides access to the Google Cloud Storage (GCS) client.
