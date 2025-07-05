@@ -280,10 +280,26 @@ class AutoGenWrapper(RetryWrapper):
             if is_valid_schema_type and self.model_info.get("structured_output"):
                 json_output_requested = schema  # type: ignore # Pass the schema for structured output
 
+            # Some models don't support simultaneous tool calling and structured output
+            # Check model family to determine capabilities
+            model_family = self.model_info.get('family', ModelFamily.UNKNOWN)
+            
+            # Gemini models can't use tools with structured output (json_output with Pydantic model)
+            # This is a known limitation documented in Gemini's API
+            gemini_families = {ModelFamily.GEMINI_1_5_FLASH, ModelFamily.GEMINI_1_5_PRO, 
+                             ModelFamily.GEMINI_2_0_FLASH, ModelFamily.GEMINI_2_5_PRO, 
+                             ModelFamily.GEMINI_2_5_FLASH, 'gemini'}
+            
+            if model_family in gemini_families and json_output_requested and isinstance(json_output_requested, type):
+                # For Gemini with Pydantic schema, we can't use tools
+                tools_to_pass = []
+            else:
+                tools_to_pass = tools
+            
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
                 messages,          # Positional arguments for self.client.create
-                tools=tools,
+                tools=tools_to_pass,
                 json_output=json_output_requested,
                 cancellation_token=cancellation_token,
                 extra_create_args=kwargs,  # Keyword arguments for self.client.create
@@ -334,9 +350,13 @@ class AutoGenWrapper(RetryWrapper):
                 any tool call cycles.
 
         """
+        # If we have a schema (structured output), don't pass tools to avoid Gemini conflict
+        # Models that support both will still work, models like Gemini will get either/or
+        effective_tools = tools_list if not schema else []
+        
         create_result = await self.create(
             messages=messages,
-            tools=tools_list,
+            tools=effective_tools,
             cancellation_token=cancellation_token,
             schema=schema,
         )
