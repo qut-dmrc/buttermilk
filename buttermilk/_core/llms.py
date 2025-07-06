@@ -12,6 +12,8 @@ and provide a consistent interface for agents within the Buttermilk framework.
 import asyncio
 import inspect
 import json
+import weave
+
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -231,6 +233,7 @@ class AutoGenWrapper(RetryWrapper):
     client: ChatCompletionClient
     model_info: ModelInfo
 
+    @weave.op
     async def create(
         self,
         messages: Sequence[LLMMessage],
@@ -404,6 +407,7 @@ class AutoGenWrapper(RetryWrapper):
 
         return create_result  # type: ignore # Expect CreateResult
 
+    @weave.op
     async def _call_tool(
         self,
         call: FunctionCall,
