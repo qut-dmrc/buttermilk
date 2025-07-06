@@ -283,23 +283,24 @@ class AutoGenWrapper(RetryWrapper):
             # Some models don't support simultaneous tool calling and structured output
             # Check model family to determine capabilities
             model_family = self.model_info.get('family', ModelFamily.UNKNOWN)
-            
+
             # Gemini models can't use tools with structured output (json_output with Pydantic model)
             # This is a known limitation documented in Gemini's API
             gemini_families = {ModelFamily.GEMINI_1_5_FLASH, ModelFamily.GEMINI_1_5_PRO, 
                              ModelFamily.GEMINI_2_0_FLASH, ModelFamily.GEMINI_2_5_PRO, 
                              ModelFamily.GEMINI_2_5_FLASH, 'gemini'}
-            
-            if model_family in gemini_families and json_output_requested and isinstance(json_output_requested, type):
-                # For Gemini with Pydantic schema, we can't use tools
-                tools_to_pass = []
-            else:
-                tools_to_pass = tools
-            
+
+            # Some other models also have this limitation (discovered through testing)
+            models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
+
+            if tools and model_family in models_with_tool_schema_conflict and json_output_requested and isinstance(json_output_requested, type):
+                # For models that can't handle tools + structured output together, we don't ask for a structured output, (but still ask for a json result?)
+                json_output_requested = True
+
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
-                messages,          # Positional arguments for self.client.create
-                tools=tools_to_pass,
+                messages,  # Positional arguments for self.client.create
+                tools=tools,
                 json_output=json_output_requested,
                 cancellation_token=cancellation_token,
                 extra_create_args=kwargs,  # Keyword arguments for self.client.create
@@ -350,16 +351,15 @@ class AutoGenWrapper(RetryWrapper):
                 any tool call cycles.
 
         """
-        # If we have a schema (structured output), don't pass tools to avoid Gemini conflict
-        # Models that support both will still work, models like Gemini will get either/or
-        effective_tools = tools_list if not schema else []
-        
-        create_result = await self.create(
-            messages=messages,
-            tools=effective_tools,
-            cancellation_token=cancellation_token,
-            schema=schema,
-        )
+        # Pass tools as-is - the create() method will handle conflicts between tools and schema
+        effective_tools = tools_list
+        try:
+            create_result = await self.create(
+                messages=messages,
+                tools=effective_tools,
+                cancellation_token=cancellation_token,
+                schema=schema,
+            )
 
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):

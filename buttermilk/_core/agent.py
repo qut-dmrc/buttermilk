@@ -463,7 +463,8 @@ class Agent(AgentConfig, ABC):
             child_call = bm.weave.create_call(op, inputs=message.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
-            parent_call._children.append(child_call)  # Nest this call for tracing
+            if parent_call is not None:
+                parent_call._children.append(child_call)  # Nest this call for tracing
             result = await self._process(message=message)
             result.call_id = child_call.id
             result.tracing_link = child_call.ui_url
@@ -536,7 +537,7 @@ class Agent(AgentConfig, ABC):
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
             )
         except ProcessingError as e:
-            logger.warning(f"Agent {self.agent_name} error during __call__: {e}", exc_info=False)
+            logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
             result = ErrorEvent(source=self.agent_name, content=f"Processing error: {e}")
             is_error = True
             trace = AgentTrace(

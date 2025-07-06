@@ -5,9 +5,10 @@ rag_zotero:
   role: "ZOTERO_RESEARCHER"  
   agent_obj: RagZotero
   tools: {}
+  variants:
+    model: ${llms.general}
   parameters:
     template: rag
-    model: ${llms.general}
     description: |
       Academic research agent that searches Zotero library and provides
       properly formatted academic responses with full citations.

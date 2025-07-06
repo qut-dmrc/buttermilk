@@ -1,9 +1,10 @@
 defaults:
   - _self_
   - local
-  - defaults/data_source
+  - run: api
+  # - defaults/data_source
   - llms@bm.llms: lite
-  - storage@bm.storage: []
+  # - storage@bm.storage: []
 
 bm:
   _target_: buttermilk._core.bm_init.BM

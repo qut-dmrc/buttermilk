@@ -317,27 +317,27 @@ class LLMAgent(Agent, AgentConfig):
             f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
             f"Configured tools ({len(self._tools_list)}): {tool_names}"
         )
+        # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
+        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
+
+        # Debug the schema parameter
+        logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
         try:
-            # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-            model_client = bm.llms.get_autogen_chat_client(self.parameters['model'])
-
-            # Debug the schema parameter
-            logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
-
             chat_result: CreateResult = await model_client.call_chat(
                 messages=llm_messages_to_send,
                 tools_list=self._tools_list,
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected Pydantic schema for structured output
             )
-            llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
-            logger.debug(
-                f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}"
-            )
         except Exception as llm_error:
             # Catch errors during the actual LLM call
             msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
             raise ProcessingError(msg) from llm_error
+
+        llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
+        logger.debug(
+            f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}"
+        )
 
         # 3. Parse the LLM response and create an AgentOutput
         parsed_object = None
