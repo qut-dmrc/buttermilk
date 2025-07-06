@@ -360,6 +360,10 @@ class AutoGenWrapper(RetryWrapper):
                 cancellation_token=cancellation_token,
                 schema=schema,
             )
+        except Exception as e:
+            # The first call failed -- before we have executed any tools
+            logger.error(f"Error executing initial query: {e!s}")
+            raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
@@ -393,8 +397,8 @@ class AutoGenWrapper(RetryWrapper):
                 )
             except Exception as e:
                 # If tool execution fails, we can log the error and return the original result
-                logger.error(f"Error executing tools: {e!s}")
-                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
+                logger.error(f"Error calling LLM to synthesise tool results: {e!s}")
+                raise ProcessingError(f"Failed to synthesise tool results: {e!s}") from e
 
         return create_result  # type: ignore # Expect CreateResult
 
