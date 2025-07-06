@@ -268,35 +268,40 @@ class AutoGenWrapper(RetryWrapper):
                 after retries are exhausted.
 
         """
+        is_valid_schema_type = (
+            schema is not None
+            and inspect.isclass(schema)
+            and issubclass(schema, BaseModel)
+            and schema is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
+        )
+
+        json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
+        if is_valid_schema_type and self.model_info.get("structured_output"):
+            json_output_requested = schema  # type: ignore # Pass the schema for structured output
+
+        # Some models don't support simultaneous tool calling and structured output
+        # Check model family to determine capabilities
+        model_family = self.model_info.get("family", ModelFamily.UNKNOWN)
+
+        # Gemini models can't use tools with structured output (json_output with Pydantic model)
+        # This is a known limitation documented in Gemini's API
+        gemini_families = {
+            ModelFamily.GEMINI_1_5_FLASH,
+            ModelFamily.GEMINI_1_5_PRO,
+            ModelFamily.GEMINI_2_0_FLASH,
+            ModelFamily.GEMINI_2_5_PRO,
+            ModelFamily.GEMINI_2_5_FLASH,
+            "gemini",
+        }
+
+        # Some other models also have this limitation (discovered through testing)
+        models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
+
+        if tools and model_family in models_with_tool_schema_conflict and json_output_requested and isinstance(json_output_requested, type):
+            # For models that can't handle tools + structured output together, we don't ask for a structured output
+            json_output_requested = False
+
         try:
-            is_valid_schema_type = (
-                schema is not None
-                and inspect.isclass(schema)
-                and issubclass(schema, BaseModel)
-                and schema is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
-            )
-
-            json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
-            if is_valid_schema_type and self.model_info.get("structured_output"):
-                json_output_requested = schema  # type: ignore # Pass the schema for structured output
-
-            # Some models don't support simultaneous tool calling and structured output
-            # Check model family to determine capabilities
-            model_family = self.model_info.get('family', ModelFamily.UNKNOWN)
-
-            # Gemini models can't use tools with structured output (json_output with Pydantic model)
-            # This is a known limitation documented in Gemini's API
-            gemini_families = {ModelFamily.GEMINI_1_5_FLASH, ModelFamily.GEMINI_1_5_PRO, 
-                             ModelFamily.GEMINI_2_0_FLASH, ModelFamily.GEMINI_2_5_PRO, 
-                             ModelFamily.GEMINI_2_5_FLASH, 'gemini'}
-
-            # Some other models also have this limitation (discovered through testing)
-            models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
-
-            if tools and model_family in models_with_tool_schema_conflict and json_output_requested and isinstance(json_output_requested, type):
-                # For models that can't handle tools + structured output together, we don't ask for a structured output, (but still ask for a json result?)
-                json_output_requested = True
-
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
                 messages,  # Positional arguments for self.client.create
@@ -306,20 +311,17 @@ class AutoGenWrapper(RetryWrapper):
                 extra_create_args=kwargs,  # Keyword arguments for self.client.create
             )
 
-            if not create_result.content:
-                raise ProcessingError("Empty response content from LLM.")
-            if isinstance(create_result.content, str) and not create_result.content.strip():
-                raise ProcessingError("Empty string response from LLM.")
-            # Check if content is a list and if all items are FunctionCall (valid tool call scenario)
-            if isinstance(create_result.content, list) and \
-               not all(isinstance(item, FunctionCall) for item in create_result.content):
-                raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
-
-        except ProcessingError:  # Re-raise known ProcessingErrors
-            raise
         except Exception as e:  # Wrap other exceptions
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
+
+        if not create_result.content:
+            raise ProcessingError("Empty response content from LLM.")
+        if isinstance(create_result.content, str) and not create_result.content.strip():
+            raise ProcessingError("Empty string response from LLM.")
+        # Check if content is a list and if all items are FunctionCall (valid tool call scenario)
+        if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
+            raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
 
         return create_result  # type: ignore # Expect CreateResult or compatible
 
