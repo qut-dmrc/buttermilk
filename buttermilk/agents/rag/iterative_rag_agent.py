@@ -13,7 +13,7 @@ from pydantic import Field
 import json
 
 from buttermilk.agents.rag.rag_agent import RagAgent, ResearchResult
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk import logger
 from autogen_core.models import AssistantMessage
@@ -94,18 +94,43 @@ class IterativeRagAgent(RagAgent):
                     tool_name = tool_call.function.name
                     tool_args = tool_call.function.arguments
 
-                    if tool_name not in self.tools:
+                    # Find the tool by name in our tools list
+                    matching_tool = None
+                    for tool in self._tools_list:
+                        if hasattr(tool, 'name') and tool.name == tool_name:
+                            matching_tool = tool
+                            break
+                    
+                    if matching_tool is None:
                         error_msg = f"Tool '{tool_name}' not found for agent '{self.agent_name}'."
                         logger.error(error_msg)
                         tool_outputs.append(ErrorEvent(source=self.agent_id, content=error_msg))
                         continue
 
                     try:
-                        # Execute the tool
-                        tool_instance = self.tools[tool_name]
-                        # Assuming tool_args is a JSON string, parse it
-                        parsed_tool_args = json.loads(tool_args)
-                        tool_result = await tool_instance.run(**parsed_tool_args)  # Assuming tools have a .run method
+                        # Parse tool arguments 
+                        if isinstance(tool_args, str):
+                            parsed_tool_args = json.loads(tool_args)
+                        else:
+                            parsed_tool_args = tool_args
+                        
+                        # Execute the tool using the func method from FunctionTool
+                        if hasattr(matching_tool, 'func'):
+                            tool_result = await matching_tool.func(**parsed_tool_args)
+                        elif hasattr(matching_tool, 'run'):
+                            tool_result = await matching_tool.run(**parsed_tool_args)
+                        else:
+                            raise AttributeError(f"Tool {tool_name} has no callable func or run method")
+                            
+                        # Convert result to ToolOutput if it isn't already
+                        if not isinstance(tool_result, ToolOutput):
+                            tool_result = ToolOutput(
+                                name=tool_name,
+                                call_id=getattr(tool_call, 'id', ''),
+                                content=str(tool_result),
+                                results=tool_result if not isinstance(tool_result, str) else None
+                            )
+                        
                         tool_outputs.append(tool_result)
                         logger.info(f"Tool '{tool_name}' executed. Result: {tool_result.content[:100]}...")
                     except Exception as tool_error:

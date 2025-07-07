@@ -47,9 +47,9 @@ async def test_iterative_rag_agent_can_call_tool_multiple_times(mocker):
     agent = IterativeRagAgent(
         name="test_agent",
         parameters={"model": "fake-model", "max_iterations": 3},
-        tools={"search_tool": mock_search_tool},
-        _tools_list=[mock_search_tool],
     )
+    # Set the tools list directly
+    agent._tools_list = [mock_search_tool]
     agent._fill_template = AsyncMock(return_value=[])
 
     # 4. Create test input message
