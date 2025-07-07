@@ -304,6 +304,8 @@ class FlowRunContext(BaseModel):
             message_type = formatted_message.type
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
+            logger.debug(f"[FlowRunner.send_message_to_ui] Sending message of type {message_type} to UI for session {self.session_id}")
+
             @retry(
                 stop=stop_after_attempt(10),
                 wait=wait_fixed(3),  # Wait 3 seconds between attempts
@@ -530,15 +532,8 @@ class SessionManager:
         return True
 
     async def cleanup_session(self, session_id: str) -> bool:
-        """Clean up and remove a session with atomic operations.
+        """Clean up and remove a session with atomic operations."""
 
-        Args:
-            session_id: The session to clean up
-
-        Returns:
-            True if session was found and cleaned up, False otherwise
-
-        """
         async with self._global_lock:
             if session_id not in self.sessions:
                 return False

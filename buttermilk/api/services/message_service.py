@@ -118,8 +118,12 @@ class MessageService:
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
                 message_type = "system_error"
-            elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
-                return None
+            elif isinstance(message, FlowEvent):
+                message_type = "system_message"
+            elif isinstance(message, TaskProcessingComplete):
+                message_type = "system_update"
+            elif isinstance(message, TaskProcessingStarted):
+                message_type = "system_update"
             else:
                 logger.warning(f"Unknown message type: {type(message)}")
                 message_type = "chat_message"

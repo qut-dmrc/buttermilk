@@ -183,7 +183,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         return response
 
     # WebSocket endpoint - essential for frontend terminal functionality
-    @flow_data_router.websocket("/ws/{session_id}")
+    @app.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """WebSocket endpoint for client communication with the WebUIAgent.
 
@@ -348,10 +348,13 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     logger.info("Monitoring router added for production observability")
     
     # Defer heavy routers until first request
-    lazy_manager.defer_router(flow_data_router, prefix="")
     lazy_manager.defer_router(mcp_router, prefix="")
     lazy_manager.defer_router(agent_mcp_router, prefix="")
     lazy_manager.create_lazy_middleware()
+
+    # Include flow_data_router directly since its websocket endpoint is now directly on app
+    app.include_router(flow_data_router)
+    logger.info("Flow data router included directly.")
 
     logger.info("Heavy routes deferred - will load on first request")
 

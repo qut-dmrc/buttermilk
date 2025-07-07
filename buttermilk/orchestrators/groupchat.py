@@ -27,7 +27,7 @@ from autogen_core import (
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
-from buttermilk._core import (  # noqa
+from buttermilk._core import (
     BM,
     AllMessages,
     StepRequest,
@@ -41,6 +41,7 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
     ManagerMessage,
+    TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger  # noqa
@@ -310,8 +311,9 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+            logger.debug(f"[AutogenOrchestrator.output_result] Received message: {message}")
             if callback_to_ui is not None:
-                logger.debug(f"Sending message to UI: {message}")
+                logger.debug(f"[AutogenOrchestrator.output_result] Sending message to UI: {message}")
                 await callback_to_ui(message)
             else:
                 logger.debug(f"[{self.trace_id}] {message}")
@@ -478,6 +480,17 @@ class AutogenOrchestrator(Orchestrator):
                 try:
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
+                        # Publish a TaskProcessingComplete message to the UI
+                        await self._runtime.publish_message(
+                            TaskProcessingComplete(
+                                agent_id="orchestrator",
+                                role="orchestrator",
+                                status="COMPLETED",
+                                message="Flow completed successfully.",
+                                more_tasks_remain=False,
+                            ),
+                            topic_id=DefaultTopicId(type=MANAGER)
+                        )
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
