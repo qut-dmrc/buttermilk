@@ -81,7 +81,7 @@ class IterativeRagAgent(RagAgent):
             )
 
             # Check for tool calls
-            if chat_result.tool_calls:
+            if hasattr(chat_result, "tool_calls") and chat_result.tool_calls:
                 logger.info(f"IterativeRagAgent: LLM requested tool calls: {len(chat_result.tool_calls)}")
                 tool_outputs = []
                 for tool_call in chat_result.tool_calls:
