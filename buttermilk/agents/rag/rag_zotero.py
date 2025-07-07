@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from buttermilk.agents.rag.iterative_rag_agent import IterativeRagAgent
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
@@ -26,14 +27,14 @@ class ZoteroResearchResult(ResearchResult):
     
     Uses ZoteroReference objects for proper academic citation formatting.
     """
-    
+
     literature: list[ZoteroReference] = Field(
         ...,
         description="List of Zotero literature references with full citations.",
     )
 
 
-class RagZotero(RagAgent):
+class RagZotero(IterativeRagAgent):
     """RAG agent specialized for Zotero academic literature.
     
     This agent inherits all functionality from RagAgent but uses
@@ -46,7 +47,6 @@ class RagZotero(RagAgent):
     
     All search functionality is handled by configured tools.
     """
-    
+
     # Override output model for Zotero-specific formatting
     _output_model: type[BaseModel] = ZoteroResearchResult
-    

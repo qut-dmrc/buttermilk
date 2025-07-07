@@ -2,7 +2,6 @@
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-import json
 
 # Patch bm before importing any buttermilk modules that use it
 import buttermilk.agents.llm
@@ -34,27 +33,16 @@ async def test_iterative_rag_agent_can_call_tool_multiple_times(mocker):
     mock_search_tool.name = "search_tool"
     mock_search_tool.run = AsyncMock(return_value=ToolOutput(content="some result", call_id="mock_call_id_1", function_name="search_tool", name="search_tool", results=["some result"]))
 
-    # 2. Mock the LLM to simulate iterative calls and tool execution
+    # 2. Mock the LLM to simulate iterative calls
     mock_llm_client = MagicMock()
-
-    async def call_chat_side_effect(*args, **kwargs):
-        messages = kwargs.get('messages', [])
-        last_message = messages[-1] if messages else None
-
-        # Simulate LLM deciding to call a tool
-        if "tool_code" in last_message.content:
-            # Extract tool call from the content (simplified for this mock)
-            # In a real scenario, you'd parse the tool_calls from the LLM's response
-            tool_call_str = last_message.content
-            if "search_tool" in tool_call_str:
-                # Simulate tool execution
-                tool_output = await mock_search_tool.run(query="mock query")
-                return CreateResult(content=tool_output.content, thought="Tool executed", finish_reason="tool_calls", usage=RequestUsage(prompt_tokens=10, completion_tokens=10), cached=False)
-        
-        # Simulate LLM synthesizing final answer
-        return CreateResult(content="Final answer based on two searches", thought="Synthesizing results", finish_reason="stop", usage=RequestUsage(prompt_tokens=10, completion_tokens=10), cached=False)
-
-    mock_llm_client.call_chat = AsyncMock(side_effect=call_chat_side_effect)
+    mock_llm_client.call_chat = AsyncMock(side_effect=[
+        # First call: LLM decides to use the search tool
+        CreateResult(content="", thought="Thinking about initial search", finish_reason="function_calls", usage=RequestUsage(prompt_tokens=10, completion_tokens=10), cached=False, tool_calls=[MockToolCall(id="call_1", function={'name': 'search_tool', 'arguments': '{"query": "initial query"}'})]),
+        # Second call: LLM decides to use the search tool again
+        CreateResult(content="", thought="Refining search", finish_reason="function_calls", usage=RequestUsage(prompt_tokens=10, completion_tokens=10), cached=False, tool_calls=[MockToolCall(id="call_2", function={'name': 'search_tool', 'arguments': '{"query": "follow-up query"}'})]),
+        # Final call: LLM synthesizes the answer
+        CreateResult(content="Final answer based on two searches", thought="Synthesizing results", finish_reason="stop", usage=RequestUsage(prompt_tokens=10, completion_tokens=10), cached=False)
+    ])
 
     mock_bm_instance.llms.get_autogen_chat_client.return_value = mock_llm_client
 
