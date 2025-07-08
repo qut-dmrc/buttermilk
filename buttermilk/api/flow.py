@@ -222,6 +222,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         token = session_id_var.set(session_id)
         logger.info(f"[WEBSOCKET] Starting to monitor UI for session {session_id}")
+        logger.info(f"[WEBSOCKET] Session websocket reference: {session.websocket}")
         async for run_request in session.monitor_ui():
             try:
                 logger.info(f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
@@ -233,10 +234,12 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 # The only message we receive is a run_request -- which we then
                 # use to create a new flow.
                 logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
+                logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
                 task = asyncio.create_task(flow_runner.run_flow(
                     run_request=run_request,
                     wait_for_completion=False,
                 ))
+                logger.info(f"[WEBSOCKET] Task created: {task}")
 
             except WebSocketDisconnect:
                 logger.info(f"Client {session_id} disconnected.")

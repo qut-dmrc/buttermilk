@@ -296,6 +296,9 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
+        logger.info(f"[FlowRunner.send_message_to_ui] CALLED with message type: {type(message)}, session: {self.session_id}")
+        logger.info(f"[FlowRunner.send_message_to_ui] Message content: {getattr(message, 'content', 'No content attr')}")
+        
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
             logger.debug(f"[FlowRunner.send_message_to_ui] Dropping message not handled by client: {message}")
@@ -970,7 +973,9 @@ class FlowRunner(BaseModel):
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
-        logger.debug(f"[FlowRunner.run_flow] run_request.callback_to_ui set to _session.send_message_to_ui: {run_request.callback_to_ui is not None}")
+        logger.info(f"[FlowRunner.run_flow] run_request.callback_to_ui set to: {run_request.callback_to_ui}")
+        logger.info(f"[FlowRunner.run_flow] _session.websocket: {_session.websocket}")
+        logger.info(f"[FlowRunner.run_flow] _session.session_id: {_session.session_id}")
 
         # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore

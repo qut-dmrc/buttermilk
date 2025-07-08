@@ -149,8 +149,8 @@ class AutogenOrchestrator(Orchestrator):
 
         await self.register_ui(callback_to_ui=request.callback_to_ui)
 
-        # does it need a second to spin up?
-        await asyncio.sleep(1)
+        # Give the UI registration time to complete
+        await asyncio.sleep(2)
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
         logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
@@ -165,7 +165,16 @@ class AutogenOrchestrator(Orchestrator):
         # Send a welcome message to the UI
         logger.info(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic: {msg}")
         logger.info(f"[AutogenOrchestrator._setup] callback_to_ui is {'set' if request.callback_to_ui else 'NOT set'}")
-        await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
+        
+        # Create the FlowEvent
+        flow_event = FlowEvent(source="orchestrator", content=msg)
+        logger.info(f"[AutogenOrchestrator._setup] Created FlowEvent: {flow_event}")
+        
+        # Publish to MANAGER topic
+        topic = DefaultTopicId(type=MANAGER)
+        logger.info(f"[AutogenOrchestrator._setup] Publishing to topic: {topic}")
+        await self._runtime.publish_message(flow_event, topic_id=topic)
+        logger.info(f"[AutogenOrchestrator._setup] Message published successfully")
         
         # Give the MANAGER a moment to process the message
         await asyncio.sleep(0.5)
@@ -347,6 +356,10 @@ class AutogenOrchestrator(Orchestrator):
             # unknown_type_policy="ignore",
         )
         logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
+        
+        # Give the agent time to fully register
+        await asyncio.sleep(0.5)
+        logger.debug(f"[AutogenOrchestrator.register_ui] Registration complete after delay")
 
     async def _cleanup(self) -> None:
         """Cleans up resources with timeout and verification."""
