@@ -1,0 +1,14 @@
+# Simplified RAG agent configuration
+# Uses external search tools and templates for orchestration
+
+rag:
+  role: "RESEARCHER"
+  agent_obj: RagAgent
+  tools: {}
+  variants:
+    model: ${llms.general}
+  parameters:
+    template: rag
+    description: |
+      Research agent that searches the knowledge base and provides
+      synthesized responses with proper citations.

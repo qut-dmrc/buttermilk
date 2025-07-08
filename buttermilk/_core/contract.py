@@ -1034,6 +1034,7 @@ OOBMessages = Union[
     ProceedToNextTaskSignal,
     HeartBeat,
     AgentAnnouncement,
+    FlowEvent,
 ]
 """A type alias for messages considered Out-Of-Band (OOB).
 

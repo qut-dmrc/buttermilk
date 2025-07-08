@@ -15,13 +15,13 @@ def test_conf(conf):
     """Test that the test configuration is loaded correctly."""
     assert conf.job == "testing"
     assert conf.bm.job == "testing"
-    assert conf.name == "buttermilk" # Changed assertion to 'buttermilk'
-    assert conf.bm.name == "buttermilk" # Changed assertion to 'buttermilk'
+    assert conf.name == "buttermilk"
+    assert conf.bm.name == "buttermilk"
 
 
 def test_bm_instance(bm):
     assert bm.job == "testing"
-    assert bm.name == "buttermilk" # Changed assertion to 'buttermilk'
+    assert bm.name == "buttermilk"
 
 
 def test_instantiate_hydra(conf):
@@ -71,8 +71,6 @@ def test_singleton_with_kwargs_update_fails(conf, bm):
         # Attempt to instantiate BM directly after it's already set
         # This should raise FatalError due to the singleton pattern
         BM(**{**conf.bm, "job": "new_job"})
-        # The following assertion should not be reached if the error is raised
-        # assert bm_updated.job == "new_job" # Removed this assertion as it's unreachable
 
 
 def test_singleton_between_modules(bm):
@@ -95,6 +93,6 @@ def test_singleton_between_modules(bm):
     assert bm1 is bm2, "BM should be the same instance across different module functions"
 
     # Properties should be the same
-    assert bm2.name == "buttermilk", "Property 'name' should be maintained across modules" # Changed assertion
+    assert bm2.name == "buttermilk", "Property 'name' should be maintained across modules"
     assert bm2.job == "testing", "Property 'job' should be maintained across modules"
     assert bm2.run_id == bm1.run_id, "Property 'run_id' should be maintained across modules"

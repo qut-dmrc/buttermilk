@@ -35,7 +35,7 @@ from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
-from buttermilk.agents.rag.ragzot import ResearchResult
+from buttermilk.agents.rag import ResearchResult
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
 # Initialize a global console instance with JSON highlighting

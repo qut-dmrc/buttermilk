@@ -147,7 +147,7 @@ class FetchRecord(ToolConfig):
                     self.fetch,
                     description=self.description,
                     name="FetchRecord",
-                    strict=False,
+                    strict=True,
                 ),
             ]
         return self._fns

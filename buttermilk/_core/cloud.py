@@ -85,6 +85,22 @@ class CloudManager:
         except Exception as e:
             raise RuntimeError(f"Failed to obtain GCP credentials: {e}") from e
 
+    def get_access_token(self) -> str:
+        """Get a valid access token from GCP credentials, refreshing if needed.
+        
+        Returns:
+            str: A valid OAuth2 access token
+        """
+        creds = self.gcp_credentials
+        
+        # Refresh if needed
+        if not creds.valid:
+            from google.auth.transport.requests import Request
+            request = Request()
+            creds.refresh(request)
+            
+        return creds.token
+
     @cached_property
     def gcs(self) -> Optional[Any]:
         """Get Google Cloud Storage client instance.
@@ -173,7 +189,7 @@ class CloudManager:
         from vertexai import init as aiplatform_init
 
         # Ensure required attributes exist
-        project = getattr(cloud, "project_id", None)
+        project = getattr(cloud, "project", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 

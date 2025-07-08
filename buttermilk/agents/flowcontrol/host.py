@@ -332,14 +332,16 @@ class HostAgent(Agent):
 
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
-            logger.info(f"Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
+            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
+            logger.debug(f"[HostAgent._handle_events] ConductorRequest content: {message.model_dump_json(indent=2)}")
             if self._conductor_task and not self._conductor_task.done():
-                logger.warning(f"Host {self.agent_name} received ConductorRequest but task is already running.")
+                logger.warning(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
             self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
             # If no task is running, start a new one
-            logger.info(f"Host {self.agent_name} starting new conductor task.")
+            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} starting new conductor task.")
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))
+            logger.debug(f"[HostAgent._handle_events] Conductor task created: {self._conductor_task}")
 
         # Ignore FlowProgressUpdate messages received by the host itself
         elif isinstance(message, FlowProgressUpdate):
@@ -521,94 +523,108 @@ class HostAgent(Agent):
             FatalError: If no participants are provided in the request.
 
         """
-        logger.info(f"Host {self.agent_name} starting flow execution.")
-
-        # Initialize participants from the request
-        logger.debug(f"Host {self.agent_name} updating participants from ConductorRequest: {message.participants}")
-        self._participants.update(message.participants)
-        logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
-        if not self._participants:
-            msg = "Host received ConductorRequest with no participants."
-            logger.error(f"{msg} Aborting.")
-            # Send an END message with the error
-            await self.callback_to_groupchat(StepRequest(role=END, content=msg))
-            raise FatalError(msg)
-
-        # Store participant tools if provided
-        if hasattr(message, 'participant_tools'):
-            self._participant_tools = message.participant_tools
-            logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
-
-        # Extract initial query/prompt from ConductorRequest if available
-        # Parse inputs using the typed model for cleaner extraction
-        from buttermilk._core.contract import HostInputModel
-        
-        # Store the raw inputs for backward compatibility
-        self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
-        
         try:
-            # Parse inputs into our typed model
-            if isinstance(self._initial_inputs, dict):
-                host_inputs = HostInputModel(**self._initial_inputs)
-            else:
-                host_inputs = HostInputModel()
+            logger.info(f"Host {self.agent_name} starting flow execution.")
+
+            # Initialize participants from the request
+            logger.debug(f"Host {self.agent_name} updating participants from ConductorRequest: {message.participants}")
+            self._participants.update(message.participants)
+            logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
+            if not self._participants:
+                msg = "Host received ConductorRequest with no participants."
+                logger.error(f"{msg} Aborting.")
+                # Send an END message with the error
+                await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+                raise FatalError(msg)
+
+            # Store participant tools if provided
+            if hasattr(message, 'participant_tools'):
+                self._participant_tools = message.participant_tools
+                logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
+
+            # Extract initial query/prompt from ConductorRequest if available
+            # Parse inputs using the typed model for cleaner extraction
+            from buttermilk._core.contract import HostInputModel
             
-            # Extract fields cleanly
-            self._initial_query = host_inputs.initial_query
-            self._initial_parameters = host_inputs.parameters
+            # Store the raw inputs for backward compatibility
+            self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
             
-            if self._initial_query:
-                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-            
-            if self._initial_parameters:
-                logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+            try:
+                # Parse inputs into our typed model
+                if isinstance(self._initial_inputs, dict):
+                    host_inputs = HostInputModel(**self._initial_inputs)
+                else:
+                    host_inputs = HostInputModel()
                 
-        except Exception as e:
-            # If parsing fails, fall back to empty values
-            logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
-            self._initial_query = None
-            self._initial_parameters = {}
+                # Extract fields cleanly
+                self._initial_query = host_inputs.initial_query
+                self._initial_parameters = host_inputs.parameters
+                
+                if self._initial_query:
+                    logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
+                
+                if self._initial_parameters:
+                    logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+                    
+            except Exception as e:
+                # If parsing fails, fall back to empty values
+                logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
+                self._initial_query = None
+                self._initial_parameters = {}
 
-        # Rerun initialization to set up the group chat
-        await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
+            # Rerun initialization to set up the group chat
+            await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
 
-        # Start the periodic progress reporter task
-        self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+            # Start the periodic progress reporter task
+            self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
 
-        # Initialize generator now that participants are known
-        self._step_generator = self._sequence()
-        logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
+            # Initialize generator now that participants are known
+            self._step_generator = self._sequence()
+            logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
-        async for next_step in self._step_generator:
-            logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
-            # Wait for tasks from the *previous* step to complete before starting the *next* step
-            if not await self.wait_check_last_step_completions():
-                # If the wait failed (timeout or error), stop the flow
-                # break
-                pass
-            # Don't seek confirmation from the manager to send a request to the manager
-            logger.info(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
-            if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
-                # If user rejected or timed out, stop the flow
-                continue
-                # break
+            async for next_step in self._step_generator:
+                logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
+                # Wait for tasks from the *previous* step to complete before starting the *next* step
+                if not await self.wait_check_last_step_completions():
+                    # If the wait failed (timeout or error), stop the flow
+                    # break
+                    pass
+                # Don't seek confirmation from the manager to send a request to the manager
+                logger.info(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
+                if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
+                    # If user rejected or timed out, stop the flow
+                    continue
+                    # break
 
-            # Execute the current step
-            await self._execute_step(next_step)
+                # Execute the current step
+                await self._execute_step(next_step)
 
-        # --- Sequence finished ---
-        logger.info(f"Host {self.agent_name} flow execution finished.")
+            # --- Sequence finished ---
+            logger.info(f"Host {self.agent_name} flow execution finished.")
 
-        # Send final progress update before any cleanup begins
-        final_progress_message = FlowProgressUpdate(
-            source=self.agent_id,
-            status="finished",
-            step_name=END,
-            waiting_on={},
-            message="Flow completed",
-        )
-        logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
-        await self.callback_to_groupchat(final_progress_message)
+            # Send final progress update before any cleanup begins
+            final_progress_message = FlowProgressUpdate(
+                source=self.agent_id,
+                status="finished",
+                step_name=END,
+                waiting_on={},
+                message="Flow completed",
+            )
+            logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
+            await self.callback_to_groupchat(final_progress_message)
+
+        except (KeyboardInterrupt):
+            logger.info("Flow terminated by user.")
+        except (FatalError, Exception) as e:
+            logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
+        finally:
+            # Cancel the progress reporter task
+            if self._progress_reporter_task:
+                self._progress_reporter_task.cancel()
+                try:
+                    await self._progress_reporter_task
+                except asyncio.CancelledError:
+                    pass
 
     async def _shutdown(self) -> None:
         """Shutdown the agent and clean up resources."""

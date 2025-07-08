@@ -66,6 +66,10 @@ Primary Goal: Build reproducible, traceable, and HASS-researcher-friendly tools.
 * Modularity: Maintain a modular architecture. Prefer creating new Agent/Orchestrator subclasses over modifying core components.
 * Composable YAML configuration: The only way to configure settings in buttermilk projects is through Hydra (OmegaConf objects). Remove / Do not add support for manual dictionary configuration, and use OmegaConf objects by preference
 
+### Configuration
+
+The LLM configuration is loaded from a GCP Secret named `models.json`. This means that for tests to run correctly, the environment must be authenticated with GCP and have access to this secret. If the secret is not available, the tests will fail with authentication and configuration errors.
+
 ## Development process
 
 Always read the `docs/ARCHITECTURE.md` file before commencing work and remember to update it after you finish. The objective is to maintain a document that will give you important context about the project, including how components fit together. Where information is missing, discuss potential approaches with the user and get permission to proceed.

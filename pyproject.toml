@@ -208,7 +208,7 @@ addopts = [
     "--capture=fd", 
     "--continue-on-collection-errors",
     "--durations=10", 
-    "-n 24", 
+    # "-n 24", 
     "-v", # show name of tests 
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",

@@ -163,7 +163,6 @@ class TestStructuredLLMHostListen:
         )
         
         # Mock dependencies
-        host._model = "test-model"
         host._tools_list = []
         host._tool_schemas = []
         host._agent_registry = {}

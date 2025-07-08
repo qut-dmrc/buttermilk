@@ -23,10 +23,6 @@ class BMAccessor:
     def __getattr__(self, name):# -> Any:
         return getattr(get_bm(), name)
 
-    # BM instances are not callable, so we'll just return the instance
-    def __call__(self, *args, **kwargs):
-        return get_bm()
-
     def __get__(self, obj, objtype=None) -> BM:
         if get_bm() is None:
             raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")

@@ -34,6 +34,9 @@ def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
                 for fn in fn_list:
                     if isinstance(fn, Tool):
                         tools.append(fn)
+            elif isinstance(cfg, Tool):
+                # Direct Tool instance (e.g., FunctionTool)
+                tools.append(cfg)
             elif isinstance(cfg, ToolConfig):
                 # Traditional ToolConfig object
                 from buttermilk.tools import AVAILABLE_TOOLS

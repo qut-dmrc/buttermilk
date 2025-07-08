@@ -9,11 +9,31 @@ configured Language Model.
 from typing import Any  # For type hinting
 
 from PIL.Image import Image  # For image type checking
+from pydantic import BaseModel, Field
 from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk contract types
 from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
 from buttermilk.utils.media import download_and_convert  # Utility for media handling
+
+
+class MediaDescription(BaseModel):
+    """Structured output for media descriptions."""
+    
+    description: str = Field(
+        ...,
+        description="The textual description of the media content (alt text, caption, or transcript)"
+    )
+    media_type: str = Field(
+        ...,
+        description="Type of media described (image, video, audio, text)"
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level in the description accuracy"
+    )
 
 
 class Describer(LLMAgent):
@@ -28,170 +48,151 @@ class Describer(LLMAgent):
     Key Configuration Parameters (from `AgentConfig.parameters`):
         - `model` (str): **Required (inherited from LLMAgent)**. The name of the
           LLM to use for generating descriptions.
-        - `prompt_template` (str): **Required (inherited from LLMAgent)**. The name
-          of the prompt template to use. For `Describer`, this template should
-          guide the LLM to describe the provided media content. Defaults to "describe".
-        - `download_if_necessary` (bool): Optional. If `True` (default), the agent
-          will attempt to download media from a URI specified in the input if
-          the `Record` does not already contain the media components.
-
-    Input:
-        Expects an `AgentInput` message. The relevant information is typically
-        within `message.records`, where each `Record` might contain media
-        components (images, video, audio) or a URI to such media. If `message.records`
-        is empty, it might use `message.inputs` (if `download_if_necessary` is True)
-        to fetch a record.
-
-    Output:
-        Produces an `AgentTrace` containing the LLM's generated description in its
-        `outputs` field. This description is also used to update the `alt_text`
-        attribute of the processed `Record`. If processing is skipped or fails,
-        it might return the original job data or an `ErrorEvent`.
+        - `template` (str): Name of the Jinja2 template to use for prompting.
+          Defaults to "describer".
+        - Additional parameters are passed to the LLM (e.g., `temperature`,
+          `max_tokens`).
 
     Attributes:
-        template (str | None): The default prompt template name to use if not
-            otherwise specified in parameters. Defaults to "describe".
-            (Note: This seems to be a class attribute, but `LLMAgent` typically
-            expects `prompt_template` in `parameters`).
+        _output_model: Set to MediaDescription for structured outputs
+
     """
-    template: str | None = "describe" # Default prompt template for this agent
+    
+    # Force structured output for descriptions
+    _output_model: type[BaseModel] | None = MediaDescription
 
-    async def _process( # Overriding _process from base Agent/LLMAgent
-        self,
-        *,
-        message: AgentInput, # Changed 'job' to 'message' to align with Agent._process
-        **kwargs: Any,
-    ) -> AgentTrace | ErrorEvent | None: # Return type consistent with LLMAgent._process
-        """Processes the input message to generate a description for its media content.
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentTrace | ErrorEvent:
+        """Process the input to generate a media description.
 
-        This method orchestrates the description generation by:
-        1.  Optionally downloading media if `message.records` is empty but URIs are
-            provided in `message.inputs` and `download_if_necessary` is true.
-        2.  Checking if the record contains any non-text media components (image,
-            video, audio). If not, or if no record/components are found, it skips LLM processing.
-        3.  Checking if the record already has `alt_text`. If so, it skips LLM processing.
-        4.  If checks pass, it calls the `super()._process()` (from `LLMAgent`)
-            to invoke the LLM with the appropriate prompt and media.
-        5.  Updates the `alt_text` of the input `Record` (and potentially other
-            metadata via `record.update_from`) with the generated description from
-            the LLM's output.
+        This method checks if the record already has alt text or if it's purely
+        textual content. If neither, it downloads media from a URI if needed,
+        and invokes the LLM to generate a description.
 
         Args:
-            message: The `AgentInput` containing data and parameters for the description task.
-                     The `message.records` (or `message.inputs` for download) should
-                     provide the media to be described.
-            **kwargs: Additional keyword arguments passed down from the caller.
+            message: The input message containing the record to describe.
+            **kwargs: Additional keyword arguments passed to the LLM agent.
 
         Returns:
-            AgentTrace | ErrorEvent | None:
-            - An `AgentTrace` containing the LLM's response and updated record information
-              if description generation was successful.
-            - An `ErrorEvent` if a significant error occurred during processing.
-            - `None` if processing was intentionally skipped (e.g., no media,
-              alt_text already exists). The original `message` (or its relevant parts)
-              might be passed through by the orchestrator in such cases, or this
-              `None` return can signify no action was taken by this agent.
-              (Note: The original `process_job` returned the `job` object itself
-              when skipping. `_process` in `Agent` expects `AgentOutput` or similar.
-              Returning `None` signals no direct output from this agent for this input,
-              which might be appropriate for a skip.)
+            AgentTrace: Contains the generated description or an appropriate
+                message if no description was needed.
+            ErrorEvent: If an error occurs during processing.
+
         """
-        # Ensure there's a record to process, either from message.records or by downloading
-        record_to_process = None
-        if message.records:
-            record_to_process = message.records[0] # Assuming one record per AgentInput for describer
-            # TODO: How should Describer handle multiple records in a single AgentInput?
-            # For now, processing only the first one.
-            logger.debug(f"Describer '{self.agent_id}' using record '{record_to_process.record_id}' from input.")
-        elif self.parameters.get("download_if_necessary", True) and message.inputs:
-            logger.debug(
-                f"Describer '{self.agent_id}': No records in input, attempting to download from inputs: {list(message.inputs.keys())}.",
+        if not message.records:
+            return ErrorEvent(
+                source=self.agent_id,
+                error="No records provided for description.",
+                error_code="NO_RECORDS",
             )
-            try:
-                # download_and_convert expects kwargs that match its signature based on input type
-                # This assumes message.inputs is structured appropriately
-                record_to_process = await download_and_convert(**message.inputs)
-                if record_to_process:
-                     # If downloaded, add it to the message.records for consistency downstream
-                     # and so that super()._process() can find it.
-                    message.records = [record_to_process]
-                logger.debug(f"Describer '{self.agent_id}' downloaded record: {record_to_process.record_id if record_to_process else 'Failed'}")
-            except Exception as e:
-                logger.error(f"Describer '{self.agent_id}': Failed to download record: {e!s}")
-                return ErrorEvent(source=self.agent_id, content=f"Failed to download record: {e!s}")
 
-        if not record_to_process:
-            logger.debug(
-                f"Describer '{self.agent_id}': No record available to process for message_id '{message.message_id if hasattr(message, 'message_id') else 'N/A'}'. Skipping.",
+        # Get the record to describe
+        record = message.records[0]  # Use the first record if multiple
+
+        # Check if alt_text already exists in metadata
+        if (
+            hasattr(record, "metadata")
+            and isinstance(record.metadata, dict)
+            and record.metadata.get("alt_text")
+        ):
+            logger.info(f"Record already has alt_text: {record.metadata['alt_text'][:50]}...")
+            # Return structured output even for existing alt text
+            existing_description = MediaDescription(
+                description=record.metadata["alt_text"],
+                media_type="unknown",  # We don't know the original media type
+                confidence=1.0
             )
-            return None # No record, nothing to do
-
-        # Check for non-text media components
-        # The original code checked record.components which might not be populated if MediaObj is in record.content
-        # A more robust check might involve iterating through record.content if it's a list of MediaObj
-        media_exists = False
-        if isinstance(record_to_process.content, Sequence) and not isinstance(record_to_process.content, str):
-            for item in record_to_process.content:
-                if isinstance(item, Image):
-                    media_exists = True
-                    break
-        # Add other checks if record.components was the intended place for complex media
-        # For now, assuming content holds MediaObj items for multimodal.
-
-        if not media_exists:
-            logger.debug(
-                f"Describer '{self.agent_id}' for record '{record_to_process.record_id}': No non-text media components found. Skipping description.",
+            return AgentTrace(
+                agent_id=self.agent_id,
+                agent_type="describer",
+                agent_name=self.agent_name or "Describer",
+                content=existing_description.description,
+                outputs=existing_description,
+                metadata={"source": "existing_alt_text"},
             )
-            return None # No relevant media to describe
 
-        # Skip if alt_text already exists
-        if record_to_process.alt_text:
-            logger.debug(
-                f"Describer '{self.agent_id}' for record '{record_to_process.record_id}': Alt text already exists. Skipping.",
-            )
-            return None # Alt text already present
-
-        # Call LLMAgent's _process method to get the description
-        # The LLMAgent._process expects the record to be in message.records
-        # and uses the prompt template (e.g., "describe")
-        agent_trace_result = await super()._process(message=message, **kwargs)
-
-        if isinstance(agent_trace_result, AgentTrace) and agent_trace_result.outputs:
-            # Update record's alt_text and potentially other metadata from the LLM's output.
-            # The structure of agent_trace_result.outputs depends on the LLM and prompt.
-            # Assuming outputs is a dict or can be converted to one for update_from.
-            output_data = agent_trace_result.outputs
-            if isinstance(output_data, str): # If LLM output is just a string
-                record_to_process.alt_text = output_data
-                # Optionally, put this string into the AgentTrace.outputs as a structured dict if preferred
-                agent_trace_result.outputs = {"generated_alt_text": output_data}
-            elif isinstance(output_data, dict):
-                # If output is a dict, try to find a key for alt_text or use a default key
-                # This part depends on how the prompt template structures the LLM output.
-                generated_description = output_data.get("description", output_data.get("alt_text", output_data.get("text")))
-                if generated_description and isinstance(generated_description, str):
-                    record_to_process.alt_text = generated_description
-
-                # update_from expects a Pydantic model or dict.
-                # It might be too broad here if outputs contains many things.
-                # Consider more targeted updates to record_to_process.metadata if needed.
-                try:
-                    record_to_process.metadata.update(output_data) # Example: merge all outputs into metadata
-                    # A more specific update would be:
-                    # record_to_process.update_from_dict(output_data) # if Record has such a method
-                except Exception as e:
-                    logger.warning(f"Describer '{self.agent_id}': Failed to update record metadata from LLM outputs: {e!s}")
-            else:
-                logger.warning(f"Describer '{self.agent_id}': LLM output was not a string or dict, cannot directly update alt_text. Output: {output_data}")
-
-            logger.info(f"Describer '{self.agent_id}' generated alt_text for record '{record_to_process.record_id}'.")
-            # The agent_trace_result already contains the outputs from the LLM.
-            # If record_to_process was part of message.records, it's a mutable object,
-            # so modifications here will be reflected in the message object if it's passed around.
-            return agent_trace_result
-        elif isinstance(agent_trace_result, ErrorEvent):
-            logger.error(f"Describer '{self.agent_id}': LLM processing failed for record '{record_to_process.record_id}': {agent_trace_result.content}")
-            return agent_trace_result # Propagate the error
+        # Check if the record is purely textual
+        if record.media:
+            # There's media content
+            if isinstance(record.media, list) and not record.media:
+                # Empty media list, fall back to text
+                if record.text:
+                    return self._create_text_response(record)
+                else:
+                    return ErrorEvent(
+                        source=self.agent_id,
+                        error="Record has no media or text content to describe.",
+                        error_code="NO_CONTENT",
+                    )
+            # Process media content
+            return await self._process_media(message, record, **kwargs)
+        elif record.text:
+            # No media, just text
+            return self._create_text_response(record)
         else:
-            logger.warning(f"Describer '{self.agent_id}': LLM processing for record '{record_to_process.record_id}' did not return a valid AgentTrace or ErrorEvent.")
-            return None
+            # Neither media nor text
+            return ErrorEvent(
+                source=self.agent_id,
+                error="Record has no content to describe.",
+                error_code="NO_CONTENT",
+            )
+
+    def _create_text_response(self, record: Any) -> AgentTrace:
+        """Create a response for text-only records."""
+        text_description = MediaDescription(
+            description=f"This is a text-only record. Content: {record.text[:200]}...",
+            media_type="text",
+            confidence=1.0
+        )
+        return AgentTrace(
+            agent_id=self.agent_id,
+            agent_type="describer",
+            agent_name=self.agent_name or "Describer",
+            content=text_description.description,
+            outputs=text_description,
+            metadata={"media_type": "text", "skipped_reason": "text_only"},
+        )
+
+    async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentTrace | ErrorEvent:
+        """Process media content and generate description."""
+        # Check if we need to download from URI
+        if hasattr(record, "uri") and record.uri and not record.media:
+            logger.info(f"Downloading media from URI: {record.uri}")
+            try:
+                # Import here to avoid circular imports
+                from buttermilk.utils.media import download_and_convert
+
+                downloaded_media = await download_and_convert(record.uri)
+                if downloaded_media:
+                    record.media = downloaded_media
+                else:
+                    return ErrorEvent(
+                        source=self.agent_id,
+                        error=f"Failed to download media from URI: {record.uri}",
+                        error_code="DOWNLOAD_FAILED",
+                    )
+            except Exception as e:
+                logger.error(f"Error downloading media from {record.uri}: {e}", exc_info=True)
+                return ErrorEvent(
+                    source=self.agent_id,
+                    error=f"Failed to download media: {str(e)}",
+                    error_code="DOWNLOAD_ERROR",
+                )
+
+        # Determine media type
+        media_type = "unknown"
+        if hasattr(record, "media") and record.media:
+            if isinstance(record.media, list) and record.media:
+                first_media = record.media[0]
+                if isinstance(first_media, Image):
+                    media_type = "image"
+                # Could add more type detection here
+            elif isinstance(record.media, Image):
+                media_type = "image"
+
+        # Now process with the parent LLMAgent's process method
+        # which will use the template and model to generate a description
+        result = await super()._process(message=message, **kwargs)
+        
+        # The parent's process should return structured MediaDescription
+        # due to _output_model setting
+        return result
