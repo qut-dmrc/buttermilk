@@ -296,13 +296,19 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
-        logger.info(f"[FlowRunner.send_message_to_ui] CALLED with message type: {type(message)}, session: {self.session_id}")
+        logger.info(f"[FlowRunner.send_message_to_ui] 📤 CALLED!")
+        logger.info(f"[FlowRunner.send_message_to_ui] Session: {self.session_id}")
+        logger.info(f"[FlowRunner.send_message_to_ui] Message type: {type(message)}")
         logger.info(f"[FlowRunner.send_message_to_ui] Message content: {getattr(message, 'content', 'No content attr')}")
+        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket state: {self.websocket}")
+        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket connected: {self.websocket and self.websocket.client_state == WebSocketState.CONNECTED if self.websocket else 'No websocket'}")
         
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug(f"[FlowRunner.send_message_to_ui] Dropping message not handled by client: {message}")
+            logger.warning(f"[FlowRunner.send_message_to_ui] ⚠️ Message not formatted by MessageService: {message}")
             return
+        
+        logger.info(f"[FlowRunner.send_message_to_ui] ✅ Message formatted successfully: type={formatted_message.type}")
 
         try:
             message_type = formatted_message.type

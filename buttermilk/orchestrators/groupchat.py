@@ -325,20 +325,24 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
-            logger.info(f"[MANAGER ClosureAgent] Received message: {message}")
-            logger.info(f"[MANAGER ClosureAgent] Type of message: {type(message)}")
-            logger.info(f"[MANAGER ClosureAgent] Message content: {getattr(message, 'content', 'No content attr')}")
+            logger.info(f"[MANAGER ClosureAgent] 🎯 RECEIVED MESSAGE!")
+            logger.info(f"[MANAGER ClosureAgent] Type: {type(message)}")
+            logger.info(f"[MANAGER ClosureAgent] Content: {getattr(message, 'content', 'No content attr')}")
+            logger.info(f"[MANAGER ClosureAgent] Source: {getattr(message, 'source', 'No source attr')}")
+            logger.info(f"[MANAGER ClosureAgent] Full message: {message}")
+            
             if callback_to_ui is not None:
-                logger.info(f"[MANAGER ClosureAgent] Sending message to UI via callback")
+                logger.info(f"[MANAGER ClosureAgent] callback_to_ui is available: {callback_to_ui}")
+                logger.info(f"[MANAGER ClosureAgent] Attempting to send message to UI...")
                 try:
-                    await callback_to_ui(message)
-                    logger.info(f"[MANAGER ClosureAgent] Successfully sent message to UI")
+                    result = await callback_to_ui(message)
+                    logger.info(f"[MANAGER ClosureAgent] ✅ Successfully called callback_to_ui, result: {result}")
                 except Exception as e:
-                    logger.error(f"[MANAGER ClosureAgent] Error sending message to UI: {e}")
+                    logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
             else:
-                logger.warning(f"[MANAGER ClosureAgent] No callback_to_ui available!")
+                logger.warning(f"[MANAGER ClosureAgent] ⚠️ No callback_to_ui available!")
                 logger.debug(f"[{self.trace_id}] {message}")
-            logger.info(f"[MANAGER ClosureAgent] Message processed")
+            logger.info(f"[MANAGER ClosureAgent] 🏁 Message processing complete")
 
         # Register the closure function as an agent named MANAGER.
         logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")

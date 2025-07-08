@@ -82,14 +82,16 @@ class FlowTestClient:
         print(f"[FlowTestClient-BG] Background receiver stopped")
 
     async def start_flow(self, flow_name: str, initial_prompt: str):
-        """Start a flow and wait for readiness."""
-        run_request = RunRequest(
-            flow=flow_name,
-            prompt=initial_prompt,
-            ui_type="test",
-        )
-        print(f"[FlowTestClient] Sending RunRequest: {run_request.model_dump_json()}")
-        await self._websocket.send(run_request.model_dump_json())
+        """Start a flow and wait for readiness - mimics web UI behavior."""
+        # Send message in same format as web UI
+        message = {
+            "type": "run_flow",
+            "flow": flow_name,
+            "record_id": "",
+            "prompt": initial_prompt,  # The web UI puts extra params in the message
+        }
+        print(f"[FlowTestClient] Sending run_flow message: {json.dumps(message)}")
+        await self._websocket.send(json.dumps(message))
 
     async def _receive_json(self, timeout: int = 30) -> Dict[str, Any]:
         """Receives a JSON message from the websocket and stores it."""
@@ -290,7 +292,8 @@ class TestFlowE2E:
 
                     # Wait for messages to accumulate
                     print("[TEST] Waiting for messages to arrive...")
-                    await asyncio.sleep(10)
+                    print("[TEST] Note: AutogenOrchestrator setup can take 10-15 seconds")
+                    await asyncio.sleep(20)  # Give enough time for autogen to initialize
                     
                     # Check what messages we received
                     print(f"\n[TEST] Total messages received: {len(client.received_messages)}")
