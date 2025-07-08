@@ -352,7 +352,7 @@ class AutogenOrchestrator(Orchestrator):
             closure=output_result,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=DefaultTopicId(type=MANAGER),  # Subscribe to the MANAGER topic
+                    topic_type=MANAGER,  # Subscribe to the MANAGER topic
                     agent_type=MANAGER,
                 ),
             ],
