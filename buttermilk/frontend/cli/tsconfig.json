@@ -1,0 +1,17 @@
+
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "node16",
+    "lib": ["es6", "dom"],
+    "jsx": "react",
+    "moduleResolution": "node16",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
