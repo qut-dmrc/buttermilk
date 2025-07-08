@@ -117,6 +117,8 @@ class AutogenOrchestrator(Orchestrator):
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
     _participants: dict[str, str] = PrivateAttr()
     _agent_registry: dict[str, Agent] = PrivateAttr(default_factory=dict)
+    _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(default_factory=list)
+    _is_initialized: bool = PrivateAttr(default=False)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
@@ -178,6 +180,18 @@ class AutogenOrchestrator(Orchestrator):
         
         # Give the MANAGER a moment to process the message
         await asyncio.sleep(0.5)
+        
+        # Mark as initialized and process any pending messages
+        self._is_initialized = True
+        logger.info(f"[AutogenOrchestrator._setup] Runtime initialized, processing {len(self._pending_messages)} pending messages")
+        
+        # Process any messages that were queued before initialization
+        for pending_message, topic_id in self._pending_messages:
+            logger.info(f"[AutogenOrchestrator._setup] Publishing pending message: {pending_message}")
+            await self._runtime.publish_message(pending_message, topic_id=topic_id)
+        
+        # Clear the pending messages
+        self._pending_messages.clear()
 
         # Collect tool definitions from registered agents
         participant_tools = {}
@@ -402,6 +416,8 @@ class AutogenOrchestrator(Orchestrator):
             # Clear registries
             self._agent_registry.clear()
             self._agent_types.clear()
+            self._pending_messages.clear()
+            self._is_initialized = False
 
             # Stop the runtime with timeout
             if hasattr(self, "_runtime") and self._runtime._run_context:
@@ -514,6 +530,11 @@ class AutogenOrchestrator(Orchestrator):
                 try:
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
+                        # Send flow_completed event before TaskProcessingComplete
+                        await self._runtime.publish_message(
+                            FlowEvent(source="orchestrator", content="flow_completed"),
+                            topic_id=DefaultTopicId(type=MANAGER)
+                        )
                         # Publish a TaskProcessingComplete message to the UI
                         logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
                         logger.debug(f"[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
@@ -562,6 +583,13 @@ class AutogenOrchestrator(Orchestrator):
         """
         async def publish_callback(message: FlowMessage) -> None:
             logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
+            
+            # If runtime is not initialized yet, queue the message
+            if not self._is_initialized or not hasattr(self, '_runtime') or self._runtime is None:
+                logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
+                self._pending_messages.append((message, self._topic))
+                return
+            
             await self._runtime.publish_message(
                 message,
                 topic_id=self._topic,
