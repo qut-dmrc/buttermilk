@@ -54,12 +54,16 @@ class FlowTestClient:
 
     async def _receive_json(self, timeout: int = 30) -> Dict[str, Any]:
         """Receives a JSON message from the websocket and stores it."""
-        message_str = await asyncio.wait_for(self._websocket.recv(), timeout=timeout)
-        print(f"[FlowTestClient] Received raw message string: {message_str}")  # Debug print raw message
-        message_json = json.loads(message_str)
-        self.received_messages.append(message_json)
-        print(f"[FlowTestClient] Received parsed message: {json.dumps(message_json, indent=2)}")  # Debug print parsed message
-        return message_json
+        try:
+            message_str = await asyncio.wait_for(self._websocket.recv(), timeout=timeout)
+            print(f"[FlowTestClient] Received raw message string: {message_str}")  # Debug print raw message
+            message_json = json.loads(message_str)
+            self.received_messages.append(message_json)
+            print(f"[FlowTestClient] Received parsed message: {json.dumps(message_json, indent=2)}")  # Debug print parsed message
+            return message_json
+        except asyncio.TimeoutError:
+            print(f"[FlowTestClient] Timeout waiting for message (timeout={timeout}s)")
+            raise
 
     async def wait_for_message_type(self, message_type: str, timeout: int = 60) -> Dict[str, Any]:
         """Waits for a message of a specific type from the orchestrator."""
@@ -181,6 +185,9 @@ async def backend_process():
 
     try:
         await asyncio.wait_for(wait_for_server(), timeout=30)
+        print("[backend_fixture] Backend server started successfully")
+        # Give it a moment to fully initialize
+        await asyncio.sleep(1)
     except asyncio.TimeoutError:
         raise ConnectionError("Backend server failed to start")
 
@@ -210,17 +217,18 @@ class TestFlowE2E:
     @pytest.mark.asyncio
     async def test_osb_flow_interaction(self, backend_process):
         uri = "ws://localhost:8000/ws/osb_test_session"
+        print(f"[TEST] Connecting to WebSocket URI: {uri}")
         try:
-            with anyio.fail_after(30):  # 30 second timeout for the entire test interaction
+            with anyio.fail_after(20):  # 20 second timeout for the entire test interaction
                 async with FlowTestClient(uri) as client:
                     await client.start_flow("osb", "Tell me about the latest news.")
 
                     # Add a small delay to allow backend to initialize and send initial messages
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
 
                     # Wait for the initial system message indicating flow setup
                     print("[TEST] Waiting for initial system message...")
-                    initial_message = await client.wait_for_message_type("system_message", timeout=5)
+                    initial_message = await client.wait_for_message_type("system_message", timeout=10)
                     print(f"[TEST] Received initial system message: {initial_message.get('outputs', {}).get('content')}")
                     assert "Setting up AutogenOrchestrator" in initial_message.get("outputs", {}).get("content")
 

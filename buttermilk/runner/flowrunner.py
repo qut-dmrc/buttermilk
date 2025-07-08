@@ -244,21 +244,24 @@ class FlowRunContext(BaseModel):
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
+        logger.info(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
         while True:
             await asyncio.sleep(0.1)
 
             # Check if the WebSocket is connected
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
-                logger.debug(f"WebSocket not connected for session {self.session_id}")
+                logger.debug(f"[MONITOR_UI] WebSocket not connected for session {self.session_id}, state: {self.websocket.client_state if self.websocket else 'None'}")
                 continue
 
             try:
+                logger.debug(f"[MONITOR_UI] Waiting for WebSocket message for session {self.session_id}")
                 data = await self.websocket.receive_json()
+                logger.info(f"[MONITOR_UI] Received data from WebSocket: {data}")
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
-                    logger.debug(f"No message returned from process_message_from_ui for data: {data}")
+                    logger.debug(f"[MONITOR_UI] No message returned from process_message_from_ui for data: {data}")
                     continue
 
                 if isinstance(message, RunRequest):

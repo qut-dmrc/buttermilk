@@ -192,16 +192,22 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             session_id: Unique identifier for this client session
 
         """
+        logger.info(f"[WEBSOCKET] Endpoint called for session {session_id}")
         # Accept the WebSocket connection
         if websocket.client_state == WebSocketState.CONNECTING:
-            logger.debug(f"Accepting WebSocket connection for session {session_id}")
+            logger.info(f"[WEBSOCKET] Accepting WebSocket connection for session {session_id}")
             await websocket.accept()
+        else:
+            logger.warning(f"[WEBSOCKET] WebSocket state is {websocket.client_state} for session {session_id}")
         
+        logger.info(f"[WEBSOCKET] Connection accepted, getting flow runner for session {session_id}")
         flow_runner: FlowRunner = websocket.app.state.flow_runner
         if not (session := await flow_runner.get_websocket_session_async(session_id=session_id, websocket=websocket)):
-            logger.error(f"Session {session_id} not found.")
+            logger.error(f"[WEBSOCKET] Session {session_id} not found.")
             await websocket.close()
             raise HTTPException(status_code=404, detail="Session not found")
+        
+        logger.info(f"[WEBSOCKET] Got session, starting to monitor UI for session {session_id}")
 
         # Start session metrics tracking
         from buttermilk.monitoring import get_metrics_collector
@@ -213,9 +219,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         # Listen for messages from the client
 
         token = session_id_var.set(session_id)
+        logger.info(f"[WEBSOCKET] Starting to monitor UI for session {session_id}")
         async for run_request in session.monitor_ui():
             try:
-                logger.info(f"Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
+                logger.info(f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
                 await asyncio.sleep(0.1)
                 # Track session activity
                 metrics_collector.update_session_activity(session_id)
