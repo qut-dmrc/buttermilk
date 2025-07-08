@@ -318,9 +318,14 @@ class AutogenOrchestrator(Orchestrator):
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
             logger.info(f"[MANAGER ClosureAgent] Received message: {message}")
             logger.info(f"[MANAGER ClosureAgent] Type of message: {type(message)}")
+            logger.info(f"[MANAGER ClosureAgent] Message content: {getattr(message, 'content', 'No content attr')}")
             if callback_to_ui is not None:
                 logger.info(f"[MANAGER ClosureAgent] Sending message to UI via callback")
-                await callback_to_ui(message)
+                try:
+                    await callback_to_ui(message)
+                    logger.info(f"[MANAGER ClosureAgent] Successfully sent message to UI")
+                except Exception as e:
+                    logger.error(f"[MANAGER ClosureAgent] Error sending message to UI: {e}")
             else:
                 logger.warning(f"[MANAGER ClosureAgent] No callback_to_ui available!")
                 logger.debug(f"[{self.trace_id}] {message}")

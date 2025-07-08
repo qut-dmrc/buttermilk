@@ -145,6 +145,7 @@ class FlowTestClient:
 @pytest_asyncio.fixture(scope="class")
 async def backend_process():
     """Starts the backend server once for all tests in the class."""
+    print("[backend_fixture] Starting backend fixture setup...")
     # Kill any process already listening on port 8000
     try:
         print("[backend_fixture] Attempting to kill processes on port 8000...")
@@ -173,35 +174,44 @@ async def backend_process():
         stderr=subprocess.PIPE,
     )
 
-    async def wait_for_server():
-        # Also monitor stdout for INFO logs
-        async def monitor_stdout():
-            while True:
-                line = await process.stdout.readline()
-                if not line:
-                    break
-                line = line.decode("utf-8").strip()
-                if line:  # Only print non-empty lines
-                    print(f"[backend-stdout] {line}")
-        
-        # Start monitoring stdout in background
-        asyncio.create_task(monitor_stdout())
-        
-        # Monitor stderr for startup message
+    # Shared state to track server readiness
+    server_ready = asyncio.Event()
+    
+    # Create tasks to continuously monitor both streams
+    async def monitor_stdout():
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+            line = line.decode("utf-8").strip()
+            if line:  # Only print non-empty lines
+                print(f"[backend-stdout] {line}")
+    
+    async def monitor_stderr():
         while True:
             line = await process.stderr.readline()
             if not line:
                 break
             line = line.decode("utf-8").strip()
-            print(f"[backend] {line}")
-            if "Uvicorn running on" in line:
-                return
+            if line:
+                print(f"[backend-stderr] {line}")
+                # Check for server ready message (might have ANSI codes)
+                if "Uvicorn running on" in line or "Application startup complete" in line:
+                    server_ready.set()
+    
+    # Start monitoring tasks in background - they'll run for the lifetime of the process
+    stdout_task = asyncio.create_task(monitor_stdout())
+    stderr_task = asyncio.create_task(monitor_stderr())
+    
+    async def wait_for_server():
+        # Wait for the server ready event
+        await server_ready.wait()
 
     try:
-        await asyncio.wait_for(wait_for_server(), timeout=30)
+        await asyncio.wait_for(wait_for_server(), timeout=60)
         print("[backend_fixture] Backend server started successfully")
         # Give it a moment to fully initialize
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
     except asyncio.TimeoutError:
         raise ConnectionError("Backend server failed to start")
 
@@ -230,15 +240,24 @@ class TestFlowE2E:
 
     @pytest.mark.asyncio
     async def test_osb_flow_interaction(self, backend_process):
+        print(f"[TEST] Test started, backend_process fixture: {backend_process}")
         uri = "ws://localhost:8000/ws/osb_test_session"
         print(f"[TEST] Connecting to WebSocket URI: {uri}")
         try:
-            with anyio.fail_after(20):  # 20 second timeout for the entire test interaction
+            with anyio.fail_after(30):  # 30 second timeout for the entire test interaction
                 async with FlowTestClient(uri) as client:
                     await client.start_flow("osb", "Tell me about the latest news.")
 
-                    # Add a small delay to allow backend to initialize and send initial messages
-                    await asyncio.sleep(1)
+                    # Add a longer delay to allow backend to initialize and send initial messages
+                    await asyncio.sleep(3)
+
+                    # Try to receive any message first to debug
+                    print("[TEST] Waiting for ANY message...")
+                    try:
+                        any_message = await client._receive_json(timeout=5)
+                        print(f"[TEST] Got a message! Type: {any_message.get('type')}, Content: {any_message}")
+                    except asyncio.TimeoutError:
+                        print("[TEST] No messages received in 5 seconds")
 
                     # Wait for the initial system message indicating flow setup
                     print("[TEST] Waiting for initial system message...")

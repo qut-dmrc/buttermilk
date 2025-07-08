@@ -168,15 +168,20 @@ class MessageService:
 
         """
         try:
-            message_type = data.pop("type", None)
+            message_type = data.get("type", None)
+            
+            # If no type but has flow field, it's likely a RunRequest
+            if not message_type and "flow" in data and "prompt" in data:
+                logger.debug("Detected RunRequest format without type field")
+                return RunRequest(**data)
 
             match message_type:
                 case "run_flow":
                     run_request = RunRequest(
                         ui_type="web",
-                        flow=data.pop("flow"),
-                        record_id=data.pop("record_id", None),
-                        parameters=data,
+                        flow=data.get("flow"),
+                        record_id=data.get("record_id", None),
+                        parameters={k: v for k, v in data.items() if k not in ["type", "flow", "record_id"]},
                     )
                     return run_request
                 case "pull_task":

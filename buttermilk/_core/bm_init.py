@@ -817,7 +817,7 @@ class BM(SessionInfo):
             logger=logger,  # Target Buttermilk's main logger
             fmt=console_format,
             isatty=True,  # Enable colors if output is a TTY
-            stream=sys.stderr,  # Log to stderr
+            stream=sys.stdout,  # Log to stdout for better test visibility
             level=logging.DEBUG if verbose else logging.INFO,
         )
 
