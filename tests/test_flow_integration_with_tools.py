@@ -109,7 +109,6 @@ class TestOSBFlowIntegration:
                 "human_in_loop": False
             }
         )
-        structured_host._model = "test-model"
         
         # Mock the orchestrator
         mock_orchestrator = AsyncMock(spec=AutogenOrchestrator)
@@ -410,7 +409,6 @@ class TestFlowMigration:
         structured_host.callback_to_groupchat = AsyncMock()
         structured_host._participants = {"AGENT1": Mock()}
         structured_host.tools = []
-        structured_host._model = "test-model"
     
     async def test_gradual_migration_path(self):
         """Test that flows can gradually migrate agents to use tool definitions."""
@@ -458,7 +456,6 @@ class TestFlowMigration:
             "MODERN": modern
         }
         host.tools = []
-        host._model = "test-model"
         host.callback_to_groupchat = AsyncMock()
         
         await host._initialize(callback_to_groupchat=host.callback_to_groupchat)

@@ -1,4 +1,4 @@
-"""Tests for IterativeRagAgent."""
+"""Test the IterativeRagAgent."""
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock
@@ -77,3 +77,4 @@ def test_iterative_rag_agent_uses_correct_template():
         parameters={"model": "fake-model"},
     )
     assert agent.template == "iterative_rag"
+    

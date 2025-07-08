@@ -100,6 +100,7 @@ class ChatParser(BaseModel):
                 # The primary attempt is the recursive one above.
                 simple_json_match = re.search(r"[\{\[]\s*(.*)\s*[\}\]]", text, re.DOTALL)
                 if not simple_json_match:
+
                     raise JSONDecodeError("Unable to find JSON-like brackets '{...}' or '[...]' in response", doc=text, pos=0)
                 json_candidate_str = simple_json_match.group(0)  # The whole match
             else:

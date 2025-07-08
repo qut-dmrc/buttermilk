@@ -464,8 +464,7 @@ class RunRequest(BaseModel):
     )
     ui_type: str = Field(
         ...,
-        description="Type of UI initiating the run (e.g., 'cli', 'api'). Excluded from serialization.",
-        exclude=True,
+        description="Type of UI initiating the run (e.g., 'cli', 'api', 'test').",
     )
 
     # Batch processing specific fields

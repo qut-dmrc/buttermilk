@@ -9,10 +9,10 @@ defaults:
   - /agents@observers: 
     - host/llm_host # Using intelligent LLM host
   - /agents: 
-    - research_agent
-  - /tools@agents.research_agent.tools: 
+    - rag_zotero  # Use Zotero RAG agent for academic citations
+  - /tools@agents.rag_zotero.tools: 
     - chromadb_search
-  - /storage@agents.research_agent.tools.chromadb_search: zot
+  - /storage@agents.rag_zotero.tools.chromadb_search: zot
   - /storage@parameters.save: flows
 
 # Core flow configuration

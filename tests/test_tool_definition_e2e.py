@@ -101,8 +101,6 @@ class TestEndToEndFlows:
             role="RESEARCHER",
             parameters={"model": "test-model", "template": "agent_tool_description"}
         )
-        research._model = "test-model"
-        
         writer = WriterAgent(
             agent_name="writer",
             model_name="test-model",
@@ -123,7 +121,6 @@ class TestEndToEndFlows:
             role="HOST",
             parameters={"model": "test-model", "template": "host_structured_tools"}
         )
-        host._model = "test-model"
         
         # Setup host with agents
         host._participants = mock_agents
@@ -349,7 +346,6 @@ class TestEndToEndFlows:
             role="HOST",
             parameters={"model": "test-model", "template": "host_structured_tools"}
         )
-        host._model = "test-model"
         host._participants = mock_agents
         host.callback_to_groupchat = AsyncMock()
         host.tools = []

@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 import logging
 import random
 from collections.abc import AsyncGenerator, Callable
@@ -32,7 +33,6 @@ class SessionStatus(str, Enum):
 from buttermilk import logger
 from buttermilk._core import (
     AgentTrace,
-    logger,  # noqa
 )
 from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.context import set_logging_context
@@ -43,7 +43,6 @@ from buttermilk._core.contract import (
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
@@ -246,21 +245,24 @@ class FlowRunContext(BaseModel):
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
+        logger.info(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
         while True:
             await asyncio.sleep(0.1)
 
             # Check if the WebSocket is connected
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
-                logger.debug(f"WebSocket not connected for session {self.session_id}")
+                logger.debug(f"[MONITOR_UI] WebSocket not connected for session {self.session_id}, state: {self.websocket.client_state if self.websocket else 'None'}")
                 continue
 
             try:
+                logger.debug(f"[MONITOR_UI] Waiting for WebSocket message for session {self.session_id}")
                 data = await self.websocket.receive_json()
+                logger.info(f"[MONITOR_UI] Received data from WebSocket: {data}")
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
-                    logger.debug(f"No message returned from process_message_from_ui for data: {data}")
+                    logger.debug(f"[MONITOR_UI] No message returned from process_message_from_ui for data: {data}")
                     continue
 
                 if isinstance(message, RunRequest):
@@ -295,22 +297,29 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
+        logger.info(f"[FlowRunner.send_message_to_ui] 📤 CALLED!")
+        logger.info(f"[FlowRunner.send_message_to_ui] Session: {self.session_id}")
+        logger.info(f"[FlowRunner.send_message_to_ui] Message type: {type(message)}")
+        logger.info(f"[FlowRunner.send_message_to_ui] Message content: {getattr(message, 'content', 'No content attr')}")
+        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket state: {self.websocket}")
+        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket connected: {self.websocket and self.websocket.client_state == WebSocketState.CONNECTED if self.websocket else 'No websocket'}")
+        
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug(f"Dropping message not handled by client: {message}")
+            logger.warning(f"[FlowRunner.send_message_to_ui] ⚠️ Message not formatted by MessageService: {message}")
             return
+        
+        logger.info(f"[FlowRunner.send_message_to_ui] ✅ Message formatted successfully: type={formatted_message.type}")
 
         try:
             message_type = formatted_message.type
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
-            @retry(
-                stop=stop_after_attempt(10),
-                wait=wait_fixed(3),  # Wait 3 seconds between attempts
-                retry=retry_if_exception_type(Exception),  # Retry on any exception during send
-                reraise=True,  # Reraise the last exception if all retries fail
-                # before_sleep=before_sleep_log(logger, logging.WARNING),  # Log a warning before retrying
-            )
+            logger.debug(f"[FlowRunner.send_message_to_ui] Sending message of type {message_type} to UI for session {self.session_id}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] Formatted message: {formatted_message.model_dump_json(indent=2)}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] Message data to send: {json.dumps(message_data_to_send, indent=2)}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] WebSocket state: {self.websocket.client_state}")
+
             async def _send_with_retry_internal():
                 if not self.websocket:
                     # Raise an error to be caught by tenacity or the outer try/except
@@ -323,7 +332,7 @@ class FlowRunContext(BaseModel):
                     # Proceed to send; if it fails due to state, tenacity will catch and retry.
 
                 await self.websocket.send_json(message_data_to_send)
-                logger.debug(f"Message sent to UI for session {self.session_id}: {message_type}")
+                logger.debug(f"[FlowRunner.send_message_to_ui] Successfully sent message of type {message_type} to UI for session {self.session_id}")
 
             await _send_with_retry_internal()
 
@@ -530,15 +539,8 @@ class SessionManager:
         return True
 
     async def cleanup_session(self, session_id: str) -> bool:
-        """Clean up and remove a session with atomic operations.
+        """Clean up and remove a session with atomic operations."""
 
-        Args:
-            session_id: The session to clean up
-
-        Returns:
-            True if session was found and cleaned up, False otherwise
-
-        """
         async with self._global_lock:
             if session_id not in self.sessions:
                 return False
@@ -841,7 +843,7 @@ class FlowRunner(BaseModel):
         # Check if this is a reconnection to an existing session
         if session_id in self.session_manager.sessions:
             existing_session = self.session_manager.sessions[session_id]
-            
+
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
                 logger.info(f"Attempting to reconnect to session {session_id}")
@@ -945,7 +947,7 @@ class FlowRunner(BaseModel):
         if hasattr(bm, 'ensure_initialized'):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")
-        
+
         # Initialize metrics tracking
         import time
         start_time = time.time()
@@ -975,6 +977,12 @@ class FlowRunner(BaseModel):
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
         _session.update_activity()  # Update activity timestamp
+
+        # Set the callback_to_ui for the run_request, which will be used by the orchestrator
+        run_request.callback_to_ui = _session.send_message_to_ui
+        logger.info(f"[FlowRunner.run_flow] run_request.callback_to_ui set to: {run_request.callback_to_ui}")
+        logger.info(f"[FlowRunner.run_flow] _session.websocket: {_session.websocket}")
+        logger.info(f"[FlowRunner.run_flow] _session.session_id: {_session.session_id}")
 
         # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore

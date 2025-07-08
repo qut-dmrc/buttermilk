@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import Field
 import json
 
-from buttermilk.agents.rag.rag_agent import RagAgent, ResearchResult
+from buttermilk.agents.rag.simple_rag_agent import RagAgent, ResearchResult
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk import logger
@@ -34,12 +34,12 @@ class IterativeRagAgent(RagAgent):
     async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
         """Core processing logic for iterative RAG.
 
-        This method implements the proper iterative RAG cycle:
+        This method implements an iterative RAG cycle:
         1. Generate tool calls -> run tools -> reflect and generate new tool calls 
         2. Repeat until exhausted or max iterations 
         3. Reflect and synthesise final result
 
-        The key fix is that after executing tools, we give the LLM a chance to reflect
+        After executing tools, we give the LLM a chance to reflect
         on the results and decide whether to continue with more tool calls or synthesize.
         """
         logger.debug(f"IterativeRagAgent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
@@ -47,6 +47,7 @@ class IterativeRagAgent(RagAgent):
         max_iterations = self.parameters.get("max_iterations", 5)  # Configurable max iterations
         current_iteration = 0
         chat_history = list(message.context) if message.context else []  # Start with initial context
+        current_input_message = message.inputs.get("prompt", "")
         initial_prompt = message.inputs.get("prompt", "")
 
         # Prepare initial messages for the LLM
@@ -64,6 +65,19 @@ class IterativeRagAgent(RagAgent):
         while current_iteration < max_iterations:
             current_iteration += 1
             logger.info(f"IterativeRagAgent: Iteration {current_iteration}/{max_iterations}")
+
+            # Prepare messages for the LLM
+            llm_messages_to_send = await self._fill_template(
+                task_params=message.parameters,
+                inputs={"prompt": current_input_message},  # Pass current prompt to template
+                context=chat_history,
+                records=message.records,
+            )
+
+            # Get the appropriate AutoGenWrapper instance
+            import buttermilk
+
+            model_client = buttermilk.get_bm().llms.get_autogen_chat_client(self.parameters["model"])
 
             try:
                 chat_result = await model_client.call_chat(
@@ -85,11 +99,10 @@ class IterativeRagAgent(RagAgent):
             )
 
             # Check for tool calls
-            if chat_result.tool_calls:
+            if hasattr(chat_result, "tool_calls") and chat_result.tool_calls:
                 logger.info(f"IterativeRagAgent: LLM requested tool calls: {len(chat_result.tool_calls)}")
                 tool_outputs = []
                 
-                # Execute all requested tools
                 for tool_call in chat_result.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = tool_call.function.arguments
@@ -157,6 +170,7 @@ class IterativeRagAgent(RagAgent):
 
             elif chat_result.finish_reason == "stop":
                 logger.info(f"IterativeRagAgent: LLM decided to synthesize final answer. Iterations: {current_iteration}")
+
                 # Parse the final result using the agent's output model
                 if self._output_model:
                     try:

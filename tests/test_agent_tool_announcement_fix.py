@@ -17,7 +17,7 @@ from buttermilk._core.contract import AgentAnnouncement, AgentInput, AgentOutput
 from buttermilk._core.mcp_decorators import tool
 from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
-from buttermilk.agents.rag.enhanced_rag_agent import EnhancedRagAgent
+from buttermilk.agents.rag import RagAgent
 
 
 class MockToolAgent(Agent):
