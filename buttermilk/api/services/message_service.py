@@ -4,12 +4,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
+from buttermilk import logger
 from buttermilk._core import (
     AgentConfig,
     StepRequest,
     TaskProcessingComplete,
     UIMessage,
-    logger,
 )
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
@@ -46,6 +46,7 @@ class ChatMessage(BaseModel):
         "research_result",
         "differences",
         "judge_reasons",
+        "system_message",  # Added system_message
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
@@ -72,17 +73,22 @@ class MessageService:
 
         """
         try:
+            logger.debug(f"[MessageService.format_message_for_client] Incoming message type: {type(message)}")
             if message is None:
+                logger.debug("[MessageService] Received None message, returning None.")
                 return None
 
             if isinstance(message, ChatMessage):
                 # Already formatted
+                logger.debug(f"[MessageService] Message is already ChatMessage: {message.type}, returning as is.")
                 return message
             if isinstance(message, ManagerMessage):
                 # Message from UI to chat; don't send back to UI
+                logger.debug("[MessageService] ManagerMessage received, not sending back to UI.")
                 return None
             if isinstance(message, StepRequest):
                 # Internal message; don't send back to UI
+                logger.debug("[MessageService] StepRequest received, not sending back to UI.")
                 return None
 
             agent_info = getattr(message, "agent_info", None)
@@ -93,9 +99,10 @@ class MessageService:
             if isinstance(message, AgentTrace):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
+                    logger.debug(f"[MessageService] AgentTrace with outputs, unwrapping to {type(message.outputs)}.")
                     message = message.outputs
                 else:
-                    logger.warning(f"AgentTrace object with no outputs: {message}")
+                    logger.warning(f"[MessageService] AgentTrace object with no outputs: {message}, returning None.")
                     return None
 
             message_type = None
@@ -125,7 +132,7 @@ class MessageService:
             elif isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             else:
-                logger.warning(f"Unknown message type: {type(message)}")
+                logger.warning(f"[MessageService] Unknown message type: {type(message)}, defaulting to chat_message.")
                 message_type = "chat_message"
 
             # Repackage
@@ -138,10 +145,11 @@ class MessageService:
                 tracing_link=tracing_link,
                 timestamp=datetime.datetime.now(),
             )
+            logger.debug(f"[MessageService] Formatted message of type {output.type}, returning output. Content: {output.outputs}")
             return output
 
         except Exception as e:
-            logger.error(f"Error formatting message for client: {e}")
+            logger.error(f"[MessageService] Error formatting message for client: {e}")
 
         return None
 

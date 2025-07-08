@@ -32,7 +32,6 @@ class SessionStatus(str, Enum):
 from buttermilk import logger
 from buttermilk._core import (
     AgentTrace,
-    logger,  # noqa
 )
 from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.context import set_logging_context
@@ -43,7 +42,6 @@ from buttermilk._core.contract import (
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
@@ -297,7 +295,7 @@ class FlowRunContext(BaseModel):
         """
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug(f"Dropping message not handled by client: {message}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] Dropping message not handled by client: {message}")
             return
 
         try:
@@ -305,14 +303,10 @@ class FlowRunContext(BaseModel):
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
             logger.debug(f"[FlowRunner.send_message_to_ui] Sending message of type {message_type} to UI for session {self.session_id}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] Formatted message: {formatted_message.model_dump_json(indent=2)}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] Message data to send: {json.dumps(message_data_to_send, indent=2)}")
+            logger.debug(f"[FlowRunner.send_message_to_ui] WebSocket state: {self.websocket.client_state}")
 
-            @retry(
-                stop=stop_after_attempt(10),
-                wait=wait_fixed(3),  # Wait 3 seconds between attempts
-                retry=retry_if_exception_type(Exception),  # Retry on any exception during send
-                reraise=True,  # Reraise the last exception if all retries fail
-                # before_sleep=before_sleep_log(logger, logging.WARNING),  # Log a warning before retrying
-            )
             async def _send_with_retry_internal():
                 if not self.websocket:
                     # Raise an error to be caught by tenacity or the outer try/except
@@ -325,7 +319,7 @@ class FlowRunContext(BaseModel):
                     # Proceed to send; if it fails due to state, tenacity will catch and retry.
 
                 await self.websocket.send_json(message_data_to_send)
-                logger.debug(f"Message sent to UI for session {self.session_id}: {message_type}")
+                logger.debug(f"[FlowRunner.send_message_to_ui] Successfully sent message of type {message_type} to UI for session {self.session_id}")
 
             await _send_with_retry_internal()
 
@@ -836,7 +830,7 @@ class FlowRunner(BaseModel):
         # Check if this is a reconnection to an existing session
         if session_id in self.session_manager.sessions:
             existing_session = self.session_manager.sessions[session_id]
-            
+
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
                 logger.info(f"Attempting to reconnect to session {session_id}")
@@ -940,7 +934,7 @@ class FlowRunner(BaseModel):
         if hasattr(bm, 'ensure_initialized'):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")
-        
+
         # Initialize metrics tracking
         import time
         start_time = time.time()
@@ -970,6 +964,10 @@ class FlowRunner(BaseModel):
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
         _session.update_activity()  # Update activity timestamp
+
+        # Set the callback_to_ui for the run_request, which will be used by the orchestrator
+        run_request.callback_to_ui = _session.send_message_to_ui
+        logger.debug(f"[FlowRunner.run_flow] run_request.callback_to_ui set to _session.send_message_to_ui: {run_request.callback_to_ui is not None}")
 
         # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore

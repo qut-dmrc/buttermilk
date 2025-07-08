@@ -240,9 +240,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             finally:
                 session_id_var.reset(token)
 
-        if task:
-            await task
-
         # End session tracking
         metrics_collector.end_session_tracking(session_id)
 

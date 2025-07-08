@@ -31,7 +31,6 @@ from buttermilk._core import (
     BM,
     AllMessages,
     StepRequest,
-    # logger, # logger is imported below
 )
 from buttermilk._core.agent import Agent, ProcessingError
 from buttermilk._core.config import AgentConfig
@@ -44,7 +43,7 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger  # noqa
+from buttermilk import logger
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -133,6 +132,7 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
+        logger.debug(f"[AutogenOrchestrator._setup] Entering _setup method. Request callback_to_ui: {request.callback_to_ui is not None}")
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
 
@@ -163,7 +163,11 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(0.5)
 
         # Send a welcome message to the UI
+        logger.debug(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic: {msg}")
         await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
+        
+        # Give the MANAGER a moment to process the message
+        await asyncio.sleep(0.5)
 
         # Collect tool definitions from registered agents
         participant_tools = {}
@@ -306,32 +310,36 @@ class AutogenOrchestrator(Orchestrator):
 
         """
         if callback_to_ui:
-            logger.debug("Registering UI callback...")
+            logger.debug(f"[AutogenOrchestrator.register_ui] Registering UI callback: {callback_to_ui}")
         else:
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
             logger.debug(f"[AutogenOrchestrator.output_result] Received message: {message}")
+            logger.debug(f"[AutogenOrchestrator.output_result] Type of message: {type(message)}")
             if callback_to_ui is not None:
-                logger.debug(f"[AutogenOrchestrator.output_result] Sending message to UI: {message}")
+                logger.debug(f"[AutogenOrchestrator.output_result] Sending message to UI via callback: {message}")
                 await callback_to_ui(message)
             else:
                 logger.debug(f"[{self.trace_id}] {message}")
+            logger.debug(f"[AutogenOrchestrator.output_result] Message processed by ClosureAgent: {message}")
 
         # Register the closure function as an agent named MANAGER.
+        logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")
         await ClosureAgent.register_closure(
             runtime=self._runtime,
             type=MANAGER,  # Agent ID/Name.
             closure=output_result,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=self._topic.type,  # Subscribe to the main group chat topic
+                    topic_type=DefaultTopicId(type=MANAGER),  # Subscribe to the MANAGER topic
                     agent_type=MANAGER,
                 ),
             ],
             # If a message arrives that isn't handled, just ignore it silently.
             # unknown_type_policy="ignore",
         )
+        logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
 
     async def _cleanup(self) -> None:
         """Cleans up resources with timeout and verification."""
@@ -462,6 +470,7 @@ class AutogenOrchestrator(Orchestrator):
         try:
             # 1. Setup the runtime and agents
             try:
+                logger.debug(f"[AutogenOrchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
                 termination_handler, interrupt_handler = await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
@@ -473,6 +482,7 @@ class AutogenOrchestrator(Orchestrator):
                 if self._records:
                     for record in self._records:
                         # send each record to all clients
+                        logger.debug(f"[AutogenOrchestrator._run] Publishing record: {record}")
                         await self._runtime.publish_message(record, topic_id=self._topic)
 
             # 3. Wait for termination.
@@ -481,6 +491,8 @@ class AutogenOrchestrator(Orchestrator):
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
                         # Publish a TaskProcessingComplete message to the UI
+                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
+                        logger.debug(f"[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
                         await self._runtime.publish_message(
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
@@ -491,6 +503,7 @@ class AutogenOrchestrator(Orchestrator):
                             ),
                             topic_id=DefaultTopicId(type=MANAGER)
                         )
+                        logger.debug(f"[AutogenOrchestrator._run] TaskProcessingComplete message published.")
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
@@ -524,6 +537,7 @@ class AutogenOrchestrator(Orchestrator):
 
         """
         async def publish_callback(message: FlowMessage) -> None:
+            logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
             await self._runtime.publish_message(
                 message,
                 topic_id=self._topic,
