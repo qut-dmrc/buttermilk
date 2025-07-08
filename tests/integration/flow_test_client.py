@@ -211,10 +211,12 @@ class FlowTestClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        ws_url: str = "ws://localhost:8000/ws"
+        ws_url: str = "ws://localhost:8000/ws",
+        direct_ws_url: Optional[str] = None
     ):
         self.base_url = base_url
         self.ws_url = ws_url
+        self.direct_ws_url = direct_ws_url  # For direct WebSocket connection without session
         self.session: Optional[aiohttp.ClientSession] = None
         self.ws: Optional[ClientWebSocketResponse] = None
         self.session_id: Optional[str] = None
@@ -234,23 +236,67 @@ class FlowTestClient:
             await client.disconnect()
     
     async def connect(self):
-        """Connect to the WebSocket."""
+        """Connect to the WebSocket with retry logic."""
         # Create HTTP session
         self.session = aiohttp.ClientSession()
         
-        # Get session ID
-        async with self.session.get(f"{self.base_url}/api/session") as resp:
-            if resp.status != 200:
-                text = await resp.text()
-                raise RuntimeError(f"Failed to get session: {resp.status} - {text}")
+        # If direct WebSocket URL is provided, connect directly without session
+        if self.direct_ws_url:
+            ws_retry_count = 0
+            max_ws_retries = 30
+            while ws_retry_count < max_ws_retries:
+                try:
+                    self.ws = await self.session.ws_connect(self.direct_ws_url)
+                    logger.info(f"WebSocket connected directly to {self.direct_ws_url}")
+                    break
+                except aiohttp.ClientConnectionError as e:
+                    ws_retry_count += 1
+                    if ws_retry_count >= max_ws_retries:
+                        raise ConnectionRefusedError(
+                            f"Could not connect to WebSocket after {max_ws_retries} retries"
+                        ) from e
+                    logger.info(f"WebSocket connection refused, retry {ws_retry_count}/{max_ws_retries}...")
+                    await asyncio.sleep(0.5)
+        else:
+            # Get session ID with retries
+            session_retry_count = 0
+            max_session_retries = 10
+            while session_retry_count < max_session_retries:
+                try:
+                    async with self.session.get(f"{self.base_url}/api/session") as resp:
+                        if resp.status != 200:
+                            text = await resp.text()
+                            raise RuntimeError(f"Failed to get session: {resp.status} - {text}")
+                        
+                        data = await resp.json()
+                        self.session_id = data.get("session_id")
+                        logger.info(f"Got session ID: {self.session_id}")
+                        break
+                except aiohttp.ClientConnectionError as e:
+                    session_retry_count += 1
+                    if session_retry_count >= max_session_retries:
+                        raise ConnectionRefusedError(
+                            f"Could not get session ID after {max_session_retries} retries"
+                        ) from e
+                    logger.info(f"Session endpoint connection refused, retry {session_retry_count}/{max_session_retries}...")
+                    await asyncio.sleep(0.5)
             
-            data = await resp.json()
-            self.session_id = data.get("session_id")
-            logger.info(f"Got session ID: {self.session_id}")
-        
-        # Connect WebSocket
-        self.ws = await self.session.ws_connect(f"{self.ws_url}/{self.session_id}")
-        logger.info("WebSocket connected")
+            # Connect WebSocket with retries
+            ws_retry_count = 0
+            max_ws_retries = 30
+            while ws_retry_count < max_ws_retries:
+                try:
+                    self.ws = await self.session.ws_connect(f"{self.ws_url}/{self.session_id}")
+                    logger.info("WebSocket connected")
+                    break
+                except aiohttp.ClientConnectionError as e:
+                    ws_retry_count += 1
+                    if ws_retry_count >= max_ws_retries:
+                        raise ConnectionRefusedError(
+                            f"Could not connect to WebSocket after {max_ws_retries} retries"
+                        ) from e
+                    logger.info(f"WebSocket connection refused, retry {ws_retry_count}/{max_ws_retries}...")
+                    await asyncio.sleep(0.5)
         
         # Start message listener
         self._listener_task = asyncio.create_task(self._listen_for_messages())
@@ -299,12 +345,13 @@ class FlowTestClient:
             logger.error(f"Unexpected error in message listener: {e}")
             raise
     
-    async def start_flow(self, flow_name: str, prompt: str = ""):
+    async def start_flow(self, flow_name: str, prompt: str = "", record_id: str = ""):
         """Start a flow and wait for initialization."""
         message = {
             "type": MessageType.RUN_FLOW,
             "flow": flow_name,
-            "prompt": prompt
+            "prompt": prompt,
+            "record_id": record_id  # Added for compatibility with web UI format
         }
         
         logger.info(f"Starting flow: {flow_name}")
@@ -313,12 +360,17 @@ class FlowTestClient:
         # Give the flow a moment to start
         await asyncio.sleep(0.5)
     
-    async def send_manager_response(self, content: str):
+    async def send_manager_response(self, content: str, selection: Optional[str] = None):
         """Send a manager response message."""
         message = {
             "type": MessageType.MANAGER_RESPONSE,
-            "content": content
+            "content": content,
+            "confirm": content.lower() == "yes" if selection is None else False
         }
+        
+        # Add selection if provided
+        if selection is not None:
+            message["selection"] = selection
         
         logger.info(f"Sending response: {content}")
         await self.ws.send_json(message)
