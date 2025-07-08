@@ -192,9 +192,11 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             session_id: Unique identifier for this client session
 
         """
+        print(f"[WEBSOCKET PRINT] Endpoint called for session {session_id}", flush=True)
         logger.info(f"[WEBSOCKET] Endpoint called for session {session_id}")
         # Accept the WebSocket connection
         if websocket.client_state == WebSocketState.CONNECTING:
+            print(f"[WEBSOCKET PRINT] Accepting WebSocket connection for session {session_id}", flush=True)
             logger.info(f"[WEBSOCKET] Accepting WebSocket connection for session {session_id}")
             await websocket.accept()
         else:

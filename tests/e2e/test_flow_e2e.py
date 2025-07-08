@@ -174,6 +174,20 @@ async def backend_process():
     )
 
     async def wait_for_server():
+        # Also monitor stdout for INFO logs
+        async def monitor_stdout():
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                line = line.decode("utf-8").strip()
+                if line:  # Only print non-empty lines
+                    print(f"[backend-stdout] {line}")
+        
+        # Start monitoring stdout in background
+        asyncio.create_task(monitor_stdout())
+        
+        # Monitor stderr for startup message
         while True:
             line = await process.stderr.readline()
             if not line:

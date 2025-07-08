@@ -163,7 +163,8 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(0.5)
 
         # Send a welcome message to the UI
-        logger.debug(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic: {msg}")
+        logger.info(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic: {msg}")
+        logger.info(f"[AutogenOrchestrator._setup] callback_to_ui is {'set' if request.callback_to_ui else 'NOT set'}")
         await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
         
         # Give the MANAGER a moment to process the message
@@ -315,14 +316,15 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
-            logger.debug(f"[AutogenOrchestrator.output_result] Received message: {message}")
-            logger.debug(f"[AutogenOrchestrator.output_result] Type of message: {type(message)}")
+            logger.info(f"[MANAGER ClosureAgent] Received message: {message}")
+            logger.info(f"[MANAGER ClosureAgent] Type of message: {type(message)}")
             if callback_to_ui is not None:
-                logger.debug(f"[AutogenOrchestrator.output_result] Sending message to UI via callback: {message}")
+                logger.info(f"[MANAGER ClosureAgent] Sending message to UI via callback")
                 await callback_to_ui(message)
             else:
+                logger.warning(f"[MANAGER ClosureAgent] No callback_to_ui available!")
                 logger.debug(f"[{self.trace_id}] {message}")
-            logger.debug(f"[AutogenOrchestrator.output_result] Message processed by ClosureAgent: {message}")
+            logger.info(f"[MANAGER ClosureAgent] Message processed")
 
         # Register the closure function as an agent named MANAGER.
         logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")
