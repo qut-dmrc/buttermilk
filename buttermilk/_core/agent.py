@@ -266,19 +266,17 @@ class Agent(AgentConfig, ABC):
         # Get actual tool definitions from @tool decorated methods
         tool_definitions = self.get_tool_definitions()
         
-        # If agent has specific @tool methods, use the first one as primary tool
-        # Otherwise fall back to generic agent tool definition
+        # Only include tool if agent has explicit @tool methods
+        primary_tool = None
         if tool_definitions:
             primary_tool = tool_definitions[0].to_autogen_tool_schema()
-        else:
-            primary_tool = self.get_autogen_tool_definition()
 
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=self.get_available_tools(),
             supported_message_types=self.get_supported_message_types(),
-            tool_definition=primary_tool,
+            tool_definition=primary_tool if primary_tool else None,
             status=status,
             announcement_type=announcement_type,
             responding_to=responding_to,
@@ -891,69 +889,6 @@ class Agent(AgentConfig, ABC):
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
 
-    def get_autogen_tool_definition(self) -> ToolSchema:
-        """Return autogen-compatible tool definition for this agent.
-        
-        This creates a standard tool definition that allows the agent to be
-        invoked as a tool by other agents. The tool definition follows 
-        Autogen's format and can be used by LLM hosts for structured tool calling.
-        
-        Returns:
-            ToolSchema: Autogen-compatible tool definition with name, description, 
-                        and parameters.
-        """
-        return ToolSchema(
-            name=f"call_{self.role.lower()}",
-            description=self._get_tool_description(),
-            parameters=self._get_agent_input_schema()
-        )
-
-    def _get_tool_description(self) -> str:
-        """Get the tool description for this agent.
-        
-        This creates a description that explains not just what the agent does,
-        but when it should be used. Agents can override this method to provide
-        more specific guidance for LLMs.
-        
-        Returns:
-            str: Description suitable for LLM tool selection.
-        """
-        # Check if agent has a tool-specific description in parameters
-        if hasattr(self, 'parameters') and self.parameters:
-            tool_desc = self.parameters.get('tool_description')
-            if tool_desc:
-                return tool_desc
-
-        # Use agent description if available, otherwise create default
-        if self.description:
-            # Enhance the description with usage guidance
-            return f"Use this tool when you need to: {self.description.lower()}. " \
-                   f"Calls the {self.role} agent to handle {self.role.lower()}-specific tasks."
-        else:
-            # Fallback description
-            return f"Use this tool to invoke the {self.role} agent for {self.role.lower()}-related tasks and processing."
-
-    def _get_agent_input_schema(self) -> dict[str, Any]:
-        """Get input schema for this agent when used as a tool.
-        
-        Returns a JSON schema that describes what inputs this agent expects.
-        Agents can override this method to provide custom schemas.
-        
-        Returns:
-            dict: JSON schema for agent inputs.
-        """
-        # Check if agent has defined a custom input model class
-        if hasattr(self, 'input_model_class') and issubclass(self.input_model_class, BaseModel):
-            # Use Pydantic's built-in schema generation
-            return self.input_model_class.model_json_schema()
-        
-        # Check if agent has defined custom schema directly
-        if hasattr(self, 'input_schema'):
-            return self.input_schema
-
-        # Default to BaseAgentInputModel schema
-        from buttermilk._core.contract import BaseAgentInputModel
-        return BaseAgentInputModel.model_json_schema()
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.

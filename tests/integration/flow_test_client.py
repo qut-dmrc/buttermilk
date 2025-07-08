@@ -345,32 +345,23 @@ class FlowTestClient:
             logger.error(f"Unexpected error in message listener: {e}")
             raise
     
-    async def start_flow(self, flow_name: str, prompt: str = "", record_id: str = ""):
-        """Start a flow and wait for initialization."""
+    async def start_flow(self, flow_name: str, prompt: str = ""):
+        """Start a flow."""
         message = {
             "type": MessageType.RUN_FLOW,
             "flow": flow_name,
-            "prompt": prompt,
-            "record_id": record_id  # Added for compatibility with web UI format
+            "prompt": prompt
         }
         
         logger.info(f"Starting flow: {flow_name}")
         await self.ws.send_json(message)
-        
-        # Give the flow a moment to start
-        await asyncio.sleep(0.5)
     
-    async def send_manager_response(self, content: str, selection: Optional[str] = None):
+    async def send_manager_response(self, content: str):
         """Send a manager response message."""
         message = {
             "type": MessageType.MANAGER_RESPONSE,
-            "content": content,
-            "confirm": content.lower() == "yes" if selection is None else False
+            "content": content
         }
-        
-        # Add selection if provided
-        if selection is not None:
-            message["selection"] = selection
         
         logger.info(f"Sending response: {content}")
         await self.ws.send_json(message)
@@ -381,10 +372,8 @@ class FlowTestClient:
         return msg.content
     
     async def wait_for_prompt(self, timeout: float = 30.0) -> str:
-        """Wait for a prompt from the system."""
-        # Common prompt patterns
-        prompt_pattern = r"(confirm|proceed|continue|yes/no|y/n|\?|:)$"
-        msg = await self.waiter.wait_for_ui_message(prompt_pattern, timeout)
+        """Wait for a UI message prompt."""
+        msg = await self.waiter.wait_for_ui_message(timeout=timeout)
         return msg.content
     
     async def wait_for_agent_results(
