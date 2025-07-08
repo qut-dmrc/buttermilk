@@ -33,6 +33,7 @@ class MessageType(str, Enum):
     ERROR = "error"
     TASK_PROCESSING_STARTED = "task_processing_started"
     TASK_PROCESSING_COMPLETE = "task_processing_complete"
+    FLOW_EVENT = "flow_event"  # For orchestrator state events
 
 
 @dataclass
@@ -76,6 +77,7 @@ class MessageCollector:
         self.agent_announcements: list[CollectedMessage] = []
         self.agent_traces: list[CollectedMessage] = []
         self.errors: list[CollectedMessage] = []
+        self.flow_events: list[CollectedMessage] = []
         
     def add_message(self, msg_type: str, data: dict, raw: str):
         """Add a message to the collection."""
@@ -97,6 +99,8 @@ class MessageCollector:
             self.agent_traces.append(message)
         elif msg_type == MessageType.ERROR:
             self.errors.append(message)
+        elif msg_type == MessageType.FLOW_EVENT:
+            self.flow_events.append(message)
     
     def get_agents_announced(self) -> list[str]:
         """Get list of agent roles that have announced themselves."""
@@ -187,9 +191,13 @@ class FlowEventWaiter:
         start_time = time.time()
         
         while time.time() - start_time < timeout:
-            # Check for completion message
+            # Check for completion message or flow_completed event
             for msg in self.collector.all_messages:
                 if msg.type == MessageType.FLOW_COMPLETE:
+                    return self.collector.all_messages
+                elif msg.type == MessageType.TASK_PROCESSING_COMPLETE:
+                    return self.collector.all_messages
+                elif msg.type == MessageType.FLOW_EVENT and msg.content == "flow_completed":
                     return self.collector.all_messages
             
             # Check for errors
@@ -376,6 +384,32 @@ class FlowTestClient:
         msg = await self.waiter.wait_for_ui_message(timeout=timeout)
         return msg.content
     
+    async def wait_for_flow_event(
+        self,
+        event_content: str,
+        timeout: float = 30.0
+    ) -> CollectedMessage:
+        """Wait for a specific flow event."""
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            for msg in self.collector.flow_events:
+                if msg.content == event_content:
+                    return msg
+            
+            await asyncio.sleep(0.1)
+        
+        # Timeout - provide helpful error
+        received_events = [msg.content for msg in self.collector.flow_events]
+        raise TimeoutError(
+            f"Timed out waiting for flow event '{event_content}'. "
+            f"Received events: {received_events}"
+        )
+    
+    async def wait_for_orchestrator_ready(self, timeout: float = 30.0) -> CollectedMessage:
+        """Wait for orchestrator to be ready."""
+        return await self.wait_for_flow_event("orchestrator_ready", timeout)
+
     async def wait_for_agent_results(
         self,
         expected_agents: list[str],
@@ -409,3 +443,27 @@ class FlowTestClient:
     async def wait_for_completion(self, timeout: float = 300.0) -> list[CollectedMessage]:
         """Wait for flow completion and return all messages."""
         return await self.waiter.wait_for_completion(timeout)
+    
+    async def wait_for_orchestrator_ready(self, timeout: float = 30.0) -> bool:
+        """Wait for orchestrator to be ready."""
+        try:
+            await self.waiter.wait_for_orchestrator_ready(timeout)
+            return True
+        except TimeoutError:
+            return False
+    
+    async def wait_for_flow_event(self, event_content: str, timeout: float = 30.0) -> CollectedMessage:
+        """Wait for a specific flow event."""
+        return await self.waiter.wait_for_flow_event(event_content, timeout)
+    
+    def get_message_summary(self) -> dict:
+        """Get a summary of all collected messages."""
+        return {
+            "total": len(self.collector.all_messages),
+            "ui_messages": len(self.collector.ui_messages),
+            "agent_announcements": len(self.collector.agent_announcements),
+            "agent_traces": len(self.collector.agent_traces),
+            "flow_events": len(self.collector.flow_events),
+            "errors": len(self.collector.errors),
+            "agents_active": self.collector.get_agents_announced()
+        }
