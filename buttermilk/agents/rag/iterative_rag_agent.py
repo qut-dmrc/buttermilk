@@ -13,7 +13,7 @@ from pydantic import Field
 import json
 
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, ResearchResult
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk import logger
 from autogen_core.models import AssistantMessage
@@ -34,15 +34,33 @@ class IterativeRagAgent(RagAgent):
     async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
         """Core processing logic for iterative RAG.
 
-        This method implements a loop that repeatedly calls the LLM, executes tools,
-        and processes results until a final answer is synthesized or max iterations are reached.
+        This method implements an iterative RAG cycle:
+        1. Generate tool calls -> run tools -> reflect and generate new tool calls 
+        2. Repeat until exhausted or max iterations 
+        3. Reflect and synthesise final result
+
+        After executing tools, we give the LLM a chance to reflect
+        on the results and decide whether to continue with more tool calls or synthesize.
         """
         logger.debug(f"IterativeRagAgent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
         max_iterations = self.parameters.get("max_iterations", 5)  # Configurable max iterations
         current_iteration = 0
-        chat_history = message.context  # Start with initial context
+        chat_history = list(message.context) if message.context else []  # Start with initial context
         current_input_message = message.inputs.get("prompt", "")
+        initial_prompt = message.inputs.get("prompt", "")
+
+        # Prepare initial messages for the LLM
+        llm_messages_to_send = await self._fill_template(
+            task_params=message.parameters,
+            inputs={"prompt": initial_prompt},
+            context=chat_history,
+            records=message.records,
+        )
+
+        # Get the appropriate AutoGenWrapper instance
+        import buttermilk
+        model_client = buttermilk.get_bm().llms.get_autogen_chat_client(self.parameters["model"])
 
         while current_iteration < max_iterations:
             current_iteration += 1
@@ -84,22 +102,48 @@ class IterativeRagAgent(RagAgent):
             if hasattr(chat_result, "tool_calls") and chat_result.tool_calls:
                 logger.info(f"IterativeRagAgent: LLM requested tool calls: {len(chat_result.tool_calls)}")
                 tool_outputs = []
+                
                 for tool_call in chat_result.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = tool_call.function.arguments
 
-                    if tool_name not in self.tools:
+                    # Find the tool by name in our tools list
+                    matching_tool = None
+                    for tool in self._tools_list:
+                        if hasattr(tool, 'name') and tool.name == tool_name:
+                            matching_tool = tool
+                            break
+                    
+                    if matching_tool is None:
                         error_msg = f"Tool '{tool_name}' not found for agent '{self.agent_name}'."
                         logger.error(error_msg)
                         tool_outputs.append(ErrorEvent(source=self.agent_id, content=error_msg))
                         continue
 
                     try:
-                        # Execute the tool
-                        tool_instance = self.tools[tool_name]
-                        # Assuming tool_args is a JSON string, parse it
-                        parsed_tool_args = json.loads(tool_args)
-                        tool_result = await tool_instance.run(**parsed_tool_args)  # Assuming tools have a .run method
+                        # Parse tool arguments 
+                        if isinstance(tool_args, str):
+                            parsed_tool_args = json.loads(tool_args)
+                        else:
+                            parsed_tool_args = tool_args
+                        
+                        # Execute the tool using the func method from FunctionTool
+                        if hasattr(matching_tool, 'func'):
+                            tool_result = await matching_tool.func(**parsed_tool_args)
+                        elif hasattr(matching_tool, 'run'):
+                            tool_result = await matching_tool.run(**parsed_tool_args)
+                        else:
+                            raise AttributeError(f"Tool {tool_name} has no callable func or run method")
+                            
+                        # Convert result to ToolOutput if it isn't already
+                        if not isinstance(tool_result, ToolOutput):
+                            tool_result = ToolOutput(
+                                name=tool_name,
+                                call_id=getattr(tool_call, 'id', ''),
+                                content=str(tool_result),
+                                results=tool_result if not isinstance(tool_result, str) else None
+                            )
+                        
                         tool_outputs.append(tool_result)
                         logger.info(f"Tool '{tool_name}' executed. Result: {tool_result.content[:100]}...")
                     except Exception as tool_error:
@@ -107,7 +151,7 @@ class IterativeRagAgent(RagAgent):
                         logger.error(error_msg, exc_info=True)
                         tool_outputs.append(ErrorEvent(source=self.agent_id, content=error_msg))
 
-                # Add tool outputs to chat history for next LLM call
+                # Add tool outputs to chat history
                 for output in tool_outputs:
                     chat_history.append(
                         output.to_llm_message()
@@ -115,11 +159,18 @@ class IterativeRagAgent(RagAgent):
                         else AssistantMessage(content=str(output), source="IterativeRagAgent")
                     )
 
-                # Update current_input_message with tool results for the next iteration's prompt
-                current_input_message = "Tool results: " + "; ".join([str(o.content) for o in tool_outputs if hasattr(o, "content")])
+                # CRITICAL FIX: After executing tools, prepare messages for the next LLM call
+                # to allow reflection on tool results. Use the updated chat_history which now
+                # includes the tool outputs, and let the LLM decide what to do next.
+                llm_messages_to_send = chat_history
+                
+                # Continue the loop to give LLM a chance to reflect on tool results
+                # and decide whether to make more tool calls or synthesize final result
+                continue
 
             elif chat_result.finish_reason == "stop":
-                logger.info(f"IterativeRagAgent: LLM synthesized final answer. Iterations: {current_iteration}")
+                logger.info(f"IterativeRagAgent: LLM decided to synthesize final answer. Iterations: {current_iteration}")
+
                 # Parse the final result using the agent's output model
                 if self._output_model:
                     try:
@@ -133,13 +184,34 @@ class IterativeRagAgent(RagAgent):
                     return AgentOutput(agent_id=self.agent_id, outputs=chat_result.content, metadata=chat_result.model_dump())
             else:
                 logger.warning(f"IterativeRagAgent: LLM finished with unexpected reason: {chat_result.finish_reason}. Content: {chat_result.content}")
-                return AgentOutput(
-                    agent_id=self.agent_id,
-                    outputs=ErrorEvent(source=self.agent_id, content=f"LLM finished with unexpected reason: {chat_result.finish_reason}"),
-                )
+                # Don't immediately exit - give it another chance unless we're at max iterations
+                llm_messages_to_send = chat_history
+                continue
 
-        logger.warning(f"IterativeRagAgent: Max iterations ({max_iterations}) reached without a final answer.")
-        return AgentOutput(
-            agent_id=self.agent_id,
-            outputs=ErrorEvent(source=self.agent_id, content=f"Max iterations ({max_iterations}) reached without a final answer."),
-        )
+        logger.warning(f"IterativeRagAgent: Max iterations ({max_iterations}) reached. Attempting final synthesis.")
+        
+        # If max iterations reached, make one final call to synthesize results
+        try:
+            final_result = await model_client.call_chat(
+                messages=chat_history,
+                tools_list=[],  # No tools for final synthesis
+                cancellation_token=cancellation_token,
+                schema=self._output_model,
+            )
+            
+            if self._output_model:
+                try:
+                    parsed_output = self._output_model.model_validate_json(final_result.content)
+                    return AgentOutput(agent_id=self.agent_id, outputs=parsed_output, metadata=final_result.model_dump())
+                except Exception as parse_error:
+                    logger.error(f"Failed to parse final synthesis: {parse_error}")
+                    return AgentOutput(agent_id=self.agent_id, outputs=final_result.content, metadata=final_result.model_dump())
+            else:
+                return AgentOutput(agent_id=self.agent_id, outputs=final_result.content, metadata=final_result.model_dump())
+                
+        except Exception as final_error:
+            logger.error(f"Error during final synthesis: {final_error}")
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=ErrorEvent(source=self.agent_id, content=f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}"),
+            )
