@@ -3,22 +3,51 @@ import React, { useState, useEffect } from 'react';
 import { render, Text } from 'ink';
 import meow from 'meow';
 import UI from './ui.js';
-import http from 'http'; // Import http module
-import Spinner from 'ink-spinner'; // Assuming ink-spinner is available
-
-const BACKEND_HOST = 'localhost';
-const BACKEND_PORT = 8080;
+import http from 'http';
+import https from 'https';
+import Spinner from 'ink-spinner';
 
 const cli = meow(`
   Usage
     $ buttermilk-cli
+
+  Options
+    --host, -h      Backend host (default: localhost)
+    --port, -p      Backend port (default: 8080)
+    --url, -u       Full backend URL (overrides host/port)
+
+  Environment Variables
+    BUTTERMILK_HOST    Backend host
+    BUTTERMILK_PORT    Backend port
+    BUTTERMILK_URL     Full backend URL
 
   Description
     Connects to the Buttermilk backend via WebSocket.
 `,
 {
 	importMeta: import.meta,
+	flags: {
+		host: {
+			type: 'string',
+			alias: 'h',
+			default: process.env.BUTTERMILK_HOST || 'localhost'
+		},
+		port: {
+			type: 'number',
+			alias: 'p',
+			default: parseInt(process.env.BUTTERMILK_PORT || '8080')
+		},
+		url: {
+			type: 'string',
+			alias: 'u',
+			default: process.env.BUTTERMILK_URL
+		}
+	}
 });
+
+const BACKEND_HOST = cli.flags.url ? new URL(cli.flags.url).hostname : cli.flags.host;
+const BACKEND_PORT = cli.flags.url ? parseInt(new URL(cli.flags.url).port || '80') : cli.flags.port;
+const BACKEND_PROTOCOL = cli.flags.url ? new URL(cli.flags.url).protocol.replace(':', '') : 'http';
 
 const App = () => {
   const [websocketUrl, setWebsocketUrl] = useState<string | null>(null);
@@ -29,7 +58,8 @@ const App = () => {
       console.log("App: Starting fetchSessionId...");
       try {
         const response = await new Promise<string>((resolve, reject) => {
-          http.get(`http://${BACKEND_HOST}:${BACKEND_PORT}/api/session`, (res) => {
+          const httpModule = BACKEND_PROTOCOL === 'https' ? https : http;
+          httpModule.get(`${BACKEND_PROTOCOL}://${BACKEND_HOST}:${BACKEND_PORT}/api/session`, (res) => {
             let data = '';
             res.on('data', (chunk) => {
               data += chunk;
@@ -47,7 +77,8 @@ const App = () => {
         if (!sessionId) {
           throw new Error('Session ID not found in response');
         }
-        const newWebsocketUrl = `ws://${BACKEND_HOST}:${BACKEND_PORT}/ws/${sessionId}`;
+        const wsProtocol = BACKEND_PROTOCOL === 'https' ? 'wss' : 'ws';
+        const newWebsocketUrl = `${wsProtocol}://${BACKEND_HOST}:${BACKEND_PORT}/ws/${sessionId}`;
         console.log(`App: Fetched session ID, setting WebSocket URL: ${newWebsocketUrl}`);
         setWebsocketUrl(newWebsocketUrl);
       } catch (err: any) {
@@ -77,10 +108,4 @@ const App = () => {
   return <UI url={websocketUrl} />;
 };
 
-render(<App />, {
-  stdin: undefined,
-});
-
-render(<App />, {
-  stdin: undefined,
-});
+render(<App />);
