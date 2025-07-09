@@ -10,7 +10,7 @@ config:
 	uv run python -m buttermilk.runner.cli -c job
 
 api:
-	uv run python -m buttermilk.runner.cli flows=[osb,tox,trans] run=api
+	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
 
 # Run unit tests and generate a coverage report.
 coverage:
