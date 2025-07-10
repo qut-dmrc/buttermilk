@@ -6,6 +6,7 @@ import UI from './ui.js';
 import http from 'http';
 import https from 'https';
 import Spinner from 'ink-spinner';
+import { logger } from './utils/logger.js';
 
 const cli = meow(`
   Usage
@@ -15,11 +16,13 @@ const cli = meow(`
     --host, -h      Backend host (default: localhost)
     --port, -p      Backend port (default: 8080)
     --url, -u       Full backend URL (overrides host/port)
+    --debug, -d     Enable debug logging
 
   Environment Variables
     BUTTERMILK_HOST    Backend host
     BUTTERMILK_PORT    Backend port
     BUTTERMILK_URL     Full backend URL
+    BUTTERMILK_DEBUG   Enable debug logging
 
   Description
     Connects to the Buttermilk backend via WebSocket.
@@ -41,13 +44,28 @@ const cli = meow(`
 			type: 'string',
 			shortFlag: 'u',
 			default: process.env.BUTTERMILK_URL || ''
+		},
+		debug: {
+			type: 'boolean',
+			shortFlag: 'd',
+			default: process.env.BUTTERMILK_DEBUG === 'true'
 		}
 	}
 });
 
+// Enable debug logging if requested
+logger.setDebug(cli.flags.debug);
+
 const BACKEND_HOST = cli.flags.url && cli.flags.url !== '' ? new URL(cli.flags.url).hostname : cli.flags.host;
 const BACKEND_PORT = cli.flags.url && cli.flags.url !== '' ? parseInt(new URL(cli.flags.url).port || '80') : cli.flags.port;
 const BACKEND_PROTOCOL = cli.flags.url && cli.flags.url !== '' ? new URL(cli.flags.url).protocol.replace(':', '') : 'http';
+
+logger.debug('CLI Configuration:', {
+  host: BACKEND_HOST,
+  port: BACKEND_PORT,
+  protocol: BACKEND_PROTOCOL,
+  debug: cli.flags.debug
+});
 
 const App = () => {
   const [websocketUrl, setWebsocketUrl] = useState<string | null>(null);
