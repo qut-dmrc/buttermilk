@@ -46,7 +46,7 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk import logger
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
-from buttermilk.libs.autogen import AutogenAgentAdapter
+# AutogenAgentAdapter no longer needed - Agent now inherits from RoutedAgent directly
 
 
 class InterruptHandler(BaseModel):
@@ -227,9 +227,9 @@ class AutogenOrchestrator(Orchestrator):
         return termination_handler, interrupt_handler
 
     async def _register_agents(self, params: RunRequest) -> None:
-        """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
+        """Registers Buttermilk agents with the Autogen runtime.
 
-        Iterates through the `self.agents` configuration, creating AutogenAgentAdapter
+        Iterates through the `self.agents` configuration, creating Agent
         instances for each agent variant and registering them with the runtime.
         Sets up subscriptions so agents listen on the main group chat topic and
         potentially role-specific topics.
@@ -253,32 +253,25 @@ class AutogenOrchestrator(Orchestrator):
                 if isinstance(agent_cls, type(Agent)):
                     config_with_session = {**variant_config.model_dump(), "session_id": params.session_id}
 
-                    # This function creates an instance of the AutogenAgentAdapter,
-                    # wrapping the actual Buttermilk agent logic.
-                    # It captures loop variables (variant_config, agent_cls, self._topic.type)
-                    # to ensure the correct configuration is used when the factory is called.
-
+                    # Create factory function for the agent
                     def agent_factory(
-                        orchestrator_ref,  # New parameter for self
+                        orchestrator_ref,  # Reference to orchestrator for registration
                         cfg: dict = config_with_session,
                         cls: type[Agent] = agent_cls,
-                        topic_type: str = self._topic.type,
-                    ):
-                        # The adapter will need to accept 'registration_callback'
-                        return AutogenAgentAdapter(
-                            agent_cfg=cfg,
-                            agent_cls=cls,
-                            topic_type=topic_type,
-                            registration_callback=orchestrator_ref._register_buttermilk_agent_instance,  # Pass the method
-                        )
+                    ) -> Agent:
+                        # Create the agent instance
+                        agent_instance = cls(**cfg)
+                        # Register with orchestrator
+                        orchestrator_ref._register_buttermilk_agent_instance(agent_instance.agent_id, agent_instance)
+                        return agent_instance
 
-                    # Register the adapter factory with the runtime.
-                    # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                    agent_type: AgentType = await AutogenAgentAdapter.register(
+                    # Register the agent factory with the runtime.
+                    # The runtime will call this factory to create agent instances.
+                    agent_type: AgentType = await Agent.register(
                         runtime=self._runtime,
                         type=variant_config.agent_id,  # Use the specific variant ID for registration
-                        factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls, t_type=self._topic.type: agent_factory(
-                            orch, cfg=v_cfg, cls=a_cls, topic_type=t_type,
+                        factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
+                            orch, cfg=v_cfg, cls=a_cls,
                         ),
                     )
                 else:
@@ -308,7 +301,7 @@ class AutogenOrchestrator(Orchestrator):
                         agent_type=agent_type,
                     ),
                 )
-                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'")
+                logger.debug(f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'")
 
                 registered_for_role.append((agent_type, variant_config))
 
