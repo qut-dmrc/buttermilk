@@ -99,7 +99,8 @@ async def backend_process():
 
 @pytest.mark.e2e
 class TestFlowE2E:
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_start_flow_with_backend(self, backend_process):
         """Basic test to verify flow can be started."""
         async with FlowTestClient.create(direct_ws_url="ws://localhost:8000/ws/test_session") as client:
@@ -107,15 +108,15 @@ class TestFlowE2E:
             # Wait for orchestrator to be ready
             ready = await client.wait_for_orchestrator_ready(timeout=30)
             assert ready, "Orchestrator failed to initialize"
-            
+
             # Give it some time to process
             await asyncio.sleep(10)
-            
+
             # Verify we got some messages
             summary = client.get_message_summary()
             assert summary["total"] > 0, "No messages received"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_osb_flow_with_prompt_in_runrequest(self, backend_process):
         """Test sending a prompt in the RunRequest and waiting for it to be processed."""
         logger.info("[TEST] Test started - expecting prompt in RunRequest to be processed")
@@ -143,7 +144,7 @@ class TestFlowE2E:
         except TimeoutError:
             pytest.fail("Test timed out waiting for prompt processing")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_osb_flow_initialization(self, backend_process):
         """Test that AutogenOrchestrator initializes with proper state events."""
         logger.info("[TEST] Test started - verifying orchestrator initialization with state events")
@@ -158,7 +159,7 @@ class TestFlowE2E:
                     ready = await client.wait_for_orchestrator_ready(timeout=20)
                     assert ready, "Orchestrator failed to become ready"
                     logger.info("[TEST] ✓ Orchestrator is ready")
-                    
+
                     # Also verify we got the setup message
                     try:
                         init_msg = await client.wait_for_ui_message("Setting up AutogenOrchestrator", timeout=5)
@@ -166,17 +167,17 @@ class TestFlowE2E:
                     except TimeoutError:
                         # It's OK if we miss this specific message as long as orchestrator is ready
                         logger.info("[TEST] Setup message not found, but orchestrator is ready")
-                    
+
                     # Log message summary
                     summary = client.get_message_summary()
                     logger.info(f"[TEST] Message summary: {summary}")
-                    
+
                     return
 
         except TimeoutError:
             pytest.fail("Test timed out during initialization")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_osb_flow_with_user_interaction(self, backend_process):
         """Test complete OSB flow with user interaction."""
         logger.info("[TEST] Starting comprehensive OSB flow test with user interaction")
@@ -200,7 +201,7 @@ class TestFlowE2E:
                         # OSB might ask for confirmation or additional input
                         prompt_msg = await client.wait_for_ui_message(pattern="(proceed|confirm|continue)", timeout=10)
                         logger.info(f"[TEST] ✓ Received prompt: {prompt_msg}")
-                        
+
                         # Send confirmation
                         logger.info("[TEST] Sending confirmation...")
                         await client.send_manager_response("yes")
@@ -210,27 +211,27 @@ class TestFlowE2E:
                     # Step 4: Wait for agent activity
                     logger.info("[TEST] Step 4: Waiting for agent responses...")
                     await asyncio.sleep(30)  # Give agents time to work
-                    
+
                     # Check for agent activity
                     summary = client.get_message_summary()
                     logger.info(f"[TEST] Current message summary: {summary}")
-                    
+
                     assert summary["agent_announcements"] > 0, "No agents announced themselves"
                     assert summary["agent_traces"] > 0 or summary["ui_messages"] > 5, "No agent activity detected"
-                    
+
                     # Step 5: Verify we got relevant responses
                     logger.info("[TEST] Step 5: Verifying response content...")
                     found_relevant_content = False
-                    
+
                     # Check all messages for hate speech related content
                     for msg in client.collector.all_messages:
                         if any(keyword in msg.content.lower() for keyword in ["hate", "speech", "meta", "facebook", "policy"]):
                             found_relevant_content = True
                             logger.info(f"[TEST] ✓ Found relevant content in {msg.type}: {msg.content[:100]}...")
                             break
-                    
+
                     assert found_relevant_content, "No relevant content about hate speech found in responses"
-                    
+
                     # Step 6: Log final state
                     logger.info("[TEST] Step 6: Test completed successfully")
                     final_summary = client.get_message_summary()

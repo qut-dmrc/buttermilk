@@ -237,8 +237,8 @@ class ConcreteOrchestrator(Orchestrator):
 
 class TestOrchestratorIntegration:
     """Test orchestrator integration with storage configs."""
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_orchestrator_with_storage_configs(self):
         """Test full orchestrator with storage configs."""
         config = {
@@ -259,14 +259,14 @@ class TestOrchestratorIntegration:
             "observers": {},
             "parameters": {}
         }
-        
+
         # Create orchestrator
         orchestrator = ConcreteOrchestrator(**config)
-        
+
         # Verify storage configs
         assert isinstance(orchestrator.storage["input_file"], FileStorageConfig)
         assert isinstance(orchestrator.storage["results_bq"], BigQueryStorageConfig)
-        
+
         # Verify attributes are accessible
         assert orchestrator.storage["input_file"].path == "/data/input.jsonl"
         assert orchestrator.storage["results_bq"].project_id == "my-project"

@@ -134,9 +134,8 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
-        logger.debug(f"[AutogenOrchestrator._setup] Entering _setup method. Request callback_to_ui: {request.callback_to_ui is not None}")
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
-        logger.info(msg)
+        logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
 
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
@@ -144,7 +143,6 @@ class AutogenOrchestrator(Orchestrator):
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
-        logger.debug("Autogen runtime started.")
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
@@ -165,37 +163,29 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(0.5)
 
         # Send a welcome message to the UI
-        logger.info(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic: {msg}")
-        logger.info(f"[AutogenOrchestrator._setup] callback_to_ui is {'set' if request.callback_to_ui else 'NOT set'}")
-        
-        # Create the FlowEvent
         flow_event = FlowEvent(source="orchestrator", content=msg)
-        logger.info(f"[AutogenOrchestrator._setup] Created FlowEvent: {flow_event}")
-        
-        # Publish to MANAGER topic
         topic = DefaultTopicId(type=MANAGER)
-        logger.info(f"[AutogenOrchestrator._setup] Publishing to topic: {topic}")
+        logger.debug(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
         await self._runtime.publish_message(flow_event, topic_id=topic)
-        logger.info(f"[AutogenOrchestrator._setup] Message published successfully")
-        
+
         # Give the MANAGER a moment to process the message
         await asyncio.sleep(0.5)
-        
+
         # Mark as initialized and process any pending messages
         self._is_initialized = True
-        logger.info(f"[AutogenOrchestrator._setup] Runtime initialized, processing {len(self._pending_messages)} pending messages")
         
         # Process any messages that were queued before initialization
-        for pending_message, topic_id in self._pending_messages:
-            logger.info(f"[AutogenOrchestrator._setup] Publishing pending message: {pending_message}")
-            await self._runtime.publish_message(pending_message, topic_id=topic_id)
-        
+        if self._pending_messages:
+            logger.debug(f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages")
+            for pending_message, topic_id in self._pending_messages:
+                await self._runtime.publish_message(pending_message, topic_id=topic_id)
+
         # Clear the pending messages
         self._pending_messages.clear()
 
         # Collect tool definitions from registered agents
         participant_tools = {}
-        logger.info(f"Collecting tools from {len(self._agent_registry)} registered agents")
+        logger.debug(f"Collecting tools from {len(self._agent_registry)} registered agents")
         for agent_id, agent_instance in self._agent_registry.items():
             if hasattr(agent_instance, 'role') and hasattr(agent_instance, 'get_tool_definitions'):
                 role = agent_instance.role.upper()
@@ -339,24 +329,15 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
-            logger.info(f"[MANAGER ClosureAgent] 🎯 RECEIVED MESSAGE!")
-            logger.info(f"[MANAGER ClosureAgent] Type: {type(message)}")
-            logger.info(f"[MANAGER ClosureAgent] Content: {getattr(message, 'content', 'No content attr')}")
-            logger.info(f"[MANAGER ClosureAgent] Source: {getattr(message, 'source', 'No source attr')}")
-            logger.info(f"[MANAGER ClosureAgent] Full message: {message}")
-            
-            if callback_to_ui is not None:
-                logger.info(f"[MANAGER ClosureAgent] callback_to_ui is available: {callback_to_ui}")
-                logger.info(f"[MANAGER ClosureAgent] Attempting to send message to UI...")
-                try:
-                    result = await callback_to_ui(message)
-                    logger.info(f"[MANAGER ClosureAgent] ✅ Successfully called callback_to_ui, result: {result}")
-                except Exception as e:
-                    logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
-            else:
-                logger.warning(f"[MANAGER ClosureAgent] ⚠️ No callback_to_ui available!")
-                logger.debug(f"[{self.trace_id}] {message}")
-            logger.info(f"[MANAGER ClosureAgent] 🏁 Message processing complete")
+            logger.debug(
+                f"[MANAGER ClosureAgent] 🎯 Received message type: {type(message)} from {getattr(message, 'source', 'No source attr')}: {message}"
+            )
+
+            try:
+                result = await callback_to_ui(message)
+                logger.info(f"[MANAGER ClosureAgent] ✅ Successfully called callback_to_ui, result: {result}")
+            except Exception as e:
+                logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
 
         # Register the closure function as an agent named MANAGER.
         logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")
@@ -369,12 +350,16 @@ class AutogenOrchestrator(Orchestrator):
                     topic_type=MANAGER,  # Subscribe to the MANAGER topic
                     agent_type=MANAGER,
                 ),
+                TypeSubscription(
+                    topic_type=self._topic.type,  # Main group chat topic
+                    agent_type=MANAGER,
+                ),
             ],
             # If a message arrives that isn't handled, just ignore it silently.
             # unknown_type_policy="ignore",
         )
         logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
-        
+
         # Give the agent time to fully register
         await asyncio.sleep(0.5)
         logger.debug(f"[AutogenOrchestrator.register_ui] Registration complete after delay")
@@ -583,13 +568,13 @@ class AutogenOrchestrator(Orchestrator):
         """
         async def publish_callback(message: FlowMessage) -> None:
             logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
-            
+
             # If runtime is not initialized yet, queue the message
             if not self._is_initialized or not hasattr(self, '_runtime') or self._runtime is None:
                 logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
                 self._pending_messages.append((message, self._topic))
                 return
-            
+
             await self._runtime.publish_message(
                 message,
                 topic_id=self._topic,

@@ -529,13 +529,13 @@ class TestOSBMCPIntegration:
                 "message_data": {"query": "test", "flow": "osb"}
             })
         ]
-        
+
         for endpoint, request_data in endpoints_and_data:
             response = client.post(endpoint, json=request_data)
-            
+
             assert response.status_code == 200
             data = response.json()
-            
+
             # Verify consistent MCP response format
             assert "success" in data
             assert "result" in data
@@ -555,26 +555,26 @@ class TestOSBMCPIntegration:
             "/mcp/osb/session-state",
             "/mcp/osb/message-validation"
         ]
-        
+
         for endpoint in endpoints:
             response = client.post(endpoint, json={})  # Empty request
-            
+
             # Should return validation error (422) or handle gracefully
             assert response.status_code in [422, 200]
-            
+
             if response.status_code == 200:
                 data = response.json()
                 # If handled gracefully, should have error in response
                 if not data.get("success", True):
                     assert "error" in data
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_mcp_concurrent_requests(self, client):
         """Test OSB MCP endpoints handle concurrent requests correctly."""
         # Create multiple concurrent requests to different endpoints
         async def make_request(endpoint, data):
             return client.post(endpoint, json=data)
-        
+
         requests = [
             ("/mcp/osb/vector-query", {
                 "query": f"Test query {i}",
@@ -583,13 +583,13 @@ class TestOSBMCPIntegration:
             })
             for i in range(5)
         ]
-        
+
         # Execute concurrent requests
         responses = []
         for endpoint, data in requests:
             response = client.post(endpoint, json=data)
             responses.append(response)
-        
+
         # Verify all requests succeeded
         for i, response in enumerate(responses):
             assert response.status_code == 200
@@ -604,16 +604,16 @@ class TestOSBMCPIntegration:
             "agent_type": "researcher", 
             "flow": "osb"
         }
-        
+
         response = client.post("/mcp/osb/vector-query", json=request_data)
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["success"] is True
         assert "execution_time_ms" in data
         assert data["execution_time_ms"] > 0
-        
+
         # Check endpoint-specific performance metrics
         result = data["result"]
         assert "performance" in result

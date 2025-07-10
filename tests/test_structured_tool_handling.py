@@ -18,7 +18,7 @@ from buttermilk.agents.rag import RagAgent
 
 class TestStructuredToolHandling:
     """Test the structured tool handling improvements."""
-    
+
     @pytest.fixture
     def mock_participants(self):
         """Create mock participants dict."""
@@ -26,7 +26,7 @@ class TestStructuredToolHandling:
             "RESEARCHER": "Agent that searches and analyzes research data",
             "ANALYST": "Agent that performs data analysis",
         }
-    
+
     @pytest.fixture
     def mock_participant_tools(self):
         """Create mock participant tools."""
@@ -67,8 +67,8 @@ class TestStructuredToolHandling:
                 }
             ]
         }
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_tool_registration_from_conductor_request(self, mock_participants, mock_participant_tools):
         """Test that tools are properly registered when ConductorRequest is received."""
         # Create host agent
@@ -77,35 +77,35 @@ class TestStructuredToolHandling:
             agent_name="TestHost",
             role="HOST"
         )
-        
+
         # Initialize with mock callback
         mock_callback = AsyncMock()
         await host.initialize(callback_to_groupchat=mock_callback)
-        
+
         # Create ConductorRequest
         conductor_request = ConductorRequest(
             inputs={},
             participants=mock_participants,
             participant_tools=mock_participant_tools
         )
-        
+
         # Handle the ConductorRequest
         await host._handle_events(
             message=conductor_request,
             cancellation_token=Mock(),
             public_callback=Mock()
         )
-        
+
         # Verify tools were built
         assert hasattr(host, '_tools_list')
         assert len(host._tools_list) > 0
-        
+
         # Check that tools have the expected names
         tool_names = [tool.name for tool in host._tools_list]
         assert "researcher.case_search_tool" in tool_names
         assert "analyst.analyze_data" in tool_names
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_tool_invocation_with_role_prefix(self, mock_participants, mock_participant_tools):
         """Test that tools with role prefix are correctly parsed and invoked."""
         # Create host agent
@@ -114,16 +114,16 @@ class TestStructuredToolHandling:
             agent_name="TestHost",
             role="HOST"
         )
-        
+
         # Initialize
         mock_callback = AsyncMock()
         await host.initialize(callback_to_groupchat=mock_callback)
-        
+
         # Set up participants and tools
         host._participants = mock_participants
         host._participant_tools = mock_participant_tools
         await host._build_agent_tools()
-        
+
         # Simulate LLM response with tool call
         mock_llm_response = AgentTrace(
             agent_id="test_host",
@@ -138,7 +138,7 @@ class TestStructuredToolHandling:
                 }
             }
         )
-        
+
         # Process the response
         await host._listen(
             message=mock_llm_response,
@@ -146,17 +146,17 @@ class TestStructuredToolHandling:
             source="",
             public_callback=Mock()
         )
-        
+
         # Verify StepRequest was created correctly
         assert not host._proposed_step.empty()
         step_request = await host._proposed_step.get()
-        
+
         assert step_request.role == "RESEARCHER"
         assert step_request.inputs["tool"] == "case_search_tool"
         assert step_request.inputs["query"] == "test search query"
         assert step_request.inputs["max_results"] == 5
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_tool_parameters_passed_correctly(self):
         """Test that tool parameters are passed correctly to agents (issue #85)."""
         # Create a mock RAG agent
@@ -166,7 +166,7 @@ class TestStructuredToolHandling:
             role="RESEARCHER",
             parameters={}
         )
-        
+
         # Create mock AgentOutput with structured result
         mock_output = AgentOutput(
             agent_id="test_rag",
@@ -176,7 +176,7 @@ class TestStructuredToolHandling:
                 "total_results": 2
             }
         )
-        
+
         # Mock the _process method
         with patch.object(rag_agent, '_process', new_callable=AsyncMock, return_value=mock_output) as mock_process:
             # Create StepRequest with query parameter
@@ -187,21 +187,21 @@ class TestStructuredToolHandling:
                     "max_results": 10
                 }
             )
-            
+
             # Process the request
             result = await rag_agent._process(message=step_request)
-            
+
             # Verify the result
             assert result.outputs == "Here are the search results..."
             assert result.metadata["query"] == "test search query"
             assert result.metadata["total_results"] == 2
-            
+
             # Verify _process was called with correct message
             mock_process.assert_called_once()
             call_args = mock_process.call_args[1]
             assert call_args['message'] == step_request
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_error_handling_for_missing_participants(self):
         """Test error handling when participants list is empty."""
         # Create host agent
@@ -210,11 +210,11 @@ class TestStructuredToolHandling:
             agent_name="TestHost",
             role="HOST"
         )
-        
+
         # Initialize without participants
         mock_callback = AsyncMock()
         await host.initialize(callback_to_groupchat=mock_callback)
-        
+
         # Simulate LLM response with tool call
         mock_llm_response = AgentTrace(
             agent_id="test_host",
@@ -226,7 +226,7 @@ class TestStructuredToolHandling:
                 "parameters": {"query": "test"}
             }
         )
-        
+
         # Process the response
         await host._listen(
             message=mock_llm_response,
@@ -234,7 +234,7 @@ class TestStructuredToolHandling:
             source="",
             public_callback=Mock()
         )
-        
+
         # Verify error message was sent
         mock_callback.assert_called_once()
         error_trace = mock_callback.call_args[0][0]

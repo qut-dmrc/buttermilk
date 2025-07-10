@@ -126,7 +126,6 @@ dev = [
     "ipykernel>=6.29.5",
     "buttermilk",
     "pytest-anyio>=0.0.0",
-    "pytest-asyncio>=1.0.0",
 ]
 ui = [
     "streamlit>=1.28.0",

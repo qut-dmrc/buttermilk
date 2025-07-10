@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_websocket_connection():
     """Test basic WebSocket connection."""
     
@@ -38,7 +38,7 @@ async def test_websocket_connection():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_api_session_endpoint():
     """Test that API session endpoint works."""
     import aiohttp

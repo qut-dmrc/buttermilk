@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import { retroIRCTheme } from './themes.js';
 import { Message } from './types.js';
-import MessageComponent from './components/Message.js';
+import MessageList from './components/MessageList.js';
 import UserInput from './components/UserInput.js';
 import Spinner from './components/Spinner.js';
 import { connect, WebSocketConnection, ConnectionState } from './websocket.js';
@@ -42,7 +43,7 @@ const UI = ({ url }: Props) => {
     const userMessage: Message = {
       type: 'user_message',
       payload: {
-        message: `You: ${text}`,
+        message: text,
         timestamp: new Date().toISOString()
       }
     };
@@ -111,35 +112,60 @@ Regular text is sent as user_message to the current flow.`
   };
 
   const getStatusMessage = () => {
+    const statusIcon = retroIRCTheme.format.status(
+      connectionState === 'connected' ? 'connected' :
+      connectionState === 'disconnected' || connectionState === 'error' ? 'disconnected' :
+      'reconnecting'
+    );
+    
+    const statusColor = 
+      connectionState === 'connected' ? retroIRCTheme.colors.connected :
+      connectionState === 'disconnected' || connectionState === 'error' ? retroIRCTheme.colors.disconnected :
+      retroIRCTheme.colors.reconnecting;
+    
     switch (connectionState) {
       case 'connecting':
-        return <Text color="yellow"><Spinner /> Connecting to server...</Text>;
+        return <Text color={statusColor}><Spinner /> Connecting to server...</Text>;
       case 'connected':
-        return <Text color="green">● Connected</Text>;
+        return <Text color={statusColor}>{statusIcon} Connected</Text>;
       case 'reconnecting':
-        return <Text color="yellow"><Spinner /> Reconnecting...</Text>;
+        return <Text color={statusColor}><Spinner /> Reconnecting...</Text>;
       case 'disconnected':
-        return <Text color="red">● Disconnected</Text>;
+        return <Text color={statusColor}>{statusIcon} Disconnected</Text>;
       case 'error':
-        return <Text color="red">● Error: {connectionError?.message || 'Unknown error'}</Text>;
+        return <Text color={statusColor}>{statusIcon} Error: {connectionError?.message || 'Unknown error'}</Text>;
     }
   };
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1} borderStyle="single" borderColor="gray">
-        <Box padding={0.5}>
-          {getStatusMessage()}
+      {/* Terminal header */}
+      <Box 
+        borderStyle="single" 
+        borderColor={retroIRCTheme.colors.border}
+        marginBottom={1}
+      >
+        <Box flexDirection="row" justifyContent="space-between" width="100%">
+          <Text color={retroIRCTheme.colors.text} bold>
+            Buttermilk Terminal v1.0 - IRC Mode
+          </Text>
+          <Box>
+            {getStatusMessage()}
+          </Box>
         </Box>
       </Box>
       
+      {/* Message area */}
       <Box flexDirection="column" flexGrow={1}>
-        {messages.map((msg, i) => (
-          <MessageComponent key={i} message={msg} />
-        ))}
+        <MessageList messages={messages} />
       </Box>
       
-      {connectionState === 'connected' && <UserInput onSubmit={handleSubmit} />}
+      {/* Input area - only show when connected */}
+      {connectionState === 'connected' && (
+        <Box borderStyle="single" borderColor={retroIRCTheme.colors.border} marginTop={1}>
+          <UserInput onSubmit={handleSubmit} />
+        </Box>
+      )}
     </Box>
   );
 };

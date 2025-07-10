@@ -22,7 +22,7 @@ class MockToolCall:
         self.function.arguments = function['arguments']
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_iterative_rag_agent_can_call_tool_multiple_times(mocker):
     """Test that the IterativeRagAgent can call tools multiple times in one session."""
     # 1. Mock a search tool
@@ -77,4 +77,3 @@ def test_iterative_rag_agent_uses_correct_template():
         parameters={"model": "fake-model"},
     )
     assert agent.template == "iterative_rag"
-    

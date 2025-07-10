@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_osb_hate_speech_query():
     """Test OSB flow with a hate speech policy query."""
     
@@ -69,7 +69,7 @@ async def test_osb_hate_speech_query():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_osb_simple_connection():
     """Test simple connection and message flow."""
     

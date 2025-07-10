@@ -93,35 +93,35 @@ def osb_flow_runner(mock_vector_store, mock_osb_agents):
 class TestOSBMultiAgentCoordination:
     """Test coordination between OSB agents in workflows."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_complete_policy_analysis_workflow(self, osb_flow_runner, mock_vector_store):
         """Test complete OSB policy analysis workflow."""
         # Test scenario: Analyzing potentially harmful social media content
         test_query = "This post contains language targeting a specific ethnic group with derogatory terms"
-        
+
         # Execute workflow steps
         workflow_results = await self._run_complete_osb_workflow(
             query=test_query,
             case_number="OSB-TEST-001",
             flow_runner=osb_flow_runner
         )
-        
+
         # Validate workflow completion
         assert workflow_results["workflow_complete"] is True
         assert workflow_results["error_occurred"] is False
-        
+
         # Validate all agents participated
         expected_agents = {"researcher", "policy_analyst", "fact_checker", "explorer"}
         assert set(workflow_results["agent_responses"].keys()) == expected_agents
-        
+
         # Validate synthesis was performed
         assert "synthesis_summary" in workflow_results
         assert "policy_violations" in workflow_results
         assert "recommendations" in workflow_results
-        
+
         # Validate timing requirements
         assert workflow_results["total_duration"] < 60.0  # Under 1 minute
-        
+
         # Validate confidence scores
         assert workflow_results["overall_confidence"] >= 0.5
 
@@ -129,7 +129,7 @@ class TestOSBMultiAgentCoordination:
                                        flow_runner: FlowRunner) -> Dict[str, Any]:
         """Execute complete OSB workflow simulation."""
         start_time = time.time()
-        
+
         workflow_results = {
             "query": query,
             "case_number": case_number,
@@ -142,32 +142,32 @@ class TestOSBMultiAgentCoordination:
             "total_duration": 0,
             "overall_confidence": 0.0
         }
-        
+
         try:
             # Step 1: Vector store query for context
             vector_results = await self._simulate_vector_query(query, flow_runner)
-            
+
             # Step 2: Execute each agent
             agent_names = ["researcher", "policy_analyst", "fact_checker", "explorer"]
-            
+
             for agent_name in agent_names:
                 agent_result = await self._simulate_agent_execution(
                     agent_name, query, vector_results, case_number
                 )
                 workflow_results["agent_responses"][agent_name] = agent_result
-            
+
             # Step 3: Synthesize results
             synthesis_result = await self._simulate_synthesis(
                 query, workflow_results["agent_responses"]
             )
-            
+
             workflow_results.update(synthesis_result)
             workflow_results["workflow_complete"] = True
-            
+
         except Exception as e:
             workflow_results["error_occurred"] = True
             workflow_results["error_message"] = str(e)
-        
+
         workflow_results["total_duration"] = time.time() - start_time
         return workflow_results
 
@@ -221,7 +221,7 @@ class TestOSBMultiAgentCoordination:
                 "processing_time": 2.5
             }
         }
-        
+
         return agent_responses.get(agent_name, {
             "error": f"Unknown agent: {agent_name}",
             "confidence": 0.0
@@ -246,14 +246,14 @@ class TestOSBMultiAgentCoordination:
             "consensus_level": "high"
         }
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_agent_coordination_timing(self, osb_flow_runner):
         """Test timing and coordination between OSB agents."""
         test_query = "Test query for timing validation"
-        
+
         # Track agent execution order and timing
         execution_log = []
-        
+
         async def mock_agent_with_timing(agent_name: str, delay: float):
             start_time = time.time()
             await asyncio.sleep(delay)  # Simulate processing time
@@ -263,7 +263,7 @@ class TestOSBMultiAgentCoordination:
                 "duration": time.time() - start_time
             })
             return {"agent": agent_name, "processed": True}
-        
+
         # Simulate agent execution with different processing times
         agent_tasks = [
             mock_agent_with_timing("researcher", 0.1),
@@ -271,33 +271,33 @@ class TestOSBMultiAgentCoordination:
             mock_agent_with_timing("fact_checker", 0.12),
             mock_agent_with_timing("explorer", 0.18)
         ]
-        
+
         start_time = time.time()
         results = await asyncio.gather(*agent_tasks)
         total_time = time.time() - start_time
-        
+
         # Validate timing requirements
         assert total_time < 1.0  # Parallel execution should be under 1 second
         assert len(results) == 4  # All agents completed
         assert len(execution_log) == 4  # All executions logged
-        
+
         # Validate agents ran in parallel (overlapping times)
         agent_start_times = [log["start_time"] for log in execution_log]
         time_spread = max(agent_start_times) - min(agent_start_times)
         assert time_spread < 0.1  # All agents started within 100ms
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_agent_error_handling_and_recovery(self, osb_flow_runner):
         """Test error handling when individual agents fail."""
         test_query = "Error recovery test query"
-        
+
         # Simulate scenario where one agent fails
         async def failing_agent():
             raise Exception("Simulated agent failure")
-        
+
         async def successful_agent(agent_name: str):
             return {"agent": agent_name, "success": True, "confidence": 0.8}
-        
+
         # Mix of successful and failing agents
         agent_tasks = [
             successful_agent("researcher"),
@@ -305,26 +305,26 @@ class TestOSBMultiAgentCoordination:
             successful_agent("fact_checker"),
             successful_agent("explorer")
         ]
-        
+
         # Execute with error handling
         results = await asyncio.gather(*agent_tasks, return_exceptions=True)
-        
+
         # Validate error handling
         successful_results = [r for r in results if not isinstance(r, Exception)]
         failed_results = [r for r in results if isinstance(r, Exception)]
-        
+
         assert len(successful_results) == 3  # 3 agents succeeded
         assert len(failed_results) == 1     # 1 agent failed
-        
+
         # Validate workflow can continue with partial results
         assert all(r.get("success") for r in successful_results)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_cross_agent_data_consistency(self, osb_flow_runner, mock_vector_store):
         """Test data consistency across agent interactions."""
         test_query = "Data consistency test query"
         case_number = "OSB-CONSISTENCY-001"
-        
+
         # Simulate agents accessing shared context
         shared_context = {
             "query": test_query,
@@ -335,22 +335,22 @@ class TestOSBMultiAgentCoordination:
                 "workflow_id": "test-workflow-001"
             }
         }
-        
+
         # Execute agents with shared context
         agent_results = {}
         for agent_name in ["researcher", "policy_analyst", "fact_checker", "explorer"]:
             result = await self._simulate_agent_with_context(agent_name, shared_context)
             agent_results[agent_name] = result
-        
+
         # Validate consistent case_number across all agents
         for agent_name, result in agent_results.items():
             assert result.get("case_number") == case_number
             assert result.get("source_query") == test_query
-        
+
         # Validate consistent confidence scoring approach
         confidence_scores = [result.get("confidence", 0) for result in agent_results.values()]
         assert all(0 <= score <= 1 for score in confidence_scores)  # Valid confidence range
-        
+
         # Validate consistent timestamp handling
         timestamps = [result.get("timestamp") for result in agent_results.values()]
         timestamp_range = max(timestamps) - min(timestamps)
@@ -371,7 +371,7 @@ class TestOSBMultiAgentCoordination:
 class TestOSBWorkflowIntegration:
     """Integration tests for complete OSB workflows."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_end_to_end_content_moderation_workflow(self, osb_flow_runner):
         """Test complete content moderation workflow from query to decision."""
         # Realistic content moderation scenario
@@ -383,27 +383,27 @@ class TestOSBWorkflowIntegration:
             "reported_by": "community_user",
             "priority": "high"
         }
-        
+
         # Execute complete workflow
         workflow_result = await self._execute_end_to_end_workflow(
             content_to_analyze, case_metadata, osb_flow_runner
         )
-        
+
         # Validate complete workflow execution
         assert workflow_result["status"] == "completed"
         assert "final_decision" in workflow_result
         assert "confidence_level" in workflow_result
         assert "enforcement_actions" in workflow_result
-        
+
         # Validate decision quality
         decision = workflow_result["final_decision"]
         assert decision in ["no_violation", "policy_violation", "requires_review"]
-        
+
         # Validate audit trail
         assert "audit_trail" in workflow_result
         audit_trail = workflow_result["audit_trail"]
         assert len(audit_trail) >= 4  # All agents + synthesis
-        
+
         # Validate enforcement recommendations
         if decision == "policy_violation":
             assert len(workflow_result["enforcement_actions"]) > 0
@@ -422,7 +422,7 @@ class TestOSBWorkflowIntegration:
             "confidence_level": 0.0,
             "enforcement_actions": []
         }
-        
+
         try:
             # Stage 1: Initial processing and vector search
             vector_context = await self._get_policy_context(content)
@@ -431,7 +431,7 @@ class TestOSBWorkflowIntegration:
                 "timestamp": time.time(),
                 "results_count": len(vector_context.get("results", []))
             })
-            
+
             # Stage 2: Multi-agent analysis
             agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
             for agent in agents:
@@ -442,7 +442,7 @@ class TestOSBWorkflowIntegration:
                     "timestamp": time.time(),
                     "confidence": agent_output.get("confidence", 0)
                 })
-            
+
             # Stage 3: Synthesis and decision
             synthesis = await self._synthesize_agent_outputs(
                 content, workflow_result["agent_outputs"], metadata
@@ -451,19 +451,19 @@ class TestOSBWorkflowIntegration:
             workflow_result["final_decision"] = synthesis["decision"]
             workflow_result["confidence_level"] = synthesis["confidence"]
             workflow_result["enforcement_actions"] = synthesis.get("recommended_actions", [])
-            
+
             workflow_result["audit_trail"].append({
                 "stage": "synthesis",
                 "timestamp": time.time(),
                 "decision": synthesis["decision"]
             })
-            
+
             workflow_result["status"] = "completed"
-            
+
         except Exception as e:
             workflow_result["status"] = "error"
             workflow_result["error"] = str(e)
-        
+
         return workflow_result
 
     async def _get_policy_context(self, content: str) -> Dict[str, Any]:
@@ -492,9 +492,9 @@ class TestOSBWorkflowIntegration:
                                       metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize agent outputs into final decision."""
         avg_confidence = sum(output.get("confidence", 0) for output in agent_outputs.values()) / len(agent_outputs)
-        
+
         decision = "policy_violation" if avg_confidence > 0.8 else "no_violation"
-        
+
         return {
             "decision": decision,
             "confidence": avg_confidence,
@@ -506,7 +506,7 @@ class TestOSBWorkflowIntegration:
             }
         }
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_workflow_performance_requirements(self, osb_flow_runner):
         """Test that OSB workflows meet performance requirements."""
         test_scenarios = [
@@ -514,31 +514,31 @@ class TestOSBWorkflowIntegration:
             {"content": "Medium length test content with more details for analysis", "expected_max_time": 10.0},
             {"content": "Very long test content " * 50, "expected_max_time": 15.0}  # Long content
         ]
-        
+
         for i, scenario in enumerate(test_scenarios):
             start_time = time.time()
-            
+
             # Execute workflow
             result = await self._execute_end_to_end_workflow(
                 scenario["content"],
                 {"case_number": f"PERF-TEST-{i:03d}"},
                 osb_flow_runner
             )
-            
+
             execution_time = time.time() - start_time
-            
+
             # Validate performance requirements
             assert execution_time <= scenario["expected_max_time"]
             assert result["status"] == "completed"
-            
+
             # Validate quality not compromised for speed
             assert result["confidence_level"] >= 0.5
 
-    @pytest.mark.asyncio  
+    @pytest.mark.anyio
     async def test_concurrent_workflow_handling(self, osb_flow_runner):
         """Test handling of multiple concurrent OSB workflows."""
         num_concurrent_workflows = 5
-        
+
         # Create concurrent workflow tasks
         workflow_tasks = []
         for i in range(num_concurrent_workflows):
@@ -548,21 +548,21 @@ class TestOSBWorkflowIntegration:
                 self._execute_end_to_end_workflow(content, metadata, osb_flow_runner)
             )
             workflow_tasks.append(task)
-        
+
         # Execute all workflows concurrently
         start_time = time.time()
         results = await asyncio.gather(*workflow_tasks, return_exceptions=True)
         total_time = time.time() - start_time
-        
+
         # Validate concurrent execution
         successful_results = [r for r in results if not isinstance(r, Exception)]
         assert len(successful_results) == num_concurrent_workflows
-        
+
         # Validate all workflows completed successfully
         for result in successful_results:
             assert result["status"] == "completed"
             assert "final_decision" in result
-        
+
         # Validate reasonable total time (should be faster than sequential)
         max_sequential_time = num_concurrent_workflows * 15.0  # Assume 15s per workflow
         assert total_time < max_sequential_time * 0.5  # At least 50% faster due to parallelism
@@ -571,25 +571,25 @@ class TestOSBWorkflowIntegration:
 class TestOSBWorkflowErrorRecovery:
     """Test error recovery and resilience in OSB workflows."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_partial_agent_failure_recovery(self, osb_flow_runner):
         """Test workflow continuation when some agents fail."""
         content = "Test content for error recovery"
         metadata = {"case_number": "ERROR-RECOVERY-001"}
-        
+
         # Simulate scenario where 2 out of 4 agents fail
         successful_agents = ["researcher", "explorer"]
         failed_agents = ["policy_analyst", "fact_checker"]
-        
+
         workflow_result = await self._execute_workflow_with_agent_failures(
             content, metadata, successful_agents, failed_agents, osb_flow_runner
         )
-        
+
         # Validate workflow completes despite failures
         assert workflow_result["status"] == "partial_completion"
         assert len(workflow_result["successful_agents"]) == 2
         assert len(workflow_result["failed_agents"]) == 2
-        
+
         # Validate decision can still be made with partial results
         assert "final_decision" in workflow_result
         assert workflow_result["confidence_level"] >= 0.3  # Lower but still valid confidence
@@ -608,7 +608,7 @@ class TestOSBWorkflowErrorRecovery:
             "final_decision": "",
             "confidence_level": 0.0
         }
-        
+
         # Execute successful agents
         for agent in successful_agents:
             try:
@@ -617,11 +617,11 @@ class TestOSBWorkflowErrorRecovery:
                 workflow_result["successful_agents"].append(agent)
             except Exception:
                 workflow_result["failed_agents"].append(agent)
-        
+
         # Simulate failed agents
         for agent in failed_agents:
             workflow_result["failed_agents"].append(agent)
-        
+
         # Make decision with partial results
         if workflow_result["successful_agents"]:
             synthesis = await self._synthesize_partial_results(
@@ -632,7 +632,7 @@ class TestOSBWorkflowErrorRecovery:
             workflow_result["status"] = "partial_completion"
         else:
             workflow_result["status"] = "failed"
-        
+
         return workflow_result
 
     async def _execute_agent_analysis(self, agent: str, content: str, 
@@ -651,13 +651,13 @@ class TestOSBWorkflowErrorRecovery:
         """Synthesize partial agent results with reduced confidence."""
         if not agent_outputs:
             return {"decision": "insufficient_data", "confidence": 0.0}
-        
+
         avg_confidence = sum(output.get("confidence", 0) for output in agent_outputs.values()) / len(agent_outputs)
         # Reduce confidence due to missing agents
         reduced_confidence = avg_confidence * (len(agent_outputs) / 4.0)  # Assuming 4 total agents
-        
+
         decision = "requires_review" if reduced_confidence < 0.7 else "policy_violation"
-        
+
         return {
             "decision": decision,
             "confidence": reduced_confidence,

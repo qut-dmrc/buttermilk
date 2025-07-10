@@ -332,16 +332,17 @@ class HostAgent(Agent):
 
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
-            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
-            logger.debug(f"[HostAgent._handle_events] ConductorRequest content: {message.model_dump_json(indent=2)}")
+            logger.info(
+                f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest "
+                f"with {len(message.participants)} participants: {list(message.participants.keys())}"
+            )
             if self._conductor_task and not self._conductor_task.done():
                 logger.warning(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
             self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
             # If no task is running, start a new one
-            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} starting new conductor task.")
+            logger.debug(f"[HostAgent._handle_events] Host {self.agent_name} starting new conductor task")
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))
-            logger.debug(f"[HostAgent._handle_events] Conductor task created: {self._conductor_task}")
 
         # Ignore FlowProgressUpdate messages received by the host itself
         elif isinstance(message, FlowProgressUpdate):

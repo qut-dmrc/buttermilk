@@ -165,7 +165,7 @@ standard_test_inputs = {
 
 ### Dependencies Required
 - `pytest` - Test framework
-- `pytest-asyncio` - Async test support  
+- `pytest-anyio` - Async test support  
 - `fastapi[test]` - FastAPI test client
 - `requests` - For manual endpoint testing
 
