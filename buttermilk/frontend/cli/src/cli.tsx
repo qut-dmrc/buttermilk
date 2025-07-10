@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { render, Text } from 'ink';
 import meow from 'meow';
 import UI from './ui.js';
+import UIReadline from './ui-readline.js';
 import http from 'http';
 import https from 'https';
 import Spinner from 'ink-spinner';
@@ -49,6 +50,11 @@ const cli = meow(`
 			type: 'boolean',
 			shortFlag: 'd',
 			default: process.env.BUTTERMILK_DEBUG === 'true'
+		},
+		readline: {
+			type: 'boolean',
+			shortFlag: 'r',
+			default: process.env.BUTTERMILK_READLINE === 'true' || true
 		}
 	}
 });
@@ -123,7 +129,8 @@ const App = () => {
   }
 
   console.log(`App: Rendering UI with URL: ${websocketUrl}`);
-  return <UI url={websocketUrl} />;
+  // Use readline-based UI by default for proper input echo
+  return cli.flags.readline ? <UIReadline url={websocketUrl} /> : <UI url={websocketUrl} />;
 };
 
 render(<App />);

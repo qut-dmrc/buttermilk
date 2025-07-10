@@ -150,3 +150,14 @@ node dist/cli.js
 - **components/Message.tsx**: Rich message rendering with type-specific formatting
 - **components/UserInput.tsx**: User input handling
 - **components/Spinner.tsx**: Loading indicator
+
+## Known Issues
+
+### No Local Echo on Input
+If you don't see characters as you type, this is usually because:
+1. The terminal is not in raw mode (common in some terminal emulators)
+2. Running through a pipe or non-TTY environment
+
+**Workaround**: Type your message blind and press Enter - the message will be sent and displayed in the chat history.
+
+**Note**: The input is still being captured correctly, you just can't see it as you type. Your messages will appear in the chat after pressing Enter.
