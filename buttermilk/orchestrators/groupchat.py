@@ -208,7 +208,7 @@ class AutogenOrchestrator(Orchestrator):
                 except Exception as e:
                     logger.warning(f"Failed to get tool definitions from {role}: {e}")
             else:
-                logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions")
+                logger.debug(f"Agent {agent_id} does not have role or get_tool_definitions method. Has role: {hasattr(agent_instance, 'role')}, Has get_tool_definitions: {hasattr(agent_instance, 'get_tool_definitions')}")
 
         # Start up the host agent with participants and their tools
         logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())} and tools: {list(participant_tools.keys())}")

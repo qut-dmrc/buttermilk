@@ -400,7 +400,7 @@ class HostAgent(Agent):
                 f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest "
                 f"with {len(message.participants)} participants: {list(message.participants.keys())}"
             )
-            if self._conductor_task and not self._conductor_task.done():
+            if self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
                 logger.warning(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
             self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
