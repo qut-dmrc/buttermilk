@@ -76,8 +76,8 @@ export class MockWebSocketServer {
         await this.handleRunFlow(ws, message);
         break;
       
-      case 'user_message':
-        await this.handleUserMessage(ws, message);
+      case 'ui_message':
+        await this.handleUIMessage(ws, message);
         break;
       
       case 'manager_response':
@@ -214,7 +214,7 @@ export class MockWebSocketServer {
     }
   }
 
-  private async handleUserMessage(ws: WebSocket, message: Message): Promise<void> {
+  private async handleUIMessage(ws: WebSocket, message: Message): Promise<void> {
     // Echo back with a response
     await this.sendMessage(ws, {
       type: 'system_message',

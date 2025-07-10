@@ -156,7 +156,7 @@ class FlowClient {
 
   sendUserMessage(text: string): void {
     this.send({
-      type: 'user_message',
+      type: 'ui_message',
       payload: { text }
     });
   }

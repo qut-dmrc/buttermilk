@@ -66,7 +66,7 @@
       "args": [
         "+flows=[trans,zot,osb]",
         "+run=api",
-        "+llms=full",
+        "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

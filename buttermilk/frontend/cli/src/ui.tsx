@@ -93,8 +93,8 @@ Regular text is sent as user_message to the current flow.`
       return;
     }
 
-    // Default: send as user message
-    connection.send({ type: 'user_message', payload: { text } });
+    // Default: send as ui_message (supported by backend)
+    connection.send({ type: 'ui_message', payload: { text } });
   };
 
   const getStatusMessage = () => {

@@ -123,7 +123,7 @@ export const stressTestScenarios: TestScenario[] = [
       { action: 'waitFor', matcher: 'Connected', timeout: 5000 },
       { 
         action: 'input', 
-        value: '{"type": "user_message", "payload": {"text": "' + 'x'.repeat(1000) + '"}}' 
+        value: '{"type": "ui_message", "payload": {"text": "' + 'x'.repeat(1000) + '"}}' 
       },
       { action: 'waitFor', matcher: 'Mock server received:', timeout: 3000 }
     ]
