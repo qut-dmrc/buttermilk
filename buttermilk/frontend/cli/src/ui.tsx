@@ -82,13 +82,14 @@ Regular text is sent as user_message to the current flow.`
         return;
       }
 
-      connection.send({
+      const message: any = {
         type: 'run_flow',
-        payload: {
-          flow: flowName,
-          prompt: prompt || undefined
-        }
-      });
+        flow: flowName
+      };
+      if (prompt) {
+        message.prompt = prompt;
+      }
+      connection.send(message);
       return;
     }
 
