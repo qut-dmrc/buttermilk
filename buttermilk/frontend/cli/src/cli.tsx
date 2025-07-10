@@ -54,7 +54,7 @@ const cli = meow(`
 		readline: {
 			type: 'boolean',
 			shortFlag: 'r',
-			default: process.env.BUTTERMILK_READLINE === 'true' || true
+			default: process.env.BUTTERMILK_READLINE === 'true' || false
 		}
 	}
 });

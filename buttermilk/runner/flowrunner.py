@@ -257,7 +257,7 @@ class FlowRunContext(BaseModel):
             try:
                 logger.debug(f"[MONITOR_UI] Waiting for WebSocket message for session {self.session_id}")
                 data = await self.websocket.receive_json()
-                logger.info(f"[MONITOR_UI] Received data from WebSocket: {data}")
+                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket")
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
@@ -297,12 +297,7 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
-        logger.info(f"[FlowRunner.send_message_to_ui] 📤 CALLED!")
-        logger.info(f"[FlowRunner.send_message_to_ui] Session: {self.session_id}")
-        logger.info(f"[FlowRunner.send_message_to_ui] Message type: {type(message)}")
-        logger.info(f"[FlowRunner.send_message_to_ui] Message content: {getattr(message, 'content', 'No content attr')}")
-        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket state: {self.websocket}")
-        logger.info(f"[FlowRunner.send_message_to_ui] WebSocket connected: {self.websocket and self.websocket.client_state == WebSocketState.CONNECTED if self.websocket else 'No websocket'}")
+        logger.debug(f"[FlowRunner.send_message_to_ui] Sending {type(message).__name__} to session {self.session_id}")
 
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
@@ -979,9 +974,7 @@ class FlowRunner(BaseModel):
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
-        logger.info(f"[FlowRunner.run_flow] run_request.callback_to_ui set to: {run_request.callback_to_ui}")
-        logger.info(f"[FlowRunner.run_flow] _session.websocket: {_session.websocket}")
-        logger.info(f"[FlowRunner.run_flow] _session.session_id: {_session.session_id}")
+        logger.debug(f"[FlowRunner.run_flow] Callback configured for session {_session.session_id}")
 
         # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore

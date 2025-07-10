@@ -66,6 +66,20 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         """
         # First, say hello to the user
         await asyncio.sleep(3)  # Let the group chat initialize
+        
+        # Wait for tool schemas to be available
+        max_wait = 10  # seconds
+        waited = 0
+        while not self._tool_schemas and waited < max_wait:
+            logger.debug(f"StructuredLLMHost waiting for tool schemas... ({waited}s)")
+            await asyncio.sleep(0.5)
+            waited += 0.5
+            
+        if self._tool_schemas:
+            logger.info(f"StructuredLLMHost ready with {len(self._tool_schemas)} tool schemas")
+        else:
+            logger.warning(f"StructuredLLMHost proceeding without tool schemas after {max_wait}s wait")
+        
         yield StepRequest(
             role=MANAGER,
             content="Hi! What would you like to do?",
@@ -98,6 +112,10 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             public_callback=public_callback,
             **kwargs,
         )
+        
+        # Log tool schema status
+        logger.debug(f"StructuredLLMHost {self.agent_name} in _listen has {len(self._tool_schemas)} tool schemas")
+        logger.debug(f"Message type received: {type(message).__name__}")
 
         if isinstance(message, ManagerMessage):
             # Skip command messages
@@ -113,6 +131,25 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             self._clear_pending_steps()
 
             logger.info(f"Manager interrupted with new request: {message.content}")
+            
+            # Check if we have tool schemas available
+            if not self._tool_schemas:
+                logger.warning(f"StructuredLLMHost {self.agent_name} has no tool schemas available yet. Waiting for initialization...")
+                # Wait a bit for the ConductorRequest to be processed
+                await asyncio.sleep(0.5)
+                
+                # Check again
+                if not self._tool_schemas:
+                    logger.error(f"StructuredLLMHost {self.agent_name} still has no tool schemas after waiting")
+                    # Return a helpful message to the user
+                    error_msg = "I'm still initializing. Please try your request again in a moment."
+                    error_output = AgentOutput(
+                        agent_id=self.agent_id,
+                        outputs=error_msg,
+                        metadata={"error": "initialization_pending"}
+                    )
+                    await self.callback_to_groupchat(error_output)
+                    return
 
             # Use the LLM with structured tools to determine next step
             # The template should be configured to use tool calling

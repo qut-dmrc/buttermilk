@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Mapping
 from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken
@@ -169,6 +169,70 @@ class HostAgent(Agent):
             f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
             f"from {len(self._agent_registry)} announced agents"
         )
+    
+    async def _create_participant_tool_schemas(self, participants: dict[str, str] | Mapping[str, str]) -> None:
+        """Create tool schemas for all participants, including those without explicit tools.
+        
+        For participants that don't have @tool decorated methods, we create a generic
+        tool that allows the LLM to invoke them by role.
+        
+        Args:
+            participants: Mapping of participant roles to descriptions
+        """
+        logger.info(f"Host {self.agent_name} creating participant tool schemas for {len(participants)} participants")
+        logger.debug(f"Participants: {list(participants.keys())}")
+        logger.debug(f"Existing tool schemas before: {len(self._tool_schemas)}")
+        
+        # Start with existing tool schemas from agents
+        all_tool_schemas = list(self._tool_schemas)
+        
+        # Track which roles already have tools
+        roles_with_tools = set()
+        for schema in all_tool_schemas:
+            # Extract role from tool name if it follows a pattern
+            if isinstance(schema, dict) and 'function' in schema and 'name' in schema['function']:
+                # Check if this tool is associated with a role
+                for role in participants:
+                    if role.lower() in schema['function']['name'].lower():
+                        roles_with_tools.add(role)
+                        logger.debug(f"Role {role} already has tool: {schema['function']['name']}")
+                        break
+        
+        # Create tools for participants without explicit tools
+        for role, description in participants.items():
+            if role not in roles_with_tools and role != "HOST":
+                logger.debug(f"Creating synthetic tool for role {role} with description: {description}")
+                # Create a tool schema for this participant
+                tool_schema = {
+                    "type": "function",
+                    "function": {
+                        "name": f"ask_{role.lower()}",
+                        "description": f"Ask {role} to {description}",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "request": {
+                                    "type": "string",
+                                    "description": f"The request or question for {role}"
+                                }
+                            },
+                            "required": ["request"]
+                        }
+                    }
+                }
+                all_tool_schemas.append(tool_schema)  # type: ignore
+                logger.debug(f"Created participant tool schema for {role}: ask_{role.lower()}")
+        
+        # Update the tool schemas
+        self._tool_schemas = all_tool_schemas
+        logger.info(f"Host {self.agent_name} has {len(self._tool_schemas)} total tool schemas after adding participant tools")
+        
+        # Log the actual tool names for debugging
+        tool_names = []
+        for schema in self._tool_schemas:
+            if isinstance(schema, dict) and 'function' in schema:
+                tool_names.append(schema['function']['name'])
+        logger.debug(f"Tool schemas available: {tool_names}")
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
@@ -542,6 +606,9 @@ class HostAgent(Agent):
             if hasattr(message, 'participant_tools'):
                 self._participant_tools = message.participant_tools
                 logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
+            
+            # Create tool schemas for all participants
+            await self._create_participant_tool_schemas(message.participants)
 
             # Extract initial query/prompt from ConductorRequest if available
             # Parse inputs using the typed model for cleaner extraction
@@ -722,10 +789,27 @@ class HostAgent(Agent):
         for call in tool_calls:
             # Find which agent handles this tool
             agent_role = None
-            for agent_id, announcement in self._agent_registry.items():
-                if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
-                    agent_role = announcement.agent_config.role
-                    break
+            
+            # First check if it's a participant "ask_" tool
+            if call.name.startswith("ask_"):
+                # Extract role from tool name (e.g., "ask_zotero_researcher" -> "ZOTERO_RESEARCHER")
+                role_part = call.name[4:].upper()  # Remove "ask_" prefix and uppercase
+                # Check if this role exists in our participants
+                for participant_role in self._participants:
+                    if participant_role.upper() == role_part:
+                        agent_role = participant_role
+                        break
+            
+            # If not found, check agent announcements for explicit tool definitions
+            if not agent_role:
+                for agent_id, announcement in self._agent_registry.items():
+                    tool_def = announcement.tool_definition
+                    if tool_def:
+                        # Check both old format (name at root) and new format (name in function)
+                        tool_name = tool_def.get('name') or (tool_def.get('function', {}).get('name'))
+                        if tool_name == call.name:
+                            agent_role = announcement.agent_config.role
+                            break
 
             if not agent_role:
                 logger.warning(f"No agent found for tool: {call.name}")
@@ -738,12 +822,21 @@ class HostAgent(Agent):
                 logger.error(f"Failed to parse tool arguments: {call.arguments}")
                 continue
 
-            # Create StepRequest for this tool call
-            step_request = StepRequest(
-                role=agent_role,
-                inputs=arguments,
-                metadata={"tool_name": call.name, "tool_call_id": call.id}
-            )
+            # Handle "ask_" tools specially - extract the request content
+            if call.name.startswith("ask_") and "request" in arguments:
+                # For ask_ tools, the content is in the "request" field
+                step_request = StepRequest(
+                    role=agent_role,
+                    content=arguments["request"],
+                    metadata={"tool_name": call.name, "tool_call_id": call.id}
+                )
+            else:
+                # For other tools, pass arguments as inputs
+                step_request = StepRequest(
+                    role=agent_role,
+                    inputs=arguments,
+                    metadata={"tool_name": call.name, "tool_call_id": call.id}
+                )
 
             # Create a more descriptive log message
             tool_desc = self._describe_tool_call(call.name, arguments)

@@ -11,10 +11,6 @@ interface Props {
 const UserInput = ({ onSubmit }: Props) => {
   const [value, setValue] = useState('');
   
-  const handleChange = (newValue: string) => {
-    setValue(newValue);
-  };
-  
   const handleSubmit = (text: string) => {
     if (text.trim()) {
       onSubmit(text);
@@ -24,14 +20,16 @@ const UserInput = ({ onSubmit }: Props) => {
 
   return (
     <Box>
+      {/* IRC-style prompt with proper theming */}
       <Text color={retroIRCTheme.colors.text}>❯ </Text>
       <Box flexGrow={1}>
         <TextInput
           value={value}
-          onChange={handleChange}
+          onChange={setValue}
           onSubmit={handleSubmit}
           placeholder="Type /help for commands..."
-          showCursor
+          showCursor={true}
+          focus={true}
         />
       </Box>
     </Box>
