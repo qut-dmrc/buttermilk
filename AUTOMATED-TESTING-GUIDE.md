@@ -8,9 +8,11 @@ This guide documents what can be automated in the Buttermilk testing process and
 
 ### 1. Server Management
 - ✅ Start the Buttermilk backend server using `make api`
+- ✅ Start server in debug mode with `make debug` (captures output to `/tmp/buttermilk-debug.log`)
 - ✅ Check if the server is running (health checks)
 - ✅ Monitor server status and API endpoints
 - ✅ Track flow execution metrics
+- ✅ Read server logs from `/tmp/buttermilk-debug.log` when using debug mode
 
 ### 2. CLI Client Testing
 - ✅ Build the CLI client
@@ -64,6 +66,29 @@ This script will:
 3. Test API connection
 4. Run flow tests
 5. Report metrics
+
+### Debug Mode Testing
+
+For debugging issues with server output visible:
+
+```bash
+# 1. Stop any existing server
+pkill -f buttermilk.runner.cli
+
+# 2. Start server in debug mode
+make debug &
+
+# 3. Wait for server to start
+sleep 10
+
+# 4. Run tests
+./automated-flow-test.sh
+
+# 5. Check server logs
+tail -f /tmp/buttermilk-debug.log
+```
+
+I can now read the server logs from `/tmp/buttermilk-debug.log` to help debug issues.
 
 ### Manual Debugging Steps
 

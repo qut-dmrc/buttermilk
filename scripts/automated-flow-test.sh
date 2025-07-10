@@ -7,11 +7,12 @@ echo ""
 # Step 1: Check if server is running
 echo "1️⃣ Checking server status..."
 if ! curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ❌ Server not running. Starting server..."
+    echo "   ❌ Server not running. Starting server in debug mode..."
     cd /workspaces/buttermilk
-    make api 2>&1 > server.log &
+    make debug &
     SERVER_PID=$!
     echo "   ⏳ Waiting for server to start (PID: $SERVER_PID)..."
+    echo "   📝 Server logs: /tmp/buttermilk-debug.log"
     
     # Wait for server to be ready
     for i in {1..30}; do
@@ -23,6 +24,7 @@ if ! curl -s http://localhost:8000/health > /dev/null 2>&1; then
     done
 else
     echo "   ✅ Server is already running"
+    echo "   💡 To see server logs, restart with: make debug"
 fi
 
 # Step 2: Build CLI if needed
@@ -133,7 +135,7 @@ else
     echo "   ❌ Zot flow is not working properly"
     echo ""
     echo "   Debugging tips:"
-    echo "   - Check server logs: tail -f /workspaces/buttermilk/server.log"
+    echo "   - Check server logs: tail -f /tmp/buttermilk-debug.log"
     echo "   - Check for missing dependencies or configuration"
     echo "   - Verify ChromaDB is configured for zot flow"
 fi
