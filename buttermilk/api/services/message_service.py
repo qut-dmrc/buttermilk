@@ -195,7 +195,9 @@ class MessageService:
                 case "ui_message":
                     return UIMessage(**data)
                 case "manager_response":
-                    return ManagerMessage(**data)
+                    # Remove 'type' field as ManagerMessage doesn't expect it
+                    message_data = {k: v for k, v in data.items() if k != "type"}
+                    return ManagerMessage(**message_data)
                 case "TaskProcessingComplete":
                     return TaskProcessingComplete(**data)
                 case "TaskProcessingStarted":

@@ -93,8 +93,9 @@ Regular text is sent as user_message to the current flow.`
       return;
     }
 
-    // Default: send as ui_message (supported by backend)
-    connection.send({ type: 'ui_message', payload: { text } });
+    // Default: send as manager_response (correct type for user input)
+    // Note: manager_response expects fields directly, not wrapped in payload
+    connection.send({ type: 'manager_response', content: text } as any);
   };
 
   const getStatusMessage = () => {
