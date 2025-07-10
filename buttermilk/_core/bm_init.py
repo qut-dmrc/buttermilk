@@ -821,6 +821,25 @@ class BM(SessionInfo):
             level=logging.DEBUG if verbose else logging.INFO,
         )
 
+        # Add file logging when verbose is True
+        if verbose:
+            log_filename = f"/tmp/buttermilk_{self.run_id}.log"
+            
+            # Create file handler
+            file_handler = logging.FileHandler(log_filename, mode='w')
+            file_handler.setLevel(logging.DEBUG)
+            
+            # Use the same format as console but without colors
+            file_formatter = logging.Formatter(console_format)
+            file_handler.setFormatter(file_formatter)
+            
+            # Add the same context filter
+            file_handler.addFilter(context_filter)
+            
+            # Add handler to the logger
+            logger.addHandler(file_handler)
+            logger.info(f"Verbose logging enabled - also writing to: {log_filename}")
+
         # Defer Google Cloud Logging setup to improve startup performance
         # Cloud logging will be initialized on first cloud operation
         if self.logger_cfg and self.logger_cfg.type == "gcp":
