@@ -15,9 +15,11 @@ api:
 # Run API server in debug mode with output capture for automated testing
 debug:
 	@echo "Starting Buttermilk API in debug mode..."
-	@echo "Output will be captured to: /tmp/buttermilk-debug.log"
-	@echo "Tail the log with: tail -f /tmp/buttermilk-debug.log"
-	@uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full 2>&1 | tee /tmp/buttermilk-debug.log
+	@echo "Logs are written to: /tmp/buttermilk_<run_id>.log"
+	@echo "To find the latest log: ls -la /tmp/buttermilk_*.log | tail -1"
+	@echo "Starting server in background..."
+	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full > /dev/null 2>&1 &
+	@echo "Server starting... Check logs with: tail -f /tmp/buttermilk_*.log"
 
 # Run unit tests and generate a coverage report.
 coverage:
