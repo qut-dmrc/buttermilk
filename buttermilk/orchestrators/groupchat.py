@@ -173,7 +173,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Mark as initialized and process any pending messages
         self._is_initialized = True
-        
+
         # Process any messages that were queued before initialization
         if self._pending_messages:
             logger.debug(f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages")
@@ -300,14 +300,15 @@ class AutogenOrchestrator(Orchestrator):
 
                 # Also subscribe the agent to a topic specific to its role (e.g., "JUDGE", "SCORER").
                 # This allows targeted messages to be sent directly to agents fulfilling that specific role.
-                role_topic_type = role_name.upper()
+                # Use the actual agent role from config, not the dictionary key
+                actual_role = step_config.role.upper()
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=role_topic_type,
+                        topic_type=actual_role,
                         agent_type=agent_type,
                     ),
                 )
-                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
+                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'")
 
                 registered_for_role.append((agent_type, variant_config))
 
@@ -323,9 +324,7 @@ class AutogenOrchestrator(Orchestrator):
             callback_to_ui: A callable that takes a message and sends it to the UI.
 
         """
-        if callback_to_ui:
-            logger.debug(f"[AutogenOrchestrator.register_ui] Registering UI callback: {callback_to_ui}")
-        else:
+        if not callback_to_ui:
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:

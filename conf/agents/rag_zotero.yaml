@@ -3,6 +3,7 @@
 
 rag_zotero:
   role: "ZOTERO_RESEARCHER"  
+  description: "Academic research agent that searches Zotero library and provides properly formatted academic responses with full citations"
   agent_obj: RagZotero
   tools: {}
   variants:
