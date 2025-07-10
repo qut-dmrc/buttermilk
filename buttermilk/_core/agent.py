@@ -190,7 +190,6 @@ class Agent(AgentConfig, ABC):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-
     async def cleanup(self) -> None:
         """Cleanup agent resources and state.
 
@@ -265,7 +264,7 @@ class Agent(AgentConfig, ABC):
 
         # Get actual tool definitions from @tool decorated methods
         tool_definitions = self.get_tool_definitions()
-        
+
         # Only include tool if agent has explicit @tool methods
         primary_tool = None
         if tool_definitions:
@@ -448,7 +447,7 @@ class Agent(AgentConfig, ABC):
                     message.parent_call_id
                 )
             except Exception as e:  # Broad exception for Weave call retrieval
-                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
+                logger.error(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
                 parent_call = weave.get_current_call()  # Fallback to current call if specified parent not found
         else:
             parent_call = weave.get_current_call()
@@ -461,7 +460,7 @@ class Agent(AgentConfig, ABC):
             child_call = bm.weave.create_call(op, inputs=message.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
-            if parent_call is not None:
+            if parent_call and child_call:
                 parent_call._children.append(child_call)  # Nest this call for tracing
             result = await self._process(message=message)
             result.call_id = child_call.id
@@ -888,7 +887,6 @@ class Agent(AgentConfig, ABC):
         """
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
-
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.

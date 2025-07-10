@@ -129,13 +129,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             )
 
             if result:
-                # The LLM may have called a tool, which will have already
-                # sent the appropriate StepRequest via the tool's callback
-                logger.debug(
-                    "LLM response processed. Tool calls handled automatically via FunctionTool callbacks."
-                )
-
-                # Just pass the response to the manager
+                # Send the response back to the group chat
                 await self.callback_to_groupchat(result)
 
     async def _process(self, *, message: AgentInput,

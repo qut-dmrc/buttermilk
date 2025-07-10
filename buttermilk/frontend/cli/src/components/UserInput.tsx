@@ -10,9 +10,15 @@ interface Props {
 const UserInput = ({ onSubmit }: Props) => {
   const [value, setValue] = useState('');
   
+  const handleChange = (newValue: string) => {
+    setValue(newValue);
+  };
+  
   const handleSubmit = (text: string) => {
-    setValue('');
-    onSubmit(text);
+    if (text.trim()) {
+      onSubmit(text);
+      setValue('');
+    }
   };
 
   return (
@@ -20,9 +26,10 @@ const UserInput = ({ onSubmit }: Props) => {
       <Text color="cyan">❯ </Text>
       <TextInput
         value={value}
-        onChange={setValue}
+        onChange={handleChange}
         onSubmit={handleSubmit}
         placeholder="Type /help for commands..."
+        showCursor
       />
     </Box>
   );

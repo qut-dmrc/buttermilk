@@ -15,6 +15,7 @@ const UI = ({ url }: Props) => {
   const [connection, setConnection] = useState<WebSocketConnection | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [connectionError, setConnectionError] = useState<Error | null>(null);
+  const [lastUserInput, setLastUserInput] = useState<string>('');
 
   useEffect(() => {
     const conn = connect(
@@ -36,6 +37,17 @@ const UI = ({ url }: Props) => {
 
   const handleSubmit = (text: string) => {
     if (!connection || !text.trim()) return;
+
+    // Add local echo of user input
+    const userMessage: Message = {
+      type: 'user_message',
+      payload: {
+        message: `You: ${text}`,
+        timestamp: new Date().toISOString()
+      }
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setLastUserInput(text);
 
     // Handle help command
     if (text === '/help') {
