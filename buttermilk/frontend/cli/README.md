@@ -83,14 +83,35 @@ buttermilk-cli
 
 ## Development
 
-```bash
-# Install dependencies
-npm install
+### Running Without Installing
 
-# Build TypeScript
+```bash
+# From the CLI directory
+cd /workspaces/buttermilk/buttermilk/frontend/cli
+
+# Build the project
+npm install
 npm run build
 
-# Run locally
+# Run directly
+node dist/cli.js
+
+# With custom backend
+node dist/cli.js --host localhost --port 8080
+node dist/cli.js --url http://localhost:8080
+
+# Or use npx
+npx . --host localhost --port 8080
+```
+
+### Development Mode
+
+For active development with auto-rebuild:
+```bash
+# Terminal 1: Watch for changes
+npm run build -- --watch
+
+# Terminal 2: Run the CLI
 node dist/cli.js
 ```
 

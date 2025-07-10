@@ -29,25 +29,25 @@ const cli = meow(`
 	flags: {
 		host: {
 			type: 'string',
-			alias: 'h',
+			shortFlag: 'h',
 			default: process.env.BUTTERMILK_HOST || 'localhost'
 		},
 		port: {
 			type: 'number',
-			alias: 'p',
+			shortFlag: 'p',
 			default: parseInt(process.env.BUTTERMILK_PORT || '8080')
 		},
 		url: {
 			type: 'string',
-			alias: 'u',
-			default: process.env.BUTTERMILK_URL
+			shortFlag: 'u',
+			default: process.env.BUTTERMILK_URL || ''
 		}
 	}
 });
 
-const BACKEND_HOST = cli.flags.url ? new URL(cli.flags.url).hostname : cli.flags.host;
-const BACKEND_PORT = cli.flags.url ? parseInt(new URL(cli.flags.url).port || '80') : cli.flags.port;
-const BACKEND_PROTOCOL = cli.flags.url ? new URL(cli.flags.url).protocol.replace(':', '') : 'http';
+const BACKEND_HOST = cli.flags.url && cli.flags.url !== '' ? new URL(cli.flags.url).hostname : cli.flags.host;
+const BACKEND_PORT = cli.flags.url && cli.flags.url !== '' ? parseInt(new URL(cli.flags.url).port || '80') : cli.flags.port;
+const BACKEND_PROTOCOL = cli.flags.url && cli.flags.url !== '' ? new URL(cli.flags.url).protocol.replace(':', '') : 'http';
 
 const App = () => {
   const [websocketUrl, setWebsocketUrl] = useState<string | null>(null);
