@@ -41,6 +41,32 @@ export BUTTERMILK_URL=https://myserver.com:9000
 buttermilk-cli
 ```
 
+### Starting Flows
+
+Once connected, you can start flows using these commands:
+
+```bash
+# Start a flow with a prompt
+/flow osb What is the impact of social media on teens?
+/run osb Analyze climate change policies
+
+# Start a test flow
+/flow test
+
+# Get help
+/help
+
+# Send raw JSON (advanced)
+{"type": "run_flow", "payload": {"flow": "osb", "prompt": "Your question"}}
+
+# Regular messages (sent as user_message)
+Hello, how are you?
+```
+
+### Interactive Flows
+
+Some flows (like OSB) are interactive and will prompt you for responses. Simply type your response when prompted.
+
 ## Message Types Supported
 
 ### Chat Messages

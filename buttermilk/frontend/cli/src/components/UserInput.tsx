@@ -9,16 +9,20 @@ interface Props {
 
 const UserInput = ({ onSubmit }: Props) => {
   const [value, setValue] = useState('');
+  
+  const handleSubmit = (text: string) => {
+    setValue('');
+    onSubmit(text);
+  };
 
   return (
     <Box>
-      <Box marginRight={1}>
-        <Text>You:</Text>
-      </Box>
+      <Text color="cyan">❯ </Text>
       <TextInput
         value={value}
         onChange={setValue}
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
+        placeholder="Type /help for commands..."
       />
     </Box>
   );

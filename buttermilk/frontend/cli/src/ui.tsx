@@ -35,9 +35,65 @@ const UI = ({ url }: Props) => {
   }, [url]);
 
   const handleSubmit = (text: string) => {
-    if (connection) {
-      connection.send({ type: 'user_message', payload: { text } });
+    if (!connection || !text.trim()) return;
+
+    // Handle help command
+    if (text === '/help') {
+      const helpMessage: Message = {
+        type: 'system_message',
+        payload: {
+          message: `Available commands:
+  /flow <name> <prompt>  - Start a flow (e.g., /flow osb What is AI?)
+  /run <name> <prompt>   - Alias for /flow
+  /help                  - Show this help message
+
+You can also send raw JSON messages:
+  {"type": "run_flow", "flow": "osb", "prompt": "Your question"}
+
+Regular text is sent as user_message to the current flow.`
+        }
+      };
+      setMessages(prev => [...prev, helpMessage]);
+      return;
     }
+
+    // Try to parse as JSON for advanced users
+    if (text.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(text);
+        connection.send(parsed);
+        return;
+      } catch (e) {
+        // If JSON parsing fails, treat as regular message
+      }
+    }
+
+    // Handle flow commands
+    if (text.startsWith('/flow ') || text.startsWith('/run ')) {
+      const parts = text.split(' ');
+      const flowName = parts[1];
+      const prompt = parts.slice(2).join(' ');
+      
+      if (!flowName) {
+        setMessages(prev => [...prev, {
+          type: 'system_error',
+          payload: { message: 'Please specify a flow name. Usage: /flow <name> [prompt]' }
+        }]);
+        return;
+      }
+
+      connection.send({
+        type: 'run_flow',
+        payload: {
+          flow: flowName,
+          prompt: prompt || undefined
+        }
+      });
+      return;
+    }
+
+    // Default: send as user message
+    connection.send({ type: 'user_message', payload: { text } });
   };
 
   const getStatusMessage = () => {
