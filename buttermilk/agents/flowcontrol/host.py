@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator, Callable, Mapping
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken, MessageContext, DefaultTopicId
+from autogen_core import CancellationToken, MessageContext, DefaultTopicId, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import ToolSchema
 from pydantic import Field
@@ -106,6 +106,68 @@ class HostAgent(Agent):
             await self.publish_message(message, topic_id=DefaultTopicId(type="default"))
         else:
             logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
+    
+    @message_handler
+    async def handle_conductor_request(
+        self,
+        message: ConductorRequest,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ConductorRequest to start the flow."""
+        logger.info(
+            f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
+            f"with {len(message.participants)} participants: {list(message.participants.keys())}"
+        )
+        
+        if hasattr(self, '_conductor_task') and self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
+            logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
+            return
+        
+        self._conductor_task = "starting"  # Mark as starting to avoid re-entrance
+        logger.debug(f"[HostAgent.handle_conductor_request] Host {self.agent_name} starting new conductor task")
+        self._conductor_task = asyncio.create_task(self._run_flow(message=message))
+    
+    @message_handler
+    async def handle_task_complete(
+        self,
+        message: TaskProcessingComplete,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle task completion signals from worker agents."""
+        self._step_starting.clear()  # Clear this event as soon as any task completes
+        agent_id_to_update = message.agent_id
+        
+        async with self._tasks_condition:
+            if agent_id_to_update in self._pending_tasks_by_agent:
+                self._pending_tasks_by_agent[agent_id_to_update] -= 1
+                if self._pending_tasks_by_agent[agent_id_to_update] <= 0:
+                    del self._pending_tasks_by_agent[agent_id_to_update]
+                
+                logger.info(
+                    f"Host noted TaskComplete from agent {agent_id_to_update} for role '{message.role}'. "
+                    f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
+                )
+                self._tasks_condition.notify_all()
+            else:
+                logger.warning(
+                    f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks."
+                )
+    
+    @message_handler
+    async def handle_task_started(
+        self,
+        message: TaskProcessingStarted,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle task start signals from worker agents."""
+        agent_id_to_update = message.agent_id
+        
+        async with self._tasks_condition:
+            self._pending_tasks_by_agent[agent_id_to_update] += 1
+            logger.info(
+                f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
+                f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
+            )
 
     # --- Agent Registry Methods ---
 
