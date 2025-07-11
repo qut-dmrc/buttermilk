@@ -97,16 +97,28 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         #     message=message,ctx=ctx
         # )
 
+        # Wait for tool schemas to be populated if they haven't been yet
+        # This handles the race condition where ManagerMessage arrives before ConductorRequest processing completes
+        max_wait = 5  # seconds
+        wait_interval = 0.1
+        waited = 0
+        
+        while waited < max_wait:
+            tool_schemas = self._tool_schemas if hasattr(self, '_tool_schemas') else []
+            if tool_schemas:
+                break
+            await asyncio.sleep(wait_interval)
+            waited += wait_interval
+        
         # Log tool schema status
-        # Check if we have tool schemas available
-        tool_schemas = getattr(self, "_tool_schemas", [])
         if not tool_schemas:
             logger.warning(
-                f"StructuredLLMHost {self.agent_name} has no tool schemas available. This may indicate the participants have not advertised their capabilities."
+                f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. "
+                "This may indicate the participants have not advertised their capabilities."
             )
             # Still try to process without tools - the LLM can work without them, just less effectively
         else:
-            logger.debug(f"StructuredLLMHost {self.agent_name} in _listen has {len(tool_schemas)} tool schemas")
+            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(tool_schemas)} tool schemas")
             logger.debug(f"Message type received: {type(message).__name__}")
 
         # Skip command messages
@@ -130,6 +142,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 inputs={
                     "user_feedback": self._user_feedback,
                     "prompt": str(message.content),
+                    "participants": list(self._participants.keys()) if hasattr(self, '_participants') else [],
+                    "tool_count": len(tool_schemas)
                 }
             ),
             cancellation_token=ctx.cancellation_token,

@@ -14,11 +14,13 @@ from typing import Any
 import shortuuid
 import weave
 from autogen_core import (
+    AgentId,
     AgentType,
     ClosureAgent,
     ClosureContext,  # Represents a registered type of agent in the runtime.
     DefaultInterventionHandler,
-    DefaultTopicId,  # A standard implementation for topic identifiers.
+    DefaultTopicId,
+    DropMessage,  # A standard implementation for topic identifiers.
     MessageContext,
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
@@ -55,7 +57,8 @@ class InterruptHandler(BaseModel):
     interrupt: asyncio.Event = Field(default_factory=asyncio.Event)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
+    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any | type[DropMessage]:
+        """Called when a message is published to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.publish_message`."""
         if isinstance(message, ManagerMessage):
             if message.interrupt:
                 # Pause the flow
@@ -65,6 +68,14 @@ class InterruptHandler(BaseModel):
                 # Resume the flow
                 logger.info(f"Manager resume message received: {message}")
                 self.interrupt.clear()
+        return message
+
+    async def on_send(self, message: Any, *, message_context: MessageContext, recipient: AgentId) -> Any | type[DropMessage]:
+        """Called when a message is submitted to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.send_message`."""
+        return message
+
+    async def on_response(self, message: Any, *, sender: AgentId, recipient: AgentId | None) -> Any | type[DropMessage]:
+        """Called when a response is received by the AgentRuntime from an Agent's message handler returning a value."""
         return message
 
 
