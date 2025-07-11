@@ -210,7 +210,7 @@ class HostAgent(Agent):
         """Build tool objects from agent-provided tool definitions.
         
         This method collects tool objects from agents for LLM-based decision making.
-        Converts raw schemas to AgentToolDefinition objects when needed.
+        All tool definitions should already be AgentToolDefinition objects.
         """
         tool_objects = []
 
@@ -219,31 +219,14 @@ class HostAgent(Agent):
             agent_role = announcement.agent_config.role
 
             if tool_def := announcement.tool_definition:
-                # Check if it's already a Tool object (AgentToolDefinition)
+                # Should always be a Tool object (AgentToolDefinition)
                 if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
                     # It's a Tool object, store it directly
                     tool_objects.append(tool_def)
                     logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
                 else:
-                    # It's a schema dict - convert to AgentToolDefinition
-                    # Extract name and description from the schema
-                    if isinstance(tool_def, dict):
-                        func_info = tool_def.get('function', tool_def)
-                        name = func_info.get('name', f"tool_{agent_role.lower()}")
-                        description = func_info.get('description', f"Tool for {agent_role}")
-                        parameters = func_info.get('parameters', {"type": "object", "properties": {}})
-                        
-                        # Create an AgentToolDefinition from the schema
-                        agent_tool = AgentToolDefinition(
-                            name=name,
-                            description=description,
-                            input_schema=parameters,
-                            output_schema={"type": "string"}  # Default output schema
-                        )
-                        tool_objects.append(agent_tool)
-                        logger.debug(f"Converted schema to tool object: {name} for {agent_role}")
-                    else:
-                        logger.warning(f"Unknown tool definition type for {agent_role}: {type(tool_def)}")
+                    # This shouldn't happen with the new architecture
+                    logger.error(f"Expected Tool object but got {type(tool_def)} for {agent_role}")
 
         # Store tool objects for LLM-based hosts
         self._tool_schemas = tool_objects
@@ -252,81 +235,6 @@ class HostAgent(Agent):
             f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
             f"from {len(self._agent_registry)} agents"
         )
-
-    async def _create_participant_tool_schemas(self, participants: dict[str, str] | Mapping[str, str]) -> None:
-        """Create tool schemas for all participants, including those without explicit tools.
-        
-        Ensures EVERY participant has a tool that can be called by the LLM.
-        For participants that don't have @tool decorated methods, we create a generic
-        tool that allows the LLM to invoke them by role.
-        
-        Args:
-            participants: Mapping of participant roles to descriptions
-        """
-        logger.info(f"Host {self.agent_name} creating participant tool schemas for {len(participants)} participants")
-        logger.debug(f"Participants: {list(participants.keys())}")
-        logger.debug(f"Existing tool schemas before: {len(self._tool_schemas)}")
-
-        # Start with existing tool schemas from agents
-        all_tool_schemas = list(self._tool_schemas)
-
-        # Track which roles already have tools from agent announcements
-        roles_with_tools = set()
-        
-        # Also check roles that are in the agent registry (they might not have tools yet)
-        announced_roles = {ann.agent_config.role for ann in self._agent_registry.values()}
-        
-        for item in all_tool_schemas:
-            # Extract role from tool - tools should already be AgentToolDefinition objects
-            if hasattr(item, 'name'):
-                tool_name = item.name
-                # Check if this tool is associated with a participant role
-                for role in participants:
-                    if role.lower() in tool_name.lower() or f"ask_{role.lower()}" == tool_name:
-                        roles_with_tools.add(role)
-                        logger.debug(f"Role {role} already has tool: {tool_name}")
-                        break
-
-        # Create tools for ALL participants that don't have explicit tools
-        for role, description in participants.items():
-            if role not in roles_with_tools and role != "HOST":
-                # Check if this role has an agent in the registry but no tool
-                if role in announced_roles:
-                    logger.info(f"Creating tool for announced agent {role} that didn't provide a tool definition")
-                else:
-                    logger.info(f"Creating tool for participant {role} with no agent announcement")
-                
-                # Create an AgentToolDefinition for this participant
-                tool_def = AgentToolDefinition(
-                    name=f"ask_{role.lower()}",
-                    description=f"Ask {role} to {description}",
-                    input_schema={
-                        "type": "object",
-                        "properties": {
-                            "request": {
-                                "type": "string",
-                                "description": f"The request or question for {role}"
-                            }
-                        },
-                        "required": ["request"]
-                    },
-                    output_schema={"type": "string"}  # Simple string response
-                )
-                all_tool_schemas.append(tool_def)
-                logger.debug(f"Created participant tool definition for {role}: ask_{role.lower()}")
-
-        # Update the tool schemas
-        self._tool_schemas = all_tool_schemas
-        logger.info(f"Host {self.agent_name} has {len(self._tool_schemas)} total tools after adding participant tools")
-
-        # Log the actual tool names for debugging
-        tool_names = []
-        for item in self._tool_schemas:
-            if hasattr(item, 'name'):
-                tool_names.append(f"{item.name} (Tool)")
-            elif isinstance(item, dict) and 'function' in item:
-                tool_names.append(f"{item['function']['name']} (schema)")
-        logger.debug(f"Tool items available: {tool_names}")
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
@@ -702,9 +610,6 @@ class HostAgent(Agent):
                 self._participant_tools = message.participant_tools
                 logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
 
-            # Create tool schemas for all participants
-            await self._create_participant_tool_schemas(message.participants)
-
             # Extract initial query/prompt from ConductorRequest if available
             # Parse inputs using the typed model for cleaner extraction
             from buttermilk._core.contract import HostInputModel
@@ -898,16 +803,9 @@ class HostAgent(Agent):
             if not agent_role:
                 for agent_id, announcement in self._agent_registry.items():
                     tool_def = announcement.tool_definition
-                    if tool_def:
-                        # Check if it's a Tool object or a schema dict
-                        if hasattr(tool_def, 'name'):
-                            # It's a Tool object
-                            tool_name = tool_def.name
-                        else:
-                            # It's a schema dict - check both old format (name at root) and new format (name in function)
-                            tool_name = tool_def.get('name') or (tool_def.get('function', {}).get('name'))
-                        
-                        if tool_name == call.name:
+                    if tool_def and hasattr(tool_def, 'name'):
+                        # It's a Tool object (AgentToolDefinition)
+                        if tool_def.name == call.name:
                             agent_role = announcement.agent_config.role
                             break
 

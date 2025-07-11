@@ -31,6 +31,8 @@ from autogen_core.models import (
 )
 from autogen_core.tools import ToolSchema
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
+
+from buttermilk._core.tool_definition import AgentToolDefinition
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -676,9 +678,9 @@ class ConductorRequest(AgentInput):
         ...,  # Mandatory field
         description="Mapping of chat participant roles to their purpose descriptions (e.g., {'SUMMARIZER': 'Summarizes text'}).",
     )
-    participant_tools: Mapping[str, list[dict[str, Any]]] = Field(
+    participant_tools: Mapping[str, list[AgentToolDefinition]] = Field(
         default_factory=dict,
-        description="Mapping of participant roles to their tool definitions (e.g., {'RESEARCHER': [{'name': 'search', 'description': '...'}]}).",
+        description="Mapping of participant roles to their tool definitions as AgentToolDefinition objects.",
     )
 
 

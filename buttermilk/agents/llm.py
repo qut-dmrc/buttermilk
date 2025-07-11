@@ -135,6 +135,16 @@ class LLMAgent(Agent):
             self._tools_list = []
         return self
 
+    def get_available_tools(self) -> list["Tool"]:
+        """Get list of tools this agent can respond to.
+        
+        Returns the configured tools from self._tools_list.
+        
+        Returns:
+            list[Tool]: List of configured tools.
+        """
+        return self._tools_list
+
     def get_display_name(self) -> str:
         """Get the display name for this LLM agent, including model information.
         

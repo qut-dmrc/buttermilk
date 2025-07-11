@@ -299,11 +299,11 @@ class Agent(RoutedAgent):
             "leaving": f"Agent {self.agent_name} leaving"
         }
 
-        # Get actual tool definitions from @tool decorated methods
-        tool_definitions = self.get_tool_definitions()
+        # Get ALL tool definitions (decorated methods + configured tools)
+        tool_definitions = self.get_all_tool_definitions()
 
-        # Only include tool if agent has explicit @tool methods
-        # Now we can pass the AgentToolDefinition directly since it implements Tool protocol
+        # Use the first tool definition as the primary one
+        # This now includes both decorated methods and configured tools
         primary_tool = tool_definitions[0] if tool_definitions else None
 
         return AgentAnnouncement(
@@ -1035,6 +1035,51 @@ class Agent(RoutedAgent):
         """
         from buttermilk._core.mcp_decorators import extract_tool_definitions
         return extract_tool_definitions(self)
+    
+    def get_all_tool_definitions(self) -> list["AgentToolDefinition"]:
+        """Get all tool definitions from both decorated methods and configured tools.
+        
+        This method combines:
+        1. Tool definitions from @tool decorated methods
+        2. Tool definitions from configured tools (if the agent has them)
+        
+        Returns:
+            list[AgentToolDefinition]: All available tool definitions
+        """
+        from buttermilk._core.tool_definition import AgentToolDefinition
+        
+        # Start with decorated method tools
+        tool_defs = self.get_tool_definitions()
+        
+        # Add configured tools if this agent has them
+        if hasattr(self, '_tools_list') and self._tools_list:
+            from autogen_core.tools import FunctionTool
+            
+            for tool in self._tools_list:
+                if isinstance(tool, FunctionTool):
+                    # Convert FunctionTool to AgentToolDefinition
+                    # FunctionTool has name, description, and schema properties
+                    schema = tool.schema
+                    if isinstance(schema, dict) and 'function' in schema:
+                        func_info = schema['function']
+                        tool_def = AgentToolDefinition(
+                            name=func_info.get('name', tool.name),
+                            description=func_info.get('description', tool.description),
+                            input_schema=func_info.get('parameters', {"type": "object", "properties": {}}),
+                            output_schema={"type": "string"}  # Default output schema
+                        )
+                        tool_defs.append(tool_def)
+                elif hasattr(tool, 'name') and hasattr(tool, 'description'):
+                    # Generic Tool with basic properties
+                    tool_def = AgentToolDefinition(
+                        name=tool.name,
+                        description=tool.description,
+                        input_schema={"type": "object", "properties": {}},  # Default schema
+                        output_schema={"type": "string"}
+                    )
+                    tool_defs.append(tool_def)
+        
+        return tool_defs
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
