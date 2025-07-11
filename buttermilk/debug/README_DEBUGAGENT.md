@@ -100,11 +100,53 @@ The DebugAgent builds on:
 - Buttermilk's MCP infrastructure for tool discovery and invocation
 - Standard agent patterns for easy integration
 
+## Starting the MCP Server
+
+Since Buttermilk doesn't have a standalone MCP server yet, we've created a simple one:
+
+1. **Start the Debug MCP Server**:
+   ```bash
+   python scripts/run_debug_mcp_server.py
+   ```
+   
+   This starts a server on http://localhost:8090 with:
+   - `GET /tools` - List all available debugging tools
+   - `POST /tools/{tool_name}` - Execute a specific tool
+
+2. **Test the server**:
+   ```bash
+   python scripts/test_debug_mcp.py
+   ```
+
+3. **Use with an LLM**:
+   Configure your LLM client to access the server at http://localhost:8090
+
+## HTTP API Examples
+
+List available tools:
+```bash
+curl http://localhost:8090/tools
+```
+
+Get latest logs:
+```bash
+curl -X POST http://localhost:8090/tools/get_latest_buttermilk_logs \
+  -H "Content-Type: application/json" \
+  -d '{"params": {"lines": 50}}'
+```
+
+Start a WebSocket client:
+```bash
+curl -X POST http://localhost:8090/tools/start_websocket_client \
+  -H "Content-Type: application/json" \
+  -d '{"params": {"flow_id": "test_flow", "host": "localhost", "port": 8000}}'
+```
+
 ## Next Steps
 
 To use this in practice:
 
 1. Ensure the Buttermilk API server is running (`make debug`)
-2. Register the DebugAgent with your MCP server or tool registry
-3. Configure your LLM client to discover and use the MCP tools
+2. Start the Debug MCP server (`python scripts/run_debug_mcp_server.py`)
+3. Configure your LLM client to use the endpoints at http://localhost:8090
 4. Start debugging flows interactively through the LLM interface
