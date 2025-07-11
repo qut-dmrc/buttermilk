@@ -77,9 +77,7 @@ class LLMAgent(Agent):
     """
 
     # LLM-specific configurations
-    _model: str = pydantic.PrivateAttr(default="")
-    _output_model: type[pydantic.BaseModel] | None = pydantic.PrivateAttr(default=None)
-    _tools_list: list["Tool"] = pydantic.PrivateAttr(default_factory=list)
+    # These are now initialized in __init__ instead of using PrivateAttr
 
     # Control behavior
     fail_on_unfilled_parameters: bool = pydantic.Field(
@@ -103,6 +101,11 @@ class LLMAgent(Agent):
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
+        
+        # Initialize private attributes
+        self._model: str = self.parameters.get("model", "")
+        self._output_model: type[pydantic.BaseModel] | None = None
+        self._tools_list: list["Tool"] = []
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:

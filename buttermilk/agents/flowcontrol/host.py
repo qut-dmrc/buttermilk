@@ -6,7 +6,7 @@ from typing import Any  # Import Dict
 from autogen_core import CancellationToken, MessageContext, DefaultTopicId
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import ToolSchema
-from pydantic import Field, PrivateAttr
+from pydantic import Field
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -43,36 +43,47 @@ class HostAgent(Agent):
     for synchronization.
     """
 
-    _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
-    _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
-    # Condition variable to synchronize task completion based on pending agents
-    _tasks_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
-    _step_starting: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    # Track count of pending tasks per agent ID
-    _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))  # Corrected duplicate definition
-    _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
-    _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
-    _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
-
-    # Agent registry attributes (runtime state, not configuration)
-    _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
-    _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
-    _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
-
-    # Tool schemas for LLM-based hosts
-    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
-    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
-    _registry_summary_cache: dict[str, Any] | None = PrivateAttr(default=None)
-    # Additional configuration
+    # Additional configuration fields (these work because they're handled by AgentConfig)
     max_wait_time: int = Field(
         default=240,
         description="Maximum time to wait for agent responses in seconds",
     )
-    _current_step: str = PrivateAttr(default="")
     max_user_confirmation_time: int = Field(
         default=1220,
         description="Maximum time to wait for agent responses in seconds",
     )
+
+    def __init__(self, **kwargs):
+        """Initialize HostAgent with all required attributes."""
+        super().__init__(**kwargs)
+        
+        # Initialize private attributes that were previously using PrivateAttr
+        self._message_types_handled: type[Any] = type(ConductorRequest)
+        self._step_generator: AsyncGenerator[StepRequest, None] | None = None
+        self._tasks_condition: asyncio.Condition = asyncio.Condition()
+        self._step_starting: asyncio.Event = asyncio.Event()
+        self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
+        self._participants: dict[str, Any] = {}
+        self._participant_tools: dict[str, list[dict[str, Any]]] = {}
+        self._conductor_task: asyncio.Task | None = None
+        
+        # Agent registry attributes
+        self._agent_registry: dict[str, AgentAnnouncement] = {}
+        self._tool_registry: dict[str, list[str]] = {}
+        self._registry_lock: asyncio.Lock = asyncio.Lock()
+        
+        # Tool schemas for LLM-based hosts
+        self._tool_schemas: list[ToolSchema] = []
+        self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
+        self._registry_summary_cache: dict[str, Any] | None = None
+        self._current_step: str = ""
+        
+        # User confirmation attributes
+        self._user_confirmation: ManagerMessage | None = None
+        self._user_confirmation_received: asyncio.Event = asyncio.Event()
+        self._user_feedback: list[str] = []
+        self._progress_reporter_task: asyncio.Task | None = None
+
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
     def human_in_loop(self) -> bool:
@@ -88,12 +99,6 @@ class HostAgent(Agent):
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
         self.parameters['human_in_loop'] = value
-
-    #  Event for confirmation responses from the MANAGER.
-    _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
-    _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    _user_feedback: list[str] = PrivateAttr(default_factory=list)
-    _progress_reporter_task: asyncio.Task | None = PrivateAttr(default=None)
 
     async def _publish(self, message: Any) -> None:
         """Publish a message to the group chat."""

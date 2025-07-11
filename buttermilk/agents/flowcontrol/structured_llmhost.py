@@ -9,7 +9,6 @@ from typing import Any
 
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
 from autogen_core.models import CreateResult
-from pydantic import PrivateAttr
 
 from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
@@ -31,10 +30,15 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
     a predefined sequence.
     """
 
-    _user_feedback: list[str] = PrivateAttr(default_factory=list)
+    def __init__(self, **kwargs):
+        """Initialize StructuredLLMHostAgent."""
+        super().__init__(**kwargs)
 
-    # Override the output model - we don't need CallOnAgent anymore
-    _output_model = None  # Let the LLM use tool calling directly
+        # Initialize attributes specific to this class
+        self._user_feedback: list[str] = []
+
+        # Override the output model - we don't need CallOnAgent anymore
+        self._output_model = None  # Let the LLM use tool calling directly
 
     def _clear_pending_steps(self) -> None:
         """Clear all pending steps from the queue."""
@@ -102,9 +106,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             )
             # Still try to process without tools - the LLM can work without them, just less effectively
         else:
-            logger.debug(
-                f"StructuredLLMHost {self.agent_name} in _listen has {len(tool_schemas)} tool schemas"
-            )
+            logger.debug(f"StructuredLLMHost {self.agent_name} in _listen has {len(tool_schemas)} tool schemas")
             logger.debug(f"Message type received: {type(message).__name__}")
 
         # Skip command messages
