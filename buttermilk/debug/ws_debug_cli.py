@@ -24,9 +24,8 @@ from rich.text import Text
 import glob
 import os
 
-# Use the existing flow test client
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from tests.integration.flow_test_client import FlowTestClient, MessageType
+# Use the flow test client from the agents test utilities
+from buttermilk.agents.test_utils import FlowTestClient, MessageType
 
 
 class InteractiveDebugClient:

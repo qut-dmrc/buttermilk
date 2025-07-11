@@ -15,7 +15,7 @@ from buttermilk._core import AgentInput, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
 # Tool decorator removed with MCP implementation
-from tests.integration.flow_test_client import FlowTestClient
+from buttermilk.agents.test_utils import FlowTestClient
 
 
 class DebugAgent(Agent):
