@@ -1,6 +1,6 @@
 """Debug Agent for LLM-driven debugging.
 
-This agent provides MCP-exposed tools for debugging Buttermilk flows,
+This agent provides tools for debugging Buttermilk flows,
 including log reading and WebSocket flow control.
 """
 
@@ -14,7 +14,7 @@ from typing import Any, Optional
 from buttermilk._core import AgentInput, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
-from buttermilk._core.mcp_decorators import tool
+# Tool decorator removed with MCP implementation
 from tests.integration.flow_test_client import FlowTestClient
 
 
@@ -48,7 +48,6 @@ class DebugAgent(Agent):
     
     # Log reading tools
     
-    @tool
     def get_latest_buttermilk_logs(self, lines: int = 100) -> str:
         """Get the last N lines from the most recent buttermilk log file.
         
@@ -72,7 +71,6 @@ class DebugAgent(Agent):
         except Exception as e:
             return f"Error reading log file {latest_log}: {str(e)}"
     
-    @tool  
     def list_log_files(self) -> list[dict[str, Any]]:
         """List all buttermilk log files with their metadata.
         
@@ -98,7 +96,6 @@ class DebugAgent(Agent):
     
     # WebSocket client tools
     
-    @tool
     async def start_websocket_client(
         self, 
         flow_id: str,
@@ -149,7 +146,6 @@ class DebugAgent(Agent):
                 "message": f"Failed to start client: {str(e)}"
             }
     
-    @tool
     async def send_websocket_message(
         self,
         flow_id: str,
@@ -213,7 +209,6 @@ class DebugAgent(Agent):
                 "message": f"Failed to send message: {str(e)}"
             }
     
-    @tool
     def get_websocket_messages(
         self,
         flow_id: str,
@@ -269,7 +264,6 @@ class DebugAgent(Agent):
             for msg in messages
         ]
     
-    @tool
     def get_websocket_summary(self, flow_id: str) -> dict[str, Any]:
         """Get a summary of WebSocket client state and messages.
         
@@ -299,7 +293,6 @@ class DebugAgent(Agent):
         # Call parent cleanup
         await super().cleanup()
     
-    @tool
     async def stop_websocket_client(self, flow_id: str) -> dict[str, str]:
         """Stop and cleanup a WebSocket client.
         
@@ -331,7 +324,6 @@ class DebugAgent(Agent):
                 "message": f"Error stopping client: {str(e)}"
             }
     
-    @tool
     def list_active_clients(self) -> list[str]:
         """List all active WebSocket client IDs.
         

@@ -91,20 +91,17 @@ def test_startup(flow, timeout, output, verbose):
                 time.sleep(2)
                 
                 # Test API health
-                # client = MCPFlowTester()
-                # health = client.health_check()
-                # api_reachable = health.api_reachable
-                # flows_loaded = health.available_flows
-                api_reachable = False  # MCP client removed
-                flows_loaded = []
+                client = MCPFlowTester()
+                health = client.health_check()
+                api_reachable = health.api_reachable
+                flows_loaded = health.available_flows
                 
-                # if api_reachable:
-                #     click.echo("✅ API health check passed")
-                #     if verbose and flows_loaded:
-                #         click.echo(f"📊 Available flows: {', '.join(flows_loaded)}")
-                # else:
-                #     click.echo("❌ API health check failed")
-                click.echo("⚠️  API health check skipped (MCP client removed)")
+                if api_reachable:
+                    click.echo("✅ API health check passed")
+                    if verbose and flows_loaded:
+                        click.echo(f"📊 Available flows: {', '.join(flows_loaded)}")
+                else:
+                    click.echo("❌ API health check failed")
                 
                 break
             
@@ -173,158 +170,158 @@ def test_startup(flow, timeout, output, verbose):
         sys.exit(1)
 
 
-# @debug.command()
-# @click.option('--flow', required=True, help='Flow name to test (e.g., osb)')
-# @click.option('--query', required=True, help='Test query to send')
-# @click.option('--host', default='localhost', help='API host')
-# @click.option('--port', default=8000, help='API port')
-# @click.option('--timeout', default=30, help='Request timeout in seconds')
-# @click.option('--output', help='Output file for results (JSON)')
-# def test_mcp_query(flow, query, host, port, timeout, output):
-#     """Test flow via existing MCP endpoints."""
-#     base_url = f"http://{host}:{port}"
-#     client = MCPFlowTester(base_url=base_url, timeout=timeout)
-#     
-#     click.echo(f"🧪 Testing {flow} flow with MCP endpoints")
-#     click.echo(f"🌐 API: {base_url}")
-#     click.echo(f"❓ Query: {query}")
-#     
-#     # Health check first
-#     click.echo("\\n🏥 Checking API health...")
-#     health = client.health_check()
-#     
-#     if not health.api_reachable:
-#         click.echo(f"❌ API not reachable: {health.error_details}")
-#         sys.exit(1)
-#     
-#     click.echo(f"✅ API healthy (response time: {health.response_time:.2f}s)")
-#     if health.available_flows:
-#         click.echo(f"📊 Available flows: {', '.join(health.available_flows)}")
-#     
-#     # Test the specific query
-#     if flow == "osb":
-#         click.echo("\\n🔍 Testing OSB vector query...")
-#         result = client.test_osb_vector_query(query)
-#     else:
-#         click.echo(f"\\n🚀 Testing flow start for {flow}...")
-#         result = client.test_mcp_flow_start(flow, query)
-#     
-#     # Display results
-#     click.echo("\\n" + "="*60)
-#     click.echo("📊 QUERY TEST RESULTS")
-#     click.echo("="*60)
-#     click.echo(f"🎯 Status: {'✅' if result.status == 'success' else '❌'} {result.status}")
-#     click.echo(f"⏱️  Response time: {result.response_time:.2f}s")
-#     click.echo(f"🔗 Endpoint: {result.endpoint}")
-#     
-#     if result.status == "success" and result.response:
-#         response = result.response
-#         if "result" in response:
-#             click.echo(f"\\n✅ RESPONSE:")
-#             result_data = response["result"]
-#             
-#             # Handle different response types
-#             if isinstance(result_data, dict):
-#                 if "content" in result_data:
-#                     click.echo(f"📝 Content: {result_data['content'][:200]}...")
-#                 if "search_results" in result_data:
-#                     search_results = result_data["search_results"]
-#                     click.echo(f"🔍 Found {len(search_results)} search results")
-#                     for i, result in enumerate(search_results[:3]):
-#                         title = result.get("title", "No title")
-#                         score = result.get("score", 0)
-#                         click.echo(f"   {i+1}. {title} (score: {score:.3f})")
-#             else:
-#                 click.echo(f"📄 Result: {str(result_data)[:200]}...")
-#         
-#         if "trace_id" in response:
-#             click.echo(f"🔍 Trace ID: {response['trace_id']}")
-#     
-#     elif result.error_details:
-#         click.echo(f"\\n❌ ERROR: {result.error_details}")
-#     
-#     # Save output if requested
-#     if output:
-#         output_path = Path(output)
-#         output_path.write_text(result.model_dump_json(indent=2))
-#         click.echo(f"\\n💾 Results saved to: {output_path}")
-#     
-#     # Set exit code
-#     if result.status != "success":
-#         sys.exit(1)
-# 
+@debug.command()
+@click.option('--flow', required=True, help='Flow name to test (e.g., osb)')
+@click.option('--query', required=True, help='Test query to send')
+@click.option('--host', default='localhost', help='API host')
+@click.option('--port', default=8000, help='API port')
+@click.option('--timeout', default=30, help='Request timeout in seconds')
+@click.option('--output', help='Output file for results (JSON)')
+def test_mcp_query(flow, query, host, port, timeout, output):
+    """Test flow via existing MCP endpoints."""
+    base_url = f"http://{host}:{port}"
+    client = MCPFlowTester(base_url=base_url, timeout=timeout)
+    
+    click.echo(f"🧪 Testing {flow} flow with MCP endpoints")
+    click.echo(f"🌐 API: {base_url}")
+    click.echo(f"❓ Query: {query}")
+    
+    # Health check first
+    click.echo("\\n🏥 Checking API health...")
+    health = client.health_check()
+    
+    if not health.api_reachable:
+        click.echo(f"❌ API not reachable: {health.error_details}")
+        sys.exit(1)
+    
+    click.echo(f"✅ API healthy (response time: {health.response_time:.2f}s)")
+    if health.available_flows:
+        click.echo(f"📊 Available flows: {', '.join(health.available_flows)}")
+    
+    # Test the specific query
+    if flow == "osb":
+        click.echo("\\n🔍 Testing OSB vector query...")
+        result = client.test_osb_vector_query(query)
+    else:
+        click.echo(f"\\n🚀 Testing flow start for {flow}...")
+        result = client.test_mcp_flow_start(flow, query)
+    
+    # Display results
+    click.echo("\\n" + "="*60)
+    click.echo("📊 QUERY TEST RESULTS")
+    click.echo("="*60)
+    click.echo(f"🎯 Status: {'✅' if result.status == 'success' else '❌'} {result.status}")
+    click.echo(f"⏱️  Response time: {result.response_time:.2f}s")
+    click.echo(f"🔗 Endpoint: {result.endpoint}")
+    
+    if result.status == "success" and result.response:
+        response = result.response
+        if "result" in response:
+            click.echo(f"\\n✅ RESPONSE:")
+            result_data = response["result"]
+            
+            # Handle different response types
+            if isinstance(result_data, dict):
+                if "content" in result_data:
+                    click.echo(f"📝 Content: {result_data['content'][:200]}...")
+                if "search_results" in result_data:
+                    search_results = result_data["search_results"]
+                    click.echo(f"🔍 Found {len(search_results)} search results")
+                    for i, result in enumerate(search_results[:3]):
+                        title = result.get("title", "No title")
+                        score = result.get("score", 0)
+                        click.echo(f"   {i+1}. {title} (score: {score:.3f})")
+            else:
+                click.echo(f"📄 Result: {str(result_data)[:200]}...")
+        
+        if "trace_id" in response:
+            click.echo(f"🔍 Trace ID: {response['trace_id']}")
+    
+    elif result.error_details:
+        click.echo(f"\\n❌ ERROR: {result.error_details}")
+    
+    # Save output if requested
+    if output:
+        output_path = Path(output)
+        output_path.write_text(result.model_dump_json(indent=2))
+        click.echo(f"\\n💾 Results saved to: {output_path}")
+    
+    # Set exit code
+    if result.status != "success":
+        sys.exit(1)
 
-# @debug.command()
-# @click.option('--flow', required=True, help='Flow name to test comprehensively')
-# @click.option('--queries-file', help='JSON file with test queries')
-# @click.option('--host', default='localhost', help='API host')
-# @click.option('--port', default=8000, help='API port')
-# @click.option('--timeout', default=60, help='Request timeout in seconds')
-# @click.option('--output', help='Output file for results (JSON)')
-# def test_flow_comprehensive(flow, queries_file, host, port, timeout, output):
-#     """Run comprehensive test suite for a flow."""
-#     base_url = f"http://{host}:{port}"
-#     client = MCPFlowTester(base_url=base_url, timeout=timeout)
-#     
-#     # Load test queries
-#     test_queries = None
-#     if queries_file:
-#         queries_path = Path(queries_file)
-#         if queries_path.exists():
-#             test_queries = json.loads(queries_path.read_text())
-#         else:
-#             click.echo(f"❌ Queries file not found: {queries_file}")
-#             sys.exit(1)
-#     
-#     click.echo(f"🧪 Running comprehensive test suite for {flow} flow")
-#     click.echo(f"🌐 API: {base_url}")
-#     
-#     # Run comprehensive test
-#     report = client.test_flow_comprehensive(flow, test_queries)
-#     
-#     # Display results
-#     click.echo("\\n" + "="*60)
-#     click.echo("📊 COMPREHENSIVE TEST REPORT")
-#     click.echo("="*60)
-#     click.echo(f"🎯 Flow: {report.flow_name}")
-#     click.echo(f"🏥 Overall Status: {report.overall_status}")
-#     click.echo(f"🌐 API Health: {'✅' if report.api_health.api_reachable else '❌'}")
-#     click.echo(f"🧪 MCP Tests: {len([r for r in report.mcp_test_results if r.status == 'success'])}/{len(report.mcp_test_results)} passed")
-#     click.echo(f"🤖 Agent Tests: {len([r for r in report.agent_tests if r.status == 'success'])}/{len(report.agent_tests)} passed")
-#     
-#     if report.mcp_test_results:
-#         avg_response_time = sum(r.response_time for r in report.mcp_test_results) / len(report.mcp_test_results)
-#         click.echo(f"⏱️  Average Response Time: {avg_response_time:.2f}s")
-#     
-#     # Show failed tests
-#     failed_mcp = [r for r in report.mcp_test_results if r.status != "success"]
-#     if failed_mcp:
-#         click.echo(f"\\n❌ FAILED MCP TESTS ({len(failed_mcp)}):")
-#         for test in failed_mcp:
-#             click.echo(f"   • {test.endpoint}: {test.error_details}")
-#     
-#     failed_agents = [r for r in report.agent_tests if r.status != "success"]
-#     if failed_agents:
-#         click.echo(f"\\n❌ FAILED AGENT TESTS ({len(failed_agents)}):")
-#         for test in failed_agents:
-#             click.echo(f"   • {test.agent_role}: {test.error_details}")
-#     
-#     # Show recommendations
-#     if report.recommendations:
-#         click.echo(f"\\n💡 RECOMMENDATIONS:")
-#         for rec in report.recommendations:
-#             click.echo(f"   • {rec}")
-#     
-#     # Save output if requested
-#     if output:
-#         output_path = Path(output)
-#         output_path.write_text(report.model_dump_json(indent=2))
-#         click.echo(f"\\n💾 Results saved to: {output_path}")
-#     
-#     # Set exit code based on overall status
-#     if report.overall_status == "unhealthy":
-#         sys.exit(1)
-# 
+
+@debug.command()
+@click.option('--flow', required=True, help='Flow name to test comprehensively')
+@click.option('--queries-file', help='JSON file with test queries')
+@click.option('--host', default='localhost', help='API host')
+@click.option('--port', default=8000, help='API port')
+@click.option('--timeout', default=60, help='Request timeout in seconds')
+@click.option('--output', help='Output file for results (JSON)')
+def test_flow_comprehensive(flow, queries_file, host, port, timeout, output):
+    """Run comprehensive test suite for a flow."""
+    base_url = f"http://{host}:{port}"
+    client = MCPFlowTester(base_url=base_url, timeout=timeout)
+    
+    # Load test queries
+    test_queries = None
+    if queries_file:
+        queries_path = Path(queries_file)
+        if queries_path.exists():
+            test_queries = json.loads(queries_path.read_text())
+        else:
+            click.echo(f"❌ Queries file not found: {queries_file}")
+            sys.exit(1)
+    
+    click.echo(f"🧪 Running comprehensive test suite for {flow} flow")
+    click.echo(f"🌐 API: {base_url}")
+    
+    # Run comprehensive test
+    report = client.test_flow_comprehensive(flow, test_queries)
+    
+    # Display results
+    click.echo("\\n" + "="*60)
+    click.echo("📊 COMPREHENSIVE TEST REPORT")
+    click.echo("="*60)
+    click.echo(f"🎯 Flow: {report.flow_name}")
+    click.echo(f"🏥 Overall Status: {report.overall_status}")
+    click.echo(f"🌐 API Health: {'✅' if report.api_health.api_reachable else '❌'}")
+    click.echo(f"🧪 MCP Tests: {len([r for r in report.mcp_test_results if r.status == 'success'])}/{len(report.mcp_test_results)} passed")
+    click.echo(f"🤖 Agent Tests: {len([r for r in report.agent_tests if r.status == 'success'])}/{len(report.agent_tests)} passed")
+    
+    if report.mcp_test_results:
+        avg_response_time = sum(r.response_time for r in report.mcp_test_results) / len(report.mcp_test_results)
+        click.echo(f"⏱️  Average Response Time: {avg_response_time:.2f}s")
+    
+    # Show failed tests
+    failed_mcp = [r for r in report.mcp_test_results if r.status != "success"]
+    if failed_mcp:
+        click.echo(f"\\n❌ FAILED MCP TESTS ({len(failed_mcp)}):")
+        for test in failed_mcp:
+            click.echo(f"   • {test.endpoint}: {test.error_details}")
+    
+    failed_agents = [r for r in report.agent_tests if r.status != "success"]
+    if failed_agents:
+        click.echo(f"\\n❌ FAILED AGENT TESTS ({len(failed_agents)}):")
+        for test in failed_agents:
+            click.echo(f"   • {test.agent_role}: {test.error_details}")
+    
+    # Show recommendations
+    if report.recommendations:
+        click.echo(f"\\n💡 RECOMMENDATIONS:")
+        for rec in report.recommendations:
+            click.echo(f"   • {rec}")
+    
+    # Save output if requested
+    if output:
+        output_path = Path(output)
+        output_path.write_text(report.model_dump_json(indent=2))
+        click.echo(f"\\n💾 Results saved to: {output_path}")
+    
+    # Set exit code based on overall status
+    if report.overall_status == "unhealthy":
+        sys.exit(1)
+
 
 @debug.command()
 @click.option('--minutes-back', default=30, help='How many minutes back to analyze logs')
@@ -428,16 +425,14 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     
     # Step 2: Test API health
     click.echo("\n2️⃣ Testing API health...")
-    # client = MCPFlowTester()
-    # health = client.health_check()
-    click.echo("   ⚠️  API health check skipped (MCP client removed)")
-    health = None  # MCP client removed
+    client = MCPFlowTester()
+    health = client.health_check()
     
-    # if health.api_reachable:
-    #     click.echo(f"   ✅ API reachable (response time: {health.response_time:.2f}s)")
-    #     click.echo(f"   📊 Available flows: {', '.join(health.available_flows)}")
-    # else:
-    #     click.echo(f"   ❌ API not reachable: {health.error_details}")
+    if health.api_reachable:
+        click.echo(f"   ✅ API reachable (response time: {health.response_time:.2f}s)")
+        click.echo(f"   📊 Available flows: {', '.join(health.available_flows)}")
+    else:
+        click.echo(f"   ❌ API not reachable: {health.error_details}")
         
         # Try to start daemon if not running
         click.echo("\n🚀 Attempting to start daemon...")
@@ -487,20 +482,19 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
             click.echo(f"   ❌ Failed to start daemon: {e}")
     
     # Step 3: Test specific flow if API is running
-    # if health.api_reachable and flow in health.available_flows:
-    #     click.echo(f"\n3️⃣ Testing {flow} flow with query...")
-    #     click.echo(f"   Query: {query}")
-    #     
-    #     if flow == "osb":
-    #         result = client.test_osb_vector_query(query)
-    #     else:
-    #         result = client.test_mcp_flow_start(flow, query)
-    #     
-    #     if result.status == "success":
-    #         click.echo(f"   ✅ Flow executed successfully ({result.response_time:.2f}s)")
-    #     else:
-    #         click.echo(f"   ❌ Flow failed: {result.error_details}")
-    click.echo("\n3️⃣ Flow testing skipped (MCP client removed)")
+    if health.api_reachable and flow in health.available_flows:
+        click.echo(f"\n3️⃣ Testing {flow} flow with query...")
+        click.echo(f"   Query: {query}")
+        
+        if flow == "osb":
+            result = client.test_osb_vector_query(query)
+        else:
+            result = client.test_mcp_flow_start(flow, query)
+        
+        if result.status == "success":
+            click.echo(f"   ✅ Flow executed successfully ({result.response_time:.2f}s)")
+        else:
+            click.echo(f"   ❌ Flow failed: {result.error_details}")
     
     # Step 4: Analyze type checking errors
     click.echo("\n4️⃣ Analyzing type checking errors...")
@@ -516,18 +510,17 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     # Step 5: Comprehensive testing if requested
     if comprehensive:
         click.echo("\n5️⃣ Running comprehensive flow test...")
-        # if health.api_reachable and flow in health.available_flows:
-        #     report = client.test_flow_comprehensive(flow, [query])
-        #     click.echo(f"   Overall Status: {report.overall_status}")
-        #     
-        #     failed_tests = [r for r in report.mcp_test_results if r.status != "success"]
-        #     if failed_tests:
-        #         click.echo(f"   ❌ {len(failed_tests)} tests failed")
-        #         for test in failed_tests[:3]:
-        #             click.echo(f"      {test.endpoint}: {test.error_details}")
-        # else:
-        #     click.echo("   ⏭️ Skipping comprehensive tests (API not available)")
-        click.echo("   ⚠️  Comprehensive tests skipped (MCP client removed)")
+        if health.api_reachable and flow in health.available_flows:
+            report = client.test_flow_comprehensive(flow, [query])
+            click.echo(f"   Overall Status: {report.overall_status}")
+            
+            failed_tests = [r for r in report.mcp_test_results if r.status != "success"]
+            if failed_tests:
+                click.echo(f"   ❌ {len(failed_tests)} tests failed")
+                for test in failed_tests[:3]:
+                    click.echo(f"      {test.endpoint}: {test.error_details}")
+        else:
+            click.echo("   ⏭️ Skipping comprehensive tests (API not available)")
     
     # Summary and recommendations
     click.echo("\n📋 SUMMARY AND RECOMMENDATIONS")
@@ -539,11 +532,11 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
         click.echo("   2. Look for isinstance() calls with subscripted generics")
         click.echo("   3. Add error capture to agent initialization")
     
-    # if not health.api_reachable:
-    #     click.echo("🔧 Next steps for API issues:")
-    #     click.echo("   1. Check daemon startup logs with --verbose")
-    #     click.echo("   2. Verify configuration files are valid")
-    #     click.echo("   3. Test with minimal configuration first")
+    if not health.api_reachable:
+        click.echo("🔧 Next steps for API issues:")
+        click.echo("   1. Check daemon startup logs with --verbose")
+        click.echo("   2. Verify configuration files are valid")
+        click.echo("   3. Test with minimal configuration first")
     
     if type_analysis["total_type_errors"] > 0:
         click.echo("🔧 Next steps for type checking:")

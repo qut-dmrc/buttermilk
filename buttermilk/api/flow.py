@@ -19,8 +19,6 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 from .lazy_routes import LazyRouteManager, create_core_router
 from .routes import flow_data_router
-from .mcp import mcp_router
-from .mcp_agents import agent_mcp_router
 from .monitoring import monitoring_router
 
 # Define the base directory for the FastAPI app
@@ -343,9 +341,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     app.include_router(monitoring_router)
     logger.info("Monitoring router added for production observability")
     
-    # Defer heavy routers until first request
-    lazy_manager.defer_router(mcp_router, prefix="")
-    lazy_manager.defer_router(agent_mcp_router, prefix="")
+    # Create lazy middleware for deferred routes
     lazy_manager.create_lazy_middleware()
 
     # Include flow_data_router directly since its websocket endpoint is now directly on app

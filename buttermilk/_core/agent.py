@@ -1026,15 +1026,16 @@ class Agent(RoutedAgent):
         """Generate structured tool definitions for this agent.
         
         This method extracts tool definitions from methods decorated with
-        @tool or @MCPRoute decorators. It enables agents to automatically
+        @tool decorators. It enables agents to automatically
         expose their capabilities as structured tool definitions that can
-        be used by LLMs and MCP servers.
+        be used by LLMs.
         
         Returns:
             List of AgentToolDefinition objects representing this agent's tools.
         """
-        from buttermilk._core.mcp_decorators import extract_tool_definitions
-        return extract_tool_definitions(self)
+        # Since MCP decorators were removed, return empty list for now
+        # TODO: Implement tool extraction from @tool decorators if needed
+        return []
     
     def get_all_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Get all tool definitions from both decorated methods and configured tools.
@@ -1108,7 +1109,7 @@ class Agent(RoutedAgent):
             # First, try direct method name match
             if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
                 method = getattr(self, tool_name)
-                if hasattr(method, "_tool_metadata") or hasattr(method, "_mcp_route"):
+                if hasattr(method, "_tool_metadata"):
                     logger.debug(
                         f"Agent {self.agent_name} executing tool {tool_name} "
                         f"with inputs: {request.inputs}"
