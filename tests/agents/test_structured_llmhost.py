@@ -8,7 +8,6 @@ from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAg
 from buttermilk._core.contract import ConductorRequest, StepRequest
 from autogen_core.tools import FunctionTool
 from autogen_core import CancellationToken
-from buttermilk.agents.flowcontrol.structured_llmhost import AgentToolWrapper
 
 
 class TestStructuredLLMHostAgent:
@@ -24,7 +23,7 @@ class TestStructuredLLMHostAgent:
             description="Test host agent",
             parameters={"model": "gpt-4", "template": "test", "human_in_loop": False}
         )
-        host.callback_to_groupchat = AsyncMock()
+        # No longer need callback_to_groupchat
         return host
 
     @pytest.fixture
@@ -116,9 +115,9 @@ class TestStructuredLLMHostAgent:
         assert "analyze" in tool_names
         assert "write" in tool_names
 
-        # Verify all tools are FunctionTool or AgentToolWrapper instances
+        # Verify all tools are FunctionTool instances
         for tool in mock_host._tools_list:
-            assert isinstance(tool, (FunctionTool, AgentToolWrapper))
+            assert isinstance(tool, FunctionTool)
 
     @pytest.mark.anyio
     async def test_build_agent_tools_default_only(self, mock_host, sample_participants):
@@ -181,7 +180,7 @@ class TestStructuredLLMHostAgent:
         # Invoke the tool using run_json method
         result = await search_tool.run_json({"query": "test query", "max_results": 5}, CancellationToken())
 
-        # Verify result is an empty dict (AgentToolWrapper returns {})
+        # Verify result is as expected
         assert result == {}
 
         # Verify StepRequest was queued
@@ -210,7 +209,7 @@ class TestStructuredLLMHostAgent:
         # Invoke with prompt
         result = await reviewer_tool.run_json({"prompt": "Please review this content"}, CancellationToken())
 
-        # Verify result is an empty dict (AgentToolWrapper returns {})
+        # Verify result is as expected
         assert result == {}
         step = await mock_host._proposed_step.get()
         assert step.role == "REVIEWER"
@@ -254,7 +253,7 @@ class TestStructuredLLMHostAgent:
     async def test_no_participants_initialization(self, mock_host):
         """Test initialization when no agents have announced themselves."""
         # Execute initialization with empty registry (no agents announced)
-        await mock_host._initialize(callback_to_groupchat=AsyncMock())
+        await mock_host.initialize()
 
         # Verify tools list was initialized but empty
         assert hasattr(mock_host, '_tools_list')
@@ -295,7 +294,7 @@ class TestStructuredLLMHostAgent:
         # Invoke with multiple parameters
         result = await write_tool.run_json({"topic": "AI Ethics", "style": "academic"}, CancellationToken())
 
-        # Verify result is an empty dict (AgentToolWrapper returns {})
+        # Verify result is as expected
         assert result == {}
         step = await mock_host._proposed_step.get()
         assert step.role == "WRITER"

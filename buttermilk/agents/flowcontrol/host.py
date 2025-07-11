@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator, Callable, Mapping
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken
+from autogen_core import CancellationToken, MessageContext, DefaultTopicId
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import ToolSchema
 from pydantic import Field, PrivateAttr
@@ -44,7 +44,6 @@ class HostAgent(Agent):
     """
 
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
-    callback_to_groupchat: Any = Field(default=None)
     _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
     # Condition variable to synchronize task completion based on pending agents
     _tasks_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
@@ -97,13 +96,18 @@ class HostAgent(Agent):
 
     async def initialize(
         self,
-        callback_to_groupchat,
         **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
         await super().initialize(**kwargs)
-        self.callback_to_groupchat = callback_to_groupchat
         logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
+
+    async def _publish(self, message: Any) -> None:
+        """Publish a message to the group chat."""
+        if hasattr(self, '_runtime') and self._runtime:
+            await self.publish_message(message, topic_id=DefaultTopicId(type="default"))
+        else:
+            logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
 
     # --- Agent Registry Methods ---
 
@@ -444,7 +448,7 @@ class HostAgent(Agent):
         )
         # This is callback to groupchat, because we're the host agent right now.
         # Our message goes to the groupchat and then gets picked up by the UI.
-        await self.callback_to_groupchat(confirmation_request)
+        await self._publish(confirmation_request)
 
     async def _wait_for_user(self, step) -> bool:
         """Wait for user confirmation before proceeding with the next step.
@@ -471,7 +475,7 @@ class HostAgent(Agent):
             return False
         msg = "User did not respond to confirm step in time. Ending flow."
         logger.error(msg)
-        await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+        await self._publish(StepRequest(role=END, content=msg))
         return False
 
     async def _report_progress_periodically(self, interval: int = 10):
@@ -497,7 +501,7 @@ class HostAgent(Agent):
                             message="Flow currently idle",
                         )
                     logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
-                    await self.callback_to_groupchat(progress_message)
+                    await self._publish(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
         except Exception as e:
@@ -599,7 +603,7 @@ class HostAgent(Agent):
                 msg = "Host received ConductorRequest with no participants."
                 logger.error(f"{msg} Aborting.")
                 # Send an END message with the error
-                await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+                await self._publish(StepRequest(role=END, content=msg))
                 raise FatalError(msg)
 
             # Store participant tools if provided
@@ -641,7 +645,7 @@ class HostAgent(Agent):
                 self._initial_parameters = {}
 
             # Rerun initialization to set up the group chat
-            await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
+            await self.initialize()
 
             # Start the periodic progress reporter task
             self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
@@ -679,7 +683,7 @@ class HostAgent(Agent):
                 message="Flow completed",
             )
             logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
-            await self.callback_to_groupchat(final_progress_message)
+            await self._publish(final_progress_message)
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")
@@ -738,7 +742,7 @@ class HostAgent(Agent):
             await asyncio.sleep(10)
         elif step.role == END:
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
-            await self.callback_to_groupchat(step)
+            await self._publish(step)
         else:
             if step.role in self._participants:
                 # Signal that we expect at least one response/task start for this step
@@ -753,12 +757,12 @@ class HostAgent(Agent):
                     content=step.content or "What would you like to do?",
                     options=None,  # No specific options, just free text response
                 )
-                await self.callback_to_groupchat(ui_message)
+                await self._publish(ui_message)
                 return  # Don't send the StepRequest itself
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 
-            await self.callback_to_groupchat(step)
+            await self._publish(step)
 
     async def _process(
         self,
@@ -847,7 +851,7 @@ class HostAgent(Agent):
                 await self._proposed_step.put(step_request)
 
             # Send it out regardless
-            await self.callback_to_groupchat(step_request)
+            await self._publish(step_request)
     
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.

@@ -122,51 +122,50 @@ class Agent(RoutedAgent):
     _id: Union[AgentId, None] = None
     _runtime: Union["AgentRuntime", None] = None
     _config: AgentConfig
-    
+
     # --- Configuration properties (delegated to _config) ---
     @property
     def agent_id(self) -> str:
         return self._config.agent_id
-    
+
     @property
     def agent_name(self) -> str:
         return self._config.agent_name
-    
+
     @property
     def role(self) -> str:
         return self._config.role
-    
+
     @property
     def description(self) -> str:
         return self._config.description
-    
+
     @property
     def parameters(self) -> dict[str, Any]:
         return self._config.parameters or {}
-    
+
     @property
     def inputs(self) -> Union[dict[str, str], None]:
         return self._config.inputs
-    
+
     @property
     def session_id(self) -> str:
         """Get session_id from config if available."""
         return getattr(self._config, 'session_id', '')
-    
+
     def __init__(self, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""
         # Create AgentConfig from the data
         self._config = AgentConfig(**data)
-        
+
         # Initialize RoutedAgent with description
         RoutedAgent.__init__(self, description=self._config.description)
-        
+
         # Initialize private attributes
         self._records = []
         self._model_context = UnboundedChatCompletionContext()
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
-        self._announcement_callback = None
 
     @property
     def metadata(self) -> AgentMetadata:
@@ -322,18 +321,18 @@ class Agent(RoutedAgent):
 
     async def send_announcement(
         self,
-        public_callback: Callable[[Any], Awaitable[None]],
         announcement_type: Literal["initial", "response", "update"],
         status: Literal["joining", "active", "leaving"],
-        responding_to: str | None = None
+        responding_to: str | None = None,
+        topic_id: TopicId | None = None
     ) -> None:
         """Send an agent announcement message.
         
         Args:
-            public_callback: Callback to publish the announcement.
             announcement_type: Type of announcement.
             status: Current agent status.
             responding_to: Agent ID being responded to (for response type).
+            topic_id: Topic to publish to (defaults to DefaultTopicId).
         """
         try:
             announcement = self.create_announcement(
@@ -341,24 +340,28 @@ class Agent(RoutedAgent):
                 status=status,
                 responding_to=responding_to
             )
-            await public_callback(announcement)
-            logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+            if hasattr(self, '_runtime') and self._runtime:
+                await self.publish_message(
+                    announcement, 
+                    topic_id=topic_id or DefaultTopicId(type="default")
+                )
+                logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+            else:
+                logger.warning(f"Agent {self.agent_name} has no runtime to send announcement")
         except Exception as e:
             logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
 
     async def initialize(
         self,
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any
     ) -> None:
-        """Initializes agent state or resources and optionally sends joining announcement.
+        """Initializes agent state or resources and sends joining announcement.
 
         Called once by the orchestrator. Subclasses can override this method to perform 
         asynchronous setup tasks such as loading models, establishing connections to external 
         services, or initializing complex state.
         
         Args:
-            public_callback: Optional callback to publish announcement.
             **kwargs: Arbitrary keyword arguments that might be passed by the
                 orchestrator or calling context, providing additional setup parameters.
         """
@@ -366,25 +369,19 @@ class Agent(RoutedAgent):
         # Set the agent ID in the context variable for tracing
         agent_id_var.set(self.agent_id)
 
-        # Store callback for cleanup if provided
-        if public_callback:
-            self._announcement_callback = public_callback
-            # Send joining announcement
-            await self.send_announcement(
-                public_callback=public_callback,
-                announcement_type="initial",
-                status="joining"
-            )
+        # Send joining announcement
+        await self.send_announcement(
+            announcement_type="initial",
+            status="joining"
+        )
 
     async def cleanup_with_announcement(self) -> None:
         """Cleanup agent and send leaving announcement."""
-        # Send leaving announcement if we have a stored callback
-        if hasattr(self, "_announcement_callback") and self._announcement_callback:
-            await self.send_announcement(
-                public_callback=self._announcement_callback,
-                announcement_type="update",
-                status="leaving"
-            )
+        # Send leaving announcement
+        await self.send_announcement(
+            announcement_type="update",
+            status="leaving"
+        )
 
         # Call base cleanup
         await self.cleanup()
@@ -552,16 +549,12 @@ class Agent(RoutedAgent):
 
         """
         is_error = False
-        
-        # Get the publish callback - check for temporary callback first (from invoke method)
-        if hasattr(self, '_temp_public_callback') and self._temp_public_callback:
-            public_callback = self._temp_public_callback
-        elif hasattr(self, '_runtime') and self._runtime:
-            async def public_callback(msg: Any) -> None:
+
+        # Define publishing helper
+        async def publish(msg: Any) -> None:
+            if hasattr(self, '_runtime') and self._runtime:
                 await self.publish_message(msg, topic_id=ctx.topic_id or DefaultTopicId(type="default"))
-        else:
-            # Fallback if no runtime available
-            async def public_callback(msg: Any) -> None:
+            else:
                 logger.warning(f"No runtime available for publishing: {msg}")
 
         try:
@@ -571,7 +564,7 @@ class Agent(RoutedAgent):
             logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
             raise ProcessingError(f"Agent {self.agent_name}: Error preparing input state: {e}") from e
 
-        await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
+        await publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
 
         try:
             result = await self.__call__(message=final_input)
@@ -603,20 +596,19 @@ class Agent(RoutedAgent):
             )
 
         # Publish status update: Task Complete (including error if error)
-        await public_callback(
+        await publish(
             TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
         )
 
         logger.debug(f"Agent {self.agent_name} {self.agent_name} finished task {message}.")
 
-        # Publish the trace to the public callback
-        await public_callback(trace)
+        # Publish the trace
+        await publish(trace)
         return trace
-    
+
     async def invoke(
         self,
         message: Union[AgentInput, StepRequest],
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
         cancellation_token: CancellationToken | None = None,
         source: str = "",
         **kwargs: Any,
@@ -644,21 +636,9 @@ class Agent(RoutedAgent):
                 is_rpc=True,
                 cancellation_token=cancellation_token or CancellationToken(),
             )
-            
-            # Store the public callback temporarily
-            old_callback = getattr(self, '_temp_public_callback', None)
-            if public_callback:
-                self._temp_public_callback = public_callback
-            
-            try:
-                result = await self.handle_invocation(message, ctx)
-                return result
-            finally:
-                # Restore old callback
-                if old_callback:
-                    self._temp_public_callback = old_callback
-                elif hasattr(self, '_temp_public_callback'):
-                    delattr(self, '_temp_public_callback')
+
+            result = await self.handle_invocation(message, ctx)
+            return result
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
@@ -730,15 +710,14 @@ class Agent(RoutedAgent):
         """
         # Extract source from sender
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-        
-        # Get public callback
-        if hasattr(self, '_runtime') and self._runtime:
-            async def public_callback(msg: Any) -> None:
+
+        # Define publishing helper for handle_groupchat_message
+        async def publish(msg: Any) -> None:
+            if hasattr(self, '_runtime') and self._runtime:
                 await self.publish_message(msg, topic_id=ctx.topic_id or DefaultTopicId(type="default"))
-        else:
-            async def public_callback(msg: Any) -> None:
+            else:
                 logger.warning(f"No runtime available for publishing: {msg}")
-        
+
         logger.debug(f"Agent {self.agent_name} received message from '{source}' via handle_groupchat_message.")
 
         # Handle Record type messages directly
@@ -814,20 +793,19 @@ class Agent(RoutedAgent):
                 message.agent_config.role in ["HOST", "ORCHESTRATOR"]):
                 # Respond to host announcement
                 await self.send_announcement(
-                    public_callback=public_callback,
                     announcement_type="response",
                     status="active",
-                    responding_to=message.agent_config.agent_id
+                    responding_to=message.agent_config.agent_id,
+                    topic_id=ctx.topic_id
                 )
                 logger.debug(f"Agent {self.agent_name} responded to host announcement from {message.agent_config.agent_id}")
-    
+
     async def _listen(
         self,
         message: GroupchatMessageTypes,
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any,
     ) -> None:
         """Backwards compatibility wrapper for _listen."""
@@ -838,61 +816,48 @@ class Agent(RoutedAgent):
             is_rpc=False,
             cancellation_token=cancellation_token or CancellationToken(),
         )
-        
-        # Store the public callback temporarily if provided
-        old_callback = getattr(self, '_temp_public_callback', None)
-        if public_callback:
-            self._temp_public_callback = public_callback
-        
-        try:
-            await self.handle_groupchat_message(message, ctx)
-        finally:
-            # Restore old callback
-            if old_callback:
-                self._temp_public_callback = old_callback
-            elif hasattr(self, '_temp_public_callback'):
-                delattr(self, '_temp_public_callback')
 
-    @message_handler
-    async def handle_control_message(
-        self,
-        message: OOBMessages,
-        ctx: MessageContext,
-    ) -> Union[OOBMessages, None]:
-        """Handles Out-Of-Band (OOB) control messages.
+        await self.handle_groupchat_message(message, ctx)
 
-        This method is intended for processing messages that are not part of the
-        standard request-response flow of agent processing, but rather control
-        signals or special events. Examples include requests to reset the agent,
-        status queries, or other administrative commands.
+    # @message_handler
+    # async def handle_control_message(
+    #     self,
+    #     message: OOBMessages,
+    #     ctx: MessageContext,
+    # ) -> Union[OOBMessages, None]:
+    #     """Handles Out-Of-Band (OOB) control messages.
 
-        Subclasses can override this method to react to specific types of OOB
-        messages relevant to their functionality. The base implementation is a
-        no-op for most messages but serves as a hook for future extensions or
-        specific agent needs.
+    #     This method is intended for processing messages that are not part of the
+    #     standard request-response flow of agent processing, but rather control
+    #     signals or special events. Examples include requests to reset the agent,
+    #     status queries, or other administrative commands.
 
-        Args:
-            message: The Out-Of-Band (`OOBMessages`) message received.
-            ctx: The message context containing sender info and cancellation token.
+    #     Subclasses can override this method to react to specific types of OOB
+    #     messages relevant to their functionality. The base implementation is a
+    #     no-op for most messages but serves as a hook for future extensions or
+    #     specific agent needs.
 
-        Returns:
-            Union[OOBMessages, None]: An optional `OOBMessage` as a direct response to
-            the handled event, or `None` if no direct response is generated.
+    #     Args:
+    #         message: The Out-Of-Band (`OOBMessages`) message received.
+    #         ctx: The message context containing sender info and cancellation token.
 
-        """
-        logger.debug(f"Agent {self.agent_name} received OOB event: {type(message).__name__}. Default handler is a no-op.")
-        # Example of how a subclass might handle a specific OOB message:
-        # if isinstance(message, YourSpecificOOBMessage):
-        #     # Perform some action
-        #     await self.on_reset(cancellation_token) # e.g., reset on a specific signal
-        #     return OOBResponse(...) # Optionally return a response
-        return None  # Default: no direct response
-    
+    #     Returns:
+    #         Union[OOBMessages, None]: An optional `OOBMessage` as a direct response to
+    #         the handled event, or `None` if no direct response is generated.
+
+    #     """
+    #     logger.debug(f"Agent {self.agent_name} received OOB event: {type(message).__name__}. Default handler is a no-op.")
+    #     # Example of how a subclass might handle a specific OOB message:
+    #     # if isinstance(message, YourSpecificOOBMessage):
+    #     #     # Perform some action
+    #     #     await self.on_reset(cancellation_token) # e.g., reset on a specific signal
+    #     #     return OOBResponse(...) # Optionally return a response
+    #     return None  # Default: no direct response
+
     async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
         source: str = "",
         **kwargs: Any,
     ) -> Union[OOBMessages, None]:
@@ -904,21 +869,9 @@ class Agent(RoutedAgent):
             is_rpc=True,  # OOB messages are typically RPC-style
             cancellation_token=cancellation_token or CancellationToken(),
         )
-        
-        # Store the public callback temporarily if provided
-        old_callback = getattr(self, '_temp_public_callback', None)
-        if public_callback:
-            self._temp_public_callback = public_callback
-        
-        try:
-            return await self.handle_control_message(message, ctx)
-        finally:
-            # Restore old callback
-            if old_callback:
-                self._temp_public_callback = old_callback
-            elif hasattr(self, '_temp_public_callback'):
-                delattr(self, '_temp_public_callback')
-    
+
+        return await self.handle_control_message(message, ctx)
+
     @message_handler
     async def handle_step_request(
         self,
@@ -937,7 +890,7 @@ class Agent(RoutedAgent):
             # Not for this agent, ignore
             logger.debug(f"Agent {self.agent_name} ignoring StepRequest for role {message.role}")
             return None
-    
+
     @message_handler
     async def handle_heartbeat(
         self,
