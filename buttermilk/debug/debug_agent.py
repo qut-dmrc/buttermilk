@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-from buttermilk._core import AgentInput
+from buttermilk._core import AgentInput, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
 from buttermilk._core.mcp_decorators import tool
@@ -284,6 +284,20 @@ class DebugAgent(Agent):
         
         client = self._active_clients[flow_id]
         return client.get_message_summary()
+    
+    async def cleanup(self) -> None:
+        """Cleanup all active WebSocket clients."""
+        # Clean up any active clients
+        for flow_id in list(self._active_clients.keys()):
+            try:
+                client = self._active_clients[flow_id]
+                await client.disconnect()
+            except Exception as e:
+                logger.warning(f"Error cleaning up client {flow_id}: {e}")
+        self._active_clients.clear()
+        
+        # Call parent cleanup
+        await super().cleanup()
     
     @tool
     async def stop_websocket_client(self, flow_id: str) -> dict[str, str]:

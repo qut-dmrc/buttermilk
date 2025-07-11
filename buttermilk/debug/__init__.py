@@ -2,5 +2,6 @@
 
 from .models import *
 from .mcp_client import MCPFlowTester
+from .debug_agent import DebugAgent
 
-__all__ = ['MCPFlowTester']
+__all__ = ['MCPFlowTester', 'DebugAgent']

@@ -45,6 +45,9 @@ async def test_debug_agent():
         print(f"WebSocket test failed (server may not be running): {e}")
     
     print("\nDebugAgent test complete!")
+    
+    # Cleanup the agent
+    await agent.cleanup()
 
 
 if __name__ == "__main__":
