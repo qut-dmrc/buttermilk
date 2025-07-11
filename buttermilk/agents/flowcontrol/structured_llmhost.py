@@ -54,8 +54,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         await super().initialize(**kwargs)
 
         # Initialize empty tools list
-        if self.tools:
-            self._tools_list = create_tool_functions(self.tools)
+        if hasattr(self._config, 'tools') and self._config.tools:
+            self._tools_list = create_tool_functions(self._config.tools)
         else:
             self._tools_list = []
 
