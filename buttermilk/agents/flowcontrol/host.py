@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Callable, Mapping
+from collections.abc import AsyncGenerator, Mapping
 from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken, MessageContext, DefaultTopicId, message_handler
@@ -19,7 +19,6 @@ from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
     FlowProgressUpdate,
-    GroupchatMessageTypes,
     ManagerMessage,
     StepRequest,
     TaskProcessingComplete,
@@ -188,6 +187,45 @@ class HostAgent(Agent):
         )
         await self.update_agent_registry(message)
 
+    @message_handler
+    async def handle_agent_trace(
+        self,
+        message: AgentTrace,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentTrace messages and add to conversation history."""
+        content_to_log = str(message.content)[:TRUNCATE_LEN]
+        await self._model_context.add_message(
+            AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+        )
+
+    @message_handler
+    async def handle_manager_message(
+        self,
+        message: ManagerMessage,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ManagerMessage for user confirmations and feedback."""
+        logger.info(f"Host {self.agent_name} received user input: {message}")
+        self._user_confirmation = message
+        self._user_confirmation_received.set()
+
+        if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
+            logger.info(
+                f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
+            )
+            self.human_in_loop = message.human_in_loop
+
+        content = getattr(message, "content", getattr(message, "params", None))
+        if content and not str(content).startswith(COMMAND_SYMBOL):
+            content_to_log = str(content)[:TRUNCATE_LEN]
+            # store in user feedback separately as well
+            self._user_feedback.append(content)
+            # Add to conversation history
+            await self._model_context.add_message(
+                UserMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+            )
+
     # --- Agent Registry Methods ---
 
     async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
@@ -315,48 +353,6 @@ class HostAgent(Agent):
             **kwargs
         )
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken,
-        source: str = "",
-        public_callback: Callable,
-        **kwargs: Any,
-    ) -> None:
-        """Listen to messages in the group chat and maintain conversation history."""
-        # Log messages to our local context cache, but truncate them
-        content_to_log = None
-        # Allow both UserMessage and AssistantMessage types
-        msg_type: type[UserMessage | AssistantMessage] = UserMessage
-
-        if isinstance(message, (AgentTrace)):
-            content_to_log = str(message.content)[:TRUNCATE_LEN]
-            msg_type = AssistantMessage
-        elif isinstance(message, ManagerMessage):
-            logger.info(f"Host {self.agent_name} received user input: {message}")
-            self._user_confirmation = message
-            self._user_confirmation_received.set()
-
-            if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
-                logger.info(
-                    f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
-                )
-                self.human_in_loop = message.human_in_loop
-
-            content = getattr(message, "content", getattr(message, "params", None))
-            if content and not str(content).startswith(COMMAND_SYMBOL):
-                content_to_log = str(content)[:TRUNCATE_LEN]
-                # store in user feedback separately as well
-                self._user_feedback.append(content)
-
-        # Do not log TaskProgressUpdate messages to history
-        elif isinstance(message, FlowProgressUpdate):
-            logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
-            return  # Do not proceed to log
-
-        if content_to_log:
-            await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
 
     async def request_user_confirmation(self, step: StepRequest) -> None:

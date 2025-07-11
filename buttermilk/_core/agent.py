@@ -300,7 +300,7 @@ class Agent(RoutedAgent):
         }
 
         # Get ALL tool definitions (decorated methods + configured tools)
-        tool_definitions = self.get_all_tool_definitions()
+        tool_definitions = self.get_tool_definitions()
 
         # Use the first tool definition as the primary one
         # This now includes both decorated methods and configured tools
@@ -853,24 +853,6 @@ class Agent(RoutedAgent):
     #     #     return OOBResponse(...) # Optionally return a response
     #     return None  # Default: no direct response
 
-    async def _handle_events(
-        self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken | None = None,
-        source: str = "",
-        **kwargs: Any,
-    ) -> Union[OOBMessages, None]:
-        """Backwards compatibility wrapper for _handle_events."""
-        # Create a MessageContext
-        ctx = MessageContext(
-            sender=AgentId(type=source or "unknown", key=source or "unknown"),
-            topic_id=DefaultTopicId(type="default"),
-            is_rpc=True,  # OOB messages are typically RPC-style
-            cancellation_token=cancellation_token or CancellationToken(),
-        )
-
-        return await self.handle_control_message(message, ctx)
-
     @message_handler
     async def handle_step_request(
         self,
@@ -885,10 +867,6 @@ class Agent(RoutedAgent):
         # Only handle if the role matches this agent's role
         if message.role == self.role:
             return await self.handle_invocation(message, ctx)
-        else:
-            # Not for this agent, ignore
-            logger.debug(f"Agent {self.agent_name} ignoring StepRequest for role {message.role}")
-            return None
 
     @message_handler
     async def handle_heartbeat(
@@ -1033,7 +1011,7 @@ class Agent(RoutedAgent):
             List of AgentToolDefinition objects representing this agent's tools.
         """
         from buttermilk._core.tool_definition import AgentToolDefinition
-        
+
         # Create a tool definition for the agent's main processing capability
         tool_def = AgentToolDefinition(
             name=f"{self.agent_name}_call",
@@ -1058,53 +1036,8 @@ class Agent(RoutedAgent):
                 "description": "Agent processing results"
             }
         )
-        
+
         return [tool_def]
-    
-    def get_all_tool_definitions(self) -> list["AgentToolDefinition"]:
-        """Get all tool definitions from both decorated methods and configured tools.
-        
-        This method combines:
-        1. Tool definitions from @tool decorated methods
-        2. Tool definitions from configured tools (if the agent has them)
-        
-        Returns:
-            list[AgentToolDefinition]: All available tool definitions
-        """
-        from buttermilk._core.tool_definition import AgentToolDefinition
-        
-        # Start with decorated method tools
-        tool_defs = self.get_tool_definitions()
-        
-        # Add configured tools if this agent has them
-        if hasattr(self, '_tools_list') and self._tools_list:
-            from autogen_core.tools import FunctionTool
-            
-            for tool in self._tools_list:
-                if isinstance(tool, FunctionTool):
-                    # Convert FunctionTool to AgentToolDefinition
-                    # FunctionTool has name, description, and schema properties
-                    schema = tool.schema
-                    if isinstance(schema, dict) and 'function' in schema:
-                        func_info = schema['function']
-                        tool_def = AgentToolDefinition(
-                            name=func_info.get('name', tool.name),
-                            description=func_info.get('description', tool.description),
-                            input_schema=func_info.get('parameters', {"type": "object", "properties": {}}),
-                            output_schema={"type": "string"}  # Default output schema
-                        )
-                        tool_defs.append(tool_def)
-                elif hasattr(tool, 'name') and hasattr(tool, 'description'):
-                    # Generic Tool with basic properties
-                    tool_def = AgentToolDefinition(
-                        name=tool.name,
-                        description=tool.description,
-                        input_schema={"type": "object", "properties": {}},  # Default schema
-                        output_schema={"type": "string"}
-                    )
-                    tool_defs.append(tool_def)
-        
-        return tool_defs
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
