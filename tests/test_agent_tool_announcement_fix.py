@@ -83,7 +83,7 @@ class TestAgentToolAnnouncementFix:
         assert analyze_tool.description == "Analyze the given data"
 
         # Check tool schema format
-        schema = analyze_tool.to_autogen_tool_schema()
+        schema = analyze_tool.schema["function"]
         assert schema["name"] == "analyze"
         assert schema["description"] == "Analyze the given data"
         assert "parameters" in schema
@@ -139,7 +139,7 @@ class TestAgentToolAnnouncementFix:
         assert search_tool.description == "Search the knowledge base with an intelligent RAG system"
 
         # Check tool schema has correct parameters
-        schema = search_tool.to_autogen_tool_schema()
+        schema = search_tool.schema["function"]
         assert "query" in schema["parameters"]["properties"]
         assert "max_results" in schema["parameters"]["properties"]
         assert "query" in schema["parameters"]["required"]

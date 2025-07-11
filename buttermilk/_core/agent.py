@@ -303,9 +303,8 @@ class Agent(RoutedAgent):
         tool_definitions = self.get_tool_definitions()
 
         # Only include tool if agent has explicit @tool methods
-        primary_tool = None
-        if tool_definitions:
-            primary_tool = tool_definitions[0].to_autogen_tool_schema()
+        # Now we can pass the AgentToolDefinition directly since it implements Tool protocol
+        primary_tool = tool_definitions[0] if tool_definitions else None
 
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),

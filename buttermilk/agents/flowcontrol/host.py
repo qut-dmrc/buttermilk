@@ -206,27 +206,35 @@ class HostAgent(Agent):
         await self._build_agent_tools()
 
     async def _build_agent_tools(self) -> None:
-        """Build tool schemas from agent-provided tool definitions.
+        """Build tool objects from agent-provided tool definitions.
         
-        This method collects tool schemas from agents for LLM-based decision making.
-        Base HostAgent doesn't use these, but subclasses like StructuredLLMHostAgent do.
+        This method collects tool objects from agents for LLM-based decision making.
+        Base HostAgent stores schemas, but StructuredLLMHostAgent will use these as Tool objects.
         """
-        tool_schemas = []
+        tool_objects = []
 
-        # Collect tool schemas from agent announcements
+        # Collect tool objects from agent announcements
         for agent_id, announcement in self._agent_registry.items():
             agent_role = announcement.agent_config.role
 
             if tool_def := announcement.tool_definition:
-                # Store the schema directly - no wrapping needed
-                tool_schemas.append(tool_def)
-                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
+                # Check if it's already a Tool object (AgentToolDefinition)
+                if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
+                    # It's a Tool object, store it directly
+                    tool_objects.append(tool_def)
+                    logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
+                else:
+                    # It's a schema dict, we'll need to wrap it later if needed
+                    # For now, store the schema
+                    tool_objects.append(tool_def)
+                    logger.debug(f"Registered tool schema: {tool_def.get('name', 'unknown')} for {agent_role}")
 
-        # Store schemas for LLM-based hosts
-        self._tool_schemas = tool_schemas
+        # Store tool objects for LLM-based hosts
+        # Note: StructuredLLMHostAgent will handle converting schemas to SchemaTool if needed
+        self._tool_schemas = tool_objects
 
         logger.info(
-            f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
+            f"Host {self.agent_name} collected {len(tool_objects)} tool definitions "
             f"from {len(self._agent_registry)} announced agents"
         )
 
@@ -865,8 +873,14 @@ class HostAgent(Agent):
                 for agent_id, announcement in self._agent_registry.items():
                     tool_def = announcement.tool_definition
                     if tool_def:
-                        # Check both old format (name at root) and new format (name in function)
-                        tool_name = tool_def.get('name') or (tool_def.get('function', {}).get('name'))
+                        # Check if it's a Tool object or a schema dict
+                        if hasattr(tool_def, 'name'):
+                            # It's a Tool object
+                            tool_name = tool_def.name
+                        else:
+                            # It's a schema dict - check both old format (name at root) and new format (name in function)
+                            tool_name = tool_def.get('name') or (tool_def.get('function', {}).get('name'))
+                        
                         if tool_name == call.name:
                             agent_role = announcement.agent_config.role
                             break

@@ -983,7 +983,7 @@ class AgentAnnouncement(FlowEvent):
         default_factory=list,
         description="OOBMessage types this agent handles"
     )
-    tool_definition: ToolSchema | None = Field(default=None, description="Autogen-compatible tool definition for this agent")
+    tool_definition: Any | None = Field(default=None, description="Tool object or schema for this agent (AgentToolDefinition or ToolSchema)")
 
     # Status
     status: Literal["joining", "active", "leaving"] = Field(

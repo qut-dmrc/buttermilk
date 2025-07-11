@@ -9,7 +9,6 @@ from typing import Any
 
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
 from autogen_core.models import CreateResult
-from autogen_core.tools import BaseTool, ToolSchema
 
 from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
@@ -20,81 +19,6 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
-
-
-class SchemaTool:
-    """A non-executable tool that only provides schema information.
-    
-    This tool is used by StructuredLLMHostAgent to convert tool schemas
-    into Tool objects that can be passed to the LLM's create() method.
-    The tool doesn't execute anything - it's only used for its schema.
-    
-    This class implements the Tool protocol without inheriting from BaseTool
-    to avoid type constraints on ArgsT and ReturnT.
-    """
-    
-    def __init__(self, tool_schema: dict[str, Any]):
-        """Initialize from a tool schema dictionary.
-        
-        Args:
-            tool_schema: OpenAI-style tool schema with 'type' and 'function' fields
-        """
-        # Extract function information from the schema
-        if 'function' in tool_schema:
-            func_info = tool_schema['function']
-        else:
-            # Handle older format where properties are at root level
-            func_info = tool_schema
-            
-        self._name = func_info.get('name', 'unknown')
-        self._description = func_info.get('description', 'No description')
-        self._tool_schema = tool_schema
-    
-    @property
-    def name(self) -> str:
-        """Return the tool name."""
-        return self._name
-    
-    @property
-    def description(self) -> str:
-        """Return the tool description."""
-        return self._description
-    
-    @property
-    def schema(self) -> ToolSchema:
-        """Return the original tool schema."""
-        return self._tool_schema  # type: ignore
-    
-    def args_type(self) -> type:
-        """Return the args type (dict for schema tools)."""
-        return dict
-    
-    def return_type(self) -> type:
-        """Return the return type (str for schema tools)."""
-        return str
-    
-    def state_type(self) -> type:
-        """Return the state type (None for stateless tools)."""
-        return type(None)
-    
-    async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
-        """This method should never be called."""
-        raise NotImplementedError(
-            f"SchemaTool '{self.name}' is not executable. "
-            "Tool calls should be intercepted by the host agent."
-        )
-    
-    def return_value_as_string(self, value: Any) -> str:
-        """Convert return value to string."""
-        return str(value)
-    
-    async def save_state_json(self) -> str:
-        """No state to save."""
-        return "{}"
-    
-    async def load_state_json(self, state_json: str) -> None:
-        """No state to load."""
-        pass
 
 
 class StructuredLLMHostAgent(HostAgent, LLMAgent):
@@ -257,13 +181,21 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # This returns FunctionCall objects without executing them
         logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
 
-        # Convert tool schemas to Tool objects
-        tools_list = [SchemaTool(schema) for schema in self._tool_schemas]
+        # Prepare tools - they should already be Tool objects from _build_agent_tools
+        tools_list = []
+        for tool_def in self._tool_schemas:
+            if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
+                # It's already a Tool object (e.g., AgentToolDefinition)
+                tools_list.append(tool_def)
+            else:
+                # It's a raw schema dict - this shouldn't happen with our new approach
+                logger.warning(f"Found raw schema instead of Tool object: {tool_def}")
+                # Skip raw schemas for now
         
         try:
             create_result: CreateResult = await model_client.create(
                 messages=llm_messages_to_send,
-                tools=tools_list,  # Pass Tool objects, not raw schemas
+                tools=tools_list,  # Pass Tool objects
                 cancellation_token=cancellation_token,
             )
         except Exception as llm_error:

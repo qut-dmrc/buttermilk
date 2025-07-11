@@ -6,17 +6,23 @@ definitions that can be used for both LLM tool invocation and MCP route generati
 
 from typing import Any, Literal
 
+from autogen_core import CancellationToken
+from autogen_core.tools import ToolSchema
 from pydantic import BaseModel, Field
 
 
 class AgentToolDefinition(BaseModel):
-    """Base class for agent tool definitions.
+    """Base class for agent tool definitions that implements the Tool protocol.
     
     Each agent can generate its own structured tool definition that serves multiple purposes:
     - LLM tool definition for structured invocation
     - MCP route specification for remote access
     - Input validation schema
     - Documentation and description
+    
+    This class implements the autogen Tool protocol, making it directly usable
+    with LLM create() calls while remaining non-executable (execution is handled
+    by the host agent routing to actual agents).
     """
     
     name: str = Field(
@@ -45,21 +51,57 @@ class AgentToolDefinition(BaseModel):
         description="Required permissions for accessing this tool"
     )
     
-    def to_autogen_tool_schema(self) -> dict[str, Any]:
-        """Convert to Autogen-compatible tool schema format."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.input_schema
-        }
+    # Implement Tool protocol properties and methods
     
-    def to_openai_function_schema(self) -> dict[str, Any]:
-        """Convert to OpenAI function calling format."""
+    @property
+    def schema(self) -> ToolSchema:
+        """Return the tool schema in OpenAI format for the Tool protocol."""
         return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.input_schema
-        }
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.input_schema
+            }
+        }  # type: ignore
+    
+    def args_type(self) -> type:
+        """Return the args type (dict for schema-based tools)."""
+        return dict
+    
+    def return_type(self) -> type:
+        """Return the return type (dict for schema-based tools)."""
+        return dict
+    
+    def state_type(self) -> type:
+        """Return the state type (None for stateless tools)."""
+        return type(None)
+    
+    async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
+        """This method should never be called.
+        
+        The host agent intercepts tool calls before execution.
+        """
+        raise NotImplementedError(
+            f"AgentToolDefinition '{self.name}' is not directly executable. "
+            "Tool calls should be intercepted and routed by the host agent."
+        )
+    
+    def return_value_as_string(self, value: Any) -> str:
+        """Convert return value to string."""
+        import json
+        if isinstance(value, str):
+            return value
+        return json.dumps(value)
+    
+    async def save_state_json(self) -> str:
+        """No state to save for stateless tools."""
+        return "{}"
+    
+    async def load_state_json(self, state_json: str) -> None:
+        """No state to load for stateless tools."""
+        pass
+    
     
     def to_mcp_route_definition(self) -> dict[str, Any] | None:
         """Convert to MCP route definition if mcp_route is specified."""
