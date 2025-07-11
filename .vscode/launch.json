@@ -20,6 +20,8 @@
         "buttermilk.api.flow:app",
         "--reload",
         "+flows=[mock,osb,hate,trans,describer]",
+        "+run=api",
+        "verbose=true",
         "llms=lite"
       ],
       "jinja": true
@@ -66,6 +68,7 @@
       "args": [
         "+flows=[trans,zot,osb]",
         "+run=api",
+        "verbose=true",
         "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
