@@ -1,0 +1,8 @@
+{
+    "servers": {
+        "bm-debug-local": {
+            "type": "sse",
+            "url": "http://localhost:8090"
+        }
+    }
+}
