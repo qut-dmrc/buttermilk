@@ -183,13 +183,15 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Prepare tools - they should already be Tool objects from _build_agent_tools
         tools_list = []
-        for tool_def in self._tool_schemas:
+        for i, tool_def in enumerate(self._tool_schemas):
             if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
                 # It's already a Tool object (e.g., AgentToolDefinition)
                 tools_list.append(tool_def)
+                logger.debug(f"Tool {i}: {tool_def.name} is a Tool object")
             else:
                 # It's a raw schema dict - this shouldn't happen with our new approach
-                logger.warning(f"Found raw schema instead of Tool object: {tool_def}")
+                logger.warning(f"Tool {i}: Found raw schema instead of Tool object: {tool_def}")
+                logger.debug(f"Type: {type(tool_def)}, Has schema attr: {hasattr(tool_def, 'schema')}, Has run_json attr: {hasattr(tool_def, 'run_json')}")
                 # Skip raw schemas for now
         
         try:

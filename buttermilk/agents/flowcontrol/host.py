@@ -28,6 +28,7 @@ from buttermilk._core.contract import (
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.tool_definition import AgentToolDefinition
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -209,7 +210,7 @@ class HostAgent(Agent):
         """Build tool objects from agent-provided tool definitions.
         
         This method collects tool objects from agents for LLM-based decision making.
-        Base HostAgent stores schemas, but StructuredLLMHostAgent will use these as Tool objects.
+        Only stores actual Tool objects, not raw schemas.
         """
         tool_objects = []
 
@@ -224,18 +225,16 @@ class HostAgent(Agent):
                     tool_objects.append(tool_def)
                     logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
                 else:
-                    # It's a schema dict, we'll need to wrap it later if needed
-                    # For now, store the schema
-                    tool_objects.append(tool_def)
-                    logger.debug(f"Registered tool schema: {tool_def.get('name', 'unknown')} for {agent_role}")
+                    # It's a schema dict - skip it for now
+                    # Participant tools will be created as proper Tool objects in _create_participant_tool_schemas
+                    logger.debug(f"Skipping raw tool schema for {agent_role}")
 
         # Store tool objects for LLM-based hosts
-        # Note: StructuredLLMHostAgent will handle converting schemas to SchemaTool if needed
         self._tool_schemas = tool_objects
 
         logger.info(
-            f"Host {self.agent_name} collected {len(tool_objects)} tool definitions "
-            f"from {len(self._agent_registry)} announced agents"
+            f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
+            f"from {len(self._agent_registry)} agents with tool definitions"
         )
 
     async def _create_participant_tool_schemas(self, participants: dict[str, str] | Mapping[str, str]) -> None:
@@ -256,40 +255,46 @@ class HostAgent(Agent):
 
         # Track which roles already have tools
         roles_with_tools = set()
-        for schema in all_tool_schemas:
+        for item in all_tool_schemas:
             # Extract role from tool name if it follows a pattern
-            if isinstance(schema, dict) and 'function' in schema and 'name' in schema['function']:
+            tool_name = None
+            if hasattr(item, 'name'):
+                # It's a Tool object (AgentToolDefinition)
+                tool_name = item.name
+            elif isinstance(item, dict) and 'function' in item and 'name' in item['function']:
+                # It's a schema dict
+                tool_name = item['function']['name']
+            
+            if tool_name:
                 # Check if this tool is associated with a role
                 for role in participants:
-                    if role.lower() in schema['function']['name'].lower():
+                    if role.lower() in tool_name.lower():
                         roles_with_tools.add(role)
-                        logger.debug(f"Role {role} already has tool: {schema['function']['name']}")
+                        logger.debug(f"Role {role} already has tool: {tool_name}")
                         break
 
         # Create tools for participants without explicit tools
         for role, description in participants.items():
             if role not in roles_with_tools and role != "HOST":
                 logger.debug(f"Creating synthetic tool for role {role} with description: {description}")
-                # Create a tool schema for this participant
-                tool_schema = {
-                    "type": "function",
-                    "function": {
-                        "name": f"ask_{role.lower()}",
-                        "description": f"Ask {role} to {description}",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "request": {
-                                    "type": "string",
-                                    "description": f"The request or question for {role}"
-                                }
-                            },
-                            "required": ["request"]
-                        }
-                    }
-                }
-                all_tool_schemas.append(tool_schema)  # type: ignore
-                logger.debug(f"Created participant tool schema for {role}: ask_{role.lower()}")
+                # Create an AgentToolDefinition for this participant
+                tool_def = AgentToolDefinition(
+                    name=f"ask_{role.lower()}",
+                    description=f"Ask {role} to {description}",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "request": {
+                                "type": "string",
+                                "description": f"The request or question for {role}"
+                            }
+                        },
+                        "required": ["request"]
+                    },
+                    output_schema={"type": "string"}  # Simple string response
+                )
+                all_tool_schemas.append(tool_def)  # type: ignore
+                logger.debug(f"Created participant tool definition for {role}: ask_{role.lower()}")
 
         # Update the tool schemas
         self._tool_schemas = all_tool_schemas
@@ -297,10 +302,12 @@ class HostAgent(Agent):
 
         # Log the actual tool names for debugging
         tool_names = []
-        for schema in self._tool_schemas:
-            if isinstance(schema, dict) and 'function' in schema:
-                tool_names.append(schema['function']['name'])
-        logger.debug(f"Tool schemas available: {tool_names}")
+        for item in self._tool_schemas:
+            if hasattr(item, 'name'):
+                tool_names.append(f"{item.name} (Tool)")
+            elif isinstance(item, dict) and 'function' in item:
+                tool_names.append(f"{item['function']['name']} (schema)")
+        logger.debug(f"Tool items available: {tool_names}")
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
