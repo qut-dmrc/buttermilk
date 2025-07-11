@@ -1025,17 +1025,41 @@ class Agent(RoutedAgent):
     def get_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Generate structured tool definitions for this agent.
         
-        This method extracts tool definitions from methods decorated with
-        @tool decorators. It enables agents to automatically
-        expose their capabilities as structured tool definitions that can
-        be used by LLMs.
+        This method creates a tool definition for the agent's primary
+        processing capability, allowing it to be invoked as a tool
+        in the Autogen groupchat.
         
         Returns:
             List of AgentToolDefinition objects representing this agent's tools.
         """
-        # Since MCP decorators were removed, return empty list for now
-        # TODO: Implement tool extraction from @tool decorators if needed
-        return []
+        from buttermilk._core.tool_definition import AgentToolDefinition
+        
+        # Create a tool definition for the agent's main processing capability
+        tool_def = AgentToolDefinition(
+            name=f"{self.agent_name}_process",
+            description=self.description or f"Process requests using {self.agent_name} agent",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "inputs": {
+                        "type": "object",
+                        "description": "Input data for the agent to process"
+                    },
+                    "context": {
+                        "type": "object", 
+                        "description": "Shared context across agents",
+                        "default": {}
+                    }
+                },
+                "required": ["inputs"]
+            },
+            output_schema={
+                "type": "object",
+                "description": "Agent processing results"
+            }
+        )
+        
+        return [tool_def]
     
     def get_all_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Get all tool definitions from both decorated methods and configured tools.
