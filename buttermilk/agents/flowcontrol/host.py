@@ -58,7 +58,7 @@ class HostAgent(Agent):
     _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
     _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
     _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
-    
+
     # Tool schemas for LLM-based hosts
     _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
     _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
@@ -88,19 +88,12 @@ class HostAgent(Agent):
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
         self.parameters['human_in_loop'] = value
+
     #  Event for confirmation responses from the MANAGER.
     _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
     _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
     _progress_reporter_task: asyncio.Task | None = PrivateAttr(default=None)
-
-    async def initialize(
-        self,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize the agent."""
-        await super().initialize(**kwargs)
-        logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
 
     async def _publish(self, message: Any) -> None:
         """Publish a message to the group chat."""
@@ -145,7 +138,7 @@ class HostAgent(Agent):
 
             # Invalidate cache
             self._registry_summary_cache = None
-        
+
         # Rebuild tool schemas when agents announce (for LLM-based hosts)
         await self._build_agent_tools()
 
@@ -168,12 +161,12 @@ class HostAgent(Agent):
 
         # Store schemas for LLM-based hosts
         self._tool_schemas = tool_schemas
-        
+
         logger.info(
             f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
             f"from {len(self._agent_registry)} announced agents"
         )
-    
+
     async def _create_participant_tool_schemas(self, participants: dict[str, str] | Mapping[str, str]) -> None:
         """Create tool schemas for all participants, including those without explicit tools.
         
@@ -186,10 +179,10 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_name} creating participant tool schemas for {len(participants)} participants")
         logger.debug(f"Participants: {list(participants.keys())}")
         logger.debug(f"Existing tool schemas before: {len(self._tool_schemas)}")
-        
+
         # Start with existing tool schemas from agents
         all_tool_schemas = list(self._tool_schemas)
-        
+
         # Track which roles already have tools
         roles_with_tools = set()
         for schema in all_tool_schemas:
@@ -201,7 +194,7 @@ class HostAgent(Agent):
                         roles_with_tools.add(role)
                         logger.debug(f"Role {role} already has tool: {schema['function']['name']}")
                         break
-        
+
         # Create tools for participants without explicit tools
         for role, description in participants.items():
             if role not in roles_with_tools and role != "HOST":
@@ -226,11 +219,11 @@ class HostAgent(Agent):
                 }
                 all_tool_schemas.append(tool_schema)  # type: ignore
                 logger.debug(f"Created participant tool schema for {role}: ask_{role.lower()}")
-        
+
         # Update the tool schemas
         self._tool_schemas = all_tool_schemas
         logger.info(f"Host {self.agent_name} has {len(self._tool_schemas)} total tool schemas after adding participant tools")
-        
+
         # Log the actual tool names for debugging
         tool_names = []
         for schema in self._tool_schemas:
@@ -610,34 +603,34 @@ class HostAgent(Agent):
             if hasattr(message, 'participant_tools'):
                 self._participant_tools = message.participant_tools
                 logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
-            
+
             # Create tool schemas for all participants
             await self._create_participant_tool_schemas(message.participants)
 
             # Extract initial query/prompt from ConductorRequest if available
             # Parse inputs using the typed model for cleaner extraction
             from buttermilk._core.contract import HostInputModel
-            
+
             # Store the raw inputs for backward compatibility
             self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
-            
+
             try:
                 # Parse inputs into our typed model
                 if isinstance(self._initial_inputs, dict):
                     host_inputs = HostInputModel(**self._initial_inputs)
                 else:
                     host_inputs = HostInputModel()
-                
+
                 # Extract fields cleanly
                 self._initial_query = host_inputs.initial_query
                 self._initial_parameters = host_inputs.parameters
-                
+
                 if self._initial_query:
                     logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-                
+
                 if self._initial_parameters:
                     logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
-                    
+
             except Exception as e:
                 # If parsing fails, fall back to empty values
                 logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
@@ -778,7 +771,7 @@ class HostAgent(Agent):
         """
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
         return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
-    
+
     async def _route_tool_calls_to_agents(
         self,
         tool_calls: list[Any],  # FunctionCall objects
@@ -789,11 +782,11 @@ class HostAgent(Agent):
         to convert tool calls into StepRequests for the appropriate agents.
         """
         import json
-        
+
         for call in tool_calls:
             # Find which agent handles this tool
             agent_role = None
-            
+
             # First check if it's a participant "ask_" tool
             if call.name.startswith("ask_"):
                 # Extract role from tool name (e.g., "ask_zotero_researcher" -> "ZOTERO_RESEARCHER")
@@ -803,7 +796,7 @@ class HostAgent(Agent):
                     if participant_role.upper() == role_part:
                         agent_role = participant_role
                         break
-            
+
             # If not found, check agent announcements for explicit tool definitions
             if not agent_role:
                 for agent_id, announcement in self._agent_registry.items():
@@ -845,14 +838,14 @@ class HostAgent(Agent):
             # Create a more descriptive log message
             tool_desc = self._describe_tool_call(call.name, arguments)
             logger.info(f"Host routing to {agent_role}: {tool_desc}")
-            
+
             # Queue it if we have a queue
             if hasattr(self, '_proposed_step'):
                 await self._proposed_step.put(step_request)
 
             # Send it out regardless
             await self._publish(step_request)
-    
+
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
         
@@ -888,6 +881,6 @@ class HostAgent(Agent):
                 if key not in ["metadata", "context", "options"]:
                     val_str = str(value)
                     return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
-            
+
             # Fallback
             return f"{tool_name}({len(arguments)} args)"

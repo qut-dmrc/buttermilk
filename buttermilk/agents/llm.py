@@ -23,7 +23,6 @@ from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, Syst
 from buttermilk import buttermilk as bm
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import AgentConfig, ToolConfig
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import ModelOutput
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     from autogen_core.tools import Tool
 
 
-class LLMAgent(Agent, AgentConfig):
+class LLMAgent(Agent):
     """Agent that uses an LLM for text processing and generation.
 
     `LLMAgent` extends the base `Agent` class to add LLM-powered capabilities.
@@ -119,12 +118,12 @@ class LLMAgent(Agent, AgentConfig):
             Self: The agent instance with `_tools_list` populated.
 
         """
-        # `self.tools` is populated by AgentConfig based on Hydra config.
-        if self.tools:
-            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
+        # `self._config.tools` is populated by AgentConfig based on Hydra config.
+        if self._config.tools:
+            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
 
             # Instantiate tools here if they are OmegaConf objects
-            _tool_objects = hydra.utils.instantiate(self.tools)
+            _tool_objects = hydra.utils.instantiate(self._config.tools)
 
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
             self._tools_list = create_tool_functions(_tool_objects)
