@@ -54,6 +54,7 @@ dependencies = [
     "google-cloud-bigquery<4.0.0,>=3.27.0",
     "google-generativeai<1.0.0,>=0.7.2",
     "uvicorn<1.0.0,>=0.34.0",
+    "fastapi<1.0.0,>=0.100.0",
     "google-cloud-pubsub<3.0.0,>=2.27.1",
     "bleach<7.0.0,>=6.2.0",
     "numpy>=1.26.4",
