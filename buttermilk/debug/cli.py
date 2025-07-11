@@ -13,6 +13,7 @@ from .models import StartupTestResult
 from .gcp_logs import GCPLogAnalyzer, analyze_current_issue
 from .error_capture import analyze_type_checking_errors
 from .config_validator import validate_configuration
+from .ws_debug_cli import InteractiveDebugClient
 
 
 @click.group()
@@ -613,6 +614,30 @@ def validate_config(config_path, output, verbose):
     
     # Set exit code
     if not report.is_valid:
+        sys.exit(1)
+
+
+@debug.command()
+@click.option('--host', default='localhost', help='WebSocket server host')
+@click.option('--port', default=8000, type=int, help='WebSocket server port')
+def websocket(host, port):
+    """Interactive WebSocket debug client (no MCP required).
+    
+    This provides a standalone interactive CLI for debugging flows via WebSocket.
+    It connects directly to the Buttermilk API without requiring MCP.
+    
+    Example:
+        buttermilk debug websocket --host localhost --port 8000
+    """
+    import asyncio
+    client = InteractiveDebugClient(host, port)
+    
+    try:
+        asyncio.run(client.run_interactive())
+    except KeyboardInterrupt:
+        click.echo("\nExiting...")
+    except Exception as e:
+        click.echo(f"Error: {e}")
         sys.exit(1)
 
 

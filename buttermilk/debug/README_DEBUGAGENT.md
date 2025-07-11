@@ -1,4 +1,76 @@
-# DebugAgent - LLM-Driven Debugging Tools
+# Buttermilk Debug Tools
+
+This directory contains debugging tools for Buttermilk flows, including both LLM-driven MCP tools and a standalone WebSocket CLI.
+
+## WebSocket Debug CLI (No MCP Required)
+
+The WebSocket Debug CLI provides an interactive command-line interface for debugging flows without requiring MCP. It connects directly to the Buttermilk WebSocket API.
+
+### Usage
+
+```bash
+# Via the debug CLI command
+uv run python -m buttermilk.debug.cli websocket
+
+# Or run the standalone script
+uv run python buttermilk/debug/ws_debug_cli.py
+
+# Connect to a specific host/port
+uv run python -m buttermilk.debug.cli websocket --host myserver --port 9000
+```
+
+### Available Commands
+
+**Flow Control:**
+- `start <flow_name> [query]` - Start a flow with optional initial query
+- `response <text>` - Send a response to the current flow
+- `status` - Show current flow status
+
+**Message Inspection:**
+- `messages [n]` - Show last n messages (default: 10)
+- `messages <type>` - Show messages of specific type (e.g., "error", "ui_message")
+- `agents` - Show active agents
+- `errors` - Show error messages
+
+**Log Analysis:**
+- `logs [n]` - Show last n lines from latest log file
+- `logfiles` - List available log files
+
+**Session Control:**
+- `clear` - Clear message history
+- `export <file>` - Export messages to JSON file
+- `help` - Show available commands
+- `quit/exit` - Exit the debugger
+
+### Example Session
+
+```bash
+> help
+# Shows all available commands
+
+> start osb "What is content moderation?"
+# Starts the OSB flow with an initial query
+
+> messages 5
+# Shows the last 5 messages
+
+> agents
+# Shows active agents in the flow
+
+> response "Tell me more about automated moderation"
+# Sends a response to continue the conversation
+
+> logs 20
+# Shows last 20 lines from the latest log file
+
+> export debug_session.json
+# Saves all messages to a file
+
+> quit
+# Exits the debugger
+```
+
+## DebugAgent - LLM-Driven Debugging Tools
 
 The DebugAgent provides MCP-exposed tools for debugging Buttermilk flows. It's designed to be used by LLMs through the MCP protocol to investigate and debug issues in running flows.
 
