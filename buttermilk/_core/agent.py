@@ -1036,7 +1036,7 @@ class Agent(RoutedAgent):
         
         # Create a tool definition for the agent's main processing capability
         tool_def = AgentToolDefinition(
-            name=f"{self.agent_name}_process",
+            name=f"{self.agent_name}_call",
             description=self.description or f"Process requests using {self.agent_name} agent",
             input_schema={
                 "type": "object",

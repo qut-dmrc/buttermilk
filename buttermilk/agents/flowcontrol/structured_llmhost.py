@@ -104,20 +104,18 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         waited = 0
 
         while waited < max_wait:
-            if self._tool_schemas:
+            if self._tools:
                 break
             await asyncio.sleep(wait_interval)
             waited += wait_interval
 
         # Log tool schema status
-        if not self._tool_schemas:
-            logger.warning(
-                f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. "
-                "This may indicate the participants have not advertised their capabilities."
-            )
-            # Still try to process without tools - the LLM can work without them, just less effectively
+        if not self._tools:
+            msg = f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
+            raise ProcessingError(msg)
+
         else:
-            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tool_schemas)} tool schemas")
+            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tools)} tool schemas")
             logger.debug(f"Message type received: {type(message).__name__}")
 
         # Skip command messages
@@ -142,7 +140,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                     "user_feedback": self._user_feedback,
                     "prompt": str(message.content),
                     "participants": list(self._participants.keys()) if hasattr(self, "_participants") else [],
-                    "tool_count": len(self._tool_schemas),
+                    "tool_count": len(self._tools),
                 }
             ),
             cancellation_token=ctx.cancellation_token,
@@ -179,12 +177,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Call create() directly with tool schemas (not executable tools)
         # This returns FunctionCall objects without executing them
-        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
+        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tools)} tool schemas")
 
-        # All items in _tool_schemas should be Tool objects now
-        tools_list = self._tool_schemas
+        # All items in _tools should be Tool objects now
+        tools_list = self._tools
         logger.debug(f"StructuredLLMHost has {len(tools_list)} tools ready for LLM")
-        
+
         try:
             create_result: CreateResult = await model_client.create(
                 messages=llm_messages_to_send,

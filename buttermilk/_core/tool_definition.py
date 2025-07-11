@@ -27,7 +27,7 @@ class AgentToolDefinition(BaseModel):
     name: str = Field(
         ...,
         description="The unique name of the tool, should be snake_case",
-        pattern="^[a-z][a-z0-9_]*$"
+        pattern="^[a-zA-Z][a-zA-Z0-9_]*$"
     )
     description: str = Field(
         ...,

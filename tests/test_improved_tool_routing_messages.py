@@ -142,7 +142,7 @@ class TestImprovedToolRoutingMessages:
         )
 
         # Mock the tool schemas method
-        with patch.object(agent, '_get_tool_schemas', return_value=[]):
+        with patch.object(agent, "_get_tools", return_value=[]):
 
             # Mock the LLM to return tool calls
             mock_create_result = Mock()

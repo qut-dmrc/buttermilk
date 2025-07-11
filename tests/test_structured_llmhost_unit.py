@@ -73,8 +73,8 @@ class TestStructuredLLMHostInitialization:
         await host.update_agent_registry(analyze_announcement)
 
         # Check that tools were collected
-        assert len(host._tool_schemas) == 2
-        tool_names = [schema["name"] for schema in host._tool_schemas]
+        assert len(host._tools) == 2
+        tool_names = [schema["name"] for schema in host._tools]
         assert "search_cases" in tool_names
         assert "analyze_data" in tool_names
 
@@ -95,7 +95,7 @@ class TestStructuredLLMHostInitialization:
         announcement = self.create_agent_announcement("proc-001", "PROCESSOR", tool)
         await host.update_agent_registry(announcement)
 
-        assert len(host._tool_schemas) == 1
+        assert len(host._tools) == 1
 
         # Agent leaves
         leaving_announcement = AgentAnnouncement(
@@ -108,7 +108,7 @@ class TestStructuredLLMHostInitialization:
         await host.update_agent_registry(leaving_announcement)
 
         # Tool should be removed
-        assert len(host._tool_schemas) == 0
+        assert len(host._tools) == 0
 
 
 class TestStructuredLLMHostSequence:
@@ -164,7 +164,7 @@ class TestStructuredLLMHostListen:
 
         # Mock dependencies
         host._tools_list = []
-        host._tool_schemas = []
+        host._tools = []
         host._agent_registry = {}
         host.callback_to_groupchat = AsyncMock()
 
@@ -302,7 +302,7 @@ class TestStructuredLLMHostListen:
         )
 
         mock_host._agent_registry = {"search-001": announcement}
-        mock_host._tool_schemas = [tool_schema]
+        mock_host._tools = [tool_schema]
 
         # Mock the LLM to return tool calls
         from autogen_core import FunctionCall
@@ -354,7 +354,7 @@ class TestStructuredLLMHostListen:
         """Test handling when no agent owns the requested tool."""
         # Empty agent registry
         mock_host._agent_registry = {}
-        mock_host._tool_schemas = []
+        mock_host._tools = []
 
         # Mock the LLM to return a tool call for non-existent tool
         from autogen_core import FunctionCall

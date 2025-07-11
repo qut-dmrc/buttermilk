@@ -202,7 +202,7 @@ class AutogenOrchestrator(Orchestrator):
                 role = agent_instance.role.upper()
                 try:
                     # Use get_all_tool_definitions to get both decorated and configured tools
-                    tool_defs = agent_instance.get_all_tool_definitions()
+                    tool_defs = agent_instance.get_tool_definitions()
                     if tool_defs:
                         # Pass AgentToolDefinition objects directly - no conversion needed
                         participant_tools[role] = tool_defs

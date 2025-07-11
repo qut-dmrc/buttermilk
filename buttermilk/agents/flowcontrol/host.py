@@ -21,7 +21,6 @@ from buttermilk._core.contract import (
     FlowProgressUpdate,
     GroupchatMessageTypes,
     ManagerMessage,
-    OOBMessages,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -64,7 +63,7 @@ class HostAgent(Agent):
         self._registry_lock: asyncio.Lock = asyncio.Lock()
 
         # Tool schemas for LLM-based hosts
-        self._tool_schemas: list[ToolSchema] = []
+        self._tools: list[ToolSchema] = []
         self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
         self._registry_summary_cache: dict[str, Any] | None = None
         self._current_step: str = ""
@@ -166,6 +165,29 @@ class HostAgent(Agent):
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
             )
 
+    @message_handler
+    async def handle_flow_progress_update(
+        self,
+        message: FlowProgressUpdate,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle FlowProgressUpdate messages."""
+        logger.debug(f"Host {self.agent_name} received FlowProgressUpdate message. Ignoring.")
+        # Do nothing with progress updates received by the host
+
+    @message_handler
+    async def handle_agent_announcement(
+        self,
+        message: AgentAnnouncement,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentAnnouncement messages."""
+        logger.info(
+            f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: "
+            f"{message.announcement_type} - {message.status}"
+        )
+        await self.update_agent_registry(message)
+
     # --- Agent Registry Methods ---
 
     async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
@@ -229,7 +251,7 @@ class HostAgent(Agent):
                     logger.error(f"Expected Tool object but got {type(tool_def)} for {agent_role}")
 
         # Store tool objects for LLM-based hosts
-        self._tool_schemas = tool_objects
+        self._tools = tool_objects
 
         logger.info(
             f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
@@ -336,94 +358,6 @@ class HostAgent(Agent):
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
-    async def _handle_events(
-        self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken,
-        public_callback: Callable,
-        **kwargs: Any,
-    ) -> OOBMessages | None:
-        """Handle special events and messages."""
-        logger.debug(f"Host {self.agent_name} handling event: {type(message).__name__}")
-
-        # Handle task completion signals from worker agents.
-        if isinstance(message, TaskProcessingComplete):
-            self._step_starting.clear()  # Clear this event as soon as any task completes? Revisit this logic.
-            agent_id_to_update = message.agent_id
-            async with self._tasks_condition:
-                if agent_id_to_update in self._pending_tasks_by_agent:
-                    # Check if the dictionary is empty *before* potentially making it empty
-                    was_empty_before_update = not self._pending_tasks_by_agent
-
-                    self._pending_tasks_by_agent[agent_id_to_update] -= 1
-                    log_prefix = f"Host received TaskComplete from {message.agent_id} (ID: {agent_id_to_update}) for role '{message.role}'."
-
-                    # If count reaches zero, remove the agent from pending
-                    if self._pending_tasks_by_agent[agent_id_to_update] <= 0:  # Use <= 0 to handle potential negative counts from errors
-                        if self._pending_tasks_by_agent[agent_id_to_update] < 0:
-                            logger.warning(
-                                f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue."
-                            )
-                        del self._pending_tasks_by_agent[agent_id_to_update]
-                        logger.debug(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
-                    else:
-                        logger.debug(
-                            f"{log_prefix} "
-                            f"Agent {agent_id_to_update} has {self._pending_tasks_by_agent[agent_id_to_update]} remaining tasks. "
-                            f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
-                        )
-
-                    # If the entire dictionary is now empty AND it was NOT empty before this update, notify waiters
-                    if not self._pending_tasks_by_agent and not was_empty_before_update:
-                        logger.info("All pending tasks completed across all agents. Notifying waiters.")
-                        self._tasks_condition.notify_all()
-
-                    # Log remaining pending tasks regardless
-                    logger.debug(f"Current pending tasks: {dict(self._pending_tasks_by_agent)}")
-
-                else:
-                    logger.warning(
-                        f"Host received TaskComplete from agent {message.agent_id} (ID: {agent_id_to_update}) for role '{message.role}', "
-                        "but this agent ID was not tracked with pending tasks.",
-                    )
-
-        elif isinstance(message, TaskProcessingStarted):
-            agent_id = message.agent_id
-            async with self._tasks_condition:
-                self._pending_tasks_by_agent[agent_id] += 1
-                logger.debug(
-                    f"Host noted TaskStarted from agent {agent_id} for role '{message.role}'. "
-                    f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
-                )
-
-        # Handle conductor request to start running the flow
-        elif isinstance(message, ConductorRequest):
-            logger.info(
-                f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest "
-                f"with {len(message.participants)} participants: {list(message.participants.keys())}"
-            )
-            if self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
-                logger.warning(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest but task is already running.")
-                return None
-            self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
-            # If no task is running, start a new one
-            logger.debug(f"[HostAgent._handle_events] Host {self.agent_name} starting new conductor task")
-            self._conductor_task = asyncio.create_task(self._run_flow(message=message))
-
-        # Ignore FlowProgressUpdate messages received by the host itself
-        elif isinstance(message, FlowProgressUpdate):
-            logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
-            # Do nothing with progress updates received by the host
-
-        # Handle AgentAnnouncement messages
-        elif isinstance(message, AgentAnnouncement):
-            logger.info(
-                f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}"
-            )
-            await self.update_agent_registry(message)
-            # Don't add to conversation history
-            return
-        return None  # Explicitly return None if no other value is returned
 
     async def request_user_confirmation(self, step: StepRequest) -> None:
         """Request confirmation from the user for the next step.
