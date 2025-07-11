@@ -9,6 +9,7 @@ from typing import Any
 
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
 from autogen_core.models import CreateResult
+from autogen_core.tools import BaseTool, ToolSchema
 
 from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
@@ -19,6 +20,81 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
+
+
+class SchemaTool:
+    """A non-executable tool that only provides schema information.
+    
+    This tool is used by StructuredLLMHostAgent to convert tool schemas
+    into Tool objects that can be passed to the LLM's create() method.
+    The tool doesn't execute anything - it's only used for its schema.
+    
+    This class implements the Tool protocol without inheriting from BaseTool
+    to avoid type constraints on ArgsT and ReturnT.
+    """
+    
+    def __init__(self, tool_schema: dict[str, Any]):
+        """Initialize from a tool schema dictionary.
+        
+        Args:
+            tool_schema: OpenAI-style tool schema with 'type' and 'function' fields
+        """
+        # Extract function information from the schema
+        if 'function' in tool_schema:
+            func_info = tool_schema['function']
+        else:
+            # Handle older format where properties are at root level
+            func_info = tool_schema
+            
+        self._name = func_info.get('name', 'unknown')
+        self._description = func_info.get('description', 'No description')
+        self._tool_schema = tool_schema
+    
+    @property
+    def name(self) -> str:
+        """Return the tool name."""
+        return self._name
+    
+    @property
+    def description(self) -> str:
+        """Return the tool description."""
+        return self._description
+    
+    @property
+    def schema(self) -> ToolSchema:
+        """Return the original tool schema."""
+        return self._tool_schema  # type: ignore
+    
+    def args_type(self) -> type:
+        """Return the args type (dict for schema tools)."""
+        return dict
+    
+    def return_type(self) -> type:
+        """Return the return type (str for schema tools)."""
+        return str
+    
+    def state_type(self) -> type:
+        """Return the state type (None for stateless tools)."""
+        return type(None)
+    
+    async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
+        """This method should never be called."""
+        raise NotImplementedError(
+            f"SchemaTool '{self.name}' is not executable. "
+            "Tool calls should be intercepted by the host agent."
+        )
+    
+    def return_value_as_string(self, value: Any) -> str:
+        """Convert return value to string."""
+        return str(value)
+    
+    async def save_state_json(self) -> str:
+        """No state to save."""
+        return "{}"
+    
+    async def load_state_json(self, state_json: str) -> None:
+        """No state to load."""
+        pass
 
 
 class StructuredLLMHostAgent(HostAgent, LLMAgent):
@@ -102,23 +178,22 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         max_wait = 5  # seconds
         wait_interval = 0.1
         waited = 0
-        
+
         while waited < max_wait:
-            tool_schemas = self._tool_schemas if hasattr(self, '_tool_schemas') else []
-            if tool_schemas:
+            if self._tool_schemas:
                 break
             await asyncio.sleep(wait_interval)
             waited += wait_interval
-        
+
         # Log tool schema status
-        if not tool_schemas:
+        if not self._tool_schemas:
             logger.warning(
                 f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. "
                 "This may indicate the participants have not advertised their capabilities."
             )
             # Still try to process without tools - the LLM can work without them, just less effectively
         else:
-            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(tool_schemas)} tool schemas")
+            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tool_schemas)} tool schemas")
             logger.debug(f"Message type received: {type(message).__name__}")
 
         # Skip command messages
@@ -142,8 +217,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 inputs={
                     "user_feedback": self._user_feedback,
                     "prompt": str(message.content),
-                    "participants": list(self._participants.keys()) if hasattr(self, '_participants') else [],
-                    "tool_count": len(tool_schemas)
+                    "participants": list(self._participants.keys()) if hasattr(self, "_participants") else [],
+                    "tool_count": len(self._tool_schemas),
                 }
             ),
             cancellation_token=ctx.cancellation_token,
@@ -180,13 +255,15 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Call create() directly with tool schemas (not executable tools)
         # This returns FunctionCall objects without executing them
-        tool_schemas = getattr(self, "_tool_schemas", [])
-        logger.debug(f"StructuredLLMHost calling LLM with {len(tool_schemas)} tool schemas")
+        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
 
+        # Convert tool schemas to Tool objects
+        tools_list = [SchemaTool(schema) for schema in self._tool_schemas]
+        
         try:
             create_result: CreateResult = await model_client.create(
                 messages=llm_messages_to_send,
-                tools=tool_schemas,  # Pass schemas, not executable tools
+                tools=tools_list,  # Pass Tool objects, not raw schemas
                 cancellation_token=cancellation_token,
             )
         except Exception as llm_error:

@@ -64,7 +64,7 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": true,
+      "justMyCode": false,
       "args": [
         "+flows=[trans,zot,osb]",
         "+run=api",

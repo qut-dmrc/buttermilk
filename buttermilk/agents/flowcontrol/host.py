@@ -43,20 +43,10 @@ class HostAgent(Agent):
     for synchronization.
     """
 
-    # Additional configuration fields (these work because they're handled by AgentConfig)
-    max_wait_time: int = Field(
-        default=240,
-        description="Maximum time to wait for agent responses in seconds",
-    )
-    max_user_confirmation_time: int = Field(
-        default=1220,
-        description="Maximum time to wait for agent responses in seconds",
-    )
-
     def __init__(self, **kwargs):
         """Initialize HostAgent with all required attributes."""
         super().__init__(**kwargs)
-        
+
         # Initialize private attributes that were previously using PrivateAttr
         self._message_types_handled: type[Any] = type(ConductorRequest)
         self._step_generator: AsyncGenerator[StepRequest, None] | None = None
@@ -66,23 +56,29 @@ class HostAgent(Agent):
         self._participants: dict[str, Any] = {}
         self._participant_tools: dict[str, list[dict[str, Any]]] = {}
         self._conductor_task: asyncio.Task | None = None
-        
+
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
         self._tool_registry: dict[str, list[str]] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
-        
+
         # Tool schemas for LLM-based hosts
         self._tool_schemas: list[ToolSchema] = []
         self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
         self._registry_summary_cache: dict[str, Any] | None = None
         self._current_step: str = ""
-        
+
         # User confirmation attributes
         self._user_confirmation: ManagerMessage | None = None
         self._user_confirmation_received: asyncio.Event = asyncio.Event()
         self._user_feedback: list[str] = []
         self._progress_reporter_task: asyncio.Task | None = None
+
+        # Maximum time to wait for agent responses in seconds
+        self._max_wait_time: int = kwargs.get("max_wait_time", 240)
+
+        # Maximum time to wait for agent responses in seconds
+        self._max_user_confirmation_time: int = kwargs.get("max_user_confirmation_time", 1220)
 
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
@@ -106,7 +102,7 @@ class HostAgent(Agent):
             await self.publish_message(message, topic_id=DefaultTopicId(type="default"))
         else:
             logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
-    
+
     @message_handler
     async def handle_conductor_request(
         self,
@@ -118,15 +114,15 @@ class HostAgent(Agent):
             f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
             f"with {len(message.participants)} participants: {list(message.participants.keys())}"
         )
-        
+
         if hasattr(self, '_conductor_task') and self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
             logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
             return
-        
+
         self._conductor_task = "starting"  # Mark as starting to avoid re-entrance
         logger.debug(f"[HostAgent.handle_conductor_request] Host {self.agent_name} starting new conductor task")
         self._conductor_task = asyncio.create_task(self._run_flow(message=message))
-    
+
     @message_handler
     async def handle_task_complete(
         self,
@@ -136,13 +132,13 @@ class HostAgent(Agent):
         """Handle task completion signals from worker agents."""
         self._step_starting.clear()  # Clear this event as soon as any task completes
         agent_id_to_update = message.agent_id
-        
+
         async with self._tasks_condition:
             if agent_id_to_update in self._pending_tasks_by_agent:
                 self._pending_tasks_by_agent[agent_id_to_update] -= 1
                 if self._pending_tasks_by_agent[agent_id_to_update] <= 0:
                     del self._pending_tasks_by_agent[agent_id_to_update]
-                
+
                 logger.info(
                     f"Host noted TaskComplete from agent {agent_id_to_update} for role '{message.role}'. "
                     f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
@@ -152,7 +148,7 @@ class HostAgent(Agent):
                 logger.warning(
                     f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks."
                 )
-    
+
     @message_handler
     async def handle_task_started(
         self,
@@ -161,7 +157,7 @@ class HostAgent(Agent):
     ) -> None:
         """Handle task start signals from worker agents."""
         agent_id_to_update = message.agent_id
-        
+
         async with self._tasks_condition:
             self._pending_tasks_by_agent[agent_id_to_update] += 1
             logger.info(
@@ -518,7 +514,7 @@ class HostAgent(Agent):
 
         """
         logger.info(f"Host {self.agent_name}: _wait_for_user called for step {step.role}")
-        max_tries = self.max_user_confirmation_time // 60
+        max_tries = self._max_user_confirmation_time // 60
         for _ in range(max_tries):
             logger.info(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
             try:
@@ -582,13 +578,14 @@ class HostAgent(Agent):
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
-                    timeout=self.max_wait_time,
+                    timeout=self._max_wait_time,
                 )
                 return True
         except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
             msg = (
-                f"Timeout waiting for task completion condition. " f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
+                f"Timeout waiting for task completion condition. "
+                f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self._max_wait_time}s."
             )
             logger.warning(msg)
             self._step_starting.clear()  # Reset the event to allow for new steps
@@ -811,7 +808,6 @@ class HostAgent(Agent):
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
-                logger.debug(f"Host executing MANAGER step without setting _step_starting: {step.role}")
                 # Convert StepRequest to UIMessage for frontend display
                 ui_message = UIMessage(
                     content=step.content or "What would you like to do?",
