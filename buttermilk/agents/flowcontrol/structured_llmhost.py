@@ -181,18 +181,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # This returns FunctionCall objects without executing them
         logger.debug(f"StructuredLLMHost calling LLM with {len(self._tool_schemas)} tool schemas")
 
-        # Prepare tools - they should already be Tool objects from _build_agent_tools
-        tools_list = []
-        for i, tool_def in enumerate(self._tool_schemas):
-            if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
-                # It's already a Tool object (e.g., AgentToolDefinition)
-                tools_list.append(tool_def)
-                logger.debug(f"Tool {i}: {tool_def.name} is a Tool object")
-            else:
-                # It's a raw schema dict - this shouldn't happen with our new approach
-                logger.warning(f"Tool {i}: Found raw schema instead of Tool object: {tool_def}")
-                logger.debug(f"Type: {type(tool_def)}, Has schema attr: {hasattr(tool_def, 'schema')}, Has run_json attr: {hasattr(tool_def, 'run_json')}")
-                # Skip raw schemas for now
+        # All items in _tool_schemas should be Tool objects now
+        tools_list = self._tool_schemas
+        logger.debug(f"StructuredLLMHost has {len(tools_list)} tools ready for LLM")
         
         try:
             create_result: CreateResult = await model_client.create(

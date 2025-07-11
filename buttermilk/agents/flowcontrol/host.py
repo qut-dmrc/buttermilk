@@ -210,7 +210,7 @@ class HostAgent(Agent):
         """Build tool objects from agent-provided tool definitions.
         
         This method collects tool objects from agents for LLM-based decision making.
-        Only stores actual Tool objects, not raw schemas.
+        Converts raw schemas to AgentToolDefinition objects when needed.
         """
         tool_objects = []
 
@@ -225,21 +225,38 @@ class HostAgent(Agent):
                     tool_objects.append(tool_def)
                     logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
                 else:
-                    # It's a schema dict - skip it for now
-                    # Participant tools will be created as proper Tool objects in _create_participant_tool_schemas
-                    logger.debug(f"Skipping raw tool schema for {agent_role}")
+                    # It's a schema dict - convert to AgentToolDefinition
+                    # Extract name and description from the schema
+                    if isinstance(tool_def, dict):
+                        func_info = tool_def.get('function', tool_def)
+                        name = func_info.get('name', f"tool_{agent_role.lower()}")
+                        description = func_info.get('description', f"Tool for {agent_role}")
+                        parameters = func_info.get('parameters', {"type": "object", "properties": {}})
+                        
+                        # Create an AgentToolDefinition from the schema
+                        agent_tool = AgentToolDefinition(
+                            name=name,
+                            description=description,
+                            input_schema=parameters,
+                            output_schema={"type": "string"}  # Default output schema
+                        )
+                        tool_objects.append(agent_tool)
+                        logger.debug(f"Converted schema to tool object: {name} for {agent_role}")
+                    else:
+                        logger.warning(f"Unknown tool definition type for {agent_role}: {type(tool_def)}")
 
         # Store tool objects for LLM-based hosts
         self._tool_schemas = tool_objects
 
         logger.info(
             f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
-            f"from {len(self._agent_registry)} agents with tool definitions"
+            f"from {len(self._agent_registry)} agents"
         )
 
     async def _create_participant_tool_schemas(self, participants: dict[str, str] | Mapping[str, str]) -> None:
         """Create tool schemas for all participants, including those without explicit tools.
         
+        Ensures EVERY participant has a tool that can be called by the LLM.
         For participants that don't have @tool decorated methods, we create a generic
         tool that allows the LLM to invoke them by role.
         
@@ -253,30 +270,32 @@ class HostAgent(Agent):
         # Start with existing tool schemas from agents
         all_tool_schemas = list(self._tool_schemas)
 
-        # Track which roles already have tools
+        # Track which roles already have tools from agent announcements
         roles_with_tools = set()
+        
+        # Also check roles that are in the agent registry (they might not have tools yet)
+        announced_roles = {ann.agent_config.role for ann in self._agent_registry.values()}
+        
         for item in all_tool_schemas:
-            # Extract role from tool name if it follows a pattern
-            tool_name = None
+            # Extract role from tool - tools should already be AgentToolDefinition objects
             if hasattr(item, 'name'):
-                # It's a Tool object (AgentToolDefinition)
                 tool_name = item.name
-            elif isinstance(item, dict) and 'function' in item and 'name' in item['function']:
-                # It's a schema dict
-                tool_name = item['function']['name']
-            
-            if tool_name:
-                # Check if this tool is associated with a role
+                # Check if this tool is associated with a participant role
                 for role in participants:
-                    if role.lower() in tool_name.lower():
+                    if role.lower() in tool_name.lower() or f"ask_{role.lower()}" == tool_name:
                         roles_with_tools.add(role)
                         logger.debug(f"Role {role} already has tool: {tool_name}")
                         break
 
-        # Create tools for participants without explicit tools
+        # Create tools for ALL participants that don't have explicit tools
         for role, description in participants.items():
             if role not in roles_with_tools and role != "HOST":
-                logger.debug(f"Creating synthetic tool for role {role} with description: {description}")
+                # Check if this role has an agent in the registry but no tool
+                if role in announced_roles:
+                    logger.info(f"Creating tool for announced agent {role} that didn't provide a tool definition")
+                else:
+                    logger.info(f"Creating tool for participant {role} with no agent announcement")
+                
                 # Create an AgentToolDefinition for this participant
                 tool_def = AgentToolDefinition(
                     name=f"ask_{role.lower()}",
@@ -293,12 +312,12 @@ class HostAgent(Agent):
                     },
                     output_schema={"type": "string"}  # Simple string response
                 )
-                all_tool_schemas.append(tool_def)  # type: ignore
+                all_tool_schemas.append(tool_def)
                 logger.debug(f"Created participant tool definition for {role}: ask_{role.lower()}")
 
         # Update the tool schemas
         self._tool_schemas = all_tool_schemas
-        logger.info(f"Host {self.agent_name} has {len(self._tool_schemas)} total tool schemas after adding participant tools")
+        logger.info(f"Host {self.agent_name} has {len(self._tool_schemas)} total tools after adding participant tools")
 
         # Log the actual tool names for debugging
         tool_names = []
