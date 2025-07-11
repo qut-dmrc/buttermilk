@@ -96,12 +96,14 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Log tool schema status
         # Check if we have tool schemas available
         tool_schemas = getattr(self, "_tool_schemas", [])
-        if not self._tool_schemas:
-            msg = "StructuredLLMHost {self.agent_name} has no tool schemas available. This may indicate the participants have not advertised their capabilities."
-            raise ProcessingError(msg)
+        if not tool_schemas:
+            logger.warning(
+                f"StructuredLLMHost {self.agent_name} has no tool schemas available. This may indicate the participants have not advertised their capabilities."
+            )
+            # Still try to process without tools - the LLM can work without them, just less effectively
         else:
             logger.debug(
-                f"StructuredLLMHost {self.agent_name} in _listen has {len(tool_schemas)} tool schemas: {', '.join([tool.name for tool in tool_schemas])}"
+                f"StructuredLLMHost {self.agent_name} in _listen has {len(tool_schemas)} tool schemas"
             )
             logger.debug(f"Message type received: {type(message).__name__}")
 

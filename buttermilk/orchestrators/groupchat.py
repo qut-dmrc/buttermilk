@@ -321,13 +321,8 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
-            logger.debug(
-                f"[MANAGER ClosureAgent] 🎯 Received message type: {type(message)} from {getattr(message, 'source', 'No source attr')}: {message}"
-            )
-
             try:
                 result = await callback_to_ui(message)
-                logger.info(f"[MANAGER ClosureAgent] ✅ Successfully called callback_to_ui, result: {result}")
             except Exception as e:
                 logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
 
