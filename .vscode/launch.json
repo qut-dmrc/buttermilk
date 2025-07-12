@@ -20,6 +20,8 @@
         "buttermilk.api.flow:app",
         "--reload",
         "+flows=[mock,osb,hate,trans,describer]",
+        "+run=api",
+        "verbose=true",
         "llms=lite"
       ],
       "jinja": true
@@ -62,11 +64,12 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": true,
+      "justMyCode": false,
       "args": [
         "+flows=[trans,zot,osb]",
         "+run=api",
-        "+llms=full",
+        "verbose=true",
+        "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

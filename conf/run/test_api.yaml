@@ -16,7 +16,7 @@ run:
     tox:
       _target_: buttermilk.orchestrators.groupchat.AutogenOrchestrator
       name: "tox_test"
-      description: "Test toxicity flow for MCP testing"
+      description: "Test toxicity flow for API testing"
       orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
       parameters:
         criteria: ["criteria_ordinary"]

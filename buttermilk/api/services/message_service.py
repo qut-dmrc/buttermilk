@@ -73,23 +73,15 @@ class MessageService:
 
         """
         try:
-            logger.debug(f"[MessageService.format_message_for_client] Incoming message type: {type(message)}")
             if message is None:
-                logger.debug("[MessageService] Received None message, returning None.")
                 return None
 
-            if isinstance(message, ChatMessage):
-                # Already formatted
-                logger.debug(f"[MessageService] Message is already ChatMessage: {message.type}, returning as is.")
-                return message
-            if isinstance(message, ManagerMessage):
-                # Message from UI to chat; don't send back to UI
-                logger.debug("[MessageService] ManagerMessage received, not sending back to UI.")
-                return None
-            if isinstance(message, StepRequest):
-                # Internal message; don't send back to UI
-                logger.debug("[MessageService] StepRequest received, not sending back to UI.")
-                return None
+            # Skip messages that shouldn't be sent to UI
+            if isinstance(message, (ChatMessage, ManagerMessage, StepRequest)):
+                message_type = type(message).__name__
+                action = "returning as-is" if isinstance(message, ChatMessage) else "not sending to UI"
+                logger.debug(f"[MessageService] {message_type} received, {action}")
+                return message if isinstance(message, ChatMessage) else None
 
             agent_info = getattr(message, "agent_info", None)
             message_id = getattr(message, "call_id", uuid())
@@ -99,7 +91,6 @@ class MessageService:
             if isinstance(message, AgentTrace):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
-                    logger.debug(f"[MessageService] AgentTrace with outputs, unwrapping to {type(message.outputs)}.")
                     message = message.outputs
                 else:
                     logger.warning(f"[MessageService] AgentTrace object with no outputs: {message}, returning None.")
@@ -195,7 +186,9 @@ class MessageService:
                 case "ui_message":
                     return UIMessage(**data)
                 case "manager_response":
-                    return ManagerMessage(**data)
+                    # Remove 'type' field as ManagerMessage doesn't expect it
+                    message_data = {k: v for k, v in data.items() if k != "type"}
+                    return ManagerMessage(**message_data)
                 case "TaskProcessingComplete":
                     return TaskProcessingComplete(**data)
                 case "TaskProcessingStarted":

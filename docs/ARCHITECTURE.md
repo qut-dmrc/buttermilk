@@ -60,6 +60,16 @@ Buttermilk is a framework for building reproducible, traceable, and HASS-researc
   - Deterministic workflow execution
   - No LLM overhead for simple pipelines
 
+#### Debugging Infrastructure (Issue #116)
+- **DebugAgent** (`buttermilk.debug.debug_agent`): LLM-driven debugging tools
+  - Log reading tools for raw access to `/tmp/buttermilk_*.log` files
+  - WebSocket client controller for interactive flow testing
+  - Exposed via `@tool` decorator for MCP discovery
+- **MCP Debug Server** (`scripts/run_debug_mcp_server.py`): HTTP server on port 8090
+  - Exposes DebugAgent tools as REST endpoints
+  - Enables LLM integration for automated debugging
+- **Design Philosophy**: Simple tools, smart LLM - no intelligence in tools
+
 ### Data Flow
 1. YAML configuration → Hydra → OmegaConf objects
 2. OmegaConf → Pydantic models for validation
@@ -94,6 +104,9 @@ buttermilk/
 ├── agents/             # Agent implementations
 │   ├── flowcontrol/    # HOST agents
 │   └── example_tool_agent.py # NEW: Example tool agents
+├── debug/              # Debugging infrastructure
+│   ├── debug_agent.py  # LLM-driven debugging tools
+│   └── README_DEBUGAGENT.md  # Debug tools documentation
 ├── orchestrators/      # Flow orchestration
 ├── runner/             # CLI and execution
 └── utils/              # Utilities

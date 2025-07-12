@@ -23,7 +23,6 @@ from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, Syst
 from buttermilk import buttermilk as bm
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import AgentConfig, ToolConfig
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import ModelOutput
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     from autogen_core.tools import Tool
 
 
-class LLMAgent(Agent, AgentConfig):
+class LLMAgent(Agent):
     """Agent that uses an LLM for text processing and generation.
 
     `LLMAgent` extends the base `Agent` class to add LLM-powered capabilities.
@@ -78,9 +77,7 @@ class LLMAgent(Agent, AgentConfig):
     """
 
     # LLM-specific configurations
-    _model: str = pydantic.PrivateAttr(default="")
-    _output_model: type[pydantic.BaseModel] | None = pydantic.PrivateAttr(default=None)
-    _tools_list: list["Tool"] = pydantic.PrivateAttr(default_factory=list)
+    # These are now initialized in __init__ instead of using PrivateAttr
 
     # Control behavior
     fail_on_unfilled_parameters: bool = pydantic.Field(
@@ -104,6 +101,11 @@ class LLMAgent(Agent, AgentConfig):
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
+        
+        # Initialize private attributes
+        self._model: str = self.parameters.get("model", "")
+        self._output_model: type[pydantic.BaseModel] | None = None
+        self._tools_list: list["Tool"] = []
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
@@ -119,12 +121,12 @@ class LLMAgent(Agent, AgentConfig):
             Self: The agent instance with `_tools_list` populated.
 
         """
-        # `self.tools` is populated by AgentConfig based on Hydra config.
-        if self.tools:
-            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
+        # `self._config.tools` is populated by AgentConfig based on Hydra config.
+        if self._config.tools:
+            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
 
             # Instantiate tools here if they are OmegaConf objects
-            _tool_objects = hydra.utils.instantiate(self.tools)
+            _tool_objects = hydra.utils.instantiate(self._config.tools)
 
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
             self._tools_list = create_tool_functions(_tool_objects)
@@ -132,6 +134,16 @@ class LLMAgent(Agent, AgentConfig):
             logger.debug(f"Agent '{self.agent_name}': No tools configured.")
             self._tools_list = []
         return self
+
+    def get_available_tools(self) -> list["Tool"]:
+        """Get list of tools this agent can respond to.
+        
+        Returns the configured tools from self._tools_list.
+        
+        Returns:
+            list[Tool]: List of configured tools.
+        """
+        return self._tools_list
 
     def get_display_name(self) -> str:
         """Get the display name for this LLM agent, including model information.

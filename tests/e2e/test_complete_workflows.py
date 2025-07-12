@@ -103,22 +103,22 @@ def e2e_app(mock_bm, mock_flow_runner):
 class TestCompleteUserJourneys:
     """Test complete user journeys from frontend interaction to final results."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     @pytest.mark.parametrize("flow_name", list(TEST_FLOWS.keys()))
     async def test_complete_workflow_journey(self, e2e_app, flow_name):
         """Test complete user journey for any flow configuration."""
         flow_config = TEST_FLOWS[flow_name]
-        
+
         with TestClient(e2e_app) as client:
             # Step 1: Create session (mimicking frontend)
             session_response = client.get("/api/session")
             assert session_response.status_code == 200
             session_data = session_response.json()
             session_id = session_data["session_id"]
-            
+
             # Step 2: Establish WebSocket connection
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                
+
                 # Step 3: Send workflow query
                 query = flow_config["sample_queries"][0]
                 workflow_message = {
@@ -128,30 +128,30 @@ class TestCompleteUserJourneys:
                     "ui_type": "terminal",
                     "session_id": session_id
                 }
-                
+
                 start_time = time.time()
                 websocket.send_json(workflow_message)
-                
+
                 # Step 4: Monitor workflow progression
                 workflow_progression = await self._monitor_workflow_progression(
                     websocket, 
                     flow_config["agents"],
                     timeout=flow_config["expected_workflow_time"]
                 )
-                
+
                 total_time = time.time() - start_time
-                
+
                 # Step 5: Validate complete journey
                 assert workflow_progression["workflow_started"] is True
                 assert workflow_progression["agents_responded"] >= len(flow_config["agents"]) * 0.8  # 80% of agents
                 assert workflow_progression["workflow_completed"] is True
                 assert total_time <= flow_config["expected_workflow_time"] * 1.5  # Allow 50% buffer
-                
+
                 # Step 6: Validate final results quality
                 final_result = workflow_progression["final_result"]
                 assert final_result is not None
                 assert len(str(final_result).strip()) > 50  # Substantial response
-                
+
             # Step 7: Verify session cleanup
             cleanup_response = client.delete(f"/api/session/{session_id}")
             assert cleanup_response.status_code == 200
@@ -168,9 +168,9 @@ class TestCompleteUserJourneys:
             "messages_received": [],
             "errors_encountered": []
         }
-        
+
         end_time = time.time() + timeout
-        
+
         while time.time() < end_time:
             try:
                 # Try to receive message with short timeout
@@ -178,37 +178,37 @@ class TestCompleteUserJourneys:
                     self._receive_websocket_message(websocket),
                     timeout=2.0
                 )
-                
+
                 if message_data is None:
                     continue
-                
+
                 progression["messages_received"].append(message_data)
                 message_type = message_data.get("type", "unknown")
-                
+
                 # Track workflow progression
                 if message_type == "workflow_started":
                     progression["workflow_started"] = True
-                
+
                 elif message_type == "agent_response":
                     agent_name = message_data.get("agent")
                     if agent_name and agent_name in expected_agents:
                         progression["agent_responses"][agent_name] = message_data
                         progression["agents_responded"] += 1
-                
+
                 elif message_type == "workflow_complete":
                     progression["workflow_completed"] = True
                     progression["final_result"] = message_data.get("result")
                     break
-                
+
                 elif message_type == "error":
                     progression["errors_encountered"].append(message_data)
-                
+
             except asyncio.TimeoutError:
                 # No message received, continue monitoring
                 continue
             except Exception as e:
                 progression["errors_encountered"].append({"error": str(e)})
-        
+
         return progression
 
     async def _receive_websocket_message(self, websocket) -> Dict[str, Any]:
@@ -220,11 +220,11 @@ class TestCompleteUserJourneys:
         except Exception:
             return None
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_concurrent_user_sessions(self, e2e_app):
         """Test multiple concurrent user sessions across different flows."""
         num_concurrent_sessions = 3
-        
+
         with TestClient(e2e_app) as client:
             # Create multiple sessions
             sessions = []
@@ -236,7 +236,7 @@ class TestCompleteUserJourneys:
                     "flow": list(TEST_FLOWS.keys())[i % len(TEST_FLOWS)],
                     "query_index": i
                 })
-            
+
             # Run concurrent workflows
             concurrent_tasks = []
             for session in sessions:
@@ -244,14 +244,14 @@ class TestCompleteUserJourneys:
                     self._run_session_workflow(client, session)
                 )
                 concurrent_tasks.append(task)
-            
+
             # Wait for all sessions to complete
             results = await asyncio.gather(*concurrent_tasks, return_exceptions=True)
-            
+
             # Validate all sessions completed successfully
             successful_sessions = sum(1 for result in results if not isinstance(result, Exception))
             assert successful_sessions >= num_concurrent_sessions * 0.8  # 80% success rate
-            
+
             # Cleanup sessions
             for session in sessions:
                 try:
@@ -264,10 +264,10 @@ class TestCompleteUserJourneys:
         session_id = session_config["session_id"]
         flow_name = session_config["flow"]
         query_index = session_config["query_index"]
-        
+
         flow_config = TEST_FLOWS[flow_name]
         query = flow_config["sample_queries"][query_index % len(flow_config["sample_queries"])]
-        
+
         with client.websocket_connect(f"/ws/{session_id}") as websocket:
             workflow_message = {
                 "type": "run_flow",
@@ -275,19 +275,19 @@ class TestCompleteUserJourneys:
                 "query": query,
                 "session_id": session_id
             }
-            
+
             websocket.send_json(workflow_message)
-            
+
             # Wait for workflow completion
             await asyncio.sleep(flow_config["expected_workflow_time"] * 0.5)  # Wait for partial completion
-            
+
             return {"session_id": session_id, "status": "completed"}
 
 
 class TestEndToEndIntegration:
     """Test integration between all system components."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_mcp_to_websocket_integration(self, e2e_app):
         """Test integration between MCP endpoints and WebSocket flows."""
         with TestClient(e2e_app) as client:
@@ -297,33 +297,33 @@ class TestEndToEndIntegration:
                 "agent_name": "researcher",
                 "flow": "osb"
             })
-            
+
             assert mcp_response.status_code == 200
             mcp_data = mcp_response.json()
             assert mcp_data["success"] is True
-            
+
             # Step 2: Test same query via WebSocket workflow
             session_response = client.get("/api/session")
             session_id = session_response.json()["session_id"]
-            
+
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 websocket.send_json({
                     "type": "run_flow",
                     "flow": "osb",
                     "query": "Test integration query"
                 })
-                
+
                 # Both approaches should work consistently
                 # (In real implementation, would verify response consistency)
                 assert True  # Placeholder for consistency validation
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_error_propagation_across_components(self, e2e_app):
         """Test error handling propagation from backend to frontend."""
         with TestClient(e2e_app) as client:
             session_response = client.get("/api/session")
             session_id = session_response.json()["session_id"]
-            
+
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send invalid flow request
                 invalid_message = {
@@ -331,19 +331,19 @@ class TestEndToEndIntegration:
                     "flow": "nonexistent_flow",
                     "query": "This should fail"
                 }
-                
+
                 websocket.send_json(invalid_message)
-                
+
                 # Should receive error message via WebSocket
                 # (In real implementation, would capture and validate error message)
                 assert True  # Placeholder for error validation
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_performance_under_realistic_load(self, e2e_app):
         """Test system performance under realistic user load."""
         target_concurrent_users = 5
         test_duration = 10  # seconds
-        
+
         with TestClient(e2e_app) as client:
             # Create multiple user sessions
             user_sessions = []
@@ -351,26 +351,26 @@ class TestEndToEndIntegration:
                 session_response = client.get("/api/session")
                 session_id = session_response.json()["session_id"]
                 user_sessions.append(session_id)
-            
+
             # Run realistic load test
             start_time = time.time()
             load_tasks = []
-            
+
             for session_id in user_sessions:
                 task = asyncio.create_task(
                     self._simulate_realistic_user_behavior(client, session_id, test_duration)
                 )
                 load_tasks.append(task)
-            
+
             # Wait for load test completion
             results = await asyncio.gather(*load_tasks, return_exceptions=True)
             total_time = time.time() - start_time
-            
+
             # Validate performance metrics
             successful_users = sum(1 for result in results if not isinstance(result, Exception))
             assert successful_users >= target_concurrent_users * 0.8  # 80% success rate
             assert total_time <= test_duration * 1.2  # Within 20% of expected time
-            
+
             # Cleanup
             for session_id in user_sessions:
                 try:
@@ -383,77 +383,80 @@ class TestEndToEndIntegration:
         """Simulate realistic user behavior pattern."""
         end_time = time.time() + duration
         queries_sent = 0
-        
+
         flow_names = list(TEST_FLOWS.keys())
-        
+
         with client.websocket_connect(f"/ws/{session_id}") as websocket:
             while time.time() < end_time:
                 # Simulate user typing and thinking time
                 await asyncio.sleep(1.0 + (queries_sent * 0.5))  # Increasing intervals
-                
+
                 # Select random flow and query
                 flow_name = flow_names[queries_sent % len(flow_names)]
                 flow_config = TEST_FLOWS[flow_name]
                 query = flow_config["sample_queries"][0]
-                
+
                 # Send query
                 websocket.send_json({
                     "type": "run_flow",
                     "flow": flow_name,
                     "query": f"{query} (user simulation {queries_sent})"
                 })
-                
+
                 queries_sent += 1
-                
+
                 # Don't overwhelm the system
                 if queries_sent >= 3:
                     break
-        
+
         return {"session_id": session_id, "queries_sent": queries_sent}
 
 
 class TestRealWorldScenarios:
     """Test real-world usage scenarios across different flows."""
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("scenario", [
-        {
-            "name": "Content Moderation Rush",
-            "flow": "content_moderation",
-            "queries": [
-                "Urgent: Mass reported content needs immediate review",
-                "High priority: Potential doxxing content reported",
-                "Critical: Coordinated harassment campaign detected"
-            ],
-            "expected_urgency": "high"
-        },
-        {
-            "name": "OSB Case Investigation",
-            "flow": "osb",
-            "queries": [
-                "Complex case requiring full OSB analysis: Multi-platform harassment",
-                "Policy edge case: New type of harmful content not in guidelines",
-                "Appeal review: User disputes content removal decision"
-            ],
-            "expected_urgency": "medium"
-        },
-        {
-            "name": "Research Deep Dive",
-            "flow": "research",
-            "queries": [
-                "Comprehensive research: Long-term social media impact studies",
-                "Meta-analysis: Effectiveness of content moderation approaches",
-                "Trend analysis: Emerging patterns in online harassment"
-            ],
-            "expected_urgency": "low"
-        }
-    ])
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        "scenario",
+        [
+            {
+                "name": "Content Moderation Rush",
+                "flow": "content_moderation",
+                "queries": [
+                    "Urgent: Mass reported content needs immediate review",
+                    "High priority: Potential doxxing content reported",
+                    "Critical: Coordinated harassment campaign detected",
+                ],
+                "expected_urgency": "high",
+            },
+            {
+                "name": "OSB Case Investigation",
+                "flow": "osb",
+                "queries": [
+                    "Complex case requiring full OSB analysis: Multi-platform harassment",
+                    "Policy edge case: New type of harmful content not in guidelines",
+                    "Appeal review: User disputes content removal decision",
+                ],
+                "expected_urgency": "medium",
+            },
+            {
+                "name": "Research Deep Dive",
+                "flow": "research",
+                "queries": [
+                    "Comprehensive research: Long-term social media impact studies",
+                    "Meta-analysis: Effectiveness of content moderation approaches",
+                    "Trend analysis: Emerging patterns in online harassment",
+                ],
+                "expected_urgency": "low",
+            },
+        ],
+    )
     async def test_real_world_scenario(self, e2e_app, scenario):
         """Test specific real-world usage scenarios."""
         with TestClient(e2e_app) as client:
             session_response = client.get("/api/session")
             session_id = session_response.json()["session_id"]
-            
+
             scenario_results = {
                 "scenario": scenario["name"],
                 "flow": scenario["flow"],
@@ -461,20 +464,20 @@ class TestRealWorldScenarios:
                 "total_time": 0,
                 "responses_quality": []
             }
-            
+
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 start_time = time.time()
-                
+
                 for query in scenario["queries"]:
                     query_start = time.time()
-                    
+
                     # Send query
                     websocket.send_json({
                         "type": "run_flow",
                         "flow": scenario["flow"],
                         "query": query
                     })
-                    
+
                     # Wait for response (shorter for urgent scenarios)
                     if scenario["expected_urgency"] == "high":
                         timeout = 15.0
@@ -482,33 +485,33 @@ class TestRealWorldScenarios:
                         timeout = 30.0
                     else:
                         timeout = 60.0
-                    
+
                     # Monitor response (simplified for test)
                     await asyncio.sleep(min(timeout * 0.1, 5.0))  # Simulate waiting for response
-                    
+
                     query_time = time.time() - query_start
                     scenario_results["queries_processed"] += 1
                     scenario_results["responses_quality"].append({
                         "query_time": query_time,
                         "within_timeout": query_time <= timeout
                     })
-                
+
                 scenario_results["total_time"] = time.time() - start_time
-            
+
             # Validate scenario expectations
             assert scenario_results["queries_processed"] == len(scenario["queries"])
-            
+
             # All responses should be within timeout
             responses_within_timeout = sum(
                 1 for r in scenario_results["responses_quality"] 
                 if r["within_timeout"]
             )
             assert responses_within_timeout == len(scenario["queries"])
-            
+
             # Cleanup
             client.delete(f"/api/session/{session_id}")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_system_resilience_under_varied_load(self, e2e_app):
         """Test system resilience under varied load patterns."""
         load_patterns = [
@@ -516,21 +519,21 @@ class TestRealWorldScenarios:
             {"name": "Sustained Load", "sessions": 4, "duration": 15},
             {"name": "Gradual Ramp", "sessions": 6, "duration": 10}
         ]
-        
+
         with TestClient(e2e_app) as client:
             for pattern in load_patterns:
                 print(f"Testing {pattern['name']} pattern...")
-                
+
                 # Create sessions for this pattern
                 sessions = []
                 for i in range(pattern["sessions"]):
                     session_response = client.get("/api/session")
                     session_id = session_response.json()["session_id"]
                     sessions.append(session_id)
-                
+
                 # Execute load pattern
                 start_time = time.time()
-                
+
                 if pattern["name"] == "Burst Load":
                     # All sessions start simultaneously
                     tasks = [
@@ -538,7 +541,7 @@ class TestRealWorldScenarios:
                         for session_id in sessions
                     ]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 elif pattern["name"] == "Sustained Load":
                     # Sessions run continuously
                     tasks = [
@@ -546,7 +549,7 @@ class TestRealWorldScenarios:
                         for session_id in sessions
                     ]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 else:  # Gradual Ramp
                     # Sessions start with delays
                     tasks = []
@@ -557,16 +560,16 @@ class TestRealWorldScenarios:
                         )
                         tasks.append(task)
                     results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 pattern_time = time.time() - start_time
-                
+
                 # Validate pattern results
                 successful_sessions = sum(1 for r in results if not isinstance(r, Exception))
                 success_rate = successful_sessions / len(sessions)
-                
+
                 print(f"{pattern['name']}: {success_rate:.1%} success rate in {pattern_time:.1f}s")
                 assert success_rate >= 0.7  # At least 70% success rate
-                
+
                 # Cleanup
                 for session_id in sessions:
                     try:
@@ -592,7 +595,7 @@ class TestRealWorldScenarios:
         with client.websocket_connect(f"/ws/{session_id}") as websocket:
             end_time = time.time() + duration
             query_count = 0
-            
+
             while time.time() < end_time:
                 websocket.send_json({
                     "type": "run_flow",
@@ -601,5 +604,5 @@ class TestRealWorldScenarios:
                 })
                 query_count += 1
                 await asyncio.sleep(2.0)  # Moderate pace
-                
+
         return {"session_id": session_id, "type": "sustained", "queries": query_count}

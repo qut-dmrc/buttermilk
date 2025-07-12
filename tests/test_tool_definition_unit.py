@@ -74,24 +74,12 @@ class TestAgentToolDefinition:
             output_schema={"type": "string"},
         )
         
-        schema = tool_def.to_autogen_tool_schema()
-        assert schema["name"] == "test_tool"
-        assert schema["description"] == "A test tool"
-        assert schema["parameters"] == tool_def.input_schema
+        schema = tool_def.schema
+        assert schema["type"] == "function"
+        assert schema["function"]["name"] == "test_tool"
+        assert schema["function"]["description"] == "A test tool"
+        assert schema["function"]["parameters"] == tool_def.input_schema
     
-    def test_to_openai_function_schema(self):
-        """Test conversion to OpenAI function schema."""
-        tool_def = AgentToolDefinition(
-            name="test_tool",
-            description="A test tool",
-            input_schema={"type": "object"},
-            output_schema={"type": "string"},
-        )
-        
-        schema = tool_def.to_openai_function_schema()
-        assert schema["name"] == "test_tool"
-        assert schema["description"] == "A test tool"
-        assert schema["parameters"] == tool_def.input_schema
     
     def test_to_mcp_route_definition(self):
         """Test conversion to MCP route definition."""

@@ -1,13 +1,12 @@
-"""Example agent demonstrating the new tool definition system.
+"""Example agent demonstrating the tool definition system.
 
-This module shows how to use the @tool and @MCPRoute decorators to
-expose agent capabilities as structured tool definitions.
+This module shows how to expose agent capabilities as structured tool definitions.
 """
 
 from typing import Any, Literal
 
 from buttermilk._core import Agent, AgentInput, AgentOutput
-from buttermilk._core.mcp_decorators import MCPRoute, tool
+# Tool decorators removed with MCP implementation
 
 
 class DataAnalysisAgent(Agent):
@@ -38,8 +37,6 @@ class DataAnalysisAgent(Agent):
             outputs=result
         )
     
-    @tool
-    @MCPRoute("/analyze", permissions=["read:data"])
     async def analyze_dataset(
         self, 
         dataset: str, 
@@ -74,7 +71,6 @@ class DataAnalysisAgent(Agent):
             }
         }
     
-    @tool(name="visualize", description="Create data visualizations")
     async def visualize_data(
         self,
         data: dict[str, list[float]],
@@ -100,7 +96,6 @@ class DataAnalysisAgent(Agent):
             "url": f"https://example.com/charts/{chart_type}_chart.png"
         }
     
-    @MCPRoute("/health", permissions=[])
     async def health_check(self) -> dict[str, str]:
         """Check the health status of the agent.
         
@@ -140,7 +135,6 @@ class CalculatorAgent(Agent):
             outputs={"result": result}
         )
     
-    @tool
     def add(self, a: float, b: float) -> float:
         """Add two numbers together.
         
@@ -153,7 +147,6 @@ class CalculatorAgent(Agent):
         """
         return a + b
     
-    @tool
     def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers.
         

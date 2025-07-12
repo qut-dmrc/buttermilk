@@ -1,12 +1,12 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Mapping
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken
+from autogen_core import CancellationToken, MessageContext, DefaultTopicId, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import ToolSchema
-from pydantic import Field, PrivateAttr
+from pydantic import Field
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -19,15 +19,14 @@ from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
     FlowProgressUpdate,
-    GroupchatMessageTypes,
     ManagerMessage,
-    OOBMessages,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.tool_definition import AgentToolDefinition
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -43,37 +42,43 @@ class HostAgent(Agent):
     for synchronization.
     """
 
-    _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
-    callback_to_groupchat: Any = Field(default=None)
-    _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
-    # Condition variable to synchronize task completion based on pending agents
-    _tasks_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
-    _step_starting: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    # Track count of pending tasks per agent ID
-    _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))  # Corrected duplicate definition
-    _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
-    _participant_tools: dict[str, list[dict[str, Any]]] = PrivateAttr(default_factory=dict)  # Stores tool definitions per role
-    _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
+    def __init__(self, **kwargs):
+        """Initialize HostAgent with all required attributes."""
+        super().__init__(**kwargs)
 
-    # Agent registry attributes (runtime state, not configuration)
-    _agent_registry: dict[str, AgentAnnouncement] = PrivateAttr(default_factory=dict)
-    _tool_registry: dict[str, list[str]] = PrivateAttr(default_factory=dict)
-    _registry_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
-    
-    # Tool schemas for LLM-based hosts
-    _tool_schemas: list[ToolSchema] = PrivateAttr(default_factory=list)
-    _proposed_step: asyncio.Queue[StepRequest] = PrivateAttr(default_factory=asyncio.Queue)
-    _registry_summary_cache: dict[str, Any] | None = PrivateAttr(default=None)
-    # Additional configuration
-    max_wait_time: int = Field(
-        default=240,
-        description="Maximum time to wait for agent responses in seconds",
-    )
-    _current_step: str = PrivateAttr(default="")
-    max_user_confirmation_time: int = Field(
-        default=1220,
-        description="Maximum time to wait for agent responses in seconds",
-    )
+        # Initialize private attributes that were previously using PrivateAttr
+        self._message_types_handled: type[Any] = type(ConductorRequest)
+        self._step_generator: AsyncGenerator[StepRequest, None] | None = None
+        self._tasks_condition: asyncio.Condition = asyncio.Condition()
+        self._step_starting: asyncio.Event = asyncio.Event()
+        self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
+        self._participants: dict[str, Any] = {}
+        self._participant_tools: dict[str, list[dict[str, Any]]] = {}
+        self._conductor_task: asyncio.Task | None = None
+
+        # Agent registry attributes
+        self._agent_registry: dict[str, AgentAnnouncement] = {}
+        self._tool_registry: dict[str, list[str]] = {}
+        self._registry_lock: asyncio.Lock = asyncio.Lock()
+
+        # Tool schemas for LLM-based hosts
+        self._tools: list[ToolSchema] = []
+        self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
+        self._registry_summary_cache: dict[str, Any] | None = None
+        self._current_step: str = ""
+
+        # User confirmation attributes
+        self._user_confirmation: ManagerMessage | None = None
+        self._user_confirmation_received: asyncio.Event = asyncio.Event()
+        self._user_feedback: list[str] = []
+        self._progress_reporter_task: asyncio.Task | None = None
+
+        # Maximum time to wait for agent responses in seconds
+        self._max_wait_time: int = kwargs.get("max_wait_time", 240)
+
+        # Maximum time to wait for agent responses in seconds
+        self._max_user_confirmation_time: int = kwargs.get("max_user_confirmation_time", 1220)
+
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
     def human_in_loop(self) -> bool:
@@ -89,21 +94,137 @@ class HostAgent(Agent):
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
         self.parameters['human_in_loop'] = value
-    #  Event for confirmation responses from the MANAGER.
-    _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
-    _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    _user_feedback: list[str] = PrivateAttr(default_factory=list)
-    _progress_reporter_task: asyncio.Task | None = PrivateAttr(default=None)
 
-    async def initialize(
+    async def _publish(self, message: Any) -> None:
+        """Publish a message to the group chat."""
+        if hasattr(self, '_runtime') and self._runtime:
+            await self.publish_message(message, topic_id=DefaultTopicId(type="default"))
+        else:
+            logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
+
+    @message_handler
+    async def handle_conductor_request(
         self,
-        callback_to_groupchat,
-        **kwargs: Any,
+        message: ConductorRequest,
+        ctx: MessageContext,
     ) -> None:
-        """Initialize the agent."""
-        await super().initialize(**kwargs)
-        self.callback_to_groupchat = callback_to_groupchat
-        logger.info(f"HostAgent {self.agent_name} initialized with human_in_loop={self.human_in_loop}")
+        """Handle ConductorRequest to start the flow."""
+        logger.info(
+            f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
+            f"with {len(message.participants)} participants: {list(message.participants.keys())}"
+        )
+
+        if hasattr(self, '_conductor_task') and self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
+            logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
+            return
+
+        self._conductor_task = "starting"  # Mark as starting to avoid re-entrance
+        logger.debug(f"[HostAgent.handle_conductor_request] Host {self.agent_name} starting new conductor task")
+        self._conductor_task = asyncio.create_task(self._run_flow(message=message))
+
+    @message_handler
+    async def handle_task_complete(
+        self,
+        message: TaskProcessingComplete,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle task completion signals from worker agents."""
+        self._step_starting.clear()  # Clear this event as soon as any task completes
+        agent_id_to_update = message.agent_id
+
+        async with self._tasks_condition:
+            if agent_id_to_update in self._pending_tasks_by_agent:
+                self._pending_tasks_by_agent[agent_id_to_update] -= 1
+                if self._pending_tasks_by_agent[agent_id_to_update] <= 0:
+                    del self._pending_tasks_by_agent[agent_id_to_update]
+
+                logger.info(
+                    f"Host noted TaskComplete from agent {agent_id_to_update} for role '{message.role}'. "
+                    f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
+                )
+                self._tasks_condition.notify_all()
+            else:
+                logger.warning(
+                    f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks."
+                )
+
+    @message_handler
+    async def handle_task_started(
+        self,
+        message: TaskProcessingStarted,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle task start signals from worker agents."""
+        agent_id_to_update = message.agent_id
+
+        async with self._tasks_condition:
+            self._pending_tasks_by_agent[agent_id_to_update] += 1
+            logger.info(
+                f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
+                f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
+            )
+
+    @message_handler
+    async def handle_flow_progress_update(
+        self,
+        message: FlowProgressUpdate,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle FlowProgressUpdate messages."""
+        logger.debug(f"Host {self.agent_name} received FlowProgressUpdate message. Ignoring.")
+        # Do nothing with progress updates received by the host
+
+    @message_handler
+    async def handle_agent_announcement(
+        self,
+        message: AgentAnnouncement,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentAnnouncement messages."""
+        logger.info(
+            f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: "
+            f"{message.announcement_type} - {message.status}"
+        )
+        await self.update_agent_registry(message)
+
+    @message_handler
+    async def handle_agent_trace(
+        self,
+        message: AgentTrace,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentTrace messages and add to conversation history."""
+        content_to_log = str(message.content)[:TRUNCATE_LEN]
+        await self._model_context.add_message(
+            AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+        )
+
+    @message_handler
+    async def handle_manager_message(
+        self,
+        message: ManagerMessage,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ManagerMessage for user confirmations and feedback."""
+        logger.info(f"Host {self.agent_name} received user input: {message}")
+        self._user_confirmation = message
+        self._user_confirmation_received.set()
+
+        if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
+            logger.info(
+                f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
+            )
+            self.human_in_loop = message.human_in_loop
+
+        content = getattr(message, "content", getattr(message, "params", None))
+        if content and not str(content).startswith(COMMAND_SYMBOL):
+            content_to_log = str(content)[:TRUNCATE_LEN]
+            # store in user feedback separately as well
+            self._user_feedback.append(content)
+            # Add to conversation history
+            await self._model_context.add_message(
+                UserMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+            )
 
     # --- Agent Registry Methods ---
 
@@ -141,33 +262,38 @@ class HostAgent(Agent):
 
             # Invalidate cache
             self._registry_summary_cache = None
-        
+
         # Rebuild tool schemas when agents announce (for LLM-based hosts)
         await self._build_agent_tools()
 
     async def _build_agent_tools(self) -> None:
-        """Build tool schemas from agent-provided tool definitions.
+        """Build tool objects from agent-provided tool definitions.
         
-        This method collects tool schemas from agents for LLM-based decision making.
-        Base HostAgent doesn't use these, but subclasses like StructuredLLMHostAgent do.
+        This method collects tool objects from agents for LLM-based decision making.
+        All tool definitions should already be AgentToolDefinition objects.
         """
-        tool_schemas = []
+        tool_objects = []
 
-        # Collect tool schemas from agent announcements
+        # Collect tool objects from agent announcements
         for agent_id, announcement in self._agent_registry.items():
             agent_role = announcement.agent_config.role
 
             if tool_def := announcement.tool_definition:
-                # Store the schema directly - no wrapping needed
-                tool_schemas.append(tool_def)
-                logger.debug(f"Registered tool schema: {tool_def['name']} for {agent_role}")
+                # Should always be a Tool object (AgentToolDefinition)
+                if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
+                    # It's a Tool object, store it directly
+                    tool_objects.append(tool_def)
+                    logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
+                else:
+                    # This shouldn't happen with the new architecture
+                    logger.error(f"Expected Tool object but got {type(tool_def)} for {agent_role}")
 
-        # Store schemas for LLM-based hosts
-        self._tool_schemas = tool_schemas
-        
+        # Store tool objects for LLM-based hosts
+        self._tools = tool_objects
+
         logger.info(
-            f"Host {self.agent_name} collected {len(tool_schemas)} tool schemas "
-            f"from {len(self._agent_registry)} announced agents"
+            f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
+            f"from {len(self._agent_registry)} agents"
         )
 
     def create_registry_summary(self) -> dict[str, Any]:
@@ -227,136 +353,7 @@ class HostAgent(Agent):
             **kwargs
         )
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken,
-        source: str = "",
-        public_callback: Callable,
-        **kwargs: Any,
-    ) -> None:
-        """Listen to messages in the group chat and maintain conversation history."""
-        # Log messages to our local context cache, but truncate them
-        content_to_log = None
-        # Allow both UserMessage and AssistantMessage types
-        msg_type: type[UserMessage | AssistantMessage] = UserMessage
 
-        if isinstance(message, (AgentTrace)):
-            content_to_log = str(message.content)[:TRUNCATE_LEN]
-            msg_type = AssistantMessage
-        elif isinstance(message, ManagerMessage):
-            logger.info(f"Host {self.agent_name} received user input: {message}")
-            self._user_confirmation = message
-            self._user_confirmation_received.set()
-
-            if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
-                logger.info(
-                    f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
-                )
-                self.human_in_loop = message.human_in_loop
-
-            content = getattr(message, "content", getattr(message, "params", None))
-            if content and not str(content).startswith(COMMAND_SYMBOL):
-                content_to_log = str(content)[:TRUNCATE_LEN]
-                # store in user feedback separately as well
-                self._user_feedback.append(content)
-
-        # Do not log TaskProgressUpdate messages to history
-        elif isinstance(message, FlowProgressUpdate):
-            logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
-            return  # Do not proceed to log
-
-        if content_to_log:
-            await self._model_context.add_message(msg_type(content=content_to_log, source=source))
-
-    async def _handle_events(
-        self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken,
-        public_callback: Callable,
-        **kwargs: Any,
-    ) -> OOBMessages | None:
-        """Handle special events and messages."""
-        logger.debug(f"Host {self.agent_name} handling event: {type(message).__name__}")
-
-        # Handle task completion signals from worker agents.
-        if isinstance(message, TaskProcessingComplete):
-            self._step_starting.clear()  # Clear this event as soon as any task completes? Revisit this logic.
-            agent_id_to_update = message.agent_id
-            async with self._tasks_condition:
-                if agent_id_to_update in self._pending_tasks_by_agent:
-                    # Check if the dictionary is empty *before* potentially making it empty
-                    was_empty_before_update = not self._pending_tasks_by_agent
-
-                    self._pending_tasks_by_agent[agent_id_to_update] -= 1
-                    log_prefix = f"Host received TaskComplete from {message.agent_id} (ID: {agent_id_to_update}) for role '{message.role}'."
-
-                    # If count reaches zero, remove the agent from pending
-                    if self._pending_tasks_by_agent[agent_id_to_update] <= 0:  # Use <= 0 to handle potential negative counts from errors
-                        if self._pending_tasks_by_agent[agent_id_to_update] < 0:
-                            logger.warning(
-                                f"{log_prefix} Task count went negative ({self._pending_tasks_by_agent[agent_id_to_update]}). This might indicate an issue."
-                            )
-                        del self._pending_tasks_by_agent[agent_id_to_update]
-                        logger.debug(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
-                    else:
-                        logger.debug(
-                            f"{log_prefix} "
-                            f"Agent {agent_id_to_update} has {self._pending_tasks_by_agent[agent_id_to_update]} remaining tasks. "
-                            f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
-                        )
-
-                    # If the entire dictionary is now empty AND it was NOT empty before this update, notify waiters
-                    if not self._pending_tasks_by_agent and not was_empty_before_update:
-                        logger.info("All pending tasks completed across all agents. Notifying waiters.")
-                        self._tasks_condition.notify_all()
-
-                    # Log remaining pending tasks regardless
-                    logger.debug(f"Current pending tasks: {dict(self._pending_tasks_by_agent)}")
-
-                else:
-                    logger.warning(
-                        f"Host received TaskComplete from agent {message.agent_id} (ID: {agent_id_to_update}) for role '{message.role}', "
-                        "but this agent ID was not tracked with pending tasks.",
-                    )
-
-        elif isinstance(message, TaskProcessingStarted):
-            agent_id = message.agent_id
-            async with self._tasks_condition:
-                self._pending_tasks_by_agent[agent_id] += 1
-                logger.debug(
-                    f"Host noted TaskStarted from agent {agent_id} for role '{message.role}'. "
-                    f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
-                )
-
-        # Handle conductor request to start running the flow
-        elif isinstance(message, ConductorRequest):
-            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest with {len(message.participants)} participants: {list(message.participants.keys())}")
-            logger.debug(f"[HostAgent._handle_events] ConductorRequest content: {message.model_dump_json(indent=2)}")
-            if self._conductor_task and not self._conductor_task.done():
-                logger.warning(f"[HostAgent._handle_events] Host {self.agent_name} received ConductorRequest but task is already running.")
-                return None
-            self._conductor_task = "starting"  # Mark as starting to avoid re-entrance -- this is a temporary state
-            # If no task is running, start a new one
-            logger.info(f"[HostAgent._handle_events] Host {self.agent_name} starting new conductor task.")
-            self._conductor_task = asyncio.create_task(self._run_flow(message=message))
-            logger.debug(f"[HostAgent._handle_events] Conductor task created: {self._conductor_task}")
-
-        # Ignore FlowProgressUpdate messages received by the host itself
-        elif isinstance(message, FlowProgressUpdate):
-            logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
-            # Do nothing with progress updates received by the host
-
-        # Handle AgentAnnouncement messages
-        elif isinstance(message, AgentAnnouncement):
-            logger.info(
-                f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: {message.announcement_type} - {message.status}"
-            )
-            await self.update_agent_registry(message)
-            # Don't add to conversation history
-            return
-        return None  # Explicitly return None if no other value is returned
 
     async def request_user_confirmation(self, step: StepRequest) -> None:
         """Request confirmation from the user for the next step.
@@ -379,7 +376,7 @@ class HostAgent(Agent):
         )
         # This is callback to groupchat, because we're the host agent right now.
         # Our message goes to the groupchat and then gets picked up by the UI.
-        await self.callback_to_groupchat(confirmation_request)
+        await self._publish(confirmation_request)
 
     async def _wait_for_user(self, step) -> bool:
         """Wait for user confirmation before proceeding with the next step.
@@ -389,7 +386,7 @@ class HostAgent(Agent):
 
         """
         logger.info(f"Host {self.agent_name}: _wait_for_user called for step {step.role}")
-        max_tries = self.max_user_confirmation_time // 60
+        max_tries = self._max_user_confirmation_time // 60
         for _ in range(max_tries):
             logger.info(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
             try:
@@ -406,7 +403,7 @@ class HostAgent(Agent):
             return False
         msg = "User did not respond to confirm step in time. Ending flow."
         logger.error(msg)
-        await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+        await self._publish(StepRequest(role=END, content=msg))
         return False
 
     async def _report_progress_periodically(self, interval: int = 10):
@@ -432,7 +429,7 @@ class HostAgent(Agent):
                             message="Flow currently idle",
                         )
                     logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
-                    await self.callback_to_groupchat(progress_message)
+                    await self._publish(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
         except Exception as e:
@@ -453,13 +450,14 @@ class HostAgent(Agent):
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
-                    timeout=self.max_wait_time,
+                    timeout=self._max_wait_time,
                 )
                 return True
         except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
             msg = (
-                f"Timeout waiting for task completion condition. " f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
+                f"Timeout waiting for task completion condition. "
+                f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self._max_wait_time}s."
             )
             logger.warning(msg)
             self._step_starting.clear()  # Reset the event to allow for new steps
@@ -534,7 +532,7 @@ class HostAgent(Agent):
                 msg = "Host received ConductorRequest with no participants."
                 logger.error(f"{msg} Aborting.")
                 # Send an END message with the error
-                await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+                await self._publish(StepRequest(role=END, content=msg))
                 raise FatalError(msg)
 
             # Store participant tools if provided
@@ -545,27 +543,27 @@ class HostAgent(Agent):
             # Extract initial query/prompt from ConductorRequest if available
             # Parse inputs using the typed model for cleaner extraction
             from buttermilk._core.contract import HostInputModel
-            
+
             # Store the raw inputs for backward compatibility
             self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
-            
+
             try:
                 # Parse inputs into our typed model
                 if isinstance(self._initial_inputs, dict):
                     host_inputs = HostInputModel(**self._initial_inputs)
                 else:
                     host_inputs = HostInputModel()
-                
+
                 # Extract fields cleanly
                 self._initial_query = host_inputs.initial_query
                 self._initial_parameters = host_inputs.parameters
-                
+
                 if self._initial_query:
                     logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-                
+
                 if self._initial_parameters:
                     logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
-                    
+
             except Exception as e:
                 # If parsing fails, fall back to empty values
                 logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
@@ -573,7 +571,7 @@ class HostAgent(Agent):
                 self._initial_parameters = {}
 
             # Rerun initialization to set up the group chat
-            await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
+            await self.initialize()
 
             # Start the periodic progress reporter task
             self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
@@ -611,7 +609,7 @@ class HostAgent(Agent):
                 message="Flow completed",
             )
             logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
-            await self.callback_to_groupchat(final_progress_message)
+            await self._publish(final_progress_message)
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")
@@ -670,7 +668,7 @@ class HostAgent(Agent):
             await asyncio.sleep(10)
         elif step.role == END:
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
-            await self.callback_to_groupchat(step)
+            await self._publish(step)
         else:
             if step.role in self._participants:
                 # Signal that we expect at least one response/task start for this step
@@ -679,18 +677,17 @@ class HostAgent(Agent):
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
-                logger.debug(f"Host executing MANAGER step without setting _step_starting: {step.role}")
                 # Convert StepRequest to UIMessage for frontend display
                 ui_message = UIMessage(
                     content=step.content or "What would you like to do?",
                     options=None,  # No specific options, just free text response
                 )
-                await self.callback_to_groupchat(ui_message)
+                await self._publish(ui_message)
                 return  # Don't send the StepRequest itself
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 
-            await self.callback_to_groupchat(step)
+            await self._publish(step)
 
     async def _process(
         self,
@@ -706,7 +703,7 @@ class HostAgent(Agent):
         """
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
         return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
-    
+
     async def _route_tool_calls_to_agents(
         self,
         tool_calls: list[Any],  # FunctionCall objects
@@ -717,14 +714,30 @@ class HostAgent(Agent):
         to convert tool calls into StepRequests for the appropriate agents.
         """
         import json
-        
+
         for call in tool_calls:
             # Find which agent handles this tool
             agent_role = None
-            for agent_id, announcement in self._agent_registry.items():
-                if announcement.tool_definition and announcement.tool_definition['name'] == call.name:
-                    agent_role = announcement.agent_config.role
-                    break
+
+            # First check if it's a participant "ask_" tool
+            if call.name.startswith("ask_"):
+                # Extract role from tool name (e.g., "ask_zotero_researcher" -> "ZOTERO_RESEARCHER")
+                role_part = call.name[4:].upper()  # Remove "ask_" prefix and uppercase
+                # Check if this role exists in our participants
+                for participant_role in self._participants:
+                    if participant_role.upper() == role_part:
+                        agent_role = participant_role
+                        break
+
+            # If not found, check agent announcements for explicit tool definitions
+            if not agent_role:
+                for agent_id, announcement in self._agent_registry.items():
+                    tool_def = announcement.tool_definition
+                    if tool_def and hasattr(tool_def, 'name'):
+                        # It's a Tool object (AgentToolDefinition)
+                        if tool_def.name == call.name:
+                            agent_role = announcement.agent_config.role
+                            break
 
             if not agent_role:
                 logger.warning(f"No agent found for tool: {call.name}")
@@ -737,24 +750,33 @@ class HostAgent(Agent):
                 logger.error(f"Failed to parse tool arguments: {call.arguments}")
                 continue
 
-            # Create StepRequest for this tool call
-            step_request = StepRequest(
-                role=agent_role,
-                inputs=arguments,
-                metadata={"tool_name": call.name, "tool_call_id": call.id}
-            )
+            # Handle "ask_" tools specially - extract the request content
+            if call.name.startswith("ask_") and "request" in arguments:
+                # For ask_ tools, the content is in the "request" field
+                step_request = StepRequest(
+                    role=agent_role,
+                    content=arguments["request"],
+                    metadata={"tool_name": call.name, "tool_call_id": call.id}
+                )
+            else:
+                # For other tools, pass arguments as inputs
+                step_request = StepRequest(
+                    role=agent_role,
+                    inputs=arguments,
+                    metadata={"tool_name": call.name, "tool_call_id": call.id}
+                )
 
             # Create a more descriptive log message
             tool_desc = self._describe_tool_call(call.name, arguments)
             logger.info(f"Host routing to {agent_role}: {tool_desc}")
-            
+
             # Queue it if we have a queue
             if hasattr(self, '_proposed_step'):
                 await self._proposed_step.put(step_request)
 
             # Send it out regardless
-            await self.callback_to_groupchat(step_request)
-    
+            await self._publish(step_request)
+
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
         
@@ -790,6 +812,6 @@ class HostAgent(Agent):
                 if key not in ["metadata", "context", "options"]:
                     val_str = str(value)
                     return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
-            
+
             # Fallback
             return f"{tool_name}({len(arguments)} args)"

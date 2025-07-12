@@ -226,7 +226,7 @@ class FetchRecord(ToolConfig):
         raise ProcessingError("Record not found, and no URI or ID was effectively specified for the fetch attempt.")
 
 
-class FetchAgent(FetchRecord, Agent):
+class FetchAgent(Agent):
     """An agent that fetches records, either as a tool or through direct processing.
 
     This agent combines the record-fetching capabilities of `FetchRecord` (making
@@ -243,6 +243,7 @@ class FetchAgent(FetchRecord, Agent):
     Attributes:
         id (str): A unique identifier for the agent instance, typically prefixed
             with "fetch_record_". Defaults to a generated ID.
+        _fetch_tool (FetchRecord): Internal FetchRecord instance for fetching functionality.
 
     """
 
@@ -250,6 +251,13 @@ class FetchAgent(FetchRecord, Agent):
         default_factory=lambda: f"fetch_record_{uuid()[:4]}",
         description="Unique identifier for the FetchAgent instance.",
     )
+    _fetch_tool: FetchRecord = pydantic.PrivateAttr(default=None)
+
+    def __init__(self, **data):
+        """Initialize the FetchAgent with FetchRecord tool."""
+        super().__init__(**data)
+        # Initialize the FetchRecord tool
+        self._fetch_tool = FetchRecord()
 
     async def _listen(
         self,
@@ -285,17 +293,17 @@ class FetchAgent(FetchRecord, Agent):
         if isinstance(message, ManagerMessage):
             if message.content:
                 # Check if the message is a command
-                match = self._pat.search(message.content)
+                match = self._fetch_tool._pat.search(message.content)
                 if match:
                     # Extract the record_id or URL from the message
                     record_id = match.group(1)
                     uri = match.group(2)
                     if uri:
-                        result = await self.fetch(uri=uri)
+                        result = await self._fetch_tool.fetch(uri=uri)
                     elif record_id:
-                        result = await self.fetch(record_id=record_id)
+                        result = await self._fetch_tool.fetch(record_id=record_id)
                 elif uri := extract_url(message.content):
-                    result = await self.fetch(uri=uri)
+                    result = await self._fetch_tool.fetch(uri=uri)
 
         if result and isinstance(result, Record):
             # output = AgentOutput(agent_id=self.agent_id,
@@ -311,10 +319,19 @@ class FetchAgent(FetchRecord, Agent):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                result = await self.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
+                result = await self._fetch_tool.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
 
         if result:
-            return result
+            # Wrap the Record in an AgentOutput
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=result,
+                metadata=result.metadata if hasattr(result, 'metadata') else {},
+            )
 
-        # Return an ErrorEvent instead of None
-        return ErrorEvent(source=self.id, content="No result found in _process")
+        # Return an ErrorEvent wrapped in AgentOutput
+        error = ErrorEvent(source=self.id, content="No result found in _process")
+        return AgentOutput(
+            agent_id=self.agent_id,
+            outputs=error,
+        )

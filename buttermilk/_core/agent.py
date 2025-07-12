@@ -11,10 +11,11 @@ systems like Autogen.
 """
 
 import asyncio
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Union
+import warnings
 
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
@@ -22,11 +23,21 @@ from weave.trace.weave_client import Call, WeaveObject
 
 if TYPE_CHECKING:
     from buttermilk._core.tool_definition import AgentToolDefinition
+    from autogen_core import AgentRuntime
 
 from autogen_core.tools import Tool, ToolSchema
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from autogen_core import CancellationToken
+from autogen_core import (
+    CancellationToken,
+    message_handler,
+    RoutedAgent,
+    MessageContext,
+    AgentId,
+    AgentMetadata,
+    DefaultTopicId,
+    TopicId,
+)
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import (
@@ -42,6 +53,8 @@ from buttermilk._core.config import AgentConfig
 # Buttermilk core imports
 from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages,
 from buttermilk._core.context import agent_id_var
+from buttermilk._core.types import Record  # Data record structure
+from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
@@ -50,71 +63,25 @@ from buttermilk._core.contract import (
     ErrorEvent,
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     ManagerMessage,  # Messages from the user
-    OOBMessages,  # Union of Out-Of-Band control messages
+    OOBMessages,
+    StepRequest,  # Union of Out-Of-Band control messages
     TaskProcessingComplete,
     TaskProcessingStarted,  # Request to execute a specific step
+    FlowEvent,
+    FlowMessage,
+    AllMessages,
+    HeartBeat,
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.retry import RetryWrapper
-from buttermilk._core.types import Record  # Data record structure
-from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
-
-# --- Buttermilk Handler Decorator ---
-
-
-def buttermilk_handler(message_types: type):
-    """Decorator to mark methods within a Buttermilk `Agent` subclass as handlers
-    for specific message types (typically originating from Autogen via `AutogenAgentAdapter`).
-
-    The `AutogenAgentAdapter` inspects agent methods for the `_is_buttermilk_handler`
-    attribute and the `_buttermilk_handler_message_type` attribute set by this decorator
-    to determine which method should process an incoming message.
-
-    Args:
-        message_types: The specific message type (or tuple of types from
-            `buttermilk._core.contract` or other relevant modules) that the
-            decorated method is intended to handle.
-
-    Returns:
-        Callable: The decorated method, augmented with attributes used by the
-            `AutogenAgentAdapter` for dispatch.
-
-    """
-
-    def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
-        """Inner decorator function that attaches metadata to the method."""
-        # Attach metadata attributes to the original function object.
-        # The adapter will look for these attributes.
-        func._buttermilk_handler_message_type = message_types
-        func._is_buttermilk_handler = True  # Marker attribute
-
-        @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            """Async wrapper to preserve function signature and await the original method.
-
-            Args:
-                *args: Positional arguments passed to the original method.
-                **kwargs: Keyword arguments passed to the original method.
-
-            Returns:
-                Any: The result of the original decorated method.
-
-            """
-            # Simply await the original decorated function.
-            return await func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
 
 # --- Base Agent Class ---
 
 
-class Agent(AgentConfig, ABC):
-    """Abstract Base Class (ABC) for all Buttermilk agents.
+class Agent(RoutedAgent):
+    """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
 
     This class serves as the foundation for all specialized agents within the
     Buttermilk framework. It inherits its configuration structure from `AgentConfig`
@@ -151,45 +118,114 @@ class Agent(AgentConfig, ABC):
 
     """
 
+    # --- Autogen Core Protocol Implementation ---
+    _id: Union[AgentId, None] = None
+    _runtime: Union["AgentRuntime", None] = None
+    _config: AgentConfig
+
+    # --- Configuration properties (delegated to _config) ---
+    @property
+    def agent_id(self) -> str:
+        return self._config.agent_id
+
+    @property
+    def agent_name(self) -> str:
+        return self._config.agent_name
+
+    @property
+    def role(self) -> str:
+        return self._config.role
+
+    @property
+    def description(self) -> str:
+        return self._config.description
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return self._config.parameters or {}
+
+    @property
+    def inputs(self) -> Union[dict[str, str], None]:
+        return self._config.inputs
+
+    @property
+    def session_id(self) -> str:
+        """Get session_id from config if available."""
+        return getattr(self._config, 'session_id', '')
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize the Agent with configuration data and setup RoutedAgent."""
+        # Create AgentConfig from the data
+        self._config = AgentConfig(**data)
+
+        # Initialize RoutedAgent with description
+        RoutedAgent.__init__(self, description=self._config.description)
+
+        # Initialize private attributes
+        self._records = []
+        self._model_context = UnboundedChatCompletionContext()
+        self._data = KeyValueCollector()
+        self._heartbeat = asyncio.Queue(maxsize=1)
+
+    @property
+    def metadata(self) -> AgentMetadata:
+        """Metadata of the agent."""
+        if self._id is None:
+            raise RuntimeError("Agent not bound to runtime")
+        return AgentMetadata(key=self._id.key, type=self._id.type, description=self.description)
+
+    @property
+    def id(self) -> AgentId:
+        """ID of the agent."""
+        if self._id is None:
+            raise RuntimeError("Agent not bound to runtime")
+        return self._id
+
+    async def bind_id_and_runtime(self, id: AgentId, runtime: "AgentRuntime") -> None:
+        """Function used to bind an Agent instance to an `AgentRuntime`.
+
+        Args:
+            id (AgentId): ID of the agent.
+            runtime (AgentRuntime): AgentRuntime instance to bind the agent to.
+        """
+        self._id = id
+        self._runtime = runtime
+
+    async def save_state(self) -> Mapping[str, Any]:
+        """Save the state of the agent. The result must be JSON serializable."""
+        warnings.warn("save_state not implemented", stacklevel=2)
+        return {}
+
+    async def load_state(self, state: Mapping[str, Any]) -> None:
+        """Load in the state of the agent obtained from `save_state`.
+
+        Args:
+            state (Mapping[str, Any]): State of the agent. Must be JSON serializable.
+        """
+        warnings.warn("load_state not implemented", stacklevel=2)
+        pass
+
+    async def close(self) -> None:
+        """Called when the runtime is closed"""
+        await self.cleanup()
+
     # --- Internal State ---
-    _records: list[Record] = PrivateAttr(default_factory=list)
-    _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)
-    _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _heartbeat: asyncio.Queue[bool | None] = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
-    _announcement_callback: Callable[[Any], Awaitable[None]] | None = PrivateAttr(default=None)
+    _records: list[Record]
+    _model_context: ChatCompletionContext
+    _data: KeyValueCollector
+    _heartbeat: Union[asyncio.Queue[Union[bool, None]], asyncio.Queue]
+    _announcement_callback: Union[Callable[[Any], Awaitable[None]], None]
 
-    model_config = {  # Pydantic Model Configuration
-        "extra": "ignore",
-        "arbitrary_types_allowed": False,
-        "populate_by_name": True,
-        "validate_assignment": True,
-    }
-
-    @computed_field()
     @property
     def _cfg(self) -> AgentConfig:
-        """Provides a clean `AgentConfig` instance derived from this `Agent` instance.
-
-        This property dynamically constructs an `AgentConfig` object containing only
-        the fields defined in `AgentConfig`, effectively filtering out any additional
-        fields or methods present in the `Agent` subclass instance. It's useful
-        for obtaining a pure configuration snapshot of the agent.
+        """Provides the agent's configuration.
 
         Returns:
-            AgentConfig: An instance of `AgentConfig` populated with the
-                configuration values from the current agent.
-
+            AgentConfig: The agent's configuration instance.
         """
-        agent_config_fields = set(AgentConfig.model_fields.keys())
-        config_data = {
-            field: getattr(self, field)
-            for field in agent_config_fields
-            if hasattr(self, field)
-        }
-        return AgentConfig(**config_data)
+        return self._config
 
     # --- Core Methods (Lifecycle & Interaction) ---
-
 
     async def cleanup(self) -> None:
         """Cleanup agent resources and state.
@@ -263,42 +299,35 @@ class Agent(AgentConfig, ABC):
             "leaving": f"Agent {self.agent_name} leaving"
         }
 
-        # Get actual tool definitions from @tool decorated methods
+        # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
-        
-        # If agent has specific @tool methods, use the first one as primary tool
-        # Otherwise fall back to generic agent tool definition
-        if tool_definitions:
-            primary_tool = tool_definitions[0].to_autogen_tool_schema()
-        else:
-            primary_tool = self.get_autogen_tool_definition()
 
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
-            available_tools=self.get_available_tools(),
+            available_tools=[tool.name for tool in self.get_available_tools()],
             supported_message_types=self.get_supported_message_types(),
-            tool_definition=primary_tool,
+            tool_definition=tool_definitions,
             status=status,
             announcement_type=announcement_type,
             responding_to=responding_to,
-            source=self.agent_id
+            source=self.agent_id,
         )
 
     async def send_announcement(
         self,
-        public_callback: Callable[[Any], Awaitable[None]],
         announcement_type: Literal["initial", "response", "update"],
         status: Literal["joining", "active", "leaving"],
-        responding_to: str | None = None
+        responding_to: str | None = None,
+        topic_id: TopicId | None = None
     ) -> None:
         """Send an agent announcement message.
         
         Args:
-            public_callback: Callback to publish the announcement.
             announcement_type: Type of announcement.
             status: Current agent status.
             responding_to: Agent ID being responded to (for response type).
+            topic_id: Topic to publish to (defaults to DefaultTopicId).
         """
         try:
             announcement = self.create_announcement(
@@ -306,24 +335,28 @@ class Agent(AgentConfig, ABC):
                 status=status,
                 responding_to=responding_to
             )
-            await public_callback(announcement)
-            logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+            if hasattr(self, '_runtime') and self._runtime:
+                await self.publish_message(
+                    announcement, 
+                    topic_id=topic_id or DefaultTopicId(type="default")
+                )
+                logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
+            else:
+                logger.warning(f"Agent {self.agent_name} has no runtime to send announcement")
         except Exception as e:
             logger.warning(f"Agent {self.agent_name} failed to send announcement: {e}")
 
     async def initialize(
         self,
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
         **kwargs: Any
     ) -> None:
-        """Initializes agent state or resources and optionally sends joining announcement.
+        """Initializes agent state or resources and sends joining announcement.
 
         Called once by the orchestrator. Subclasses can override this method to perform 
         asynchronous setup tasks such as loading models, establishing connections to external 
         services, or initializing complex state.
         
         Args:
-            public_callback: Optional callback to publish announcement.
             **kwargs: Arbitrary keyword arguments that might be passed by the
                 orchestrator or calling context, providing additional setup parameters.
         """
@@ -331,25 +364,19 @@ class Agent(AgentConfig, ABC):
         # Set the agent ID in the context variable for tracing
         agent_id_var.set(self.agent_id)
 
-        # Store callback for cleanup if provided
-        if public_callback:
-            self._announcement_callback = public_callback
-            # Send joining announcement
-            await self.send_announcement(
-                public_callback=public_callback,
-                announcement_type="initial",
-                status="joining"
-            )
+        # Send joining announcement
+        await self.send_announcement(
+            announcement_type="initial",
+            status="joining"
+        )
 
     async def cleanup_with_announcement(self) -> None:
         """Cleanup agent and send leaving announcement."""
-        # Send leaving announcement if we have a stored callback
-        if hasattr(self, "_announcement_callback") and self._announcement_callback:
-            await self.send_announcement(
-                public_callback=self._announcement_callback,
-                announcement_type="update",
-                status="leaving"
-            )
+        # Send leaving announcement
+        await self.send_announcement(
+            announcement_type="update",
+            status="leaving"
+        )
 
         # Call base cleanup
         await self.cleanup()
@@ -397,8 +424,8 @@ class Agent(AgentConfig, ABC):
            subclasses to perform the agent's specific task.
         3. Ensuring the trace call is properly finished, regardless of success or failure.
 
-        This method is typically invoked by an orchestrator or an adapter (like
-        `AutogenAgentAdapter`) when a message needs to be processed by the agent.
+        This method is typically invoked by an orchestrator or the runtime
+        when a message needs to be processed by the agent.
         It is not intended to be called directly by user code in most cases;
         prefer using `invoke` for a more complete interaction pattern that includes
         callbacks and status updates.
@@ -450,7 +477,7 @@ class Agent(AgentConfig, ABC):
                     message.parent_call_id
                 )
             except Exception as e:  # Broad exception for Weave call retrieval
-                logger.warning(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
+                logger.error(f"Agent {self.agent_name}: Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
                 parent_call = weave.get_current_call()  # Fallback to current call if specified parent not found
         else:
             parent_call = weave.get_current_call()
@@ -463,7 +490,7 @@ class Agent(AgentConfig, ABC):
             child_call = bm.weave.create_call(op, inputs=message.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
-            if parent_call is not None:
+            if parent_call and child_call:
                 parent_call._children.append(child_call)  # Nest this call for tracing
             result = await self._process(message=message)
             result.call_id = child_call.id
@@ -476,12 +503,11 @@ class Agent(AgentConfig, ABC):
                 # Output is passed to bm.weave.finish_call if result is not None
                 bm.weave.finish_call(child_call, output=result or None, op=op)
 
-    async def invoke(
+    @message_handler
+    async def handle_invocation(
         self,
-        message: AgentInput,
-        public_callback: Callable[[Any], Awaitable[None]],
-        cancellation_token: CancellationToken | None = None,
-        **kwargs: Any,
+        message: Union[AgentInput, StepRequest],
+        ctx: MessageContext,
     ) -> AgentTrace:
         """Prepare input, calls the agent's core logic, and handles callbacks.
 
@@ -519,6 +545,13 @@ class Agent(AgentConfig, ABC):
         """
         is_error = False
 
+        # Define publishing helper
+        async def publish(msg: Any) -> None:
+            if hasattr(self, '_runtime') and self._runtime:
+                await self.publish_message(msg, topic_id=ctx.topic_id or DefaultTopicId(type="default"))
+            else:
+                logger.warning(f"No runtime available for publishing: {msg}")
+
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
@@ -526,7 +559,7 @@ class Agent(AgentConfig, ABC):
             logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
             raise ProcessingError(f"Agent {self.agent_name}: Error preparing input state: {e}") from e
 
-        await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
+        await publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
 
         try:
             result = await self.__call__(message=final_input)
@@ -558,15 +591,49 @@ class Agent(AgentConfig, ABC):
             )
 
         # Publish status update: Task Complete (including error if error)
-        await public_callback(
+        await publish(
             TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
         )
 
         logger.debug(f"Agent {self.agent_name} {self.agent_name} finished task {message}.")
 
-        # Publish the trace to the public callback
-        await public_callback(trace)
+        # Publish the trace
+        await publish(trace)
         return trace
+
+    async def invoke(
+        self,
+        message: Union[AgentInput, StepRequest],
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        **kwargs: Any,
+    ) -> AgentTrace:
+        """Public invoke method that delegates to the message handler.
+        
+        This method is kept for backwards compatibility and is called by external code.
+        It creates a MessageContext and delegates to the handle_invocation message handler.
+        """
+        # If we have a runtime, use the proper message handler routing
+        if hasattr(self, '_runtime') and self._runtime and hasattr(self, '_id') and self._id:
+            # Send the message through the runtime which will route it back to our handler
+            result = await self._runtime.send_message(
+                message,
+                sender=self._id,
+                recipient=self._id,
+                cancellation_token=cancellation_token,
+            )
+            return result
+        else:
+            # Fallback: Call the handler directly if no runtime available
+            ctx = MessageContext(
+                sender=AgentId(type=source or "unknown", key=source or "unknown"),
+                topic_id=DefaultTopicId(type="default"),
+                is_rpc=True,
+                cancellation_token=cancellation_token or CancellationToken(),
+            )
+
+            result = await self.handle_invocation(message, ctx)
+            return result
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
@@ -607,14 +674,11 @@ class Agent(AgentConfig, ABC):
         """
         raise NotImplementedError("Subclasses must implement the _process method.")
 
-    async def _listen(
+    @message_handler
+    async def handle_groupchat_message(
         self,
         message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken,
-        source: str = "",
-        public_callback: Callable[[Any], Awaitable[None]],
-        **kwargs: Any,
+        ctx: MessageContext,
     ) -> None:
         """Handle passively received messages from other agents or sources.
 
@@ -639,7 +703,17 @@ class Agent(AgentConfig, ABC):
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         """
-        logger.debug(f"Agent {self.agent_name} received message from '{source}' via _listen.")
+        # Extract source from sender
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+
+        # Define publishing helper for handle_groupchat_message
+        async def publish(msg: Any) -> None:
+            if hasattr(self, '_runtime') and self._runtime:
+                await self.publish_message(msg, topic_id=ctx.topic_id or DefaultTopicId(type="default"))
+            else:
+                logger.warning(f"No runtime available for publishing: {msg}")
+
+        logger.debug(f"Agent {self.agent_name} received message from '{source}' via handle_groupchat_message.")
 
         # Handle Record type messages directly
         if isinstance(message, Record):
@@ -714,52 +788,97 @@ class Agent(AgentConfig, ABC):
                 message.agent_config.role in ["HOST", "ORCHESTRATOR"]):
                 # Respond to host announcement
                 await self.send_announcement(
-                    public_callback=public_callback,
                     announcement_type="response",
                     status="active",
-                    responding_to=message.agent_config.agent_id
+                    responding_to=message.agent_config.agent_id,
+                    topic_id=ctx.topic_id
                 )
                 logger.debug(f"Agent {self.agent_name} responded to host announcement from {message.agent_config.agent_id}")
 
-    async def _handle_events(
+    async def _listen(
         self,
-        message: OOBMessages,
+        message: GroupchatMessageTypes,
+        *,
         cancellation_token: CancellationToken | None = None,
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
+        source: str = "",
         **kwargs: Any,
-    ) -> OOBMessages | None:
-        """Handles Out-Of-Band (OOB) control messages.
+    ) -> None:
+        """Backwards compatibility wrapper for _listen."""
+        # Create a MessageContext
+        ctx = MessageContext(
+            sender=AgentId(type=source or "unknown", key=source or "unknown"),
+            topic_id=DefaultTopicId(type="default"),
+            is_rpc=False,
+            cancellation_token=cancellation_token or CancellationToken(),
+        )
 
-        This method is intended for processing messages that are not part of the
-        standard request-response flow of agent processing, but rather control
-        signals or special events. Examples include requests to reset the agent,
-        status queries, or other administrative commands.
+        await self.handle_groupchat_message(message, ctx)
 
-        Subclasses can override this method to react to specific types of OOB
-        messages relevant to their functionality. The base implementation is a
-        no-op for most messages but serves as a hook for future extensions or
-        specific agent needs.
+    # @message_handler
+    # async def handle_control_message(
+    #     self,
+    #     message: OOBMessages,
+    #     ctx: MessageContext,
+    # ) -> Union[OOBMessages, None]:
+    #     """Handles Out-Of-Band (OOB) control messages.
 
-        Args:
-            message: The Out-Of-Band (`OOBMessages`) message received.
-            cancellation_token: An optional `CancellationToken` to signal if the
-                event handling should be aborted.
-            public_callback: An optional asynchronous callback for publishing
-                general responses or events.
-            **kwargs: Additional keyword arguments that might be passed by the caller.
+    #     This method is intended for processing messages that are not part of the
+    #     standard request-response flow of agent processing, but rather control
+    #     signals or special events. Examples include requests to reset the agent,
+    #     status queries, or other administrative commands.
 
-        Returns:
-            OOBMessages | None: An optional `OOBMessage` as a direct response to
-            the handled event, or `None` if no direct response is generated.
+    #     Subclasses can override this method to react to specific types of OOB
+    #     messages relevant to their functionality. The base implementation is a
+    #     no-op for most messages but serves as a hook for future extensions or
+    #     specific agent needs.
 
+    #     Args:
+    #         message: The Out-Of-Band (`OOBMessages`) message received.
+    #         ctx: The message context containing sender info and cancellation token.
+
+    #     Returns:
+    #         Union[OOBMessages, None]: An optional `OOBMessage` as a direct response to
+    #         the handled event, or `None` if no direct response is generated.
+
+    #     """
+    #     logger.debug(f"Agent {self.agent_name} received OOB event: {type(message).__name__}. Default handler is a no-op.")
+    #     # Example of how a subclass might handle a specific OOB message:
+    #     # if isinstance(message, YourSpecificOOBMessage):
+    #     #     # Perform some action
+    #     #     await self.on_reset(cancellation_token) # e.g., reset on a specific signal
+    #     #     return OOBResponse(...) # Optionally return a response
+    #     return None  # Default: no direct response
+
+    @message_handler
+    async def handle_step_request(
+        self,
+        message: StepRequest,
+        ctx: MessageContext,
+    ) -> Union[AgentTrace, None]:
+        """Handle StepRequest messages specifically.
+        
+        StepRequest is a subclass of AgentInput, so we delegate to handle_invocation.
+        This handler ensures StepRequests directed to this agent are properly handled.
         """
-        logger.debug(f"Agent {self.agent_name} received OOB event: {type(message).__name__}. Default handler is a no-op.")
-        # Example of how a subclass might handle a specific OOB message:
-        # if isinstance(message, YourSpecificOOBMessage):
-        #     # Perform some action
-        #     await self.on_reset(cancellation_token) # e.g., reset on a specific signal
-        #     return OOBResponse(...) # Optionally return a response
-        return None  # Default: no direct response
+        # Only handle if the role matches this agent's role
+        if message.role == self.role:
+            return await self.handle_invocation(message, ctx)
+
+    @message_handler
+    async def handle_heartbeat(
+        self,
+        message: HeartBeat,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle heartbeat messages.
+        
+        Puts the heartbeat signal into the agent's internal heartbeat queue.
+        """
+        try:
+            self._heartbeat.put_nowait(message.go_next)
+        except asyncio.QueueFull:
+            # If the agent isn't processing heartbeats quickly enough.
+            logger.debug(f"Heartbeat queue full for agent {self.agent_name}. Agent may be busy or stuck.")
 
     # --- Helper Methods ---
 
@@ -880,80 +999,41 @@ class Agent(AgentConfig, ABC):
     def get_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Generate structured tool definitions for this agent.
         
-        This method extracts tool definitions from methods decorated with
-        @tool or @MCPRoute decorators. It enables agents to automatically
-        expose their capabilities as structured tool definitions that can
-        be used by LLMs and MCP servers.
+        This method creates a tool definition for the agent's primary
+        processing capability, allowing it to be invoked as a tool
+        in the Autogen groupchat.
         
         Returns:
             List of AgentToolDefinition objects representing this agent's tools.
         """
-        from buttermilk._core.mcp_decorators import extract_tool_definitions
-        return extract_tool_definitions(self)
+        from buttermilk._core.tool_definition import AgentToolDefinition
 
-    def get_autogen_tool_definition(self) -> ToolSchema:
-        """Return autogen-compatible tool definition for this agent.
-        
-        This creates a standard tool definition that allows the agent to be
-        invoked as a tool by other agents. The tool definition follows 
-        Autogen's format and can be used by LLM hosts for structured tool calling.
-        
-        Returns:
-            ToolSchema: Autogen-compatible tool definition with name, description, 
-                        and parameters.
-        """
-        return ToolSchema(
-            name=f"call_{self.role.lower()}",
-            description=self._get_tool_description(),
-            parameters=self._get_agent_input_schema()
+        # Create a tool definition for the agent's main processing capability
+        tool_def = AgentToolDefinition(
+            name=f"{self.agent_name}_call",
+            description=self.description or f"Process requests using {self.agent_name} agent",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "inputs": {
+                        "type": "object",
+                        "description": "Input data for the agent to process"
+                    },
+                    "context": {
+                        "type": "object", 
+                        "description": "Shared context across agents",
+                        "default": {}
+                    }
+                },
+                "required": ["inputs"]
+            },
+            output_schema={
+                "type": "object",
+                "description": "Agent processing results"
+            }
         )
 
-    def _get_tool_description(self) -> str:
-        """Get the tool description for this agent.
-        
-        This creates a description that explains not just what the agent does,
-        but when it should be used. Agents can override this method to provide
-        more specific guidance for LLMs.
-        
-        Returns:
-            str: Description suitable for LLM tool selection.
-        """
-        # Check if agent has a tool-specific description in parameters
-        if hasattr(self, 'parameters') and self.parameters:
-            tool_desc = self.parameters.get('tool_description')
-            if tool_desc:
-                return tool_desc
-
-        # Use agent description if available, otherwise create default
-        if self.description:
-            # Enhance the description with usage guidance
-            return f"Use this tool when you need to: {self.description.lower()}. " \
-                   f"Calls the {self.role} agent to handle {self.role.lower()}-specific tasks."
-        else:
-            # Fallback description
-            return f"Use this tool to invoke the {self.role} agent for {self.role.lower()}-related tasks and processing."
-
-    def _get_agent_input_schema(self) -> dict[str, Any]:
-        """Get input schema for this agent when used as a tool.
-        
-        Returns a JSON schema that describes what inputs this agent expects.
-        Agents can override this method to provide custom schemas.
-        
-        Returns:
-            dict: JSON schema for agent inputs.
-        """
-        # Check if agent has defined a custom input model class
-        if hasattr(self, 'input_model_class') and issubclass(self.input_model_class, BaseModel):
-            # Use Pydantic's built-in schema generation
-            return self.input_model_class.model_json_schema()
-        
-        # Check if agent has defined custom schema directly
-        if hasattr(self, 'input_schema'):
-            return self.input_schema
-
-        # Default to BaseAgentInputModel schema
-        from buttermilk._core.contract import BaseAgentInputModel
-        return BaseAgentInputModel.model_json_schema()
+        return [tool_def]
 
     async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
         """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
@@ -982,7 +1062,7 @@ class Agent(AgentConfig, ABC):
             # First, try direct method name match
             if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
                 method = getattr(self, tool_name)
-                if hasattr(method, "_tool_metadata") or hasattr(method, "_mcp_route"):
+                if hasattr(method, "_tool_metadata"):
                     logger.debug(
                         f"Agent {self.agent_name} executing tool {tool_name} "
                         f"with inputs: {request.inputs}"

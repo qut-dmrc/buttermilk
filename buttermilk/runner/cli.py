@@ -148,6 +148,7 @@ def main(conf: DictConfig) -> None:
                 log_level=str(conf.get("log_level", "info")).lower(),
                 access_log=True,  # Enable access logs
                 workers=int(conf.get("workers", 1)),  # Number of worker processes
+                log_config=None,  # Preserve existing logging configuration
             )
             api_server = uvicorn.Server(config=uvicorn_config)
             logger.info(f"FastAPI server starting on http://{uvicorn_config.host}:{uvicorn_config.port}")

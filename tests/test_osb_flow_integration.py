@@ -64,7 +64,7 @@ class MockRAGAgent(Agent):
 
 class TestOSBFlowIntegration:
     """Test OSB flow with new tool definition system."""
-    
+
     @pytest.fixture
     def mock_osb_agents(self):
         """Create mock OSB agents."""
@@ -90,8 +90,8 @@ class TestOSBFlowIntegration:
                 role="EXPLORER"
             )
         }
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_osb_host_initialization(self, mock_osb_agents):
         """Test OSB host initializes with agent tools."""
         host = StructuredLLMHostAgent(
@@ -99,7 +99,7 @@ class TestOSBFlowIntegration:
             model_name="test-model",
             role="ASSISTANT"
         )
-        
+
         # Setup host
         host._participants = mock_osb_agents
         host.tools = {}
@@ -108,25 +108,25 @@ class TestOSBFlowIntegration:
             "template": "host_structured_tools"
         }
         host.callback_to_groupchat = AsyncMock()
-        
+
         # Initialize
         await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
-        
+
         # Verify tools were registered
         tool_names = [tool.name for tool in host._tools_list]
-        
+
         # Each agent should have 2 tools (search_osb, analyze_findings)
         # Total: 4 agents * 2 tools = 8 tools
         assert len(host._tools_list) == 8
-        
+
         # Check specific tools
         assert "researcher.search_osb" in tool_names
         assert "researcher.analyze_findings" in tool_names
         assert "policy_analyst.search_osb" in tool_names
         assert "fact_checker.search_osb" in tool_names
         assert "explorer.search_osb" in tool_names
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_osb_tool_invocation(self, mock_osb_agents):
         """Test invoking OSB agent tools through host."""
         host = StructuredLLMHostAgent(
@@ -134,34 +134,34 @@ class TestOSBFlowIntegration:
             model_name="test-model",
             role="ASSISTANT"
         )
-        
+
         # Setup
         host._participants = mock_osb_agents
         host.tools = {}
         host.parameters = {"model": "test-model"}
         host.callback_to_groupchat = AsyncMock()
-        
+
         await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
-        
+
         # Find the researcher.search_osb tool
         search_tool = next(
             tool for tool in host._tools_list 
             if tool.name == "researcher.search_osb"
         )
-        
+
         # Invoke the tool
         await search_tool._func(query="test query", limit=5)
-        
+
         # Verify callback was called with StepRequest
         host.callback_to_groupchat.assert_called_once()
         step_request = host.callback_to_groupchat.call_args[0][0]
-        
+
         assert step_request.role == "RESEARCHER"
         assert step_request.inputs["tool"] == "search_osb"
         assert step_request.inputs["tool_inputs"]["query"] == "test query"
         assert step_request.inputs["tool_inputs"]["limit"] == 5
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_osb_multi_agent_coordination(self, mock_osb_agents):
         """Test coordinating multiple OSB agents."""
         host = StructuredLLMHostAgent(
@@ -169,81 +169,81 @@ class TestOSBFlowIntegration:
             model_name="test-model",
             role="ASSISTANT"
         )
-        
+
         # Setup
         host._participants = mock_osb_agents
         host.tools = {}
         host.parameters = {"model": "test-model", "template": "host_structured_tools"}
         host.callback_to_groupchat = AsyncMock()
-        
+
         await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
-        
+
         # Simulate calling multiple agents
         tools_to_call = [
             ("researcher.search_osb", {"query": "OSB case 123"}),
             ("policy_analyst.search_osb", {"query": "policy implications"}),
             ("fact_checker.analyze_findings", {"findings": [{"id": "1"}]})
         ]
-        
+
         for tool_name, inputs in tools_to_call:
             tool = next(t for t in host._tools_list if t.name == tool_name)
             await tool._func(**inputs)
-        
+
         # Verify all callbacks
         assert host.callback_to_groupchat.call_count == 3
-        
+
         # Check each call
         calls = host.callback_to_groupchat.call_args_list
-        
+
         # Researcher call
         assert calls[0][0][0].role == "RESEARCHER"
         assert calls[0][0][0].inputs["tool"] == "search_osb"
-        
+
         # Policy analyst call
         assert calls[1][0][0].role == "POLICY_ANALYST"
         assert calls[1][0][0].inputs["tool"] == "search_osb"
-        
+
         # Fact checker call
         assert calls[2][0][0].role == "FACT_CHECKER"
         assert calls[2][0][0].inputs["tool"] == "analyze_findings"
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_osb_flow_with_unified_requests(self, mock_osb_agents):
         """Test OSB flow using UnifiedRequests."""
         from buttermilk._core.tool_definition import UnifiedRequest
-        
+
         researcher = mock_osb_agents["RESEARCHER"]
-        
+
         # Test search tool via UnifiedRequest
         search_request = UnifiedRequest(
             target="researcher.search_osb",
             inputs={"query": "OSB unified test", "limit": 2}
         )
-        
+
         result = await researcher.handle_unified_request(search_request)
-        
+
         assert researcher.search_called
         assert result["query"] == "OSB unified test"
         assert len(result["results"]) == 2
         assert result["results"][0]["content"] == "OSB result 0 for OSB unified test"
-        
+
         # Test analyze tool
         analyze_request = UnifiedRequest(
             target="researcher.analyze_findings",
             inputs={"findings": result["results"]}
         )
-        
+
         analysis = await researcher.handle_unified_request(analyze_request)
-        
+
         assert researcher.analyze_called
         assert analysis["summary"] == "Analyzed 2 findings"
         assert len(analysis["key_insights"]) == 2
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_osb_backward_compatibility(self, mock_osb_agents):
         """Test OSB agents work with traditional AgentInput."""
         researcher = mock_osb_agents["RESEARCHER"]
-        
+
         # Traditional AgentInput
         agent_input = AgentInput(
             inputs={"query": "traditional OSB query"},
@@ -251,25 +251,25 @@ class TestOSBFlowIntegration:
             parameters={},
             records=[]
         )
-        
+
         result = await researcher._process(message=agent_input)
-        
+
         assert result.outputs["query"] == "traditional OSB query"
         assert result.outputs["agent"] == "researcher"
         assert len(result.outputs["results"]) == 1
-    
+
     def test_osb_tool_permissions(self, mock_osb_agents):
         """Test OSB tool permissions are properly set."""
         researcher = mock_osb_agents["RESEARCHER"]
         tools = researcher.get_tool_definitions()
-        
+
         # Find search_osb tool
         search_tool = next(t for t in tools if t.name == "search_osb")
-        
+
         # Verify permissions
         assert search_tool.permissions == ["read:osb"]
         assert search_tool.mcp_route == "/search"
-        
+
         # Analyze tool should have no special permissions
         analyze_tool = next(t for t in tools if t.name == "analyze_findings")
         assert analyze_tool.permissions == []

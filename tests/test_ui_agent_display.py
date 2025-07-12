@@ -15,7 +15,7 @@ from buttermilk.agents.ui.console import CLIUserAgent
 
 class TestUIAgentDisplay:
     """Test suite for UI display of agent announcements."""
-    
+
     @pytest.fixture
     def console_agent(self):
         """Create a CLIUserAgent for testing."""
@@ -25,7 +25,7 @@ class TestUIAgentDisplay:
         )
         agent._console = MagicMock(spec=Console)
         return agent
-    
+
     @pytest.fixture
     def sample_announcement(self):
         """Create a sample agent announcement."""
@@ -41,23 +41,23 @@ class TestUIAgentDisplay:
             announcement_type="initial",
             status="joining"
         )
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_announcement_formatting(self, console_agent, sample_announcement):
         """Test that agent announcements are properly formatted for display."""
         # Format the announcement
         formatted = console_agent._fmt_msg(sample_announcement, source="WORKER-worker123")
-        
+
         # Verify formatting
         assert formatted is not None
         assert isinstance(formatted, Text)
-        
+
         # Check that the text contains expected elements
         text_str = str(formatted)
         assert "joining" in text_str.lower()
         assert any(tool in text_str for tool in ["process", "analyze"])
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_ui_message_with_agent_summary(self, console_agent):
         """Test UIMessage with agent registry summary is displayed properly."""
         # Create UIMessage with agent summary and trigger word for detailed display
@@ -76,32 +76,32 @@ class TestUIAgentDisplay:
                 }
             }
         )
-        
+
         # Format the message
         formatted = console_agent._fmt_msg(ui_message, source="system")
-        
+
         # Verify formatting
         assert formatted is not None
         text_str = str(formatted)
         assert "AGENTS:" in text_str or "HOST" in text_str
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_announcement_display_in_listen(self, console_agent, sample_announcement):
         """Test that announcements are displayed when received via _listen."""
         # Track what was printed
         printed_messages = []
         console_agent._console.print = lambda msg: printed_messages.append(msg)
-        
+
         # Process announcement through _listen
         await console_agent._listen(
             message=sample_announcement,
             source="WORKER-worker123"
         )
-        
+
         # Verify something was printed (the formatted announcement)
         assert len(printed_messages) > 0
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_agent_status_colors(self, console_agent):
         """Test different status colors for agent announcements."""
         statuses = [
@@ -109,7 +109,7 @@ class TestUIAgentDisplay:
             ("active", "bright_blue"),
             ("leaving", "yellow")
         ]
-        
+
         for status, expected_color in statuses:
             announcement = AgentAnnouncement(
                 content=f"Agent is {status}",
@@ -117,18 +117,18 @@ class TestUIAgentDisplay:
                 announcement_type="update",
                 status=status
             )
-            
+
             formatted = console_agent._fmt_msg(announcement, source="TEST-123")
             assert formatted is not None
             # Note: Color verification would require deeper inspection of Text object
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_agent_list_command_display(self, console_agent):
         """Test display of agent list when requested."""
         # Mock console print
         printed_messages = []
         console_agent._console.print = lambda msg: printed_messages.append(msg)
-        
+
         # Create a UI message requesting agent list
         ui_msg = UIMessage(
             content="!agents",  # Command to list agents
@@ -147,14 +147,14 @@ class TestUIAgentDisplay:
                 }
             }
         )
-        
+
         # Display the message
         await console_agent.callback_to_ui(ui_msg, source="system")
-        
+
         # Verify output was printed
         assert len(printed_messages) > 0
-    
-    @pytest.mark.asyncio  
+
+    @pytest.mark.anyio
     async def test_announcement_type_icons(self, console_agent):
         """Test different icons for announcement types."""
         announcement_types = [
@@ -162,7 +162,7 @@ class TestUIAgentDisplay:
             ("response", "↩️", "HOST-123"),  # response type needs responding_to
             ("update", "🔄", None)
         ]
-        
+
         for ann_type, expected_icon, responding_to in announcement_types:
             kwargs = {
                 "content": f"Announcement type: {ann_type}",
@@ -172,14 +172,14 @@ class TestUIAgentDisplay:
             }
             if responding_to:
                 kwargs["responding_to"] = responding_to
-                
+
             announcement = AgentAnnouncement(**kwargs)
-            
+
             # For now, just verify formatting works
             formatted = console_agent._fmt_msg(announcement, source="TEST-123")
             assert formatted is not None
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_tools_display_in_announcement(self, console_agent):
         """Test that available tools are displayed in announcements."""
         announcement = AgentAnnouncement(
@@ -189,16 +189,16 @@ class TestUIAgentDisplay:
             announcement_type="initial",
             status="joining"
         )
-        
+
         formatted = console_agent._fmt_msg(announcement, source="TOOLBOX-123")
         assert formatted is not None
-        
+
         # Convert to string for verification
         text_str = str(formatted)
         # At least some tools should be mentioned
         assert any(tool in text_str for tool in ["search", "extract", "analyze"])
-    
-    @pytest.mark.asyncio
+
+    @pytest.mark.anyio
     async def test_agent_registry_summary_formatting(self, console_agent):
         """Test formatting of complete agent registry summary."""
         # Create a comprehensive registry summary
@@ -222,11 +222,11 @@ class TestUIAgentDisplay:
                 "model": "llama-3"
             }
         }
-        
+
         ui_msg = UIMessage(
             content="Agent Status Report",
             agent_registry_summary=registry_summary
         )
-        
+
         formatted = console_agent._fmt_msg(ui_msg, source="system")
         assert formatted is not None

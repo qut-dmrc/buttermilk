@@ -1,4 +1,5 @@
-# Example: Create a new file, maybe buttermilk/_integration/autogen_adapter.py
+# DEPRECATED: This adapter is no longer needed as Agent now inherits from RoutedAgent directly.
+# This file is kept for reference but should not be used.
 import inspect
 from typing import Any
 

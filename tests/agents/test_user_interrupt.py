@@ -14,7 +14,7 @@ pytestmark = pytest.mark.skip(reason="Selector orchestrator no longer exists in 
 class TestUserInterrupt:
     """Tests for the user interrupt feature in the Selector orchestrator."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_user_interrupt_flow(self):
         """Test that the user interrupt flag causes a re-request of host suggestions."""
         # Create a selector instance with mocked components
@@ -62,7 +62,7 @@ class TestUserInterrupt:
         assert step_arg.role == "TEST"
         assert step_arg.prompt == "Test prompt 1"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_cli_user_agent_interrupt_response(self):
         """Test that the CLIUserAgent correctly sets the interrupt flag."""
         from buttermilk.agents.ui.console import CLIUserAgent

@@ -386,7 +386,7 @@ class AssistantAgentWrapper(Agent):
         )
 
     async def initialize(self, **kwargs) -> None:
-        """Initializes the agent. Called by `AutogenAgentAdapter` if used, or by Buttermilk's lifecycle.
+        """Initializes the agent. Called by the runtime or by Buttermilk's lifecycle.
 
         The core initialization of the underlying `AssistantAgent` (like setting up
         the LLM client, tools, and system message) is performed in the

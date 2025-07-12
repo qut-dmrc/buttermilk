@@ -3,6 +3,7 @@
 llm_host:
   role: HOST
   name: "Intelligent Coordinator"
+  description: "Intelligent coordinator that helps users with tasks by orchestrating other agents"
   agent_obj: StructuredLLMHostAgent
   parameters:
     model: ${llms.host}

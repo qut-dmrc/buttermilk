@@ -12,7 +12,7 @@ from typing import Literal  # For type hinting
 from pydantic import BaseModel, Field, computed_field  # Pydantic components
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
+from buttermilk._core.agent import AgentInput, AgentTrace  # Base types
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
@@ -175,7 +175,6 @@ class Judge(LLMAgent):
     # Initialization (`__init__`) is handled by the parent LLMAgent/Agent classes,
     # which accept AgentConfig detailing model, template, parameters, etc.
 
-    @buttermilk_handler(AgentInput)  # Decorator to mark this for handling AgentInput
     async def evaluate_content(
         self,
         message: AgentInput,

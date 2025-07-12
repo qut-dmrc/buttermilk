@@ -17,5 +17,5 @@ defaults:
 
 # Core flow configuration
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-name: "Enhanced RAG for Zotero DB"
+name: "Zotero RAG"
 description: "Answer academic questions from scholarly database"

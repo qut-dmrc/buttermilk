@@ -54,6 +54,7 @@ dependencies = [
     "google-cloud-bigquery<4.0.0,>=3.27.0",
     "google-generativeai<1.0.0,>=0.7.2",
     "uvicorn<1.0.0,>=0.34.0",
+    "fastapi<1.0.0,>=0.100.0",
     "google-cloud-pubsub<3.0.0,>=2.27.1",
     "bleach<7.0.0,>=6.2.0",
     "numpy>=1.26.4",
@@ -126,7 +127,6 @@ dev = [
     "ipykernel>=6.29.5",
     "buttermilk",
     "pytest-anyio>=0.0.0",
-    "pytest-asyncio>=1.0.0",
 ]
 ui = [
     "streamlit>=1.28.0",
@@ -208,7 +208,7 @@ addopts = [
     "--capture=fd", 
     "--continue-on-collection-errors",
     "--durations=10", 
-    # "-n 24", 
+    "-n 24", 
     "-v", # show name of tests 
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",

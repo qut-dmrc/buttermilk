@@ -10,7 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **PLAN**: Create documentation (issues/plans) with clear phases and validation criteria
 4. **TEST**: Write failing tests that capture expected behavior
 5. **IMPLEMENT**: Make minimal changes that solve the root cause
-6. **VALIDATE**: Ensure no regressions and all success criteria are met
+6. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
+7. **VALIDATE**: Ensure no regressions and all success criteria are met
 
 ### Red Flags That Indicate You're Moving Too Fast
 - Proposing config changes without understanding data flow

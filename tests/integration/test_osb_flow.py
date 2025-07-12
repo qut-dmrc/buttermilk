@@ -106,7 +106,7 @@ async def test_server():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_osb_hate_speech_query(test_server):
     """Test OSB flow with a hate speech policy query."""
     
@@ -158,7 +158,7 @@ async def test_osb_hate_speech_query(test_server):
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_osb_flow_with_followup(test_server):
     """Test OSB flow with follow-up questions."""
     
@@ -211,7 +211,7 @@ async def test_osb_flow_with_followup(test_server):
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio  
+@pytest.mark.anyio
 async def test_osb_error_handling(test_server):
     """Test OSB flow error handling with invalid input."""
     

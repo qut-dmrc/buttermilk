@@ -8,7 +8,12 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && node dist/test/run-tests.js",
+    "test:debug": "npm run build && node dist/test/run-tests.js --debug",
+    "test:real": "npm run build && node dist/test/real-server-test.js",
+    "test:real:debug": "npm run build && node dist/test/real-server-test.js --debug",
+    "test:real:verbose": "npm run build && node dist/test/real-server-test.js --verbose",
+    "dev": "tsc --watch"
   },
   "keywords": [],
   "author": "",

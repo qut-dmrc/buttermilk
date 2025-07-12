@@ -3,11 +3,12 @@ defaults:
   - local
   - run: api
   # - defaults/data_source
-  - llms@bm.llms: lite
+  - llms: lite
   # - storage@bm.storage: []
 
 bm:
   _target_: buttermilk._core.bm_init.BM
   name: ${run.name}
   job: ${run.job}
-  platform: 
+  platform:
+  llms: ${llms}
