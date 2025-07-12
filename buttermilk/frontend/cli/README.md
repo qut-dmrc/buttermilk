@@ -123,11 +123,11 @@ npm run build
 node dist/cli.js
 
 # With custom backend
-node dist/cli.js --host localhost --port 8080
-node dist/cli.js --url http://localhost:8080
+node dist/cli.js --host localhost --port 8000
+node dist/cli.js --url http://localhost:8000
 
 # Or use npx
-npx . --host localhost --port 8080
+npx . --host localhost --port 8000
 ```
 
 ### Development Mode

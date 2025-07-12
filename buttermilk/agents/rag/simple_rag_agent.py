@@ -6,7 +6,6 @@ This module provides a clean RAG agent that:
 - Relies on templates for orchestration
 """
 
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,14 +14,14 @@ from buttermilk.agents.llm import LLMAgent
 
 class Reference(BaseModel):
     """Represents a single cited reference within a research result."""
-    
+
     summary: str = Field(..., description="Summary of the key information from this reference.")
     source: str = Field(..., description="Source identifier or title for the reference.")
 
 
 class ResearchResult(BaseModel):
     """Structured output of a RAG process with citations."""
-    
+
     literature: list[Reference] = Field(
         ...,
         description="List of literature references used in generating the response.",

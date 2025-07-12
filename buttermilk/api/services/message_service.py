@@ -160,7 +160,7 @@ class MessageService:
         """
         try:
             message_type = data.get("type", None)
-            
+
             # If no type but has flow field, it's likely a RunRequest
             if not message_type and "flow" in data and "prompt" in data:
                 logger.debug("Detected RunRequest format without type field")

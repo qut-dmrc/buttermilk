@@ -10,7 +10,7 @@ except ImportError:
     SecretClient = None
     AZURE_AVAILABLE = False
 
-# Optional Google Cloud imports - fail gracefully if not available  
+# Optional Google Cloud imports - fail gracefully if not available
 try:
     from google.cloud import secretmanager
     GCP_SECRETS_AVAILABLE = True

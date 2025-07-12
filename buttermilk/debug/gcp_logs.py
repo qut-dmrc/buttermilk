@@ -8,9 +8,8 @@ Provides structured analysis of daemon startup, agent initialization, and flow e
 import json
 import subprocess
 import sys
-import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +18,7 @@ from buttermilk._core.log import logger
 
 class LogEntry(BaseModel):
     """Structured representation of a GCP log entry."""
-    
+
     timestamp: str = Field(description="Log entry timestamp")
     severity: str = Field(description="Log severity level")
     message: str = Field(description="Log message content")
@@ -27,11 +26,11 @@ class LogEntry(BaseModel):
     source_location: Optional[Dict[str, Any]] = Field(default=None, description="Source location info")
     trace: Optional[str] = Field(default=None, description="Trace ID if available")
     span_id: Optional[str] = Field(default=None, description="Span ID if available")
-    
-    
+
+
 class LogAnalysis(BaseModel):
     """Analysis results for a set of log entries."""
-    
+
     total_entries: int = Field(description="Total number of log entries analyzed")
     error_count: int = Field(description="Number of error-level entries")
     warning_count: int = Field(description="Number of warning-level entries")
@@ -49,7 +48,7 @@ class GCPLogAnalyzer:
     Uses gcloud CLI to fetch and analyze logs for daemon startup, agent initialization,
     and flow execution issues. Designed to be modular and extensible for different flows.
     """
-    
+
     def __init__(self, project_id: Optional[str] = None):
         """
         Initialize GCP log analyzer.
@@ -58,7 +57,7 @@ class GCPLogAnalyzer:
             project_id: GCP project ID (auto-detected if not provided)
         """
         self.project_id = project_id or self._detect_project_id()
-        
+
     def _detect_project_id(self) -> str:
         """Auto-detect GCP project ID from environment or gcloud config."""
         try:
@@ -72,7 +71,7 @@ class GCPLogAnalyzer:
         except subprocess.CalledProcessError as e:
             logger.warning(f"Could not detect GCP project ID: {e}")
             return "unknown-project"
-    
+
     def fetch_recent_logs(
         self,
         minutes_back: int = 30,
@@ -92,24 +91,24 @@ class GCPLogAnalyzer:
         """
         start_time = datetime.utcnow() - timedelta(minutes=minutes_back)
         start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
+
         # Build gcloud logging command
         cmd = [
             "gcloud", "logging", "read",
-            f"timestamp >= \"{start_time_str}\"",
+            f'timestamp >= "{start_time_str}"',
             "--format=json",
             f"--limit={max_entries}",
             f"--project={self.project_id}"
         ]
-        
+
         # Add additional filters
         if filter_expression:
             cmd[2] = f"({cmd[2]}) AND ({filter_expression})"
-        
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             raw_logs = json.loads(result.stdout) if result.stdout.strip() else []
-            
+
             # Convert to structured LogEntry objects
             log_entries = []
             for raw_log in raw_logs:
@@ -126,16 +125,16 @@ class GCPLogAnalyzer:
                     log_entries.append(entry)
                 except Exception as e:
                     logger.warning(f"Failed to parse log entry: {e}")
-                    
+
             return log_entries
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to fetch GCP logs: {e}")
             return []
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse GCP log JSON: {e}")
             return []
-    
+
     def analyze_daemon_startup(self, minutes_back: int = 10) -> LogAnalysis:
         """
         Analyze daemon startup logs for configuration and initialization issues.
@@ -149,9 +148,9 @@ class GCPLogAnalyzer:
         # Fetch logs with startup-related filters
         filter_expr = 'resource.type="cloud_run_revision" OR resource.type="gce_instance"'
         logs = self.fetch_recent_logs(minutes_back, filter_expr)
-        
+
         analysis = self._analyze_logs(logs)
-        
+
         # Look for specific startup issues
         startup_keywords = [
             "Enhanced RAG agent error",
@@ -161,17 +160,17 @@ class GCPLogAnalyzer:
             "ModuleNotFoundError",
             "Configuration error"
         ]
-        
+
         for entry in logs:
             for keyword in startup_keywords:
                 if keyword.lower() in entry.message.lower():
                     analysis.startup_issues.append(f"[{entry.timestamp}] {entry.message}")
-        
+
         return analysis
-    
+
     def analyze_flow_execution(
-        self, 
-        flow_name: str, 
+        self,
+        flow_name: str,
         session_id: Optional[str] = None,
         minutes_back: int = 60
     ) -> LogAnalysis:
@@ -190,22 +189,22 @@ class GCPLogAnalyzer:
         filter_parts = [f'textPayload:"{flow_name}"']
         if session_id:
             filter_parts.append(f'textPayload:"{session_id}"')
-        
+
         filter_expr = " AND ".join(filter_parts)
         logs = self.fetch_recent_logs(minutes_back, filter_expr)
-        
+
         analysis = self._analyze_logs(logs)
-        
+
         # Analyze flow-specific patterns
         agent_keywords = ["agent", "researcher", "policy_analyst", "fact_checker", "explorer"]
         timing_keywords = ["timeout", "duration", "elapsed", "latency"]
-        
+
         for entry in logs:
             # Track agent-specific errors
             for keyword in agent_keywords:
                 if keyword.lower() in entry.message.lower() and entry.severity in ["ERROR", "WARNING"]:
                     analysis.agent_errors.append(f"[{entry.timestamp}] {entry.message}")
-            
+
             # Track performance issues
             for keyword in timing_keywords:
                 if keyword.lower() in entry.message.lower():
@@ -215,9 +214,9 @@ class GCPLogAnalyzer:
                         "timestamp": entry.timestamp,
                         "message": entry.message
                     })
-        
+
         return analysis
-    
+
     def analyze_agent_errors(self, agent_name: str, minutes_back: int = 30) -> LogAnalysis:
         """
         Analyze logs for specific agent errors and issues.
@@ -231,27 +230,27 @@ class GCPLogAnalyzer:
         """
         filter_expr = f'textPayload:"{agent_name}"'
         logs = self.fetch_recent_logs(minutes_back, filter_expr)
-        
+
         analysis = self._analyze_logs(logs)
-        
+
         # Look for agent-specific error patterns
         error_patterns = [
             "type.*error",
-            "validation.*error", 
+            "validation.*error",
             "import.*error",
             "attribute.*error",
             "key.*error",
             "value.*error"
         ]
-        
+
         for entry in logs:
             if entry.severity in ["ERROR", "WARNING"]:
                 for pattern in error_patterns:
                     if any(p in entry.message.lower() for p in pattern.split(".*")):
                         analysis.agent_errors.append(f"[{entry.timestamp}] {entry.message}")
-        
+
         return analysis
-    
+
     def stream_logs_realtime(
         self,
         filter_expression: Optional[str] = None,
@@ -269,10 +268,10 @@ class GCPLogAnalyzer:
             "--format=json",
             f"--project={self.project_id}"
         ]
-        
+
         if filter_expression:
             cmd.append(filter_expression)
-        
+
         try:
             process = subprocess.Popen(
                 cmd,
@@ -282,13 +281,13 @@ class GCPLogAnalyzer:
                 bufsize=1,
                 universal_newlines=True
             )
-            
+
             print(f"🔍 Streaming GCP logs for project: {self.project_id}")
             if filter_expression:
                 print(f"   Filter: {filter_expression}")
             print("   Press Ctrl+C to stop...")
             print("-" * 60)
-            
+
             for line in process.stdout:
                 if line.strip():
                     try:
@@ -299,31 +298,31 @@ class GCPLogAnalyzer:
                             message=log_data.get("textPayload") or str(log_data.get("jsonPayload", "")),
                             labels=log_data.get("labels", {})
                         )
-                        
+
                         # Default display
                         severity_emoji = {
                             "ERROR": "❌",
-                            "WARNING": "⚠️", 
+                            "WARNING": "⚠️",
                             "INFO": "ℹ️",
                             "DEBUG": "🐛"
                         }.get(entry.severity, "📝")
-                        
+
                         timestamp = entry.timestamp[:19].replace("T", " ")
                         print(f"{severity_emoji} [{timestamp}] {entry.message}")
-                        
+
                         # Call custom callback if provided
                         if callback:
                             callback(entry)
-                            
+
                     except json.JSONDecodeError:
                         continue
-                        
+
         except KeyboardInterrupt:
             print("\n⏹️  Log streaming stopped")
             process.terminate()
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to stream logs: {e}")
-    
+
     def _analyze_logs(self, logs: List[LogEntry]) -> LogAnalysis:
         """Perform basic analysis on a list of log entries."""
         if not logs:
@@ -337,20 +336,20 @@ class GCPLogAnalyzer:
                 flow_performance={},
                 startup_issues=[]
             )
-        
+
         error_count = sum(1 for log in logs if log.severity == "ERROR")
         warning_count = sum(1 for log in logs if log.severity == "WARNING")
-        
+
         # Extract key errors
         key_errors = []
         for log in logs:
             if log.severity == "ERROR":
                 key_errors.append(f"[{log.timestamp}] {log.message}")
-        
+
         # Time range
         timestamps = [log.timestamp for log in logs if log.timestamp]
         time_range = (min(timestamps), max(timestamps)) if timestamps else ("", "")
-        
+
         return LogAnalysis(
             total_entries=len(logs),
             error_count=error_count,
@@ -366,32 +365,32 @@ class GCPLogAnalyzer:
 def analyze_current_issue() -> None:
     """Quick analysis of the current Enhanced RAG agent issue."""
     analyzer = GCPLogAnalyzer()
-    
+
     print("🔍 ANALYZING ENHANCED RAG AGENT ISSUE")
     print("=" * 50)
-    
+
     # Look for recent startup issues
     startup_analysis = analyzer.analyze_daemon_startup(minutes_back=30)
-    
-    print(f"📊 Startup Analysis (last 30 minutes):")
+
+    print("📊 Startup Analysis (last 30 minutes):")
     print(f"   Total entries: {startup_analysis.total_entries}")
     print(f"   Errors: {startup_analysis.error_count}")
     print(f"   Warnings: {startup_analysis.warning_count}")
-    
+
     if startup_analysis.startup_issues:
-        print(f"\n🚨 Startup Issues Found:")
+        print("\n🚨 Startup Issues Found:")
         for issue in startup_analysis.startup_issues[:5]:
             print(f"   {issue}")
-    
+
     if startup_analysis.key_errors:
-        print(f"\n❌ Key Errors:")
+        print("\n❌ Key Errors:")
         for error in startup_analysis.key_errors[:3]:
             print(f"   {error}")
-    
+
     # Look for Enhanced RAG specific errors
-    print(f"\n🎯 Enhanced RAG Agent Analysis:")
+    print("\n🎯 Enhanced RAG Agent Analysis:")
     rag_analysis = analyzer.analyze_agent_errors("enhanced", minutes_back=60)
-    
+
     if rag_analysis.agent_errors:
         print(f"   Found {len(rag_analysis.agent_errors)} agent-related errors")
         for error in rag_analysis.agent_errors[:3]:

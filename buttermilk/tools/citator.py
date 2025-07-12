@@ -4,8 +4,8 @@ import pydantic
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.contract import AgentInput
-from buttermilk._core.types import Record
 from buttermilk._core.log import logger
+from buttermilk._core.types import Record
 from buttermilk.agents.llm import LLMAgent
 
 CITATION_TEXT_CHAR_LIMIT = 4000  # characters

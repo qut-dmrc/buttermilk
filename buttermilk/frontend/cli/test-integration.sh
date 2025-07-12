@@ -10,8 +10,8 @@ echo "=================================="
 echo ""
 
 # Check if backend is running
-if ! curl -s http://localhost:8080/api/session > /dev/null; then
-    echo "❌ Backend not running on localhost:8080"
+if ! curl -s http://localhost:8000/api/session > /dev/null; then
+    echo "❌ Backend not running on localhost:8000"
     echo "   Please start the Buttermilk backend first"
     exit 1
 fi

@@ -144,7 +144,7 @@ class QueryRunner(BaseModel):
             if return_df:
                 # Get the result iterator first, which has total_rows attribute
                 result_iterator = query_job.result()
-                if hasattr(result_iterator, 'total_rows') and result_iterator.total_rows and result_iterator.total_rows > 0:
+                if hasattr(result_iterator, "total_rows") and result_iterator.total_rows and result_iterator.total_rows > 0:
                     return query_job.to_dataframe()
                 return pd.DataFrame()  # Return empty DataFrame for no rows
             return query_job  # Return the job object which contains RowIterator

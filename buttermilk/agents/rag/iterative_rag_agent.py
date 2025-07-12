@@ -7,16 +7,15 @@ This module provides a RAG agent that:
 - Is specifically designed for iterative search
 """
 
-from typing import Any
 
-from pydantic import Field
 import json
 
-from buttermilk.agents.rag.simple_rag_agent import RagAgent, ResearchResult
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
-from buttermilk._core.exceptions import ProcessingError
-from buttermilk import logger
 from autogen_core.models import AssistantMessage
+from pydantic import Field
+
+from buttermilk import logger
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
+from buttermilk.agents.rag.simple_rag_agent import RagAgent
 
 
 class IterativeRagAgent(RagAgent):
@@ -82,7 +81,7 @@ class IterativeRagAgent(RagAgent):
             try:
                 chat_result = await model_client.call_chat(
                     messages=llm_messages_to_send,
-                    tools_list=self._tools_list,
+                    tools_list=self._tools,
                     cancellation_token=cancellation_token,
                     schema=self._output_model,  # Pass expected Pydantic schema for structured output
                 )
@@ -95,25 +94,25 @@ class IterativeRagAgent(RagAgent):
             chat_history.append(
                 chat_result.to_llm_message()
                 if hasattr(chat_result, "to_llm_message")
-                else AssistantMessage(content=str(chat_result), source="IterativeRagAgent")
+                else AssistantMessage(content=str(chat_result), source="IterativeRagAgent"),
             )
 
             # Check for tool calls
             if hasattr(chat_result, "tool_calls") and chat_result.tool_calls:
                 logger.info(f"IterativeRagAgent: LLM requested tool calls: {len(chat_result.tool_calls)}")
                 tool_outputs = []
-                
+
                 for tool_call in chat_result.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = tool_call.function.arguments
 
                     # Find the tool by name in our tools list
                     matching_tool = None
-                    for tool in self._tools_list:
-                        if hasattr(tool, 'name') and tool.name == tool_name:
+                    for tool in self._tools:
+                        if hasattr(tool, "name") and tool.name == tool_name:
                             matching_tool = tool
                             break
-                    
+
                     if matching_tool is None:
                         error_msg = f"Tool '{tool_name}' not found for agent '{self.agent_name}'."
                         logger.error(error_msg)
@@ -121,29 +120,29 @@ class IterativeRagAgent(RagAgent):
                         continue
 
                     try:
-                        # Parse tool arguments 
+                        # Parse tool arguments
                         if isinstance(tool_args, str):
                             parsed_tool_args = json.loads(tool_args)
                         else:
                             parsed_tool_args = tool_args
-                        
+
                         # Execute the tool using the func method from FunctionTool
-                        if hasattr(matching_tool, 'func'):
+                        if hasattr(matching_tool, "func"):
                             tool_result = await matching_tool.func(**parsed_tool_args)
-                        elif hasattr(matching_tool, 'run'):
+                        elif hasattr(matching_tool, "run"):
                             tool_result = await matching_tool.run(**parsed_tool_args)
                         else:
                             raise AttributeError(f"Tool {tool_name} has no callable func or run method")
-                            
+
                         # Convert result to ToolOutput if it isn't already
                         if not isinstance(tool_result, ToolOutput):
                             tool_result = ToolOutput(
                                 name=tool_name,
-                                call_id=getattr(tool_call, 'id', ''),
+                                call_id=getattr(tool_call, "id", ""),
                                 content=str(tool_result),
-                                results=tool_result if not isinstance(tool_result, str) else None
+                                results=tool_result if not isinstance(tool_result, str) else None,
                             )
-                        
+
                         tool_outputs.append(tool_result)
                         logger.info(f"Tool '{tool_name}' executed. Result: {tool_result.content[:100]}...")
                     except Exception as tool_error:
@@ -156,19 +155,19 @@ class IterativeRagAgent(RagAgent):
                     chat_history.append(
                         output.to_llm_message()
                         if hasattr(output, "to_llm_message")
-                        else AssistantMessage(content=str(output), source="IterativeRagAgent")
+                        else AssistantMessage(content=str(output), source="IterativeRagAgent"),
                     )
 
                 # CRITICAL FIX: After executing tools, prepare messages for the next LLM call
                 # to allow reflection on tool results. Use the updated chat_history which now
                 # includes the tool outputs, and let the LLM decide what to do next.
                 llm_messages_to_send = chat_history
-                
+
                 # Continue the loop to give LLM a chance to reflect on tool results
                 # and decide whether to make more tool calls or synthesize final result
                 continue
 
-            elif chat_result.finish_reason == "stop":
+            if chat_result.finish_reason == "stop":
                 logger.info(f"IterativeRagAgent: LLM decided to synthesize final answer. Iterations: {current_iteration}")
 
                 # Parse the final result using the agent's output model
@@ -189,7 +188,7 @@ class IterativeRagAgent(RagAgent):
                 continue
 
         logger.warning(f"IterativeRagAgent: Max iterations ({max_iterations}) reached. Attempting final synthesis.")
-        
+
         # If max iterations reached, make one final call to synthesize results
         try:
             final_result = await model_client.call_chat(
@@ -198,7 +197,7 @@ class IterativeRagAgent(RagAgent):
                 cancellation_token=cancellation_token,
                 schema=self._output_model,
             )
-            
+
             if self._output_model:
                 try:
                     parsed_output = self._output_model.model_validate_json(final_result.content)
@@ -208,7 +207,7 @@ class IterativeRagAgent(RagAgent):
                     return AgentOutput(agent_id=self.agent_id, outputs=final_result.content, metadata=final_result.model_dump())
             else:
                 return AgentOutput(agent_id=self.agent_id, outputs=final_result.content, metadata=final_result.model_dump())
-                
+
         except Exception as final_error:
             logger.error(f"Error during final synthesis: {final_error}")
             return AgentOutput(

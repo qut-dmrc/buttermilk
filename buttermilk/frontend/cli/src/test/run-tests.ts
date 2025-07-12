@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { MockWebSocketServer, MockHTTPServer } from './MockWebSocketServer.js';
-import { TestClient, ScenarioRunner } from './TestClient.js';
-import { testScenarios, stressTestScenarios, errorScenarios } from './scenarios.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MockHTTPServer, MockWebSocketServer } from './MockWebSocketServer.js';
+import { ScenarioRunner, TestClient } from './TestClient.js';
+import { errorScenarios, stressTestScenarios, testScenarios } from './scenarios.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,8 +16,8 @@ interface TestConfig {
 }
 
 const defaultConfig: TestConfig = {
-  httpPort: 8080,
-  wsPort: 8080,
+  httpPort: 8000,
+  wsPort: 8000,
   sessionId: 'test-session-123',
   debug: process.env.DEBUG === 'true'
 };
@@ -164,8 +164,8 @@ Usage: node run-tests.js [options]
 
 Options:
   --debug, -d         Enable debug output
-  --http-port <port>  HTTP server port (default: 8080)
-  --ws-port <port>    WebSocket server port (default: 8080)
+  --http-port <port>  HTTP server port (default: 8000)
+  --ws-port <port>    WebSocket server port (default: 8000)
   --help, -h          Show this help message
 
 Environment Variables:

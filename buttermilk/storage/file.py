@@ -1,16 +1,18 @@
 """File storage implementation for unified storage operations."""
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
-from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
+from cloudpathlib import AnyPath  # For handling local and cloud paths
+
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+
 from .base import Storage, StorageError
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
+
     from .._core.storage_config import StorageConfig
 
 
@@ -52,13 +54,13 @@ class FileStorage(Storage):
             else:
                 # Use regular open for local files
                 file_obj = open(self.path, "r")
-                
+
             try:
                 # Check if the file is a JSON array or JSONL
                 first_char = file_obj.read(1)
                 file_obj.seek(0)  # Reset to beginning
-                
-                if first_char == '[':
+
+                if first_char == "[":
                     # Handle JSON array format
                     data_array = json.load(file_obj)
                     for line_num, data in enumerate(data_array, 1):
@@ -107,12 +109,12 @@ class FileStorage(Storage):
             # Convert records to dictionaries
             data = [self._record_to_dict(record) for record in records]
 
-            with open(self.path, 'w') as f:
-                if self.path.suffix == '.jsonl':
+            with open(self.path, "w") as f:
+                if self.path.suffix == ".jsonl":
                     # JSONL format - one JSON object per line
                     for record_dict in data:
                         json.dump(record_dict, f, ensure_ascii=False)
-                        f.write('\n')
+                        f.write("\n")
                 else:
                     # JSON format - single JSON array
                     json.dump(data, f, indent=2, ensure_ascii=False)
@@ -156,8 +158,8 @@ class FileStorage(Storage):
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create empty file with appropriate format
-            with open(self.path, 'w') as f:
-                if self.path.suffix == '.jsonl':
+            with open(self.path, "w") as f:
+                if self.path.suffix == ".jsonl":
                     # Empty JSONL file
                     pass
                 else:
@@ -185,113 +187,113 @@ class FileStorage(Storage):
             if self.config.columns:
                 mapped_data = {}
                 consumed_source_fields = set()  # Track which source fields should be removed
-                
+
                 # Collect all source fields that will be mapped
                 all_source_fields = set()
                 for new_key, old_key in self.config.columns.items():
-                    if new_key == 'metadata' and isinstance(old_key, dict):
+                    if new_key == "metadata" and isinstance(old_key, dict):
                         for meta_key, meta_source in old_key.items():
                             if meta_source in data:
                                 all_source_fields.add(meta_source)
                     elif old_key in data:
                         all_source_fields.add(old_key)
-                
+
                 # Perform the actual mapping
                 for new_key, old_key in self.config.columns.items():
                     # Handle nested metadata mapping
-                    if new_key == 'metadata' and isinstance(old_key, dict):
+                    if new_key == "metadata" and isinstance(old_key, dict):
                         metadata = {}
                         for meta_key, meta_source in old_key.items():
                             if meta_source in data:
                                 metadata[meta_key] = data[meta_source]
-                        mapped_data['metadata'] = metadata
+                        mapped_data["metadata"] = metadata
                     elif old_key in data:
                         mapped_data[new_key] = data[old_key]
-                
+
                 # Mark source fields for removal only if they were actually consumed
                 for new_key, old_key in self.config.columns.items():
-                    if new_key == 'metadata' and isinstance(old_key, dict):
+                    if new_key == "metadata" and isinstance(old_key, dict):
                         for meta_key, meta_source in old_key.items():
                             if meta_source in data:
                                 consumed_source_fields.add(meta_source)
                     elif old_key in data:
                         consumed_source_fields.add(old_key)
-                
+
                 # Merge mapped data with original, but handle metadata specially
                 if mapped_data:
                     # Start with original data
                     data = {**data}
-                    
+
                     # Apply non-metadata mappings
                     for key, value in mapped_data.items():
-                        if key != 'metadata':
+                        if key != "metadata":
                             data[key] = value
-                    
+
                     # Merge metadata: original metadata + mapped metadata
-                    if 'metadata' in mapped_data:
-                        original_metadata = data.get('metadata', {})
+                    if "metadata" in mapped_data:
+                        original_metadata = data.get("metadata", {})
                         if isinstance(original_metadata, str):
                             try:
                                 original_metadata = json.loads(original_metadata)
                             except json.JSONDecodeError:
-                                original_metadata = {'raw_metadata': original_metadata}
-                        
-                        mapped_metadata = mapped_data['metadata']
-                        data['metadata'] = {**original_metadata, **mapped_metadata}
-                
+                                original_metadata = {"raw_metadata": original_metadata}
+
+                        mapped_metadata = mapped_data["metadata"]
+                        data["metadata"] = {**original_metadata, **mapped_metadata}
+
                 # Remove only the original source fields to avoid duplication
                 # But preserve unmapped fields and target fields
-                
+
                 # Get all direct mapping source fields (not nested metadata)
-                direct_source_fields = [old_key for new_key, old_key in self.config.columns.items() 
-                                      if new_key != 'metadata' and isinstance(old_key, str)]
-                
+                direct_source_fields = [old_key for new_key, old_key in self.config.columns.items()
+                                      if new_key != "metadata" and isinstance(old_key, str)]
+
                 # Get all metadata source fields
                 metadata_source_fields = []
                 for new_key, old_key in self.config.columns.items():
-                    if new_key == 'metadata' and isinstance(old_key, dict):
+                    if new_key == "metadata" and isinstance(old_key, dict):
                         metadata_source_fields.extend(old_key.values())
-                
+
                 for field in consumed_source_fields:
                     should_remove = False
-                    
+
                     # Remove if it's a direct mapping source field that's being renamed
                     if field in direct_source_fields and field not in self.config.columns.keys():
                         should_remove = True
-                    
+
                     # Remove if it's only used for metadata mapping and not a target field
                     if field in metadata_source_fields and field not in self.config.columns.keys():
                         should_remove = True
-                    
+
                     if should_remove:
                         data.pop(field, None)
 
             # Extract required and optional fields
-            record_id = data.get('record_id', data.get('id', f"record_{index}"))
-            content = data.get('content', data.get('text', ''))
+            record_id = data.get("record_id", data.get("id", f"record_{index}"))
+            content = data.get("content", data.get("text", ""))
 
             # Build metadata from remaining fields
-            metadata = data.get('metadata', {})
+            metadata = data.get("metadata", {})
             if isinstance(metadata, str):
                 try:
                     metadata = json.loads(metadata)
                 except json.JSONDecodeError:
-                    metadata = {'raw_metadata': metadata}
+                    metadata = {"raw_metadata": metadata}
 
             # Add other fields to metadata if not already Record fields
-            record_fields = {'record_id', 'content', 'metadata', 'alt_text', 'ground_truth', 'uri', 'mime'}
+            record_fields = {"record_id", "content", "metadata", "alt_text", "ground_truth", "uri", "mime"}
             for key, value in data.items():
-                if key not in record_fields and key not in ['id', 'text']:
+                if key not in record_fields and key not in ["id", "text"]:
                     metadata[key] = value
 
             return Record(
                 record_id=str(record_id),
                 content=content,
                 metadata=metadata,
-                alt_text=data.get('alt_text'),
-                ground_truth=data.get('ground_truth'),
-                uri=data.get('uri'),
-                mime=data.get('mime', 'text/plain')
+                alt_text=data.get("alt_text"),
+                ground_truth=data.get("ground_truth"),
+                uri=data.get("uri"),
+                mime=data.get("mime", "text/plain")
             )
 
         except Exception as e:
@@ -299,7 +301,7 @@ class FileStorage(Storage):
             # Create a safer error record with string representation of data
             try:
                 safe_data = str(data)[:1000]  # Limit length to avoid huge error messages
-                safe_metadata = {'parse_error': str(e)}
+                safe_metadata = {"parse_error": str(e)}
                 # Don't include original_data as it might not be serializable
                 return Record(
                     record_id=f"error_{index}",
@@ -311,7 +313,7 @@ class FileStorage(Storage):
                 return Record(
                     record_id=f"error_{index}",
                     content=f"Failed to parse record: {str(e2)}",
-                    metadata={'critical_error': True}
+                    metadata={"critical_error": True}
                 )
 
     def _record_to_dict(self, record: Record) -> dict:
@@ -324,19 +326,19 @@ class FileStorage(Storage):
             Dictionary representation
         """
         result = {
-            'record_id': record.record_id,
-            'content': record.content,
-            'metadata': record.metadata,
+            "record_id": record.record_id,
+            "content": record.content,
+            "metadata": record.metadata,
         }
 
         # Add optional fields if present
         if record.alt_text:
-            result['alt_text'] = record.alt_text
+            result["alt_text"] = record.alt_text
         if record.ground_truth:
-            result['ground_truth'] = record.ground_truth
+            result["ground_truth"] = record.ground_truth
         if record.uri:
-            result['uri'] = record.uri
-        if record.mime and record.mime != 'text/plain':
-            result['mime'] = record.mime
+            result["uri"] = record.uri
+        if record.mime and record.mime != "text/plain":
+            result["mime"] = record.mime
 
         return result

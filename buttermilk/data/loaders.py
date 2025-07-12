@@ -20,7 +20,7 @@ from buttermilk._core.log import logger
 
 class DataLoaderWrapper:
     """Wrapper to provide DataLoader interface for storage objects."""
-    
+
     def __init__(self, storage):
         """Initialize wrapper with storage instance.
         
@@ -28,15 +28,15 @@ class DataLoaderWrapper:
             storage: Storage instance to wrap
         """
         self.storage = storage
-        
+
     def __iter__(self):
         """Iterate over records in storage."""
         return iter(self.storage)
-        
+
     def __len__(self):
         """Get number of records in storage."""
         return len(self.storage)
-        
+
     def get_all_records(self):
         """Get all records (compatibility method)."""
         return list(self.storage)
@@ -46,13 +46,13 @@ from buttermilk._core.types import Record
 @runtime_checkable
 class DataLoaderProtocol(Protocol):
     """Protocol defining the interface for data loaders."""
-    
+
     config: DataSourceConfig | None
-    
+
     def __iter__(self) -> Iterator[Record]:
         """Yield Record objects from the data source."""
         ...
-    
+
     def __len__(self) -> int:
         """Return number of records if known, 0 if streaming/unknown."""
         ...
@@ -349,7 +349,7 @@ class PlaintextDataLoader(DataLoader):
                             "path": str(file_path),
                             "size": len(content)
                         }
-                        
+
                         for new_name, old_name in self.config.columns.items():
                             if old_name in original_data:
                                 # Handle special mapping to Record fields
@@ -358,7 +358,7 @@ class PlaintextDataLoader(DataLoader):
                                 else:
                                     # Map to metadata
                                     record_kwargs["metadata"][new_name] = original_data[old_name]
-                        
+
                         # Override with mapped values
                         record_kwargs.update(mapped_kwargs)
 
@@ -390,49 +390,49 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
         DeprecationWarning,
         stacklevel=2
     )
-    
+
     # Try to use new storage system first
     try:
         from buttermilk._core.dmrc import get_bm
         from buttermilk._core.storage_config import StorageConfig
-        
+
         # Convert DataSourceConfig to StorageConfig
         config_dict = config.model_dump()
-        
+
         # Handle field differences between DataSourceConfig and StorageConfig
         # Set StorageConfig defaults for fields that might be None in DataSourceConfig
         storage_dict = {
-            'type': config_dict['type'],
-            'path': config_dict.get('path'),
-            'columns': config_dict.get('columns', {}),
-            'randomize': config_dict.get('randomize') if config_dict.get('randomize') is not None else True,
-            'batch_size': config_dict.get('batch_size') if config_dict.get('batch_size') is not None else 1000,
-            'limit': config_dict.get('limit'),
-            'name': config_dict.get('name', ''),
-            'split': config_dict.get('split', 'train'),
+            "type": config_dict["type"],
+            "path": config_dict.get("path"),
+            "columns": config_dict.get("columns", {}),
+            "randomize": config_dict.get("randomize") if config_dict.get("randomize") is not None else True,
+            "batch_size": config_dict.get("batch_size") if config_dict.get("batch_size") is not None else 1000,
+            "limit": config_dict.get("limit"),
+            "name": config_dict.get("name", ""),
+            "split": config_dict.get("split", "train"),
         }
-        
+
         # Add other fields that exist in both configs
         for key, value in config_dict.items():
             if key not in storage_dict and value is not None:
                 storage_dict[key] = value
-                
+
         storage_config = StorageConfig(**storage_dict)
-        
+
         bm = get_bm()
         storage = bm.get_storage(storage_config)
-        
+
         # Ensure storage implements DataLoader interface
-        if hasattr(storage, '__iter__') and hasattr(storage, '__len__'):
+        if hasattr(storage, "__iter__") and hasattr(storage, "__len__"):
             return storage
         else:
             # Wrap storage to provide DataLoader interface
             return DataLoaderWrapper(storage)
-            
+
     except Exception as e:
         # Fallback to old implementation if new system fails
         logger.warning(f"Failed to use new storage system, falling back to legacy loaders: {e}")
-    
+
     # Legacy implementation (fallback)
     if config.type == "huggingface":
         return HuggingFaceDataLoader(config)
@@ -452,13 +452,13 @@ def create_data_loader(config: DataSourceConfig) -> DataLoader:
         # Use new unified storage system
         from buttermilk._core.dmrc import get_bm
         from buttermilk._core.storage_config import StorageConfig
-        
+
         # Convert DataSourceConfig to StorageConfig
         storage_config = StorageConfig(
             type="bigquery",
             **config.model_dump(exclude={"type"})
         )
-        
+
         bm = get_bm()
         storage = bm.get_storage(storage_config)
         return DataLoaderWrapper(storage)

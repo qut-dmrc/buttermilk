@@ -41,23 +41,26 @@ from rich import print  # For rich console output
 
 from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
-from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
+from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
+
 try:
     from buttermilk._core.llms import LLMs  # Manages LLM clients
 except ImportError:
     LLMs = None
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
+
 try:
     from buttermilk._core.query import QueryRunner  # For running SQL queries
 except ImportError:
     QueryRunner = None
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
+
 try:
     from buttermilk.utils import save  # Utility for saving data
 except ImportError:
     save = None
-from buttermilk._core.storage_config import StorageConfig, BigQueryDefaults, BaseStorageConfig, StorageFactory  # Unified storage config
+from buttermilk._core.storage_config import StorageConfig, StorageFactory  # Unified storage config
 
 # Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -824,18 +827,18 @@ class BM(SessionInfo):
         # Add file logging when verbose is True
         if verbose:
             log_filename = f"/tmp/buttermilk_{self.run_id}.log"
-            
+
             # Create file handler
-            file_handler = logging.FileHandler(log_filename, mode='w')
+            file_handler = logging.FileHandler(log_filename, mode="w")
             file_handler.setLevel(logging.DEBUG)
-            
+
             # Use the same format as console but without colors
             file_formatter = logging.Formatter(console_format)
             file_handler.setFormatter(file_formatter)
-            
+
             # Add the same context filter
             file_handler.addFilter(context_filter)
-            
+
             # Add handler to the logger
             logger.addHandler(file_handler)
             logger.info(f"Verbose logging enabled - also writing to: {log_filename}")
@@ -1029,7 +1032,6 @@ class BM(SessionInfo):
         Raises:
             ValueError: If storage type is not supported
         """
-        from buttermilk.storage import BigQueryStorage, FileStorage
 
         # Ensure config is a StorageConfig object
         if config is None:
@@ -1080,9 +1082,9 @@ class BM(SessionInfo):
         storage = self.get_storage(config)
 
         # Auto-initialize if it's ChromaDB with remote storage
-        if hasattr(storage, 'ensure_cache_initialized'):
+        if hasattr(storage, "ensure_cache_initialized"):
             # Check if it's remote storage requiring initialization
-            if hasattr(storage, 'persist_directory') and storage.persist_directory:
+            if hasattr(storage, "persist_directory") and storage.persist_directory:
                 if storage.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
                     logger.info(f"🔄 Auto-initializing remote storage: {storage.persist_directory}")
                     await storage.ensure_cache_initialized()

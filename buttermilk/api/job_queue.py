@@ -19,6 +19,7 @@ from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
 
+
 class JobQueueClient(BaseModel):
     """Client for interacting with the Google Pub/Sub job queue.
 

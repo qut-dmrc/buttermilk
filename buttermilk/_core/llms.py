@@ -12,39 +12,33 @@ and provide a consistent interface for agents within the Buttermilk framework.
 import asyncio
 import inspect
 import json
-import weave
-
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
 # Core LLM library imports - these are required dependencies
-import openai
+import weave
 from anthropic import (
-    AnthropicVertex,  # Client for Anthropic models on Vertex AI
     AsyncAnthropicVertex,
 )
 
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (
+    AssistantMessage,
     ChatCompletionClient,
     CreateResult,
+    FunctionExecutionResult,
+    FunctionExecutionResultMessage,
     LLMMessage,
     ModelFamily,
     ModelInfo,
-    FunctionExecutionResultMessage,
-    FunctionExecutionResult,
 )
-from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
-)
-from autogen_ext.models.openai._transformation.registry import (
-    _find_model_family,  # Helper for model family detection
 )
 from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
 from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configuration
@@ -560,7 +554,7 @@ class LLMs(BaseModel):
             # Check if it's using OpenAI-compatible endpoint
             if config.base_url and "openai" in config.base_url:
                 client = OpenAIChatCompletionClient(
-                    base_url=config.base_url, 
+                    base_url=config.base_url,
                     model_info=config.model_info,  # Pass model_info explicitly for custom models
                     **client_params
                 )
@@ -595,20 +589,20 @@ class LLMs(BaseModel):
             else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini, Llama)
                 # For Vertex models, use OAuth2 bearer token for authentication
                 vertex_params = client_params.copy()
-                
+
                 # Set up headers with bearer token using BM's token method
                 headers = {
                     "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}"
                 }
-                
+
                 # For Vertex endpoints, we need a dummy API key to satisfy OpenAI client validation
                 # The actual auth is done via the Authorization header
                 if vertex_params.get("api_key") is None:
                     vertex_params["api_key"] = "dummy-key-for-vertex"
-                    
+
                 # Add default_headers to vertex_params
                 vertex_params["default_headers"] = headers
-                
+
                 client = OpenAIChatCompletionClient(
                     base_url=config.base_url,
                     model_info=config.model_info,  # Pass model_info for custom models
@@ -622,7 +616,7 @@ class LLMs(BaseModel):
                 bm_instance = get_bm()
                 if not bm_instance.gcp_credentials:
                     raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
-                
+
                 # Get region and project_id from config.configs
                 _vertex_params = {
                     "region": config.configs.get("region"),

@@ -1,17 +1,10 @@
 """Test structured tool handling improvements for issues #88 and #85."""
 
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 
-from buttermilk._core.contract import (
-    AgentInput, 
-    AgentOutput, 
-    ConductorRequest,
-    StepRequest,
-    AgentTrace
-)
-from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk._core.contract import AgentOutput, AgentTrace, ConductorRequest, StepRequest
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.agents.rag import RagAgent
 
@@ -40,17 +33,17 @@ class TestStructuredToolHandling:
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Search query"
+                                "description": "Search query",
                             },
                             "max_results": {
                                 "type": "integer",
-                                "description": "Maximum results to return"
-                            }
+                                "description": "Maximum results to return",
+                            },
                         },
-                        "required": ["query"]
+                        "required": ["query"],
                     },
-                    "output_schema": {"type": "object"}
-                }
+                    "output_schema": {"type": "object"},
+                },
             ],
             "ANALYST": [
                 {
@@ -60,22 +53,22 @@ class TestStructuredToolHandling:
                         "type": "object",
                         "properties": {
                             "data": {"type": "array"},
-                            "method": {"type": "string"}
-                        }
+                            "method": {"type": "string"},
+                        },
                     },
-                    "output_schema": {"type": "object"}
-                }
-            ]
+                    "output_schema": {"type": "object"},
+                },
+            ],
         }
 
     @pytest.mark.anyio
-    async def test_tool_registration_from_conductor_request(self, mock_participants, mock_participant_tools):
+    async def test_tool_registration_from_conductor_request(self, mock_participants):
         """Test that tools are properly registered when ConductorRequest is received."""
         # Create host agent
         host = StructuredLLMHostAgent(
             agent_id="test_host",
             agent_name="TestHost",
-            role="HOST"
+            role="HOST",
         )
 
         # Initialize with mock callback
@@ -86,18 +79,17 @@ class TestStructuredToolHandling:
         conductor_request = ConductorRequest(
             inputs={},
             participants=mock_participants,
-            participant_tools=mock_participant_tools
         )
 
         # Handle the ConductorRequest
         await host._handle_events(
             message=conductor_request,
             cancellation_token=Mock(),
-            public_callback=Mock()
+            public_callback=Mock(),
         )
 
         # Verify tools were built
-        assert hasattr(host, '_tools_list')
+        assert hasattr(host, "_tools_list")
         assert len(host._tools_list) > 0
 
         # Check that tools have the expected names
@@ -106,13 +98,13 @@ class TestStructuredToolHandling:
         assert "analyst.analyze_data" in tool_names
 
     @pytest.mark.anyio
-    async def test_tool_invocation_with_role_prefix(self, mock_participants, mock_participant_tools):
+    async def test_tool_invocation_with_role_prefix(self, mock_participants):
         """Test that tools with role prefix are correctly parsed and invoked."""
         # Create host agent
         host = StructuredLLMHostAgent(
             agent_id="test_host",
             agent_name="TestHost",
-            role="HOST"
+            role="HOST",
         )
 
         # Initialize
@@ -121,7 +113,6 @@ class TestStructuredToolHandling:
 
         # Set up participants and tools
         host._participants = mock_participants
-        host._participant_tools = mock_participant_tools
         await host._build_agent_tools()
 
         # Simulate LLM response with tool call
@@ -134,9 +125,9 @@ class TestStructuredToolHandling:
                 "tool_code": "researcher.case_search_tool",
                 "parameters": {
                     "query": "test search query",
-                    "max_results": 5
-                }
-            }
+                    "max_results": 5,
+                },
+            },
         )
 
         # Process the response
@@ -144,7 +135,7 @@ class TestStructuredToolHandling:
             message=mock_llm_response,
             cancellation_token=Mock(),
             source="",
-            public_callback=Mock()
+            public_callback=Mock(),
         )
 
         # Verify StepRequest was created correctly
@@ -164,7 +155,7 @@ class TestStructuredToolHandling:
             agent_id="test_rag",
             agent_name="TestRAG",
             role="RESEARCHER",
-            parameters={}
+            parameters={},
         )
 
         # Create mock AgentOutput with structured result
@@ -173,19 +164,19 @@ class TestStructuredToolHandling:
             outputs="Here are the search results...",
             metadata={
                 "query": "test search query",
-                "total_results": 2
-            }
+                "total_results": 2,
+            },
         )
 
         # Mock the _process method
-        with patch.object(rag_agent, '_process', new_callable=AsyncMock, return_value=mock_output) as mock_process:
+        with patch.object(rag_agent, "_process", new_callable=AsyncMock, return_value=mock_output) as mock_process:
             # Create StepRequest with query parameter
             step_request = StepRequest(
                 role="RESEARCHER",
                 inputs={
                     "query": "test search query",
-                    "max_results": 10
-                }
+                    "max_results": 10,
+                },
             )
 
             # Process the request
@@ -199,7 +190,7 @@ class TestStructuredToolHandling:
             # Verify _process was called with correct message
             mock_process.assert_called_once()
             call_args = mock_process.call_args[1]
-            assert call_args['message'] == step_request
+            assert call_args["message"] == step_request
 
     @pytest.mark.anyio
     async def test_error_handling_for_missing_participants(self):
@@ -208,7 +199,7 @@ class TestStructuredToolHandling:
         host = StructuredLLMHostAgent(
             agent_id="test_host",
             agent_name="TestHost",
-            role="HOST"
+            role="HOST",
         )
 
         # Initialize without participants
@@ -223,8 +214,8 @@ class TestStructuredToolHandling:
             content="I'll search for that.",
             outputs={
                 "tool_code": "researcher.case_search_tool",
-                "parameters": {"query": "test"}
-            }
+                "parameters": {"query": "test"},
+            },
         )
 
         # Process the response
@@ -232,7 +223,7 @@ class TestStructuredToolHandling:
             message=mock_llm_response,
             cancellation_token=Mock(),
             source="",
-            public_callback=Mock()
+            public_callback=Mock(),
         )
 
         # Verify error message was sent

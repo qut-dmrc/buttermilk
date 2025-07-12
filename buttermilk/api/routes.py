@@ -72,10 +72,10 @@ async def get_session_endpoint(
 ):
     """Get or create a session for WebSocket connection."""
     logger.debug(f"Session request received. Existing ID: {session_id}")
-    
+
     try:
         # If a session_id is provided, check if it exists
-        if session_id and hasattr(flows, 'session_manager'):
+        if session_id and hasattr(flows, "session_manager"):
             # Check if session exists and is valid
             if session_id in flows.session_manager.sessions:
                 session = flows.session_manager.sessions[session_id]
@@ -84,28 +84,28 @@ async def get_session_endpoint(
                     return JSONResponse({
                         "sessionId": session_id,
                         "status": session.status.value,
-                        "created_at": session.created_at.isoformat() if hasattr(session, 'created_at') else None
+                        "created_at": session.created_at.isoformat() if hasattr(session, "created_at") else None
                     })
-        
+
         # Create a new session ID
         new_session_id = str(uuid.uuid4())
         logger.info(f"Creating new session: {new_session_id}")
-        
+
         # Pre-create the session in the session manager if it exists
         # This ensures the WebSocket connection will find it
-        if hasattr(flows, 'session_manager'):
+        if hasattr(flows, "session_manager"):
             # Ensure the session manager is started
             await flows._ensure_session_manager_started()
             # Pre-create the session so WebSocket can find it
             await flows.session_manager.get_or_create_session(new_session_id, websocket=None)
             logger.info(f"Pre-created session {new_session_id} in session manager")
-        
+
         return JSONResponse({
             "sessionId": new_session_id,
             "status": "new",
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         logger.error(f"Error in session endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create session")
@@ -178,22 +178,22 @@ async def _get_records_impl(
         try:
             available_datasets = await DataService.get_datasets_for_flow(flow, flows)
             logger.debug(f"Returning {len(available_datasets)} available datasets for flow {flow}")
-            
+
             if "application/json" in accept_header:
                 return JSONResponse(content={
                     "error": "dataset parameter required",
                     "available_datasets": available_datasets,
                     "message": f"Please specify a dataset. Available options: {', '.join(available_datasets)}"
                 }, status_code=400)
-            
+
             context_data = {
-                "records": [], 
+                "records": [],
                 "error": f"Dataset parameter required. Available datasets: {', '.join(available_datasets)}",
                 "available_datasets": available_datasets,
                 "flow": flow
             }
             return await negotiate_response(request, context_data, "partials/records_list.html", templates, status_code=400)
-            
+
         except Exception as e:
             logger.error(f"Error getting datasets for flow {flow}: {e}", exc_info=True)
             error_content = {"error": f"Error getting datasets for flow {flow}: {e!s}"}

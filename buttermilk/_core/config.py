@@ -19,7 +19,6 @@ import cloudpathlib  # For handling cloud storage paths
 import jmespath  # For JSON query language processing
 
 # BigQuery import - now a core dependency
-from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -78,6 +77,7 @@ class CloudProviderCfg(BaseModel):
         project (str | None): GCP project ID (required for GCP-based providers).
         location (str | None): Cloud region/location (required for specific services).
         model_config (ConfigDict): Pydantic model configuration.
+
     """
 
     type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
@@ -100,9 +100,9 @@ class LoggerConfig(CloudProviderCfg):
     This extends CloudProviderCfg with specific validation requirements
     for logging configurations, which need both project and location for GCP.
     """
-    
-    @model_validator(mode='after')
-    def validate_logger_requirements(self) -> 'LoggerConfig':
+
+    @model_validator(mode="after")
+    def validate_logger_requirements(self) -> "LoggerConfig":
         """Validate that required fields are present for logger configurations."""
         if self.type == "gcp":
             missing_fields = []
@@ -110,12 +110,12 @@ class LoggerConfig(CloudProviderCfg):
                 missing_fields.append("project")
             if not self.location:
                 missing_fields.append("location")
-                
+
             if missing_fields:
                 fields_str = ", ".join(missing_fields)
                 raise ValueError(
                     f"GCP logger configuration requires these fields: {fields_str}. "
-                    f"Please ensure your logger_cfg includes all required fields."
+                    f"Please ensure your logger_cfg includes all required fields.",
                 )
         elif self.type == "local":
             # Local logging has no requirements
@@ -123,9 +123,9 @@ class LoggerConfig(CloudProviderCfg):
         else:
             raise ValueError(
                 f"Unsupported logger type: '{self.type}'. "
-                f"Supported logger types are: 'gcp', 'local'"
+                f"Supported logger types are: 'gcp', 'local'",
             )
-        
+
         return self
 
 
@@ -353,24 +353,24 @@ class DataSourceConfig(BaseModel):
     # BigQuery-specific fields
     project_id: str | None = Field(
         default=None,
-        description="Google Cloud project ID for BigQuery data sources."
+        description="Google Cloud project ID for BigQuery data sources.",
     )
     dataset_id: str | None = Field(
         default=None,
-        description="BigQuery dataset ID."
+        description="BigQuery dataset ID.",
     )
     table_id: str | None = Field(
         default=None,
-        description="BigQuery table ID."
+        description="BigQuery table ID.",
     )
     randomize: bool | None = Field(
         default=None,
-        description="Whether to randomize BigQuery query results."
+        description="Whether to randomize BigQuery query results.",
     )
     batch_size: int | None = Field(
         default=None,
         ge=1,
-        description="Batch size for BigQuery operations."
+        description="Batch size for BigQuery operations.",
     )
     embedding_model: str = Field(
         default="",
@@ -411,7 +411,7 @@ class DataSourceConfig(BaseModel):
             "Use BaseStorageConfig and its type-specific subclasses from "
             "buttermilk._core.storage_config instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         super().__init__(**data)
 
@@ -431,36 +431,37 @@ class BigQueryConfig(BaseModel):
         batch_size (int): Batch size for operations. Defaults to 1000.
         auto_create (bool): Whether to auto-create tables if they don't exist.
         clustering_fields (list[str]): Default clustering fields for new tables.
+
     """
 
     project_id: str | None = Field(
         default=None,
-        description="Google Cloud project ID. If None, uses default from credentials."
+        description="Google Cloud project ID. If None, uses default from credentials.",
     )
     dataset_id: str = Field(
         default="buttermilk",
-        description="BigQuery dataset ID."
+        description="BigQuery dataset ID.",
     )
     table_id: str = Field(
         default="records",
-        description="BigQuery table ID."
+        description="BigQuery table ID.",
     )
     randomize: bool = Field(
         default=True,
-        description="Whether to randomize query results."
+        description="Whether to randomize query results.",
     )
     batch_size: int = Field(
         default=1000,
         ge=1,
-        description="Batch size for operations."
+        description="Batch size for operations.",
     )
     auto_create: bool = Field(
         default=True,
-        description="Whether to auto-create tables if they don't exist."
+        description="Whether to auto-create tables if they don't exist.",
     )
     clustering_fields: list[str] = Field(
         default=["record_id", "dataset_name"],
-        description="Default clustering fields for new tables."
+        description="Default clustering fields for new tables.",
     )
 
     model_config = ConfigDict(
@@ -772,12 +773,8 @@ class AgentConfig(BaseModel):
         intended_agent_id = f"{current_role}-{current_unique_id}" if current_role else current_unique_id
 
         if self.agent_id != intended_agent_id:
-            if self.agent_id and self.agent_id != "":
-                logger.debug(
-                    f"Agent ID for role '{current_role}' (uid: {current_unique_id}) is being updated. "
-                    f"Old/Provided ID: '{self.agent_id}', New Canonical ID: '{intended_agent_id}'. ",
-                )
-            object.__setattr__(self, "agent_id", intended_agent_id)  # Use object.__setattr__ to bypass Pydantic validation cycle here
+            # Use object.__setattr__ to bypass Pydantic validation cycle here
+            object.__setattr__(self, "agent_id", intended_agent_id)  # noqa: PLC2801
 
         # Part 2: Generate agent_name
         name_parts = []
@@ -816,6 +813,7 @@ class AgentConfig(BaseModel):
         
         Returns:
             str: The display name for the agent
+
         """
         return self.agent_name
 
@@ -1013,7 +1011,7 @@ class AgentVariants(AgentConfig):
 
 class SessionProgressConfig(BaseModel):
     """Configuration for session progress tracking."""
-    
+
     current_step: int = Field(default=0, description="Current step in the session")
     total_steps: int = Field(default=100, description="Total steps in the session")
     status: str = Field(default="waiting", description="Current session status")
@@ -1021,7 +1019,7 @@ class SessionProgressConfig(BaseModel):
 
 class SessionDefaultsConfig(BaseModel):
     """Default configuration for session data structures."""
-    
+
     progress: SessionProgressConfig = Field(default_factory=SessionProgressConfig)
     scores: dict[str, Any] = Field(default_factory=dict, description="Default scores structure")
     outcomes: list[Any] = Field(default_factory=list, description="Default outcomes list")
@@ -1030,7 +1028,7 @@ class SessionDefaultsConfig(BaseModel):
 
 class SessionConfig(BaseModel):
     """Configuration for session management."""
-    
+
     timeout_minutes: int = Field(default=60, description="Session timeout in minutes")
     cleanup_interval_minutes: int = Field(default=15, description="Cleanup interval in minutes")
     max_concurrent_sessions: int = Field(default=50, description="Maximum concurrent sessions")

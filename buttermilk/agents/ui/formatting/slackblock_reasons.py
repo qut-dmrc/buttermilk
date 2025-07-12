@@ -1,7 +1,7 @@
 import pprint
 
-from buttermilk._core.contract import AgentTrace
 from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
+from buttermilk._core.contract import AgentTrace
 from buttermilk.agents.ui.formatting.slackblock import format_response
 
 

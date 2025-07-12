@@ -8,7 +8,7 @@ The application uses a `.env` file in the `chat/` directory to configure the bac
 
 ```
 # Backend API URL
-BACKEND_API_URL="http://localhost:8080"
+BACKEND_API_URL="http://localhost:8000"
 ```
 
 Update this URL to point to your actual backend server. For production deployment, set this environment variable appropriately.
@@ -20,7 +20,7 @@ Update this URL to point to your actual backend server. For production deploymen
 The frontend uses a proxy approach for API requests. Here's how it works:
 
 1. Frontend makes a request to its own endpoint (e.g., `/api/flows`)
-2. The SvelteKit endpoint proxies this request to the backend (e.g., `http://localhost:8080/api/flows`)
+2. The SvelteKit endpoint proxies this request to the backend (e.g., `http://localhost:8000/api/flows`)
 3. The backend response is returned to the frontend
 
 This approach offers several benefits:

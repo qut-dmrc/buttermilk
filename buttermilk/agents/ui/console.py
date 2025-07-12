@@ -18,7 +18,7 @@ from rich.text import Text
 from buttermilk import logger
 
 # Import base agent and specific message types used
-from buttermilk._core.agent import AgentInput, OOBMessages
+from buttermilk._core.agent import AgentInput
 from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentAnnouncement,  # Agent announcement messages
@@ -26,6 +26,7 @@ from buttermilk._core.contract import (
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
+    OOBMessages,
     TaskProcessingComplete,  # Status updates
     TaskProcessingStarted,  # Task start notifications (to be filtered)
     ToolOutput,  # Potentially displayable tool output
@@ -80,6 +81,7 @@ AGENT_ICONS = {
     "manager": "👤",
 }
 
+
 def get_model_color(message) -> str:
     """Get color for agent based on model (matching frontend logic)"""
     if hasattr(message, "agent_info") and message.agent_info:
@@ -91,22 +93,23 @@ def get_model_color(message) -> str:
                     if model_name in model_lower:
                         # Convert hex colors to rich color names
                         if color == "#10a37f": return "green"
-                        elif color == "#1f85de": return "blue"
-                        elif color == "#00d4aa": return "cyan"
-                        elif color == "#ff6b35": return "bright_red"
-                        elif color == "#4285f4": return "bright_blue"
-                        elif color == "#0866ff": return "blue"
-                        elif color == "#3498db": return "bright_cyan"
+                        if color == "#1f85de": return "blue"
+                        if color == "#00d4aa": return "cyan"
+                        if color == "#ff6b35": return "bright_red"
+                        if color == "#4285f4": return "bright_blue"
+                        if color == "#0866ff": return "blue"
+                        if color == "#3498db": return "bright_cyan"
 
     # Fallback to role-based coloring
     if hasattr(message, "agent_info") and message.agent_info:
         agent_name = getattr(message.agent_info, "agent_name", "").lower()
         if "judge" in agent_name: return "bright_red"
-        elif "scorer" in agent_name: return "bright_yellow"
-        elif "assistant" in agent_name: return "bright_blue"
-        elif "researcher" in agent_name: return "bright_cyan"
+        if "scorer" in agent_name: return "bright_yellow"
+        if "assistant" in agent_name: return "bright_blue"
+        if "researcher" in agent_name: return "bright_cyan"
 
     return "dim white"
+
 
 def get_agent_name(message, source: str) -> str:
     """Extract agent name from message, preferring agent_info.agent_name"""
@@ -119,6 +122,7 @@ def get_agent_name(message, source: str) -> str:
     agent_id = getattr(message, "agent_id", source or "unknown")
     return agent_id
 
+
 def get_agent_icon(agent_id: str) -> str:
     """Get icon for agent based on name/type"""
     agent_lower = agent_id.lower()
@@ -126,6 +130,7 @@ def get_agent_icon(agent_id: str) -> str:
         if agent_type in agent_lower:
             return icon
     return "💬"
+
 
 def get_model_tag(message) -> str:
     """Extract model identifier from message"""
@@ -136,23 +141,24 @@ def get_model_tag(message) -> str:
                 model_lower = model.lower()
                 if "gpt-4" in model_lower or "gpt4" in model_lower:
                     return "GPT4"
-                elif "gpt-3" in model_lower:
+                if "gpt-3" in model_lower:
                     return "GPT3"
-                elif "o3" in model_lower:
+                if "o3" in model_lower:
                     return "O3"
-                elif "sonnet" in model_lower:
+                if "sonnet" in model_lower:
                     return "SNNT"
-                elif "opus" in model_lower:
+                if "opus" in model_lower:
                     return "OPUS"
-                elif "haiku" in model_lower:
+                if "haiku" in model_lower:
                     return "HAIK"
-                elif "claude" in model_lower:
+                if "claude" in model_lower:
                     return "CLDE"
-                elif "gemini" in model_lower:
+                if "gemini" in model_lower:
                     return "GEMN"
-                elif "llama" in model_lower:
+                if "llama" in model_lower:
                     return "LLMA"
     return ""
+
 
 def format_timestamp() -> str:
     """Format current time as HH:MM:SS for IRC-style display"""
@@ -235,6 +241,7 @@ class CLIUserAgent(UIAgent):
 
         Returns:
             A Rich Text object ready for printing, or None if the message is not formatted.
+
         """
         try:
             # Extract agent information
@@ -252,7 +259,7 @@ class CLIUserAgent(UIAgent):
                 display_name = agent_name
                 if model_tag:
                     display_name = f"{display_name}[{model_tag}]"
-            
+
             # Apply UI-specific formatting (ljust for console alignment)
             agent_display = display_name[:16].ljust(16)
 
@@ -340,7 +347,7 @@ class CLIUserAgent(UIAgent):
                 # Format agent announcements
                 ann_type = getattr(message, "announcement_type", "unknown")
                 status = getattr(message, "status", "unknown")
-                
+
                 # Choose icon and color based on announcement type and status
                 if ann_type == "initial":
                     icon = "🆕"
@@ -354,28 +361,28 @@ class CLIUserAgent(UIAgent):
                 else:
                     icon = "📢"
                     color = "white"
-                
+
                 result.append(f"{icon} ", style=color)
                 result.append(f"[{status.upper()}] ", style=color)
-                
+
                 # Show agent role and tools
                 if hasattr(message, "agent_config") and message.agent_config:
                     role = getattr(message.agent_config, "role", "UNKNOWN")
                     result.append(f"{role} ", style="bold")
-                
+
                 # Show available tools if any
                 tools = getattr(message, "available_tools", [])
                 if tools:
                     tools_str = ", ".join(tools[:3])  # Show first 3 tools
                     if len(tools) > 3:
-                        tools_str += f" +{len(tools)-3}"
+                        tools_str += f" +{len(tools) - 3}"
                     result.append(f"[{tools_str}] ", style="dim cyan")
-                
+
                 # Show content
                 content = getattr(message, "content", "")
                 if content:
                     result.append(content[:100], style="white")
-                
+
                 content_added = True
 
             elif isinstance(message, UIMessage):
@@ -385,46 +392,46 @@ class CLIUserAgent(UIAgent):
                     # Special formatting for agent registry display
                     result.append("📋 AGENTS: ", style="bright_yellow")
                     result.append(f"{len(registry)} active", style="white")
-                    
+
                     # If content is "!agents" or similar, show detailed list
                     content = getattr(message, "content", "")
                     if "!agents" in content.lower() or "agent" in content.lower():
                         # Add line break for detailed view
                         result.append("\n", style="")
-                        
+
                         # Show each agent in registry
                         for agent_id, info in list(registry.items())[:5]:  # Show first 5
                             role = info.get("role", "UNKNOWN")
                             status = info.get("status", "unknown")
                             tools = info.get("tools", [])
                             model = info.get("model", "")
-                            
+
                             # Indent for sub-items
                             result.append(" " * 25 + "├ ", style="dim")
-                            
+
                             # Agent icon and name
                             agent_icon = get_agent_icon(role)
                             result.append(f"{agent_icon} {role}", style="bold white")
-                            
+
                             # Status indicator
                             status_color = "green" if status == "active" else "yellow"
                             result.append(f" [{status}]", style=status_color)
-                            
+
                             # Model tag if available
                             if model:
-                                model_tag = get_model_tag(type('obj', (), {'agent_info': type('info', (), {'parameters': type('params', (), {'model': model})})})())
+                                model_tag = get_model_tag(type("obj", (), {"agent_info": type("info", (), {"parameters": type("params", (), {"model": model})})})())
                                 if model_tag:
                                     result.append(f" {model_tag}", style="dim")
-                            
+
                             # Tools summary
                             if tools:
                                 tools_str = f" ({len(tools)} tools)"
                                 result.append(tools_str, style="dim cyan")
-                            
+
                             result.append("\n", style="")
-                        
+
                         if len(registry) > 5:
-                            result.append(" " * 25 + f"└ ... and {len(registry)-5} more\n", style="dim")
+                            result.append(" " * 25 + f"└ ... and {len(registry) - 5} more\n", style="dim")
                 else:
                     # Standard UIMessage formatting
                     result.append("REQ: ", style="bright_yellow")
@@ -512,7 +519,7 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, TaskProcessingStarted):
             # Skip all TaskProcessingStarted messages
             return None
-        elif isinstance(message, TaskProcessingComplete):
+        if isinstance(message, TaskProcessingComplete):
             if getattr(message, "is_error", False):
                 # Only show failed tasks
                 if formatted_msg := self._fmt_msg(message, source=source):
@@ -540,7 +547,7 @@ class CLIUserAgent(UIAgent):
 
                 # Handle special commands
                 input_lower = user_input.strip().lower()
-                
+
                 # Handle exit command
                 if input_lower == "exit":
                     logger.info("User requested exit.")
@@ -551,16 +558,16 @@ class CLIUserAgent(UIAgent):
                     # Send a special message via callback?
                     # await self.callback_to_groupchat(ManagerMessage(confirm=False, prompt="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
-                
+
                 # Handle agent list command
-                elif input_lower in ["!agents", "!list", "!who"]:
+                if input_lower in ["!agents", "!list", "!who"]:
                     logger.info("User requested agent list.")
                     # Send a special message requesting agent list
                     response = ManagerMessage(
-                        confirm=False, 
-                        interrupt=False, 
+                        confirm=False,
+                        interrupt=False,
                         content="!agents",
-                        request_agent_list=True  # Special flag for agent list request
+                        request_agent_list=True,  # Special flag for agent list request
                     )
                     await self.callback_to_groupchat(response)
                     continue

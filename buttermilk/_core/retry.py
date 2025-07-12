@@ -12,7 +12,7 @@ from anthropic._exceptions import (
     RateLimitError as AnthropicRateLimitError,
     ServiceUnavailableError as AnthropicServiceUnavailableError,
 )
-from google.api_core.exceptions import TooManyRequests, ResourceExhausted
+from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,

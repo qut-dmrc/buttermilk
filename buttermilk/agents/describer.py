@@ -10,16 +10,16 @@ from typing import Any  # For type hinting
 
 from PIL.Image import Image  # For image type checking
 from pydantic import BaseModel, Field
+
 from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk contract types
 from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
-from buttermilk.utils.media import download_and_convert  # Utility for media handling
 
 
 class MediaDescription(BaseModel):
     """Structured output for media descriptions."""
-    
+
     description: str = Field(
         ...,
         description="The textual description of the media content (alt text, caption, or transcript)"
@@ -57,7 +57,7 @@ class Describer(LLMAgent):
         _output_model: Set to MediaDescription for structured outputs
 
     """
-    
+
     # Force structured output for descriptions
     _output_model: type[BaseModel] | None = MediaDescription
 
@@ -192,7 +192,7 @@ class Describer(LLMAgent):
         # Now process with the parent LLMAgent's process method
         # which will use the template and model to generate a description
         result = await super()._process(message=message, **kwargs)
-        
+
         # The parent's process should return structured MediaDescription
         # due to _output_model setting
         return result
