@@ -935,16 +935,12 @@ class ProceedToNextTaskSignal(BaseModel):
 class HeartBeat(BaseModel):
     """A simple message potentially used for liveness checks or basic flow control.
 
-    The exact usage context might depend on specific agent or orchestrator
-    implementations (e.g., related to `Agent._check_heartbeat`).
-
     Attributes:
         go_next (bool): A boolean signal, possibly indicating if the recipient
             should proceed with an action or if a condition is met.
 
     """
 
-    # TODO: Clarify usage context if this is actively used by Agent._check_heartbeat.
     go_next: bool = Field(..., description="Signal indicating if the recipient should proceed or a condition is met.")
 
 

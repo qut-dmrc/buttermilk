@@ -15,7 +15,6 @@ from abc import abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Union
-import warnings
 
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
@@ -191,19 +190,7 @@ class Agent(RoutedAgent):
         self._id = id
         self._runtime = runtime
 
-    async def save_state(self) -> Mapping[str, Any]:
-        """Save the state of the agent. The result must be JSON serializable."""
-        warnings.warn("save_state not implemented", stacklevel=2)
-        return {}
 
-    async def load_state(self, state: Mapping[str, Any]) -> None:
-        """Load in the state of the agent obtained from `save_state`.
-
-        Args:
-            state (Mapping[str, Any]): State of the agent. Must be JSON serializable.
-        """
-        warnings.warn("load_state not implemented", stacklevel=2)
-        pass
 
     async def close(self) -> None:
         """Called when the runtime is closed"""
@@ -814,40 +801,7 @@ class Agent(RoutedAgent):
 
         await self.handle_groupchat_message(message, ctx)
 
-    # @message_handler
-    # async def handle_control_message(
-    #     self,
-    #     message: OOBMessages,
-    #     ctx: MessageContext,
-    # ) -> Union[OOBMessages, None]:
-    #     """Handles Out-Of-Band (OOB) control messages.
 
-    #     This method is intended for processing messages that are not part of the
-    #     standard request-response flow of agent processing, but rather control
-    #     signals or special events. Examples include requests to reset the agent,
-    #     status queries, or other administrative commands.
-
-    #     Subclasses can override this method to react to specific types of OOB
-    #     messages relevant to their functionality. The base implementation is a
-    #     no-op for most messages but serves as a hook for future extensions or
-    #     specific agent needs.
-
-    #     Args:
-    #         message: The Out-Of-Band (`OOBMessages`) message received.
-    #         ctx: The message context containing sender info and cancellation token.
-
-    #     Returns:
-    #         Union[OOBMessages, None]: An optional `OOBMessage` as a direct response to
-    #         the handled event, or `None` if no direct response is generated.
-
-    #     """
-    #     logger.debug(f"Agent {self.agent_name} received OOB event: {type(message).__name__}. Default handler is a no-op.")
-    #     # Example of how a subclass might handle a specific OOB message:
-    #     # if isinstance(message, YourSpecificOOBMessage):
-    #     #     # Perform some action
-    #     #     await self.on_reset(cancellation_token) # e.g., reset on a specific signal
-    #     #     return OOBResponse(...) # Optionally return a response
-    #     return None  # Default: no direct response
 
     @message_handler
     async def handle_step_request(
@@ -882,36 +836,7 @@ class Agent(RoutedAgent):
 
     # --- Helper Methods ---
 
-    async def _check_heartbeat(self, timeout: float = 240.0) -> bool:
-        """Waits for a heartbeat signal on the internal `_heartbeat` queue.
 
-        This method can be used by orchestrators or monitoring systems to check
-        if an agent is responsive or ready for tasks. A heartbeat is typically
-        sent by the agent itself or a managing component to indicate liveness.
-        The agent must have a mechanism to put `True` or some value onto its
-        `_heartbeat` queue for this method to succeed.
-
-        Args:
-            timeout: The maximum number of seconds to wait for a heartbeat signal.
-                Defaults to 240 seconds.
-
-        Returns:
-            bool: `True` if a heartbeat signal was received within the timeout period,
-            `False` otherwise (e.g., on timeout or if an error occurs).
-
-        """
-        try:
-            logger.debug(f"Agent {self.agent_name} waiting for heartbeat (timeout: {timeout}s)...")
-            await asyncio.wait_for(self._heartbeat.get(), timeout=timeout)
-            logger.debug(f"Agent {self.agent_name} received heartbeat.")
-            self._heartbeat.task_done()  # Mark the item from queue as processed
-            return True
-        except TimeoutError:  # More specific exception for timeout
-            logger.warning(f"Agent {self.agent_name} timed out waiting for heartbeat after {timeout}s.")
-            return False
-        except Exception as e:
-            logger.error(f"Agent {self.agent_name}: Error checking heartbeat: {e!s}")
-            return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Augments an incoming `AgentInput` message with the agent's internal state.

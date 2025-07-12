@@ -23,9 +23,4 @@ def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
     # return output
 
 
-def col_mapping_hydra_to_pandas(mapping_dict: dict) -> dict:
-    # For local dataframe mapping
-    output = col_mapping_hydra_to_local(mapping_dict)
-    output = {v: k for k, v in mapping_dict.items()}
 
-    return output
