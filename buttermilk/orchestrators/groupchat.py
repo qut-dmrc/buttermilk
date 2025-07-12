@@ -36,7 +36,7 @@ from buttermilk._core import (
     StepRequest,
 )
 from buttermilk._core.agent import Agent, ProcessingError
-from buttermilk._core.constants import CONDUCTOR, MANAGER
+from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
@@ -190,7 +190,7 @@ class AutogenOrchestrator(Orchestrator):
         self._pending_messages.clear()
 
         # Start up the host agent with participants and their tools
-        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())}")
+        logger.info(f"Sending ConductorRequest to topic '{self._topic}' with {len(self._participants)} participants: {list(self._participants.keys())}")
         conductor_request = ConductorRequest(
             inputs=request.model_dump(),
             participants=self._participants,
@@ -198,7 +198,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
         await self._runtime.publish_message(
             conductor_request,
-            topic_id=DefaultTopicId(type=CONDUCTOR),
+            topic_id=self._topic,
         )
 
         return termination_handler, interrupt_handler
