@@ -12,16 +12,15 @@ LLM interaction, handling the core template rendering and LLM communication
 workflow.
 """
 
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Self
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any, Self
 
-import pydantic
 import hydra
-
+import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, SystemMessage, UserMessage
+from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, UserMessage
 
-from buttermilk import buttermilk as bm
-from buttermilk import logger
+from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
@@ -74,6 +73,7 @@ class LLMAgent(Agent):
             AgentInput(inputs={"text": "Hello world"})
         )
         ```
+
     """
 
     # LLM-specific configurations
@@ -97,15 +97,16 @@ class LLMAgent(Agent):
 
         Raises:
             ValueError: If 'model' is not specified in parameters.
+
         """
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
-        
+
         # Initialize private attributes
         self._model: str = self.parameters.get("model", "")
         self._output_model: type[pydantic.BaseModel] | None = None
-        self._tools_list: list["Tool"] = []
+        self._tools: list[Tool] = []
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
@@ -115,10 +116,10 @@ class LLMAgent(Agent):
         It checks `self.tools` (an `AgentConfig` field, typically populated from
         Hydra configuration) and uses `create_tool_functions` to convert these
         tool definitions into a list of Autogen-compatible tool objects
-        (`_tools_list`).
+        (`_tools`).
 
         Returns:
-            Self: The agent instance with `_tools_list` populated.
+            Self: The agent instance with `_tools` populated.
 
         """
         # `self._config.tools` is populated by AgentConfig based on Hydra config.
@@ -129,21 +130,22 @@ class LLMAgent(Agent):
             _tool_objects = hydra.utils.instantiate(self._config.tools)
 
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            self._tools_list = create_tool_functions(_tool_objects)
+            self._tools = create_tool_functions(_tool_objects)
         else:
             logger.debug(f"Agent '{self.agent_name}': No tools configured.")
-            self._tools_list = []
+            self._tools = []
         return self
 
     def get_available_tools(self) -> list["Tool"]:
         """Get list of tools this agent can respond to.
         
-        Returns the configured tools from self._tools_list.
+        Returns the configured tools from self._tools.
         
         Returns:
             list[Tool]: List of configured tools.
+
         """
-        return self._tools_list
+        return self._tools
 
     def get_display_name(self) -> str:
         """Get the display name for this LLM agent, including model information.
@@ -152,8 +154,9 @@ class LLMAgent(Agent):
         
         Returns:
             str: Display name with model tag appended
+
         """
-        base_name = super().get_display_name()
+        base_name = self._config.get_display_name()
         model_tag = self._get_model_tag()
         if model_tag:
             return f"{base_name} [{model_tag}]"
@@ -164,8 +167,9 @@ class LLMAgent(Agent):
         
         Returns:
             str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
+
         """
-        if not self.parameters['model']:
+        if not self.parameters["model"]:
             return ""
 
         model_lower = self.parameters["model"].lower()
@@ -173,19 +177,19 @@ class LLMAgent(Agent):
         # Common model patterns
         if "gpt-4" in model_lower:
             return "GPT4"
-        elif "gpt-3.5" in model_lower:
+        if "gpt-3.5" in model_lower:
             return "GPT3"
-        elif "sonnet" in model_lower:
+        if "sonnet" in model_lower:
             return "SONN"
-        elif "opus" in model_lower:
+        if "opus" in model_lower:
             return "OPUS"
-        elif "haiku" in model_lower:
+        if "haiku" in model_lower:
             return "HAIK"
-        elif "claude" in model_lower:
+        if "claude" in model_lower:
             return "CLDE"
-        elif "gemini" in model_lower:
+        if "gemini" in model_lower:
             return "GEMN"
-        elif "llama" in model_lower:
+        if "llama" in model_lower:
             return "LLMA"
         return ""
 
@@ -324,10 +328,10 @@ class LLMAgent(Agent):
             error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
-        tool_names = [getattr(tool, 'name', str(tool)) for tool in self._tools_list]
+        tool_names = [getattr(tool, "name", str(tool)) for tool in self._tools]
         logger.info(
             f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
-            f"Configured tools ({len(self._tools_list)}): {tool_names}"
+            f"Configured tools ({len(self._tools)}): {tool_names}",
         )
         # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
         model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
@@ -337,7 +341,7 @@ class LLMAgent(Agent):
         try:
             chat_result: CreateResult = await model_client.call_chat(
                 messages=llm_messages_to_send,
-                tools_list=self._tools_list,
+                tools_list=self._tools,
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected Pydantic schema for structured output
             )
@@ -348,7 +352,7 @@ class LLMAgent(Agent):
 
         llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
         logger.debug(
-            f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}"
+            f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
 
         # 3. Parse the LLM response and create an AgentOutput
@@ -371,27 +375,27 @@ class LLMAgent(Agent):
                 except Exception as parse_error:
                     logger.error(
                         f"Agent {self.agent_id}: Failed to parse LLM response into {schema.__name__}: {parse_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
                     # Raise error - no fallback for structured outputs
                     raise ProcessingError(
-                        f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}"
+                        f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                     ) from parse_error
-            elif hasattr(chat_result.content, 'model_dump'):
+            elif hasattr(chat_result.content, "model_dump"):
                 # Already a Pydantic object, but might be wrong type
                 if isinstance(chat_result.content, self._output_model):
                     parsed_object = chat_result.content
                 else:
                     logger.warning(
                         f"Agent {self.agent_name}: Response is {type(chat_result.content).__name__}, "
-                        f"expected {self._output_model.__name__}"
+                        f"expected {self._output_model.__name__}",
                     )
 
         # For structured outputs, require parsed object
         if self._output_model:
             if parsed_object is None:
                 raise ProcessingError(
-                    f"Agent {self.agent_name} requires structured output of type {self._output_model.__name__} but parsing failed"
+                    f"Agent {self.agent_name} requires structured output of type {self._output_model.__name__} but parsing failed",
                 )
             final_output = parsed_object
         else:
@@ -399,7 +403,7 @@ class LLMAgent(Agent):
             final_output = chat_result.content
 
         # Store the model context if available
-        if hasattr(model_client, '_current_messages'):
+        if hasattr(model_client, "_current_messages"):
             self._model_context = model_client._current_messages
 
         # Prepare metadata for AgentOutput

@@ -1,7 +1,6 @@
 import asyncio
 import importlib
 import json
-import logging
 import random
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
@@ -11,8 +10,7 @@ from typing import Any
 import shortuuid
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SessionStatus(str, Enum):
@@ -337,7 +335,7 @@ class FlowRunContext(BaseModel):
                     error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
                     error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
                     await self.websocket.send_json(error_message_data)
-                except Exception as e_fallback:
+                except Exception:
                     pass
 
             logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected. {e}")
@@ -656,7 +654,7 @@ class SessionManager:
             return False
 
         session = self.sessions[session_id]
-        
+
         # Only allow reconnection for ACTIVE sessions
         if session.status != SessionStatus.ACTIVE:
             logger.info(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
@@ -671,7 +669,7 @@ class SessionManager:
             # Clear active connections for this session
             if session_id in self.active_connections:
                 self.active_connections[session_id].clear()
-            
+
             logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
             return True
         else:
@@ -694,7 +692,7 @@ class SessionManager:
             return None
 
         session = self.sessions[session_id]
-        
+
         # Only allow reconnection to sessions in RECONNECTING status
         if session.status != SessionStatus.RECONNECTING:
             logger.warning(f"Attempted to reconnect to session {session_id} in status {session.status.value}")
@@ -710,7 +708,7 @@ class SessionManager:
         session.websocket = websocket
         session.add_websocket(websocket)
         session.update_activity()
-        
+
         # Add to active connections
         if session_id not in self.active_connections:
             self.active_connections[session_id] = set()
@@ -938,7 +936,7 @@ class FlowRunner(BaseModel):
         # Ensure BM is fully initialized before running flow
         from buttermilk._core.dmrc import get_bm
         bm = get_bm()
-        if hasattr(bm, 'ensure_initialized'):
+        if hasattr(bm, "ensure_initialized"):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")
 

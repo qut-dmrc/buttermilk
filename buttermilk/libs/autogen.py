@@ -91,7 +91,7 @@ class AutogenAgentAdapter(RoutedAgent):
             # Instantiate the agent using the provided class and config.
             try:
                 # Convert AgentConfig to dict if needed
-                if hasattr(agent_cfg, 'model_dump'):
+                if hasattr(agent_cfg, "model_dump"):
                     config_dict = agent_cfg.model_dump()
                 else:
                     config_dict = agent_cfg
@@ -108,7 +108,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         # Set the default topic ID based on the provided type string.
         self.topic_id = DefaultTopicId(type=topic_type)
-        
+
         # Initialize task tracking
         self._background_tasks = set()
 
@@ -121,7 +121,7 @@ class AutogenAgentAdapter(RoutedAgent):
             callback_to_groupchat=self._make_publish_callback(),
             public_callback=self._make_publish_callback()
         )
-        
+
         task = asyncio.create_task(init_task)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
@@ -162,14 +162,14 @@ class AutogenAgentAdapter(RoutedAgent):
         Cancels all background tasks and calls cleanup on the wrapped agent.
         """
         logger.debug(f"Cleaning up AutogenAgentAdapter for agent {self.agent.agent_name}")
-        
+
         # Cancel all background tasks
         if self._background_tasks:
             logger.debug(f"Cancelling {len(self._background_tasks)} background tasks for agent {self.agent.agent_name}")
             for task in self._background_tasks:
                 if not task.done():
                     task.cancel()
-            
+
             # Wait for cancellation with timeout
             try:
                 await asyncio.wait_for(
@@ -178,21 +178,21 @@ class AutogenAgentAdapter(RoutedAgent):
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout waiting for background tasks cancellation in adapter for {self.agent.agent_name}")
-            
+
             self._background_tasks.clear()
-        
+
         # Cleanup the wrapped agent
         try:
             # Store the announcement callback if agent supports it
-            if hasattr(self.agent, '_announcement_callback'):
+            if hasattr(self.agent, "_announcement_callback"):
                 self.agent._announcement_callback = self._make_publish_callback()
-            
+
             # Check if agent supports cleanup with announcement
-            if hasattr(self.agent, 'cleanup_with_announcement'):
+            if hasattr(self.agent, "cleanup_with_announcement"):
                 await self.agent.cleanup_with_announcement()
             else:
                 await self.agent.cleanup()
-            
+
             logger.debug(f"Agent {self.agent.agent_name} cleanup completed")
         except Exception as e:
             logger.warning(f"Error during agent cleanup for {self.agent.agent_name}: {e}")

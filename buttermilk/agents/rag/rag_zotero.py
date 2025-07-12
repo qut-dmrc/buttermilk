@@ -4,12 +4,11 @@ This module provides a Zotero-focused RAG agent that inherits from the
 simplified RagAgent base class and adds only Zotero-specific output formatting.
 """
 
-from typing import Any
 
 from pydantic import BaseModel, Field
 
 from buttermilk.agents.rag.iterative_rag_agent import IterativeRagAgent
-from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
+from buttermilk.agents.rag.simple_rag_agent import Reference, ResearchResult
 
 
 class ZoteroReference(Reference):
@@ -17,7 +16,7 @@ class ZoteroReference(Reference):
     
     Extends the base Reference class to include proper academic citations.
     """
-    
+
     citation: str = Field(..., description="Full academic citation for the reference.")
     doi: str | None = Field(default=None, description="DOI of the reference if available.")
 

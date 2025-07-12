@@ -31,22 +31,22 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
         """
         # 1. Core buttermilk configurations (base infrastructure)
         search_path.append("buttermilk_core", "pkg://buttermilk.conf")
-        
+
         # 2. User-specific configuration directory
         user_config_dir = os.getenv("BUTTERMILK_CONFIG_DIR")
         if user_config_dir and Path(user_config_dir).exists():
             search_path.append("user_config", f"file://{user_config_dir}")
-        
+
         # 3. Project-specific configurations in current working directory
         cwd_conf = Path.cwd() / "conf"
         if cwd_conf.exists():
             search_path.append("project_config", f"file://{cwd_conf}")
-        
+
         # 4. Home directory configurations
         home_config = Path.home() / ".config" / "buttermilk"
         if home_config.exists():
             search_path.append("home_config", f"file://{home_config}")
-        
+
         # 5. Well-known external package patterns
         external_packages = self._discover_external_packages()
         for pkg_name, pkg_path in external_packages:
@@ -64,19 +64,19 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
             List of (package_name, package_path) tuples
         """
         external_packages = []
-        
+
         # Common patterns for research configuration packages
         patterns = [
             "buttermilk_*_configs",
-            "*_buttermilk_flows", 
+            "*_buttermilk_flows",
             "research_*_configs",
             "*_research_flows"
         ]
-        
+
         try:
             import importlib.util
             import sys
-            
+
             # Check for installed packages matching our patterns
             for module_name in sys.modules:
                 if any(self._matches_pattern(module_name, pattern) for pattern in patterns):
@@ -86,13 +86,13 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
                             external_packages.append((module_name, f"pkg://{module_name}.conf"))
                     except ImportError:
                         continue
-                        
+
         except Exception:
             # If package discovery fails, continue without external packages
             pass
-        
+
         return external_packages
-    
+
     def _matches_pattern(self, name: str, pattern: str) -> bool:
         """Check if a module name matches a wildcard pattern."""
         import fnmatch

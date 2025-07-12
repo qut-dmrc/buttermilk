@@ -21,7 +21,7 @@ except ImportError:
     AssistantMessage = None
     UserMessage = None
     AUTOGEN_AVAILABLE = False
-    
+
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
@@ -36,7 +36,7 @@ from pydantic import (
 
 # Conditional imports to avoid circular dependencies
 if TYPE_CHECKING:
-    from buttermilk.data.vector import ChunkedDocument
+    pass
 
 
 class Record(BaseModel):
@@ -362,7 +362,7 @@ class Record(BaseModel):
             from buttermilk._core.log import logger
             logger.warning("Autogen not available. Cannot create message object.")
             return None
-            
+
         if role == "assistant":
             # Assistant message content should likely be string representation
             return AssistantMessage(content=self.as_markdown, source=self.record_id)

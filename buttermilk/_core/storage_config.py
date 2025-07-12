@@ -1,16 +1,16 @@
 """Storage configuration classes with type-specific schemas."""
 
 import os
-from typing import Any, Literal, Union, Annotated
+from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, computed_field, model_validator, Discriminator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from buttermilk._core.log import logger
 
 
 class AdditionalFieldConfig(BaseModel):
     """Configuration for additional fields to embed in multi-field embedding."""
-    
+
     source_field: str = Field(
         description="Name of the field in Record.metadata to embed"
     )
@@ -25,7 +25,7 @@ class AdditionalFieldConfig(BaseModel):
 
 class MultiFieldEmbeddingConfig(BaseModel):
     """Configuration for embedding multiple fields from records."""
-    
+
     content_field: str = Field(
         default="content",
         description="Main content field to chunk and embed (from Record.content)"
@@ -71,7 +71,7 @@ class BaseStorageConfig(BaseModel):
         default=True,
         description="Whether to auto-create storage if it doesn't exist"
     )
-    
+
     # Data filtering and selection
     filter: dict[str, Any] = Field(
         default_factory=dict,
@@ -90,7 +90,7 @@ class BaseStorageConfig(BaseModel):
         default=None,
         description="Maximum number of records to process"
     )
-    
+
     # Generic fields that some storage types may use
     name: str = Field(
         default="",
@@ -104,7 +104,7 @@ class BaseStorageConfig(BaseModel):
         default=None,
         description="URI for data source (alternative to path for some storage types)"
     )
-    
+
     # Provider-specific configuration
     db: dict[str, Any] = Field(
         default_factory=dict,
@@ -116,7 +116,7 @@ class BaseStorageConfig(BaseModel):
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
     }
-    
+
     def merge_defaults(self, defaults):
         """Merge this config with default values, prioritizing this config's values."""
         exclude_fields = set()
@@ -130,9 +130,9 @@ class BaseStorageConfig(BaseModel):
 
 class BigQueryStorageConfig(BaseStorageConfig):
     """Configuration for BigQuery storage operations."""
-    
+
     type: Literal["bigquery"] = Field(default="bigquery", description="Storage backend type")
-    
+
     # BigQuery-specific fields
     project_id: str | None = Field(
         default=None,
@@ -150,7 +150,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
         default=["record_id", "dataset_name"],
         description="Fields to use for clustering"
     )
-    
+
     # Data organization specific to BigQuery
     max_records_per_group: int = Field(
         default=-1,
@@ -176,7 +176,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
         default=None,
         description="Data split type for datasets (e.g., 'train', 'test', 'validation')."
     )
-    
+
     @model_validator(mode="after")
     def set_project_id_from_env(self) -> "BigQueryStorageConfig":
         """Set project_id from environment if not already set."""
@@ -195,10 +195,10 @@ class BigQueryStorageConfig(BaseStorageConfig):
 
 class FileStorageConfig(BaseStorageConfig):
     """Configuration for file-based storage operations."""
-    
+
     type: Literal["file", "local", "gcs", "s3", "plaintext"] = Field(description="Storage backend type")
-    
-    # File-specific fields  
+
+    # File-specific fields
     path: str | None = Field(
         default=None,
         description="File path or URI for storage location"
@@ -215,13 +215,13 @@ class FileStorageConfig(BaseStorageConfig):
         default=None,
         description="Columns to use as an index"
     )
-    
+
 
 class VectorStorageConfig(BaseStorageConfig):
     """Configuration for vector database storage operations."""
-    
+
     type: Literal["chromadb", "vector"] = Field(description="Storage backend type")
-    
+
     # Vector storage specific fields
     persist_directory: str | None = Field(
         default=None,
@@ -239,7 +239,7 @@ class VectorStorageConfig(BaseStorageConfig):
         default=None,
         description="Dimensionality of embeddings"
     )
-    
+
     # Multi-field embedding configuration
     multi_field_embedding: dict[str, Any] | None = Field(
         default=None,
@@ -252,9 +252,9 @@ class VectorStorageConfig(BaseStorageConfig):
 
 class HuggingFaceStorageConfig(BaseStorageConfig):
     """Configuration for HuggingFace dataset storage operations."""
-    
+
     type: Literal["huggingface"] = Field(default="huggingface", description="Storage backend type")
-    
+
     # HuggingFace specific fields
     dataset_id: str | None = Field(
         default=None,
@@ -264,11 +264,11 @@ class HuggingFaceStorageConfig(BaseStorageConfig):
         default="train",
         description="Data split identifier (train/test/val)."
     )
-    
+
 
 class GeneratorStorageConfig(BaseStorageConfig):
     """Configuration for generator-based storage operations."""
-    
+
     type: Literal["generator", "job", "outputs"] = Field(description="Storage backend type")
 
 
@@ -276,7 +276,7 @@ class GeneratorStorageConfig(BaseStorageConfig):
 StorageConfig = Annotated[
     Union[
         BigQueryStorageConfig,
-        FileStorageConfig, 
+        FileStorageConfig,
         VectorStorageConfig,
         HuggingFaceStorageConfig,
         GeneratorStorageConfig
@@ -305,7 +305,7 @@ class BigQueryDefaults(BaseModel):
 
 class StorageFactory:
     """Factory for creating storage instances based on configuration."""
-    
+
     @staticmethod
     def create_config(config_dict: dict) -> BaseStorageConfig:
         """Create appropriate config type based on the 'type' field in the dictionary.
@@ -323,17 +323,17 @@ class StorageFactory:
         """
         if not isinstance(config_dict, dict):
             raise ValueError(f"Expected dict, got {type(config_dict)}")
-            
-        storage_type = config_dict.get('type')
+
+        storage_type = config_dict.get("type")
         if not storage_type:
             raise ValueError("Missing 'type' field in storage configuration")
-        
+
         # Use the discriminated union for proper validation
         from pydantic import TypeAdapter
-        
+
         adapter = TypeAdapter(StorageConfig)
         return adapter.validate_python(config_dict)
-    
+
     @staticmethod
     def create_storage(config: Union[StorageConfig, BaseStorageConfig], bm_instance=None):
         """Create storage instance based on configuration type.
@@ -346,19 +346,19 @@ class StorageFactory:
             Storage instance appropriate for the config type
         """
         from buttermilk.data.vector import ChromaDBEmbeddings
-        
+
         # Handle both new type-specific configs and legacy unified configs
         if not isinstance(config, (BaseStorageConfig, dict)):
             raise ValueError(f"Expected StorageConfig or dict instance, got {type(config)}")
-        
+
         # Convert dict (from OmegaConf) to appropriate config type
         if isinstance(config, dict):
             config = StorageFactory.create_config(config)
-            
+
         storage_type = config.type
-        
+
         storage_type = config.type
-        
+
         if storage_type in ["bigquery", "bq"]:
             from buttermilk.storage.bigquery import BigQueryStorage
             return BigQueryStorage(config, bm_instance)
@@ -368,27 +368,27 @@ class StorageFactory:
         elif storage_type == "chromadb":
             # Convert VectorStorageConfig to ChromaDBEmbeddings parameters
             chromadb_params = {
-                'collection_name': getattr(config, 'collection_name', None) or 'default_collection',
-                'persist_directory': getattr(config, 'persist_directory', None) or './data/chromadb',
-                'embedding_model': getattr(config, 'embedding_model', None) or 'gemini-embedding-001',
-                'dimensionality': getattr(config, 'dimensionality', None) or 3072,
+                "collection_name": getattr(config, "collection_name", None) or "default_collection",
+                "persist_directory": getattr(config, "persist_directory", None) or "./data/chromadb",
+                "embedding_model": getattr(config, "embedding_model", None) or "gemini-embedding-001",
+                "dimensionality": getattr(config, "dimensionality", None) or 3072,
             }
-            
+
             # Add multi-field embedding configuration if specified
-            multi_field_embedding = getattr(config, 'multi_field_embedding', None)
+            multi_field_embedding = getattr(config, "multi_field_embedding", None)
             if multi_field_embedding:
                 try:
                     # Parse multi-field config into proper Pydantic model
                     multi_field_config = MultiFieldEmbeddingConfig(**multi_field_embedding)
-                    chromadb_params['multi_field_config'] = multi_field_config
+                    chromadb_params["multi_field_config"] = multi_field_config
                 except Exception as e:
                     logger.warning(f"Invalid multi_field_embedding config, using default: {e}")
-            
+
             # Add other ChromaDB-specific fields if present in config
-            for field in ['concurrency', 'upsert_batch_size', 'embedding_batch_size', 'arrow_save_dir']:
+            for field in ["concurrency", "upsert_batch_size", "embedding_batch_size", "arrow_save_dir"]:
                 if hasattr(config, field) and getattr(config, field) is not None:
                     chromadb_params[field] = getattr(config, field)
-            
+
             return ChromaDBEmbeddings(**chromadb_params)
         elif storage_type == "huggingface":
             from buttermilk.storage.huggingface import HuggingFaceStorage
@@ -397,10 +397,10 @@ class StorageFactory:
             # Use FileStorage with plaintext-specific configuration
             from buttermilk.storage.file import FileStorage
             # For plaintext, we typically use glob patterns
-            glob_pattern = getattr(config, 'glob', None)
+            glob_pattern = getattr(config, "glob", None)
             if not glob_pattern or glob_pattern == "**/*":
                 # Set default glob for text files
-                if hasattr(config, 'glob'):
+                if hasattr(config, "glob"):
                     config.glob = "**/*.txt"
             return FileStorage(config, bm_instance)
         else:

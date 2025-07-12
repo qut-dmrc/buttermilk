@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { TestClient, ScenarioRunner, TestScenario } from './TestClient.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ScenarioRunner, TestClient, TestScenario } from './TestClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,7 +68,7 @@ async function runRealServerTests() {
   console.log('==============================================\n');
 
   const host = process.env.BUTTERMILK_HOST || 'localhost';
-  const port = parseInt(process.env.BUTTERMILK_PORT || '8080');
+  const port = parseInt(process.env.BUTTERMILK_PORT || '8000');
   
   console.log(`📡 Testing against server at ${host}:${port}`);
   console.log('   (Set BUTTERMILK_HOST and BUTTERMILK_PORT to test different servers)\n');
@@ -198,7 +198,7 @@ Options:
 
 Environment Variables:
   BUTTERMILK_HOST    Server host (default: localhost)
-  BUTTERMILK_PORT    Server port (default: 8080)
+  BUTTERMILK_PORT    Server port (default: 8000)
 
 This test suite runs against a real Buttermilk backend server.
 Make sure the server is running before executing tests.

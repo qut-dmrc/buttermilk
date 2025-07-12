@@ -14,8 +14,11 @@ It uses the `google-cloud-bigquery` and `google-cloud-bigquery-storage` client l
 
 import asyncio
 import datetime
-from collections.abc import Sequence  # For type hinting sequences
-from typing import Any, Mapping, Optional  # For type hinting
+from collections.abc import (
+    Mapping,  # For type hinting
+    Sequence,  # For type hinting sequences
+)
+from typing import Any
 
 import pandas as pd
 import pydantic  # Pydantic core, though less used directly in this file now
@@ -30,17 +33,18 @@ try:
         ProtoRows,
     )
     BIGQUERY_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     # BigQuery not available - create placeholder types
     bigquery = None
     bigquery_storage_v1beta2 = None
     BigQueryWriteAsyncClient = None
     ProtoRows = None
     BIGQUERY_AVAILABLE = False
-    
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator  # Pydantic components
 
-from .._core.log import logger  # Centralized logger
+from buttermilk._core.log import logger  # Centralized logger
+
 from .utils import make_serialisable, remove_punctuation  # Utility functions
 
 # This constant is also in _core/constants.py. Define here if specific to bq utils,
@@ -50,9 +54,9 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / (10**12)  # $5 per Terabyte (1 TB = 10^12 bytes)
 
 
 def construct_dict_from_schema(
-    schema: list[Any], # Schema can be list of SchemaField or dicts
+    schema: list[Any],  # Schema can be list of SchemaField or dicts
     data_dict: dict[str, Any],
-    remove_extra_fields: bool = True
+    remove_extra_fields: bool = True,
 ) -> dict[str, Any]:
     """Recursively constructs a dictionary that conforms to a BigQuery schema.
     
@@ -84,37 +88,37 @@ def construct_dict_from_schema(
         ValueError: If data type conversion fails for a specific field (e.g.,
             cannot convert a string to a number for an INTEGER field if the string
             is not a valid number).
+
     """
     if not BIGQUERY_AVAILABLE:
         logger.warning("BigQuery libraries not available. Returning original data without schema validation.")
         return data_dict
-        
+
     transformed_dict: dict[str, Any] = {}
 
     # Create a set of schema field names for efficient lookup if removing extra fields
     schema_field_names = {
-        (field.name if hasattr(field, 'name') and field.name else field["name"])
+        (field.name if hasattr(field, "name") and field.name else field["name"])
         for field in schema
     }
 
     for key, value in data_dict.items():
         if remove_extra_fields and key not in schema_field_names:
             logger.debug(f"Field '{key}' not in schema, removing (remove_extra_fields=True).")
-            continue # Skip fields not in schema if remove_extra_fields is True
+            continue  # Skip fields not in schema if remove_extra_fields is True
 
         # Find the corresponding schema field definition for the current key
         field_schema = None
         for f_schema in schema:
-            current_field_name = f_schema.name if hasattr(f_schema, 'name') else f_schema["name"]
+            current_field_name = f_schema.name if hasattr(f_schema, "name") else f_schema["name"]
             if current_field_name == key:
-                field_schema = f_schema.to_api_repr() if hasattr(f_schema, 'to_api_repr') else f_schema
+                field_schema = f_schema.to_api_repr() if hasattr(f_schema, "to_api_repr") else f_schema
                 break
 
-        if not field_schema: # Should not happen if remove_extra_fields is False and key is present
-            if not remove_extra_fields: # Pass through if not removing extra and no schema found (should be rare)
+        if not field_schema:  # Should not happen if remove_extra_fields is False and key is present
+            if not remove_extra_fields:  # Pass through if not removing extra and no schema found (should be rare)
                  transformed_dict[key] = value
             continue
-
 
         field_type_upper = field_schema["type"].upper()
         is_repeated = field_schema.get("mode", "").upper() == "REPEATED"
@@ -123,7 +127,7 @@ def construct_dict_from_schema(
         if not is_repeated and isinstance(value, str) and \
            (remove_punctuation(value).upper() == "NULL" or not remove_punctuation(value)):
             logger.debug(f"Field '{key}' has NULL-like string value ('{value}'), skipping.")
-            continue # Skip (effectively treating as NULL by not adding to dict)
+            continue  # Skip (effectively treating as NULL by not adding to dict)
 
         # Handle repeated fields (arrays)
         if is_repeated:
@@ -134,26 +138,26 @@ def construct_dict_from_schema(
             transformed_array_items = []
             nested_schema_fields = field_schema.get("fields")
             for item in value:
-                if nested_schema_fields and isinstance(item, dict): # Array of STRUCTs
+                if nested_schema_fields and isinstance(item, dict):  # Array of STRUCTs
                     transformed_array_items.append(construct_dict_from_schema(nested_schema_fields, item, remove_extra_fields))
-                elif nested_schema_fields: # Expected dict for struct, got something else
+                elif nested_schema_fields:  # Expected dict for struct, got something else
                      logger.warning(f"REPEATED field '{key}' contains non-dict item '{item}' for a STRUCT type. Skipping item.")
-                else: # Array of simple types
+                else:  # Array of simple types
                     # Apply type conversion to individual array items if needed (simplified here)
                     # For simplicity, this example assumes basic types in arrays don't need deep conversion here
                     # A more robust version would delegate to a type conversion helper for array items too.
-                    transformed_array_items.append(item) # Basic types are added as is for now
+                    transformed_array_items.append(item)  # Basic types are added as is for now
             transformed_dict[key] = transformed_array_items
 
         # Handle nested fields (STRUCT/RECORD) for non-repeated fields
-        elif field_type_upper in {"RECORD", "STRUCT"}: # Both are valid type names
+        elif field_type_upper in {"RECORD", "STRUCT"}:  # Both are valid type names
             nested_schema_fields = field_schema.get("fields")
             if isinstance(value, dict) and nested_schema_fields:
                 transformed_dict[key] = construct_dict_from_schema(nested_schema_fields, value, remove_extra_fields)
             elif isinstance(value, dict) and not nested_schema_fields:
                  logger.warning(f"Field '{key}' is STRUCT but schema has no 'fields'. Value: {value}. Storing as is.")
-                 transformed_dict[key] = value # Or handle as error
-            else: # Value is not a dict for a STRUCT field
+                 transformed_dict[key] = value  # Or handle as error
+            else:  # Value is not a dict for a STRUCT field
                 logger.warning(f"Field '{key}' is STRUCT but value is not a dict (type: {type(value)}). Skipping.")
                 continue
 
@@ -163,14 +167,14 @@ def construct_dict_from_schema(
                 converted_value = value
             elif isinstance(value, str):
                 try:
-                    converted_value = pd.to_datetime(value) # Handles various string formats
+                    converted_value = pd.to_datetime(value)  # Handles various string formats
                 except Exception as e_dt:
                     logger.warning(f"Could not parse string '{value}' to datetime for field '{key}': {e_dt!s}. Skipping.")
                     continue
-            elif isinstance(value, (int, float)): # Assume POSIX timestamp (seconds or ms)
+            elif isinstance(value, (int, float)):  # Assume POSIX timestamp (seconds or ms)
                 try:
                     converted_value = datetime.datetime.utcfromtimestamp(value)
-                except (ValueError, OSError): # Try milliseconds if seconds failed
+                except (ValueError, OSError):  # Try milliseconds if seconds failed
                     try:
                         converted_value = datetime.datetime.utcfromtimestamp(value / 1000.0)
                     except Exception as e_ts:
@@ -193,9 +197,9 @@ def construct_dict_from_schema(
                     transformed_dict[key] = int(numeric_value)
                 elif field_type_upper in ("FLOAT", "FLOAT64") and not pd.isna(numeric_value):
                     transformed_dict[key] = float(numeric_value)
-                else: # NUMERIC, BIGNUMERIC or if NaN (let BigQuery handle potential type issues for these)
-                    transformed_dict[key] = numeric_value if not pd.isna(numeric_value) else None # Convert NaN to None
-                    if transformed_dict[key] is None: continue # Skip if it became None
+                else:  # NUMERIC, BIGNUMERIC or if NaN (let BigQuery handle potential type issues for these)
+                    transformed_dict[key] = numeric_value if not pd.isna(numeric_value) else None  # Convert NaN to None
+                    if transformed_dict[key] is None: continue  # Skip if it became None
             except ValueError as e_num:
                 logger.warning(f"Could not convert '{value}' to numeric for field '{key}': {e_num!s}. Skipping.")
                 continue
@@ -207,7 +211,7 @@ def construct_dict_from_schema(
                     transformed_dict[key] = True
                 elif val_lower in ("false", "f", "no", "n", "0"):
                     transformed_dict[key] = False
-                elif not val_lower: # Empty string for boolean field
+                elif not val_lower:  # Empty string for boolean field
                     logger.debug(f"Empty string for BOOLEAN field '{key}'. Skipping.")
                     continue
                 else:
@@ -215,12 +219,12 @@ def construct_dict_from_schema(
                     continue
             elif isinstance(value, bool):
                 transformed_dict[key] = value
-            elif isinstance(value, (int, float)): # Allow 0/1 for boolean
+            elif isinstance(value, (int, float)):  # Allow 0/1 for boolean
                 transformed_dict[key] = bool(value)
             else:
                 logger.warning(f"Unsupported type '{type(value)}' for BOOLEAN conversion for field '{key}'. Skipping.")
                 continue
-        else: # STRING, BYTES, GEOGRAPHY, JSON - pass through as is, BigQuery client handles these
+        else:  # STRING, BYTES, GEOGRAPHY, JSON - pass through as is, BigQuery client handles these
             transformed_dict[key] = value
 
     return transformed_dict
@@ -257,27 +261,28 @@ class TableWriter(BaseModel):
             - `extra`: "forbid" - Disallows extra fields.
             - `arbitrary_types_allowed`: True - Allows `BigQueryWriteAsyncClient`.
             - `populate_by_name`: True.
+
     """
 
     write_client: BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
     destination: str | None = Field(
         default=None,
-        description="Optional. Fully qualified table ID (project.dataset.table). Used if component IDs not set."
+        description="Optional. Fully qualified table ID (project.dataset.table). Used if component IDs not set.",
     )
-    bq_schema: list | None = Field( # Changed from str to list for compatibility when bigquery is not available
+    bq_schema: list | None = Field(  # Changed from str to list for compatibility when bigquery is not available
         default=None,
-        description="BigQuery table schema as list of SchemaFields or path to JSON schema file."
+        description="BigQuery table schema as list of SchemaFields or path to JSON schema file.",
     )
     stream: str | None = Field(
         default="_default",
-        description="BigQuery Storage Write API stream name. Defaults to '_default'."
+        description="BigQuery Storage Write API stream name. Defaults to '_default'.",
     )
     project_id: str | None = Field(default=None, description="Google Cloud project ID.")
     dataset_id: str | None = Field(default=None, description="BigQuery dataset ID.")
     table_id: str | None = Field(default=None, description="BigQuery table ID.")
     table_path: str | None = Field(
         default=None,
-        description="Fully qualified table path for Storage Write API (projects/.../datasets/.../tables/...). Auto-constructed if not set."
+        description="Fully qualified table path for Storage Write API (projects/.../datasets/.../tables/...). Auto-constructed if not set.",
     )
 
     model_config = ConfigDict(
@@ -288,7 +293,7 @@ class TableWriter(BaseModel):
 
     @pydantic.field_validator("bq_schema", mode="before")
     @classmethod
-    def load_schema_from_path(cls, v: Any) -> list | Any: # Allow Any to pass through if already list
+    def load_schema_from_path(cls, v: Any) -> list | Any:  # Allow Any to pass through if already list
         """Pydantic validator to load a BigQuery schema from a JSON file path if a string is provided.
 
         Args:
@@ -301,16 +306,17 @@ class TableWriter(BaseModel):
 
         Raises:
             TypeError: If `v` is a string path but schema loading fails.
+
         """
-        if isinstance(v, str): # If schema is provided as a file path string
+        if isinstance(v, str):  # If schema is provided as a file path string
             try:
                 return bigquery.Client().schema_from_json(v)
             except Exception as e:
                 raise TypeError(f"Failed to load BigQuery schema from JSON file path '{v}': {e!s}") from e
-        return v # Pass through if already list of SchemaField or None
+        return v  # Pass through if already list of SchemaField or None
 
-    @model_validator(mode="after") # Changed from field_validator for table_path to model_validator
-    def construct_table_path(cls, values: Any) -> Any: # Changed to model_validator signature
+    @model_validator(mode="after")  # Changed from field_validator for table_path to model_validator
+    def construct_table_path(cls, values: Any) -> Any:  # Changed to model_validator signature
         """Constructs the `table_path` from component IDs if not explicitly provided.
 
         Also populates `project_id`, `dataset_id`, `table_id` if `destination`
@@ -326,6 +332,7 @@ class TableWriter(BaseModel):
             ValueError: If neither `table_path` nor sufficient components
                         (`destination` or all of `project_id`, `dataset_id`, `table_id`)
                         are provided to construct the table path.
+
         """
         # This is now a model_validator, so 'values' is the model instance (or its __dict__)
         # In Pydantic v2, for model_validator(mode="after"), 'values' is the model instance itself.
@@ -339,7 +346,7 @@ class TableWriter(BaseModel):
         table_id = values.table_id
         destination = values.destination
 
-        if table_path: # If table_path is already set, prioritize it.
+        if table_path:  # If table_path is already set, prioritize it.
             # Optionally, parse project_id, dataset_id, table_id from table_path if they are None
             if not (project_id and dataset_id and table_id) and isinstance(table_path, str):
                 parts = table_path.split("/")
@@ -356,7 +363,7 @@ class TableWriter(BaseModel):
                 dest_parts = destination.split(".")
                 if len(dest_parts) == 3:
                     values.project_id, values.dataset_id, values.table_id = dest_parts[0], dest_parts[1], dest_parts[2]
-                elif len(dest_parts) == 2: # Assume project from default client, dataset.table given
+                elif len(dest_parts) == 2:  # Assume project from default client, dataset.table given
                     values.dataset_id, values.table_id = dest_parts[0], dest_parts[1]
                     # values.project_id will use default from client if None
                 else:
@@ -366,14 +373,13 @@ class TableWriter(BaseModel):
 
         # Now, ensure all components are present to build table_path
         # project_id can be None if using default project for BigQuery client
-        final_project_id = values.project_id or bigquery.Client().project # Use default project if None
+        final_project_id = values.project_id or bigquery.Client().project  # Use default project if None
 
         if not (final_project_id and values.dataset_id and values.table_id):
             raise ValueError("Cannot construct table_path: Missing project_id, dataset_id, or table_id, and destination was not sufficient.")
 
         values.table_path = f"projects/{final_project_id}/datasets/{values.dataset_id}/tables/{values.table_id}"
         return values
-
 
     async def append_rows(self, rows: Sequence[Mapping[str, Any]] | pd.DataFrame) -> list[Any] | None:
         """Appends rows to the configured BigQuery table asynchronously using Storage Write API.
@@ -396,8 +402,9 @@ class TableWriter(BaseModel):
 
         Raises:
             TypeError: If `self.bq_schema` is set but is not a list of `SchemaField`.
+
         """
-        if not self.table_path: # Should be set by validator
+        if not self.table_path:  # Should be set by validator
             raise ValueError("TableWriter.table_path is not set. Cannot append rows.")
 
         write_stream_path = f"{self.table_path}/streams/{self.stream or '_default'}"
@@ -405,16 +412,16 @@ class TableWriter(BaseModel):
         prepared_batch: list[Mapping[str, Any]]
         if isinstance(rows, pd.DataFrame):
             # Deduplicate columns if necessary
-            df_to_process = rows.copy() # Work on a copy
+            df_to_process = rows.copy()  # Work on a copy
             if any(df_to_process.columns.duplicated()):
-                df_to_process.columns = [ # type: ignore
+                df_to_process.columns = [  # type: ignore
                     x[1] if x[1] not in df_to_process.columns[: x[0]] else f"{x[1]}_{list(df_to_process.columns[: x[0]]).count(x[1])}"
                     for x in enumerate(df_to_process.columns)
                 ]
             prepared_batch = df_to_process.to_dict(orient="records")
         elif isinstance(rows, list) and all(isinstance(r, dict) for r in rows):
-            prepared_batch = [r.copy() for r in rows] # List of dicts
-        elif isinstance(rows, dict): # Single dict row
+            prepared_batch = [r.copy() for r in rows]  # List of dicts
+        elif isinstance(rows, dict):  # Single dict row
              prepared_batch = [rows.copy()]
         else:
             raise TypeError(f"Unsupported 'rows' type for append_rows: {type(rows)}. Expected DataFrame, list of dicts, or dict.")
@@ -429,7 +436,7 @@ class TableWriter(BaseModel):
 
         if not serializable_batch:
             logger.warning(f"No rows to append to {self.table_path} after preparation and serialization.")
-            return None # Nothing to append
+            return None  # Nothing to append
 
         # Convert to ProtoRows for Storage Write API
         # Note: This assumes serializable_batch is a list of dicts that can be directly serialized.
@@ -462,7 +469,7 @@ class TableWriter(BaseModel):
         # serialized into its specific protobuf message type first.
         # Given no explicit proto schema definition here for rows, it's likely JSON mode.
 
-        ProtoRows() # Create an empty ProtoRows
+        ProtoRows()  # Create an empty ProtoRows
         # Add serialized rows (assuming JSON compatible dicts which client serializes)
         # This part is tricky as ProtoRows expects serialized protobuf bytes.
         # If using JSON stream, the client might abstract this.
@@ -491,10 +498,10 @@ class TableWriter(BaseModel):
         # We need to create these requests.
 
         async def request_generator():
-            for chunk_of_rows in chunks(serializable_batch, 100): # Example chunk size
+            for chunk_of_rows in chunks(serializable_batch, 100):  # Example chunk size
                 proto_data = bigquery_storage_v1beta2.types.ProtoData()
                 proto_data.rows.serialized_rows.extend(
-                     [json.dumps(row).encode("utf-8") for row in chunk_of_rows] # Serialize each dict to JSON bytes
+                     [json.dumps(row).encode("utf-8") for row in chunk_of_rows],  # Serialize each dict to JSON bytes
                 )
                 # If you have a .proto schema, you'd define writer_schema here.
                 # For schemaless JSON append (default stream), this might be okay or need adjustment.
@@ -502,15 +509,15 @@ class TableWriter(BaseModel):
 
                 yield bigquery_storage_v1beta2.types.AppendRowsRequest(
                     write_stream=write_stream_path,
-                    rows=proto_data # Corrected: use `rows` field with ProtoData
+                    rows=proto_data,  # Corrected: use `rows` field with ProtoData
                 )
 
         try:
             # The append_rows method is an async generator itself.
             # We need to iterate over it to process responses.
-            response_stream = self.write_client.append_rows(request_generator()) # type: ignore
+            response_stream = self.write_client.append_rows(request_generator())  # type: ignore
 
-            async for response_item in response_stream: # type: ignore
+            async for response_item in response_stream:  # type: ignore
                 # Each response_item could be an AppendRowsResponse
                 # Check for errors in the response
                 if hasattr(response_item, "error") and response_item.error:
@@ -524,8 +531,8 @@ class TableWriter(BaseModel):
 
         except Exception as e:
             logger.error(f"Exception during append_rows stream processing for {self.table_path}: {e!s}", exc_info=True)
-            all_response_errors.append(str(e)) # Add exception as an error string
+            all_response_errors.append(str(e))  # Add exception as an error string
 
         if all_response_errors:
             return all_response_errors
-        return [] # Return empty list for success
+        return []  # Return empty list for success
