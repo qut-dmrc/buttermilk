@@ -444,18 +444,6 @@ class FlowTestClient:
         """Wait for flow completion and return all messages."""
         return await self.waiter.wait_for_completion(timeout)
     
-    async def wait_for_orchestrator_ready(self, timeout: float = 30.0) -> bool:
-        """Wait for orchestrator to be ready."""
-        try:
-            await self.waiter.wait_for_orchestrator_ready(timeout)
-            return True
-        except TimeoutError:
-            return False
-    
-    async def wait_for_flow_event(self, event_content: str, timeout: float = 30.0) -> CollectedMessage:
-        """Wait for a specific flow event."""
-        return await self.waiter.wait_for_flow_event(event_content, timeout)
-    
     def get_message_summary(self) -> dict:
         """Get a summary of all collected messages."""
         return {

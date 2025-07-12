@@ -1,9 +1,11 @@
 """Test the DebugAgent MCP tools."""
 
 import asyncio
+import pytest
 from buttermilk.debug.debug_agent import DebugAgent
 
 
+@pytest.mark.anyio
 async def test_debug_agent():
     """Test the debug agent tools."""
     print("Creating DebugAgent...")
@@ -22,10 +24,16 @@ async def test_debug_agent():
     log_files = agent.list_log_files()
     print(f"Found {len(log_files)} log files")
     
+    # Assert that log_files is a list
+    assert isinstance(log_files, list)
+    
     if log_files:
         print(f"Most recent: {log_files[0]['path']}")
         logs = agent.get_latest_buttermilk_logs(20)
         print(f"Last 20 lines preview:\n{logs[:200]}...")
+        
+        # Assert that logs is a string
+        assert isinstance(logs, str)
     
     # Test WebSocket client (if server is running)
     print("\nTesting WebSocket client...")
