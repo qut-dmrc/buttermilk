@@ -198,10 +198,10 @@ class AutogenOrchestrator(Orchestrator):
         participant_tools = {}
         logger.debug(f"Collecting tools from {len(self._agent_registry)} registered agents")
         for agent_id, agent_instance in self._agent_registry.items():
-            if hasattr(agent_instance, 'role') and hasattr(agent_instance, 'get_all_tool_definitions'):
+            if hasattr(agent_instance, "role") and hasattr(agent_instance, "get_tool_definitions"):
                 role = agent_instance.role.upper()
                 try:
-                    # Use get_all_tool_definitions to get both decorated and configured tools
+                    # Use get_tool_definitions to get both decorated and configured tools
                     tool_defs = agent_instance.get_tool_definitions()
                     if tool_defs:
                         # Pass AgentToolDefinition objects directly - no conversion needed
@@ -212,7 +212,9 @@ class AutogenOrchestrator(Orchestrator):
                 except Exception as e:
                     logger.warning(f"Failed to get tool definitions from {role}: {e}")
             else:
-                logger.debug(f"Agent {agent_id} does not have role or get_all_tool_definitions method. Has role: {hasattr(agent_instance, 'role')}, Has get_all_tool_definitions: {hasattr(agent_instance, 'get_all_tool_definitions')}")
+                logger.debug(
+                    f"Agent {agent_id} does not have role or get_tool_definitions method. Has role: {hasattr(agent_instance, 'role')}, Has get_tool_definitions: {hasattr(agent_instance, 'get_tool_definitions')}"
+                )
 
         # Start up the host agent with participants and their tools
         logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())} and tools: {list(participant_tools.keys())}")

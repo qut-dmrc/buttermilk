@@ -302,20 +302,16 @@ class Agent(RoutedAgent):
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
 
-        # Use the first tool definition as the primary one
-        # This now includes both decorated methods and configured tools
-        primary_tool = tool_definitions[0] if tool_definitions else None
-
         return AgentAnnouncement(
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
             supported_message_types=self.get_supported_message_types(),
-            tool_definition=primary_tool,
+            tool_definition=tool_definitions,
             status=status,
             announcement_type=announcement_type,
             responding_to=responding_to,
-            source=self.agent_id
+            source=self.agent_id,
         )
 
     async def send_announcement(

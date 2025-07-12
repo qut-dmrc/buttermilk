@@ -7,15 +7,17 @@ specific actions and returns results to stdout, suitable for LLM usage.
 
 import asyncio
 import json
-from typing import Optional
+from typing import Optional, Dict, Any
 import click
 from rich.console import Console
 from datetime import datetime
 import glob
 import os
+import tempfile
+from pathlib import Path
 
 # Use the flow test client from the agents test utilities
-from buttermilk.agents.test_utils import FlowTestClient
+from buttermilk.agents.test_utils import FlowTestClient, MessageType
 
 
 class NonInteractiveDebugClient:
@@ -28,15 +30,53 @@ class NonInteractiveDebugClient:
         self.ws_url = f"ws://{host}:{port}/ws"
         self.client: Optional[FlowTestClient] = None
         self.console = Console()
+        self.session_file = Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
         
-    async def connect(self):
-        """Connect to the WebSocket server."""
+    def save_session(self, session_id: str):
+        """Save session ID to file for reuse."""
+        session_data = {
+            "session_id": session_id,
+            "host": self.host,
+            "port": self.port,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.session_file.write_text(json.dumps(session_data, indent=2))
+    
+    def load_session(self) -> Optional[str]:
+        """Load session ID from file if it exists."""
+        if self.session_file.exists():
+            try:
+                data = json.loads(self.session_file.read_text())
+                # Check if session is for the same host/port
+                if data.get("host") == self.host and data.get("port") == self.port:
+                    return data.get("session_id")
+            except Exception:
+                pass
+        return None
+    
+    async def connect(self, session_id: Optional[str] = None):
+        """Connect to the WebSocket server, optionally reusing a session."""
         try:
-            self.client = FlowTestClient(
-                base_url=self.base_url,
-                ws_url=self.ws_url
-            )
-            await self.client.connect()
+            if session_id:
+                # Direct WebSocket connection with existing session ID
+                direct_ws_url = f"{self.ws_url}/{session_id}"
+                self.client = FlowTestClient(
+                    base_url=self.base_url,
+                    ws_url=self.ws_url,
+                    direct_ws_url=direct_ws_url
+                )
+                await self.client.connect()
+                self.client.session_id = session_id  # Set the session ID manually
+            else:
+                # Normal connection that creates a new session
+                self.client = FlowTestClient(
+                    base_url=self.base_url,
+                    ws_url=self.ws_url
+                )
+                await self.client.connect()
+                if self.client.session_id:
+                    self.save_session(self.client.session_id)
+            
             return True
         except Exception as e:
             self.console.print(f"[red]Failed to connect: {e}[/red]")
@@ -82,13 +122,108 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
     
-    async def send_response(self, session_id: str, response: str, wait_time: int = 5) -> dict:
-        """Send a response to an existing session."""
-        # This would require session persistence which is not currently implemented
-        # in FlowTestClient. For now, return an informative error.
-        return {
-            "error": "Session persistence not implemented. Each command creates a new session."
-        }
+    async def send_message(self, message_type: str, content: str, wait_time: int = 5, session_id: Optional[str] = None) -> dict:
+        """Send a message to an existing session."""
+        # Use provided session_id or load from file
+        session_id = session_id or self.load_session()
+        if not session_id:
+            return {"error": "No session ID provided and no saved session found. Start a flow first."}
+        
+        if not await self.connect(session_id):
+            return {"error": f"Failed to reconnect to session {session_id}"}
+        
+        try:
+            # Send the message based on type
+            if message_type == "response":
+                await self.client.send_manager_response(content)
+            else:
+                # Generic message sending
+                message = {
+                    "type": message_type,
+                    "content": content
+                }
+                await self.client.ws.send_json(message)
+            
+            # Wait for responses
+            await asyncio.sleep(wait_time)
+            
+            # Collect results
+            result = {
+                "session_id": session_id,
+                "message_sent": {
+                    "type": message_type,
+                    "content": content
+                },
+                "messages": []
+            }
+            
+            for msg in self.client.collector.all_messages:
+                result["messages"].append({
+                    "timestamp": msg.timestamp.isoformat(),
+                    "type": msg.type,
+                    "content": msg.content,
+                    "agent_role": msg.agent_role,
+                    "data": msg.data
+                })
+            
+            return result
+            
+        except Exception as e:
+            return {"error": str(e)}
+        finally:
+            await self.disconnect()
+    
+    async def wait_for_messages(self, session_id: Optional[str] = None, wait_time: int = 5, 
+                               pattern: Optional[str] = None, message_type: Optional[str] = None) -> dict:
+        """Connect to existing session and wait for messages."""
+        # Use provided session_id or load from file
+        session_id = session_id or self.load_session()
+        if not session_id:
+            return {"error": "No session ID provided and no saved session found. Start a flow first."}
+        
+        if not await self.connect(session_id):
+            return {"error": f"Failed to reconnect to session {session_id}"}
+        
+        try:
+            # Wait for messages
+            await asyncio.sleep(wait_time)
+            
+            # Filter messages
+            messages = self.client.collector.all_messages
+            
+            if message_type:
+                messages = [msg for msg in messages if msg.type == message_type]
+            
+            if pattern:
+                import re
+                pattern_re = re.compile(pattern, re.IGNORECASE)
+                messages = [msg for msg in messages if pattern_re.search(msg.content or "")]
+            
+            # Collect results
+            result = {
+                "session_id": session_id,
+                "filter": {
+                    "pattern": pattern,
+                    "message_type": message_type
+                },
+                "messages": []
+            }
+            
+            for msg in messages:
+                result["messages"].append({
+                    "timestamp": msg.timestamp.isoformat(),
+                    "type": msg.type,
+                    "content": msg.content,
+                    "agent_role": msg.agent_role,
+                    "data": msg.data
+                })
+            
+            return result
+            
+        except Exception as e:
+            return {"error": str(e)}
+        finally:
+            await self.disconnect()
     
     async def get_logs(self, lines: int = 50) -> dict:
         """Get recent log lines."""
@@ -125,6 +260,13 @@ class NonInteractiveDebugClient:
             }
         finally:
             await self.disconnect()
+    
+    def clear_session(self):
+        """Clear saved session."""
+        if self.session_file.exists():
+            self.session_file.unlink()
+            return {"status": "Session cleared"}
+        return {"status": "No session to clear"}
 
 
 @click.group()
@@ -166,6 +308,104 @@ def start(ctx, flow_name: str, query: str, wait: int):
                 content = msg['content'] or '(no content)'
                 agent = msg['agent_role'] or 'system'
                 console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.argument('content')
+@click.option('--type', 'msg_type', default='response', help='Message type (default: response)')
+@click.option('--wait', default=5, help='Seconds to wait for responses')
+@click.option('--session', help='Session ID (uses saved session if not provided)')
+@click.pass_context
+def send(ctx, content: str, msg_type: str, wait: int, session: Optional[str]):
+    """Send a message to the current session."""
+    client = NonInteractiveDebugClient(ctx.obj['HOST'], ctx.obj['PORT'])
+    result = asyncio.run(client.send_message(msg_type, content, wait, session))
+    
+    if ctx.obj['JSON_OUTPUT']:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Sent {msg_type} message to session {result['session_id']}[/green]")
+            console.print(f"Content: {content}")
+            console.print(f"\nNew messages ({len(result['messages'])}):")
+            for msg in result['messages']:
+                timestamp = datetime.fromisoformat(msg['timestamp']).strftime("%H:%M:%S")
+                msg_type = msg['type']
+                content = msg['content'] or '(no content)'
+                agent = msg['agent_role'] or 'system'
+                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.option('--wait', default=5, help='Seconds to wait for messages')
+@click.option('--pattern', help='Regex pattern to filter messages')
+@click.option('--type', 'msg_type', help='Filter by message type')
+@click.option('--session', help='Session ID (uses saved session if not provided)')
+@click.pass_context
+def wait(ctx, wait: int, pattern: Optional[str], msg_type: Optional[str], session: Optional[str]):
+    """Wait for messages from the current session."""
+    client = NonInteractiveDebugClient(ctx.obj['HOST'], ctx.obj['PORT'])
+    result = asyncio.run(client.wait_for_messages(session, wait, pattern, msg_type))
+    
+    if ctx.obj['JSON_OUTPUT']:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Messages from session {result['session_id']}[/green]")
+            if pattern or msg_type:
+                console.print(f"Filters: pattern={pattern}, type={msg_type}")
+            console.print(f"\nMessages ({len(result['messages'])}):")
+            for msg in result['messages']:
+                timestamp = datetime.fromisoformat(msg['timestamp']).strftime("%H:%M:%S")
+                msg_type = msg['type']
+                content = msg['content'] or '(no content)'
+                agent = msg['agent_role'] or 'system'
+                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.pass_context
+def session(ctx):
+    """Show current saved session information."""
+    client = NonInteractiveDebugClient(ctx.obj['HOST'], ctx.obj['PORT'])
+    session_id = client.load_session()
+    
+    if ctx.obj['JSON_OUTPUT']:
+        if session_id and client.session_file.exists():
+            data = json.loads(client.session_file.read_text())
+            print(json.dumps(data, indent=2))
+        else:
+            print(json.dumps({"error": "No saved session"}, indent=2))
+    else:
+        console = Console()
+        if session_id:
+            data = json.loads(client.session_file.read_text())
+            console.print(f"[green]Saved session:[/green]")
+            console.print(f"  Session ID: {data['session_id']}")
+            console.print(f"  Host: {data['host']}:{data['port']}")
+            console.print(f"  Created: {data['timestamp']}")
+        else:
+            console.print("[yellow]No saved session[/yellow]")
+
+
+@cli.command()
+@click.pass_context
+def clear_session(ctx):
+    """Clear the saved session."""
+    client = NonInteractiveDebugClient(ctx.obj['HOST'], ctx.obj['PORT'])
+    result = client.clear_session()
+    
+    if ctx.obj['JSON_OUTPUT']:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        console.print(f"[green]{result['status']}[/green]")
 
 
 @cli.command()
