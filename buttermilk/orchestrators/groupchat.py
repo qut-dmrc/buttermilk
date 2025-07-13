@@ -190,7 +190,7 @@ class AutogenOrchestrator(Orchestrator):
         self._pending_messages.clear()
 
         # Start up the host agent with participants and their tools
-        logger.info(f"Sending ConductorRequest to topic '{self._topic}' with {len(self._participants)} participants: {list(self._participants.keys())}")
+        logger.highlight(f"Sending ConductorRequest to topic '{self._topic}' with {len(self._participants)} participants: {list(self._participants.keys())}")
         conductor_request = ConductorRequest(
             inputs=request.model_dump(),
             participants=self._participants,
