@@ -8,7 +8,7 @@ import statistics
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
-from buttermilk._core.tool_definition import AgentToolDefinition, UnifiedRequest
+from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk._core.mcp_decorators import tool, MCPRoute, extract_tool_definitions
 from buttermilk._core.schema_validation import SchemaValidator, validate_tool_input
 
@@ -262,108 +262,7 @@ class TestSchemaValidationPerformance:
         assert avg_time < 0.005  # Less than 5ms per validation
 
 
-class TestUnifiedRequestPerformance:
-    """Benchmark UnifiedRequest handling performance."""
-    
-    async def test_unified_request_routing_speed(self):
-        """Test speed of routing UnifiedRequests to tools."""
-        agent = BenchmarkAgent(agent_name="bench", model_name="test", role="BENCH")
-        
-        # Test different request types
-        requests = [
-            UnifiedRequest(target="bench.tool_1", inputs={"param": "test"}),
-            UnifiedRequest(target="bench.tool_2", inputs={"x": 10, "y": 20}),
-            UnifiedRequest(target="bench.tool_4", inputs={"items": ["a", "b", "c"]}),
-            UnifiedRequest(target="bench", inputs={"test": "data"})  # General request
-        ]
-        
-        # Warm up
-        for req in requests:
-            await agent.handle_unified_request(req)
-        
-        # Benchmark
-        iterations = 100
-        all_times = []
-        
-        for req in requests:
-            times = []
-            for _ in range(iterations):
-                start = time.perf_counter()
-                result = await agent.handle_unified_request(req)
-                end = time.perf_counter()
-                times.append(end - start)
-            
-            avg_time = statistics.mean(times)
-            all_times.extend(times)
-            
-            print(f"\nUnifiedRequest routing for {req.target}:")
-            print(f"  Average time: {avg_time*1000:.3f}ms")
-        
-        overall_avg = statistics.mean(all_times)
-        print(f"\nOverall average: {overall_avg*1000:.3f}ms")
-        
-        # Should be fast
-        assert overall_avg < 0.002  # Less than 2ms average
-    
-    async def test_concurrent_request_handling(self):
-        """Test performance with concurrent requests."""
-        agent = BenchmarkAgent(agent_name="bench", model_name="test", role="BENCH")
-        
-        # Create many requests matching tool signatures
-        requests = []
-        for i in range(100):
-            tool_num = (i % 10) + 1
-            
-            # Match inputs to tool signatures
-            if tool_num == 1:
-                inputs = {"param": f"test_{i}"}
-            elif tool_num == 2:
-                inputs = {"x": i, "y": i+1}
-            elif tool_num == 3:
-                inputs = {"data": {"index": i, "value": f"test_{i}"}}
-            elif tool_num == 4:
-                inputs = {"items": [f"item_{j}" for j in range(i % 5)]}
-            elif tool_num == 5:
-                inputs = {"value": float(i)}
-            elif tool_num == 6:
-                inputs = {"a": "A", "b": str(i), "c": "C"}
-            elif tool_num == 7:
-                inputs = {"enabled": i % 2 == 0}
-            elif tool_num == 8:
-                inputs = {"config": {"setting": i, "mode": "test"}}
-            elif tool_num == 9:
-                inputs = {"count": i % 20}
-            else:  # tool_10
-                inputs = {"text": f"text_{i}", "repeat": (i % 3) + 1}
-            
-            req = UnifiedRequest(
-                target=f"bench.tool_{tool_num}",
-                inputs=inputs
-            )
-            requests.append(req)
-        
-        # Sequential execution
-        start = time.perf_counter()
-        sequential_results = []
-        for req in requests:
-            result = await agent.handle_unified_request(req)
-            sequential_results.append(result)
-        sequential_time = time.perf_counter() - start
-        
-        # Concurrent execution
-        start = time.perf_counter()
-        tasks = [agent.handle_unified_request(req) for req in requests]
-        concurrent_results = await asyncio.gather(*tasks)
-        concurrent_time = time.perf_counter() - start
-        
-        print(f"\nConcurrent request handling:")
-        print(f"  Sequential time: {sequential_time*1000:.1f}ms")
-        print(f"  Concurrent time: {concurrent_time*1000:.1f}ms")
-        print(f"  Speedup: {sequential_time/concurrent_time:.2f}x")
-        
-        # Concurrent should be faster
-        assert concurrent_time < sequential_time
-        assert len(concurrent_results) == len(sequential_results)
+
 
 
 class TestMemoryUsage:
