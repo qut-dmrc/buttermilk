@@ -11,11 +11,10 @@ systems like Autogen.
 """
 
 import asyncio
-from abc import abstractmethod
-from collections.abc import AsyncGenerator, Awaitable, Callable
-from functools import wraps  # Import wraps for decorator
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Union
 import warnings
+from abc import abstractmethod
+from collections.abc import Awaitable, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Union
 
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
@@ -23,7 +22,7 @@ from weave.trace.weave_client import Call, WeaveObject
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-    from buttermilk._core.tool_definition import AgentToolDefinition
+    from buttermilk._core.tool_definition import AgentToolDefinition, UnifiedRequest
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import (
@@ -32,7 +31,6 @@ from autogen_core import (
     DefaultTopicId,
     MessageContext,
     RoutedAgent,
-    TopicId,
     message_handler,
 )
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -43,12 +41,13 @@ from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
-from buttermilk._core.constants import COMMAND_SYMBOL, MANAGER  # Constant for command messages,
+from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages
 from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
     AgentOutput,  # Standard input message structure
     AgentTrace,
+    ConductorRequest,
     ErrorEvent,
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     HeartBeat,
@@ -225,33 +224,17 @@ class Agent(RoutedAgent):
         Subclasses should override this method to cleanup any resources they have allocated
         (e.g., file handles, network connections, background tasks).
 
-        The base implementation clears internal state and should be called by subclasses
-        using super().cleanup().
+        We don't clean internal state because the whole Agent will be destroyed anyway.
+
         """
-        logger.debug(f"Agent {self.agent_name}: Base cleanup.")
-
-        # Clear internal state
-        self._records.clear()
-        self._data.clear()
-
-        # Clear model context
-        if hasattr(self._model_context, "clear"):
-            self._model_context.clear()
-        elif hasattr(self._model_context, "reset"):
-            await self._model_context.reset()
-
-        # Clear heartbeat queue
-        while not self._heartbeat.empty():
-            try:
-                self._heartbeat.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
     # --- Announcement Methods ---
 
     def get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
-
+        This is overridden in the LLMAgent class to load tools from the config.
+        
         Returns:
             list[Tool]: List of tools.
 
@@ -270,51 +253,51 @@ class Agent(RoutedAgent):
             return self._supported_oob_messages
         return []
 
-    async def send_announcement(
+    @message_handler
+    async def handle_conductor_request(
         self,
-        announcement_type: Literal["initial", "response", "update"],
-        status: Literal["joining", "active", "leaving"],
-        responding_to: str | None = None,
-        topic_id: TopicId | None = None,
+        message: "ConductorRequest",
+        ctx: MessageContext,
     ) -> None:
-        """Send an agent announcement message.
+        """Handle ConductorRequest messages by sending agent announcements.
+        
+        When a conductor requests information about this agent, respond with
+        an announcement containing the agent's capabilities and configuration.
         
         Args:
-            announcement_type: Type of announcement.
-            status: Current agent status.
-            responding_to: Agent ID being responded to (for response type).
-            topic_id: Topic to publish to (defaults to DefaultTopicId).
+            message: The ConductorRequest message.
+            ctx: Message context containing sender and topic information.
 
         """
-        content_map = {
-            "joining": f"Agent {self.agent_name} joining",
-            "active": f"Agent {self.agent_name} active",
-            "leaving": f"Agent {self.agent_name} leaving",
-        }
-
+        if not isinstance(message, ConductorRequest):
+            return
+            
+        logger.debug(f"Agent {self.agent_name} received ConductorRequest, sending announcement")
+        
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
 
         announcement = AgentAnnouncement(
-            content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
+            content=f"Agent {self.agent_name} active and available",
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
             supported_message_types=self.get_supported_message_types(),
             tool_definition=tool_definitions,
-            status=status,
-            announcement_type=announcement_type,
-            responding_to=responding_to,
+            status="active",
+            announcement_type="response",
+            responding_to=str(ctx.sender) if ctx.sender else None,
             source=self.agent_id,
         )
+        
         await self.publish_message(
-                announcement,
-                topic_id=topic_id,
-            )
-        logger.debug(f"Agent {self.agent_name} sent {announcement_type} announcement with status {status}")
-
-        # Mark as announced if this is an initial joining announcement
-        if announcement_type == "initial" and status == "joining":
-            self._announced = True
+            announcement,
+            topic_id=ctx.topic_id or DefaultTopicId(type="default"),
+        )
+        
+        logger.debug(f"Agent {self.agent_name} sent announcement in response to ConductorRequest")
+        
+        # Mark as announced
+        self._announced = True
 
     async def __call__(
         self,
@@ -572,15 +555,7 @@ class Agent(RoutedAgent):
             **kwargs: Additional keyword arguments that might be passed by the caller.
 
         """
-        # Check if we need to announce ourselves
-        if not self._announced and self._runtime:
-            await self.send_announcement(
-                announcement_type="initial",
-                status="joining",
-                topic_id=ctx.topic_id,
-            )
-            self._announced = True
-            logger.debug(f"Agent {self.agent_name} sent initial announcement on first groupchat message")
+        # No longer auto-announce on first message - wait for ConductorRequest instead
 
         # Extract source from sender
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
@@ -649,19 +624,7 @@ class Agent(RoutedAgent):
         else:
             logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
 
-        # Handle AgentAnnouncement messages
-        if isinstance(message, AgentAnnouncement):
-            # Check if this is from a host agent (initial announcement)
-            if (message.announcement_type == "initial" and
-                message.agent_config.role == MANAGER):
-                # Respond to host announcement
-                await self.send_announcement(
-                    announcement_type="response",
-                    status="active",
-                    responding_to=message.agent_config.agent_id,
-                    topic_id=ctx.topic_id,
-                )
-                logger.debug(f"Agent {self.agent_name} responded to host announcement from {message.agent_config.agent_id}")
+        # No longer respond to HOST/MANAGER announcements - wait for ConductorRequest instead
 
     @message_handler
     async def handle_heartbeat(

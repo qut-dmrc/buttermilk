@@ -7,9 +7,9 @@ from buttermilk._core.context import agent_id_var, session_id_var
 _LOGGER_NAME = "buttermilk"
 
 
-class HighlightLogger(logging.Logger):
-    """Extended logger with highlight capability."""
-    
+class BMLogger(logging.Logger):
+    """Buttermilk extended logger with custom functionality."""
+
     def highlight(self, msg: str, *args, **kwargs) -> None:
         """Log a highlighted INFO message that stands out visually."""
         # Add visual separators to make the message stand out
@@ -18,8 +18,8 @@ class HighlightLogger(logging.Logger):
 
 
 # Set custom logger class before creating logger instance
-logging.setLoggerClass(HighlightLogger)
-logger: HighlightLogger = getLogger(_LOGGER_NAME)  # type: ignore[assignment]
+logging.setLoggerClass(BMLogger)
+logger: BMLogger = getLogger(_LOGGER_NAME)  # type: ignore[assignment]
 logging.setLoggerClass(logging.Logger)  # Reset to default for other loggers
 
 
