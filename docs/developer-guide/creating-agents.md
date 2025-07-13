@@ -73,262 +73,78 @@ class SimpleAgent(Agent):
         pass
 ```
 
-### Agent with Configuration
+## Real Example Agents
 
-```python
-from pydantic import BaseModel, Field
-from typing import Optional
+Instead of dummy examples, refer to the working example agents and flows in the repository:
 
-class ContentAnalyzerConfig(BaseModel):
-    """Configuration for content analysis agent."""
-    model: str = Field(default="gemini-pro", description="LLM model to use")
-    temperature: float = Field(default=0.7, description="Generation temperature")
-    max_tokens: int = Field(default=1000, description="Maximum tokens to generate")
-    analysis_type: str = Field(default="sentiment", description="Type of analysis")
+**Example Flows:**
+- `conf/flows/trans.yaml` - Journalism quality assessment for trans issues reporting
+- `conf/flows/osb.yaml` - Interactive group chat for querying OSB vector store  
+- `conf/flows/tox.yaml` - Toxicity criteria application
+- `conf/flows/zot.yaml` - Zotero RAG for academic citations
 
-class ContentAnalyzer(Agent):
-    def __init__(self, analysis_type: str = "sentiment", **kwargs):
-        super().__init__(**kwargs)
-        self.analysis_type = analysis_type
-        self.llm_client = self._create_llm_client()
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        prompt = self._build_prompt(record.content)
-        response = await self.llm_client.generate(prompt)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={
-                "analysis_type": self.analysis_type,
-                "model": self.config.get("model", "unknown")
-            }
-        )
-    
-    def _build_prompt(self, content: str) -> str:
-        if self.analysis_type == "sentiment":
-            return f"Analyze the sentiment of this text: {content}"
-        elif self.analysis_type == "bias":
-            return f"Identify potential bias in this text: {content}"
-        else:
-            return f"Analyze this text: {content}"
-```
+**Example Agents:**
+- `conf/agents/judge.yaml` - Expert content assessment agent
+- `conf/agents/synth.yaml` - Response synthesis agent
+- `conf/agents/differences.yaml` - Analysis comparison agent
+- `conf/agents/spy.yaml` - Process monitoring agent
+- `conf/agents/rag.yaml` - Retrieval-augmented generation agent
 
-## Agent Types
+**Host Agents:**
+- `conf/agents/host/` - Various orchestration agents including sequence_host and llm_host
 
-### 1. LLM Agent
+These configurations demonstrate real, working patterns that have been tested and validated in production. Study these examples to understand:
+- How models are configured at the flow level
+- Real agent parameter patterns
+- Working tool integrations
+- Actual input/output specifications
 
-For text processing using language models:
-
-```python
-from buttermilk.agents.llm import LLMAgent
-
-class CustomLLMAgent(LLMAgent):
-    def __init__(self, system_prompt: str = None, **kwargs):
-        super().__init__(**kwargs)
-        self.system_prompt = system_prompt or "You are a helpful assistant."
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # Use the base LLM functionality
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": record.content}
-        ]
-        
-        response = await self.llm_client.generate(messages)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={
-                "model": self.model,
-                "system_prompt": self.system_prompt
-            }
-        )
-```
-
-### 2. RAG Agent
-
-For retrieval-augmented generation:
-
-```python
-from buttermilk.agents.rag import RAGAgent
-
-class PolicyRAGAgent(RAGAgent):
-    def __init__(self, knowledge_base: str = None, **kwargs):
-        super().__init__(**kwargs)
-        self.knowledge_base = knowledge_base or "default"
-        self.retriever = self._create_retriever()
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # Retrieve relevant context
-        context = await self.retriever.retrieve(record.content)
-        
-        # Build prompt with context
-        prompt = self._build_rag_prompt(record.content, context)
-        
-        # Generate response
-        response = await self.llm_client.generate(prompt)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={
-                "knowledge_base": self.knowledge_base,
-                "retrieved_docs": len(context),
-                "context_tokens": sum(len(doc.content) for doc in context)
-            }
-        )
-    
-    def _build_rag_prompt(self, query: str, context: list) -> str:
-        context_text = "\n".join([doc.content for doc in context])
-        return f"""
-        Context: {context_text}
-        
-        Query: {query}
-        
-        Answer the query based on the provided context.
-        """
-```
-
-### 3. Multi-Modal Agent
-
-For processing multiple types of content:
-
-```python
-from buttermilk.agents.multimodal import MultiModalAgent
-
-class ImageTextAgent(MultiModalAgent):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.vision_client = self._create_vision_client()
-        self.text_client = self._create_text_client()
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        results = {}
-        
-        # Process image content
-        if record.image_url:
-            image_analysis = await self.vision_client.analyze(record.image_url)
-            results["image_analysis"] = image_analysis
-        
-        # Process text content
-        if record.content:
-            text_analysis = await self.text_client.analyze(record.content)
-            results["text_analysis"] = text_analysis
-        
-        # Combine results
-        combined_analysis = self._combine_analyses(results)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=combined_analysis,
-            metadata={
-                "modalities": list(results.keys()),
-                "image_processed": bool(record.image_url),
-                "text_processed": bool(record.content)
-            }
-        )
-```
-
-### 4. Tool-Enabled Agent
-
-For agents that can use external tools:
-
-```python
-from buttermilk._core.mcp_decorators import tool
-from buttermilk._core.tool_definition import AgentToolDefinition
-
-class ToolEnabledAgent(Agent):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.calculator = Calculator()
-        self.web_search = WebSearch()
-    
-    @tool(
-        name="calculate",
-        description="Perform mathematical calculations",
-        parameters={
-            "expression": {"type": "string", "description": "Mathematical expression"}
-        }
-    )
-    async def calculate(self, expression: str) -> dict:
-        """Calculate a mathematical expression."""
-        try:
-            result = self.calculator.evaluate(expression)
-            return {"result": result, "expression": expression}
-        except Exception as e:
-            return {"error": str(e), "expression": expression}
-    
-    @tool(
-        name="search_web",
-        description="Search the web for information",
-        parameters={
-            "query": {"type": "string", "description": "Search query"}
-        }
-    )
-    async def search_web(self, query: str) -> dict:
-        """Search the web for information."""
-        results = await self.web_search.search(query)
-        return {
-            "query": query,
-            "results": results[:5],  # Top 5 results
-            "total_found": len(results)
-        }
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # This agent can use tools during processing
-        content = record.content
-        
-        # Example: Use tools if needed
-        if "calculate" in content.lower():
-            # Extract expression and calculate
-            expr = self._extract_expression(content)
-            calc_result = await self.calculate(expr)
-            response = f"Calculation result: {calc_result}"
-        elif "search" in content.lower():
-            # Extract query and search
-            query = self._extract_query(content)
-            search_result = await self.search_web(query)
-            response = f"Search results: {search_result}"
-        else:
-            response = f"Processed: {content}"
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={"tools_used": ["calculate", "search_web"]}
-        )
-```
+All agent configurations use Hydra's composition system and follow the established patterns in the codebase.
 
 ## Configuration
 
 ### Agent Configuration Files
 
+Instead of dummy configurations, refer to real working examples:
+
 ```yaml
-# conf/agents/my_agent.yaml
-name: "content_analyzer"
-type: "ContentAnalyzer"
-role: "ANALYZER"
-description: "Analyzes content for sentiment and bias"
-
-parameters:
-  model: "gemini-pro"
-  temperature: 0.7
-  max_tokens: 1000
-  analysis_type: "sentiment"
-
-tools:
-  - name: "sentiment_analysis"
-    enabled: true
-  - name: "bias_detection"
-    enabled: true
-
-metadata:
-  version: "1.0.0"
-  author: "Your Name"
-  created_date: "2024-01-15"
+# Real example: conf/agents/judge.yaml
+judge:
+  role: judge
+  description: Expert analysts, particularly suited to assess content with subject matter expertise
+  agent_obj: Judge
+  name_components: ["⚖️", "role", "model", "criteria", "unique_identifier"]
+  num_runs: 1
+  parameters:
+    template: judge
+  variants:
+    model: ${llms.judgers}
+    criteria: [] 
+  inputs:
+    records: "FETCH.outputs||*.records[]"
 ```
+
+```yaml
+# Real example: conf/agents/synth.yaml
+synthesiser:
+  role: SYNTHESISER
+  name: "🎨 Synthesiser"
+  name_components: ["🎨", "role", "model", "criteria", "unique_identifier"]
+  agent_obj: Judge
+  description: Team leaders, responsible for synthesizes diverging draft answers
+  num_runs: 1
+  parameters:
+    template: synthesise
+    formatting: json_rules
+  variants:
+    model: ${llms.synthesisers}
+    criteria: []
+  inputs:
+    records: "[FETCH]||*.records[]||*.records[]"
+    answers: "[JUDGE][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id, error: error }"
+```
+
+These examples show how models are configured at the flow level using `${llms.judgers}` and `${llms.synthesisers}` references.
 
 ### Using Configuration in Agent
 
@@ -412,134 +228,6 @@ def get_tool_definitions(self) -> list[AgentToolDefinition]:
     ]
 ```
 
-## Advanced Patterns
-
-### Stateful Agent
-
-```python
-class StatefulAgent(Agent):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.conversation_history = []
-        self.user_preferences = {}
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # Update conversation history
-        self.conversation_history.append({
-            "timestamp": datetime.now(),
-            "content": record.content,
-            "record_id": record.id
-        })
-        
-        # Use history in processing
-        context = self._build_context_from_history()
-        response = await self._generate_response(record.content, context)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={
-                "conversation_length": len(self.conversation_history),
-                "context_used": bool(context)
-            }
-        )
-    
-    def _build_context_from_history(self) -> str:
-        if len(self.conversation_history) <= 1:
-            return ""
-        
-        recent_history = self.conversation_history[-5:]  # Last 5 interactions
-        return "\n".join([item["content"] for item in recent_history])
-```
-
-### Batch Processing Agent
-
-```python
-class BatchProcessingAgent(Agent):
-    def __init__(self, batch_size: int = 10, **kwargs):
-        super().__init__(**kwargs)
-        self.batch_size = batch_size
-        self.current_batch = []
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # Add to current batch
-        self.current_batch.append(record)
-        
-        # Process batch when full
-        if len(self.current_batch) >= self.batch_size:
-            batch_results = await self._process_batch(self.current_batch)
-            self.current_batch = []
-            
-            return AgentOutput(
-                agent_name=self.name,
-                content=batch_results,
-                metadata={
-                    "batch_size": self.batch_size,
-                    "records_processed": len(batch_results)
-                }
-            )
-        
-        # Return placeholder for incomplete batch
-        return AgentOutput(
-            agent_name=self.name,
-            content="Batch incomplete",
-            metadata={"batch_progress": len(self.current_batch)}
-        )
-    
-    async def _process_batch(self, records: list[Record]) -> list[dict]:
-        # Process all records in batch
-        tasks = [self._process_single_record(record) for record in records]
-        return await asyncio.gather(*tasks)
-```
-
-### Agent with External APIs
-
-```python
-import aiohttp
-from typing import Optional
-
-class ExternalAPIAgent(Agent):
-    def __init__(self, api_key: str, base_url: str, **kwargs):
-        super().__init__(**kwargs)
-        self.api_key = api_key
-        self.base_url = base_url
-        self.session: Optional[aiohttp.ClientSession] = None
-    
-    async def _setup(self):
-        """Setup external resources."""
-        self.session = aiohttp.ClientSession()
-    
-    async def _cleanup(self):
-        """Cleanup external resources."""
-        if self.session:
-            await self.session.close()
-    
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        # Call external API
-        response = await self._call_api(record.content)
-        
-        return AgentOutput(
-            agent_name=self.name,
-            content=response,
-            metadata={
-                "api_endpoint": f"{self.base_url}/analyze",
-                "api_response_time": response.get("processing_time", 0)
-            }
-        )
-    
-    async def _call_api(self, content: str) -> dict:
-        """Call external API."""
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        payload = {"text": content}
-        
-        async with self.session.post(
-            f"{self.base_url}/analyze",
-            json=payload,
-            headers=headers
-        ) as response:
-            return await response.json()
-```
-
 ## Testing Agents
 
 ### Unit Tests
@@ -618,9 +306,10 @@ async def test_agent_with_real_llm():
 - Each agent should have one clear purpose
 - Avoid creating agents that do too many things
 
-**Stateless Processing:**
-- Agents should be stateless by default
+**State Management:**
+- Agents in flows may have state and context
 - State should be explicit and managed carefully
+- Consider whether state is needed for your use case
 
 **Error Handling:**
 - Implement proper error handling and recovery

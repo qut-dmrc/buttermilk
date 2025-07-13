@@ -1,10 +1,9 @@
 # Contributing Guide
 
-Welcome to the Buttermilk project! This guide will help you contribute effectively to our HASS-researcher-friendly AI and data processing framework.
+Welcome to the Buttermilk project! This guide provides essential information for contributing to our HASS-researcher-friendly AI framework.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
-- [Development Philosophy](#development-philosophy)
 - [Development Process](#development-process)
 - [Code Standards](#code-standards)
 - [Testing Guidelines](#testing-guidelines)
@@ -33,84 +32,9 @@ Before making any changes, please read:
 - [Core Concepts](../reference/concepts.md)
 - [Configuration Guide](../user-guide/configuration.md)
 
-## Development Philosophy
-
-### Core Principles
-
-**"Slow Down to Go Fast"**
-- Spending time on analysis prevents hours of debugging
-- Understanding systems deeply prevents introducing bugs
-- Systematic approaches are more reliable than intuition
-
-**HASS-Centric Design**
-- Prioritize usability for humanities researchers
-- Design for reproducibility and traceability
-- Make complex AI accessible to non-technical users
-
-**Minimal Viable Changes**
-- Make the smallest change that solves the root cause
-- One conceptual change per commit
-- Don't fix unrelated issues in the same PR
-
-### Quality Over Speed
-- Comprehensive testing is more valuable than clever code
-- Clear documentation prevents future confusion
-- Methodical analysis beats guessing
-
 ## Development Process
 
-### Phase 1: Analysis (Required Before Any Code Changes)
-
-**Before writing any code:**
-1. **Understand the Problem**: Write a clear problem statement
-2. **Map the Architecture**: Identify all affected components
-3. **Find Root Causes**: Distinguish symptoms from causes
-4. **Validate Assumptions**: Check your understanding with code inspection
-
-**Quality Gates:**
-- [ ] Can explain the problem clearly to someone else
-- [ ] Have identified the specific code/config causing the issue
-- [ ] Understand how the fix will impact other parts of the system
-- [ ] Have validated architectural assumptions
-
-### Phase 2: Planning
-
-**Create Documentation:**
-1. **GitHub Issue**: Use our template for non-trivial changes
-2. **Implementation Plan**: Clear phases with validation criteria
-3. **Success Criteria**: Measurable outcomes
-4. **Risk Assessment**: What could go wrong and mitigation strategies
-
-**Quality Gates:**
-- [ ] Plan addresses root cause, not just symptoms
-- [ ] Changes are minimal and focused
-- [ ] Success criteria are measurable
-- [ ] Regression prevention strategy is clear
-
-### Phase 3: Test-First Implementation
-
-**Write Tests Before Code:**
-1. **Failing Tests**: Demonstrate the current problem
-2. **Implementation**: Make tests pass
-3. **Validation**: Ensure existing tests still pass
-
-**Quality Gates:**
-- [ ] Tests fail with current implementation
-- [ ] Tests pass after implementation
-- [ ] No regressions in existing functionality
-- [ ] Edge cases are covered
-
-### Phase 4: Validation
-
-**Final Checks:**
-1. **Success Criteria**: All requirements met
-2. **Documentation**: Updated as needed
-3. **Commit Messages**: Explain "why" not just "what"
-
-**Quality Gates:**
-- [ ] Fix solves the original problem completely
-- [ ] No new issues introduced
-- [ ] Code is maintainable and well-documented
+For detailed development methodology and best practices, see the `CLAUDE.md` file in the repository root, which contains essential guidance for systematic development.
 
 ## Code Standards
 

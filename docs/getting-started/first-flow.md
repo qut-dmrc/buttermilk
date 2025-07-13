@@ -1,6 +1,6 @@
 # Your First Flow
 
-This tutorial will guide you through creating your first custom Buttermilk flow from scratch. By the end, you'll understand how flows work and how to build your own.
+This tutorial will guide you through understanding and running actual Buttermilk flows. Instead of creating dummy examples, we'll walk through real, working flows that demonstrate production patterns.
 
 ## Prerequisites
 
@@ -8,46 +8,198 @@ This tutorial will guide you through creating your first custom Buttermilk flow 
 - You've completed the [Quick Start Guide](quickstart.md)
 - Basic understanding of YAML configuration files
 
-## What We'll Build
+## Understanding Real Flows
 
-We'll create a simple sentiment analysis flow that:
-1. Takes text input
-2. Analyzes sentiment using an LLM
-3. Returns structured results
+Buttermilk includes several working example flows that demonstrate different use cases:
 
-## Step 1: Understanding Flow Structure
+### 1. Trans Flow - Journalism Quality Assessment
 
-Every Buttermilk flow has three main components:
+**Location:** `conf/flows/trans.yaml`
+
+This flow demonstrates quality assessment for journalism about trans issues:
 
 ```yaml
-# Basic flow structure
-flow:
-  name: my_flow
-  description: "What this flow does"
-  
-agents:
-  - name: analyzer
-    type: LLMAgent
-    # agent configuration
-    
-data:
-  source: inline
-  # data configuration
+# Real example: conf/flows/trans.yaml
+defaults:
+  - _self_
+  - /agents@trans.agents: 
+    - judge
+    - synth 
+    - differences
+  - /agents@trans.observers: 
+    - spy
+    - owl
+    - scorer
+    - host/sequence_host
+  - /flows/criteria@trans.parameters.criteria: trans
+  - /storage@trans.storage: tja
+  - /storage@trans.parameters.save: flows
+
+trans:
+  orchestrator: AutogenOrchestrator
+  name: "trans"
+  description: "Journalism quality assessment for trans issues reporting"
+  parameters:
+    human_in_loop: ${run.human_in_loop}
+    criteria: []
+    save: {}
+  agents: {}
+  observers: {}
 ```
 
-## Step 2: Create Your Flow Configuration
+**Key patterns:**
+- Uses Hydra's composition with `defaults`
+- Separates agents into `agents` and `observers`
+- References external criteria configurations
+- Configures storage for input and output
 
-Create a new file `conf/flows/sentiment_tutorial.yaml`:
+### 2. OSB Flow - Interactive Vector Search
+
+**Location:** `conf/flows/osb.yaml`
+
+Interactive group chat for querying a vector database:
 
 ```yaml
-# conf/flows/sentiment_tutorial.yaml
+# Real example: conf/flows/osb.yaml
 defaults:
-  - /agents/llm: gemini_simple
   - _self_
+  - /agents@observers: host/llm_host
+  - /agents: rag
+  - /tools@agents.rag.tools: chromadb_search
+  - /storage@agents.rag.tools.chromadb_search: osb_vector
+  - /storage@parameters.save: flows
 
-flow:
-  name: sentiment_tutorial
-  description: "Tutorial flow for sentiment analysis"
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "OSB Interactive Flow"
+description: "Interactive group chat for querying OSB vector store"
+parameters: {}
+agents: {}
+observers: {}
+```
+
+**Key patterns:**
+- Uses RAG (Retrieval-Augmented Generation) agent
+- Configures ChromaDB search tool
+- Demonstrates tool integration with agents
+
+### 3. Tox Flow - Toxicity Assessment
+
+**Location:** `conf/flows/tox.yaml`
+
+Applies toxicity criteria to content:
+
+```yaml
+# Real example: conf/flows/tox.yaml
+defaults:
+  - _self_
+  - /agents@tox.agents.judge: judge
+  - /agents@tox.agents.synth: synth
+  - /agents@tox.agents.differences: differences
+  - /agents@tox.observers.owl: owl
+  - /agents@tox.observers.scorer: scorer
+  - /agents@tox.observers.spy: spy
+  - /agents@tox.observers.host_sequencer: host/sequence_host
+  - /storage@tox.storage: tox_train
+  - /storage@tox.parameters.save: flows
+
+tox:
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  name: "tox"
+  description: "Applies toxicity criteria"
+  parameters:
+    human_in_loop: ${run.human_in_loop}
+    criteria:
+      - criteria_ordinary
+      - criteria_gelber
+      - criteria_hatefb_factorised
+    save: {}
+```
+
+**Key patterns:**
+- Multiple predefined criteria
+- Uses the judge-synth-differences pattern
+- Demonstrates complex agent coordination
+
+### 4. Zot Flow - Academic Literature Search
+
+**Location:** `conf/flows/zot.yaml`
+
+Academic question answering using scholarly database:
+
+```yaml
+# Real example: conf/flows/zot.yaml
+defaults:
+  - _self_
+  - /agents@observers: host/llm_host
+  - /agents: rag_zotero
+  - /tools@agents.rag_zotero.tools: chromadb_search
+  - /storage@agents.rag_zotero.tools.chromadb_search: zot
+  - /storage@parameters.save: flows
+
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "Zotero RAG"
+description: "Answer academic questions from scholarly database"
+```
+
+**Key patterns:**
+- Specialized RAG agent for academic content
+- Uses Zotero-specific configurations
+- Demonstrates domain-specific adaptations
+
+## Running Your First Flow
+
+Instead of creating a new flow, let's run an existing one:
+
+### 1. Choose a Flow
+
+Start with the OSB flow as it's interactive and demonstrates core concepts:
+
+```bash
+# Run the OSB interactive flow
+uv run python -m buttermilk.cli flows.osb
+```
+
+### 2. Understand the Output
+
+The flow will:
+1. Load the vector database
+2. Start an interactive chat session
+3. Allow you to query the database
+4. Return structured responses with citations
+
+### 3. Examine the Components
+
+While the flow runs, examine its components:
+
+```bash
+# Look at the agent configuration
+cat conf/agents/rag.yaml
+
+# Look at the tool configuration
+cat conf/tools/chromadb_search.yaml
+
+# Look at the storage configuration
+cat conf/storage/osb_vector.yaml
+```
+
+## Next Steps
+
+After running and understanding these flows:
+
+1. **Study the agent configurations** in `conf/agents/`
+2. **Examine the tool definitions** in `conf/tools/`
+3. **Look at storage configurations** in `conf/storage/`
+4. **Read the architecture documentation** to understand how components interact
+5. **Create your own flow** by adapting these patterns
+
+## Key Takeaways
+
+- **Use Real Examples**: Always refer to working flows rather than dummy examples
+- **Composition is Key**: Flows use Hydra's composition system extensively
+- **Modular Design**: Agents, tools, and storage are separately configurable
+- **Production Ready**: These flows are tested and used in research
+
+All flows demonstrate production patterns that have been validated in real research contexts, making them reliable starting points for your own work.
   version: "1.0.0"
   
 agents:
