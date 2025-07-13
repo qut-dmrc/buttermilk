@@ -73,4 +73,8 @@
 "source.organizeImports": "explicit",
 "source.fixAll.ruff": "explicit"
   },
+  "files.exclude": {
+    "**/*.backup": true
+  },
+  "explorer.excludeGitIgnore": true,
 }

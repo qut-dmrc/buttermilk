@@ -97,10 +97,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Log tool schema status
         if not self._tools:
-            msg = f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
-            raise ProcessingError(msg)
+            msg = f"StructuredLLMHost {self.agent_name} has no tools available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
+            logger.error(msg)
+            await self._publish("Unable to process request: no tools available.")
+            return  # Skip processing if no tools are available
 
-        logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tools)} tool schemas")
+        logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tools)} tools")
         logger.debug(f"Message type received: {type(message).__name__}")
 
         # Skip command messages
@@ -124,8 +126,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 inputs={
                     "user_feedback": self._user_feedback,
                     "prompt": str(message.content),
-                    "participants": list(self._participants.keys()) if hasattr(self, "_participants") else [],
-                    "tool_count": len(self._tools),
                 },
             ),
             cancellation_token=ctx.cancellation_token,
@@ -160,13 +160,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Get the LLM client
         model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
-        # Call create() directly with tool schemas (not executable tools)
-        # This returns FunctionCall objects without executing them
-        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tools)} tool schemas")
+        # deduplicate tools by name
+        tools_list = list({tool.name: tool for tool in self._tools}.values())
 
-        # All items in _tools should be Tool objects now
-        tools_list = self._tools + list(self._tool_registry.values())
-        logger.debug(f"StructuredLLMHost has {len(tools_list)} tools ready for LLM")
+        # This returns FunctionCall objects without executing them
+        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
 
         try:
             create_result: CreateResult = await model_client.create(

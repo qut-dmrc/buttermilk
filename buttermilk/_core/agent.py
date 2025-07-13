@@ -31,6 +31,7 @@ from autogen_core import (
     DefaultTopicId,
     MessageContext,
     RoutedAgent,
+    TopicId,
     message_handler,
 )
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -153,6 +154,7 @@ class Agent(RoutedAgent):
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
+        self._topic_id: TopicId = None
 
     @property
     def metadata(self) -> AgentMetadata:
@@ -269,11 +271,10 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        if not isinstance(message, ConductorRequest):
-            return
-            
         logger.debug(f"Agent {self.agent_name} received ConductorRequest, sending announcement")
-        
+
+        self._topic_id = ctx.topic_id
+
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
 
@@ -282,20 +283,20 @@ class Agent(RoutedAgent):
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
             supported_message_types=self.get_supported_message_types(),
-            tool_definition=tool_definitions,
+            tool_definitions=tool_definitions,
             status="active",
             announcement_type="response",
             responding_to=str(ctx.sender) if ctx.sender else None,
             source=self.agent_id,
         )
-        
+
         await self.publish_message(
             announcement,
             topic_id=ctx.topic_id or DefaultTopicId(type="default"),
         )
-        
+
         logger.debug(f"Agent {self.agent_name} sent announcement in response to ConductorRequest")
-        
+
         # Mark as announced
         self._announced = True
 
@@ -643,6 +644,11 @@ class Agent(RoutedAgent):
             logger.debug(f"Heartbeat queue full for agent {self.agent_name}. Agent may be busy or stuck.")
 
     # --- Helper Methods ---
+
+    async def _publish(self, message: Any) -> None:
+        """Publish a message to the group chat."""
+        await self.publish_message(message, topic_id=self._topic_id)
+        logger.highlight(f"Agent {self.agent_name} published {type(message).__name__} message to topic {self._topic_id}")
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Augments an incoming `AgentInput` message with the agent's internal state.

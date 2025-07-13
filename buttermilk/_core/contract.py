@@ -31,7 +31,6 @@ from pydantic import (
     Field,
     computed_field,
     field_validator,
-    model_validator,
 )
 
 from buttermilk._core.context import session_id_var
@@ -948,6 +947,8 @@ class AgentAnnouncement(FlowEvent):
             update for status changes.
         responding_to (str | None): agent_id of host being responded to (for
             response type announcements). Defaults to None.
+
+        tool_definitions: list[Tool]: Tool objects for this agent (AgentToolDefinition or Tool).
     
     """
 
@@ -963,7 +964,7 @@ class AgentAnnouncement(FlowEvent):
         default_factory=list,
         description="OOBMessage types this agent handles",
     )
-    tool_definition: Any | None = Field(default=None, description="Tool object or schema for this agent (AgentToolDefinition or ToolSchema)")
+    tool_definitions: list[Tool] = Field(default_factory=list, description="Tool objects for this agent (AgentToolDefinition or Tool)")
 
     # Status
     status: Literal["joining", "active", "leaving"] = Field(
@@ -980,21 +981,13 @@ class AgentAnnouncement(FlowEvent):
         default=None,
         description="agent_id of host being responded to (for response type)",
     )
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow Tool types
 
     def model_post_init(self, __context) -> None:
         """Set agent_info to match agent_config after initialization."""
         super().model_post_init(__context)
         # Ensure agent_info matches agent_config
         object.__setattr__(self, "agent_info", self.agent_config)
-
-    @model_validator(mode="after")
-    def validate_responding_to(self) -> "AgentAnnouncement":
-        """Validate that responding_to is set appropriately based on announcement_type."""
-        if self.announcement_type == "response" and not self.responding_to:
-            raise ValueError("responding_to must be set for response type announcements")
-        if self.announcement_type != "response" and self.responding_to:
-            raise ValueError("responding_to should only be set for response type announcements")
-        return self
 
     def __str__(self) -> str:
         """Returns a formatted string representation of the announcement."""

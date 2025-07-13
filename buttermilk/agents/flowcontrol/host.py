@@ -5,7 +5,7 @@ from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import ToolSchema
+from autogen_core.tools import Tool
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -55,11 +55,10 @@ class HostAgent(Agent):
 
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
-        self._tool_registry: dict[str, list[str]] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
 
         # Tool schemas for LLM-based hosts
-        self._tools: list[ToolSchema] = []
+        self._tools: list[Tool] = []
         self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
         self._registry_summary_cache: dict[str, Any] | None = None
         self._current_step: str = ""
@@ -75,8 +74,6 @@ class HostAgent(Agent):
 
         # Maximum time to wait for agent responses in seconds
         self._max_user_confirmation_time: int = kwargs.get("max_user_confirmation_time", 1220)
-
-        self._topic_id: TopicId | None = None
 
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
@@ -94,28 +91,21 @@ class HostAgent(Agent):
         """Set the human_in_loop value in parameters."""
         self.parameters["human_in_loop"] = value
 
-    async def _publish(self, message: Any) -> None:
-        """Publish a message to the group chat."""
-        if hasattr(self, "_runtime") and self._runtime:
-            await self.publish_message(message, topic_id=self._topic_id)
-            logger.debug(f"Host {self.agent_name} published message: {type(message).__name__} to topic {self._topic_id}")
-        else:
-            logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
-
     @message_handler
-    async def handle_conductor_request(
+    async def handle_conductor_request(  # type: ignore
         self,
         message: ConductorRequest,
         ctx: MessageContext,
     ) -> None:
         """Handle ConductorRequest to start the flow."""
+        await super().handle_conductor_request(message, ctx)
+
         logger.info(
             f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
             f"with {len(message.participants)} participants: {list(message.participants.keys())}",
         )
-        self._topic_id = ctx.topic_id
 
-        if hasattr(self, "_conductor_task") and self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
+        if hasattr(self, "_conductor_task") and self._conductor_task:
             logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
             return
 
@@ -245,25 +235,13 @@ class HostAgent(Agent):
             agent_id = announcement.agent_config.agent_id
 
             if announcement.status == "leaving":
-                # Remove agent from registry
-                self._agent_registry.pop(agent_id, None)
-                # Remove from tool registry and clean up empty entries
-                for tool, agent_list in list(self._tool_registry.items()):
-                    if agent_id in agent_list:
-                        agent_list.remove(agent_id)
-                        if not agent_list:  # Remove empty tool entries
-                            del self._tool_registry[tool]
-                logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
+                logger.warning(f"Host {self.agent_name} received notification to remove agent {agent_id}, but functionality is not implemented.")
             else:
                 # Add or update agent in registry
                 self._agent_registry[agent_id] = announcement
                 # Update tool registry
-                for tool in announcement.available_tools:
-                    if tool not in self._tool_registry:
-                        self._tool_registry[tool] = []
-                    if agent_id not in self._tool_registry[tool]:
-                        self._tool_registry[tool].append(agent_id)
-                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+                self._tools.extend(announcement.tool_definitions)
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {[tool.name for tool in announcement.tool_definitions]}")
 
             # Invalidate cache
             self._registry_summary_cache = None
@@ -294,7 +272,6 @@ class HostAgent(Agent):
 
         summary = {
             "active_agents": active_agents,
-            "available_tools": dict(self._tool_registry),
             "total_agents": len(self._agent_registry),
         }
 
@@ -705,7 +682,7 @@ class HostAgent(Agent):
             # If not found, check agent announcements for explicit tool definitions
             if not agent_role:
                 for agent_id, announcement in self._agent_registry.items():
-                    tool_def = announcement.tool_definition
+                    tool_def = announcement.tool_definitions
                     if tool_def and hasattr(tool_def, "name"):
                         # It's a Tool object (AgentToolDefinition)
                         if tool_def.name == call.name:

@@ -1,3 +1,4 @@
+*.backup
 outputs
 multirun
 connections.json*
