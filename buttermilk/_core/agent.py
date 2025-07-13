@@ -253,16 +253,7 @@ class Agent(RoutedAgent):
         """
         return []
 
-    def get_supported_message_types(self) -> list[str]:
-        """Get list of OOBMessage types this agent handles.
-        
-        Returns:
-            list[str]: List of supported message type names.
-        """
-        # Check if agent has defined supported messages
-        if hasattr(self, "_supported_oob_messages"):
-            return self._supported_oob_messages
-        return []
+
 
     def create_announcement(
         self,
@@ -293,7 +284,7 @@ class Agent(RoutedAgent):
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
-            supported_message_types=self.get_supported_message_types(),
+            supported_message_types=[],
             tool_definition=tool_definitions,
             status=status,
             announcement_type=announcement_type,

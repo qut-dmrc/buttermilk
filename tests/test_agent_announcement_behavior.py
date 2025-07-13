@@ -88,18 +88,6 @@ class TestAgentAnnouncementBehavior:
         assert tools == ["tool1", "tool2"]
 
     @pytest.mark.anyio
-    async def test_agent_detects_supported_message_types(self, mock_agent):
-        """Test that agent correctly detects supported OOB message types."""
-        # For base agent, should return empty list
-        message_types = mock_agent.get_supported_message_types()
-        assert message_types == []
-
-        # Mock a more complex agent with specific message handlers
-        mock_agent._supported_oob_messages = ["ConductorRequest", "StepRequest"]
-        message_types = mock_agent.get_supported_message_types()
-        assert message_types == ["ConductorRequest", "StepRequest"]
-
-    @pytest.mark.anyio
     async def test_agent_responds_to_host_announcement(self, mock_agent):
         """Test that agent responds when receiving a host announcement."""
         # Create mock callbacks
@@ -193,18 +181,17 @@ class TestAgentAnnouncementBehavior:
     @pytest.mark.anyio
     async def test_agent_announcement_includes_tools_and_message_types(self, mock_agent):
         """Test that announcements include available tools and supported message types."""
-        # Set mock tools and message types
+        # Set mock tools
         mock_agent._mock_tools = [
             {"name": "analyze", "description": "Analyze data"},
             {"name": "summarize", "description": "Summarize text"}
         ]
-        mock_agent._supported_oob_messages = ["UIMessage", "ErrorEvent"]
 
         # Create announcement
         announcement = mock_agent.create_announcement("initial", "joining")
 
         assert announcement.available_tools == ["analyze", "summarize"]
-        assert announcement.supported_message_types == ["UIMessage", "ErrorEvent"]
+        assert announcement.supported_message_types == []  # Always empty since method is removed
 
     @pytest.mark.anyio
     async def test_agent_handles_announcement_errors_gracefully(self, mock_agent):
