@@ -50,15 +50,12 @@ class AgentToolDefinition(BaseModel):
 
     @property
     def schema(self) -> ToolSchema:
-        """Return the tool schema in OpenAI format for the Tool protocol."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.input_schema
-            }
-        }  # type: ignore
+        """Return the tool schema in autogen format for the Tool protocol."""
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters=self.input_schema,
+        )
 
     def args_type(self) -> type:
         """Return the args type (dict for schema-based tools)."""

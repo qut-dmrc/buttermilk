@@ -169,19 +169,6 @@ class HostAgent(Agent):
         # Do nothing with progress updates received by the host
 
     @message_handler
-    async def handle_agent_announcement(
-        self,
-        message: AgentAnnouncement,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle AgentAnnouncement messages."""
-        logger.info(
-            f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: "
-            f"{message.announcement_type} - {message.status}",
-        )
-        await self.update_agent_registry(message)
-
-    @message_handler
     async def handle_agent_trace(
         self,
         message: AgentTrace,
@@ -222,7 +209,12 @@ class HostAgent(Agent):
 
     # --- Agent Registry Methods ---
 
-    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+    @message_handler
+    async def update_agent_registry(
+        self,
+        message: AgentAnnouncement,
+        ctx: MessageContext,
+    ) -> None:
         """Update registry with agent announcement.
         
         Thread-safe update of agent registry.
@@ -232,16 +224,16 @@ class HostAgent(Agent):
 
         """
         async with self._registry_lock:
-            agent_id = announcement.agent_config.agent_id
+            agent_id = message.agent_config.agent_id
 
-            if announcement.status == "leaving":
+            if message.status == "leaving":
                 logger.warning(f"Host {self.agent_name} received notification to remove agent {agent_id}, but functionality is not implemented.")
             else:
                 # Add or update agent in registry
-                self._agent_registry[agent_id] = announcement
+                self._agent_registry[agent_id] = message
                 # Update tool registry
-                self._tools.extend(announcement.tool_definitions)
-                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {[tool.name for tool in announcement.tool_definitions]}")
+                self._tools.extend(message.tool_definitions)
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {[tool.name for tool in message.tool_definitions]}")
 
             # Invalidate cache
             self._registry_summary_cache = None
@@ -378,7 +370,6 @@ class HostAgent(Agent):
                             waiting_on=dict(),
                             message="Flow currently idle",
                         )
-                    logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
                     await self._publish(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
@@ -508,14 +499,10 @@ class HostAgent(Agent):
                     host_inputs = HostInputModel()
 
                 # Extract fields cleanly
-                self._initial_query = host_inputs.initial_query
-                self._initial_parameters = host_inputs.parameters
+                self._initial_query = host_inputs.initial_query or ""
+                self._initial_parameters = host_inputs.parameters or {}
 
-                if self._initial_query:
-                    logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-
-                if self._initial_parameters:
-                    logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}, parameters: {list(self._initial_parameters.keys())}")
 
             except Exception as e:
                 # If parsing fails, fall back to empty values

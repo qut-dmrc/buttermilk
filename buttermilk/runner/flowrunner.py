@@ -84,7 +84,7 @@ class SessionResources(BaseModel):
             "websockets_closed": 0,
             "files_closed": 0,
             "custom_cleaned": 0,
-            "errors": []
+            "errors": [],
         }
 
         # Cancel tasks
@@ -97,9 +97,9 @@ class SessionResources(BaseModel):
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*self.tasks, return_exceptions=True),
-                    timeout=5.0
+                    timeout=5.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 report["errors"].append("Timeout waiting for task cancellation")
 
             self.tasks.clear()
@@ -295,8 +295,6 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
-        logger.debug(f"[FlowRunner.send_message_to_ui] Sending {type(message).__name__} to session {self.session_id}")
-
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
             logger.warning(f"[FlowRunner.send_message_to_ui] ⚠️ Message not formatted by MessageService: {message}")
@@ -309,7 +307,7 @@ class FlowRunContext(BaseModel):
             # Consolidate debug info into a single log entry
             logger.debug(
                 f"[FlowRunner.send_message_to_ui] Sending {message_type} to session {self.session_id} "
-                f"(ws_state={self.websocket.client_state}, payload_size={len(json.dumps(message_data_to_send))} bytes)"
+                f"(ws_state={self.websocket.client_state}, payload_size={len(json.dumps(message_data_to_send))} bytes)",
             )
 
             async def _send_with_retry_internal():
@@ -324,7 +322,6 @@ class FlowRunContext(BaseModel):
                     # Proceed to send; if it fails due to state, tenacity will catch and retry.
 
                 await self.websocket.send_json(message_data_to_send)
-                logger.debug(f"[FlowRunner.send_message_to_ui] Successfully sent message of type {message_type} to UI for session {self.session_id}")
 
             await _send_with_retry_internal()
 
@@ -471,7 +468,7 @@ class SessionManager:
                 session_id=session_id,
                 websocket=websocket,
                 session_timeout=self.session_timeout,
-                status=SessionStatus.INITIALIZING
+                status=SessionStatus.INITIALIZING,
             )
 
             # Initialize session infrastructure
@@ -500,6 +497,7 @@ class SessionManager:
             
         Returns:
             True if transition was successful, False otherwise
+
         """
         if session_id not in self.sessions:
             logger.warning(f"Attempted to transition status for non-existent session {session_id}")
@@ -532,7 +530,6 @@ class SessionManager:
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up and remove a session with atomic operations."""
-
         async with self._global_lock:
             if session_id not in self.sessions:
                 return False
@@ -575,6 +572,7 @@ class SessionManager:
         Args:
             session_id: The session to register the handler for
             handler: An async callable that performs custom cleanup
+
         """
         self.shutdown_handlers[session_id] = handler
         logger.debug(f"Registered shutdown handler for session {session_id}")
@@ -587,6 +585,7 @@ class SessionManager:
             
         Returns:
             True if session is valid, False otherwise
+
         """
         if session_id not in self.sessions:
             return False
@@ -614,6 +613,7 @@ class SessionManager:
             
         Returns:
             Dictionary containing health information
+
         """
         if session_id not in self.sessions:
             return {"status": "not_found", "health": "unknown"}
@@ -648,6 +648,7 @@ class SessionManager:
             
         Returns:
             True if session was transitioned to RECONNECTING, False if session was cleaned up
+
         """
         if session_id not in self.sessions:
             logger.warning(f"Attempted to handle disconnect for non-existent session {session_id}")
@@ -672,10 +673,9 @@ class SessionManager:
 
             logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
             return True
-        else:
-            # Transition failed, clean up the session
-            await self.cleanup_session(session_id)
-            return False
+        # Transition failed, clean up the session
+        await self.cleanup_session(session_id)
+        return False
 
     async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
         """Reconnect a client to an existing session in RECONNECTING status.
@@ -686,6 +686,7 @@ class SessionManager:
             
         Returns:
             The session if reconnection was successful, None otherwise
+
         """
         if session_id not in self.sessions:
             logger.warning(f"Attempted to reconnect to non-existent session {session_id}")
@@ -719,9 +720,8 @@ class SessionManager:
         if success:
             logger.info(f"Successfully reconnected session {session_id}")
             return session
-        else:
-            logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
-            return None
+        logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
+        return None
 
     async def _periodic_cleanup(self) -> None:
         """Background task that periodically cleans up expired sessions with enhanced logic."""
@@ -842,9 +842,8 @@ class FlowRunner(BaseModel):
                 reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
                 if reconnected_session:
                     return reconnected_session
-                else:
-                    # Reconnection failed, fall through to create new session
-                    logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
+                # Reconnection failed, fall through to create new session
+                logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
             elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
                 # Session is already active, just add the websocket
                 if websocket:
@@ -983,7 +982,7 @@ class FlowRunner(BaseModel):
         logger.info(
             f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id}) | "
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
-            f"New flow instance created"
+            f"New flow instance created",
         )
 
         try:
@@ -1005,7 +1004,7 @@ class FlowRunner(BaseModel):
                     metrics_collector.record_flow_execution(
                         flow_name=run_request.flow,
                         execution_time=execution_time,
-                        success=success
+                        success=success,
                     )
                 except Exception as e:
                     logger.debug(f"Failed to record flow execution metrics: {e}")

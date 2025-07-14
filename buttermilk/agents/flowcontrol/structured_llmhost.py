@@ -43,7 +43,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         while not self._proposed_step.empty():
             try:
                 self._proposed_step.get_nowait()
-                logger.debug("Cleared pending step from queue due to new manager request")
             except asyncio.QueueEmpty:
                 break
 
@@ -102,9 +101,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             await self._publish("Unable to process request: no tools available.")
             return  # Skip processing if no tools are available
 
-        logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tools)} tools")
-        logger.debug(f"Message type received: {type(message).__name__}")
-
         # Skip command messages
         if message.content and str(message.content).startswith(COMMAND_SYMBOL):
             return
@@ -142,8 +138,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         Instead, when the LLM calls a tool, we convert it to a StepRequest and
         queue it for the appropriate agent to handle.
         """
-        logger.debug(f"StructuredLLMHost '{self.agent_name}' starting _process")
-
         # Fill the template as usual
         try:
             llm_messages_to_send = await self._fill_template(

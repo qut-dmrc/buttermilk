@@ -1,6 +1,5 @@
 import logging
 from logging import getLogger
-from typing import Any
 
 from buttermilk._core.context import agent_id_var, session_id_var
 
@@ -13,7 +12,7 @@ class BMLogger(logging.Logger):
     def highlight(self, msg: str, *args, **kwargs) -> None:
         """Log a highlighted INFO message that stands out visually."""
         # Add visual separators to make the message stand out
-        highlighted_msg = f"\n{'═' * 80}\n▶ {msg}\n{'═' * 80}"
+        highlighted_msg = f"▶ {msg} ◀"
         self.info(highlighted_msg, *args, **kwargs)
 
 
