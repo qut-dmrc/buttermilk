@@ -673,7 +673,7 @@ class HostAgent(Agent):
 
                 # Create a more descriptive log message
                 tool_desc = self._describe_tool_call(call.name, arguments)
-                logger.info(f"Host routing to {agent_role}: {tool_desc}")
+                logger.info(f"Host routing to {role_part}: {tool_desc}")
 
                 if self.human_in_loop:
                     await self._proposed_step.put(step_request)
