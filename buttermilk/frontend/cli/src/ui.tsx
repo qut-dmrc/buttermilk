@@ -5,6 +5,7 @@ import { Message } from './types.js';
 import MessageList from './components/MessageList.js';
 import UserInput from './components/UserInput.js';
 import Spinner from './components/Spinner.js';
+import ProgressIndicator from './components/ProgressIndicator.js';
 import { connect, WebSocketConnection, ConnectionState } from './websocket.js';
 
 interface Props {
@@ -18,11 +19,49 @@ const UI = ({ url }: Props) => {
   const [connectionError, setConnectionError] = useState<Error | null>(null);
   const [lastUserInput, setLastUserInput] = useState<string>('');
 
+  // Progress tracking state
+  const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
+  const [currentStep, setCurrentStep] = useState<string>('');
+  const [flowStatus, setFlowStatus] = useState<string>('');
+  const [waitingOn, setWaitingOn] = useState<string[]>([]);
+
+  // Message types to filter out from chat display
+  const FILTERED_MESSAGE_TYPES = new Set([
+    'flow_progress_update',
+    'agent_announcement',
+    'task_processing_started',
+    'task_processing_complete'
+  ]);
+
   useEffect(() => {
     const conn = connect(
       url,
       (message) => {
-        setMessages((prevMessages) => [...prevMessages, message]);
+        // Handle progress updates separately
+        if (message.type === 'flow_progress_update') {
+          updateFlowProgress(message);
+        } else if (message.type === 'agent_announcement') {
+          updateAgentStatus(message);
+        } else if (message.type === 'task_processing_started') {
+          // Track when agents start processing
+          if (message.payload?.agent_id) {
+            setActiveAgents(prev => new Set([...prev, message.payload.agent_id]));
+          }
+        } else if (message.type === 'task_processing_complete') {
+          // Track when agents finish processing
+          if (message.payload?.agent_id) {
+            setActiveAgents(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(message.payload.agent_id);
+              return newSet;
+            });
+          }
+        }
+
+        // Only add non-filtered messages to the chat display
+        if (!FILTERED_MESSAGE_TYPES.has(message.type)) {
+          setMessages((prevMessages) => [...prevMessages, message]);
+        }
       },
       (state, error) => {
         setConnectionState(state);
@@ -35,6 +74,34 @@ const UI = ({ url }: Props) => {
       conn.close();
     };
   }, [url]);
+
+  const updateFlowProgress = (message: Message) => {
+    const payload = message.payload;
+    if (payload?.step_name) {
+      setCurrentStep(payload.step_name);
+    }
+    if (payload?.status) {
+      setFlowStatus(payload.status);
+    }
+    if (payload?.waiting_on && typeof payload.waiting_on === 'object') {
+      setWaitingOn(Object.keys(payload.waiting_on));
+    }
+  };
+
+  const updateAgentStatus = (message: Message) => {
+    const payload = message.payload;
+    if (payload?.agent_id) {
+      if (payload.action === 'joined') {
+        setActiveAgents(prev => new Set([...prev, payload.agent_id]));
+      } else if (payload.action === 'left') {
+        setActiveAgents(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(payload.agent_id);
+          return newSet;
+        });
+      }
+    }
+  };
 
   const handleSubmit = (text: string) => {
     if (!connection || !text.trim()) return;
@@ -154,6 +221,14 @@ Regular text is sent as user_message to the current flow.`
           </Box>
         </Box>
       </Box>
+      
+      {/* Progress indicator */}
+      <ProgressIndicator 
+        activeAgents={activeAgents.size}
+        currentStep={currentStep}
+        status={flowStatus}
+        waitingOn={waitingOn}
+      />
       
       {/* Message area */}
       <Box flexDirection="column" flexGrow={1}>
