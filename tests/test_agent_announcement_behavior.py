@@ -191,7 +191,6 @@ class TestAgentAnnouncementBehavior:
         announcement = mock_agent.create_announcement("initial", "joining")
 
         assert announcement.available_tools == ["analyze", "summarize"]
-        assert announcement.supported_message_types == []  # Always empty since method is removed
 
     @pytest.mark.anyio
     async def test_agent_handles_announcement_errors_gracefully(self, mock_agent):

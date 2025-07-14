@@ -284,7 +284,6 @@ class Agent(RoutedAgent):
             content=content_map.get(status, f"Agent {self.agent_name} status: {status}"),
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
-            supported_message_types=[],
             tool_definition=tool_definitions,
             status=status,
             announcement_type=announcement_type,
