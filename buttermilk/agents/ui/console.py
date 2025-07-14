@@ -196,6 +196,8 @@ class CLIUserAgent(UIAgent):
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
+    # Store the last UIMessage with options for proper confirmation handling
+    _last_confirmation_options: list[str] | None = PrivateAttr(default=None)
 
     async def callback_to_ui(self, message, source: str = "system", **kwargs):
         if formatted_msg := self._fmt_msg(message, source=source):
@@ -433,13 +435,46 @@ class CLIUserAgent(UIAgent):
                         if len(registry) > 5:
                             result.append(" " * 25 + f"└ ... and {len(registry) - 5} more\n", style="dim")
                 else:
-                    # Standard UIMessage formatting
-                    result.append("REQ: ", style="bright_yellow")
+                    # Check if this is a confirmation request with options
+                    options = getattr(message, "options", None)
                     content = getattr(message, "content", "")
-                    content_preview = content[:150].replace("\n", " ") if content else "No content"
-                    result.append(content_preview, style="white")
-                    if len(content) > 150:
-                        result.append("...", style="dim")
+                    
+                    if isinstance(options, list) and options:
+                        # Confirmation request with multiple choice options
+                        result.append("🔔 ", style="bright_yellow")
+                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(content, style="bright_white")
+                        
+                        # Display options in a neat format
+                        result.append("\n", style="")
+                        result.append(" " * 25 + "┌─ Options ─────────────\n", style="dim")
+                        
+                        for i, option in enumerate(options):
+                            option_key = option[0].upper() if option else str(i+1)
+                            result.append(" " * 25 + "│ ", style="dim")
+                            result.append(f"[{option_key}] ", style="bold cyan")
+                            result.append(f"{option}", style="white")
+                            result.append("\n", style="")
+                        
+                        result.append(" " * 25 + "└───────────────────────", style="dim")
+                        result.append("\n" + " " * 25 + "  ", style="")
+                        result.append("Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        
+                    elif options is True:
+                        # Simple Yes/No confirmation
+                        result.append("🔔 ", style="bright_yellow")
+                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(content, style="bright_white")
+                        result.append("\n" + " " * 25 + "  ", style="")
+                        result.append("[Y/n] Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        
+                    else:
+                        # Standard UIMessage formatting
+                        result.append("REQ: ", style="bright_yellow")
+                        content_preview = content[:150].replace("\n", " ") if content else "No content"
+                        result.append(content_preview, style="white")
+                        if len(content) > 150:
+                            result.append("...", style="dim")
                 content_added = True
 
             elif isinstance(message, TaskProcessingStarted):
@@ -547,6 +582,14 @@ class CLIUserAgent(UIAgent):
                 if formatted_msg := self._fmt_msg(message, source=source):
                     self._console.print(formatted_msg)
         elif isinstance(message, (UIMessage, ToolOutput, AgentAnnouncement)):
+            if isinstance(message, UIMessage):
+                # Store options if this is a confirmation request
+                options = getattr(message, "options", None)
+                if isinstance(options, list) and options:
+                    self._last_confirmation_options = options
+                else:
+                    self._last_confirmation_options = None
+            
             if formatted_msg := self._fmt_msg(message, source=source):
                 self._console.print(formatted_msg)
         else:
@@ -596,12 +639,44 @@ class CLIUserAgent(UIAgent):
 
                 # Handle confirmation/negation based on input
                 cleaned_input = re.sub(r"\W", "", user_input).lower()
-                is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q"]
+                is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q", "reject", "r"]
                 is_confirmation = not user_input.strip()  # Empty line confirms
+                
+                # Check if input matches an option (if we have options stored)
+                selected_option = None
+                if self._last_confirmation_options and user_input.strip():
+                    # Check for single letter match (first letter of option)
+                    for option in self._last_confirmation_options:
+                        if option and (
+                            user_input.strip().lower() == option[0].lower() or  # First letter match
+                            user_input.strip().lower() == option.lower()  # Full option match
+                        ):
+                            selected_option = option
+                            break
+                    
+                    # For confirm/reject options, map common responses
+                    if self._last_confirmation_options == ["confirm", "reject"]:
+                        if user_input.strip().lower() in ["y", "yes", "c", "confirm"]:
+                            selected_option = "confirm"
+                        elif user_input.strip().lower() in ["n", "no", "r", "reject"]:
+                            selected_option = "reject"
 
-                if is_negation:
+                if selected_option:
+                    # User selected a specific option
+                    logger.info(f"User selected option: {selected_option}")
+                    is_confirm = selected_option.lower() in ["confirm", "yes", "y", "accept", "ok"]
+                    response = ManagerMessage(
+                        confirm=is_confirm,
+                        interrupt=False,
+                        content=selected_option
+                    )
+                    self._last_confirmation_options = None  # Clear stored options
+                    current_prompt_lines = []  # Reset prompt buffer
+                    await self.callback_to_groupchat(response)
+                elif is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerMessage(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
+                    response = ManagerMessage(confirm=False, interrupt=False, content="reject")
+                    self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
                 elif is_confirmation:
@@ -613,8 +688,9 @@ class CLIUserAgent(UIAgent):
                         response = ManagerMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
                     else:
                         logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = ManagerMessage(confirm=True, interrupt=False, content=None)
+                        response = ManagerMessage(confirm=True, interrupt=False, content="confirm")
 
+                    self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
                 else:
@@ -661,6 +737,7 @@ class CLIUserAgent(UIAgent):
         # Initialize the console and set up the input task.
         logger.debug(f"Initializing {self.agent_name}...")
         self.callback_to_groupchat = callback_to_groupchat
+        self._last_confirmation_options = None  # Clear any stored options on init
         # Ensure any existing task is cancelled before starting a new one (e.g., on reset)
         if self._input_task and not self._input_task.done():
             self._input_task.cancel()
