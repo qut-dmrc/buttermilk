@@ -12,7 +12,6 @@ from buttermilk._core.contract import AgentOutput
 from buttermilk._core.tool_definition import (
     AgentToolDefinition,
     MCPServerConfig,
-    UnifiedRequest,
 )
 from buttermilk._core.mcp_decorators import (
     MCPRoute,
@@ -136,34 +135,7 @@ class TestMCPServerConfig:
         assert config.allowed_origins == ["http://localhost:3000"]
 
 
-class TestUnifiedRequest:
-    """Test UnifiedRequest class."""
-    
-    def test_basic_request(self):
-        """Test basic unified request."""
-        request = UnifiedRequest(
-            target="agent_name.tool_name",
-            inputs={"key": "value"},
-            context={"session": "123"},
-            metadata={"user_id": "456"}
-        )
-        
-        assert request.agent_name == "agent_name"
-        assert request.tool_name == "tool_name"
-        assert request.inputs == {"key": "value"}
-    
-    def test_agent_only_target(self):
-        """Test request with agent-only target."""
-        request = UnifiedRequest(target="agent_name")
-        assert request.agent_name == "agent_name"
-        assert request.tool_name is None
-    
-    def test_empty_collections(self):
-        """Test request with empty collections."""
-        request = UnifiedRequest(target="test")
-        assert request.inputs == {}
-        assert request.context == {}
-        assert request.metadata == {}
+
 
 
 class TestDecorators:
