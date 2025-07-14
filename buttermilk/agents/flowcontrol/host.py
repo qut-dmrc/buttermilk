@@ -5,7 +5,9 @@ from typing import Any  # Import Dict
 
 from autogen_core import CancellationToken, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import Tool
+from autogen_core.tools import (
+    Tool,
+)
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -60,7 +62,6 @@ class HostAgent(Agent):
         # Tool schemas for LLM-based hosts
         self._tools: list[Tool] = []
         self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
-        self._registry_summary_cache: dict[str, Any] | None = None
         self._current_step: str = ""
 
         # User confirmation attributes
@@ -225,6 +226,7 @@ class HostAgent(Agent):
         """
         async with self._registry_lock:
             agent_id = message.agent_config.agent_id
+            role = message.agent_config.role.upper()  # Normalize to uppercase
 
             if message.status == "leaving":
                 logger.warning(f"Host {self.agent_name} received notification to remove agent {agent_id}, but functionality is not implemented.")
@@ -653,57 +655,32 @@ class HostAgent(Agent):
         import json
 
         for call in tool_calls:
-            # Find which agent handles this tool
-            agent_role = None
 
             # First check if it's a participant "ask_" tool
-            if call.name.startswith("ask_"):
+            if call.name.endswith("_call"):
                 # Extract role from tool name (e.g., "zotero_researcher_call" -> "ZOTERO_RESEARCHER")
                 role_part = call.name[:-5].upper()  # Remove "_call" suffix and uppercase
+                # Parse the arguments
+                try:
+                    arguments = json.loads(call.arguments)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                    continue
 
-                # Check if this role exists in our participants
-                for participant_role in self._participants:
-                    if participant_role.upper() == role_part:
-                        agent_role = participant_role
-                        break
-
-            if not agent_role:
-                logger.warning(f"No agent found for tool: {call.name}")
-                continue
-
-            # Parse the arguments
-            try:
-                arguments = json.loads(call.arguments)
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse tool arguments: {call.arguments}")
-                continue
-
-            # Handle "ask_" tools specially - extract the request content
-            if call.name.startswith("ask_") and "request" in arguments:
-                # For ask_ tools, the content is in the "request" field
                 step_request = StepRequest(
-                    role=agent_role,
-                    content=arguments["request"],
-                    metadata={"tool_name": call.name, "tool_call_id": call.id},
-                )
-            else:
-                # For other tools, pass arguments as inputs
-                step_request = StepRequest(
-                    role=agent_role,
-                    inputs=arguments,
-                    metadata={"tool_name": call.name, "tool_call_id": call.id},
-                )
+                    role=role_part, inputs=arguments,
+                    metadata={"tool_name": call.name, "tool_call_id": call.id})
 
-            # Create a more descriptive log message
-            tool_desc = self._describe_tool_call(call.name, arguments)
-            logger.info(f"Host routing to {agent_role}: {tool_desc}")
+                # Create a more descriptive log message
+                tool_desc = self._describe_tool_call(call.name, arguments)
+                logger.info(f"Host routing to {agent_role}: {tool_desc}")
 
-            # Queue it if we have a queue
-            if hasattr(self, "_proposed_step"):
-                await self._proposed_step.put(step_request)
-
-            # Send it out regardless
-            await self._publish(step_request)
+                if self.human_in_loop:
+                    await self._proposed_step.put(step_request)
+                else:
+                    # If human_in_loop is False, we send the step request directly
+                    logger.info(f"Host {self.agent_name} routing tool call to agent {role_part}: {step_request}")
+                    await self._publish(step_request)
 
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
