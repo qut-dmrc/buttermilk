@@ -658,23 +658,14 @@ class HostAgent(Agent):
 
             # First check if it's a participant "ask_" tool
             if call.name.startswith("ask_"):
-                # Extract role from tool name (e.g., "ask_zotero_researcher" -> "ZOTERO_RESEARCHER")
-                role_part = call.name[4:].upper()  # Remove "ask_" prefix and uppercase
+                # Extract role from tool name (e.g., "zotero_researcher_call" -> "ZOTERO_RESEARCHER")
+                role_part = call.name[:-5].upper()  # Remove "_call" suffix and uppercase
+
                 # Check if this role exists in our participants
                 for participant_role in self._participants:
                     if participant_role.upper() == role_part:
                         agent_role = participant_role
                         break
-
-            # If not found, check agent announcements for explicit tool definitions
-            if not agent_role:
-                for agent_id, announcement in self._agent_registry.items():
-                    tool_def = announcement.tool_definitions
-                    if tool_def and hasattr(tool_def, "name"):
-                        # It's a Tool object (AgentToolDefinition)
-                        if tool_def.name == call.name:
-                            agent_role = announcement.agent_config.role
-                            break
 
             if not agent_role:
                 logger.warning(f"No agent found for tool: {call.name}")

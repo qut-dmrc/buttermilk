@@ -50,12 +50,12 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
-    GroupchatMessageTypes,  # Union of types expected in group chat listening
     HeartBeat,
     ManagerMessage,  # Messages from the user
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
+    ToolOutput,
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
@@ -528,57 +528,45 @@ class Agent(RoutedAgent):
         raise NotImplementedError("Subclasses must implement the _process method.")
 
     @message_handler
-    async def handle_groupchat_message(
+    async def handle_record(
         self,
-        message: GroupchatMessageTypes,
+        message: Record,
         ctx: MessageContext,
     ) -> None:
-        """Handle passively received messages from other agents or sources.
-
-        This method is called when the agent receives a message that is not a
-        direct request for it to perform an action (i.e., not via `invoke` or
-        `__call__`). Its primary purpose is to update the agent's internal state
-        (`_data`, `_records`, `_model_context`) based on the content of the
-        incoming message and the agent's `inputs` mapping configuration.
-
-        It does not typically generate a direct response message but may publish
-        internal status updates or log information.
-
+        """Handle Record messages by adding them to internal state.
+        
         Args:
-            message: The incoming message object. This can be various types as
-                defined by `GroupchatMessageTypes` (e.g., `Record`, `AgentOutput`,
-                `AgentTrace`, `ManagerMessage`).
-            cancellation_token: A `CancellationToken` to signal if the listening
-                operation should be aborted. (Currently not deeply integrated).
-            source: A string identifier for the sender or source of the message.
-            public_callback: An asynchronous callback function to publish messages
-                to a general or public topic. (Currently not used in base implementation).
-            **kwargs: Additional keyword arguments that might be passed by the caller.
-
+            message: The Record message to process.
+            ctx: Message context containing sender and topic information.
         """
-        # No longer auto-announce on first message - wait for ConductorRequest instead
+        self._records.append(message)
+        logger.debug(f"Agent {self.agent_name} added Record {message.record_id} to internal state.")
 
-        # Extract source from sender
+    @message_handler
+    async def handle_agent_output(
+        self,
+        message: AgentOutput,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentOutput messages, extracting Records and data based on input mappings.
+        
+        Args:
+            message: The AgentOutput message to process.
+            ctx: Message context containing sender and topic information.
+        """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-
-        logger.debug(f"Agent {self.agent_name} received message from '{source}' via handle_groupchat_message.")
-
-        # Handle Record type messages directly
-        if isinstance(message, Record):
-            self._records.append(message)
-            logger.debug(f"Agent {self.agent_name} added Record {message.record_id} to internal state.")
-
-        # Handle AgentOutput or AgentTrace containing a Record in its 'outputs'
-        elif isinstance(message, (AgentOutput, AgentTrace)) and isinstance(getattr(message, "outputs", None), Record):
+        
+        # Handle AgentOutput containing a Record in its 'outputs'
+        if isinstance(getattr(message, "outputs", None), Record):
             self._records.append(message.outputs)  # type: ignore
-            logger.debug(f"Agent {self.agent_name} added Record from {type(message).__name__}.outputs to internal state.")
-
-        # For other message types, use extract_message_data utility
+            logger.debug(f"Agent {self.agent_name} added Record from AgentOutput.outputs to internal state.")
+        
+        # Extract data based on input mappings
         elif self.inputs:  # Only extract if input mappings are defined
             extracted = extract_message_data(
                 message=message,
                 source=source,
-                input_mappings=self.inputs,  # self.inputs is from AgentConfig
+                input_mappings=self.inputs,
             )
             # Add extracted records to self._records
             extracted_records = extracted.pop("records", [])
@@ -595,37 +583,146 @@ class Agent(RoutedAgent):
             if found_keys:
                 logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
         else:
-            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction for generic message type {type(message)}.")
+            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction for AgentOutput.")
 
-        # Add relevant message content to the conversation history (_model_context).
-        # This logic determines what parts of messages are considered for context.
-        # Only add messages that are relevant to this agent's role and responsibilities.
-        if isinstance(message, AgentTrace):
-            # Only add traces to context if they are directly relevant to this agent
-            # Avoid contaminating agent context with irrelevant traces from other agents
-            should_add_to_context = (
-                source == self.agent_name or  # Messages from this agent itself
-                source == "manager" or        # Direct user/manager messages
-                (hasattr(message, "agent_info") and
-                 getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
+    @message_handler
+    async def handle_agent_trace(
+        self,
+        message: AgentTrace,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentTrace messages, adding relevant content to model context.
+        
+        Args:
+            message: The AgentTrace message to process.
+            ctx: Message context containing sender and topic information.
+        """
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        
+        # Handle AgentTrace containing a Record in its 'outputs'
+        if isinstance(getattr(message, "outputs", None), Record):
+            self._records.append(message.outputs)  # type: ignore
+            logger.debug(f"Agent {self.agent_name} added Record from AgentTrace.outputs to internal state.")
+        
+        # Extract data based on input mappings
+        elif self.inputs:  # Only extract if input mappings are defined
+            extracted = extract_message_data(
+                message=message,
+                source=source,
+                input_mappings=self.inputs,
             )
+            # Add extracted records to self._records
+            extracted_records = extracted.pop("records", [])
+            if extracted_records:
+                self._records.extend(extracted_records)
+                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
 
-            if should_add_to_context:
-                content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
-                if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                    content_to_add = str(message.outputs) if message.outputs else None
-                if content_to_add:
-                    await self._model_context.add_message(
-                        AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
-                    )
-        elif isinstance(message, ManagerMessage) and message.content:
+            # Add other extracted data to self._data
+            found_keys = []
+            for key, value in extracted.items():
+                if value is not None and value not in ([], {}):  # Ensure value is meaningful
+                    self._data.add(key, value)
+                    found_keys.append(key)
+            if found_keys:
+                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+        
+        # Add relevant message content to the conversation history (_model_context).
+        # Only add traces to context if they are directly relevant to this agent
+        should_add_to_context = (
+            source == self.agent_name or  # Messages from this agent itself
+            source == "manager" or        # Direct user/manager messages
+            (hasattr(message, "agent_info") and
+             getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
+        )
+
+        if should_add_to_context:
+            content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
+            if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
+                content_to_add = str(message.outputs) if message.outputs else None
+            if content_to_add:
+                await self._model_context.add_message(
+                    AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
+                )
+
+    @message_handler
+    async def handle_manager_message(
+        self,
+        message: ManagerMessage,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ManagerMessage messages, adding non-command content to model context.
+        
+        Args:
+            message: The ManagerMessage to process.
+            ctx: Message context containing sender and topic information.
+        """
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "manager"
+        
+        # Extract data based on input mappings if defined
+        if self.inputs:
+            extracted = extract_message_data(
+                message=message,
+                source=source,
+                input_mappings=self.inputs,
+            )
+            # Add extracted records to self._records
+            extracted_records = extracted.pop("records", [])
+            if extracted_records:
+                self._records.extend(extracted_records)
+                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+
+            # Add other extracted data to self._data
+            found_keys = []
+            for key, value in extracted.items():
+                if value is not None and value not in ([], {}):  # Ensure value is meaningful
+                    self._data.add(key, value)
+                    found_keys.append(key)
+            if found_keys:
+                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+        
+        # Add to model context if not a command
+        if message.content:
             content_str = str(message.content)
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history
-                await self._model_context.add_message(UserMessage(content=content_str, source=source or "manager"))
-        else:
-            logger.debug(f"Agent {self.agent_name} did not add message of type {type(message)} to context history from source '{source}'.")
+                await self._model_context.add_message(UserMessage(content=content_str, source=source))
 
-        # No longer respond to HOST/MANAGER announcements - wait for ConductorRequest instead
+    @message_handler
+    async def handle_tool_output(
+        self,
+        message: ToolOutput,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ToolOutput messages, extracting data based on input mappings.
+        
+        Args:
+            message: The ToolOutput message to process.
+            ctx: Message context containing sender and topic information.
+        """
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        
+        # Extract data based on input mappings
+        if self.inputs:  # Only extract if input mappings are defined
+            extracted = extract_message_data(
+                message=message,
+                source=source,
+                input_mappings=self.inputs,
+            )
+            # Add extracted records to self._records
+            extracted_records = extracted.pop("records", [])
+            if extracted_records:
+                self._records.extend(extracted_records)
+                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+
+            # Add other extracted data to self._data
+            found_keys = []
+            for key, value in extracted.items():
+                if value is not None and value not in ([], {}):  # Ensure value is meaningful
+                    self._data.add(key, value)
+                    found_keys.append(key)
+            if found_keys:
+                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+        else:
+            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction for ToolOutput.")
 
     @message_handler
     async def handle_heartbeat(
