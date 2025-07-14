@@ -50,7 +50,6 @@ class TestHostAgentRegistry:
             content="Judge joining",
             agent_config=agent_config,
             available_tools=["score", "evaluate"],
-            supported_message_types=["UIMessage"],
             status="joining",
             announcement_type="initial"
         )
@@ -81,7 +80,6 @@ class TestHostAgentRegistry:
             content="Fetch joining",
             agent_config=agent_config,
             available_tools=["fetch", "search"],
-            supported_message_types=["ConductorRequest"],
             status="joining",
             announcement_type="initial"
         )
@@ -96,7 +94,6 @@ class TestHostAgentRegistry:
             content="Fetch leaving",
             agent_config=agent_config,
             available_tools=["fetch", "search"],
-            supported_message_types=["ConductorRequest"],
             status="leaving",
             announcement_type="update"
         )

@@ -37,7 +37,6 @@ class TestUIAgentDisplay:
                 unique_identifier="worker123"
             ),
             available_tools=["process", "analyze"],
-            supported_message_types=["UIMessage", "AgentInput"],
             announcement_type="initial",
             status="joining"
         )
