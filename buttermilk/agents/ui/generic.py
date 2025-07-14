@@ -100,29 +100,15 @@ class UIAgent(Agent):
         logger.debug(f"{self.__class__.__name__} received OOB message: {type(message).__name__}")
         return None
 
-    # This matches the base Agent class's signature
-    async def _listen(
-        self,
-        message: Any,
-        *,
-        cancellation_token: CancellationToken,
-        source: str = "",
-        public_callback: Callable,
-        **kwargs: Any,
-    ) -> None:
-        """Handles messages from other agents in the group chat.
-
+    # Default implementations for UI display - subclasses should override as needed
+    async def callback_to_ui(self, message: Any, source: str = "") -> None:
+        """Display a message to the UI. Override in subclasses for specific UI handling.
+        
         Args:
-            message: The message to process
-            cancellation_token: Token for cancelling the operation
-            source: Identifier of the message sender
-            public_callback: Callback for publishing messages to public topics
-            **kwargs: Additional parameters
-
-        UI agents typically implement this to display messages to the user interface.
-
+            message: The message to display
+            source: The source of the message
         """
-        logger.debug(f"{self.__class__.__name__} received message from {source} via _listen")
+        logger.debug(f"{self.__class__.__name__} received message from {source} for display")
 
     async def cleanup(self) -> None:
         """Clean up resources when the agent is no longer needed.

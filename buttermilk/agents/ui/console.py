@@ -8,7 +8,7 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import CancellationToken  # Autogen types (used by base Agent)
+from autogen_core import CancellationToken, MessageContext, message_handler  # Autogen types (used by base Agent)
 from pydantic import PrivateAttr
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
@@ -22,9 +22,9 @@ from buttermilk._core.agent import AgentInput
 from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentAnnouncement,  # Agent announcement messages
+    AgentOutput,
     AgentTrace,
     FlowMessage,  # Base type for messages
-    GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
     OOBMessages,
     TaskProcessingComplete,  # Status updates
@@ -491,18 +491,40 @@ class CLIUserAgent(UIAgent):
             error_text.append(f"Failed to format {type(message).__name__}: {str(e)[:100]}", style="red")
             return error_text
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken | None = None,
-        source: str = "",
-        public_callback: Callable | None = None,  # Usually unused by UI agent in listen
-        **kwargs,
-    ) -> None:
-        """Displays messages received from other agents on the console."""
-        logger.debug(f"{self.agent_name} received message from {source} via _listen.")
-        # Format and display the message using the helper function.
+    # Override individual message handlers to display messages
+    @message_handler
+    async def handle_record(self, message: Record, ctx: MessageContext) -> None:
+        """Handle Record messages by displaying them."""
+        await super().handle_record(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+        """Handle AgentOutput messages by displaying them."""
+        await super().handle_agent_output(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_agent_trace(self, message: AgentTrace, ctx: MessageContext) -> None:
+        """Handle AgentTrace messages by displaying them."""
+        await super().handle_agent_trace(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_manager_message(self, message: ManagerMessage, ctx: MessageContext) -> None:
+        """Handle ManagerMessage messages by displaying them."""
+        await super().handle_manager_message(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_tool_output(self, message: ToolOutput, ctx: MessageContext) -> None:
+        """Handle ToolOutput messages by displaying them."""
+        await super().handle_tool_output(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     async def _handle_events(

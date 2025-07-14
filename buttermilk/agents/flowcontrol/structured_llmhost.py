@@ -76,11 +76,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         ctx: MessageContext,
     ) -> None:
         """Listen to messages and use structured tools to determine next steps."""
-        # TODO: figure out if we need to add user messages to context and fix this by adding a proper add_to_context method in Agent
-        # # Save messages to context
-        # await super().handle_groupchat_message(
-        #     message=message,ctx=ctx
-        # )
+        # Messages are now automatically added to context by the base class handle_manager_message method
+        # No need to manually call it here since we're overriding the handler
 
         # Wait for tool schemas to be populated if they haven't been yet
         # This handles the race condition where ManagerMessage arrives before ConductorRequest processing completes
