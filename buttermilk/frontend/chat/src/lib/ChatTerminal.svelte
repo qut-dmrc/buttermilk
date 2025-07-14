@@ -370,7 +370,7 @@ import {
             console.debug('Normalized message received from websocket:', normalizedMessage);
           }
 
-          // Check for system updates
+          // Check for system updates and flow progress
           if (isSystemUpdate(messageData)) {
             // Assign a shallow copy to ensure reactivity if properties change within the object
             systemUpdateStatus = outputs as SystemUpdate;
@@ -379,11 +379,38 @@ import {
             console.debug('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
             console.debug('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
           
+          } else if (normalizedMessage.type === 'flow_progress_update') {
+            // Handle flow progress updates - update system status but don't add to message display
+            systemUpdateStatus = {
+              source: outputs?.source || 'System',
+              step_name: outputs?.step_name || 'Processing',
+              status: outputs?.status || 'IN_PROGRESS',
+              message: outputs?.message || '',
+              timestamp: normalizedMessage.timestamp || new Date().toISOString(),
+              waiting_on: outputs?.waiting_on || {}
+            };
+            console.debug('Updated flow progress status:', systemUpdateStatus);
+          
+          } else if (normalizedMessage.type === 'agent_announcement') {
+            // Handle agent announcements - update system status but don't add to message display
+            const agentId = outputs?.agent_id || 'Unknown';
+            const action = outputs?.action || 'update';
+            const statusMessage = outputs?.status_message || `Agent ${action}`;
+            
+            systemUpdateStatus = {
+              source: agentId,
+              step_name: statusMessage,
+              status: action === 'joined' ? 'STARTED' : action === 'left' ? 'COMPLETED' : 'IN_PROGRESS',
+              message: statusMessage,
+              timestamp: normalizedMessage.timestamp || new Date().toISOString(),
+              waiting_on: {}
+            };
+            console.debug('Updated agent status:', systemUpdateStatus);
+          
           } else {
             // Add the message to the display
             console.debug('added message for display: ', normalizedMessage);
             addMessage(normalizedMessage);
-
           }
           // Check if this is a manager request and update state
           if (normalizedMessage.type === 'ui_message' && outputs) {
