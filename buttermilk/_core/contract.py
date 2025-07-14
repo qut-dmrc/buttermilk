@@ -19,27 +19,18 @@ import numpy as np
 import shortuuid  # For generating unique IDs
 
 # Import Autogen types used as base or components - conditional import
-from autogen_core.models import FunctionExecutionResult, LLMMessage
 from autogen_core.models import (
-    ChatCompletionClient,
-    CreateResult,
-    LLMMessage,
-    ModelFamily,
-    ModelInfo,
-    FunctionExecutionResultMessage,
     FunctionExecutionResult,
+    LLMMessage,
 )
-from autogen_core.tools import ToolSchema
+from autogen_core.tools import Tool  # Importing the Tool protocol from autogen_core
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
-
-from buttermilk._core.tool_definition import AgentToolDefinition
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     computed_field,
     field_validator,
-    model_validator,
 )
 
 from buttermilk._core.context import session_id_var
@@ -59,14 +50,15 @@ class BaseAgentInputModel(BaseModel):
     This provides a strongly-typed alternative to the generic dict[str, Any] in AgentInput.inputs.
     Agents can subclass this to define their specific input requirements.
     """
+
     prompt: str = Field(
         ...,
-        description="The main request or input prompt for the agent"
+        description="The main request or input prompt for the agent",
     )
-    
+
     model_config = ConfigDict(
         extra="forbid",  # Strict by default, subclasses can override
-        validate_assignment=True
+        validate_assignment=True,
     )
 
 
@@ -94,6 +86,8 @@ class FlowEvent(BaseModel):
         description="Identifier of the message source (e.g., agent ID, system component).",
     )
     content: str = Field(..., description="The main content or payload of the event message.")
+
+    # TODO: why is this needed?
     agent_info: AgentConfig = Field(default=None, description="Configuration info from the agent if applicable.")
 
     def __str__(self) -> str:
@@ -105,24 +99,6 @@ class FlowEvent(BaseModel):
     def is_error(self) -> bool:
         """Indicates if this event represents an error. Always False for base FlowEvent."""
         return False
-
-    @field_validator("agent_info", mode="before")
-    @classmethod
-    def _validate_agent_info(cls, value) -> AgentConfig | None:
-        if not isinstance(value, AgentConfig):
-            # if agent_config := get_agent_config():
-            #     return agent_config
-            # Attempt to get the agent info from the current session context.
-            # get_agent_info = agent_id_var.get()
-            # if get_agent_info:
-                # TODO: We maintain a registry of sessions by session_id somewhere. Let's find
-                # a way to maintain a registry of agents by agent_id in that registry, and
-                # use it to automatically populate the agent_info field here and in other
-                # relevant classes.
-                # This will help us avoid having to pass agent_info around in the message
-                # and make it easier to access agent-specific information.
-            return AgentConfig(**value)
-        return value
 
 
 class ErrorEvent(FlowEvent):
@@ -612,24 +588,25 @@ class HostInputModel(BaseAgentInputModel):
     This provides a cleaner interface than digging through nested dicts.
     Host agents can expect these fields in their inputs.
     """
+
     # Override prompt as optional for host agents
     prompt: str | None = Field(
         default=None,
-        description="The main request or query (also checks 'query' field)"
+        description="The main request or query (also checks 'query' field)",
     )
     query: str | None = Field(
         default=None,
-        description="Alternative to prompt for the main request"
+        description="Alternative to prompt for the main request",
     )
     criteria: str | None = Field(
         default=None,
-        description="Alternative field for search/filter criteria"
+        description="Alternative field for search/filter criteria",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
-        description="Additional parameters for the host"
+        description="Additional parameters for the host",
     )
-    
+
     @property
     def initial_query(self) -> str | None:
         """Get the initial query from any of the possible fields."""
@@ -640,18 +617,18 @@ class HostInputModel(BaseAgentInputModel):
             return self.query
         if self.criteria:
             return self.criteria
-        
+
         # Check in parameters as fallback
         if self.parameters:
-            return (self.parameters.get('prompt') or 
-                    self.parameters.get('query') or 
-                    self.parameters.get('criteria'))
-        
+            return (self.parameters.get("prompt") or
+                    self.parameters.get("query") or
+                    self.parameters.get("criteria"))
+
         return None
-    
+
     model_config = ConfigDict(
         extra="allow",  # Allow additional fields for flexibility
-        validate_assignment=True
+        validate_assignment=True,
     )
 
 
@@ -668,8 +645,8 @@ class ConductorRequest(AgentInput):
             roles (e.g., "SUMMARIZER", "REVIEWER") and values are descriptions
             of their purposes or capabilities. This helps the Conductor understand
             the available agents and their functions. This is a mandatory field.
-        participant_tools (Mapping[str, list[dict[str, Any]]]): Optional mapping of
-            participant roles to their tool definitions. Each tool definition includes
+        additional_tools (Mapping[str, list[Tool]]): Optional mapping of
+            additional tool names to their tool definitions. Each tool definition includes
             name, description, and schema information.
 
     """
@@ -678,9 +655,13 @@ class ConductorRequest(AgentInput):
         ...,  # Mandatory field
         description="Mapping of chat participant roles to their purpose descriptions (e.g., {'SUMMARIZER': 'Summarizes text'}).",
     )
-    participant_tools: Mapping[str, list[AgentToolDefinition]] = Field(
-        default_factory=dict,
-        description="Mapping of participant roles to their tool definitions as AgentToolDefinition objects.",
+    additional_tools: list[Tool] = Field(
+        default_factory=list,
+        description="Additional tool definitions.",
+    )
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,  # Allow Tool type from autogen_core
     )
 
 
@@ -964,6 +945,8 @@ class AgentAnnouncement(FlowEvent):
             update for status changes.
         responding_to (str | None): agent_id of host being responded to (for
             response type announcements). Defaults to None.
+
+        tool_definitions: list[Tool]: Tool objects for this agent (AgentToolDefinition or Tool).
     
     """
 
@@ -973,40 +956,31 @@ class AgentAnnouncement(FlowEvent):
     # Capabilities
     available_tools: list[str] = Field(
         default_factory=list,
-        description="List of tool names/endpoints this agent can respond to"
+        description="List of tool names/endpoints this agent can respond to",
     )
-    tool_definition: Any | None = Field(default=None, description="Tool object or schema for this agent (AgentToolDefinition or ToolSchema)")
-
+    tool_definitions: list[Tool] = Field(default_factory=list, description="Tool objects for this agent (AgentToolDefinition or Tool)")
     # Status
     status: Literal["joining", "active", "leaving"] = Field(
         default="joining",
-        description="Current agent status in the group chat"
+        description="Current agent status in the group chat",
     )
 
     # Metadata
     announcement_type: Literal["initial", "response", "update"] = Field(
         ...,
-        description="Type of announcement (initial when joining, response to host, update for changes)"
+        description="Type of announcement (initial when joining, response to host, update for changes)",
     )
     responding_to: str | None = Field(
         default=None,
-        description="agent_id of host being responded to (for response type)"
+        description="agent_id of host being responded to (for response type)",
     )
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow Tool types
 
     def model_post_init(self, __context) -> None:
         """Set agent_info to match agent_config after initialization."""
         super().model_post_init(__context)
         # Ensure agent_info matches agent_config
-        object.__setattr__(self, 'agent_info', self.agent_config)
-
-    @model_validator(mode='after')
-    def validate_responding_to(self) -> 'AgentAnnouncement':
-        """Validate that responding_to is set appropriately based on announcement_type."""
-        if self.announcement_type == "response" and not self.responding_to:
-            raise ValueError("responding_to must be set for response type announcements")
-        if self.announcement_type != "response" and self.responding_to:
-            raise ValueError("responding_to should only be set for response type announcements")
-        return self
+        object.__setattr__(self, "agent_info", self.agent_config)
 
     def __str__(self) -> str:
         """Returns a formatted string representation of the announcement."""

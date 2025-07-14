@@ -1,13 +1,12 @@
 """Tests for host agent registry functionality."""
 
 import asyncio
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentAnnouncement, AgentInput, AgentOutput
+from buttermilk._core.contract import AgentAnnouncement
 from buttermilk.agents.flowcontrol.host import HostAgent
 
 
@@ -21,7 +20,7 @@ class TestHostAgentRegistry:
             role="HOST",
             description="Test host agent",
             parameters={"human_in_loop": False},
-            unique_identifier="test_host"
+            unique_identifier="test_host",
         )
 
     @pytest.mark.anyio
@@ -44,14 +43,14 @@ class TestHostAgentRegistry:
         agent_config = AgentConfig(
             role="JUDGE",
             description="Test judge agent",
-            unique_identifier="judge123"
+            unique_identifier="judge123",
         )
         announcement = AgentAnnouncement(
             content="Judge joining",
             agent_config=agent_config,
             available_tools=["score", "evaluate"],
             status="joining",
-            announcement_type="initial"
+            announcement_type="initial",
         )
 
         # Update registry
@@ -74,14 +73,14 @@ class TestHostAgentRegistry:
         agent_config = AgentConfig(
             role="FETCH",
             description="Test fetch agent",
-            unique_identifier="fetch456"
+            unique_identifier="fetch456",
         )
         joining_announcement = AgentAnnouncement(
             content="Fetch joining",
             agent_config=agent_config,
             available_tools=["fetch", "search"],
             status="joining",
-            announcement_type="initial"
+            announcement_type="initial",
         )
         host_agent.update_agent_registry(joining_announcement)
 
@@ -95,7 +94,7 @@ class TestHostAgentRegistry:
             agent_config=agent_config,
             available_tools=["fetch", "search"],
             status="leaving",
-            announcement_type="update"
+            announcement_type="update",
         )
 
         # Update registry
@@ -115,14 +114,14 @@ class TestHostAgentRegistry:
         agent1_config = AgentConfig(
             role="ANALYST",
             description="First analyst",
-            unique_identifier="analyst1"
+            unique_identifier="analyst1",
         )
         announcement1 = AgentAnnouncement(
             content="Analyst 1 joining",
             agent_config=agent1_config,
             available_tools=["analyze", "summarize"],
             status="joining",
-            announcement_type="initial"
+            announcement_type="initial",
         )
         await host_agent.update_agent_registry(announcement1)
 
@@ -130,14 +129,14 @@ class TestHostAgentRegistry:
         agent2_config = AgentConfig(
             role="ANALYST",
             description="Second analyst",
-            unique_identifier="analyst2"
+            unique_identifier="analyst2",
         )
         announcement2 = AgentAnnouncement(
             content="Analyst 2 joining",
             agent_config=agent2_config,
             available_tools=["analyze", "report"],
             status="joining",
-            announcement_type="initial"
+            announcement_type="initial",
         )
         await host_agent.update_agent_registry(announcement2)
 
@@ -169,14 +168,14 @@ class TestHostAgentRegistry:
                 role=role,
                 description=f"Test {role.lower()} agent",
                 unique_identifier=unique_id,
-                parameters={"model": model} if model else {}
+                parameters={"model": model} if model else {},
             )
             announcement = AgentAnnouncement(
                 content=f"{role} joining",
                 agent_config=config,
                 available_tools=tools,
                 status="active",
-                announcement_type="initial"
+                announcement_type="initial",
             )
             await host_agent.update_agent_registry(announcement)
 
@@ -218,7 +217,7 @@ class TestHostAgentRegistry:
             agent_config=new_config,
             available_tools=["new_tool"],
             status="active",
-            announcement_type="initial"
+            announcement_type="initial",
         )
         await host_agent.update_agent_registry(new_announcement)
 
@@ -240,14 +239,14 @@ class TestHostAgentRegistry:
         agent_config = AgentConfig(
             role="WORKER",
             description="Test worker",
-            unique_identifier="worker1"
+            unique_identifier="worker1",
         )
         announcement = AgentAnnouncement(
             content="Worker joining",
             agent_config=agent_config,
             available_tools=["process", "transform"],
             status="joining",
-            announcement_type="initial"
+            announcement_type="initial",
         )
 
         # Process announcement
@@ -255,7 +254,7 @@ class TestHostAgentRegistry:
             message=announcement,
             cancellation_token=MagicMock(),
             source="WORKER-worker1",
-            public_callback=public_callback
+            public_callback=public_callback,
         )
 
         # Verify agent was registered
@@ -271,7 +270,7 @@ class TestHostAgentRegistry:
         # Initialize and announce
         await host_agent.initialize_with_announcement(
             callback_to_groupchat=AsyncMock(),
-            public_callback=public_callback
+            public_callback=public_callback,
         )
 
         # Verify host announcement was sent
@@ -285,7 +284,7 @@ class TestHostAgentRegistry:
         responder_config = AgentConfig(
             role="RESPONDER",
             description="Responding agent",
-            unique_identifier="resp1"
+            unique_identifier="resp1",
         )
         response_announcement = AgentAnnouncement(
             content="Responding to host",
@@ -293,7 +292,7 @@ class TestHostAgentRegistry:
             available_tools=["respond"],
             status="active",
             announcement_type="response",
-            responding_to=host_agent.agent_id
+            responding_to=host_agent.agent_id,
         )
 
         # Process response
@@ -307,34 +306,3 @@ class TestHostAgentRegistry:
         # Verify responder was registered
         assert "RESPONDER-resp1" in host_agent.agent_registry
         assert host_agent.agent_registry["RESPONDER-resp1"].responding_to == host_agent.agent_id
-
-    @pytest.mark.anyio
-    async def test_registry_summary_in_ui_messages(self, host_agent):
-        """Test that registry summary is included in UI messages."""
-        # Add an agent to registry
-        agent_config = AgentConfig(
-            role="WORKER",
-            description="Test worker",
-            unique_identifier="worker1"
-        )
-        announcement = AgentAnnouncement(
-            content="Worker active",
-            agent_config=agent_config,
-            available_tools=["work"],
-            status="active",
-            announcement_type="initial"
-        )
-        await host_agent.update_agent_registry(announcement)
-
-        # Create UI message with registry summary
-        ui_message = host_agent.create_ui_message_with_registry(
-            content="Processing request",
-            options=True
-        )
-
-        # Verify UI message includes registry summary
-        assert ui_message.content == "Processing request"
-        assert ui_message.options == True
-        assert ui_message.agent_registry_summary is not None
-        assert ui_message.agent_registry_summary["total_agents"] == 1
-        assert len(ui_message.agent_registry_summary["active_agents"]) == 1

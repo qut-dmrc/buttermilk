@@ -1,6 +1,6 @@
 """Debug utilities for buttermilk flows and components."""
 
-from .models import *
 from .debug_agent import DebugAgent
+from .models import *
 
-__all__ = ['DebugAgent']
+__all__ = ["DebugAgent"]

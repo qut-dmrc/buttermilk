@@ -108,29 +108,6 @@ As features are added or modified, please ensure that corresponding documentatio
 
 We appreciate your help in making Buttermilk more accessible and understandable!
 
-## Development
-
-### Dependencies
-You might need to install some tools. If you're running debian:
-
-```bash
-# Set the timezone to Australia/Brisbane
-ln -sf /usr/share/zoneinfo/Australia/Brisbane /etc/localtime &&  echo "Australia/Brisbane" | tee /etc/timezone
-
-# Install base packages
-sudo apt update && sudo apt install -y --no-install-recommends python3-pip build-essential neovim rsync gzip jq less htop git zsh fonts-roboto fonts-noto && sudo apt-get autoremove -y && sudo apt-get -y clean
-
-# Install google cloud sdk
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && sudo apt-get update -y && sudo apt-get install google-cloud-cli -y
-
-# azure CLI tools
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-    
-# Install Node and npm
-export NODE_MAJOR=20
-curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list && sudo apt update && sudo apt install --no-install-recommends -y nodejs && sudo npm install -g node-pty @devcontainers/cli diff-so-fancy && sudo npm rebuild
-```
-
 ## Installation
 
 Create a new environment and install using uv:

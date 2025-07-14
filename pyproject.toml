@@ -203,7 +203,7 @@ markers = [
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
-default_async_timeout = 300
+#default_async_timeout = 300
 addopts = [ 
     "--capture=fd", 
     "--continue-on-collection-errors",

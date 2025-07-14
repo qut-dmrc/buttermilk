@@ -118,9 +118,7 @@ class MessageService:
                 message_type = "system_error"
             elif isinstance(message, FlowEvent):
                 message_type = "system_message"
-            elif isinstance(message, TaskProcessingComplete):
-                message_type = "system_update"
-            elif isinstance(message, TaskProcessingStarted):
+            elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             else:
                 logger.warning(f"[MessageService] Unknown message type: {type(message)}, defaulting to chat_message.")
@@ -136,7 +134,6 @@ class MessageService:
                 tracing_link=tracing_link,
                 timestamp=datetime.datetime.now(),
             )
-            logger.debug(f"[MessageService] Formatted message of type {output.type}, returning output. Content: {output.outputs}")
             return output
 
         except Exception as e:
@@ -159,8 +156,8 @@ class MessageService:
 
         """
         try:
-            message_type = data.get("type", None)
-            
+            message_type = data.get("type")
+
             # If no type but has flow field, it's likely a RunRequest
             if not message_type and "flow" in data and "prompt" in data:
                 logger.debug("Detected RunRequest format without type field")
@@ -171,7 +168,7 @@ class MessageService:
                     run_request = RunRequest(
                         ui_type="web",
                         flow=data.get("flow"),
-                        record_id=data.get("record_id", None),
+                        record_id=data.get("record_id"),
                         parameters={k: v for k, v in data.items() if k not in ["type", "flow", "record_id"]},
                     )
                     return run_request

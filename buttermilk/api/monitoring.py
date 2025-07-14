@@ -5,23 +5,14 @@ This module provides REST API endpoints for accessing monitoring data,
 health status, alerts, and performance metrics for production operations.
 """
 
-import asyncio
 from datetime import datetime
-from typing import Dict, List, Any, Optional
-from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from buttermilk._core import logger
-from buttermilk.monitoring import (
-    get_metrics_collector, 
-    get_observability_manager,
-    MetricsCollector,
-    ObservabilityManager,
-    HealthStatus,
-    AlertLevel
-)
-from buttermilk.monitoring.health_monitor import HealthMonitor
-
+from buttermilk.monitoring import AlertLevel, MetricsCollector, ObservabilityManager, get_metrics_collector, get_observability_manager
 
 # Create monitoring router
 monitoring_router = APIRouter(prefix="/monitoring", tags=["Production Monitoring"])
@@ -88,7 +79,7 @@ async def health_check(observability: ObservabilityManager = Depends(get_observa
     """
     try:
         health_summary = observability.health_monitor.get_health_summary()
-        
+
         return HealthCheckResponse(
             status="ok",
             timestamp=datetime.now().isoformat(),
@@ -112,10 +103,10 @@ async def component_health_check(
     """
     try:
         component_health = observability.health_monitor.get_component_health(component_name)
-        
+
         if component_health is None:
             raise HTTPException(status_code=404, detail=f"Component '{component_name}' not found")
-        
+
         return {
             "component_name": component_health.component_name,
             "status": component_health.status.value,
@@ -144,7 +135,7 @@ async def get_metrics_summary(metrics: MetricsCollector = Depends(get_metrics)):
     """
     try:
         summary = metrics.get_summary_report()
-        
+
         return MetricsSummaryResponse(
             system=summary["system"],
             flows=summary["flows"],
@@ -169,7 +160,7 @@ async def get_flow_metrics(
     """
     try:
         flow_metrics = metrics.get_flow_metrics(flow_name)
-        
+
         result = {}
         for name, flow_data in flow_metrics.items():
             result[name] = {
@@ -184,7 +175,7 @@ async def get_flow_metrics(
                 "last_execution": flow_data.last_execution.isoformat() if flow_data.last_execution else None,
                 "throughput_per_minute": flow_data.throughput_per_minute
             }
-        
+
         return result
     except Exception as e:
         logger.error(f"Failed to get flow metrics: {e}")
@@ -203,7 +194,7 @@ async def get_agent_metrics(
     """
     try:
         agent_metrics = metrics.get_agent_metrics(flow_name)
-        
+
         result = {}
         for agent_key, agent_data in agent_metrics.items():
             result[agent_key] = {
@@ -217,7 +208,7 @@ async def get_agent_metrics(
                 "error_types": agent_data.error_types,
                 "last_invocation": agent_data.last_invocation.isoformat() if agent_data.last_invocation else None
             }
-        
+
         return result
     except Exception as e:
         logger.error(f"Failed to get agent metrics: {e}")
@@ -236,7 +227,7 @@ async def get_session_metrics(
     """
     try:
         session_metrics = metrics.get_session_metrics(active_only)
-        
+
         result = {}
         for session_id, session_data in session_metrics.items():
             result[session_id] = {
@@ -253,7 +244,7 @@ async def get_session_metrics(
                 "error_count": session_data.error_count,
                 "is_active": session_data.is_active
             }
-        
+
         return result
     except Exception as e:
         logger.error(f"Failed to get session metrics: {e}")
@@ -269,7 +260,7 @@ async def get_prometheus_metrics(observability: ObservabilityManager = Depends(g
     """
     try:
         prometheus_data = observability.export_metrics_for_prometheus()
-        
+
         # Return as plain text with proper content type
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(content=prometheus_data, media_type="text/plain")
@@ -297,14 +288,14 @@ async def get_alerts(
                 alert_level = AlertLevel(level.lower())
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid alert level: {level}")
-        
+
         if active_only:
             alerts = observability.get_active_alerts(alert_level)
         else:
             # For simplicity, we'll return active alerts for now
             # In production, you'd have a method to get all alerts including resolved ones
             alerts = observability.get_active_alerts(alert_level)
-        
+
         return [
             AlertResponse(
                 alert_id=alert.alert_id,
@@ -352,10 +343,10 @@ async def acknowledge_alert(
     """
     try:
         success = observability.acknowledge_alert(alert_id, acknowledged_by)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-        
+
         return {"message": f"Alert {alert_id} acknowledged by {acknowledged_by}"}
     except HTTPException:
         raise
@@ -376,10 +367,10 @@ async def resolve_alert(
     """
     try:
         success = observability.resolve_alert(alert_id)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-        
+
         return {"message": f"Alert {alert_id} resolved"}
     except HTTPException:
         raise
@@ -399,7 +390,7 @@ async def get_dashboard_data(observability: ObservabilityManager = Depends(get_o
     """
     try:
         dashboard_data = observability.get_dashboard_data()
-        
+
         return DashboardDataResponse(
             timestamp=dashboard_data["timestamp"],
             system=dashboard_data["system"],
@@ -427,7 +418,7 @@ async def get_performance_trends(
         # This would return time-series data for performance trends
         # For now, return basic trend information
         dashboard_data = observability.get_dashboard_data()
-        
+
         return {
             "duration_hours": duration_hours,
             "trends": dashboard_data["performance_trends"],

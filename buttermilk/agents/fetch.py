@@ -16,13 +16,11 @@ from typing import Any
 
 import pydantic  # Pydantic core
 import regex as re  # Regular expression operations
-try:
-    from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
-except ImportError:
-    FunctionTool = None
+from autogen_core import CancellationToken  # Buttermilk base agent and types
+from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
 from shortuuid import uuid  # For generating short unique IDs
 
-from buttermilk._core.agent import Agent, AgentOutput, CancellationToken  # Buttermilk base agent and types
+from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import ToolConfig  # Base class for tool configurations
 from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
@@ -31,9 +29,9 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
     ManagerMessage,
 )
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
 from buttermilk.data.loaders import DataLoader
-from buttermilk._core.storage_config import StorageConfig
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
 
@@ -108,6 +106,7 @@ class FetchRecord(ToolConfig):
 
         Returns:
             Record if found, None otherwise
+
         """
         if not self._data_sources:
             await self.load_data()
@@ -138,8 +137,6 @@ class FetchRecord(ToolConfig):
             # For now, using self.role, assuming it's set appropriately in the config.
             getattr(self, "role", "fetch_record_tool")  # Fallback name
             if not self.description:  # Ensure description is set for the tool
-                pass
-            else:
                 pass
 
             self._fns = [
@@ -326,7 +323,7 @@ class FetchAgent(Agent):
             return AgentOutput(
                 agent_id=self.agent_id,
                 outputs=result,
-                metadata=result.metadata if hasattr(result, 'metadata') else {},
+                metadata=result.metadata if hasattr(result, "metadata") else {},
             )
 
         # Return an ErrorEvent wrapped in AgentOutput

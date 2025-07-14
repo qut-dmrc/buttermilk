@@ -21,9 +21,10 @@ an Autogen-based multi-agent conversation).
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
-from typing import Any, Self, TYPE_CHECKING
+from typing import Any, Self
 
 import shortuuid  # For generating unique IDs
+
 try:
     import weave  # For tracing capabilities
 except ImportError:
@@ -42,21 +43,21 @@ from buttermilk import buttermilk as bm  # Global Buttermilk instance for framew
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
     AgentVariants,
-    DataSourceConfig,
     SaveInfo,  # Added SaveInfo
 )
-from buttermilk._core.storage_config import BaseStorageConfig  # Storage configuration models
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.log import logger
 from buttermilk._core.message_data import clean_empty_values
+from buttermilk._core.storage_config import (
+    BaseStorageConfig,  # Storage configuration models
+    StorageConfig,
+)
 from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
 from buttermilk.data.loaders import DataLoader  # Legacy data loading interface
-from buttermilk._core.storage_config import StorageConfig
-
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
@@ -146,7 +147,7 @@ class OrchestratorProtocol(BaseModel):
         "observers",
         mode="before",
     )(
-        convert_omegaconf_objects
+        convert_omegaconf_objects,
     )  # type: ignore
 
     @model_validator(mode="before")
@@ -160,7 +161,7 @@ class OrchestratorProtocol(BaseModel):
         if isinstance(data, dict) and "storage" in data:
             if "storage" not in data:
                 raise ValueError("'storage' field is required in orchestrator configuration")
-                
+
             storage = data["storage"]
             if isinstance(storage, dict):
                 validated_storage = {}
@@ -307,7 +308,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                             config_dict = config
                         else:
                             raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
-                        
+
                         # Use StorageFactory to create the proper subclass
                         from buttermilk._core.storage_config import StorageFactory
                         try:
@@ -388,21 +389,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if not self._records:  # Only fetch if no records are already present
             await self._fetch_initial_records(request)
         # raise NotImplementedError("Orchestrator subclasses must implement _setup.") # Keep if base does nothing else
-
-    @abstractmethod
-    async def _cleanup(self) -> None:
-        """Abstract method for orchestrator-specific cleanup tasks.
-
-        Subclasses must implement this method to release any resources acquired
-        during `_setup` or the main execution. This can include:
-        - Stopping communication runtimes.
-        - Closing database connections or network sessions.
-        - Cleaning up temporary files or state.
-
-        This method is called in a `finally` block within the public `run` method
-        to ensure it executes even if errors occur during the flow.
-        """
-        raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
 
     @abstractmethod
     async def _run(self, request: RunRequest) -> None:

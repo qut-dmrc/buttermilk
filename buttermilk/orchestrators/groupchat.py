@@ -12,7 +12,6 @@ from collections.abc import Awaitable, Callable  # Added type hints for clarity
 from typing import Any
 
 import shortuuid
-import weave
 from autogen_core import (
     AgentId,
     AgentType,
@@ -28,15 +27,16 @@ from autogen_core import (
 )
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
+from buttermilk import (
+    buttermilk as bm,  # Global Buttermilk instance
+    logger,
+)
 from buttermilk._core import (
-    BM,
     AllMessages,
     StepRequest,
 )
 from buttermilk._core.agent import Agent, ProcessingError
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.constants import CONDUCTOR, MANAGER
+from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
@@ -45,9 +45,9 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk import logger
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
+
 # AutogenAgentAdapter no longer needed - Agent now inherits from RoutedAgent directly
 
 
@@ -127,24 +127,19 @@ class AutogenOrchestrator(Orchestrator):
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
     _participants: dict[str, str] = PrivateAttr()
-    _agent_registry: dict[str, Agent] = PrivateAttr(default_factory=dict)
     _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(default_factory=list)
     _is_initialized: bool = PrivateAttr(default=False)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
-    _topic: TopicId = PrivateAttr(
-        default_factory=lambda: DefaultTopicId(type=f"{bm.name}-{bm.job}-{shortuuid.uuid()[:8]}"),
-    )
-
-    def _register_buttermilk_agent_instance(self, agent_id: str, agent_instance: Agent) -> None:
-        if agent_id in self._agent_registry:
-            logger.warning(f"Agent with ID '{agent_id}' already exists in the registry. Overwriting.")
-        self._agent_registry[agent_id] = agent_instance
-        logger.debug(f"Registered Buttermilk agent instance '{agent_instance.agent_name}' with ID '{agent_id}' to orchestrator registry.")
+    _topic: TopicId = PrivateAttr(default=None)
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
+        # Initialize the topic ID if not already set
+        if self._topic is None:
+            self._topic = DefaultTopicId(type=f"{bm.name}-{bm.job}-{shortuuid.uuid()[:8]}")
+
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
 
@@ -167,7 +162,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
         await self._runtime.publish_message(
             FlowEvent(source="orchestrator", content="Initializing group chat participants"),
-            topic_id=self._topic
+            topic_id=self._topic,
         )
 
         # Give agents a moment to initialize
@@ -176,7 +171,7 @@ class AutogenOrchestrator(Orchestrator):
         # Send a welcome message to the UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
         topic = DefaultTopicId(type=MANAGER)
-        logger.debug(f"[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
+        logger.debug("[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
         await self._runtime.publish_message(flow_event, topic_id=topic)
 
         # Give the MANAGER a moment to process the message
@@ -194,40 +189,16 @@ class AutogenOrchestrator(Orchestrator):
         # Clear the pending messages
         self._pending_messages.clear()
 
-        # Collect tool definitions from registered agents
-        participant_tools = {}
-        logger.debug(f"Collecting tools from {len(self._agent_registry)} registered agents")
-        for agent_id, agent_instance in self._agent_registry.items():
-            if hasattr(agent_instance, "role") and hasattr(agent_instance, "get_tool_definitions"):
-                role = agent_instance.role.upper()
-                try:
-                    # Use get_tool_definitions to get both decorated and configured tools
-                    tool_defs = agent_instance.get_tool_definitions()
-                    if tool_defs:
-                        # Pass AgentToolDefinition objects directly - no conversion needed
-                        participant_tools[role] = tool_defs
-                        logger.info(f"Collected {len(tool_defs)} tool definitions from {role}: {[t.name for t in tool_defs]}")
-                    else:
-                        logger.debug(f"No tool definitions found for {role}")
-                except Exception as e:
-                    logger.warning(f"Failed to get tool definitions from {role}: {e}")
-            else:
-                logger.debug(
-                    f"Agent {agent_id} does not have role or get_tool_definitions method. Has role: {hasattr(agent_instance, 'role')}, Has get_tool_definitions: {hasattr(agent_instance, 'get_tool_definitions')}"
-                )
-
         # Start up the host agent with participants and their tools
-        logger.info(f"Sending ConductorRequest to topic '{CONDUCTOR}' with {len(self._participants)} participants: {list(self._participants.keys())} and tools: {list(participant_tools.keys())}")
+        logger.highlight(f"Sending ConductorRequest to topic '{self._topic}' with {len(self._participants)} participants: {list(self._participants.keys())}")
         conductor_request = ConductorRequest(
-            inputs=request.model_dump(), 
+            inputs=request.model_dump(),
             participants=self._participants,
-            participant_tools=participant_tools
         )
         logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
-        logger.debug(f"ConductorRequest details - tools: {participant_tools}")
         await self._runtime.publish_message(
-            conductor_request, 
-            topic_id=DefaultTopicId(type=CONDUCTOR)
+            conductor_request,
+            topic_id=self._topic,
         )
 
         return termination_handler, interrupt_handler
@@ -247,7 +218,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.info(f"Creating participants from {len(self.agents)} agents and {len(self.observers)} observers")
         self._participants = {
             **{v.role: v.description for k, v in self.agents.items()},
-            **{v.role: v.description for k, v in self.observers.items()}
+            **{v.role: v.description for k, v in self.observers.items()},
         }
         logger.info(f"Created participants dictionary with {len(self._participants)} entries: {list(self._participants.keys())}")
 
@@ -267,8 +238,7 @@ class AutogenOrchestrator(Orchestrator):
                     ) -> Agent:
                         # Create the agent instance
                         agent_instance = cls(**cfg)
-                        # Register with orchestrator
-                        orchestrator_ref._register_buttermilk_agent_instance(agent_instance.agent_id, agent_instance)
+                        # Agent registration is now handled by the Agent class itself
                         return agent_instance
 
                     # Register the agent factory with the runtime.
@@ -355,116 +325,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Give the agent time to fully register
         await asyncio.sleep(0.5)
-        logger.debug(f"[AutogenOrchestrator.register_ui] Registration complete after delay")
-
-    async def _cleanup(self) -> None:
-        """Cleans up resources with timeout and verification."""
-        logger.debug("Cleaning up AutogenOrchestrator...")
-        cleanup_timeout = 15.0  # 15 second timeout for cleanup
-
-        try:
-            # Cancel all registered agent tasks first
-            logger.debug("Cleaning up registered agents...")
-            for agent_id, agent_instance in self._agent_registry.items():
-                try:
-                    if hasattr(agent_instance, "cleanup"):
-                        cleanup_result = agent_instance.cleanup()
-                        if asyncio.iscoroutine(cleanup_result):
-                            await asyncio.wait_for(cleanup_result, timeout=5.0)
-                    logger.debug(f"Cleaned up agent: {agent_id}")
-                except TimeoutError:
-                    logger.warning(f"Timeout cleaning up agent {agent_id}")
-                except Exception as e:
-                    logger.warning(f"Error cleaning up agent {agent_id}: {e}")
-
-            # Also cleanup any agent adapters in the runtime
-            if hasattr(self, "_runtime") and hasattr(self._runtime, "_agents"):
-                logger.debug("Cleaning up agent adapters...")
-                for agent_type, agents in self._runtime._agents.items():
-                    for agent in agents:
-                        if hasattr(agent, "cleanup"):
-                            try:
-                                await asyncio.wait_for(agent.cleanup(), timeout=5.0)
-                                logger.debug(f"Cleaned up adapter for agent type: {agent_type}")
-                            except TimeoutError:
-                                logger.warning(f"Timeout cleaning up adapter for {agent_type}")
-                            except Exception as e:
-                                logger.warning(f"Error cleaning up adapter for {agent_type}: {e}")
-
-            # Clear registries
-            self._agent_registry.clear()
-            self._agent_types.clear()
-            self._pending_messages.clear()
-            self._is_initialized = False
-
-            # Stop the runtime with timeout
-            if hasattr(self, "_runtime") and self._runtime._run_context:
-                logger.debug("Stopping Autogen runtime...")
-                try:
-                    cleanup_task = asyncio.create_task(self._runtime.close())
-                    await asyncio.wait_for(cleanup_task, timeout=cleanup_timeout)
-                    logger.info("Autogen runtime stopped successfully")
-                except TimeoutError:
-                    logger.error(f"Autogen runtime cleanup timeout after {cleanup_timeout}s")
-                    # Force cleanup
-                    await self._force_cleanup()
-                except Exception as e:
-                    logger.error(f"Error during runtime cleanup: {e}")
-                    await self._force_cleanup()
-
-            # Verify cleanup
-            await self._verify_cleanup()
-
-            # Print weave link if available
-            try:
-                call = weave.get_current_call()
-                if call and hasattr(call, "ui_url"):
-                    logger.info(f"Tracing link: 🍩 {call.ui_url}")
-            except Exception:
-                pass
-
-        except Exception as e:
-            logger.error(f"Fatal error during orchestrator cleanup: {e}")
-            await self._force_cleanup()
-
-    async def _force_cleanup(self) -> None:
-        """Force cleanup when normal cleanup fails."""
-        logger.warning("Performing force cleanup of AutogenOrchestrator")
-        try:
-            # Clear all internal state
-            self._agent_registry.clear()
-            self._agent_types.clear()
-
-            # Try to forcefully stop runtime
-            if hasattr(self, "_runtime"):
-                try:
-                    # Set runtime context to None to prevent further operations
-                    if hasattr(self._runtime, "_run_context"):
-                        self._runtime._run_context = None
-                except Exception as e:
-                    logger.warning(f"Error during force cleanup: {e}")
-
-        except Exception as e:
-            logger.error(f"Error during force cleanup: {e}")
-
-    async def _verify_cleanup(self) -> None:
-        """Verify that cleanup was successful."""
-        issues = []
-
-        # Check that registries are cleared
-        if self._agent_registry:
-            issues.append(f"{len(self._agent_registry)} agents still in registry")
-        if self._agent_types:
-            issues.append(f"{len(self._agent_types)} agent types still registered")
-
-        # Check runtime state
-        if hasattr(self, "_runtime") and self._runtime._run_context:
-            issues.append("Runtime context still active")
-
-        if issues:
-            logger.warning(f"Cleanup verification failed: {', '.join(issues)}")
-        else:
-            logger.debug("Cleanup verification passed")
+        logger.debug("[AutogenOrchestrator.register_ui] Registration complete after delay")
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
@@ -511,11 +372,11 @@ class AutogenOrchestrator(Orchestrator):
                         # Send flow_completed event before TaskProcessingComplete
                         await self._runtime.publish_message(
                             FlowEvent(source="orchestrator", content="flow_completed"),
-                            topic_id=DefaultTopicId(type=MANAGER)
+                            topic_id=DefaultTopicId(type=MANAGER),
                         )
                         # Publish a TaskProcessingComplete message to the UI
                         logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
-                        logger.debug(f"[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
+                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
                         await self._runtime.publish_message(
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
@@ -524,9 +385,9 @@ class AutogenOrchestrator(Orchestrator):
                                 message="Flow completed successfully.",
                                 more_tasks_remain=False,
                             ),
-                            topic_id=DefaultTopicId(type=MANAGER)
+                            topic_id=DefaultTopicId(type=MANAGER),
                         )
-                        logger.debug(f"[AutogenOrchestrator._run] TaskProcessingComplete message published.")
+                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
@@ -550,7 +411,8 @@ class AutogenOrchestrator(Orchestrator):
         except (FatalError, Exception) as e:
             logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
         finally:
-            await self._cleanup()
+            # Cleanup is now handled by the orchestrator lifecycle management
+            pass
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use.
@@ -563,7 +425,7 @@ class AutogenOrchestrator(Orchestrator):
             logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
 
             # If runtime is not initialized yet, queue the message
-            if not self._is_initialized or not hasattr(self, '_runtime') or self._runtime is None:
+            if not self._is_initialized or not hasattr(self, "_runtime") or self._runtime is None:
                 logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
                 self._pending_messages.append((message, self._topic))
                 return
@@ -574,27 +436,3 @@ class AutogenOrchestrator(Orchestrator):
             )
 
         return publish_callback
-
-    def get_agent_config(self, agent_id: str) -> AgentConfig | None:
-        """Retrieves the AgentConfig for a given agent_id from the registry.
-
-        Args:
-            agent_id: The ID of the agent to retrieve.
-
-        Returns:
-            The AgentConfig of the agent if found, otherwise None.
-
-        """
-        agent_instance = self._agent_registry.get(agent_id)
-        if agent_instance:
-            # The Agent class inherits from AgentConfig.
-            # We can construct a clean AgentConfig from the instance.
-            agent_config_fields = set(AgentConfig.model_fields.keys())
-            config_data = {
-                field: getattr(agent_instance, field)
-                for field in agent_config_fields
-                if hasattr(agent_instance, field)
-            }
-            return AgentConfig(**config_data)
-        logger.info(f"Agent with ID '{agent_id}' not found in the orchestrator's agent registry.")
-        return None

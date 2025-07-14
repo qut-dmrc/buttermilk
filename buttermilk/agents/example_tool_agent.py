@@ -6,17 +6,18 @@ This module shows how to expose agent capabilities as structured tool definition
 from typing import Any, Literal
 
 from buttermilk._core import Agent, AgentInput, AgentOutput
+
 # Tool decorators removed with MCP implementation
 
 
 class DataAnalysisAgent(Agent):
     """Example agent that demonstrates tool definition capabilities."""
-    
+
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
         """Process incoming requests using the appropriate tool."""
         # Extract the requested operation from inputs
         operation = message.inputs.get("operation", "analyze")
-        
+
         if operation == "analyze":
             result = await self.analyze_dataset(
                 dataset=message.inputs.get("dataset", ""),
@@ -30,17 +31,17 @@ class DataAnalysisAgent(Agent):
             )
         else:
             result = {"error": f"Unknown operation: {operation}"}
-        
+
         return AgentOutput(
             source=self.agent_name,
             role=self.role,
             outputs=result
         )
-    
+
     async def analyze_dataset(
-        self, 
-        dataset: str, 
-        query: str, 
+        self,
+        dataset: str,
+        query: str,
         output_format: Literal["table", "chart", "summary"] = "summary"
     ) -> dict[str, Any]:
         """Analyze a dataset using natural language queries.
@@ -70,7 +71,7 @@ class DataAnalysisAgent(Agent):
                 ]
             }
         }
-    
+
     async def visualize_data(
         self,
         data: dict[str, list[float]],
@@ -95,7 +96,7 @@ class DataAnalysisAgent(Agent):
             },
             "url": f"https://example.com/charts/{chart_type}_chart.png"
         }
-    
+
     async def health_check(self) -> dict[str, str]:
         """Check the health status of the agent.
         
@@ -111,11 +112,11 @@ class DataAnalysisAgent(Agent):
 
 class CalculatorAgent(Agent):
     """Example agent with simple calculator tools."""
-    
+
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
         """Process calculation requests."""
         operation = message.inputs.get("operation")
-        
+
         if operation == "add":
             result = self.add(
                 a=message.inputs.get("a", 0),
@@ -128,13 +129,13 @@ class CalculatorAgent(Agent):
             )
         else:
             result = {"error": "Unknown operation"}
-        
+
         return AgentOutput(
             source=self.agent_name,
             role=self.role,
             outputs={"result": result}
         )
-    
+
     def add(self, a: float, b: float) -> float:
         """Add two numbers together.
         
@@ -146,7 +147,7 @@ class CalculatorAgent(Agent):
             Sum of a and b
         """
         return a + b
-    
+
     def multiply(self, a: float, b: float) -> float:
         """Multiply two numbers.
         

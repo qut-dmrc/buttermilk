@@ -1,9 +1,0 @@
-test:
-  _target_: buttermilk.runner.flow.Flow
-  source: osb development
-  steps:
-    - name: test
-      _target_: buttermilk.agents.testagent.TestAgent
-      num_runs: 2
-      concurrency: 2
-      parameters: 

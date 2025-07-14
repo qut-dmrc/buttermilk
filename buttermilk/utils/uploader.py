@@ -36,7 +36,7 @@ class AsyncDataUploader:
         atexit.register(self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
         signal.signal(signal.SIGINT, self.shutdown)
-    
+
     def configure_storage(self, dataset_name: str) -> None:
         """Configure storage destination. Should be called by orchestrator/flow, not agent.
         
@@ -51,7 +51,7 @@ class AsyncDataUploader:
         if self.worker_task is None:
             worker_coroutine = self._worker()
             self.worker_task = asyncio.shield(asyncio.create_task(worker_coroutine))
-            
+
         if isinstance(item, BaseModel):
             # Convert to serialisable types
             item = item.model_dump(mode="json")
@@ -88,7 +88,7 @@ class AsyncDataUploader:
         try:
             from buttermilk._core.dmrc import get_bm
             bm = get_bm()
-            
+
             # Determine storage from flow context or use default
             # The flow/orchestrator should configure storage, not the agent
             if self.dataset_name:
@@ -97,7 +97,7 @@ class AsyncDataUploader:
             else:
                 # Fallback: use BM's session-level save for agent traces
                 bm.save(self.buffer, extension=".json")
-                
+
             self.last_flush = time.time()
             self.buffer = []
             await self._clear_backup()
@@ -124,7 +124,7 @@ class AsyncDataUploader:
             try:
                 from buttermilk._core.dmrc import get_bm
                 bm = get_bm()
-                
+
                 if self.dataset_name:
                     storage = bm.get_bigquery_storage(self.dataset_name)
                     storage.save(self.buffer)

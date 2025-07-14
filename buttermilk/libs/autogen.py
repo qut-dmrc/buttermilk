@@ -24,14 +24,18 @@ from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     AgentInput,  # Standard input message for Buttermilk agents.
+    AgentOutput,
+    AgentTrace,
     AllMessages,
     ErrorEvent,
     FlowEvent,
     FlowMessage,
-    GroupchatMessageTypes,
     HeartBeat,
+    ManagerMessage,
     OOBMessages,
+    Record,
     StepRequest,  # Union type for Out-Of-Band control messages.
+    ToolOutput,
 )
 from buttermilk._core.log import logger
 
@@ -91,7 +95,7 @@ class AutogenAgentAdapter(RoutedAgent):
             # Instantiate the agent using the provided class and config.
             try:
                 # Convert AgentConfig to dict if needed
-                if hasattr(agent_cfg, 'model_dump'):
+                if hasattr(agent_cfg, "model_dump"):
                     config_dict = agent_cfg.model_dump()
                 else:
                     config_dict = agent_cfg
@@ -108,7 +112,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         # Set the default topic ID based on the provided type string.
         self.topic_id = DefaultTopicId(type=topic_type)
-        
+
         # Initialize task tracking
         self._background_tasks = set()
 
@@ -121,7 +125,7 @@ class AutogenAgentAdapter(RoutedAgent):
             callback_to_groupchat=self._make_publish_callback(),
             public_callback=self._make_publish_callback()
         )
-        
+
         task = asyncio.create_task(init_task)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
@@ -162,14 +166,14 @@ class AutogenAgentAdapter(RoutedAgent):
         Cancels all background tasks and calls cleanup on the wrapped agent.
         """
         logger.debug(f"Cleaning up AutogenAgentAdapter for agent {self.agent.agent_name}")
-        
+
         # Cancel all background tasks
         if self._background_tasks:
             logger.debug(f"Cancelling {len(self._background_tasks)} background tasks for agent {self.agent.agent_name}")
             for task in self._background_tasks:
                 if not task.done():
                     task.cancel()
-            
+
             # Wait for cancellation with timeout
             try:
                 await asyncio.wait_for(
@@ -178,21 +182,21 @@ class AutogenAgentAdapter(RoutedAgent):
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout waiting for background tasks cancellation in adapter for {self.agent.agent_name}")
-            
+
             self._background_tasks.clear()
-        
+
         # Cleanup the wrapped agent
         try:
             # Store the announcement callback if agent supports it
-            if hasattr(self.agent, '_announcement_callback'):
+            if hasattr(self.agent, "_announcement_callback"):
                 self.agent._announcement_callback = self._make_publish_callback()
-            
+
             # Check if agent supports cleanup with announcement
-            if hasattr(self.agent, 'cleanup_with_announcement'):
+            if hasattr(self.agent, "cleanup_with_announcement"):
                 await self.agent.cleanup_with_announcement()
             else:
                 await self.agent.cleanup()
-            
+
             logger.debug(f"Agent {self.agent.agent_name} cleanup completed")
         except Exception as e:
             logger.warning(f"Error during agent cleanup for {self.agent.agent_name}: {e}")
@@ -217,36 +221,83 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.debug(f"Heartbeat queue full for agent {self.agent.agent_name}. Agent may be busy or stuck.")
 
     @message_handler
-    async def handle_groupchat_message(
+    async def handle_record(
         self,
-        message: GroupchatMessageTypes,  # Handles messages intended for general group chat consumption.
+        message: Record,
         ctx: MessageContext,
     ) -> None:
-        """Handle broadcast/group chat messages by delegating to the agent's `_listen` method.
-
-        This allows agents to react to general messages published on the topic, even if not
-        directly addressed to them. Typically used for information sharing or awareness.
-
-        Args:
-            message: The group chat message (can be various types).
-            ctx: The Autogen message context.
-
-        """
-        logger.debug(f"Agent {self.agent.agent_name} received group chat message: {type(message).__name__}")
-
-        public_callback = self._make_publish_callback(topic_id=self.topic_id)
-
+        """Handle Record messages by delegating to the agent's handler."""
+        logger.debug(f"Agent {self.agent.agent_name} received Record message")
         try:
-            # Delegate to the agent's _listen method for processing.
-            await self.agent._listen(
-                message=message,
-                cancellation_token=ctx.cancellation_token,
-                public_callback=public_callback,  # Callback for default topic
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
-            )
+            await self.agent.handle_record(message, ctx)
         except Exception as e:
-            msg = f"Error listening to chat message: {e}"
+            msg = f"Error handling Record message: {e}"
             logger.error(msg, exc_info=False)
+            public_callback = self._make_publish_callback(topic_id=self.topic_id)
+            await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
+
+    @message_handler
+    async def handle_agent_output(
+        self,
+        message: AgentOutput,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentOutput messages by delegating to the agent's handler."""
+        logger.debug(f"Agent {self.agent.agent_name} received AgentOutput message")
+        try:
+            await self.agent.handle_agent_output(message, ctx)
+        except Exception as e:
+            msg = f"Error handling AgentOutput message: {e}"
+            logger.error(msg, exc_info=False)
+            public_callback = self._make_publish_callback(topic_id=self.topic_id)
+            await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
+
+    @message_handler
+    async def handle_agent_trace(
+        self,
+        message: AgentTrace,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle AgentTrace messages by delegating to the agent's handler."""
+        logger.debug(f"Agent {self.agent.agent_name} received AgentTrace message")
+        try:
+            await self.agent.handle_agent_trace(message, ctx)
+        except Exception as e:
+            msg = f"Error handling AgentTrace message: {e}"
+            logger.error(msg, exc_info=False)
+            public_callback = self._make_publish_callback(topic_id=self.topic_id)
+            await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
+
+    @message_handler
+    async def handle_manager_message(
+        self,
+        message: ManagerMessage,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ManagerMessage messages by delegating to the agent's handler."""
+        logger.debug(f"Agent {self.agent.agent_name} received ManagerMessage")
+        try:
+            await self.agent.handle_manager_message(message, ctx)
+        except Exception as e:
+            msg = f"Error handling ManagerMessage: {e}"
+            logger.error(msg, exc_info=False)
+            public_callback = self._make_publish_callback(topic_id=self.topic_id)
+            await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
+
+    @message_handler
+    async def handle_tool_output(
+        self,
+        message: ToolOutput,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle ToolOutput messages by delegating to the agent's handler."""
+        logger.debug(f"Agent {self.agent.agent_name} received ToolOutput message")
+        try:
+            await self.agent.handle_tool_output(message, ctx)
+        except Exception as e:
+            msg = f"Error handling ToolOutput message: {e}"
+            logger.error(msg, exc_info=False)
+            public_callback = self._make_publish_callback(topic_id=self.topic_id)
             await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
 
     @message_handler

@@ -8,6 +8,7 @@ configuration patterns.
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Union
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -16,7 +17,7 @@ class CloudProviderConfig(BaseModel, ABC):
     
     Provides common fields and validation that all cloud providers should support.
     """
-    
+
     type: str = Field(description="Cloud provider type")
     project_id: Optional[str] = Field(
         default=None,
@@ -30,13 +31,13 @@ class CloudProviderConfig(BaseModel, ABC):
         default_factory=dict,
         description="Provider-specific credential configuration"
     )
-    
+
     model_config = {
         "extra": "allow",  # Allow provider-specific fields
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
     }
-    
+
     @abstractmethod
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get configuration for specific service client.
@@ -52,7 +53,7 @@ class CloudProviderConfig(BaseModel, ABC):
 
 class GCPConfig(CloudProviderConfig):
     """Google Cloud Platform configuration."""
-    
+
     type: Literal["gcp"] = "gcp"
     project_id: Optional[str] = Field(
         default=None,
@@ -70,7 +71,7 @@ class GCPConfig(CloudProviderConfig):
         default=None,
         description="Default location (defaults to region)"
     )
-    
+
     # Service-specific configurations
     storage_bucket: Optional[str] = Field(
         default=None,
@@ -80,28 +81,28 @@ class GCPConfig(CloudProviderConfig):
         default="buttermilk",
         description="Default BigQuery dataset"
     )
-    
+
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "GCPConfig":
         """Set defaults from environment variables."""
         if not self.project_id:
             self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        
+
         if not self.quota_project_id:
             self.quota_project_id = self.project_id
-            
+
         if not self.location:
             self.location = self.region
-            
+
         return self
-    
+
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get GCP service client configuration."""
         base_config = {
             "project": self.project_id,
             "location": self.location,
         }
-        
+
         service_configs = {
             "bigquery": {
                 **base_config,
@@ -127,13 +128,13 @@ class GCPConfig(CloudProviderConfig):
                 **base_config,
             },
         }
-        
+
         return service_configs.get(service, base_config)
 
 
 class VertexAIConfig(CloudProviderConfig):
     """Vertex AI specific configuration (extends GCP)."""
-    
+
     type: Literal["vertex"] = "vertex"
     project_id: Optional[str] = Field(
         default=None,
@@ -147,18 +148,18 @@ class VertexAIConfig(CloudProviderConfig):
         default=None,
         description="Vertex AI location (defaults to region)"
     )
-    
-    @model_validator(mode="after") 
+
+    @model_validator(mode="after")
     def set_defaults_from_env(self) -> "VertexAIConfig":
         """Set defaults from environment variables."""
         if not self.project_id:
             self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-            
+
         if not self.location:
             self.location = self.region
-            
+
         return self
-    
+
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get Vertex AI client configuration."""
         return {
@@ -169,7 +170,7 @@ class VertexAIConfig(CloudProviderConfig):
 
 class AWSConfig(CloudProviderConfig):
     """Amazon Web Services configuration."""
-    
+
     type: Literal["aws"] = "aws"
     account_id: Optional[str] = Field(
         default=None,
@@ -180,25 +181,25 @@ class AWSConfig(CloudProviderConfig):
         default="us-east-1",
         description="Default AWS region"
     )
-    
+
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get AWS service client configuration."""
         base_config = {
             "region_name": self.region,
         }
-        
+
         service_configs = {
             "s3": base_config,
             "secretsmanager": base_config,
             "cloudwatch": base_config,
         }
-        
+
         return service_configs.get(service, base_config)
 
 
 class AzureConfig(CloudProviderConfig):
     """Microsoft Azure configuration."""
-    
+
     type: Literal["azure"] = "azure"
     subscription_id: Optional[str] = Field(
         default=None,
@@ -213,7 +214,7 @@ class AzureConfig(CloudProviderConfig):
         default="eastus",
         description="Default Azure region"
     )
-    
+
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get Azure service client configuration."""
         return {
@@ -225,7 +226,7 @@ class AzureConfig(CloudProviderConfig):
 
 class SecretProviderConfig(BaseModel):
     """Configuration for secret management providers."""
-    
+
     type: Literal["gcp", "aws", "azure", "local"] = Field(
         description="Secret provider type"
     )
@@ -241,7 +242,7 @@ class SecretProviderConfig(BaseModel):
         default=None,
         description="Secret name for shared credentials"
     )
-    
+
     @model_validator(mode="after")
     def set_project_from_env(self) -> "SecretProviderConfig":
         """Set project from environment if not specified."""
@@ -252,7 +253,7 @@ class SecretProviderConfig(BaseModel):
 
 class LoggerConfig(BaseModel):
     """Configuration for cloud logging providers."""
-    
+
     type: Literal["gcp", "aws", "azure", "local"] = Field(
         description="Logging provider type"
     )
@@ -268,7 +269,7 @@ class LoggerConfig(BaseModel):
         default=False,
         description="Enable verbose logging"
     )
-    
+
     @model_validator(mode="after")
     def set_project_from_env(self) -> "LoggerConfig":
         """Set project from environment if not specified."""
@@ -279,7 +280,7 @@ class LoggerConfig(BaseModel):
 
 class PubSubConfig(BaseModel):
     """Configuration for pub/sub messaging providers."""
-    
+
     type: Literal["gcp", "aws", "azure"] = Field(
         description="Pub/Sub provider type"
     )
@@ -292,7 +293,7 @@ class PubSubConfig(BaseModel):
         description="Topic name for job messages"
     )
     jobs_subscription: str = Field(
-        default="jobs-sub", 
+        default="jobs-sub",
         description="Subscription name for job messages"
     )
     status_topic: str = Field(
@@ -303,7 +304,7 @@ class PubSubConfig(BaseModel):
         default="flow-sub",
         description="Subscription name for status messages"
     )
-    
+
     @model_validator(mode="after")
     def set_project_from_env(self) -> "PubSubConfig":
         """Set project from environment if not specified."""
@@ -314,7 +315,7 @@ class PubSubConfig(BaseModel):
 
 class RunInfoConfig(BaseModel):
     """Configuration for run execution information."""
-    
+
     platform: Literal["local", "cloud", "batch"] = Field(
         default="local",
         description="Execution platform"
@@ -331,7 +332,7 @@ class RunInfoConfig(BaseModel):
 
 class TracingConfig(BaseModel):
     """Configuration for experiment tracing."""
-    
+
     enabled: bool = Field(
         default=True,
         description="Enable tracing"
@@ -352,13 +353,13 @@ class InfrastructureConfig(BaseModel):
     This replaces the current scattered cloud configuration approach
     with a unified, composable system.
     """
-    
+
     # Core cloud providers
     clouds: List[CloudProvider] = Field(
         default_factory=list,
         description="List of configured cloud providers"
     )
-    
+
     # Service configurations
     secret_provider: Optional[SecretProviderConfig] = Field(
         default=None,
@@ -372,7 +373,7 @@ class InfrastructureConfig(BaseModel):
         default=None,
         description="Pub/Sub messaging configuration"
     )
-    
+
     # Execution configuration
     run_info: RunInfoConfig = Field(
         default_factory=RunInfoConfig,
@@ -382,14 +383,14 @@ class InfrastructureConfig(BaseModel):
         default_factory=TracingConfig,
         description="Experiment tracing configuration"
     )
-    
+
     def get_cloud_config(self, provider_type: str) -> Optional[CloudProvider]:
         """Get configuration for a specific cloud provider."""
         for cloud in self.clouds:
             if cloud.type == provider_type:
                 return cloud
         return None
-    
+
     def get_primary_cloud(self) -> Optional[CloudProvider]:
         """Get the primary (first) cloud provider configuration."""
         return self.clouds[0] if self.clouds else None

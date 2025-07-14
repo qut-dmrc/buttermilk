@@ -1,13 +1,14 @@
 """Pydantic models for debug infrastructure."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class MCPTestResult(BaseModel):
     """Result of testing an MCP endpoint."""
-    
+
     endpoint: str
     flow_name: str | None = None
     query: str | None = None
@@ -21,7 +22,7 @@ class MCPTestResult(BaseModel):
 
 class HealthStatus(BaseModel):
     """Health status of the API."""
-    
+
     api_reachable: bool
     status_code: int | None = None
     response_time: float
@@ -31,7 +32,7 @@ class HealthStatus(BaseModel):
 
 class FlowTestSuite(BaseModel):
     """Results of comprehensive flow testing."""
-    
+
     flow_name: str
     health_check: HealthStatus
     mcp_tests: list[MCPTestResult]
@@ -44,7 +45,7 @@ class FlowTestSuite(BaseModel):
 
 class AgentTestResult(BaseModel):
     """Result of testing individual agent via MCP."""
-    
+
     agent_role: str
     agent_type: str
     test_query: str
@@ -57,7 +58,7 @@ class AgentTestResult(BaseModel):
 
 class FlowHealthReport(BaseModel):
     """Comprehensive health report for a flow."""
-    
+
     flow_name: str
     timestamp: datetime = Field(default_factory=datetime.now)
     api_health: HealthStatus
@@ -65,20 +66,20 @@ class FlowHealthReport(BaseModel):
     agent_tests: list[AgentTestResult] = Field(default_factory=list)
     mcp_test_results: list[MCPTestResult] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
-    
+
     @property
     def overall_status(self) -> Literal["healthy", "degraded", "unhealthy"]:
         """Calculate overall health status."""
         if not self.api_health.api_reachable:
             return "unhealthy"
-        
+
         total_tests = len(self.mcp_test_results)
         if total_tests == 0:
             return "degraded"
-            
+
         failed_tests = sum(1 for test in self.mcp_test_results if test.status != "success")
         failure_rate = failed_tests / total_tests
-        
+
         if failure_rate == 0:
             return "healthy"
         elif failure_rate < 0.5:
@@ -89,7 +90,7 @@ class FlowHealthReport(BaseModel):
 
 class StartupTestResult(BaseModel):
     """Result of testing daemon startup."""
-    
+
     startup_time: float
     startup_success: bool
     validation_errors: list[str] = Field(default_factory=list)

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import React, { useState, useEffect } from 'react';
-import { render, Text } from 'ink';
-import meow from 'meow';
-import UI from './ui.js';
-import UIReadline from './ui-readline.js';
 import http from 'http';
 import https from 'https';
+import { render, Text } from 'ink';
 import Spinner from 'ink-spinner';
+import meow from 'meow';
+import React, { useEffect, useState } from 'react';
+import UIReadline from './ui-readline.js';
+import UI from './ui.js';
 import { logger } from './utils/logger.js';
 
 const cli = meow(`
@@ -15,7 +15,7 @@ const cli = meow(`
 
   Options
     --host, -h      Backend host (default: localhost)
-    --port, -p      Backend port (default: 8080)
+    --port, -p      Backend port (default: 8000)
     --url, -u       Full backend URL (overrides host/port)
     --debug, -d     Enable debug logging
 
@@ -39,7 +39,7 @@ const cli = meow(`
 		port: {
 			type: 'number',
 			shortFlag: 'p',
-			default: parseInt(process.env.BUTTERMILK_PORT || '8080')
+			default: parseInt(process.env.BUTTERMILK_PORT || '8000')
 		},
 		url: {
 			type: 'string',

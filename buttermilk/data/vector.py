@@ -1,7 +1,6 @@
 import asyncio
 import hashlib
 import json
-import shortuuid
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
@@ -30,12 +29,11 @@ from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
     logger,
 )
-from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk._core.storage_config import MultiFieldEmbeddingConfig
-from buttermilk._core.types import Record
+from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
-from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
+from buttermilk._core.storage_config import MultiFieldEmbeddingConfig, VectorStorageConfig
+from buttermilk._core.types import Record
 from buttermilk.utils.utils import ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
@@ -84,15 +82,15 @@ class BatchProcessingResult:
 
 class ChromaDBConfig(BaseModel):
     """Strict configuration with required fields for ChromaDB."""
-    
+
     # Required fields (no defaults)
     persist_directory: str
     collection_name: str
     embedding_model: str
-    
+
     # Required deduplication strategy
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = "both"
-    
+
     # Optional fields with reasonable defaults
     dimensionality: int = 3072
     concurrency: int = 20
@@ -310,10 +308,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     sync_batch_size: int = Field(default=50, description="Sync every N records")
     sync_interval_minutes: int = Field(default=10, description="Sync every N minutes")
     disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing (manual only)")
-    
+
     # New deduplication configuration (Breaking Change)
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(default="both")
-    
+
     # Retry configuration for embedding API calls
     embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
     embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries")
@@ -328,7 +326,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     _client: ClientAPI = PrivateAttr()
     _original_remote_path: str | None = PrivateAttr(default=None)
     _processed_records_count: int = PrivateAttr(default=0)
-    
+
     # New private attributes for deduplication
     _processed_combinations_cache: set[str] = PrivateAttr(default_factory=set)
     _last_sync_time: float = PrivateAttr(default=0.0)
@@ -347,7 +345,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = TextEmbeddingModel.from_pretrained(self.embedding_model)
-        
+
         # Wrap embedding model with retry logic
         self._retry_wrapper = RetryWrapper(
             client=self._embedding_model,
@@ -358,7 +356,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             jitter_seconds=2.0,  # Add some jitter for quota management
         )
         logger.info(f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff")
-        
+
         self._embedding_function = VertexAIEmbeddingFunction(
             embedding_model=self.embedding_model,
             dimensionality=self.dimensionality,
@@ -379,7 +377,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
-        
+
         # Log deduplication strategy
         logger.info(f"🔍 Deduplication strategy: {self.deduplication_strategy}")
 
@@ -423,7 +421,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         Returns:
             Path to local cache directory
         """
-        from buttermilk.utils.utils import ensure_chromadb_cache
         import os
         import time
 
@@ -441,7 +438,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # If modified within last hour, don't re-download
             if time_since_modified < 3600:  # 1 hour
                 logger.info(f"📋 Using existing local cache (modified {time_since_modified/60:.1f} minutes ago)")
-                logger.info(f"🔒 Skipping download to preserve local changes")
+                logger.info("🔒 Skipping download to preserve local changes")
                 return cache_path
             else:
                 logger.info(f"⏰ Local cache is {time_since_modified/3600:.1f} hours old, checking for updates...")
@@ -468,9 +465,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return
 
         try:
-            from buttermilk.utils.utils import upload_chromadb_cache
             import os
             import time
+
+            from buttermilk.utils.utils import upload_chromadb_cache
 
             # Use actual persist_directory as the local cache path (it's been set to local cache)
             cache_path = Path(self.persist_directory)
@@ -553,7 +551,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             self._processed_records_count = 0
             self._last_sync_time = time.time()
 
-            logger.info(f"✅ Batch sync completed (reset counter to 0)")
+            logger.info("✅ Batch sync completed (reset counter to 0)")
             return True
 
         except Exception as e:
@@ -617,14 +615,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 sync_success = await self._conditional_sync_to_remote(force=True)
                 if sync_success:
                     logger.info("✅ Final sync completed successfully")
-                    
+
                     # Log processing summary using existing BM logger
-                    logger.info(f"📊 Processing session complete:")
+                    logger.info("📊 Processing session complete:")
                     logger.info(f"   📦 Records processed: {self._processed_records_count}")
                     logger.info(f"   🔢 Total embeddings: {self.collection.count()}")
                     logger.info(f"   🔍 Deduplication strategy: {self.deduplication_strategy}")
                     logger.info(f"   📦 Cache size: {len(self._processed_combinations_cache)} combinations")
-                    
+
                     return True
                 else:
                     logger.error("❌ Final sync failed")
@@ -665,7 +663,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             )
 
             # Ensure embedding function is set on existing collection
-            if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+            if hasattr(self, "_embedding_function") and self._embedding_function is not None:
                 existing_collection._embedding_function = self._embedding_function
 
             # Get some basic stats
@@ -706,7 +704,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 name=self.collection_name
             )
             # Ensure embedding function is set on fallback collection
-            if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+            if hasattr(self, "_embedding_function") and self._embedding_function is not None:
                 fallback_collection._embedding_function = self._embedding_function
             logger.info(f"✅ Collection '{self.collection_name}' ready via fallback")
 
@@ -747,7 +745,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Ensure collection._embedding_function is synchronized with vectorstore._embedding_function
         collection = _db_registry[cache_key]
-        if hasattr(self, '_embedding_function') and self._embedding_function is not None:
+        if hasattr(self, "_embedding_function") and self._embedding_function is not None:
             collection._embedding_function = self._embedding_function
 
         return collection
@@ -820,16 +818,16 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # 2. Additional fields (single chunks each)
         for field_config in config.additional_fields:
-            field_value = record.metadata.get(field_config.source_field, '')
+            field_value = record.metadata.get(field_config.source_field, "")
 
             # Convert structured data to readable text
             if field_value:
                 if isinstance(field_value, list):
                     # Join list items with newlines for better readability
-                    chunk_text = '\n'.join(str(item).strip() for item in field_value if str(item).strip())
+                    chunk_text = "\n".join(str(item).strip() for item in field_value if str(item).strip())
                 elif isinstance(field_value, dict):
                     # Convert dict to key-value pairs
-                    chunk_text = '\n'.join(f"{k}: {v}" for k, v in field_value.items() if v)
+                    chunk_text = "\n".join(f"{k}: {v}" for k, v in field_value.items() if v)
                 else:
                     # Handle simple strings and other types
                     chunk_text = str(field_value).strip()
@@ -853,13 +851,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     def _get_record_model_key(self, record_id: str, embedding_model: str) -> str:
         """Generate unique key for record+model combination."""
         return f"{record_id}:{embedding_model}"
-    
+
     def _get_content_hash(self, record: Record) -> str:
         """Generate content hash for a record based on text content."""
         content = record.text_content or ""
         # Include metadata that affects embeddings
         metadata_str = json.dumps({
-            k: v for k, v in sorted(record.metadata.items()) 
+            k: v for k, v in sorted(record.metadata.items())
             if k in ["title", "summary", "description"]  # Only include fields that affect embedding
         }, sort_keys=True)
         combined_content = f"{content}|{metadata_str}"
@@ -875,7 +873,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             ExistenceCheck: Detailed information about existence
         """
         cache_key = self._get_record_model_key(record.record_id, self.embedding_model)
-        
+
         # Check in-memory cache first
         if cache_key in self._processed_combinations_cache:
             return ExistenceCheck(
@@ -885,7 +883,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 last_processed=None,  # Not available from cache
                 metadata_hash=None
             )
-            
+
         # Check ChromaDB for existing chunks with this record+model
         try:
             results = self.collection.get(
@@ -898,14 +896,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 limit=10,  # Get a few to count and check metadata
                 include=["metadatas"]
             )
-            
+
             exists = len(results.get("ids", [])) > 0
             chunk_count = len(results.get("ids", []))
-            
+
             # Try to extract timestamp and content hash from metadata
             last_processed = None
             metadata_hash = None
-            
+
             if exists and results.get("metadatas"):
                 for metadata in results["metadatas"]:
                     if metadata:
@@ -915,17 +913,17 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                                 last_processed = datetime.fromisoformat(metadata["created_timestamp"])
                             except:
                                 pass
-                        
+
                         # Get content hash if available
                         if "content_hash" in metadata:
                             metadata_hash = metadata["content_hash"]
                             break
-            
+
             if exists:
                 # Add to cache for future checks
                 self._processed_combinations_cache.add(cache_key)
                 logger.debug(f"Found existing record {record.record_id} with {self.embedding_model}: {chunk_count} chunks")
-            
+
             return ExistenceCheck(
                 exists=exists,
                 embedding_model=self.embedding_model,
@@ -933,7 +931,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 last_processed=last_processed,
                 metadata_hash=metadata_hash
             )
-            
+
         except Exception as e:
             logger.error(f"Error checking record+model existence: {e}")
             # Default to not exists to allow processing
@@ -957,36 +955,36 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         if force_reprocess:
             return False, "forced reprocessing"
-        
+
         existence_check = await self._check_record_exists(record)
-        
+
         if not existence_check.exists:
             return False, "new record"
-        
+
         # Handle different deduplication strategies
         if self.deduplication_strategy == "record_id":
             return True, f"record_id already exists with {self.embedding_model}"
-        
+
         elif self.deduplication_strategy == "content_hash":
             current_hash = self._get_content_hash(record)
             if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
                 return True, f"content unchanged (hash: {current_hash[:8]}...)"
             else:
                 return False, f"content changed (old: {existence_check.metadata_hash[:8] if existence_check.metadata_hash else 'unknown'}..., new: {current_hash[:8]}...)"
-        
+
         elif self.deduplication_strategy == "both":
             # More conservative - skip only if record_id exists AND content is the same
             current_hash = self._get_content_hash(record)
             if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
-                return True, f"record_id and content both unchanged"
+                return True, "record_id and content both unchanged"
             else:
-                return False, f"record exists but content may have changed"
-        
+                return False, "record exists but content may have changed"
+
         return False, "unknown deduplication strategy"
 
     async def process_record(
-        self, 
-        record: Record, 
+        self,
+        record: Record,
         *,
         skip_existing: bool = True,
         validate_before_process: bool = True,
@@ -1008,10 +1006,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             ProcessingResult: Comprehensive result with status and metadata
         """
         start_time = time.time()
-        
+
         # Override embedding model if specified
         effective_embedding_model = embedding_model_override or self.embedding_model
-        
+
         try:
             # Step 1: Check if we should skip this record
             if skip_existing and not force_reprocess:
@@ -1027,7 +1025,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         processing_time_ms=processing_time_ms,
                         metadata={"skip_validation": True}
                     )
-            
+
             # Step 2: Validate record if requested
             if validate_before_process:
                 if not record.text_content and not any(hasattr(record, field) for field in ["title", "summary", "description"]):
@@ -1041,7 +1039,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         processing_time_ms=processing_time_ms,
                         metadata={"validation_failed": True}
                     )
-            
+
             # Step 3: Create chunks using configuration
             record.chunks = self.create_multi_field_chunks_for_record(record)
 
@@ -1063,7 +1061,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # Step 5: Enhance chunk metadata with provenance tracking
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.now().isoformat()
-            
+
             # Get BM run info if available
             try:
                 from buttermilk._core.dmrc import get_bm
@@ -1071,7 +1069,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 run_id = bm.run_info.run_id if bm and bm.run_info else None
             except:
                 run_id = None
-            
+
             for chunk in record.chunks:
                 chunk.metadata.update({
                     "embedding_model": effective_embedding_model,
@@ -1079,7 +1077,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     "created_timestamp": current_timestamp,
                     "deduplication_strategy": self.deduplication_strategy
                 })
-                
+
                 # Only add run_id if available from BM
                 if run_id:
                     chunk.metadata["processing_run_id"] = run_id
@@ -1092,13 +1090,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             self._processed_combinations_cache.add(cache_key)
 
             processing_time_ms = (time.time() - start_time) * 1000
-            
+
             # Log successful processing
             chunk_types = {}
             for chunk in record.chunks:
-                chunk_type = chunk.metadata.get('chunk_type', 'content')
+                chunk_type = chunk.metadata.get("chunk_type", "content")
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
-            
+
             logger.info(f"✅ Processed record {record.record_id}: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms")
 
             return ProcessingResult(
@@ -1211,9 +1209,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 "would_process": 0
             }
         }
-        
+
         logger.info(f"🔍 Validating {len(new_records)} records for incremental update...")
-        
+
         for record in new_records:
             try:
                 should_skip, reason = await self._should_skip_record(record)
@@ -1229,18 +1227,18 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"Record {record.record_id}: validation error - {str(e)}"
                 )
                 validation_results["safe_to_add"] = False
-        
+
         # Check for potential issues
         if validation_results["stats"]["would_skip"] == len(new_records):
             validation_results["warnings"].append(
                 "All records already exist - no new embeddings would be created"
             )
-            
+
         if validation_results["conflicts"]:
             validation_results["safe_to_add"] = False
-            
+
         logger.info(f"📋 Validation complete: {validation_results['stats']['would_process']} new, {validation_results['stats']['would_skip']} existing, {len(validation_results['conflicts'])} conflicts")
-        
+
         return validation_results
 
     async def process_batch(
@@ -1265,10 +1263,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             BatchProcessingResult: Comprehensive batch processing results
         """
         start_time = time.time()
-        
+
         # Step 1: Validate the batch
         validation_result = await self.validate_incremental_update(records)
-        
+
         if mode == "validate_only":
             processing_time_ms = (time.time() - start_time) * 1000
             return BatchProcessingResult(
@@ -1281,7 +1279,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 failed_records=[],
                 metadata={"mode": "validate_only"}
             )
-        
+
         # Check if validation passed for strict modes
         if require_all_new and validation_result["stats"]["would_skip"] > 0:
             processing_time_ms = (time.time() - start_time) * 1000
@@ -1295,17 +1293,17 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 failed_records=[(r.record_id, "require_all_new failed") for r in records],
                 metadata={"mode": mode, "require_all_new": True}
             )
-        
+
         # Step 2: Process records
         successful_count = 0
         skipped_count = 0
         failed_count = 0
         failed_records = []
-        
+
         force_reprocess = (mode == "force")
-        
+
         logger.info(f"🏭 Processing batch of {len(records)} records (mode: {mode})")
-        
+
         for i, record in enumerate(records):
             try:
                 result = await self.process_record(
@@ -1314,7 +1312,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     validate_before_process=True,
                     force_reprocess=force_reprocess
                 )
-                
+
                 if result.status == "processed":
                     successful_count += 1
                 elif result.status == "skipped":
@@ -1322,7 +1320,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 elif result.status == "failed":
                     failed_count += 1
                     failed_records.append((record.record_id, result.reason))
-                    
+
                     # Check failure threshold
                     if failed_count > max_failures:
                         logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
@@ -1330,25 +1328,25 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         remaining = len(records) - (i + 1)
                         failed_count += remaining
                         failed_records.extend([
-                            (records[j].record_id, "batch stopped due to failures") 
+                            (records[j].record_id, "batch stopped due to failures")
                             for j in range(i + 1, len(records))
                         ])
                         break
-                        
+
             except Exception as e:
                 failed_count += 1
                 failed_records.append((record.record_id, f"processing exception: {str(e)}"))
                 logger.error(f"❌ Exception processing record {record.record_id}: {e}")
-                
+
                 # Check failure threshold
                 if failed_count > max_failures:
                     logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
                     break
-        
+
         processing_time_ms = (time.time() - start_time) * 1000
-        
+
         logger.info(f"✅ Batch processing complete: {successful_count} processed, {skipped_count} skipped, {failed_count} failed in {processing_time_ms:.1f}ms")
-        
+
         return BatchProcessingResult(
             total_records=len(records),
             successful_count=successful_count,
@@ -1413,7 +1411,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         if self.multi_field_config:
             chunk_types = {}
             for chunk in doc.chunks:
-                content_type = chunk.metadata.get('content_type', 'unknown')
+                content_type = chunk.metadata.get("content_type", "unknown")
                 chunk_types[content_type] = chunk_types.get(content_type, 0) + 1
 
             breakdown = ", ".join([f"{count} {ctype}" for ctype, count in chunk_types.items()])
@@ -1631,7 +1629,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 output_dimensionality=self.dimensionality,
                 auto_truncate=False,
             )
-            
+
             async def _embedding_call():
                 """Wrapper function to add error conversion."""
                 try:
@@ -1640,11 +1638,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     # Convert quota/rate limit errors to RateLimit exceptions
                     self._convert_embedding_errors(exc)
                     raise  # Re-raise if not a quota error
-            
+
             try:
                 # Use retry wrapper for embedding calls to handle quota errors
                 embeddings_result: list[TextEmbedding] = await self._retry_wrapper._execute_with_retry(_embedding_call)
-                
+
                 if embeddings_result:
                     return index, embeddings_result[0].values
                 logger.warning(f"No embedding result returned for input {index}.")

@@ -4,9 +4,7 @@ This agent provides tools for debugging Buttermilk flows,
 including log reading and WebSocket flow control.
 """
 
-import asyncio
 import glob
-import json
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -14,17 +12,18 @@ from typing import Any, Optional
 from buttermilk._core import AgentInput, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
+
 # Tool decorator removed with MCP implementation
 from buttermilk.agents.test_utils import FlowTestClient
 
 
 class DebugAgent(Agent):
     """Agent providing debugging tools for Buttermilk flows."""
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._active_clients: dict[str, FlowTestClient] = {}
-        
+
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
         """Process debugging requests."""
         # This agent is primarily tool-based, so _process just returns a helpful message
@@ -35,7 +34,7 @@ class DebugAgent(Agent):
                 "message": "Debug agent is ready. Use the exposed tools for debugging.",
                 "available_tools": [
                     "get_latest_buttermilk_logs",
-                    "list_log_files", 
+                    "list_log_files",
                     "start_websocket_client",
                     "send_websocket_message",
                     "get_websocket_messages",
@@ -45,9 +44,9 @@ class DebugAgent(Agent):
                 ]
             }
         )
-    
+
     # Log reading tools
-    
+
     def get_latest_buttermilk_logs(self, lines: int = 100) -> str:
         """Get the last N lines from the most recent buttermilk log file.
         
@@ -57,28 +56,28 @@ class DebugAgent(Agent):
         Returns:
             The last N lines of the most recent log file, or error message if no logs found
         """
-        log_files = glob.glob('/tmp/buttermilk_*.log')
+        log_files = glob.glob("/tmp/buttermilk_*.log")
         if not log_files:
             return "No buttermilk log files found in /tmp/"
-        
+
         # Get the most recent log file
         latest_log = max(log_files, key=os.path.getmtime)
-        
+
         try:
-            with open(latest_log, 'r') as f:
+            with open(latest_log, "r") as f:
                 all_lines = f.readlines()
-                return ''.join(all_lines[-lines:])
+                return "".join(all_lines[-lines:])
         except Exception as e:
             return f"Error reading log file {latest_log}: {str(e)}"
-    
+
     def list_log_files(self) -> list[dict[str, Any]]:
         """List all buttermilk log files with their metadata.
         
         Returns:
             List of log files with path, size, and modification time
         """
-        log_files = glob.glob('/tmp/buttermilk_*.log')
-        
+        log_files = glob.glob("/tmp/buttermilk_*.log")
+
         files_info = []
         for log_file in log_files:
             stat = os.stat(log_file)
@@ -89,15 +88,15 @@ class DebugAgent(Agent):
                 "modified": stat.st_mtime,
                 "modified_str": Path(log_file).stat().st_mtime
             })
-        
+
         # Sort by modification time, newest first
         files_info.sort(key=lambda x: x["modified"], reverse=True)
         return files_info
-    
+
     # WebSocket client tools
-    
+
     async def start_websocket_client(
-        self, 
+        self,
         flow_id: str,
         host: str = "localhost",
         port: int = 8000,
@@ -119,7 +118,7 @@ class DebugAgent(Agent):
                 "status": "error",
                 "message": f"Client already running for flow_id: {flow_id}"
             }
-        
+
         try:
             if use_direct_ws:
                 client = FlowTestClient(
@@ -130,22 +129,22 @@ class DebugAgent(Agent):
                     base_url=f"http://{host}:{port}",
                     ws_url=f"ws://{host}:{port}/ws"
                 )
-            
+
             await client.connect()
             self._active_clients[flow_id] = client
-            
+
             return {
                 "status": "success",
                 "message": f"Started WebSocket client for {flow_id}",
                 "session_id": client.session_id or "direct_connection"
             }
-            
+
         except Exception as e:
             return {
-                "status": "error", 
+                "status": "error",
                 "message": f"Failed to start client: {str(e)}"
             }
-    
+
     async def send_websocket_message(
         self,
         flow_id: str,
@@ -169,9 +168,9 @@ class DebugAgent(Agent):
                 "status": "error",
                 "message": f"No active client for flow_id: {flow_id}"
             }
-        
+
         client = self._active_clients[flow_id]
-        
+
         try:
             if message_type == "run_flow":
                 if not flow_name:
@@ -184,7 +183,7 @@ class DebugAgent(Agent):
                     "status": "success",
                     "message": f"Started flow {flow_name}"
                 }
-                
+
             elif message_type == "manager_response":
                 if content is None:
                     return {
@@ -196,19 +195,19 @@ class DebugAgent(Agent):
                     "status": "success",
                     "message": f"Sent response: {content}"
                 }
-                
+
             else:
                 return {
                     "status": "error",
                     "message": f"Unknown message type: {message_type}"
                 }
-                
+
         except Exception as e:
             return {
                 "status": "error",
                 "message": f"Failed to send message: {str(e)}"
             }
-    
+
     def get_websocket_messages(
         self,
         flow_id: str,
@@ -227,10 +226,10 @@ class DebugAgent(Agent):
         """
         if flow_id not in self._active_clients:
             return [{"error": f"No active client for flow_id: {flow_id}"}]
-        
+
         client = self._active_clients[flow_id]
         collector = client.collector
-        
+
         # Get messages based on type filter
         if message_type:
             if message_type == "ui_message":
@@ -247,11 +246,11 @@ class DebugAgent(Agent):
                 messages = collector.all_messages
         else:
             messages = collector.all_messages
-        
+
         # Apply last_n filter
         if last_n is not None:
             messages = messages[-last_n:]
-        
+
         # Convert to dict format
         return [
             {
@@ -263,7 +262,7 @@ class DebugAgent(Agent):
             }
             for msg in messages
         ]
-    
+
     def get_websocket_summary(self, flow_id: str) -> dict[str, Any]:
         """Get a summary of WebSocket client state and messages.
         
@@ -275,10 +274,10 @@ class DebugAgent(Agent):
         """
         if flow_id not in self._active_clients:
             return {"error": f"No active client for flow_id: {flow_id}"}
-        
+
         client = self._active_clients[flow_id]
         return client.get_message_summary()
-    
+
     async def cleanup(self) -> None:
         """Cleanup all active WebSocket clients."""
         # Clean up any active clients
@@ -289,10 +288,10 @@ class DebugAgent(Agent):
             except Exception as e:
                 logger.warning(f"Error cleaning up client {flow_id}: {e}")
         self._active_clients.clear()
-        
+
         # Call parent cleanup
         await super().cleanup()
-    
+
     async def stop_websocket_client(self, flow_id: str) -> dict[str, str]:
         """Stop and cleanup a WebSocket client.
         
@@ -307,23 +306,23 @@ class DebugAgent(Agent):
                 "status": "error",
                 "message": f"No active client for flow_id: {flow_id}"
             }
-        
+
         try:
             client = self._active_clients[flow_id]
             await client.disconnect()
             del self._active_clients[flow_id]
-            
+
             return {
                 "status": "success",
                 "message": f"Stopped client for {flow_id}"
             }
-            
+
         except Exception as e:
             return {
                 "status": "error",
                 "message": f"Error stopping client: {str(e)}"
             }
-    
+
     def list_active_clients(self) -> list[str]:
         """List all active WebSocket client IDs.
         
