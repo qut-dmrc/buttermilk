@@ -1,11 +1,10 @@
 import datetime
 from typing import Any, Protocol
 
-from buttermilk._core.config import AgentConfig, DataSourceConfig, SessionConfig
+from buttermilk._core.config import AgentConfig, SessionConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
-from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
 
 

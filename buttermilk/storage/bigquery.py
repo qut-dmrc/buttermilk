@@ -200,12 +200,12 @@ class BigQueryStorage(Storage, StorageClient):
                 existing_table = self.client.get_table(table_id)
                 existing_field_names = {field.name for field in existing_table.schema}
                 expected_field_names = {field.name for field in expected_schema}
-                
+
                 missing_fields = expected_field_names - existing_field_names
                 if missing_fields:
                     logger.info(f"Table {table_id} exists but missing fields: {missing_fields}")
-                    logger.info(f"Updating table schema to add missing fields...")
-                    
+                    logger.info("Updating table schema to add missing fields...")
+
                     # Update the table schema
                     existing_table.schema = expected_schema
                     updated_table = self.client.update_table(existing_table, ["schema"])
@@ -280,7 +280,7 @@ class BigQueryStorage(Storage, StorageClient):
         try:
             # Convert row to dictionary for easier column mapping
             row_dict = dict(row.items())
-            
+
             # Apply column mapping if specified
             if self.config.columns:
                 mapped_row = {}
@@ -291,22 +291,22 @@ class BigQueryStorage(Storage, StorageClient):
                         mapped_row[new_name] = getattr(row, old_name)
                 # Update row_dict with mapped values
                 row_dict.update(mapped_row)
-            
+
             # Parse JSON fields (handle both mapped and original names)
-            metadata_field = row_dict.get('metadata', getattr(row, 'metadata', None))
-            ground_truth_field = row_dict.get('ground_truth', getattr(row, 'ground_truth', None))
-            
+            metadata_field = row_dict.get("metadata", getattr(row, "metadata", None))
+            ground_truth_field = row_dict.get("ground_truth", getattr(row, "ground_truth", None))
+
             metadata = json.loads(metadata_field) if metadata_field else {}
             ground_truth = json.loads(ground_truth_field) if ground_truth_field else None
 
             # Create Record object using mapped fields when available
             record = Record(
-                record_id=row_dict.get('record_id', getattr(row, 'record_id', 'unknown')),
-                content=row_dict.get('content', getattr(row, 'content', '')),
+                record_id=row_dict.get("record_id", getattr(row, "record_id", "unknown")),
+                content=row_dict.get("content", getattr(row, "content", "")),
                 metadata=metadata,
                 ground_truth=ground_truth,
-                uri=row_dict.get('uri', getattr(row, 'uri', None)),
-                mime=row_dict.get('mime', getattr(row, 'mime', 'text/plain'))
+                uri=row_dict.get("uri", getattr(row, "uri", None)),
+                mime=row_dict.get("mime", getattr(row, "mime", "text/plain"))
             )
 
             return record
@@ -315,8 +315,8 @@ class BigQueryStorage(Storage, StorageClient):
             logger.warning(f"Error parsing BigQuery row {getattr(row, 'record_id', 'unknown')}: {e}")
             # Return a minimal record on parse error
             return Record(
-                record_id=getattr(row, 'record_id', 'error'),
-                content=str(getattr(row, 'content', 'Error loading content')),
+                record_id=getattr(row, "record_id", "error"),
+                content=str(getattr(row, "content", "Error loading content")),
                 metadata={"parse_error": str(e)}
             )
 

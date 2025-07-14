@@ -11,7 +11,7 @@ from .file import FileStorage
 
 __all__ = [
     "StorageConfig",
-    "Storage", 
+    "Storage",
     "BigQueryStorage",
     "FileStorage",
 ]

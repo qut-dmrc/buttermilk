@@ -420,25 +420,25 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
     """
     seen = set()
     deduplicated = []
-    
+
     for msg in messages:
         # Create a hashable identifier for the message
         # Use role, content, and source (if available) as the key
         msg_key = (
             type(msg).__name__,  # Message type (SystemMessage, UserMessage, etc.)
-            getattr(msg, 'content', ''),
-            getattr(msg, 'source', None)
+            getattr(msg, "content", ""),
+            getattr(msg, "source", None)
         )
-        
+
         if msg_key not in seen:
             seen.add(msg_key)
             deduplicated.append(msg)
         else:
             logger.debug(f"Removing duplicate message: {type(msg).__name__} with content: {getattr(msg, 'content', '')[:50]}...")
-    
+
     if len(deduplicated) < len(messages):
         logger.info(f"Removed {len(messages) - len(deduplicated)} duplicate messages from llm_messages_to_send")
-    
+
     return deduplicated
 
 

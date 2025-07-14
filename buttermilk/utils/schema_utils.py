@@ -1,11 +1,12 @@
 """Utilities for converting Pydantic models to BigQuery schemas."""
 
-from typing import Any, Dict, List, Union
+import datetime
+from typing import Dict, List, Union
+
 from google.cloud import bigquery
+from PIL.Image import Image
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
-import datetime
-from PIL.Image import Image
 
 
 def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None) -> List[bigquery.SchemaField]:
@@ -30,7 +31,7 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List
         # Skip computed fields - they're not stored
         if field_name in getattr(model_class, "model_computed_fields", {}):
             continue
-            
+
         # Skip alt_text field - it's legacy and redundant with metadata
         if field_name == "alt_text":
             continue
@@ -50,7 +51,7 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
 
     # Handle Optional types (Union[T, None] or T | None)
     is_optional = False
-    
+
     # Handle both Union[str, None] and str | None syntax
     if hasattr(field_type, "__args__") and field_type.__args__:
         args = field_type.__args__
@@ -83,15 +84,14 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     elif field_type == Image:
         # Images aren't stored directly in BigQuery
         return None
+    # For complex types like Sequence[str | Image], store as JSON if it contains strings
+    # Special case for content field - always store even if it contains images
+    elif field_name == "content":
+        bq_type = "JSON"  # Store content as JSON regardless of image presence
+    elif "Image" in str(field_type):
+        return None  # Skip other image-heavy fields
     else:
-        # For complex types like Sequence[str | Image], store as JSON if it contains strings
-        # Special case for content field - always store even if it contains images
-        if field_name == "content":
-            bq_type = "JSON"  # Store content as JSON regardless of image presence
-        elif "Image" in str(field_type):
-            return None  # Skip other image-heavy fields
-        else:
-            bq_type = "JSON"
+        bq_type = "JSON"
 
     # Determine mode
     # Special case: record_id should always be REQUIRED even though it has a default_factory

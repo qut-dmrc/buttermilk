@@ -9,14 +9,13 @@ import pydantic
 from pydantic import BaseModel, PrivateAttr  # Import Field
 from pyzotero import zotero
 
+# Import bm for credentials access
+from buttermilk._core.dmrc import get_bm
 from buttermilk._core.log import logger
+from buttermilk._core.types import Record
 
 # Import ChromaDBEmbeddings for type hinting
 from buttermilk.data.vector import ChromaDBEmbeddings
-from buttermilk._core.types import Record
-
-# Import bm for credentials access
-from buttermilk._core.dmrc import get_bm
 
 # Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
 # and causes circular import issues. If they are in the same module or structure prevents

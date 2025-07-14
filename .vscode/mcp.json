@@ -1,0 +1,8 @@
+{
+    "servers": {
+        "gh remote": {
+            "type": "sse",
+            "url": "https://api.githubcopilot.com/mcp/"
+        }
+    }
+}

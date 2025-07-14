@@ -1,12 +1,13 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken, MessageContext, DefaultTopicId, message_handler
+from autogen_core import CancellationToken, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import ToolSchema
-from pydantic import Field
+from autogen_core.tools import (
+    Tool,
+)
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -26,7 +27,6 @@ from buttermilk._core.contract import (
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.tool_definition import AgentToolDefinition
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -53,18 +53,15 @@ class HostAgent(Agent):
         self._step_starting: asyncio.Event = asyncio.Event()
         self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._participants: dict[str, Any] = {}
-        self._participant_tools: dict[str, list[dict[str, Any]]] = {}
         self._conductor_task: asyncio.Task | None = None
 
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
-        self._tool_registry: dict[str, list[str]] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
 
         # Tool schemas for LLM-based hosts
-        self._tools: list[ToolSchema] = []
+        self._tools: list[Tool] = []
         self._proposed_step: asyncio.Queue[StepRequest] = asyncio.Queue()
-        self._registry_summary_cache: dict[str, Any] | None = None
         self._current_step: str = ""
 
         # User confirmation attributes
@@ -86,37 +83,35 @@ class HostAgent(Agent):
         
         Must be explicitly configured in parameters - no defaults allowed.
         """
-        if 'human_in_loop' not in self.parameters:
+        if "human_in_loop" not in self.parameters:
             raise ValueError(f"Host agent '{self.agent_name}': 'human_in_loop' must be explicitly set in parameters")
-        return self.parameters['human_in_loop']
+        return self.parameters["human_in_loop"]
 
     @human_in_loop.setter
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
-        self.parameters['human_in_loop'] = value
-
-    async def _publish(self, message: Any) -> None:
-        """Publish a message to the group chat."""
-        if hasattr(self, '_runtime') and self._runtime:
-            await self.publish_message(message, topic_id=DefaultTopicId(type="default"))
-        else:
-            logger.warning(f"Host {self.agent_name} has no runtime to publish message: {type(message).__name__}")
+        self.parameters["human_in_loop"] = value
 
     @message_handler
-    async def handle_conductor_request(
+    async def handle_conductor_request(  # type: ignore
         self,
         message: ConductorRequest,
         ctx: MessageContext,
     ) -> None:
         """Handle ConductorRequest to start the flow."""
+        await super().handle_conductor_request(message, ctx)
+
         logger.info(
             f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
-            f"with {len(message.participants)} participants: {list(message.participants.keys())}"
+            f"with {len(message.participants)} participants: {list(message.participants.keys())}",
         )
 
-        if hasattr(self, '_conductor_task') and self._conductor_task and self._conductor_task != "starting" and not self._conductor_task.done():
+        if hasattr(self, "_conductor_task") and self._conductor_task:
             logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
             return
+
+        # Store the participants from the message
+        self._participants = dict(message.participants)
 
         self._conductor_task = "starting"  # Mark as starting to avoid re-entrance
         logger.debug(f"[HostAgent.handle_conductor_request] Host {self.agent_name} starting new conductor task")
@@ -145,7 +140,7 @@ class HostAgent(Agent):
                 self._tasks_condition.notify_all()
             else:
                 logger.warning(
-                    f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks."
+                    f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks.",
                 )
 
     @message_handler
@@ -175,19 +170,6 @@ class HostAgent(Agent):
         # Do nothing with progress updates received by the host
 
     @message_handler
-    async def handle_agent_announcement(
-        self,
-        message: AgentAnnouncement,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle AgentAnnouncement messages."""
-        logger.info(
-            f"Host {self.agent_name} received AgentAnnouncement from {message.agent_config.agent_id}: "
-            f"{message.announcement_type} - {message.status}"
-        )
-        await self.update_agent_registry(message)
-
-    @message_handler
     async def handle_agent_trace(
         self,
         message: AgentTrace,
@@ -196,7 +178,7 @@ class HostAgent(Agent):
         """Handle AgentTrace messages and add to conversation history."""
         content_to_log = str(message.content)[:TRUNCATE_LEN]
         await self._model_context.add_message(
-            AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+            AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else ""),
         )
 
     @message_handler
@@ -212,7 +194,7 @@ class HostAgent(Agent):
 
         if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
             logger.info(
-                f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})"
+                f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})",
             )
             self.human_in_loop = message.human_in_loop
 
@@ -223,78 +205,40 @@ class HostAgent(Agent):
             self._user_feedback.append(content)
             # Add to conversation history
             await self._model_context.add_message(
-                UserMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else "")
+                UserMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else ""),
             )
 
     # --- Agent Registry Methods ---
 
-    async def update_agent_registry(self, announcement: AgentAnnouncement) -> None:
+    @message_handler
+    async def update_agent_registry(
+        self,
+        message: AgentAnnouncement,
+        ctx: MessageContext,
+    ) -> None:
         """Update registry with agent announcement.
         
         Thread-safe update of agent registry.
         
         Args:
             announcement: The agent announcement to process.
+
         """
         async with self._registry_lock:
-            agent_id = announcement.agent_config.agent_id
+            agent_id = message.agent_config.agent_id
+            role = message.agent_config.role.upper()  # Normalize to uppercase
 
-            if announcement.status == "leaving":
-                # Remove agent from registry
-                self._agent_registry.pop(agent_id, None)
-                # Remove from tool registry and clean up empty entries
-                for tool, agent_list in list(self._tool_registry.items()):
-                    if agent_id in agent_list:
-                        agent_list.remove(agent_id)
-                        if not agent_list:  # Remove empty tool entries
-                            del self._tool_registry[tool]
-                logger.info(f"Host {self.agent_name} removed agent {agent_id} from registry")
+            if message.status == "leaving":
+                logger.warning(f"Host {self.agent_name} received notification to remove agent {agent_id}, but functionality is not implemented.")
             else:
                 # Add or update agent in registry
-                self._agent_registry[agent_id] = announcement
+                self._agent_registry[agent_id] = message
                 # Update tool registry
-                for tool in announcement.available_tools:
-                    if tool not in self._tool_registry:
-                        self._tool_registry[tool] = []
-                    if agent_id not in self._tool_registry[tool]:
-                        self._tool_registry[tool].append(agent_id)
-                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {announcement.available_tools}")
+                self._tools.extend(message.tool_definitions)
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {[tool.name for tool in message.tool_definitions]}")
 
             # Invalidate cache
             self._registry_summary_cache = None
-
-        # Rebuild tool schemas when agents announce (for LLM-based hosts)
-        await self._build_agent_tools()
-
-    async def _build_agent_tools(self) -> None:
-        """Build tool objects from agent-provided tool definitions.
-        
-        This method collects tool objects from agents for LLM-based decision making.
-        All tool definitions should already be AgentToolDefinition objects.
-        """
-        tool_objects = []
-
-        # Collect tool objects from agent announcements
-        for agent_id, announcement in self._agent_registry.items():
-            agent_role = announcement.agent_config.role
-
-            if tool_def := announcement.tool_definition:
-                # Should always be a Tool object (AgentToolDefinition)
-                if hasattr(tool_def, 'schema') and hasattr(tool_def, 'run_json'):
-                    # It's a Tool object, store it directly
-                    tool_objects.append(tool_def)
-                    logger.debug(f"Registered tool object: {tool_def.name} for {agent_role}")
-                else:
-                    # This shouldn't happen with the new architecture
-                    logger.error(f"Expected Tool object but got {type(tool_def)} for {agent_role}")
-
-        # Store tool objects for LLM-based hosts
-        self._tools = tool_objects
-
-        logger.info(
-            f"Host {self.agent_name} collected {len(tool_objects)} tool objects "
-            f"from {len(self._agent_registry)} agents"
-        )
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
@@ -303,6 +247,7 @@ class HostAgent(Agent):
         
         Returns:
             dict: Summary containing active agents, available tools, and counts.
+
         """
         # Return cached summary if available
         if self._registry_summary_cache is not None:
@@ -315,25 +260,25 @@ class HostAgent(Agent):
                 "role": announcement.agent_config.role,
                 "description": announcement.agent_config.description,
                 "tools": announcement.available_tools,
-                "model": announcement.agent_config.parameters.get("model") if announcement.agent_config.parameters else None
+                "model": announcement.agent_config.parameters.get("model") if announcement.agent_config.parameters else None,
             }
             active_agents.append(agent_info)
 
         summary = {
             "active_agents": active_agents,
-            "available_tools": dict(self._tool_registry),
-            "total_agents": len(self._agent_registry)
+            "total_agents": len(self._agent_registry),
         }
 
         # Cache the summary
         self._registry_summary_cache = summary
         return summary
 
+    # TODO: convert this to a handler for a command message
     def create_ui_message_with_registry(
         self,
         content: str,
         options: bool | list[str] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> UIMessage:
         """Create a UI message that includes the agent registry summary.
         
@@ -344,16 +289,15 @@ class HostAgent(Agent):
             
         Returns:
             UIMessage: UI message with registry summary.
+
         """
         registry_summary = self.create_registry_summary()
         return UIMessage(
             content=content,
             options=options,
             agent_registry_summary=registry_summary,
-            **kwargs
+            **kwargs,
         )
-
-
 
     async def request_user_confirmation(self, step: StepRequest) -> None:
         """Request confirmation from the user for the next step.
@@ -428,7 +372,6 @@ class HostAgent(Agent):
                             waiting_on=dict(),
                             message="Flow currently idle",
                         )
-                    logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
                     await self._publish(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
@@ -484,27 +427,27 @@ class HostAgent(Agent):
             step_parameters = {}
 
             # Add initial query/prompt if available
-            if hasattr(self, '_initial_query') and self._initial_query:
-                step_inputs['query'] = self._initial_query
-                step_inputs['prompt'] = self._initial_query
+            if hasattr(self, "_initial_query") and self._initial_query:
+                step_inputs["query"] = self._initial_query
+                step_inputs["prompt"] = self._initial_query
 
             # Add any parameters from the initial inputs
-            if hasattr(self, '_initial_inputs') and isinstance(self._initial_inputs, dict):
+            if hasattr(self, "_initial_inputs") and isinstance(self._initial_inputs, dict):
                 # Extract parameters from the initial inputs
-                if 'parameters' in self._initial_inputs:
-                    step_parameters.update(self._initial_inputs['parameters'])
+                if "parameters" in self._initial_inputs:
+                    step_parameters.update(self._initial_inputs["parameters"])
 
                 # Also check for direct prompt in initial inputs
-                if 'prompt' in self._initial_inputs and 'prompt' not in step_inputs:
-                    step_inputs['prompt'] = self._initial_inputs['prompt']
-                if 'query' in self._initial_inputs and 'query' not in step_inputs:
-                    step_inputs['query'] = self._initial_inputs['query']
+                if "prompt" in self._initial_inputs and "prompt" not in step_inputs:
+                    step_inputs["prompt"] = self._initial_inputs["prompt"]
+                if "query" in self._initial_inputs and "query" not in step_inputs:
+                    step_inputs["query"] = self._initial_inputs["query"]
 
             yield StepRequest(
-                role=role, 
+                role=role,
                 content=step_description,
                 inputs=step_inputs,
-                parameters=step_parameters
+                parameters=step_parameters,
             )
         yield StepRequest(role=END, content="Sequence completed.")
 
@@ -524,9 +467,6 @@ class HostAgent(Agent):
         try:
             logger.info(f"Host {self.agent_name} starting flow execution.")
 
-            # Initialize participants from the request
-            logger.debug(f"Host {self.agent_name} updating participants from ConductorRequest: {message.participants}")
-            self._participants.update(message.participants)
             logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
             if not self._participants:
                 msg = "Host received ConductorRequest with no participants."
@@ -535,17 +475,23 @@ class HostAgent(Agent):
                 await self._publish(StepRequest(role=END, content=msg))
                 raise FatalError(msg)
 
-            # Store participant tools if provided
-            if hasattr(message, 'participant_tools'):
-                self._participant_tools = message.participant_tools
-                logger.debug(f"Host {self.agent_name} received tool definitions for {len(self._participant_tools)} participants")
+            # Store additional tools if provided
+            self._tools.extend(message.additional_tools)
+
+            # Announce, and trigger agents to announce themselves
+            msg = AgentAnnouncement(
+                content="Host joining",
+                agent_config=self._config,
+                announcement_type="initial",
+            )
+            await self._publish(msg)
 
             # Extract initial query/prompt from ConductorRequest if available
             # Parse inputs using the typed model for cleaner extraction
             from buttermilk._core.contract import HostInputModel
 
             # Store the raw inputs for backward compatibility
-            self._initial_inputs = message.inputs if hasattr(message, 'inputs') else {}
+            self._initial_inputs = message.inputs if hasattr(message, "inputs") else {}
 
             try:
                 # Parse inputs into our typed model
@@ -555,23 +501,16 @@ class HostAgent(Agent):
                     host_inputs = HostInputModel()
 
                 # Extract fields cleanly
-                self._initial_query = host_inputs.initial_query
-                self._initial_parameters = host_inputs.parameters
+                self._initial_query = host_inputs.initial_query or ""
+                self._initial_parameters = host_inputs.parameters or {}
 
-                if self._initial_query:
-                    logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}...")
-
-                if self._initial_parameters:
-                    logger.debug(f"Host {self.agent_name} extracted parameters: {list(self._initial_parameters.keys())}")
+                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}, parameters: {list(self._initial_parameters.keys())}")
 
             except Exception as e:
                 # If parsing fails, fall back to empty values
                 logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
                 self._initial_query = None
                 self._initial_parameters = {}
-
-            # Rerun initialization to set up the group chat
-            await self.initialize()
 
             # Start the periodic progress reporter task
             self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
@@ -635,7 +574,7 @@ class HostAgent(Agent):
         if self._step_generator:
             await self._step_generator.aclose()
         if self._tasks_condition:
-            await self._tasks_condition.release()
+            self._tasks_condition.release()
             # Ensure the progress reporter task is cancelled when the wait finishes or times out
             if self._progress_reporter_task:
                 self._progress_reporter_task.cancel()
@@ -696,7 +635,7 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AgentOutput:
-        """Process messages. 
+        """Process messages.
         
         Base implementation returns an error since non-LLM hosts don't process direct inputs.
         Subclasses that support LLM-based processing should override this method.
@@ -716,66 +655,32 @@ class HostAgent(Agent):
         import json
 
         for call in tool_calls:
-            # Find which agent handles this tool
-            agent_role = None
 
             # First check if it's a participant "ask_" tool
-            if call.name.startswith("ask_"):
-                # Extract role from tool name (e.g., "ask_zotero_researcher" -> "ZOTERO_RESEARCHER")
-                role_part = call.name[4:].upper()  # Remove "ask_" prefix and uppercase
-                # Check if this role exists in our participants
-                for participant_role in self._participants:
-                    if participant_role.upper() == role_part:
-                        agent_role = participant_role
-                        break
+            if call.name.endswith("_call"):
+                # Extract role from tool name (e.g., "zotero_researcher_call" -> "ZOTERO_RESEARCHER")
+                role_part = call.name[:-5].upper()  # Remove "_call" suffix and uppercase
+                # Parse the arguments
+                try:
+                    arguments = json.loads(call.arguments)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                    continue
 
-            # If not found, check agent announcements for explicit tool definitions
-            if not agent_role:
-                for agent_id, announcement in self._agent_registry.items():
-                    tool_def = announcement.tool_definition
-                    if tool_def and hasattr(tool_def, 'name'):
-                        # It's a Tool object (AgentToolDefinition)
-                        if tool_def.name == call.name:
-                            agent_role = announcement.agent_config.role
-                            break
-
-            if not agent_role:
-                logger.warning(f"No agent found for tool: {call.name}")
-                continue
-
-            # Parse the arguments
-            try:
-                arguments = json.loads(call.arguments)
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse tool arguments: {call.arguments}")
-                continue
-
-            # Handle "ask_" tools specially - extract the request content
-            if call.name.startswith("ask_") and "request" in arguments:
-                # For ask_ tools, the content is in the "request" field
                 step_request = StepRequest(
-                    role=agent_role,
-                    content=arguments["request"],
-                    metadata={"tool_name": call.name, "tool_call_id": call.id}
-                )
-            else:
-                # For other tools, pass arguments as inputs
-                step_request = StepRequest(
-                    role=agent_role,
-                    inputs=arguments,
-                    metadata={"tool_name": call.name, "tool_call_id": call.id}
-                )
+                    role=role_part, inputs=arguments,
+                    metadata={"tool_name": call.name, "tool_call_id": call.id})
 
-            # Create a more descriptive log message
-            tool_desc = self._describe_tool_call(call.name, arguments)
-            logger.info(f"Host routing to {agent_role}: {tool_desc}")
+                # Create a more descriptive log message
+                tool_desc = self._describe_tool_call(call.name, arguments)
+                logger.info(f"Host routing to {role_part}: {tool_desc}")
 
-            # Queue it if we have a queue
-            if hasattr(self, '_proposed_step'):
-                await self._proposed_step.put(step_request)
-
-            # Send it out regardless
-            await self._publish(step_request)
+                if self.human_in_loop:
+                    await self._proposed_step.put(step_request)
+                else:
+                    # If human_in_loop is False, we send the step request directly
+                    logger.info(f"Host {self.agent_name} routing tool call to agent {role_part}: {step_request}")
+                    await self._publish(step_request)
 
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
@@ -786,32 +691,31 @@ class HostAgent(Agent):
             
         Returns:
             str: A human-readable description
+
         """
         # Common patterns for better descriptions
         if "query" in arguments:
             query = str(arguments["query"])
             return f"{tool_name}('{query[:40]}{'...' if len(query) > 40 else ''}')"
-        elif "message" in arguments:
+        if "message" in arguments:
             msg = str(arguments["message"])
             return f"{tool_name}('{msg[:40]}{'...' if len(msg) > 40 else ''}')"
-        elif "content" in arguments:
+        if "content" in arguments:
             content = str(arguments["content"])
             return f"{tool_name}('{content[:40]}{'...' if len(content) > 40 else ''}')"
-        elif "target" in arguments:
+        if "target" in arguments:
             return f"{tool_name}(target='{arguments['target']}')"
-        elif "inputs" in arguments and isinstance(arguments["inputs"], dict):
+        if "inputs" in arguments and isinstance(arguments["inputs"], dict):
             # Handle nested inputs
             if "query" in arguments["inputs"]:
                 query = str(arguments["inputs"]["query"])
                 return f"{tool_name}(query='{query[:30]}{'...' if len(query) > 30 else ''}')"
-            else:
-                return f"{tool_name}({len(arguments['inputs'])} inputs)"
-        else:
-            # Show first meaningful argument
-            for key, value in arguments.items():
-                if key not in ["metadata", "context", "options"]:
-                    val_str = str(value)
-                    return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
+            return f"{tool_name}({len(arguments['inputs'])} inputs)"
+        # Show first meaningful argument
+        for key, value in arguments.items():
+            if key not in ["metadata", "context", "options"]:
+                val_str = str(value)
+                return f"{tool_name}({key}='{val_str[:30]}{'...' if len(val_str) > 30 else ''}')"
 
-            # Fallback
-            return f"{tool_name}({len(arguments)} args)"
+        # Fallback
+        return f"{tool_name}({len(arguments)} args)"

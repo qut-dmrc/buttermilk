@@ -1,6 +1,6 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
+import { error, json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
 // Mock record data based on the API spec for fallback
 const MOCK_RECORDS: Record<string, any> = {
@@ -85,7 +85,7 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
   }
   
   // Get backend base URL from environment or use default
-  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8080';
+  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
   
   try {
     // Create headers for the backend request

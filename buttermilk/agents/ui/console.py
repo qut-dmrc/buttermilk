@@ -8,7 +8,7 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import CancellationToken  # Autogen types (used by base Agent)
+from autogen_core import CancellationToken, MessageContext, message_handler  # Autogen types (used by base Agent)
 from pydantic import PrivateAttr
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
@@ -18,14 +18,15 @@ from rich.text import Text
 from buttermilk import logger
 
 # Import base agent and specific message types used
-from buttermilk._core.agent import AgentInput, OOBMessages
+from buttermilk._core.agent import AgentInput
 from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentAnnouncement,  # Agent announcement messages
+    AgentOutput,
     AgentTrace,
     FlowMessage,  # Base type for messages
-    GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
+    OOBMessages,
     TaskProcessingComplete,  # Status updates
     TaskProcessingStarted,  # Task start notifications (to be filtered)
     ToolOutput,  # Potentially displayable tool output
@@ -80,6 +81,7 @@ AGENT_ICONS = {
     "manager": "👤",
 }
 
+
 def get_model_color(message) -> str:
     """Get color for agent based on model (matching frontend logic)"""
     if hasattr(message, "agent_info") and message.agent_info:
@@ -91,22 +93,23 @@ def get_model_color(message) -> str:
                     if model_name in model_lower:
                         # Convert hex colors to rich color names
                         if color == "#10a37f": return "green"
-                        elif color == "#1f85de": return "blue"
-                        elif color == "#00d4aa": return "cyan"
-                        elif color == "#ff6b35": return "bright_red"
-                        elif color == "#4285f4": return "bright_blue"
-                        elif color == "#0866ff": return "blue"
-                        elif color == "#3498db": return "bright_cyan"
+                        if color == "#1f85de": return "blue"
+                        if color == "#00d4aa": return "cyan"
+                        if color == "#ff6b35": return "bright_red"
+                        if color == "#4285f4": return "bright_blue"
+                        if color == "#0866ff": return "blue"
+                        if color == "#3498db": return "bright_cyan"
 
     # Fallback to role-based coloring
     if hasattr(message, "agent_info") and message.agent_info:
         agent_name = getattr(message.agent_info, "agent_name", "").lower()
         if "judge" in agent_name: return "bright_red"
-        elif "scorer" in agent_name: return "bright_yellow"
-        elif "assistant" in agent_name: return "bright_blue"
-        elif "researcher" in agent_name: return "bright_cyan"
+        if "scorer" in agent_name: return "bright_yellow"
+        if "assistant" in agent_name: return "bright_blue"
+        if "researcher" in agent_name: return "bright_cyan"
 
     return "dim white"
+
 
 def get_agent_name(message, source: str) -> str:
     """Extract agent name from message, preferring agent_info.agent_name"""
@@ -119,6 +122,7 @@ def get_agent_name(message, source: str) -> str:
     agent_id = getattr(message, "agent_id", source or "unknown")
     return agent_id
 
+
 def get_agent_icon(agent_id: str) -> str:
     """Get icon for agent based on name/type"""
     agent_lower = agent_id.lower()
@@ -126,6 +130,7 @@ def get_agent_icon(agent_id: str) -> str:
         if agent_type in agent_lower:
             return icon
     return "💬"
+
 
 def get_model_tag(message) -> str:
     """Extract model identifier from message"""
@@ -136,23 +141,24 @@ def get_model_tag(message) -> str:
                 model_lower = model.lower()
                 if "gpt-4" in model_lower or "gpt4" in model_lower:
                     return "GPT4"
-                elif "gpt-3" in model_lower:
+                if "gpt-3" in model_lower:
                     return "GPT3"
-                elif "o3" in model_lower:
+                if "o3" in model_lower:
                     return "O3"
-                elif "sonnet" in model_lower:
+                if "sonnet" in model_lower:
                     return "SNNT"
-                elif "opus" in model_lower:
+                if "opus" in model_lower:
                     return "OPUS"
-                elif "haiku" in model_lower:
+                if "haiku" in model_lower:
                     return "HAIK"
-                elif "claude" in model_lower:
+                if "claude" in model_lower:
                     return "CLDE"
-                elif "gemini" in model_lower:
+                if "gemini" in model_lower:
                     return "GEMN"
-                elif "llama" in model_lower:
+                if "llama" in model_lower:
                     return "LLMA"
     return ""
+
 
 def format_timestamp() -> str:
     """Format current time as HH:MM:SS for IRC-style display"""
@@ -190,6 +196,8 @@ class CLIUserAgent(UIAgent):
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
+    # Store the last UIMessage with options for proper confirmation handling
+    _last_confirmation_options: list[str] | None = PrivateAttr(default=None)
 
     async def callback_to_ui(self, message, source: str = "system", **kwargs):
         if formatted_msg := self._fmt_msg(message, source=source):
@@ -235,6 +243,7 @@ class CLIUserAgent(UIAgent):
 
         Returns:
             A Rich Text object ready for printing, or None if the message is not formatted.
+
         """
         try:
             # Extract agent information
@@ -252,7 +261,7 @@ class CLIUserAgent(UIAgent):
                 display_name = agent_name
                 if model_tag:
                     display_name = f"{display_name}[{model_tag}]"
-            
+
             # Apply UI-specific formatting (ljust for console alignment)
             agent_display = display_name[:16].ljust(16)
 
@@ -340,7 +349,7 @@ class CLIUserAgent(UIAgent):
                 # Format agent announcements
                 ann_type = getattr(message, "announcement_type", "unknown")
                 status = getattr(message, "status", "unknown")
-                
+
                 # Choose icon and color based on announcement type and status
                 if ann_type == "initial":
                     icon = "🆕"
@@ -354,28 +363,28 @@ class CLIUserAgent(UIAgent):
                 else:
                     icon = "📢"
                     color = "white"
-                
+
                 result.append(f"{icon} ", style=color)
                 result.append(f"[{status.upper()}] ", style=color)
-                
+
                 # Show agent role and tools
                 if hasattr(message, "agent_config") and message.agent_config:
                     role = getattr(message.agent_config, "role", "UNKNOWN")
                     result.append(f"{role} ", style="bold")
-                
+
                 # Show available tools if any
                 tools = getattr(message, "available_tools", [])
                 if tools:
                     tools_str = ", ".join(tools[:3])  # Show first 3 tools
                     if len(tools) > 3:
-                        tools_str += f" +{len(tools)-3}"
+                        tools_str += f" +{len(tools) - 3}"
                     result.append(f"[{tools_str}] ", style="dim cyan")
-                
+
                 # Show content
                 content = getattr(message, "content", "")
                 if content:
                     result.append(content[:100], style="white")
-                
+
                 content_added = True
 
             elif isinstance(message, UIMessage):
@@ -385,54 +394,87 @@ class CLIUserAgent(UIAgent):
                     # Special formatting for agent registry display
                     result.append("📋 AGENTS: ", style="bright_yellow")
                     result.append(f"{len(registry)} active", style="white")
-                    
+
                     # If content is "!agents" or similar, show detailed list
                     content = getattr(message, "content", "")
                     if "!agents" in content.lower() or "agent" in content.lower():
                         # Add line break for detailed view
                         result.append("\n", style="")
-                        
+
                         # Show each agent in registry
                         for agent_id, info in list(registry.items())[:5]:  # Show first 5
                             role = info.get("role", "UNKNOWN")
                             status = info.get("status", "unknown")
                             tools = info.get("tools", [])
                             model = info.get("model", "")
-                            
+
                             # Indent for sub-items
                             result.append(" " * 25 + "├ ", style="dim")
-                            
+
                             # Agent icon and name
                             agent_icon = get_agent_icon(role)
                             result.append(f"{agent_icon} {role}", style="bold white")
-                            
+
                             # Status indicator
                             status_color = "green" if status == "active" else "yellow"
                             result.append(f" [{status}]", style=status_color)
-                            
+
                             # Model tag if available
                             if model:
-                                model_tag = get_model_tag(type('obj', (), {'agent_info': type('info', (), {'parameters': type('params', (), {'model': model})})})())
+                                model_tag = get_model_tag(type("obj", (), {"agent_info": type("info", (), {"parameters": type("params", (), {"model": model})})})())
                                 if model_tag:
                                     result.append(f" {model_tag}", style="dim")
-                            
+
                             # Tools summary
                             if tools:
                                 tools_str = f" ({len(tools)} tools)"
                                 result.append(tools_str, style="dim cyan")
-                            
+
+                            result.append("\n", style="")
+
+                        if len(registry) > 5:
+                            result.append(" " * 25 + f"└ ... and {len(registry) - 5} more\n", style="dim")
+                else:
+                    # Check if this is a confirmation request with options
+                    options = getattr(message, "options", None)
+                    content = getattr(message, "content", "")
+                    
+                    if isinstance(options, list) and options:
+                        # Confirmation request with multiple choice options
+                        result.append("🔔 ", style="bright_yellow")
+                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(content, style="bright_white")
+                        
+                        # Display options in a neat format
+                        result.append("\n", style="")
+                        result.append(" " * 25 + "┌─ Options ─────────────\n", style="dim")
+                        
+                        for i, option in enumerate(options):
+                            option_key = option[0].upper() if option else str(i+1)
+                            result.append(" " * 25 + "│ ", style="dim")
+                            result.append(f"[{option_key}] ", style="bold cyan")
+                            result.append(f"{option}", style="white")
                             result.append("\n", style="")
                         
-                        if len(registry) > 5:
-                            result.append(" " * 25 + f"└ ... and {len(registry)-5} more\n", style="dim")
-                else:
-                    # Standard UIMessage formatting
-                    result.append("REQ: ", style="bright_yellow")
-                    content = getattr(message, "content", "")
-                    content_preview = content[:150].replace("\n", " ") if content else "No content"
-                    result.append(content_preview, style="white")
-                    if len(content) > 150:
-                        result.append("...", style="dim")
+                        result.append(" " * 25 + "└───────────────────────", style="dim")
+                        result.append("\n" + " " * 25 + "  ", style="")
+                        result.append("Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        
+                    elif options is True:
+                        # Simple Yes/No confirmation
+                        result.append("🔔 ", style="bright_yellow")
+                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(content, style="bright_white")
+                        result.append("\n" + " " * 25 + "  ", style="")
+                        result.append("[Y/n] Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        
+                    else:
+                        # Standard UIMessage formatting
+                        result.append("REQ: ", style="bright_yellow")
+                        content_preview = content[:150].replace("\n", " ") if content else "No content"
+                        result.append(content_preview, style="white")
+                        if len(content) > 150:
+                            result.append("...", style="dim")
                 content_added = True
 
             elif isinstance(message, TaskProcessingStarted):
@@ -484,18 +526,40 @@ class CLIUserAgent(UIAgent):
             error_text.append(f"Failed to format {type(message).__name__}: {str(e)[:100]}", style="red")
             return error_text
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken | None = None,
-        source: str = "",
-        public_callback: Callable | None = None,  # Usually unused by UI agent in listen
-        **kwargs,
-    ) -> None:
-        """Displays messages received from other agents on the console."""
-        logger.debug(f"{self.agent_name} received message from {source} via _listen.")
-        # Format and display the message using the helper function.
+    # Override individual message handlers to display messages
+    @message_handler
+    async def handle_record(self, message: Record, ctx: MessageContext) -> None:
+        """Handle Record messages by displaying them."""
+        await super().handle_record(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+        """Handle AgentOutput messages by displaying them."""
+        await super().handle_agent_output(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_agent_trace(self, message: AgentTrace, ctx: MessageContext) -> None:
+        """Handle AgentTrace messages by displaying them."""
+        await super().handle_agent_trace(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_manager_message(self, message: ManagerMessage, ctx: MessageContext) -> None:
+        """Handle ManagerMessage messages by displaying them."""
+        await super().handle_manager_message(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        await self.callback_to_ui(message, source=source)
+
+    @message_handler
+    async def handle_tool_output(self, message: ToolOutput, ctx: MessageContext) -> None:
+        """Handle ToolOutput messages by displaying them."""
+        await super().handle_tool_output(message, ctx)
+        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     async def _handle_events(
@@ -512,12 +576,20 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, TaskProcessingStarted):
             # Skip all TaskProcessingStarted messages
             return None
-        elif isinstance(message, TaskProcessingComplete):
+        if isinstance(message, TaskProcessingComplete):
             if getattr(message, "is_error", False):
                 # Only show failed tasks
                 if formatted_msg := self._fmt_msg(message, source=source):
                     self._console.print(formatted_msg)
         elif isinstance(message, (UIMessage, ToolOutput, AgentAnnouncement)):
+            if isinstance(message, UIMessage):
+                # Store options if this is a confirmation request
+                options = getattr(message, "options", None)
+                if isinstance(options, list) and options:
+                    self._last_confirmation_options = options
+                else:
+                    self._last_confirmation_options = None
+            
             if formatted_msg := self._fmt_msg(message, source=source):
                 self._console.print(formatted_msg)
         else:
@@ -540,7 +612,7 @@ class CLIUserAgent(UIAgent):
 
                 # Handle special commands
                 input_lower = user_input.strip().lower()
-                
+
                 # Handle exit command
                 if input_lower == "exit":
                     logger.info("User requested exit.")
@@ -551,28 +623,60 @@ class CLIUserAgent(UIAgent):
                     # Send a special message via callback?
                     # await self.callback_to_groupchat(ManagerMessage(confirm=False, prompt="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
-                
+
                 # Handle agent list command
-                elif input_lower in ["!agents", "!list", "!who"]:
+                if input_lower in ["!agents", "!list", "!who"]:
                     logger.info("User requested agent list.")
                     # Send a special message requesting agent list
                     response = ManagerMessage(
-                        confirm=False, 
-                        interrupt=False, 
+                        confirm=False,
+                        interrupt=False,
                         content="!agents",
-                        request_agent_list=True  # Special flag for agent list request
+                        request_agent_list=True,  # Special flag for agent list request
                     )
                     await self.callback_to_groupchat(response)
                     continue
 
                 # Handle confirmation/negation based on input
                 cleaned_input = re.sub(r"\W", "", user_input).lower()
-                is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q"]
+                is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q", "reject", "r"]
                 is_confirmation = not user_input.strip()  # Empty line confirms
+                
+                # Check if input matches an option (if we have options stored)
+                selected_option = None
+                if self._last_confirmation_options and user_input.strip():
+                    # Check for single letter match (first letter of option)
+                    for option in self._last_confirmation_options:
+                        if option and (
+                            user_input.strip().lower() == option[0].lower() or  # First letter match
+                            user_input.strip().lower() == option.lower()  # Full option match
+                        ):
+                            selected_option = option
+                            break
+                    
+                    # For confirm/reject options, map common responses
+                    if self._last_confirmation_options == ["confirm", "reject"]:
+                        if user_input.strip().lower() in ["y", "yes", "c", "confirm"]:
+                            selected_option = "confirm"
+                        elif user_input.strip().lower() in ["n", "no", "r", "reject"]:
+                            selected_option = "reject"
 
-                if is_negation:
+                if selected_option:
+                    # User selected a specific option
+                    logger.info(f"User selected option: {selected_option}")
+                    is_confirm = selected_option.lower() in ["confirm", "yes", "y", "accept", "ok"]
+                    response = ManagerMessage(
+                        confirm=is_confirm,
+                        interrupt=False,
+                        content=selected_option
+                    )
+                    self._last_confirmation_options = None  # Clear stored options
+                    current_prompt_lines = []  # Reset prompt buffer
+                    await self.callback_to_groupchat(response)
+                elif is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerMessage(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
+                    response = ManagerMessage(confirm=False, interrupt=False, content="reject")
+                    self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
                 elif is_confirmation:
@@ -584,8 +688,9 @@ class CLIUserAgent(UIAgent):
                         response = ManagerMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
                     else:
                         logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = ManagerMessage(confirm=True, interrupt=False, content=None)
+                        response = ManagerMessage(confirm=True, interrupt=False, content="confirm")
 
+                    self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
                 else:
@@ -632,6 +737,7 @@ class CLIUserAgent(UIAgent):
         # Initialize the console and set up the input task.
         logger.debug(f"Initializing {self.agent_name}...")
         self.callback_to_groupchat = callback_to_groupchat
+        self._last_confirmation_options = None  # Clear any stored options on init
         # Ensure any existing task is cancelled before starting a new one (e.g., on reset)
         if self._input_task and not self._input_task.done():
             self._input_task.cancel()

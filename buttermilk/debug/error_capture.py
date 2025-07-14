@@ -5,13 +5,12 @@ Flow-agnostic error capture and analysis system for buttermilk debugging.
 Provides detailed error context, stack traces, and type checking diagnostics.
 """
 
-import inspect
 import sys
 import traceback
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional, Callable, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +19,7 @@ from buttermilk._core.log import logger
 
 class ErrorContext(BaseModel):
     """Structured error context information."""
-    
+
     timestamp: str = Field(description="Error timestamp")
     error_type: str = Field(description="Error class name")
     error_message: str = Field(description="Error message")
@@ -37,7 +36,7 @@ class TypeCheckingDiagnostics:
     """
     Diagnostics for type checking issues, especially subscripted generics errors.
     """
-    
+
     @staticmethod
     def check_isinstance_calls(obj: Any, target_type: Any) -> Dict[str, Any]:
         """
@@ -68,7 +67,7 @@ class TypeCheckingDiagnostics:
                 "error": str(e),
                 "is_subscripted_generic": "Subscripted generics" in str(e)
             }
-    
+
     @staticmethod
     def fix_subscripted_isinstance(target_type: Any) -> Any:
         """
@@ -81,20 +80,20 @@ class TypeCheckingDiagnostics:
             Non-subscripted version safe for isinstance
         """
         import typing
-        
+
         # Handle common subscripted generics
         origin = getattr(target_type, "__origin__", None)
         if origin is not None:
             return origin
-        
+
         # Handle Union types
         if hasattr(typing, "get_origin") and typing.get_origin(target_type) is Union:
             args = typing.get_args(target_type)
             return tuple(TypeCheckingDiagnostics.fix_subscripted_isinstance(arg) for arg in args)
-        
+
         # Return as-is if not subscripted
         return target_type
-    
+
     @staticmethod
     def safe_isinstance(obj: Any, target_type: Any) -> bool:
         """
@@ -126,7 +125,7 @@ class ErrorCapture:
     """
     Flow-agnostic error capture system for debugging runtime issues.
     """
-    
+
     def __init__(self, capture_locals: bool = True, max_local_length: int = 200):
         """
         Initialize error capture system.
@@ -138,10 +137,10 @@ class ErrorCapture:
         self.capture_locals = capture_locals
         self.max_local_length = max_local_length
         self.captured_errors: List[ErrorContext] = []
-    
+
     def capture_error(
-        self, 
-        error: Exception, 
+        self,
+        error: Exception,
         context: Optional[Dict[str, Any]] = None
     ) -> ErrorContext:
         """
@@ -157,13 +156,13 @@ class ErrorCapture:
         tb = error.__traceback__
         if tb is None:
             tb = sys.exc_info()[2]
-        
+
         # Get the last frame in the traceback
         while tb.tb_next is not None:
             tb = tb.tb_next
-        
+
         frame = tb.tb_frame
-        
+
         # Extract local variables if enabled
         local_vars = {}
         if self.capture_locals and frame.f_locals:
@@ -175,7 +174,7 @@ class ErrorCapture:
                     local_vars[name] = str_value
                 except Exception:
                     local_vars[name] = "<unprintable>"
-        
+
         # Build error context
         error_context = ErrorContext(
             timestamp=datetime.now().isoformat(),
@@ -189,19 +188,19 @@ class ErrorCapture:
             type_info=self._extract_type_info(error, frame),
             agent_context=context or {}
         )
-        
+
         self.captured_errors.append(error_context)
         return error_context
-    
+
     def _extract_type_info(self, error: Exception, frame) -> Dict[str, Any]:
         """Extract type-related information from error context."""
         type_info = {}
-        
+
         # Check if this is a subscripted generics error
         if "Subscripted generics" in str(error):
             type_info["is_subscripted_generic_error"] = True
             type_info["error_details"] = str(error)
-            
+
             # Try to identify the problematic isinstance call
             if frame.f_code:
                 try:
@@ -211,7 +210,7 @@ class ErrorCapture:
                     lineno = frame.f_lineno
                     source_line = linecache.getline(filename, lineno).strip()
                     type_info["source_line"] = source_line
-                    
+
                     if "isinstance" in source_line:
                         type_info["contains_isinstance"] = True
                         type_info["source_context"] = {
@@ -221,9 +220,9 @@ class ErrorCapture:
                         }
                 except Exception:
                     pass
-        
+
         return type_info
-    
+
     @contextmanager
     def capture_context(self, context_name: str, **context_data):
         """
@@ -244,7 +243,7 @@ class ErrorCapture:
             logger.error(f"Error in {context_name}: {e}")
             logger.debug(f"Full error context: {error_context.model_dump()}")
             raise
-    
+
     def wrap_function(self, func: Callable, context_data: Optional[Dict[str, Any]] = None):
         """
         Decorator to wrap functions with error capture.
@@ -265,24 +264,24 @@ class ErrorCapture:
                 "kwargs_keys": list(kwargs.keys()),
                 **(context_data or {})
             }
-            
+
             with self.capture_context(f"function_{func.__name__}", **context):
                 return func(*args, **kwargs)
-        
+
         return wrapper
-    
+
     def get_error_summary(self) -> Dict[str, Any]:
         """Get summary of captured errors."""
         if not self.captured_errors:
             return {"total_errors": 0}
-        
+
         error_types = {}
         subscripted_generic_errors = []
-        
+
         for error in self.captured_errors:
             error_type = error.error_type
             error_types[error_type] = error_types.get(error_type, 0) + 1
-            
+
             if error.type_info.get("is_subscripted_generic_error"):
                 subscripted_generic_errors.append({
                     "timestamp": error.timestamp,
@@ -292,7 +291,7 @@ class ErrorCapture:
                     "message": error.error_message,
                     "source_line": error.type_info.get("source_line")
                 })
-        
+
         return {
             "total_errors": len(self.captured_errors),
             "error_types": error_types,
@@ -311,7 +310,7 @@ def capture_enhanced_rag_errors():
     """
     def decorator(func):
         return _global_error_capture.wrap_function(
-            func, 
+            func,
             context_data={"component": "enhanced_rag_agent"}
         )
     return decorator
@@ -339,9 +338,9 @@ def analyze_type_checking_errors() -> Dict[str, Any]:
         Analysis and recommendations for fixing type errors
     """
     summary = _global_error_capture.get_error_summary()
-    
+
     recommendations = []
-    
+
     if summary.get("subscripted_generic_errors"):
         recommendations.append({
             "issue": "Subscripted generics in isinstance calls",
@@ -349,14 +348,14 @@ def analyze_type_checking_errors() -> Dict[str, Any]:
             "affected_locations": [
                 {
                     "function": err["function"],
-                    "module": err["module"], 
+                    "module": err["module"],
                     "line": err["line"],
                     "source": err.get("source_line")
                 }
                 for err in summary["subscripted_generic_errors"]
             ]
         })
-    
+
     return {
         "summary": summary,
         "recommendations": recommendations,
@@ -368,12 +367,12 @@ if __name__ == "__main__":
     # Quick analysis of current type checking errors
     print("🔍 TYPE CHECKING ERROR ANALYSIS")
     print("=" * 40)
-    
+
     analysis = analyze_type_checking_errors()
-    
+
     print(f"Total captured errors: {analysis['summary']['total_errors']}")
     print(f"Type checking errors: {analysis['total_type_errors']}")
-    
+
     if analysis["recommendations"]:
         print("\n💡 Recommendations:")
         for rec in analysis["recommendations"]:

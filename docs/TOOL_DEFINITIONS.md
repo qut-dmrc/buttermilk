@@ -168,7 +168,7 @@ from buttermilk.mcp.server import MCPServer, MCPServerConfig
 config = MCPServerConfig(
     mode="daemon",
     host="0.0.0.0",
-    port=8080,
+    port=8000,
     auth_required=True
 )
 

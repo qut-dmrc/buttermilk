@@ -18,6 +18,7 @@ const UI = ({ url }: Props) => {
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [connectionError, setConnectionError] = useState<Error | null>(null);
   const [lastUserInput, setLastUserInput] = useState<string>('');
+  const [lastUIMessageOptions, setLastUIMessageOptions] = useState<string[] | null>(null);
 
   // Progress tracking state
   const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
@@ -37,6 +38,13 @@ const UI = ({ url }: Props) => {
     const conn = connect(
       url,
       (message) => {
+        setMessages((prevMessages) => [...prevMessages, message]);
+        
+        // Track UI messages with options for confirmation handling
+        if (message.type === 'ui_message' && (message as any).options) {
+          setLastUIMessageOptions((message as any).options);
+        }
+        
         // Handle progress updates separately
         if (message.type === 'flow_progress_update') {
           updateFlowProgress(message);
@@ -104,7 +112,30 @@ const UI = ({ url }: Props) => {
   };
 
   const handleSubmit = (text: string) => {
-    if (!connection || !text.trim()) return;
+    if (!connection) return;
+    
+    // Handle empty input (ENTER key) for confirmation
+    if (!text.trim() && lastUIMessageOptions) {
+      // Empty input means confirm/accept (first option)
+      const confirmOption = lastUIMessageOptions[0] || 'confirm';
+      const userMessage: Message = {
+        type: 'user_message',
+        payload: {
+          message: `[${confirmOption}]`,
+          timestamp: new Date().toISOString()
+        }
+      };
+      setMessages(prev => [...prev, userMessage]);
+      connection.send({ 
+        type: 'manager_response', 
+        content: confirmOption,
+        confirm: confirmOption.toLowerCase() === 'confirm'
+      } as any);
+      setLastUIMessageOptions(null);
+      return;
+    }
+    
+    if (!text.trim()) return;
 
     // Add local echo of user input
     const userMessage: Message = {
@@ -116,6 +147,39 @@ const UI = ({ url }: Props) => {
     };
     setMessages(prev => [...prev, userMessage]);
     setLastUserInput(text);
+    
+    // Check if this is a response to a UIMessage with options
+    if (lastUIMessageOptions) {
+      const lowerText = text.trim().toLowerCase();
+      let selectedOption = null;
+      
+      // Check for single letter match or full option match
+      for (const option of lastUIMessageOptions) {
+        if (lowerText === option[0].toLowerCase() || lowerText === option.toLowerCase()) {
+          selectedOption = option;
+          break;
+        }
+      }
+      
+      // Common aliases for confirm/reject
+      if (!selectedOption && lastUIMessageOptions.includes('confirm') && lastUIMessageOptions.includes('reject')) {
+        if (['y', 'yes', 'ok'].includes(lowerText)) {
+          selectedOption = 'confirm';
+        } else if (['n', 'no', 'cancel'].includes(lowerText)) {
+          selectedOption = 'reject';
+        }
+      }
+      
+      if (selectedOption) {
+        connection.send({ 
+          type: 'manager_response', 
+          content: selectedOption,
+          confirm: selectedOption.toLowerCase() === 'confirm'
+        } as any);
+        setLastUIMessageOptions(null);
+        return;
+      }
+    }
 
     // Handle help command
     if (text === '/help') {
@@ -142,6 +206,7 @@ Regular text is sent as user_message to the current flow.`
       try {
         const parsed = JSON.parse(text);
         connection.send(parsed);
+        setLastUIMessageOptions(null);
         return;
       } catch (e) {
         // If JSON parsing fails, treat as regular message
@@ -170,12 +235,14 @@ Regular text is sent as user_message to the current flow.`
         message.prompt = prompt;
       }
       connection.send(message);
+      setLastUIMessageOptions(null);
       return;
     }
 
     // Default: send as manager_response (correct type for user input)
     // Note: manager_response expects fields directly, not wrapped in payload
     connection.send({ type: 'manager_response', content: text } as any);
+    setLastUIMessageOptions(null);
   };
 
   const getStatusMessage = () => {

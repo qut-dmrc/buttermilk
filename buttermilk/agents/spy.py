@@ -59,7 +59,7 @@ class SpyAgent(RoutedAgent):
         super().__init__(description="Save results to storage")
         self.flow_name = flow_name
         self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE)
-        
+
         # Configure storage based on flow_name provided by orchestrator
         if self.flow_name:
             self.manager.configure_storage(self.flow_name)

@@ -119,6 +119,12 @@ const getMessageContent = (message: Message | any): string => {
       // User messages typically have content in payload.message
       return (msg.payload && msg.payload.message) || msg.message || msg.content || 'User message';
     
+    case 'ui_message':
+      // UI messages might have content in various locations
+      return msg.content || msg.message || 
+             (msg.payload && (msg.payload.message || msg.payload.content)) ||
+             (msg.options ? '⚠️ Action Required' : 'UI message');
+    
     case 'chat_message':
       // Chat messages might have content in outputs
       return (msg.outputs && (msg.outputs.content || msg.outputs.message)) ||
@@ -171,6 +177,7 @@ const getMessageColor = (message: Message): string => {
     'system_error': retroIRCTheme.colors.error,
     'flow_progress_update': retroIRCTheme.colors.success,
     'agent_announcement': retroIRCTheme.colors.info,
+    'ui_message': retroIRCTheme.colors.warning,
   };
   
   return typeColors[message.type] || retroIRCTheme.colors.text;
@@ -222,6 +229,31 @@ const MessageComponent = ({ message }: Props) => {
             <Text color={retroIRCTheme.colors.warning} dimColor>
               Tool calls: {(message as AgentOutput).tool_calls?.length || 0}
             </Text>
+          </Box>
+        )}
+        
+        {/* UI Message with options (confirmation request) */}
+        {message.type === 'ui_message' && (message as any).options && (
+          <Box flexDirection="column" paddingTop={1}>
+            <Box borderStyle="single" borderColor={retroIRCTheme.colors.warning} paddingLeft={1} paddingRight={1}>
+              <Box flexDirection="column">
+                <Text color={retroIRCTheme.colors.warning} bold>
+                  🔔 Confirmation Required:
+                </Text>
+                {Array.isArray((message as any).options) && (
+                  <Box flexDirection="column" paddingTop={1}>
+                    {(message as any).options.map((option: string, idx: number) => (
+                      <Text key={idx} color={retroIRCTheme.colors.info}>
+                        [{option[0].toUpperCase()}] {option}
+                      </Text>
+                    ))}
+                  </Box>
+                )}
+                <Text color={retroIRCTheme.colors.textDim} dimColor italic>
+                  Press ENTER to confirm, 'n' to reject
+                </Text>
+              </Box>
+            </Box>
           </Box>
         )}
         

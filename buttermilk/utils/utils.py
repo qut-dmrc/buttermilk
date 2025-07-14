@@ -283,7 +283,7 @@ def scrub_serializable(d) -> T:
     elif isinstance(d, (CloudPath, pathlib.Path)):
         # convert path objects to strings
         d = str(d)
-    
+
     # Handle PIL Image objects - convert to base64 for JSON storage
     try:
         from PIL.Image import Image
@@ -519,7 +519,7 @@ def get_pdf_text(file: str | IOBase) -> str | None:
     if not PDFMINER_AVAILABLE:
         logger.error("PDFMiner not available. Cannot extract text from PDF.")
         return None
-        
+
     try:
         return extract_text(file, laparams=LAParams())
     except Exception as e:
@@ -631,21 +631,21 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
             return local_path
     except (OSError, ValueError):
         pass  # Not a valid local path, treat as remote
-    
+
     # Generate cache key from persist_directory
     cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
-    
+
     # Check if we already have cached data
     chroma_db_path = local_cache_path / "chroma.sqlite3"
     if chroma_db_path.exists():
         logger.debug(f"Found cached ChromaDB at {local_cache_path}")
         return local_cache_path
-    
+
     # Use thread-safe download to prevent multiple parallel downloads of the same DB
     download_lock = _get_download_lock(persist_directory)
-    
+
     def _download_chromadb_sync():
         """Synchronous download function to be run in thread."""
         with download_lock:
@@ -653,53 +653,53 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
             if chroma_db_path.exists():
                 logger.debug(f"ChromaDB cache created by another thread at {local_cache_path}")
                 return
-                
+
             logger.info(f"Downloading ChromaDB from {persist_directory} to {local_cache_path}")
-            
+
             try:
                 # Create temporary directory for atomic download
                 with tempfile.TemporaryDirectory() as temp_dir:
                     temp_path = pathlib.Path(temp_dir) / "chromadb_download"
                     temp_path.mkdir(parents=True, exist_ok=True)
-                    
+
                     # Download the entire ChromaDB directory
                     remote_path = CloudPath(persist_directory)
-                    
+
                     if not remote_path.exists():
                         # For new vector stores, the remote directory won't exist yet
                         # Create empty local directory that ChromaDB can initialize
                         logger.info(f"Remote ChromaDB directory does not exist: {persist_directory}")
-                        logger.info(f"Creating new empty ChromaDB directory for initialization")
+                        logger.info("Creating new empty ChromaDB directory for initialization")
                         # temp_path already exists, so we just leave it empty for ChromaDB to initialize
                     else:
                         # Download all files recursively
                         _download_chromadb_recursive(remote_path, temp_path)
-                    
+
                     # For new vector stores, we skip verification since ChromaDB will create the files
                     if remote_path.exists():
                         # Only verify for existing remote stores
                         temp_chroma_db = temp_path / "chroma.sqlite3"
                         if not temp_chroma_db.exists():
                             raise OSError(f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}")
-                    
+
                     # Atomic move to final location
                     local_cache_path.parent.mkdir(parents=True, exist_ok=True)
                     if local_cache_path.exists():
                         shutil.rmtree(local_cache_path)
                     shutil.move(str(temp_path), str(local_cache_path))
-                    
+
                     logger.info(f"Successfully cached ChromaDB at {local_cache_path}")
-                    
+
             except Exception as e:
                 logger.error(f"Failed to download ChromaDB from {persist_directory}: {e}")
                 # Clean up any partial download
                 if local_cache_path.exists():
                     shutil.rmtree(local_cache_path, ignore_errors=True)
                 raise OSError(f"ChromaDB download failed: {e}") from e
-    
+
     # Run download in thread to avoid blocking async operations
     await asyncio.to_thread(_download_chromadb_sync)
-    
+
     return local_cache_path
 
 
@@ -714,7 +714,7 @@ def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Pat
         # List all items in the remote directory
         for item in remote_path.iterdir():
             local_item_path = local_path / item.name
-            
+
             if item.is_dir():
                 # Create local directory and recurse
                 local_item_path.mkdir(parents=True, exist_ok=True)
@@ -723,11 +723,11 @@ def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Pat
                 # Download file
                 logger.debug(f"Downloading {item} to {local_item_path}")
                 local_item_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 # Use CloudPath's read_bytes/write_bytes for efficient transfer
                 file_data = item.read_bytes()
                 local_item_path.write_bytes(file_data)
-                
+
     except Exception as e:
         logger.error(f"Error downloading from {remote_path}: {e}")
         raise
@@ -745,17 +745,17 @@ async def get_chromadb_cache_size(persist_directory: str) -> int:
     cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
-    
+
     if not local_cache_path.exists():
         return 0
-    
+
     def _calculate_size():
         total_size = 0
         for file_path in local_cache_path.rglob("*"):
             if file_path.is_file():
                 total_size += file_path.stat().st_size
         return total_size
-    
+
     return await asyncio.to_thread(_calculate_size)
 
 
@@ -769,12 +769,12 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
         int: Number of bytes freed
     """
     cache_dir = _get_cache_dir()
-    
+
     if persist_directory is None:
         # Clear all caches
         if not cache_dir.exists():
             return 0
-            
+
         def _clear_all():
             total_freed = 0
             for cache_path in cache_dir.iterdir():
@@ -784,16 +784,16 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
                             total_freed += file_path.stat().st_size
                     shutil.rmtree(cache_path, ignore_errors=True)
             return total_freed
-            
+
         return await asyncio.to_thread(_clear_all)
     else:
         # Clear specific cache
         cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
         local_cache_path = cache_dir / cache_key
-        
+
         if not local_cache_path.exists():
             return 0
-            
+
         def _clear_specific():
             total_freed = 0
             for file_path in local_cache_path.rglob("*"):
@@ -801,7 +801,7 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
                     total_freed += file_path.stat().st_size
             shutil.rmtree(local_cache_path, ignore_errors=True)
             return total_freed
-            
+
         return await asyncio.to_thread(_clear_specific)
 
 
@@ -820,33 +820,33 @@ async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -
         OSError: If upload fails
     """
     local_path = pathlib.Path(local_cache_path)
-    
+
     if not local_path.exists() or not local_path.is_dir():
         raise ValueError(f"Local cache path does not exist or is not a directory: {local_cache_path}")
-    
+
     # Check if it's actually a ChromaDB directory
     if not (local_path / "chroma.sqlite3").exists():
         raise ValueError(f"Local path does not appear to be a ChromaDB directory (missing chroma.sqlite3): {local_cache_path}")
-    
+
     try:
         remote_path = CloudPath(persist_directory)
-        
+
         def _upload_chromadb_sync():
             """Synchronous upload function to be run in thread."""
             logger.info(f"Uploading ChromaDB from {local_cache_path} to {persist_directory}")
-            
+
             # Ensure remote directory exists
             if not remote_path.exists():
                 remote_path.mkdir(parents=True, exist_ok=True)
-            
+
             # Upload all files recursively
             _upload_chromadb_recursive(local_path, remote_path)
-            
+
             logger.info(f"Successfully uploaded ChromaDB to {persist_directory}")
-        
+
         # Run upload in thread to avoid blocking async operations
         await asyncio.to_thread(_upload_chromadb_sync)
-        
+
     except Exception as e:
         logger.error(f"Failed to upload ChromaDB to {persist_directory}: {e}")
         raise OSError(f"ChromaDB upload failed: {e}") from e
@@ -863,7 +863,7 @@ def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath)
         # Upload all items in the local directory
         for item in local_path.iterdir():
             remote_item_path = remote_path / item.name
-            
+
             if item.is_dir():
                 # Create remote directory and recurse
                 if not remote_item_path.exists():
@@ -872,11 +872,11 @@ def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath)
             else:
                 # Upload file
                 logger.debug(f"Uploading {item} to {remote_item_path}")
-                
+
                 # Use CloudPath's read_bytes/write_bytes for efficient transfer
                 file_data = item.read_bytes()
                 remote_item_path.write_bytes(file_data)
-                
+
     except Exception as e:
         logger.error(f"Error uploading to {remote_path}: {e}")
         raise
@@ -896,8 +896,8 @@ def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest
         Base64 encoded string
     """
     from io import BytesIO
-    from PIL import Image
-    
+
+
     # Resize if requested
     if longest_edge > 0:
         if image.width > longest_edge or image.height > longest_edge:
@@ -917,7 +917,7 @@ def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest
                 new_width = shortest_edge
                 new_height = int(shortest_edge * image.height / image.width)
             image = image.resize((new_width, new_height))
-    
+
     # Convert to base64
     buffered = BytesIO()
     image.save(buffered, format=format)
@@ -937,7 +937,7 @@ def image_to_content_part(image, model_type: str = "openai", mime_type: str = "i
         Dictionary in the appropriate format for the LLM provider
     """
     b64_data = image_to_base64(image)
-    
+
     if model_type == "openai":
         return {
             "type": "image_url",
@@ -967,7 +967,8 @@ def base64_to_image(b64_string: str):
         PIL Image object
     """
     from io import BytesIO
+
     from PIL import Image
-    
+
     image_data = base64.b64decode(b64_string)
     return Image.open(BytesIO(image_data))

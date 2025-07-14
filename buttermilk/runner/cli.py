@@ -27,7 +27,6 @@ import hydra  # For configuration management
 import uvicorn  # For running the FastAPI server
 from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
 
-from buttermilk import BM  # The global Buttermilk instance type
 from buttermilk._core import (
     # dmrc as DMRC,
     logger,  # Centralized logger

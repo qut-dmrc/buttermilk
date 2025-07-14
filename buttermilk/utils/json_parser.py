@@ -120,7 +120,7 @@ class ChatParser(BaseModel):
 
         except JSONDecodeError as e:
             raise ProcessingError from e
-        
+
         if not isinstance(parsed_output, dict):
             logger.warning(f"Unable to decode JSON in result: {text}")
             parsed_output = dict(response=text)

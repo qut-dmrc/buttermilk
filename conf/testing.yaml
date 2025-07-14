@@ -6,6 +6,8 @@ defaults:
   - bigquery: testing
   - llms: lite
 
+verbose: true
+
 bm:
   name: buttermilk
   job: testing

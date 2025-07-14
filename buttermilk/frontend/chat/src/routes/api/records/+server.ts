@@ -1,6 +1,6 @@
+import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
 // Sample record data for fallback when backend is unavailable
 const FALLBACK_RECORDS = {
@@ -121,7 +121,7 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
   }
   
   // Get backend base URL from environment or use default
-  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8080';
+  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
   
   try {
     // Create headers for the backend request

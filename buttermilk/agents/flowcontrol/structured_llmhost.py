@@ -4,8 +4,7 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 """
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
-from typing import Any
+from collections.abc import AsyncGenerator
 
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
 from autogen_core.models import CreateResult
@@ -14,11 +13,10 @@ from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
-from buttermilk._core.contract import AgentOutput, ErrorEvent, GroupchatMessageTypes
+from buttermilk._core.contract import AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
-from buttermilk.utils._tools import create_tool_functions
 
 
 class StructuredLLMHostAgent(HostAgent, LLMAgent):
@@ -45,21 +43,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         while not self._proposed_step.empty():
             try:
                 self._proposed_step.get_nowait()
-                logger.debug("Cleared pending step from queue due to new manager request")
             except asyncio.QueueEmpty:
                 break
-
-    async def initialize(self, **kwargs: Any) -> None:
-        """Initialize the host agent."""
-        await super().initialize(**kwargs)
-
-        # Initialize empty tools list
-        if hasattr(self._config, 'tools') and self._config.tools:
-            self._tools_list = create_tool_functions(self._config.tools)
-        else:
-            self._tools_list = []
-
-        logger.debug(f"StructuredLLMHost {self.agent_name} initialized with {len(self._tools_list)} configured tools.")
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute.
@@ -91,11 +76,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         ctx: MessageContext,
     ) -> None:
         """Listen to messages and use structured tools to determine next steps."""
-        # Todo: figure out if we need to add user messages to context and fix this by adding a proper add_to_context method in Agent
-        # # Save messages to context
-        # await super().handle_groupchat_message(
-        #     message=message,ctx=ctx
-        # )
+        # Messages are now automatically added to context by the base class handle_manager_message method
+        # No need to manually call it here since we're overriding the handler
 
         # Wait for tool schemas to be populated if they haven't been yet
         # This handles the race condition where ManagerMessage arrives before ConductorRequest processing completes
@@ -111,12 +93,10 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Log tool schema status
         if not self._tools:
-            msg = f"StructuredLLMHost {self.agent_name} has no tool schemas available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
-            raise ProcessingError(msg)
-
-        else:
-            logger.debug(f"StructuredLLMHost {self.agent_name} in _receive_instructions has {len(self._tools)} tool schemas")
-            logger.debug(f"Message type received: {type(message).__name__}")
+            msg = f"StructuredLLMHost {self.agent_name} has no tools available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
+            logger.error(msg)
+            await self._publish("Unable to process request: no tools available.")
+            return  # Skip processing if no tools are available
 
         # Skip command messages
         if message.content and str(message.content).startswith(COMMAND_SYMBOL):
@@ -134,14 +114,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Use the LLM with structured tools to determine next step
         # The template should be configured to use tool calling
-        result = await self.invoke(
+        result = await self._process(
             message=AgentInput(
                 inputs={
                     "user_feedback": self._user_feedback,
                     "prompt": str(message.content),
-                    "participants": list(self._participants.keys()) if hasattr(self, "_participants") else [],
-                    "tool_count": len(self._tools),
-                }
+                },
             ),
             cancellation_token=ctx.cancellation_token,
         )
@@ -157,8 +135,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         Instead, when the LLM calls a tool, we convert it to a StepRequest and
         queue it for the appropriate agent to handle.
         """
-        logger.debug(f"StructuredLLMHost '{self.agent_name}' starting _process")
-
         # Fill the template as usual
         try:
             llm_messages_to_send = await self._fill_template(
@@ -175,13 +151,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Get the LLM client
         model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
-        # Call create() directly with tool schemas (not executable tools)
-        # This returns FunctionCall objects without executing them
-        logger.debug(f"StructuredLLMHost calling LLM with {len(self._tools)} tool schemas")
+        # deduplicate tools by name
+        tools_list = list({tool.name: tool for tool in self._tools}.values())
 
-        # All items in _tools should be Tool objects now
-        tools_list = self._tools
-        logger.debug(f"StructuredLLMHost has {len(tools_list)} tools ready for LLM")
+        # This returns FunctionCall objects without executing them
+        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
 
         try:
             create_result: CreateResult = await model_client.create(
@@ -215,7 +189,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             metadata={
                 "model": self.parameters["model"],
                 "finish_reason": create_result.finish_reason,
-                "usage": create_result.usage if create_result.usage else None,
+                "usage": create_result.usage or None,
             },
         )
 
@@ -227,6 +201,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         Returns:
             str: A concise summary of what tools are being called
+
         """
         if not tool_calls:
             return "No tool calls requested"
@@ -245,14 +220,13 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 # Common patterns for better descriptions
                 if "query" in args:
                     return f"Searching for: {args['query'][:50]}{'...' if len(str(args['query'])) > 50 else ''}"
-                elif "message" in args or "content" in args:
+                if "message" in args or "content" in args:
                     msg = args.get("message", args.get("content", ""))
                     return f"Processing: {str(msg)[:50]}{'...' if len(str(msg)) > 50 else ''}"
-                elif "target" in args:
+                if "target" in args:
                     return f"Targeting {args['target']} with {tool_name}"
-                else:
-                    # Generic single tool call
-                    return f"Calling {tool_name}"
+                # Generic single tool call
+                return f"Calling {tool_name}"
             except:
                 return f"Calling {tool_name}"
 
@@ -262,7 +236,6 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         if len(unique_tools) == 1:
             return f"Making {len(tool_calls)} {unique_tools[0]} calls"
-        elif len(unique_tools) <= 3:
+        if len(unique_tools) <= 3:
             return f"Calling: {', '.join(unique_tools)}"
-        else:
-            return f"Orchestrating {len(tool_calls)} tool calls across {len(unique_tools)} tools"
+        return f"Orchestrating {len(tool_calls)} tool calls across {len(unique_tools)} tools"

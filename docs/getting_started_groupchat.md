@@ -222,7 +222,7 @@ The `create_fastapi_app` function (likely found in `buttermilk.api.flow` or a si
 buttermilk run run.mode=api
 
 # You can also specify host and port if your config supports it and you want to override
-buttermilk run run.mode=api host=127.0.0.1 port=8080
+buttermilk run run.mode=api host=127.0.0.1 port=8000
 ```
 This will start the Uvicorn server (defaulting to a host and port like `http://0.0.0.0:8000` unless configured otherwise). You would then interact with the group chat by sending HTTP requests to the API endpoints defined by the FastAPI application. Consult the Buttermilk API documentation or the relevant source code (e.g., `buttermilk.api.routes`) for details on available endpoints and request/response formats.
 

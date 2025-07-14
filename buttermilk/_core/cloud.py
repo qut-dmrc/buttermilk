@@ -5,7 +5,6 @@ from typing import Any, Optional
 
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
-
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
 
@@ -92,13 +91,13 @@ class CloudManager:
             str: A valid OAuth2 access token
         """
         creds = self.gcp_credentials
-        
+
         # Refresh if needed
         if not creds.valid:
             from google.auth.transport.requests import Request
             request = Request()
             creds.refresh(request)
-            
+
         return creds.token
 
     @cached_property
