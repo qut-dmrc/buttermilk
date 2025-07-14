@@ -243,18 +243,6 @@ class Agent(RoutedAgent):
         """
         return []
 
-    def get_supported_message_types(self) -> list[str]:
-        """Get list of OOBMessage types this agent handles.
-        
-        Returns:
-            list[str]: List of supported message type names.
-
-        """
-        # Check if agent has defined supported messages
-        if hasattr(self, "_supported_oob_messages"):
-            return self._supported_oob_messages
-        return []
-
     @message_handler
     async def handle_conductor_request(
         self,
@@ -282,11 +270,10 @@ class Agent(RoutedAgent):
             content=f"Agent {self.agent_name} active and available",
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
-            supported_message_types=self.get_supported_message_types(),
-            tool_definitions=tool_definitions,
-            status="active",
-            announcement_type="response",
-            responding_to=str(ctx.sender) if ctx.sender else None,
+            tool_definition=tool_definitions,
+            status=status,
+            announcement_type=announcement_type,
+            responding_to=responding_to,
             source=self.agent_id,
         )
 
@@ -872,87 +859,3 @@ class Agent(RoutedAgent):
         )
 
         return [tool_def]
-
-    async def handle_unified_request(self, request: "UnifiedRequest", **kwargs: Any) -> Any:
-        """Handle a UnifiedRequest by routing to the appropriate tool or _process method.
-        
-        This method provides a unified interface for handling both tool-specific
-        requests and general agent requests, supporting the new structured
-        tool invocation system.
-        
-        Args:
-            request: UnifiedRequest containing target, inputs, context, and metadata
-            **kwargs: Additional keyword arguments passed to handlers
-            
-        Returns:
-            The result of the tool or process execution
-            
-        Raises:
-            ValueError: If the requested tool is not found
-            ProcessingError: If execution fails
-
-        """
-        if request.tool_name:
-            # Route to specific tool
-            tool_name = request.tool_name
-
-            # First, try direct method name match
-            if hasattr(self, tool_name) and callable(getattr(self, tool_name)):
-                method = getattr(self, tool_name)
-                if hasattr(method, "_tool_metadata"):
-                    logger.debug(
-                        f"Agent {self.agent_name} executing tool {tool_name} "
-                        f"with inputs: {request.inputs}",
-                    )
-
-                    # Execute the tool method
-                    if asyncio.iscoroutinefunction(method):
-                        result = await method(**request.inputs)
-                    else:
-                        result = method(**request.inputs)
-
-                    return result
-
-            # If direct match fails, search for methods with matching tool metadata
-            for attr_name in dir(self):
-                if attr_name.startswith("_"):
-                    continue
-
-                attr = getattr(self, attr_name)
-                if callable(attr):
-                    # Check if it has tool metadata with matching name
-                    if hasattr(attr, "_tool_metadata"):
-                        if attr._tool_metadata.get("name") == tool_name:
-                            logger.debug(
-                                f"Agent {self.agent_name} executing tool {tool_name} "
-                                f"(method: {attr_name}) with inputs: {request.inputs}",
-                            )
-
-                            # Execute the tool method
-                            if asyncio.iscoroutinefunction(attr):
-                                result = await attr(**request.inputs)
-                            else:
-                                result = attr(**request.inputs)
-
-                            return result
-
-            # Tool not found
-            raise ValueError(
-                f"Tool {tool_name} not found on agent {self.agent_name}",
-            )
-        # No specific tool - route to general _process method
-        # Convert UnifiedRequest to AgentInput for backward compatibility
-        agent_input = AgentInput(
-            inputs=request.inputs,
-            context=request.context.get("messages", []) if request.context else [],
-            parameters=request.metadata,
-            records=request.context.get("records", []) if request.context else [],
-        )
-
-        # Call the standard process method
-        result = await self._process(message=agent_input, **kwargs)
-
-        # Extract outputs from AgentOutput if needed
-        if hasattr(result, "outputs"):
-            return result.outputs
-        return result

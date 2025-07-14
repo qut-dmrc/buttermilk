@@ -31,7 +31,6 @@ class TestAgentAnnouncement:
         assert announcement.announcement_type == "initial"
         assert announcement.status == "joining"  # default
         assert announcement.available_tools == []  # default
-        assert announcement.supported_message_types == []  # default
         assert announcement.responding_to is None  # default
         
     def test_agent_announcement_creation_full(self):
@@ -48,7 +47,6 @@ class TestAgentAnnouncement:
             content="Fetch agent ready",
             agent_config=agent_config,
             available_tools=["fetch", "search", "scrape"],
-            supported_message_types=["ConductorRequest", "StepRequest"],
             status="active",
             announcement_type="response",
             responding_to="HOST_123",
@@ -58,7 +56,6 @@ class TestAgentAnnouncement:
         # Verify all fields
         assert announcement.agent_config.role == "FETCH"
         assert announcement.available_tools == ["fetch", "search", "scrape"]
-        assert announcement.supported_message_types == ["ConductorRequest", "StepRequest"]
         assert announcement.status == "active"
         assert announcement.announcement_type == "response"
         assert announcement.responding_to == "HOST_123"

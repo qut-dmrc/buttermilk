@@ -9,7 +9,7 @@ from buttermilk._core import AgentInput, StepRequest
 from buttermilk._core.agent import Agent, ManagerMessage
 from buttermilk._core.contract import AgentOutput, AgentTrace
 from buttermilk._core.constants import END, MANAGER
-from buttermilk._core.tool_definition import AgentToolDefinition, UnifiedRequest
+from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk._core.mcp_decorators import tool, MCPRoute
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -217,126 +217,7 @@ class TestEndToEndFlows:
         format_tool = next(t for t in tools if t["name"] == "format_content")
         assert format_tool["permissions"] == ["write"]
     
-    async def test_unified_request_flow(self, mock_agents):
-        """Test flow using UnifiedRequests."""
-        researcher = mock_agents["RESEARCHER"]
-        writer = mock_agents["WRITER"]
-        
-        # Execute research flow via UnifiedRequests
-        
-        # 1. Search
-        search_req = UnifiedRequest(
-            target="researcher.search_documents",
-            inputs={"query": "climate change", "max_results": 3},
-            metadata={"request_id": "test_001"}
-        )
-        
-        search_result = await researcher.handle_unified_request(search_req)
-        assert search_result["query"] == "climate change"
-        assert len(search_result["results"]) == 3
-        
-        # 2. Analyze first result
-        analyze_req = UnifiedRequest(
-            target="researcher.analyze_document",
-            inputs={"doc_id": search_result["results"][0]["id"]},
-            context={"search_results": search_result}
-        )
-        
-        analysis = await researcher.handle_unified_request(analyze_req)
-        assert analysis["doc_id"] == "doc_0"
-        assert len(analysis["key_points"]) == 3
-        
-        # 3. Generate summary from analysis
-        summary_req = UnifiedRequest(
-            target="writer.generate_summary",
-            inputs={
-                "points": analysis["key_points"],
-                "max_words": 75
-            }
-        )
-        
-        summary = await writer.handle_unified_request(summary_req)
-        assert "Summary of 3 points" in summary
-        
-        # 4. Format the summary
-        format_req = UnifiedRequest(
-            target="writer.format_content",
-            inputs={
-                "text": summary,
-                "format_type": "html"
-            }
-        )
-        
-        formatted = await writer.handle_unified_request(format_req)
-        assert formatted["format"] == "html"
-        assert "<h1>" in formatted["formatted"]
-    
-    async def test_error_handling_flow(self, mock_agents):
-        """Test error handling in the flow."""
-        researcher = mock_agents["RESEARCHER"]
-        
-        # Test invalid tool
-        invalid_tool_req = UnifiedRequest(
-            target="researcher.nonexistent_tool",
-            inputs={}
-        )
-        
-        with pytest.raises(ValueError, match="Tool nonexistent_tool not found"):
-            await researcher.handle_unified_request(invalid_tool_req)
-        
-        # Test missing required parameter
-        missing_param_req = UnifiedRequest(
-            target="researcher.search_documents",
-            inputs={}  # Missing required 'query'
-        )
-        
-        # This should work as the tool has default handling
-        # but let's test with a tool that strictly requires params
-        
-        class StrictAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
-                return AgentOutput(agent_id=self.agent_id, outputs={})
-            
-            @tool
-            def strict_tool(self, required_param: str) -> str:
-                """Tool with required parameter."""
-                return required_param
-        
-        strict_agent = StrictAgent(agent_name="strict", model_name="test", role="STRICT")
-        
-        strict_req = UnifiedRequest(
-            target="strict.strict_tool",
-            inputs={}  # Missing required_param
-        )
-        
-        with pytest.raises(TypeError, match="required_param"):
-            await strict_agent.handle_unified_request(strict_req)
-    
-    async def test_concurrent_tool_execution(self, mock_agents):
-        """Test concurrent execution of multiple tools."""
-        researcher = mock_agents["RESEARCHER"]
-        
-        # Create multiple search requests
-        queries = ["AI safety", "climate change", "quantum computing"]
-        
-        # Execute searches concurrently
-        tasks = []
-        for query in queries:
-            req = UnifiedRequest(
-                target="researcher.search_documents",
-                inputs={"query": query, "max_results": 2}
-            )
-            task = researcher.handle_unified_request(req)
-            tasks.append(task)
-        
-        # Wait for all to complete
-        results = await asyncio.gather(*tasks)
-        
-        # Verify all completed successfully
-        assert len(results) == 3
-        for i, result in enumerate(results):
-            assert result["query"] == queries[i]
-            assert len(result["results"]) == 2
+
     
     async def test_host_message_handling(self, mock_agents):
         """Test host handling of manager messages."""
