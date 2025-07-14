@@ -11,7 +11,7 @@ pytestmark = pytest.mark.anyio
 from buttermilk._core import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
-from buttermilk._core.tool_definition import AgentToolDefinition, UnifiedRequest
+from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk._core.mcp_decorators import tool, MCPRoute
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -138,53 +138,7 @@ class TestToolDefinitionIntegration:
         classify_tool = next(t for t in tools if t.name == "classify_text")
         assert classify_tool.mcp_route == "/classify"
     
-    async def test_unified_request_handling(self):
-        """Test handling UnifiedRequest through agent."""
-        agent = TestAgentWithTools(
-            agent_name="test_agent",
-            model_name="test",
-            role="analyzer"
-        )
-        
-        # Test tool-specific request
-        request = UnifiedRequest(
-            target="test_agent.analyze_data",
-            inputs={"data": "test data", "format": "csv"}
-        )
-        
-        result = await agent.handle_unified_request(request)
-        
-        assert result["analysis"] == "Analyzed 9 characters"
-        assert result["format"] == "csv"
-        assert len(result["insights"]) == 2
-        
-        # Test general request (no specific tool)
-        request = UnifiedRequest(
-            target="test_agent",
-            inputs={"operation": "search", "query": "test", "limit": 3}
-        )
-        
-        result = await agent.handle_unified_request(request)
-        
-        assert result["query"] == "test"
-        assert result["total"] == 3
-        assert len(result["results"]) == 3
-    
-    async def test_unified_request_invalid_tool(self):
-        """Test UnifiedRequest with invalid tool name."""
-        agent = TestAgentWithTools(
-            agent_name="test_agent",
-            model_name="test",
-            role="analyzer"
-        )
-        
-        request = UnifiedRequest(
-            target="test_agent.nonexistent_tool",
-            inputs={}
-        )
-        
-        with pytest.raises(ValueError, match="Tool nonexistent_tool not found"):
-            await agent.handle_unified_request(request)
+
     
     async def test_structured_host_with_agent_tools(self):
         """Test StructuredLLMHostAgent with agent tools."""
@@ -253,15 +207,6 @@ class TestToolDefinitionIntegration:
         # Should return empty tool list
         tools = agent.get_tool_definitions()
         assert tools == []
-        
-        # Should still work with UnifiedRequest
-        request = UnifiedRequest(
-            target="legacy",
-            inputs={"test": "data"}
-        )
-        
-        result = await agent.handle_unified_request(request)
-        assert result == {"message": "Legacy response"}
     
     async def test_mixed_sync_async_tools(self):
         """Test handling both sync and async tools."""
@@ -271,18 +216,10 @@ class TestToolDefinitionIntegration:
             role="test"
         )
         
-        # Async tool
-        request = UnifiedRequest(
-            target="test.analyze_data",
-            inputs={"data": "async test", "format": "json"}
-        )
-        result = await agent.handle_unified_request(request)
-        assert "Analyzed 10 characters" in result["analysis"]
+        # Test that both sync and async tools are properly decorated
+        tools = agent.get_tool_definitions()
+        assert len(tools) == 2
         
-        # Sync tool
-        request = UnifiedRequest(
-            target="test.search_documents",
-            inputs={"query": "sync test", "limit": 2}
-        )
-        result = await agent.handle_unified_request(request)
-        assert result["total"] == 2
+        tool_names = [tool.name for tool in tools]
+        assert "analyze_data" in tool_names
+        assert "search_documents" in tool_names

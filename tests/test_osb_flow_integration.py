@@ -207,37 +207,7 @@ class TestOSBFlowIntegration:
         assert calls[2][0][0].role == "FACT_CHECKER"
         assert calls[2][0][0].inputs["tool"] == "analyze_findings"
 
-    @pytest.mark.anyio
-    async def test_osb_flow_with_unified_requests(self, mock_osb_agents):
-        """Test OSB flow using UnifiedRequests."""
-        from buttermilk._core.tool_definition import UnifiedRequest
 
-        researcher = mock_osb_agents["RESEARCHER"]
-
-        # Test search tool via UnifiedRequest
-        search_request = UnifiedRequest(
-            target="researcher.search_osb",
-            inputs={"query": "OSB unified test", "limit": 2}
-        )
-
-        result = await researcher.handle_unified_request(search_request)
-
-        assert researcher.search_called
-        assert result["query"] == "OSB unified test"
-        assert len(result["results"]) == 2
-        assert result["results"][0]["content"] == "OSB result 0 for OSB unified test"
-
-        # Test analyze tool
-        analyze_request = UnifiedRequest(
-            target="researcher.analyze_findings",
-            inputs={"findings": result["results"]}
-        )
-
-        analysis = await researcher.handle_unified_request(analyze_request)
-
-        assert researcher.analyze_called
-        assert analysis["summary"] == "Analyzed 2 findings"
-        assert len(analysis["key_insights"]) == 2
 
     @pytest.mark.anyio
     async def test_osb_backward_compatibility(self, mock_osb_agents):

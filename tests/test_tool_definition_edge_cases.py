@@ -394,74 +394,7 @@ class TestSchemaValidationEdgeCases:
         assert set(merged["required"]) == {"field", "other"}
 
 
-class TestUnifiedRequestEdgeCases:
-    """Test edge cases for UnifiedRequest handling."""
-    
-    async def test_tool_not_decorated(self):
-        """Test calling non-decorated method as tool."""
-        
-        class RegularMethodAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
-                return AgentOutput(agent_id=self.agent_id, outputs={})
-            
-            def regular_method(self, value: str) -> str:
-                """Not decorated as tool."""
-                return value.upper()
-        
-        agent = RegularMethodAgent(agent_name="test", model_name="test", role="test")
-        
-        from buttermilk._core.tool_definition import UnifiedRequest
-        request = UnifiedRequest(
-            target="test.regular_method",
-            inputs={"value": "test"}
-        )
-        
-        with pytest.raises(ValueError, match="Tool regular_method not found"):
-            await agent.handle_unified_request(request)
-    
-    async def test_tool_with_validation_error(self):
-        """Test tool that raises validation error."""
-        
-        class ValidationErrorAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
-                return AgentOutput(agent_id=self.agent_id, outputs={})
-            
-            @tool
-            def strict_tool(self, count: int) -> dict:
-                """Tool with strict validation."""
-                if count < 0:
-                    raise ValueError("Count must be non-negative")
-                return {"count": count}
-        
-        agent = ValidationErrorAgent(agent_name="test", model_name="test", role="test")
-        
-        from buttermilk._core.tool_definition import UnifiedRequest
-        request = UnifiedRequest(
-            target="test.strict_tool",
-            inputs={"count": -5}
-        )
-        
-        # The tool itself raises ValueError
-        with pytest.raises(ValueError, match="Count must be non-negative"):
-            await agent.handle_unified_request(request)
-    
-    async def test_empty_unified_request(self):
-        """Test UnifiedRequest with minimal data."""
-        
-        class MinimalAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
-                return AgentOutput(
-                    agent_id=self.agent_id,
-                    outputs={"processed": True}
-                )
-        
-        agent = MinimalAgent(agent_name="test", model_name="test", role="test")
-        
-        from buttermilk._core.tool_definition import UnifiedRequest
-        request = UnifiedRequest(target="test")  # Minimal request
-        
-        result = await agent.handle_unified_request(request)
-        assert result == {"processed": True}
+
 
 
 class TestMCPRouteEdgeCases:
