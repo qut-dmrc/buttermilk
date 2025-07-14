@@ -24,25 +24,33 @@ and verify and compare results.
 
 The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
-## Core Concepts
+## 📚 Documentation
+
+**[→ Complete Documentation](docs/README.md)**
+
+### Quick Start
+- **[Installation Guide](docs/getting-started/installation.md)** - Set up your environment
+- **[Quick Start](docs/getting-started/quickstart.md)** - Get running in 5 minutes
+- **[Your First Flow](docs/getting-started/first-flow.md)** - Build a custom flow
+
+### User Guide
+- **[Running Flows](docs/user-guide/flows.md)** - Complete flow execution guide
+- **[Configuration](docs/user-guide/configuration.md)** - Hydra configuration management
+- **[API Reference](docs/user-guide/api-reference.md)** - REST API documentation
+- **[CLI Reference](docs/user-guide/cli-reference.md)** - Command-line interface
+
+### Core Concepts
 
 Buttermilk is built around a few core concepts that help structure your research and data processing:
 
-*   **Flows**: Represent a complete research or data processing pipeline, outlining a series of steps (Jobs) to achieve a specific outcome.
-*   **Jobs**: The basic unit of work, containing all information for an Agent to process a single piece of data (a Record).
-*   **Records**: Represent individual pieces of data, designed to be immutable and carry rich metadata.
-*   **Agents**: Specialized components that perform specific tasks, such as interacting with AI models or collecting data.
-*   **Orchestrators**: Manage and execute Flows, coordinating Agents and data movement.
-*   **Configuration (Hydra)**: Buttermilk uses Hydra for flexible and organized management of settings.
+*   **Flows**: Complete research or data processing pipelines
+*   **Jobs**: Basic units of work for processing individual records
+*   **Records**: Immutable data structures with rich metadata
+*   **Agents**: Specialized components for specific tasks (AI models, data collection)
+*   **Orchestrators**: Coordinate and manage flow execution
+*   **Configuration (Hydra)**: Flexible, hierarchical configuration management
 
-For a detailed explanation of these concepts, please see **[docs/concepts.md](docs/concepts.md)**.
-
-### Quick Start Guides
-
-*   **[docs/OSB_FLOW_QUICKSTART.md](docs/OSB_FLOW_QUICKSTART.md)**: Quick guide to running the OSB (Oversight Board) flow
-*   **[docs/CONFIGURATION_GUIDE.md](docs/CONFIGURATION_GUIDE.md)**: Comprehensive guide to Hydra configuration
-*   **[README_HYDRA_PATTERNS.md](README_HYDRA_PATTERNS.md)**: Common Hydra patterns and troubleshooting
-*   **[conf/examples/](conf/examples/)**: Example configuration files for common use cases
+For detailed explanations, see **[Core Concepts](docs/reference/concepts.md)**.
 
 ## Usage
 
@@ -66,11 +74,11 @@ Future Development:
 
 Buttermilk is actively under development. We welcome contributions and feedback! If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au) to discuss ideas, planning, or how to contribute.
 
-**For Contributors:**
-- **[docs/DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md)**: Required reading - development process and quality standards
-- **[CLAUDE.md](CLAUDE.md)**: Development guidelines for AI-assisted development
-- **[docs/concepts.md](docs/concepts.md)**: Core concepts and architecture
-- **[buttermilk/core_structure.md](buttermilk/core_structure.md)**: Code structure and patterns
+### For Contributors
+- **[Contributing Guide](docs/developer-guide/contributing.md)** - Development process and standards
+- **[Architecture Guide](docs/developer-guide/architecture.md)** - System architecture and design
+- **[Creating Agents](docs/developer-guide/creating-agents.md)** - Build custom agents
+- **[Testing Guide](docs/developer-guide/testing.md)** - Testing best practices
 
 ## Contributing to Documentation
 
