@@ -29,7 +29,6 @@ class MockButtermilkAgent:
         )
         self._listen = AsyncMock()
         self.get_available_tools = MagicMock(return_value=["test_tool"])
-        self.get_supported_message_types = MagicMock(return_value=["UIMessage"])
         self.create_announcement = MagicMock()
         self.send_announcement = AsyncMock()
         self.initialize = AsyncMock()

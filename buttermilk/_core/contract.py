@@ -957,8 +957,6 @@ class AgentAnnouncement(FlowEvent):
             description, parameters, and other settings.
         available_tools (list[str]): List of tool names/endpoints this agent can
             respond to. Defaults to empty list.
-        supported_message_types (list[str]): OOBMessage types this agent handles.
-            Defaults to empty list.
         status (Literal["joining", "active", "leaving"]): Current agent status
             in the group chat. Defaults to "joining".
         announcement_type (Literal["initial", "response", "update"]): Type of
@@ -976,10 +974,6 @@ class AgentAnnouncement(FlowEvent):
     available_tools: list[str] = Field(
         default_factory=list,
         description="List of tool names/endpoints this agent can respond to"
-    )
-    supported_message_types: list[str] = Field(
-        default_factory=list,
-        description="OOBMessage types this agent handles"
     )
     tool_definition: Any | None = Field(default=None, description="Tool object or schema for this agent (AgentToolDefinition or ToolSchema)")
 
