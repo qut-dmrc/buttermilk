@@ -38,11 +38,16 @@ const UI = ({ url }: Props) => {
     const conn = connect(
       url,
       (message) => {
-        setMessages((prevMessages) => [...prevMessages, message]);
+        // Debug: Log the raw message structure for ui_message types
+        if (message.type === 'ui_message') {
+          console.log('🔍 Raw UI message received:', JSON.stringify(message, null, 2));
+        }
         
         // Track UI messages with options for confirmation handling
-        if (message.type === 'ui_message' && (message as any).options) {
-          setLastUIMessageOptions((message as any).options);
+        if (message.type === 'ui_message' && (message as any).outputs?.options) {
+          const options = (message as any).outputs.options;
+          console.log('🔔 UIMessage with options received:', { content: (message as any).outputs?.content, options, type: typeof options });
+          setLastUIMessageOptions(Array.isArray(options) ? options : null);
         }
         
         // Handle progress updates separately
@@ -64,6 +69,17 @@ const UI = ({ url }: Props) => {
               return newSet;
             });
           }
+        }
+
+        // Debug all ui_messages
+        if (message.type === 'ui_message') {
+          console.log('📨 UI Message received:', { 
+            content: (message as any).outputs?.content, 
+            options: (message as any).outputs?.options, 
+            hasOptions: !!(message as any).outputs?.options,
+            optionsType: typeof (message as any).outputs?.options,
+            isArray: Array.isArray((message as any).outputs?.options)
+          });
         }
 
         // Only add non-filtered messages to the chat display
@@ -114,10 +130,13 @@ const UI = ({ url }: Props) => {
   const handleSubmit = (text: string) => {
     if (!connection) return;
     
+    console.log('🎯 handleSubmit called:', { text, hasUIOptions: !!lastUIMessageOptions, options: lastUIMessageOptions });
+    
     // Handle empty input (ENTER key) for confirmation
     if (!text.trim() && lastUIMessageOptions) {
       // Empty input means confirm/accept (first option)
       const confirmOption = lastUIMessageOptions[0] || 'confirm';
+      console.log('✅ Sending confirmation via ENTER:', confirmOption);
       const userMessage: Message = {
         type: 'user_message',
         payload: {
@@ -150,6 +169,7 @@ const UI = ({ url }: Props) => {
     
     // Check if this is a response to a UIMessage with options
     if (lastUIMessageOptions) {
+      console.log('🔍 Checking response against options:', { text, options: lastUIMessageOptions });
       const lowerText = text.trim().toLowerCase();
       let selectedOption = null;
       
@@ -171,6 +191,7 @@ const UI = ({ url }: Props) => {
       }
       
       if (selectedOption) {
+        console.log('✅ Sending selected option:', selectedOption);
         connection.send({ 
           type: 'manager_response', 
           content: selectedOption,
@@ -178,6 +199,8 @@ const UI = ({ url }: Props) => {
         } as any);
         setLastUIMessageOptions(null);
         return;
+      } else {
+        console.log('❌ No option matched, treating as regular message');
       }
     }
 

@@ -307,7 +307,7 @@ class FlowRunContext(BaseModel):
             # Consolidate debug info into a single log entry
             logger.debug(
                 f"[FlowRunner.send_message_to_ui] Sending {message_type} to session {self.session_id} "
-                f"(ws_state={self.websocket.client_state}, payload_size={len(json.dumps(message_data_to_send))} bytes)",
+                f"(ws_state={self.websocket.client_state}: {json.dumps(message_data_to_send)[:100]}... ",
             )
 
             async def _send_with_retry_internal():
