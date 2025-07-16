@@ -1,5 +1,3 @@
-import hydra
-from pydantic import BaseModel
 import pytest
 from hydra import compose, initialize
 from omegaconf import OmegaConf
@@ -11,6 +9,7 @@ def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
     from buttermilk._core.dmrc import get_bm as _get_bm
     return _get_bm()
+
 
 from buttermilk._core.bm_init import BM
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
@@ -53,9 +52,9 @@ def bm(conf) -> BM:
     return bm
 
 
-@pytest.fixture(scope="session", autouse=True)
-def flow(conf):
-    return conf.flows["test"]
+# @pytest.fixture(scope="session", autouse=True)
+# def flow(conf):
+#     return random.choice(conf.flows)
 
 
 @pytest.fixture(scope="session")
