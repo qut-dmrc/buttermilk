@@ -927,17 +927,18 @@ class HeartBeat(BaseModel):
 
 class AgentAnnouncement(FlowEvent):
     """Agent self-announcement message containing configuration and capabilities.
-    
+
     Used for dynamic agent discovery and registration in group chats. Agents send
     this message when joining, leaving, or updating their status. Host agents
     collect these announcements to maintain a registry of available agents and
     their capabilities.
-    
+
     Attributes:
         agent_config (AgentConfig): Complete agent configuration including role,
             description, parameters, and other settings.
         available_tools (list[str]): List of tool names/endpoints this agent can
             respond to. Defaults to empty list.
+        tool_definitions: List of tool calls that can be used to invoke this agent.
         status (Literal["joining", "active", "leaving"]): Current agent status
             in the group chat. Defaults to "joining".
         announcement_type (Literal["initial", "response", "update"]): Type of
@@ -947,7 +948,7 @@ class AgentAnnouncement(FlowEvent):
             response type announcements). Defaults to None.
 
         tool_definitions: list[Tool]: Tool objects for this agent (AgentToolDefinition or Tool).
-    
+
     """
 
     # Agent identification and configuration
@@ -958,7 +959,9 @@ class AgentAnnouncement(FlowEvent):
         default_factory=list,
         description="List of tool names/endpoints this agent can respond to",
     )
-    tool_definitions: list[Tool] = Field(default_factory=list, description="Tool objects for this agent (AgentToolDefinition or Tool)")
+
+    tool_definitions: list[Tool] = Field(default_factory=list, description="Tool objects for calling this agent (AgentToolDefinition or Tool)")
+
     # Status
     status: Literal["joining", "active", "leaving"] = Field(
         default="joining",
