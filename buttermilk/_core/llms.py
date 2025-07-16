@@ -41,7 +41,7 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
     OpenAIChatCompletionClient,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
-from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configuration
+from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
 
 # Use a function for deferred import to avoid circular references
@@ -58,53 +58,6 @@ from buttermilk._core.log import logger  # Buttermilk logger
 from .retry import RetryWrapper  # Retry logic wrapper
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
-
-
-class LLMConfig(BaseModel):
-    """Configuration for a specific Language Model (LLM).
-
-    Defines the connection details, model object to instantiate, API type,
-    API key, custom base URL, model-specific information, and any additional
-    configurations required by the LLM client.
-
-    Attributes:
-        connection (str): A descriptive identifier for the type of connection
-            or provider (e.g., "AzureOpenAI", "VertexAI-Gemini", "OpenAI-GPT4").
-            This helps in categorizing and managing different LLM setups.
-        obj (str): The name of the specific model object or deployment to
-            instantiate (e.g., "gpt-4-turbo", "gemini-1.5-pro", "claude-3-opus").
-        api_type (str): The type of API the model uses (e.g., "openai",
-            "vertex", "azure", "anthropic"). Defaults to "openai".
-        api_key (str | None): The API key required for authenticating with the
-            LLM provider. Can be None if authentication is handled differently
-            (e.g., via environment variables or instance metadata).
-        base_url (str | None): A custom base URL for the API endpoint, if
-            different from the provider's default (e.g., for Azure OpenAI or
-            self-hosted models).
-        model_info (ModelInfo): An Autogen `ModelInfo` object containing detailed
-            metadata about the model, such as its family, context window size,
-            support for structured output, etc.
-        configs (dict): A dictionary for additional options or configurations
-            to pass directly to the constructor of the LLM client.
-
-    """
-
-    connection: str = Field(
-        ...,
-        description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)",
-    )
-    obj: str = Field(..., description="Name of the model object to instantiate")
-    api_type: str = Field(
-        description="Type of API to use (e.g. openai, vertex, azure)",
-    )
-    api_key: str | None = Field(
-        default=None,
-        description="API key to use for this model",
-    )
-    base_url: str | None = Field(default=None, description="Custom URL to call")
-
-    model_info: ModelInfo
-    configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
 
 
 class MLPlatformTypes(Enum):
@@ -128,6 +81,79 @@ class MLPlatformTypes(Enum):
     anthropic = "anthropic"
     llama = "llama"
     azure = "azure"
+
+
+class LLMConfig(BaseModel):
+    """Configuration for a specific Language Model (LLM).
+
+    Defines the model object to instantiate, API type, API key, custom base URL,
+    model-specific information, and any additional configurations required by the
+    LLM client.
+
+    Attributes:
+        obj (str): The name of the specific model object or deployment to
+            instantiate (e.g., "gpt-4-turbo", "gemini-1.5-pro", "claude-3-opus").
+        api_type (str): The type of API the model uses (e.g., "openai",
+            "google-genai", "google-vertexai", "azure", "anthropic").
+        api_key (str | None): The API key required for authenticating with the
+            LLM provider. Can be None if authentication is handled differently
+            (e.g., via environment variables or instance metadata).
+        base_url (str | None): A custom base URL for the API endpoint, if
+            different from the provider's default (e.g., for Azure OpenAI or
+            self-hosted models).
+        model_info (ModelInfo): An Autogen `ModelInfo` object containing detailed
+            metadata about the model, such as its family, context window size,
+            support for structured output, etc.
+        configs (dict): A dictionary for additional options or configurations
+            to pass directly to the constructor of the LLM client.
+
+    """
+
+    obj: str = Field(..., description="Name of the model object to instantiate")
+    api_type: MLPlatformTypes = Field(
+        description="Type of API to use (e.g. openai, vertex, azure)",
+    )
+    api_key: str | None = Field(
+        default=None,
+        description="API key to use for this model",
+    )
+    base_url: str | None = Field(default=None, description="Custom URL to call")
+
+    model_info: ModelInfo
+    configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
+
+    @field_validator("api_type", mode="before")
+    @classmethod
+    def validate_api_type(cls, v: Any) -> MLPlatformTypes:
+        """Validate api_type and convert string values to MLPlatformTypes enum.
+
+        Args:
+            v: The input value to validate (typically from models.json)
+
+        Returns:
+            MLPlatformTypes: The validated enum value
+
+        Raises:
+            ValueError: If the api_type string is not supported
+
+        """
+        if isinstance(v, MLPlatformTypes):
+            return v
+        if isinstance(v, str):
+            # Try to match the string value to an enum member
+            try:
+                return MLPlatformTypes(v)
+            except ValueError:
+                # If direct value match fails, try case-insensitive matching
+                for platform_type in MLPlatformTypes:
+                    if platform_type.value.lower() == v.lower():
+                        return platform_type
+                # If no match found, raise a descriptive error
+                supported_values = [pt.value for pt in MLPlatformTypes]
+                raise ValueError(
+                    f"Unsupported api_type '{v}'. Supported values are: {supported_values}",
+                )
+        raise ValueError(f"api_type must be a string or MLPlatformTypes enum, got {type(v)}")
 
 
 # Generate with:
@@ -417,6 +443,7 @@ class AutoGenWrapper(RetryWrapper):
 
         Returns:
             FunctionExecutionResult ready to be sent back to the LLM
+
         """
         arguments = json.loads(call.arguments)
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
@@ -428,7 +455,7 @@ class AutoGenWrapper(RetryWrapper):
         return FunctionExecutionResult(
             call_id=call.id,
             name=tool.name,
-            content=tool.return_value_as_string(result)
+            content=tool.return_value_as_string(result),
         )
 
     async def _execute_tools(
@@ -446,6 +473,7 @@ class AutoGenWrapper(RetryWrapper):
 
         Returns:
             List of FunctionExecutionResult objects
+
         """
         tasks = []
         for call in calls:
@@ -544,23 +572,38 @@ class LLMs(BaseModel):
             **config.configs,
         }
 
-        api_type = config.api_type.lower()  # Normalize api_type
+        api_type = config.api_type.value.lower()  # Get string value from enum and normalize
 
         if api_type == "azure":
             client = AzureOpenAIChatCompletionClient(
-                azure_endpoint=config.base_url, **client_params
+                azure_endpoint=config.base_url,
+                **client_params,
             )
-        elif api_type in {"google", "google_genai"}:
+        elif api_type == "google-genai":
             # Check if it's using OpenAI-compatible endpoint
             if config.base_url and "openai" in config.base_url:
                 client = OpenAIChatCompletionClient(
                     base_url=config.base_url,
                     model_info=config.model_info,  # Pass model_info explicitly for custom models
-                    **client_params
+                    **client_params,
                 )
             else:
-                client = GeminiChatCompletionClient(**client_params)
-        elif api_type in {"vertex", "google_vertexai"}:
+                # Use native google.genai.Client with Vertex AI authentication
+                bm_instance = get_bm()  # Get Buttermilk global instance
+                if not bm_instance.gcp_credentials:
+                    raise ValueError("GCP credentials not available in Buttermilk instance for Google GenAI.")
+                
+                # Create GeminiChatCompletionClient with Vertex AI auth
+                gemini_client_params = client_params.copy()
+                # Set a dummy API key for OpenAI client validation, actual auth is via credentials
+                gemini_client_params["api_key"] = "dummy-key-for-vertex-gemini"
+                gemini_client_params["project_id"] = config.configs.get("project_id")
+                gemini_client_params["location"] = config.configs.get("location", "global")
+                gemini_client_params["credentials"] = bm_instance.gcp_credentials
+                gemini_client_params["model_info"] = config.model_info  # Pass model_info explicitly
+                
+                client = GeminiChatCompletionClient(**gemini_client_params)
+        elif api_type == "google-vertexai":
             bm_instance = get_bm()  # Get Buttermilk global instance
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available in Buttermilk instance for Vertex AI.")
@@ -592,7 +635,7 @@ class LLMs(BaseModel):
 
                 # Set up headers with bearer token using BM's token method
                 headers = {
-                    "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}"
+                    "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
                 }
 
                 # For Vertex endpoints, we need a dummy API key to satisfy OpenAI client validation
@@ -606,12 +649,12 @@ class LLMs(BaseModel):
                 client = OpenAIChatCompletionClient(
                     base_url=config.base_url,
                     model_info=config.model_info,  # Pass model_info for custom models
-                    **vertex_params
+                    **vertex_params,
                 )
 
         elif api_type == "anthropic":  # Direct Anthropic API (not via Vertex)
             # Check if this is actually Anthropic via Vertex based on connection type
-            if config.connection == "VertexServerless" and "anthropic" in config.obj.lower():
+            if config.api_type == MLPlatformTypes.anthropic and "anthropic" in config.obj.lower():
                 # This is Anthropic via Vertex, not direct Anthropic
                 bm_instance = get_bm()
                 if not bm_instance.gcp_credentials:
@@ -644,7 +687,7 @@ class LLMs(BaseModel):
             client = OpenAIChatCompletionClient(
                 base_url=config.base_url,
                 model_info=config.model_info,  # Pass model_info for custom models
-                **client_params
+                **client_params,
             )
 
         if client is None:  # Should not happen if logic is correct

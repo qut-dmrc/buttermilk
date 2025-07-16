@@ -22,7 +22,7 @@ from weave.trace.weave_client import Call, WeaveObject
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-    from buttermilk._core.tool_definition import AgentToolDefinition, UnifiedRequest
+    from buttermilk._core.tool_definition import AgentToolDefinition
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import (
@@ -270,10 +270,10 @@ class Agent(RoutedAgent):
             content=f"Agent {self.agent_name} active and available",
             agent_config=self._cfg,
             available_tools=[tool.name for tool in self.get_available_tools()],
-            tool_definition=tool_definitions,
-            status=status,
-            announcement_type=announcement_type,
-            responding_to=responding_to,
+            tool_definitions=tool_definitions,
+            status="active",
+            announcement_type="initial",
+            responding_to=message.message_id if hasattr(message, "message_id") else None,
             source=self.agent_id,
         )
 
@@ -282,7 +282,9 @@ class Agent(RoutedAgent):
             topic_id=ctx.topic_id or DefaultTopicId(type="default"),
         )
 
-        logger.debug(f"Agent {self.agent_name} sent announcement in response to ConductorRequest")
+        logger.debug(
+            f"Agent {self.agent_name} ({self.agent_id}) sent announcement to topic {ctx.topic_id or DefaultTopicId(type='default')} with tools: {[tool.name for tool in announcement.tool_definitions]}",
+        )
 
         # Mark as announced
         self._announced = True
@@ -521,10 +523,11 @@ class Agent(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle Record messages by adding them to internal state.
-        
+
         Args:
             message: The Record message to process.
             ctx: Message context containing sender and topic information.
+
         """
         self._records.append(message)
         logger.debug(f"Agent {self.agent_name} added Record {message.record_id} to internal state.")
@@ -536,18 +539,19 @@ class Agent(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle AgentOutput messages, extracting Records and data based on input mappings.
-        
+
         Args:
             message: The AgentOutput message to process.
             ctx: Message context containing sender and topic information.
+
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-        
+
         # Handle AgentOutput containing a Record in its 'outputs'
         if isinstance(getattr(message, "outputs", None), Record):
             self._records.append(message.outputs)  # type: ignore
             logger.debug(f"Agent {self.agent_name} added Record from AgentOutput.outputs to internal state.")
-        
+
         # Extract data based on input mappings
         elif self.inputs:  # Only extract if input mappings are defined
             extracted = extract_message_data(
@@ -579,18 +583,19 @@ class Agent(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle AgentTrace messages, adding relevant content to model context.
-        
+
         Args:
             message: The AgentTrace message to process.
             ctx: Message context containing sender and topic information.
+
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-        
+
         # Handle AgentTrace containing a Record in its 'outputs'
         if isinstance(getattr(message, "outputs", None), Record):
             self._records.append(message.outputs)  # type: ignore
             logger.debug(f"Agent {self.agent_name} added Record from AgentTrace.outputs to internal state.")
-        
+
         # Extract data based on input mappings
         elif self.inputs:  # Only extract if input mappings are defined
             extracted = extract_message_data(
@@ -612,7 +617,7 @@ class Agent(RoutedAgent):
                     found_keys.append(key)
             if found_keys:
                 logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
-        
+
         # Add relevant message content to the conversation history (_model_context).
         # Only add traces to context if they are directly relevant to this agent
         should_add_to_context = (
@@ -638,13 +643,14 @@ class Agent(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle ManagerMessage messages, adding non-command content to model context.
-        
+
         Args:
             message: The ManagerMessage to process.
             ctx: Message context containing sender and topic information.
+
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "manager"
-        
+
         # Extract data based on input mappings if defined
         if self.inputs:
             extracted = extract_message_data(
@@ -666,7 +672,7 @@ class Agent(RoutedAgent):
                     found_keys.append(key)
             if found_keys:
                 logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
-        
+
         # Add to model context if not a command
         if message.content:
             content_str = str(message.content)
@@ -680,13 +686,14 @@ class Agent(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle ToolOutput messages, extracting data based on input mappings.
-        
+
         Args:
             message: The ToolOutput message to process.
             ctx: Message context containing sender and topic information.
+
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-        
+
         # Extract data based on input mappings
         if self.inputs:  # Only extract if input mappings are defined
             extracted = extract_message_data(

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - _self_
+  - /local
+
+run:
+  mode: notebook
+  ui: notebook
+  human_in_loop: true
+
+  name: bm_notebook
