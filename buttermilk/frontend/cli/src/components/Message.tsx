@@ -121,9 +121,9 @@ const getMessageContent = (message: Message | any): string => {
     
     case 'ui_message':
       // UI messages might have content in various locations
-      return msg.content || msg.message || 
+      return msg.outputs?.content || msg.content || msg.message || 
              (msg.payload && (msg.payload.message || msg.payload.content)) ||
-             (msg.options ? '⚠️ Action Required' : 'UI message');
+             (msg.outputs?.options ? '⚠️ Action Required' : 'UI message');
     
     case 'chat_message':
       // Chat messages might have content in outputs
@@ -233,16 +233,16 @@ const MessageComponent = ({ message }: Props) => {
         )}
         
         {/* UI Message with options (confirmation request) */}
-        {message.type === 'ui_message' && (message as any).options && (
+        {message.type === 'ui_message' && (message as any).outputs?.options && (
           <Box flexDirection="column" paddingTop={1}>
             <Box borderStyle="single" borderColor={retroIRCTheme.colors.warning} paddingLeft={1} paddingRight={1}>
               <Box flexDirection="column">
                 <Text color={retroIRCTheme.colors.warning} bold>
                   🔔 Confirmation Required:
                 </Text>
-                {Array.isArray((message as any).options) && (
+                {Array.isArray((message as any).outputs.options) && (
                   <Box flexDirection="column" paddingTop={1}>
-                    {(message as any).options.map((option: string, idx: number) => (
+                    {(message as any).outputs.options.map((option: string, idx: number) => (
                       <Text key={idx} color={retroIRCTheme.colors.info}>
                         [{option[0].toUpperCase()}] {option}
                       </Text>
@@ -254,6 +254,17 @@ const MessageComponent = ({ message }: Props) => {
                 </Text>
               </Box>
             </Box>
+          </Box>
+        )}
+
+        {/* Debug info for UI messages */}
+        {message.type === 'ui_message' && (
+          <Box flexDirection="column" paddingTop={0}>
+            <Text color={retroIRCTheme.colors.textDim} dimColor>
+              [DEBUG] UIMessage - hasOptions: {!!(message as any).outputs?.options ? 'YES' : 'NO'}, 
+              optionsType: {typeof (message as any).outputs?.options}, 
+              isArray: {Array.isArray((message as any).outputs?.options) ? 'YES' : 'NO'}
+            </Text>
           </Box>
         )}
         

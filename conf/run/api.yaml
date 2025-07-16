@@ -8,7 +8,7 @@ run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: api
   ui: web
-  human_in_loop: true
+  human_in_loop: false
 
   name: bm_api
   job: flows

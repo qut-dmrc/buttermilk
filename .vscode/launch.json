@@ -4,7 +4,38 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-  {
+    {
+      "name": "debug cli frontend",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/buttermilk/frontend/cli/",
+      "program": "${workspaceFolder}/buttermilk/frontend/cli/dist/cli.js",
+      "preLaunchTask": "build-frontend-cli",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/buttermilk/frontend/cli/dist/**/*.js"
+      ],
+      "console": "integratedTerminal",
+      "localRoot": "${workspaceFolder}/buttermilk/frontend/cli/",
+      "remoteRoot": null
+    },
+    {
+      "name": "debug cli frontend (attach)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/buttermilk/frontend/cli/dist/**/*.js"
+      ],
+      "localRoot": "${workspaceFolder}/buttermilk/frontend/cli/",
+      "remoteRoot": null
+    },
+    {
     "type": "vscode-edge-devtools.debug",
     "request": "attach",
     "name": "Attach to Microsoft Edge and open the Edge DevTools",

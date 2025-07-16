@@ -4,6 +4,8 @@ This file provides essential guidance to Claude Code (claude.ai/code) when worki
 
 ## Development Process Guidelines
 
+See `docs/developer-guide/llm-debugging.md` for tools, expected behavior, and success criteria.
+
 ### Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions
 2. **ANALYZE**: Map the system architecture and identify root causes  
@@ -21,7 +23,7 @@ This file provides essential guidance to Claude Code (claude.ai/code) when worki
 - **CRITICAL**: Changing Pydantic model validation settings (like `extra="forbid"` to `extra="allow"`) when encountering validation errors
 - **CRITICAL**: Making "quick fixes" to suppress errors instead of understanding why they occur
 
-### Never Make These Superficial Fixes
+### Never Make Superficial Fixes
 - Changing `extra="forbid"` to `extra="allow"` in Pydantic models when encountering "extra_forbidden" errors
 - Adding try/except blocks to suppress validation errors without understanding the root cause
 - Modifying type annotations to be more permissive (like `Any`) to bypass type checking
@@ -40,6 +42,9 @@ This file provides essential guidance to Claude Code (claude.ai/code) when worki
 - **Minimal Viable Fixes**: Smallest change that solves root cause
 - **Embrace "I Don't Know Yet"**: Systematic analysis beats guessing
 - **Always Commit and Document**: Commit changes immediately and update GitHub issues with progress/solutions
+
+### Testing and Debugging Guidelines
+- **Do not make miscellaneous test scripts; use the proper debug framework**
 
 ## Buttermilk Project Development Guidelines
 
