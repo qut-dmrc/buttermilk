@@ -50,7 +50,7 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
     }
     
     // Get a new session ID from the backend
-    console.log('Requesting new session from backend');
+    console.log('Requesting new session from backend: ${env.BACKEND_API_URL}/api/session');
     const response = await fetch(`${env.BACKEND_API_URL}/api/session`, {
       method: 'GET',
       headers: {
