@@ -12,7 +12,6 @@ from collections.abc import (
 from typing import Any
 
 from autogen_core import CancellationToken
-from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -26,12 +25,16 @@ class UIAgent(Agent):
     It handles the basic initialization and resource management for UI agents.
     """
 
-    # Common fields that all UI implementations should have
-    callback_to_groupchat: Callable[..., Awaitable[None]] | None = Field(default=None)
+    def __init__(self, **kwargs):
+        """Initialize UIAgent with callback configuration."""
+        super().__init__(**kwargs)
 
-    # Private attributes for internal state management
-    _input_task: asyncio.Task | None = PrivateAttr(default=None)
-    _trace_this = False  # Controls whether this agent's messages are traced
+        # Common fields that all UI implementations should have - moved from Field declaration
+        self.callback_to_groupchat: Callable[..., Awaitable[None]] | None = kwargs.get("callback_to_groupchat")
+
+        # Private attributes for internal state management - moved from PrivateAttr declaration
+        self._input_task: asyncio.Task | None = None
+        self._trace_this = False  # Controls whether this agent's messages are traced
 
     async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the UI agent with necessary callbacks and session info.
@@ -103,10 +106,11 @@ class UIAgent(Agent):
     # Default implementations for UI display - subclasses should override as needed
     async def callback_to_ui(self, message: Any, source: str = "") -> None:
         """Display a message to the UI. Override in subclasses for specific UI handling.
-        
+
         Args:
             message: The message to display
             source: The source of the message
+
         """
         logger.debug(f"{self.__class__.__name__} received message from {source} for display")
 
