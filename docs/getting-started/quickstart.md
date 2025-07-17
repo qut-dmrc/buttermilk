@@ -2,33 +2,19 @@
 
 Get up and running with Buttermilk in 5 minutes! This guide assumes you've already completed the [installation](installation.md).
 
-## ✅ Two Working Examples
+## ✅ Try Your First Flow
 
-Buttermilk provides two example flows to demonstrate different configuration approaches:
-
-### 1. Trans Flow (Hierarchical Composition)
-
-This flow demonstrates modular configuration using Hydra's composition system:
+Let's start with the Trans flow, which analyzes journalism quality for trans issues reporting:
 
 ```bash
-# Console mode (interactive)
-uv run python -m buttermilk.runner.cli run=console +flow=trans_clean
+# Run interactively in console mode
+uv run python -m buttermilk.runner.cli run=console +flow=trans
 
 # With a custom prompt
-uv run python -m buttermilk.runner.cli run=console +flow=trans_clean +prompt="Analyze this article about trans issues"
+uv run python -m buttermilk.runner.cli run=console +flow=trans +prompt="Analyze this article about trans issues"
 ```
 
-### 2. Tox Flow (All-in-One)
-
-This flow shows everything defined in a single configuration file:
-
-```bash
-# Console mode
-uv run python -m buttermilk.runner.cli run=console +flow=tox_allinone
-
-# With a custom prompt
-uv run python -m buttermilk.runner.cli run=console +flow=tox_allinone +prompt="Check this content for toxicity"
-```
+This demonstrates Buttermilk's modular configuration using Hydra's composition system.
 
 ## 🚀 Start the API Server
 
@@ -36,11 +22,13 @@ Launch the API server to access flows via HTTP:
 
 ```bash
 # Start API server (runs on http://localhost:8000)
-uv run python -m buttermilk.runner.cli run=api
+uv run python -m buttermilk.runner.cli run=api +flow=trans
 
-# Or with specific flows
+# Or with multiple flows
 uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
 ```
+
+> **📚 Learn More**: See [Running Flows](../user-guide/flows.md) for all run modes and advanced options.
 
 ### Using the API
 

@@ -55,8 +55,13 @@ Buttermilk is an opinionated framework for HASS (Humanities, Arts, and Social Sc
 1. **Start here**: [Installation Guide](getting-started/installation.md)
 2. **Get hands-on**: [Quick Start](getting-started/quickstart.md)
 3. **Build understanding**: [Core Concepts](reference/concepts.md)
-4. **Go deeper**: [User Guide](user-guide/flows.md)
+4. **Go deeper**: [Running Flows](user-guide/flows.md) and [Configuration](user-guide/configuration.md)
 5. **Contribute**: [Developer Guide](developer-guide/contributing.md)
+
+### For LLM Developers
+- **Essential**: [Bot Knowledge Bank](bots/README.md) - Core patterns and guidelines
+- **Debugging**: [Debugging Guide](bots/debugging.md) - Tools and strategies
+- **Architecture**: [System Map](bots/map.md) - Project structure overview
 
 ## 🆘 Need Help?
 
