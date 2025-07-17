@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import React, { useEffect, useState } from 'react';
+import MessageList from './components/MessageList.js';
+import ProgressIndicator from './components/ProgressIndicator.js';
+import Spinner from './components/Spinner.js';
+import UserInput from './components/UserInput.js';
 import { retroIRCTheme } from './themes.js';
 import { Message } from './types.js';
-import MessageList from './components/MessageList.js';
-import UserInput from './components/UserInput.js';
-import Spinner from './components/Spinner.js';
-import ProgressIndicator from './components/ProgressIndicator.js';
-import { connect, WebSocketConnection, ConnectionState } from './websocket.js';
+import { connect, ConnectionState, WebSocketConnection } from './websocket.js';
 
 interface Props {
   url: string;
@@ -48,10 +48,7 @@ const UI = ({ url }: Props) => {
           const options = (message as any).outputs.options;
           console.log('🔔 UIMessage with options received:', { content: (message as any).outputs?.content, options, type: typeof options });
           setLastUIMessageOptions(Array.isArray(options) ? options : null);
-        }
-        
-        // Handle progress updates separately
-        if (message.type === 'flow_progress_update') {
+        } else if (message.type === 'flow_progress_update') {
           updateFlowProgress(message);
         } else if (message.type === 'agent_announcement') {
           updateAgentStatus(message);
