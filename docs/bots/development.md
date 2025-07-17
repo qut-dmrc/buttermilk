@@ -133,7 +133,7 @@ sentiment_analyzer:
 ### Test Style
 ```python
 # Good: Descriptive, isolated, async
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_handles_empty_content():
     """Agent should raise ValueError for empty content."""
     agent = ContentAnalyzer(test_config)
@@ -142,43 +142,14 @@ async def test_agent_handles_empty_content():
         await agent.process("")
 ```
 
-## Common Patterns
+## Remember
 
-### Creating New Agents
-```python
-# 1. Inherit from base
-class MyAgent(Agent):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Initialize resources
-        
-    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
-        # Core logic
-        return AgentOutput(...)
-```
+1. **Systematic Approach**: Don't guess, investigate
+2. **One Change at a Time**: Isolate variables
+3. **Document Everything**: Future you will thank you
+4. **Ask for Help**: Check issues, ask team
+5. **Take Breaks**: Fresh eyes see more
 
-### Adding Tools
-```python
-# Use decorators for tool definition
-@tool(name="analyze", description="Analyze text")
-async def analyze_text(self, text: str) -> dict:
-    # Tool implementation
-    return {"result": "analysis"}
-```
-
-### Configuration Validation
-```python
-# Use Pydantic for validation
-class MyConfig(BaseModel):
-    model: str
-    temperature: float = Field(ge=0, le=1)
-    
-    @validator('model')
-    def validate_model(cls, v):
-        if v not in ALLOWED_MODELS:
-            raise ValueError(f"Unknown model: {v}")
-        return v
-```
 
 ## Anti-Patterns to Avoid
 
@@ -233,17 +204,16 @@ config = {  # 🚫 Use YAML files
 1. **DON'T**: Immediately try to fix
 2. **DO**: Understand why it's happening
 
-```bash
-# Good debugging flow
+### Good debugging flow
 1. Reproduce reliably
 2. Find minimal test case  
 3. Trace execution path
 4. Identify divergence point
 5. Fix at appropriate level
-```
+
 
 ### Validation Error Strategy
-```
+
 1. Error occurs: "extra fields not permitted"
 2. DON'T: Change extra="forbid" to "allow"
 3. DO: 
@@ -251,7 +221,6 @@ config = {  # 🚫 Use YAML files
    - Find proper transformation point
    - Add field validator or factory method
    - Test the transformation
-```
 
 ## Testing Guidelines
 
@@ -288,116 +257,8 @@ uv run pytest --cov=buttermilk
 uv run pytest -n auto
 ```
 
-## Development Environment
-
-### Essential Setup
-```bash
-# Install dependencies
-uv install
-
-# Authenticate
-gcloud auth login
-gcloud auth application-default login
-
-# Set project
-export GOOGLE_CLOUD_PROJECT=your-project
-```
-
-### Environment Variables
-```bash
-# Required
-export GOOGLE_CLOUD_PROJECT=xxx
-export OPENAI_API_KEY=xxx
-export ANTHROPIC_API_KEY=xxx
-
-# Optional
-export BUTTERMILK_LOG_LEVEL=DEBUG
-export HYDRA_FULL_ERROR=1
-```
-
-### VS Code Settings
-```json
-{
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.formatting.provider": "black",
-  "python.testing.pytestEnabled": true,
-  "editor.formatOnSave": true
-}
-```
-
-## Performance Considerations
-
-### Async Best Practices
-```python
-# Good: Concurrent operations
-results = await asyncio.gather(
-    agent1.process(data1),
-    agent2.process(data2),
-    agent3.process(data3)
-)
-
-# Bad: Sequential operations
-result1 = await agent1.process(data1)
-result2 = await agent2.process(data2)
-result3 = await agent3.process(data3)
-```
-
-### Resource Management
-```python
-# Good: Proper cleanup
-class MyAgent(Agent):
-    async def initialize(self, **kwargs):
-        self.session = aiohttp.ClientSession()
-        
-    async def cleanup(self):
-        await self.session.close()
-```
-
 ## Documentation Standards
-
-### Code Documentation
-```python
-def complex_function(
-    data: dict[str, Any],
-    *,
-    validate: bool = True,
-    transform: Callable[[Any], Any] | None = None
-) -> ProcessedResult:
-    """Process complex data with optional transformation.
-    
-    This function handles the core data processing pipeline,
-    with optional validation and transformation steps.
-    
-    Args:
-        data: Input data dictionary with the following structure:
-            {
-                "content": str,  # Required
-                "metadata": dict,  # Optional
-                "config": dict  # Optional
-            }
-        validate: Whether to validate input data
-        transform: Optional transformation function
-        
-    Returns:
-        ProcessedResult containing:
-            - transformed_data: The processed data
-            - metrics: Processing metrics
-            - errors: Any validation errors
-            
-    Raises:
-        ValueError: If validation is enabled and data is invalid
-        ProcessingError: If transformation fails
-        
-    Example:
-        >>> result = complex_function(
-        ...     {"content": "test"},
-        ...     transform=lambda x: x.upper()
-        ... )
-        >>> print(result.transformed_data)
-        "TEST"
-    """
-```
+Adopt Google-style docstrings
 
 ### Commit Messages
 ```

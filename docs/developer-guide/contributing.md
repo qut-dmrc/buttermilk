@@ -124,15 +124,15 @@ class AgentConfig(BaseModel):
 **Example:**
 ```python
 # Good
-def process_record(self, record: Record) -> Result:
+async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
     # Validation happens at model level
-    return self.agent.process(record)
+    return await self.agent.process(message)
 
 # Bad
-def process_record(self, record: Record) -> Result:
-    if not record:
+async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
+    if not message:
         return None
-    if not hasattr(record, 'content'):
+    if not hasattr(message, 'content'):
         return None
     # Lots of defensive checks...
 ```
@@ -269,11 +269,10 @@ class MyAgent(Agent):
         super().__init__(config)
         self.llm = self._create_llm_client()
     
-    async def process(self, record: Record) -> AgentOutput:
-        # Process the record
-        result = await self.llm.generate(record.content)
+    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
+        # Process the message
+        result = await self.llm.generate(message.content)
         return AgentOutput(
-            agent_name=self.name,
             content=result,
             metadata={"tokens": len(result)}
         )

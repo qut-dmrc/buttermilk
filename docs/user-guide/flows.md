@@ -2,34 +2,27 @@
 
 This guide covers everything you need to know about running Buttermilk flows, from basic execution to advanced deployment scenarios.
 
-## Quick Start
+> **💡 New to Buttermilk?** Start with the [Quick Start Guide](../getting-started/quickstart.md) to get running in 5 minutes.
 
-### Example Flows
+## Available Flows
 
-Buttermilk includes two example flows to demonstrate different configuration approaches:
+Buttermilk includes several example flows for different research scenarios:
 
-#### Trans Flow (Hierarchical Composition)
+- **`trans`**: Journalism quality assessment for trans issues reporting
+- **`osb`**: Interactive group chat for querying OSB vector store  
+- **`tox`**: Toxicity criteria application
+- **`zot`**: Zotero RAG for academic citations
+
+### Running a Single Flow
 ```bash
 # Console mode (interactive)
-uv run python -m buttermilk.runner.cli run=console flow=trans_clean
+uv run python -m buttermilk.runner.cli run=console +flow=trans
 
 # API mode (web interface)
-uv run python -m buttermilk.runner.cli run=api flow=trans_clean
+uv run python -m buttermilk.runner.cli run=api +flow=trans
 
 # Batch mode (automated processing)
-uv run python -m buttermilk.runner.cli run=batch flow=trans_clean
-```
-
-#### Tox Flow (All-in-One)
-```bash
-# Console mode
-uv run python -m buttermilk.runner.cli run=console flow=tox_allinone
-
-# API mode
-uv run python -m buttermilk.runner.cli run=api flow=tox_allinone
-
-# Batch mode
-uv run python -m buttermilk.runner.cli run=batch flow=tox_allinone
+uv run python -m buttermilk.runner.cli run=batch +flow=trans
 ```
 
 ## Run Modes

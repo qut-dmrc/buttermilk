@@ -35,7 +35,7 @@ Agents are the core processing units in Buttermilk. They:
 
 ```python
 from buttermilk._core.agent import Agent
-from buttermilk._core.types import Record, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentOutput
 from omegaconf import DictConfig
 
 class SimpleAgent(Agent):
@@ -44,22 +44,21 @@ class SimpleAgent(Agent):
         # Initialize agent-specific properties
         self.processor = self._create_processor()
     
-    async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
-        """Process a single record.
+    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
+        """Process an agent input message.
         
         Args:
-            record: The record to process
+            message: The input message to process
             **kwargs: Additional context
             
         Returns:
             AgentOutput with processing results
         """
-        # Process the record
-        result = await self.processor.process(record.content)
+        # Process the message content
+        result = await self.processor.process(message.content)
         
         # Return structured output
         return AgentOutput(
-            agent_name=self.name,
             content=result,
             metadata={
                 "processing_time": 1.23,
@@ -379,16 +378,15 @@ return AgentOutput(
 ```python
 import time
 
-async def _process(self, *, record: Record, **kwargs) -> AgentOutput:
+async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
     start_time = time.time()
     
     # Processing logic
-    result = await self._do_processing(record)
+    result = await self._do_processing(message)
     
     processing_time = time.time() - start_time
     
     return AgentOutput(
-        agent_name=self.name,
         content=result,
         metadata={"processing_time": processing_time}
     )
