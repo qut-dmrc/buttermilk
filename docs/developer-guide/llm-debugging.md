@@ -7,7 +7,7 @@ This guide explains how AI assistants can debug Buttermilk flows using the avail
 
 - API Server Health Check: `curl -s http://localhost:8000/health | jq .`
 - WebSocket Connection Test: `uv run python -m buttermilk.debug.ws_debug_cli test-connection`
-- Start Flow Session: `uv run  python -m buttermilk.debug.ws_debug_cli --json-output start <flow_name> --wait <seconds>`. Use `flow_name`: `zot`, `osb`, or `trans`. Wait at least 20 seconds for flow to start and agents to initialize. Returns session_id and initial messages.
+- Start Flow Session: `uv run python -m buttermilk.debug.ws_debug_cli --json-output start <flow_name> --wait <seconds>`. Use `flow_name`: `zot`, `osb`, or `trans`. Wait at least 20 seconds for flow to start and agents to initialize. Returns session_id and initial messages.
 - Send Interactive Messages on behalf of user to active flow: `uv run python -m buttermilk.debug.ws_debug_cli --json-output send "<message>" --session <session_id> --wait <seconds>`
 - Monitor Session Activity: `uv run python -m buttermilk.debug.ws_debug_cli --json-output wait --session <session_id> --wait <seconds>`. Checks for new messages without sending input.
 - Start the API server: `uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=full`

@@ -48,7 +48,12 @@ class RagAgent(LLMAgent):
     4. Returning in ResearchResult format
     """
 
-    # Force structured output - can be overridden by subclasses
-    _output_model: type[BaseModel] | None = ResearchResult
-
-    template: str = Field("rag", description="Jinja2 template to use for this agent.")
+    def __init__(self, **kwargs):
+        """Initialize RagAgent with template configuration."""
+        super().__init__(**kwargs)
+        
+        # Force structured output - can be overridden by subclasses
+        self._output_model: type[BaseModel] | None = ResearchResult
+        
+        # Template configuration - moved from Field declaration
+        self.template: str = kwargs.get("template", "rag")

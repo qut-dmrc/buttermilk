@@ -79,12 +79,6 @@ class LLMAgent(Agent):
     # LLM-specific configurations
     # These are now initialized in __init__ instead of using PrivateAttr
 
-    # Control behavior
-    fail_on_unfilled_parameters: bool = pydantic.Field(
-        default=True,
-        description="If True, the agent will fail when template variables are missing from inputs.",
-    )
-
     def __init__(self, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
@@ -107,6 +101,9 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._output_model: type[pydantic.BaseModel] | None = None
         self._tools: list[Tool] = []
+        
+        # Control behavior - moved from Field declaration
+        self.fail_on_unfilled_parameters: bool = kwargs.get("fail_on_unfilled_parameters", True)
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
