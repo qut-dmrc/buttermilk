@@ -1,5 +1,4 @@
-"""Defines the CLIUserAgent for interacting with the user via the command line console.
-"""
+"""Defines the CLIUserAgent for interacting with the user via the command line console."""
 
 import asyncio
 from collections.abc import Awaitable, Callable  # Added List, Union, Optional
@@ -9,7 +8,6 @@ from typing import Union
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
 from autogen_core import CancellationToken, MessageContext, message_handler  # Autogen types (used by base Agent)
-from pydantic import PrivateAttr
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.pretty import pretty_repr  # For formatted output of complex objects
@@ -45,17 +43,17 @@ console = Console(highlighter=JSONHighlighter())
 
 # Model-based colors (matching frontend)
 MODEL_COLORS = {
-    "gpt-4": "#10a37f",      # OpenAI green
+    "gpt-4": "#10a37f",  # OpenAI green
     "gpt4": "#10a37f",
-    "gpt-3.5": "#1f85de",    # OpenAI blue
+    "gpt-3.5": "#1f85de",  # OpenAI blue
     "gpt3": "#1f85de",
-    "o3": "#00d4aa",         # OpenAI teal for o3 series
-    "claude": "#ff6b35",     # Anthropic orange
+    "o3": "#00d4aa",  # OpenAI teal for o3 series
+    "claude": "#ff6b35",  # Anthropic orange
     "opus": "#ff6b35",
     "sonnet": "#ff6b35",
     "haiku": "#ff6b35",
-    "gemini": "#4285f4",     # Google blue
-    "llama": "#0866ff",      # Meta blue
+    "gemini": "#4285f4",  # Google blue
+    "llama": "#0866ff",  # Meta blue
     "falcon": "#3498db",
 }
 
@@ -92,21 +90,32 @@ def get_model_color(message) -> str:
                 for model_name, color in MODEL_COLORS.items():
                     if model_name in model_lower:
                         # Convert hex colors to rich color names
-                        if color == "#10a37f": return "green"
-                        if color == "#1f85de": return "blue"
-                        if color == "#00d4aa": return "cyan"
-                        if color == "#ff6b35": return "bright_red"
-                        if color == "#4285f4": return "bright_blue"
-                        if color == "#0866ff": return "blue"
-                        if color == "#3498db": return "bright_cyan"
+                        if color == "#10a37f":
+                            return "green"
+                        if color == "#1f85de":
+                            return "blue"
+                        if color == "#00d4aa":
+                            return "cyan"
+                        if color == "#ff6b35":
+                            return "bright_red"
+                        if color == "#4285f4":
+                            return "bright_blue"
+                        if color == "#0866ff":
+                            return "blue"
+                        if color == "#3498db":
+                            return "bright_cyan"
 
     # Fallback to role-based coloring
     if hasattr(message, "agent_info") and message.agent_info:
         agent_name = getattr(message.agent_info, "agent_name", "").lower()
-        if "judge" in agent_name: return "bright_red"
-        if "scorer" in agent_name: return "bright_yellow"
-        if "assistant" in agent_name: return "bright_blue"
-        if "researcher" in agent_name: return "bright_cyan"
+        if "judge" in agent_name:
+            return "bright_red"
+        if "scorer" in agent_name:
+            return "bright_yellow"
+        if "assistant" in agent_name:
+            return "bright_blue"
+        if "researcher" in agent_name:
+            return "bright_cyan"
 
     return "dim white"
 
@@ -176,7 +185,8 @@ FormattableMessages = Union[
     Record,
     QualScore,
     JudgeReasons,
-    FlowMessage, ResearchResult,
+    FlowMessage,
+    ResearchResult,
     AgentAnnouncement,  # Added for agent announcements
 ]
 # TODO: Add other relevant FlowMessage subtypes if needed for formatting.
@@ -192,12 +202,16 @@ class CLIUserAgent(UIAgent):
     via the `callback_to_groupchat` provided during initialization.
     """
 
-    # Rich console instance for formatted output.
-    _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
-    # Background task for polling user input.
-    _input_task: asyncio.Task | None = PrivateAttr(default=None)
-    # Store the last UIMessage with options for proper confirmation handling
-    _last_confirmation_options: list[str] | None = PrivateAttr(default=None)
+    def __init__(self, **kwargs):
+        """Initialize CLIUserAgent with console and task management."""
+        super().__init__(**kwargs)
+
+        # Rich console instance for formatted output - moved from PrivateAttr declaration
+        self._console: Console = Console(highlight=True, markup=True)
+        # Background task for polling user input - moved from PrivateAttr declaration
+        self._input_task: asyncio.Task | None = None
+        # Store the last UIMessage with options for proper confirmation handling - moved from PrivateAttr declaration
+        self._last_confirmation_options: list[str] | None = None
 
     async def callback_to_ui(self, message, source: str = "system", **kwargs):
         if formatted_msg := self._fmt_msg(message, source=source):
@@ -421,7 +435,9 @@ class CLIUserAgent(UIAgent):
 
                             # Model tag if available
                             if model:
-                                model_tag = get_model_tag(type("obj", (), {"agent_info": type("info", (), {"parameters": type("params", (), {"model": model})})})())
+                                model_tag = get_model_tag(
+                                    type("obj", (), {"agent_info": type("info", (), {"parameters": type("params", (), {"model": model})})})()
+                                )
                                 if model_tag:
                                     result.append(f" {model_tag}", style="dim")
 
@@ -438,28 +454,28 @@ class CLIUserAgent(UIAgent):
                     # Check if this is a confirmation request with options
                     options = getattr(message, "options", None)
                     content = getattr(message, "content", "")
-                    
+
                     if isinstance(options, list) and options:
                         # Confirmation request with multiple choice options
                         result.append("🔔 ", style="bright_yellow")
                         result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
                         result.append(content, style="bright_white")
-                        
+
                         # Display options in a neat format
                         result.append("\n", style="")
                         result.append(" " * 25 + "┌─ Options ─────────────\n", style="dim")
-                        
+
                         for i, option in enumerate(options):
-                            option_key = option[0].upper() if option else str(i+1)
+                            option_key = option[0].upper() if option else str(i + 1)
                             result.append(" " * 25 + "│ ", style="dim")
                             result.append(f"[{option_key}] ", style="bold cyan")
                             result.append(f"{option}", style="white")
                             result.append("\n", style="")
-                        
+
                         result.append(" " * 25 + "└───────────────────────", style="dim")
                         result.append("\n" + " " * 25 + "  ", style="")
                         result.append("Press ENTER to confirm, 'n' to reject", style="dim italic")
-                        
+
                     elif options is True:
                         # Simple Yes/No confirmation
                         result.append("🔔 ", style="bright_yellow")
@@ -467,7 +483,7 @@ class CLIUserAgent(UIAgent):
                         result.append(content, style="bright_white")
                         result.append("\n" + " " * 25 + "  ", style="")
                         result.append("[Y/n] Press ENTER to confirm, 'n' to reject", style="dim italic")
-                        
+
                     else:
                         # Standard UIMessage formatting
                         result.append("REQ: ", style="bright_yellow")
@@ -589,7 +605,7 @@ class CLIUserAgent(UIAgent):
                     self._last_confirmation_options = options
                 else:
                     self._last_confirmation_options = None
-            
+
             if formatted_msg := self._fmt_msg(message, source=source):
                 self._console.print(formatted_msg)
         else:
@@ -641,19 +657,19 @@ class CLIUserAgent(UIAgent):
                 cleaned_input = re.sub(r"\W", "", user_input).lower()
                 is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q", "reject", "r"]
                 is_confirmation = not user_input.strip()  # Empty line confirms
-                
+
                 # Check if input matches an option (if we have options stored)
                 selected_option = None
                 if self._last_confirmation_options and user_input.strip():
                     # Check for single letter match (first letter of option)
                     for option in self._last_confirmation_options:
                         if option and (
-                            user_input.strip().lower() == option[0].lower() or  # First letter match
-                            user_input.strip().lower() == option.lower()  # Full option match
+                            user_input.strip().lower() == option[0].lower()  # First letter match
+                            or user_input.strip().lower() == option.lower()  # Full option match
                         ):
                             selected_option = option
                             break
-                    
+
                     # For confirm/reject options, map common responses
                     if self._last_confirmation_options == ["confirm", "reject"]:
                         if user_input.strip().lower() in ["y", "yes", "c", "confirm"]:
@@ -668,7 +684,7 @@ class CLIUserAgent(UIAgent):
                     response = ManagerMessage(
                         confirm=is_confirm,
                         interrupt=False,
-                        content=selected_option
+                        content=selected_option,
                     )
                     self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
@@ -753,7 +769,9 @@ class CLIUserAgent(UIAgent):
             welcome_text.append("⚙ ", style="white")
             welcome_text.append("system".ljust(16), style="yellow")
             welcome_text.append(" │ ", style="dim")
-            welcome_text.append("Console UI initialized. Commands: 'exit' to quit, '!agents' to list agents, empty line to confirm, 'n'/'q' to cancel.", style="green")
+            welcome_text.append(
+                "Console UI initialized. Commands: 'exit' to quit, '!agents' to list agents, empty line to confirm, 'n'/'q' to cancel.", style="green"
+            )
             self._console.print(welcome_text)
 
             # Start the background task to poll for console input.

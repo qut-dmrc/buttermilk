@@ -7,11 +7,9 @@ This module provides a RAG agent that:
 - Is specifically designed for iterative search
 """
 
-
 import json
 
 from autogen_core.models import AssistantMessage
-from pydantic import Field
 
 from buttermilk import logger
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
@@ -28,14 +26,19 @@ class IterativeRagAgent(RagAgent):
     - Synthesize a final answer from the accumulated results.
     """
 
-    template: str = Field("iterative_rag", description="Jinja2 template to use for this agent.")
+    def __init__(self, **kwargs):
+        """Initialize IterativeRagAgent with template configuration."""
+        super().__init__(**kwargs)
+
+        # Template configuration - moved from Field declaration
+        self.template: str = kwargs.get("template", "iterative_rag")
 
     async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
         """Core processing logic for iterative RAG.
 
         This method implements an iterative RAG cycle:
-        1. Generate tool calls -> run tools -> reflect and generate new tool calls 
-        2. Repeat until exhausted or max iterations 
+        1. Generate tool calls -> run tools -> reflect and generate new tool calls
+        2. Repeat until exhausted or max iterations
         3. Reflect and synthesise final result
 
         After executing tools, we give the LLM a chance to reflect
@@ -59,6 +62,7 @@ class IterativeRagAgent(RagAgent):
 
         # Get the appropriate AutoGenWrapper instance
         import buttermilk
+
         model_client = buttermilk.get_bm().llms.get_autogen_chat_client(self.parameters["model"])
 
         while current_iteration < max_iterations:
@@ -92,9 +96,11 @@ class IterativeRagAgent(RagAgent):
 
             # Add LLM's response to chat history
             chat_history.append(
-                chat_result.to_llm_message()
-                if hasattr(chat_result, "to_llm_message")
-                else AssistantMessage(content=str(chat_result), source="IterativeRagAgent"),
+                (
+                    chat_result.to_llm_message()
+                    if hasattr(chat_result, "to_llm_message")
+                    else AssistantMessage(content=str(chat_result), source="IterativeRagAgent")
+                ),
             )
 
             # Check for tool calls
@@ -153,9 +159,11 @@ class IterativeRagAgent(RagAgent):
                 # Add tool outputs to chat history
                 for output in tool_outputs:
                     chat_history.append(
-                        output.to_llm_message()
-                        if hasattr(output, "to_llm_message")
-                        else AssistantMessage(content=str(output), source="IterativeRagAgent"),
+                        (
+                            output.to_llm_message()
+                            if hasattr(output, "to_llm_message")
+                            else AssistantMessage(content=str(output), source="IterativeRagAgent")
+                        ),
                     )
 
                 # After executing tools, prepare messages for the next LLM call
@@ -212,5 +220,7 @@ class IterativeRagAgent(RagAgent):
             logger.error(f"Error during final synthesis: {final_error}")
             return AgentOutput(
                 agent_id=self.agent_id,
-                outputs=ErrorEvent(source=self.agent_id, content=f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}"),
+                outputs=ErrorEvent(
+                    source=self.agent_id, content=f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}"
+                ),
             )
