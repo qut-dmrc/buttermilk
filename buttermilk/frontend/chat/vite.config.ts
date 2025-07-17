@@ -19,6 +19,19 @@ export default defineConfig({
 				target: 'http://localhost:8000',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api\/backend/, '/api')
+			},
+			// Proxy all other API requests to backend (except SvelteKit API routes)
+			'/api/flows': {
+				target: 'http://localhost:8000',
+				changeOrigin: true
+			},
+			'/api/flowinfo': {
+				target: 'http://localhost:8000',
+				changeOrigin: true
+			},
+			'/api/records': {
+				target: 'http://localhost:8000',
+				changeOrigin: true
 			}
 		},
 		// Ensure we can resolve modules properly

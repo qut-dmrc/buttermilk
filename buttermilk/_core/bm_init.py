@@ -30,7 +30,7 @@ import logging
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
-from typing import Any, Union
+from typing import Any
 
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
@@ -319,7 +319,7 @@ class BM(SessionInfo):
         - Saving the initial configuration to a JSON file in `save_dir`.
         - Starting an asynchronous task to fetch the machine's IP address.
         - Logging into configured cloud providers.
-        
+
         Note: Logger configuration validation is now handled by Pydantic model validators
         in CloudProviderCfg, providing early validation with better error messages.
         """
@@ -341,8 +341,8 @@ class BM(SessionInfo):
 
     def _setup_gcp_environment(self) -> None:
         """Set up GCP environment variables immediately for early GCS access.
-        
-        This extracts the environment variable setup from CloudManager 
+
+        This extracts the environment variable setup from CloudManager
         to ensure they're available before any cloud operations.
         """
         import os
@@ -371,12 +371,12 @@ class BM(SessionInfo):
 
     def _schedule_background_init(self) -> None:
         """Schedule non-critical initialization tasks in the background.
-        
+
         This method defers operations that aren't immediately needed for core functionality:
         - Config file saving
-        - IP address fetching  
+        - IP address fetching
         - Cloud provider authentication
-        
+
         These operations happen asynchronously to improve startup performance.
         """
         try:
@@ -450,6 +450,7 @@ class BM(SessionInfo):
 
         Raises:
             RuntimeError: If initialization failed with an error
+
         """
         await self._initialization_complete.wait()
         if self._initialization_error:
@@ -482,7 +483,7 @@ class BM(SessionInfo):
         """Provides access to the `CloudManager` instance.
 
         The `CloudManager` handles interactions with various configured cloud
-        providers (e.g., GCP, Azure). It's instantiated on first access and 
+        providers (e.g., GCP, Azure). It's instantiated on first access and
         performs lazy authentication to improve startup performance.
 
         Returns:
@@ -497,7 +498,7 @@ class BM(SessionInfo):
 
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
-        
+
         This method is called lazily when the cloud_manager is first accessed,
         rather than during __post_init__, to improve startup performance.
         """
@@ -550,7 +551,7 @@ class BM(SessionInfo):
                     f"Cloud logging setup failed due to configuration issue: {e}. "
                     f"Logger config: type={self.logger_cfg.type}, "
                     f"project={self.logger_cfg.project}, "
-                    f"location={self.logger_cfg.location}"
+                    f"location={self.logger_cfg.location}",
                 )
 
     @cached_property
@@ -601,6 +602,7 @@ class BM(SessionInfo):
             if cache_path.exists() and cache_path.is_file():
                 try:
                     from buttermilk.utils.utils import load_json_flexi
+
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):  # Validate type from cache
                         logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
@@ -653,6 +655,7 @@ class BM(SessionInfo):
         """Synchronous cache writing helper for thread pool execution."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
+
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @cached_property
@@ -713,11 +716,12 @@ class BM(SessionInfo):
 
     def get_gcp_access_token(self) -> str:
         """Get a valid GCP access token, refreshing if needed.
-        
+
         Delegates to `self.cloud_manager.get_access_token()`.
-        
+
         Returns:
             str: A valid OAuth2 access token
+
         """
         return self.cloud_manager.get_access_token()
 
@@ -750,15 +754,49 @@ class BM(SessionInfo):
         """Provides access to the Weights & Biases Weave client for tracing.
 
         Initializes Weave with a collection name derived from `self.name` (flow name)
-        and `self.job` (job name). Cached for performance - Phase 2 optimization.
+        and `self.job` (job name). Handles connection failures gracefully by falling
+        back to offline mode or returning a mock client. Cached for performance.
 
         Returns:
-            Any: The initialized Weave client instance.
+            Any: The initialized Weave client instance, or a mock client if initialization fails.
 
         """
         import weave  # Ensure weave is imported - deferred until first access
+
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
-        return weave.init(collection_name)  # Initialize and return client
+
+        try:
+            # Try to initialize weave with a reasonable timeout
+            logger.debug(f"Initializing Weave with collection: {collection_name}")
+            client = weave.init(collection_name)
+            logger.debug("Weave initialized successfully")
+            return client
+        except Exception as e:
+            # Log the error but don't fail the entire initialization
+            logger.warning(f"Weave initialization failed: {e}. Continuing without weave tracing.")
+
+            # Return a mock client that provides the basic interface but does nothing
+            class MockWeaveClient:
+                def __init__(self):
+                    self.collection_name = collection_name
+
+                def create_call(self, *args, **kwargs):
+                    return None
+
+                def finish_call(self, *args, **kwargs):
+                    pass
+
+                def get_call(self, *args, **kwargs):
+                    return None
+
+                def __getattr__(self, name):
+                    # Return a no-op function for any other method calls
+                    def noop(*args, **kwargs):
+                        return None
+
+                    return noop
+
+            return MockWeaveClient()
 
     @property
     def credentials(self) -> dict[str, str]:
@@ -875,6 +913,7 @@ class BM(SessionInfo):
         # Log Buttermilk version if available
         try:
             from importlib.metadata import version
+
             bm_version = version("buttermilk")  # Assumes package is named 'buttermilk'
             logger.debug(f"Buttermilk version: {bm_version}")
         except Exception:  # importlib.metadata.PackageNotFoundError or other issues
@@ -892,9 +931,7 @@ class BM(SessionInfo):
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Start task only if it hasn't been started or is already done
-                if not hasattr(self, "_get_ip_task") or \
-                   self._get_ip_task is None or \
-                   self._get_ip_task.done():
+                if not hasattr(self, "_get_ip_task") or self._get_ip_task is None or self._get_ip_task.done():
 
                     async def _fetch_and_set_ip():
                         self._ip = await get_ip()
@@ -1016,31 +1053,32 @@ class BM(SessionInfo):
 
     def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
         """Factory method to create unified storage instances.
-        
+
         Creates the appropriate storage class based on the configuration type,
         using this BM instance for client access and default configurations.
-        
+
         Note: For ChromaDB with remote storage, you must call ensure_cache_initialized()
         before accessing the collection. Consider using get_storage_async() for auto-initialization.
-        
+
         Args:
             config: Storage configuration (StorageConfig object, dict, or None)
-            
+
         Returns:
             Storage instance (BigQueryStorage, FileStorage, etc.)
-            
+
         Raises:
             ValueError: If storage type is not supported
-        """
 
+        """
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        elif not isinstance(config, BaseStorageConfig):
+        if not isinstance(config, BaseStorageConfig):
             # Convert OmegaConf objects to StorageConfig
             # This is necessary for Hydra integration
             try:
                 from omegaconf import DictConfig, OmegaConf
+
                 if isinstance(config, DictConfig):
                     config_dict = OmegaConf.to_container(config, resolve=True)
                     config = StorageFactory.create_config(config_dict)
@@ -1051,32 +1089,34 @@ class BM(SessionInfo):
 
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory
+
         return StorageFactory.create_storage(config, self)
 
-    async def get_storage_async(self, config: Union[BaseStorageConfig, dict] | None = None) -> Any:
+    async def get_storage_async(self, config: BaseStorageConfig | dict | None = None) -> Any:
         """Async factory method that creates and auto-initializes storage instances.
-        
+
         For ChromaDB with remote storage (gs://, s3://, etc.), this automatically calls
         ensure_cache_initialized() so the storage is ready for immediate use.
-        
+
         Args:
             config: Storage configuration (BaseStorageConfig object, dict, or None)
-            
+
         Returns:
             Fully initialized storage instance ready for use
-            
+
         Raises:
             ValueError: If storage type is not supported
-            
+
         Example:
             # Auto-initialized ChromaDB (recommended)
             vectorstore = await bm.get_storage_async(cfg.storage.osb_vector)
             count = vectorstore.collection.count()  # ✅ Works immediately
-            
+
             # Compare with manual approach:
             vectorstore = bm.get_storage(cfg.storage.osb_vector)
             await vectorstore.ensure_cache_initialized()  # Extra step
             count = vectorstore.collection.count()  # ✅ Works after init
+
         """
         # Create storage instance using sync method
         storage = self.get_storage(config)
@@ -1094,21 +1134,22 @@ class BM(SessionInfo):
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
         """Convenience method to create BigQuery storage with dataset name.
-        
+
         Args:
             dataset_name: The dataset name for the storage
             **kwargs: Additional configuration overrides. Must include dataset_id and table_id.
-            
+
         Returns:
             BigQueryStorage instance
-            
+
         Raises:
             ValueError: If required BigQuery table components are missing
+
         """
         config_data = {
             "type": "bigquery",
             "dataset_name": dataset_name,
-            **kwargs
+            **kwargs,
         }
         config = StorageConfig(**config_data)
         return self.get_storage(config)

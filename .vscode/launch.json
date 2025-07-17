@@ -35,13 +35,6 @@
       "localRoot": "${workspaceFolder}/buttermilk/frontend/cli/",
       "remoteRoot": null
     },
-    {
-    "type": "vscode-edge-devtools.debug",
-    "request": "attach",
-    "name": "Attach to Microsoft Edge and open the Edge DevTools",
-    "url": "http://localhost:9222",
-    "webRoot": "${workspaceFolder}/buttermilk/frontend/chat/src/"
-  },
   {
       "name": "Python Debugger: FastAPI",
       "type": "debugpy",
@@ -228,6 +221,50 @@
       "purpose": ["debug-test"],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Launch chat web ui",
+      "request": "launch",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "${workspaceFolder}/buttermilk/frontend/chat/",
+      "runtimeExecutable": "npm",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "launch edge",
+      "url": "http://127.0.0.1:5173",
+      "webRoot": "${workspaceFolder}",
+      "runtimeArgs": [
+        "--remote-debugging-port=9222",
+        "--remote-debugging-address=0.0.0.0"
+      ],
+    },
+    {
+      "type": "vscode-edge-devtools.debug",
+      "request": "attach",
+      "name": "edge devtools",
+      "url": "http://localhost:9222",
+      "webRoot": "${workspaceFolder}/buttermilk/frontend/chat/src/"
+    },
+  ],
+  "compounds": [
+    {
+      "name": "Debug web frontend",
+      "configurations": [
+        "Launch chat web ui",
+        "launch edge",
+        "edge devtools"
+      ]
     }
   ],
   "inputs": [

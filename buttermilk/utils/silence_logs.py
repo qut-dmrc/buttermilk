@@ -88,8 +88,18 @@ def silence_task_logs():
     logging.getLogger("asyncio.tasks").setLevel(logging.ERROR)
     logging.getLogger("Task").setLevel(logging.ERROR)
 
-    # Weave warnings
+    # Weave warnings and errors - comprehensive suppression
+    logging.getLogger("weave").setLevel(logging.ERROR)
     logging.getLogger("weave.trace").setLevel(logging.ERROR)
+    logging.getLogger("weave.client").setLevel(logging.ERROR)
+    logging.getLogger("weave.weave_client").setLevel(logging.ERROR)
+    logging.getLogger("weave.trace.weave_client").setLevel(logging.ERROR)
+    logging.getLogger("weave.wandb_api").setLevel(logging.ERROR)
+    logging.getLogger("weave.api").setLevel(logging.ERROR)
+    
+    # Additional weave-related loggers that might output connection errors
+    logging.getLogger("httpx").setLevel(logging.ERROR)
+    logging.getLogger("httpcore").setLevel(logging.ERROR)
 
     # Silence fsspec logs
     logging.getLogger("fsspec").setLevel(logging.ERROR)
