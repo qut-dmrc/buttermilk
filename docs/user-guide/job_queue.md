@@ -27,7 +27,7 @@ Consult your Buttermilk administrator or deployment guide for the exact configur
 
 ## Submitting Jobs to the Queue
 
-You interact with the batch system as usual, using the CLI or API described in **[batch_processing.md](batch_processing.md)**.
+You interact with the batch system as usual, using the CLI or API described in **[batch-processing.md](batch-processing.md)**.
 
 ```bash
 # Example: Create a new batch job that will be sent to the Pub/Sub queue
@@ -39,7 +39,7 @@ If Buttermilk is configured to use the job queue for batch processing:
 *   Instead of processing it immediately in the same process, it will publish the job(s) to the configured Pub/Sub `jobs_topic`.
 *   The command will likely return quickly after successfully submitting the job(s) to the queue. You then monitor progress using status commands.
 
-For details on `ui=batch` commands for creating, listing, checking status, and canceling batches, please refer to **[batch_processing.md](batch_processing.md)**. The underlying mechanism (immediate processing vs. queuing) depends on the Buttermilk system's configuration.
+For details on `ui=batch` commands for creating, listing, checking status, and canceling batches, please refer to **[batch-processing.md](batch-processing.md)**. The underlying mechanism (immediate processing vs. queuing) depends on the Buttermilk system's configuration.
 
 ## Running Worker Processes (Job Daemon)
 

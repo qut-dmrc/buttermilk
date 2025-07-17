@@ -12,12 +12,17 @@ Welcome to the Buttermilk documentation! This guide will help you get started wi
 ### User Guide
 - **[Running Flows](user-guide/flows.md)** - Complete guide to running and managing flows
 - **[Configuration](user-guide/configuration.md)** - Hydra configuration management
+- **[External Configuration](user-guide/external-configuration.md)** - Setting up external config directories
+- **[Batch Processing](user-guide/batch-processing.md)** - Running flows on multiple records
+- **[Vector Databases](user-guide/vector_database_guide.md)** - Creating and using vector databases
 - **[API Reference](user-guide/api-reference.md)** - REST API endpoints and usage
 - **[CLI Reference](user-guide/cli-reference.md)** - Command-line interface
 
 ### Developer Guide
 - **[Architecture](developer-guide/architecture.md)** - System architecture and design
 - **[Creating Agents](developer-guide/creating-agents.md)** - How to build custom agents
+- **[Tool Definitions](developer-guide/TOOL_DEFINITIONS.md)** - Structured tool definition system
+- **[WebSocket Integration](developer-guide/WEBSOCKET_INTEGRATION.md)** - WebSocket communication
 - **[Testing](developer-guide/testing.md)** - Testing guidelines and best practices
 - **[Contributing](developer-guide/contributing.md)** - Development standards and process
 
