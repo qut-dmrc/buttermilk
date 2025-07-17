@@ -158,7 +158,7 @@ class IterativeRagAgent(RagAgent):
                         else AssistantMessage(content=str(output), source="IterativeRagAgent"),
                     )
 
-                # CRITICAL FIX: After executing tools, prepare messages for the next LLM call
+                # After executing tools, prepare messages for the next LLM call
                 # to allow reflection on tool results. Use the updated chat_history which now
                 # includes the tool outputs, and let the LLM decide what to do next.
                 llm_messages_to_send = chat_history

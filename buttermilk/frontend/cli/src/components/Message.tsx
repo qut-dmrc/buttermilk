@@ -1,17 +1,10 @@
-import React from 'react';
 import { Box, Text } from 'ink';
+import React from 'react';
 import { retroIRCTheme } from '../themes.js';
-import { 
-  Message, 
-  ChatMessage,
-  FlowProgressUpdate,
-  AgentAnnouncement,
+import {
   AgentOutput,
-  OSBMessage,
-  isChatMessage,
-  isFlowEvent,
-  isAgentMessage,
-  isOSBMessage
+  FlowProgressUpdate,
+  Message
 } from '../types.js';
 
 interface Props {
@@ -265,21 +258,6 @@ const MessageComponent = ({ message }: Props) => {
               optionsType: {typeof (message as any).outputs?.options}, 
               isArray: {Array.isArray((message as any).outputs?.options) ? 'YES' : 'NO'}
             </Text>
-          </Box>
-        )}
-        
-        {isOSBMessage(message) && (
-          <Box flexDirection="column" paddingTop={0}>
-            {(message as OSBMessage).policy_violations && (message as OSBMessage).policy_violations!.length > 0 && (
-              <Text color={retroIRCTheme.colors.error}>
-                ⚠ Policy violations: {(message as OSBMessage).policy_violations!.length}
-              </Text>
-            )}
-            {(message as OSBMessage).recommendations && (message as OSBMessage).recommendations!.length > 0 && (
-              <Text color={retroIRCTheme.colors.success}>
-                ✓ Recommendations: {(message as OSBMessage).recommendations!.length}
-              </Text>
-            )}
           </Box>
         )}
         
