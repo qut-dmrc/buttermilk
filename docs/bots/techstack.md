@@ -30,7 +30,7 @@
   - **ONLY** use YAML configs, no manual dicts
 
 #### Async & Concurrency
-- **asyncio**: Core async support
+- **anyio**: Core async support
   - All I/O operations async
   - Concurrent agent execution
   - Non-blocking LLM calls
@@ -156,31 +156,12 @@ defaults:
 - Discriminated unions for type safety
 - Environment-specific configurations
 
-## Design Decisions
-
-### Why These Choices?
-
-#### Python 3.10+
-- Balance of stability and modern features
-- Strong HASS researcher familiarity
-- Rich data science ecosystem
-
-#### Pydantic v2
-- Performance improvements over v1
-- Better validation messages
-- Stronger type safety
-
-#### Hydra over Alternatives
-- Composable configurations
-- Command-line flexibility
-- Proven in ML research
+### Architecture Principles
 
 #### Async-First
 - Better resource utilization
 - Responsive user experience
 - Natural fit for I/O-heavy workloads
-
-### Architecture Principles
 
 #### Modularity
 - Small, focused components
@@ -201,71 +182,7 @@ defaults:
 - Fail fast with clear messages
 - Validation at boundaries
 - No defensive programming
+- No backwards compatability
 
-## Integration Points
-
-### External Services
-- **Google Cloud Platform**
-  - BigQuery for data warehouse
-  - Secret Manager for credentials
-  - Cloud Storage for artifacts
-
-- **LLM Providers**
-  - API-based integration
-  - Async clients
-  - Rate limiting/retry logic
-
-### Protocol Support
-- **MCP (Model Context Protocol)**
-  - Tool discovery
-  - Standardized calling
-  - IDE integration potential
-
-- **WebSocket**
-  - Real-time flow monitoring
-  - Interactive debugging
-  - UI communication
-
-## Performance Considerations
-
-### Optimization Strategies
-- **Async I/O**: Non-blocking operations
-- **Connection Pooling**: Reuse HTTP connections
-- **Batch Processing**: Group operations
-- **Lazy Loading**: Load resources on-demand
-
-### Monitoring
-- **Structured Logging**: JSON-formatted logs
-- **Trace Context**: Request correlation
-- **Metrics Collection**: Performance tracking
-- **Cost Tracking**: LLM usage monitoring
-
-## Security Considerations
-
-### Credential Management
-- **Never commit secrets**
-- Use environment variables
-- GCP Secret Manager integration
-- Service account authentication
-
-### Data Protection
-- Input validation everywhere
-- SQL injection prevention
-- Rate limiting on APIs
-- Audit logging
-
-## Future Architecture
-
-### Planned Enhancements
-- GraphQL API for complex queries
-- Distributed agent execution
-- Plugin marketplace
-- Visual flow builder
-
-### Scaling Considerations
-- Horizontal scaling via queues
-- Stateless agent design
-- Cloud-native deployment
-- Kubernetes support
 
 Remember: Every technical decision should support HASS researchers' needs. Performance optimizations should never compromise usability or reproducibility.

@@ -96,26 +96,6 @@ Buttermilk provides AI and data tools for HASS (Humanities, Arts, and Social Sci
 - **Safety over Features**: Conservative with experimental features
 - **Documentation over Assumption**: Explicit is better than implicit
 
-## Future Vision
-
-### Near Term (6 months)
-- Stable API for agent development
-- Comprehensive example flows
-- GUI for flow configuration
-- Enhanced debugging tools
-
-### Medium Term (1 year)
-- Visual flow builder
-- Plugin marketplace
-- Multi-language support
-- Integration with popular HASS tools
-
-### Long Term (2+ years)
-- Standard for computational HASS research
-- Thriving ecosystem of agents and flows
-- Adopted by major research institutions
-- Influencing research infrastructure design
-
 ## Ethical Commitments
 
 ### Research Ethics
