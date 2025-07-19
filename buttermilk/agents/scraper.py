@@ -971,7 +971,8 @@ class WebScraperSelenium(WebScraperRequests):
         return self.fetch_records(records=initial_records, recurse=recurse, **kwargs)
 
     def fetch_records(self, records: list[Record], recurse: int = 0, **kwargs: Any) -> int:
-        """Processes a list of `Record` objects, typically by scraping their URLs.
+        """
+        Processes a list of `Record` objects, typically by scraping their URLs.
 
         This method shuffles the input `records` list (to potentially vary scrape
         order) and then calls `self.run` to process them.
@@ -987,7 +988,6 @@ class WebScraperSelenium(WebScraperRequests):
 
         Returns:
             int: The total number of records processed, as returned by `self.run`.
-
         """
         if not records:
             logger.debug(f"WebScraperSelenium ('{self.agent_id}'): fetch_records called with no records.")

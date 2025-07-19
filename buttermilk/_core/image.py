@@ -48,15 +48,18 @@ class ImageRecord(BaseModel):
         return obj
 
     def as_url(self):
+        """Returns the image as a data URL."""
         return (f"data:image/png;base64,{self.as_base64()}",)
 
     def as_bytestream(self):
+        """Returns the image as a byte stream."""
         output = BytesIO()
         self.image.save(output, format="png")
         output.seek(0)
         return output
 
     def as_base64(self, longest_edge=None, shortest_edge=None):
+        """Returns the image as a base64 encoded string."""
         return image_to_b64(
             self.image,
             longest_edge=longest_edge,
@@ -64,6 +67,7 @@ class ImageRecord(BaseModel):
         )
 
     def as_bytes(self):
+        """Returns the image as a byte array."""
         output = self.as_bytestream()
         return output.read()
 

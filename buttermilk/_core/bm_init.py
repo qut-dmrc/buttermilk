@@ -1015,20 +1015,21 @@ class BM(SessionInfo):
         )
 
     def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
-        """Factory method to create unified storage instances.
-        
+        """
+        Factory method to create unified storage instances.
+
         Creates the appropriate storage class based on the configuration type,
         using this BM instance for client access and default configurations.
-        
+
         Note: For ChromaDB with remote storage, you must call ensure_cache_initialized()
         before accessing the collection. Consider using get_storage_async() for auto-initialization.
-        
+
         Args:
             config: Storage configuration (StorageConfig object, dict, or None)
-            
+
         Returns:
             Storage instance (BigQueryStorage, FileStorage, etc.)
-            
+
         Raises:
             ValueError: If storage type is not supported
         """
@@ -1093,15 +1094,16 @@ class BM(SessionInfo):
         return storage
 
     def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
-        """Convenience method to create BigQuery storage with dataset name.
-        
+        """
+        Convenience method to create BigQuery storage with dataset name.
+
         Args:
             dataset_name: The dataset name for the storage
             **kwargs: Additional configuration overrides. Must include dataset_id and table_id.
-            
+
         Returns:
             BigQueryStorage instance
-            
+
         Raises:
             ValueError: If required BigQuery table components are missing
         """

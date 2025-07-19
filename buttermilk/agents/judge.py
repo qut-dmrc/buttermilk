@@ -179,7 +179,8 @@ class Judge(LLMAgent):
         self,
         message: AgentInput,
     ) -> AgentTrace:
-        """Handles an `AgentInput` request to evaluate content using the Judge agent's LLM.
+        """
+        Handles an `AgentInput` request to evaluate content using the Judge agent's LLM.
 
         This method is intended to be the primary entry point when the `Judge`
         agent is invoked to perform an evaluation, particularly within systems
@@ -202,8 +203,6 @@ class Judge(LLMAgent):
             message (AgentInput): The `AgentInput` message containing the content
                 to be evaluated. The `message.inputs` should align with what the
                 Judge's prompt template expects (e.g., text to judge, criteria).
-            cancellation_token: An optional token for cancelling the operation
-                (implicitly passed via `**kwargs` if `_process` handles it).
 
         Returns:
             AgentTrace: An `AgentTrace` object. If successful, `outputs` will
@@ -214,7 +213,6 @@ class Judge(LLMAgent):
         Raises:
             NotImplementedError: Currently raised as a placeholder, indicating this
                 handler's direct usage path might be conceptual or for specific integrations.
-
         """
         raise NotImplementedError("@buttermilk_handler is only an idea at this stage.")
         logger.debug(f"Judge agent '{self.agent_name}' received evaluation request.")

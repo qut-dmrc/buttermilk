@@ -422,14 +422,14 @@ class LLMAgent(Agent):
         return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
 
     async def _sequence(self) -> AsyncGenerator[Any, None]:
-        """Not implemented for LLMAgent.
+        """
+        Not implemented for LLMAgent.
 
         LLMAgent does not use the sequencing functionality from the base Agent class.
         This method is a placeholder to satisfy the abstract base class requirement.
 
         Yields:
             Never yields anything.
-
         """
         # LLMAgent doesn't typically use _sequence, but must implement it
         yield  # This makes it a generator but doesn't yield any actual values

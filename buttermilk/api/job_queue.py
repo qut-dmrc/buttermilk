@@ -94,6 +94,7 @@ class JobQueueClient(BaseModel):
         return None
 
     async def fetch_and_run_task(self) -> None:
+        """Fetch a single task from the queue and run it if the system is idle."""
         if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
             logger.info(f"System busy (Idle: {self.is_system_idle()}, Active Jobs: {self._active_jobs}/{self.max_concurrent_jobs}). Not processing job now.")
             self._processing.clear()

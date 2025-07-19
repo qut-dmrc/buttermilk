@@ -154,7 +154,16 @@ async def _batch_iterator(
     aiter: AsyncIterator[T],
     batch_size: int,
 ) -> AsyncIterator[list[T]]:
-    """Batches items from an async iterator."""
+    """
+    Batches items from an async iterator.
+
+    Args:
+        aiter: The async iterator to batch.
+        batch_size: The size of each batch.
+
+    Yields:
+        A list of items of size batch_size.
+    """
     batch = []
     async for item in aiter:
         batch.append(item)
@@ -168,7 +177,18 @@ async def _batch_iterator(
 def _sanitize_metadata_for_chroma(
     metadata: dict[str, Any],
 ) -> dict[str, str | int | float | bool]:
-    """Converts metadata values to types supported by ChromaDB."""
+    """
+    Converts metadata values to types supported by ChromaDB.
+
+    ChromaDB only supports str, int, float, and bool for metadata values.
+    This function converts other types to strings.
+
+    Args:
+        metadata: The metadata dictionary to sanitize.
+
+    Returns:
+        A sanitized metadata dictionary.
+    """
     sanitized = {}
     if not isinstance(metadata, dict):
         logger.warning(f"Metadata is not a dict: {metadata}. Skipping sanitization.")
@@ -500,7 +520,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             raise RuntimeError(f"ChromaDB sync failed: {e}") from e
 
     async def _should_sync_now(self, force: bool = False) -> bool:
-        """Determine if we should sync to remote storage now.
+        """
+        Determine if we should sync to remote storage now.
 
         Args:
             force: Force sync regardless of batch/time thresholds
@@ -849,11 +870,28 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         return chunks
 
     def _get_record_model_key(self, record_id: str, embedding_model: str) -> str:
-        """Generate unique key for record+model combination."""
+        """
+        Generate unique key for record+model combination.
+
+        Args:
+            record_id: The record ID.
+            embedding_model: The embedding model name.
+
+        Returns:
+            A unique key for the record and model combination.
+        """
         return f"{record_id}:{embedding_model}"
 
     def _get_content_hash(self, record: Record) -> str:
-        """Generate content hash for a record based on text content."""
+        """
+        Generate content hash for a record based on text content.
+
+        Args:
+            record: The record to hash.
+
+        Returns:
+            The content hash.
+        """
         content = record.text_content or ""
         # Include metadata that affects embeddings
         metadata_str = json.dumps({
@@ -1563,7 +1601,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return None
 
     def _write_document_to_parquet(self, doc: InputDocument, file_path: Path):
-        """Synchronous helper to write InputDocument chunks to a Parquet file."""
+        """
+        Synchronous helper to write InputDocument chunks to a Parquet file.
+
+        Args:
+            doc: The InputDocument to write.
+            file_path: The path to the Parquet file.
+        """
         if not doc.chunks:
             logger.warning(
                 f"Attempted to write empty chunks for doc {doc.record_id} to {file_path}. Skipping.",
@@ -1613,7 +1657,15 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         pq.write_table(table, file_path, compression="snappy")
 
     def _convert_embedding_errors(self, exc: Exception) -> None:
-        """Convert embedding-specific errors to RateLimit exceptions for retry handling."""
+        """
+        Convert embedding-specific errors to RateLimit exceptions for retry handling.
+
+        Args:
+            exc: The exception to convert.
+
+        Raises:
+            RateLimit: If the exception is a rate limit error.
+        """
         error_str = str(exc).lower()
         if any(keyword in error_str for keyword in ["quota", "rate limit", "429", "too many requests"]):
             raise RateLimit(str(exc)) from exc

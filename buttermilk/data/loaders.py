@@ -22,8 +22,9 @@ class DataLoaderWrapper:
     """Wrapper to provide DataLoader interface for storage objects."""
 
     def __init__(self, storage):
-        """Initialize wrapper with storage instance.
-        
+        """
+        Initialize wrapper with storage instance.
+
         Args:
             storage: Storage instance to wrap
         """

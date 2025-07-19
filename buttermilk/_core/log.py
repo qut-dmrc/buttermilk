@@ -28,6 +28,19 @@ logging.setLoggerClass(logging.Logger)  # Reset to default for other loggers
 
 class ContextFilter(logging.Filter):
     def filter(self, record):
+        """Adds session and agent context to log records.
+
+        This filter is responsible for enriching log records with contextual
+        information, such as the current session ID and agent ID. This allows
+        for more detailed and traceable logging.
+
+        Args:
+            record (logging.LogRecord): The log record to be filtered.
+
+        Returns:
+            bool: Always returns True to indicate that the record should be
+            processed.
+        """
         # Store original values
         original_session_id = session_id_var.get()
         original_agent_id = agent_id_var.get()

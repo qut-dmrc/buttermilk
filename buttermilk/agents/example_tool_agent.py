@@ -98,8 +98,9 @@ class DataAnalysisAgent(Agent):
         }
 
     async def health_check(self) -> dict[str, str]:
-        """Check the health status of the agent.
-        
+        """
+        Check the health status of the agent.
+
         Returns:
             Health status information
         """

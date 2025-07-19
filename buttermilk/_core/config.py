@@ -806,11 +806,12 @@ class AgentConfig(BaseModel):
         return self
 
     def get_display_name(self) -> str:
-        """Get the display name for this agent.
-        
+        """
+        Get the display name for this agent.
+
         Returns the agent_name which is consistently formatted across UIs.
         LLM agents may override this to include model information.
-        
+
         Returns:
             str: The display name for the agent
 

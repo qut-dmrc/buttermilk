@@ -404,13 +404,8 @@ class Agent(RoutedAgent):
         adapters) to interact with the agent for a single processing step.
 
         Args:
-            message: The initial `AgentInput` message for the agent.
-            public_callback: An asynchronous callback function to publish messages
-                (like status updates, traces) to a general or public topic.
-            cancellation_token: An optional `CancellationToken` to signal if the
-                operation should be aborted. (Currently not deeply integrated into the core loop).
-            **kwargs: Additional keyword arguments that might be passed by the caller.
-                These are not directly used by `invoke` but are available for potential extensions.
+            message: The initial `AgentInput` or `StepRequest` message for the agent.
+            ctx: The message context, containing sender and topic information.
 
         Returns:
             AgentTrace: An object detailing the agent's execution for this invocation.
@@ -730,7 +725,21 @@ class Agent(RoutedAgent):
     # --- Helper Methods ---
 
     async def _publish(self, message: Any, highlight: bool = False) -> None:
-        """Publish a message to the group chat."""
+        """Publishes a message to the agent's current topic.
+
+        This is a convenience wrapper around `self.publish_message` that automatically
+        uses the agent's current topic ID (`self._topic_id`). It also provides an
+        option to highlight the log message for better visibility, which is enabled
+        by default for `AgentTrace` and `AgentOutput` messages.
+
+        Args:
+            message: The message object to be published. Can be any type that the
+                runtime can handle.
+            highlight (bool): If True, logs the publishing action with a special
+                highlight format. Defaults to False, but is implicitly True for
+                `AgentTrace` and `AgentOutput` messages.
+
+        """
         await self.publish_message(message, topic_id=self._topic_id)
         if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
             highlight = True  # Highlight traces and outputs by default

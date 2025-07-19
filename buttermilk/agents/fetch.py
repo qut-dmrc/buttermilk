@@ -99,14 +99,14 @@ class FetchRecord(ToolConfig):
                 self._data_sources[key] = storage
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
-        """Retrieve a record by ID from loaded data sources.
+        """
+        Retrieve a record by ID from loaded data sources.
 
         Args:
             record_id: The record ID to search for
 
         Returns:
             Record if found, None otherwise
-
         """
         if not self._data_sources:
             await self.load_data()

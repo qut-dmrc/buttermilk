@@ -46,7 +46,12 @@ from pydantic import BaseModel, ConfigDict, Field  # Pydantic models for configu
 
 # Use a function for deferred import to avoid circular references
 def get_bm():
-    """Get the BM singleton with delayed import to avoid circular references."""
+    """
+    Get the BM singleton with delayed import to avoid circular references.
+
+    Returns:
+        BM: The singleton instance of the BM class.
+    """
     from buttermilk._core.dmrc import get_bm as _get_bm  # Actual import of get_bm
     return _get_bm()
 
@@ -408,7 +413,8 @@ class AutoGenWrapper(RetryWrapper):
         tool: Tool,
         cancellation_token: CancellationToken | None,
     ) -> FunctionExecutionResult:
-        """Executes a single tool call and returns the result.
+        """
+        Executes a single tool call and returns the result.
 
         Args:
             call: The FunctionCall from the LLM
