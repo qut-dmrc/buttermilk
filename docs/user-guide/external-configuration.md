@@ -204,6 +204,56 @@ pip install -e .  # Development install
 - Provide examples for other researchers
 - Include validation and testing configs
 
+## Deployment Configuration
+
+### Weave/W&B Credentials for Production
+
+For production deployments where interactive login is not possible, configure Weave credentials using environment variables or secret management:
+
+```bash
+# Environment variables (recommended for containers)
+export WANDB_API_KEY="your-wandb-api-key"
+export WANDB_PROJECT="your-project-name"
+export WANDB_ENTITY="your-entity-name"  # optional
+```
+
+Alternative: Store in your secret manager alongside other credentials:
+
+```yaml
+# In your infrastructure config
+secret_provider:
+  type: gcp
+  project_id: my-university-research
+  credentials_secret: shared-credentials  # Should contain WANDB_* keys
+```
+
+**Priority Order:**
+1. Environment variables (highest priority)
+2. Secret manager values
+3. Graceful fallback (mock client if no credentials)
+
+See **[Weave Credentials Guide](../weave-credentials.md)** for complete deployment documentation.
+
+### Container Deployment Example
+
+```dockerfile
+# Dockerfile
+FROM python:3.12
+# ... other setup ...
+
+# Set Weave credentials at runtime
+ENV WANDB_PROJECT="my-research-project"
+# API key should come from secrets/env at runtime
+```
+
+```yaml
+# docker-compose.yml or Kubernetes deployment
+environment:
+  WANDB_API_KEY: ${WANDB_API_KEY}  # From environment or secrets
+  WANDB_PROJECT: "my-research-project"
+  WANDB_ENTITY: "my-organization"
+```
+
 ## Troubleshooting
 
 ### Configuration Not Found
