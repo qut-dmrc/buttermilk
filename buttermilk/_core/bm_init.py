@@ -749,13 +749,62 @@ class BM(SessionInfo):
         """
         return self.cloud_manager.bq
 
+    def _setup_weave_credentials(self) -> None:
+        """Set up Weave/WANDB credentials from environment variables or secret manager.
+        
+        This method attempts to load WANDB credentials from multiple sources in order:
+        1. Environment variables (WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY)
+        2. Secret manager using existing credentials
+        3. Gracefully handle missing credentials
+        
+        Environment variables are set so that weave.init() can authenticate without
+        requiring interactive login.
+        """
+        import os
+        
+        # Check if credentials are already set in environment
+        wandb_api_key = os.getenv("WANDB_API_KEY")
+        wandb_project = os.getenv("WANDB_PROJECT") 
+        wandb_entity = os.getenv("WANDB_ENTITY")
+        
+        # If not found in environment, try to load from secrets
+        if not wandb_api_key or not wandb_project:
+            try:
+                # Try to get WANDB credentials from the existing credential system
+                creds = self.credentials
+                if creds:
+                    if not wandb_api_key and "WANDB_API_KEY" in creds:
+                        wandb_api_key = creds["WANDB_API_KEY"]
+                        os.environ["WANDB_API_KEY"] = wandb_api_key
+                        logger.debug("Loaded WANDB_API_KEY from secret manager")
+                    
+                    if not wandb_project and "WANDB_PROJECT" in creds:
+                        wandb_project = creds["WANDB_PROJECT"]
+                        os.environ["WANDB_PROJECT"] = wandb_project
+                        logger.debug("Loaded WANDB_PROJECT from secret manager")
+                    
+                    if not wandb_entity and "WANDB_ENTITY" in creds:
+                        wandb_entity = creds["WANDB_ENTITY"]
+                        os.environ["WANDB_ENTITY"] = wandb_entity
+                        logger.debug("Loaded WANDB_ENTITY from secret manager")
+                        
+            except Exception as e:
+                logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
+        
+        # Log credential status (without exposing the actual API key)
+        if wandb_api_key:
+            logger.debug(f"WANDB credentials configured: API_KEY=*****, PROJECT={wandb_project}, ENTITY={wandb_entity}")
+        else:
+            logger.debug("No WANDB credentials found - weave will try default authentication or fail gracefully")
+
     @cached_property
     def weave(self) -> Any:  # Type hint could be weave.weave_types.WeaveClient
         """Provides access to the Weights & Biases Weave client for tracing.
 
         Initializes Weave with a collection name derived from `self.name` (flow name)
-        and `self.job` (job name). Handles connection failures gracefully by falling
-        back to offline mode or returning a mock client. Cached for performance.
+        and `self.job` (job name). Sets up credentials from environment variables or
+        secret manager before initialization to avoid interactive login flows.
+        Handles connection failures gracefully by falling back to a mock client.
 
         Returns:
             Any: The initialized Weave client instance, or a mock client if initialization fails.
@@ -766,6 +815,9 @@ class BM(SessionInfo):
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
 
         try:
+            # Set up credentials before initializing weave
+            self._setup_weave_credentials()
+            
             # Try to initialize weave with a reasonable timeout
             logger.debug(f"Initializing Weave with collection: {collection_name}")
             client = weave.init(collection_name)
