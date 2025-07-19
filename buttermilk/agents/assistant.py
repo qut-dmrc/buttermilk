@@ -78,12 +78,12 @@ class SimpleAutogenChatWrapper(RoutedAgent):
     # Example message handler (decorator commented out by default)
     # @message_handler
     async def handle_messages(self, messages: Sequence[BaseChatMessage], ctx: MessageContext) -> None:
-        """Handles incoming messages by streaming them to the delegate agent.
+        """
+        Handles incoming messages by streaming them to the delegate agent.
 
         Args:
             messages (Sequence[BaseChatMessage]): The sequence of messages to handle.
             ctx (MessageContext): The message context, including the cancellation token.
-
         """
         async for message in self._delegate.on_messages_stream(messages, ctx.cancellation_token):
             if message:
@@ -386,7 +386,8 @@ class AssistantAgentWrapper(Agent):
         )
 
     async def initialize(self, **kwargs) -> None:
-        """Initializes the agent. Called by the runtime or by Buttermilk's lifecycle.
+        """
+        Initializes the agent. Called by the runtime or by Buttermilk's lifecycle.
 
         The core initialization of the underlying `AssistantAgent` (like setting up
         the LLM client, tools, and system message) is performed in the
@@ -398,13 +399,8 @@ class AssistantAgentWrapper(Agent):
         lifecycle management beyond Pydantic model instantiation.
 
         Args:
-            session_id (str): The session ID for this initialization context.
-                Note that `self.session_id` (from the base `Agent` class) should
-                already be set by the time this method is called if instantiated
-                correctly by the Buttermilk framework.
             **kwargs: Additional keyword arguments that might be passed during
                 initialization.
-
         """
         # Most of the specific AssistantAgent setup is in `init_assistant_agent` (Pydantic validator).
         # This method is part of the Buttermilk Agent lifecycle.

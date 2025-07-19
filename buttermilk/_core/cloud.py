@@ -45,7 +45,18 @@ class CloudManager:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
 
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
-        """Check if credentials need to be refreshed."""
+        """Checks if Google Cloud credentials need to be refreshed.
+
+        This method checks the `valid` attribute of the credentials object, which
+        indicates if the access token is still valid or has expired.
+
+        Args:
+            credentials: The Google credentials object to check.
+
+        Returns:
+            True if the credentials are not valid and need to be refreshed,
+            False otherwise.
+        """
         return hasattr(credentials, "valid") and not credentials.valid
 
     @refreshable_cached_property

@@ -137,7 +137,21 @@ class Describer(LLMAgent):
             )
 
     def _create_text_response(self, record: Any) -> AgentTrace:
-        """Create a response for text-only records."""
+        """Creates a standardized response for records that only contain text.
+
+        This helper method is called when the `Describer` agent determines that
+        a record has no media content to analyze. It generates a standard
+        `MediaDescription` object indicating that the record is text-only and
+        wraps it in an `AgentTrace`.
+
+        Args:
+            record: The `Record` object that contains only text.
+
+        Returns:
+            AgentTrace: An `AgentTrace` object with a standardized output
+            and metadata indicating that the record was text-only and no
+            media description was generated.
+        """
         text_description = MediaDescription(
             description=f"This is a text-only record. Content: {record.text[:200]}...",
             media_type="text",
@@ -153,7 +167,29 @@ class Describer(LLMAgent):
         )
 
     async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentTrace | ErrorEvent:
-        """Process media content and generate description."""
+        """Handles the processing of media content to generate a description.
+
+        This method is called when a record is determined to have media content.
+        It performs the following steps:
+        1.  If the record's media content is not already loaded (`record.media` is empty)
+            but a URI is present (`record.uri`), it attempts to download and convert
+            the media from the URI.
+        2.  It determines the type of media (e.g., "image").
+        3.  It then invokes the parent `LLMAgent._process` method, which will use
+            the configured LLM and prompt template to generate a description for
+            the media.
+
+        Args:
+            message: The original `AgentInput` message.
+            record: The `Record` object containing the media to be processed.
+            **kwargs: Additional keyword arguments to be passed to the parent
+                `_process` method (and ultimately to the LLM).
+
+        Returns:
+            AgentTrace | ErrorEvent: An `AgentTrace` containing the generated
+            `MediaDescription` if successful, or an `ErrorEvent` if downloading
+            fails or another error occurs.
+        """
         # Check if we need to download from URI
         if hasattr(record, "uri") and record.uri and not record.media:
             logger.info(f"Downloading media from URI: {record.uri}")

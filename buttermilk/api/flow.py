@@ -103,6 +103,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
+        """Generic exception handler for the application.
+
+        Args:
+            request (Request): The request that caused the exception.
+            exc (Exception): The exception that was raised.
+
+        Returns:
+            JSONResponse: A JSON response with a 500 status code and the exception details.
+        """
         return JSONResponse(
             status_code=500,
             content={"detail": str(exc)},
@@ -133,13 +142,30 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Custom middleware to log CORS failures
     @app.middleware("http")
     async def log_cors_failures(request: Request, call_next):
+        """Middleware to log CORS failures.
+
+        Args:
+            request (Request): The request.
+            call_next (Callable): The next middleware in the chain.
+
+        Returns:
+            Response: The response from the next middleware.
+        """
         response = await call_next(request)
         return response
 
     # Production monitoring middleware
     @app.middleware("http")
     async def monitoring_middleware(request: Request, call_next):
-        """Middleware to collect request metrics and system performance data."""
+        """Middleware to collect request metrics and system performance data.
+
+        Args:
+            request (Request): The request.
+            call_next (Callable): The next middleware in the chain.
+
+        Returns:
+            Response: The response from the next middleware.
+        """
         import time
 
         import psutil
