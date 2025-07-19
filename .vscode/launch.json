@@ -229,10 +229,14 @@
         "run",
         "dev"
       ],
+      "sourceMaps": true,
       "cwd": "${workspaceFolder}/buttermilk/frontend/chat/",
       "runtimeExecutable": "npm",
       "skipFiles": [
         "<node_internals>/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/buttermilk/frontend/chat/dist/**/*.js"
       ],
       "type": "node",
       "envFile": "${workspaceFolder}/.env",
@@ -252,18 +256,18 @@
     {
       "type": "vscode-edge-devtools.debug",
       "request": "attach",
-      "name": "edge devtools",
+      "name": "attach edge devtools",
       "url": "http://localhost:9222",
-      "webRoot": "${workspaceFolder}/buttermilk/frontend/chat/src/"
+      "webRoot": "${workspaceFolder}/buttermilk/frontend/chat/src/",
     },
   ],
   "compounds": [
     {
       "name": "Debug web frontend",
       "configurations": [
+        "daemon",
         "Launch chat web ui",
-        "launch edge",
-        "edge devtools"
+        "edge devtools",
       ]
     }
   ],

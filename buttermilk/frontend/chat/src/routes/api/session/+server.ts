@@ -25,7 +25,8 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
         // const validateResponse = await fetch(`${env.BACKEND_API_URL}/api/session/validate?sessionId=${existingSessionId}`);
         
         // For now, let's use the session directly and assume it's valid if we don't get an error
-        const validateResponse = await fetch(`${env.BACKEND_API_URL}/api/session?sessionId=${existingSessionId}`, {
+        const backendUrl = (env.BACKEND_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const validateResponse = await fetch(`${backendUrl}/api/session?sessionId=${existingSessionId}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json'
@@ -50,8 +51,9 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
     }
     
     // Get a new session ID from the backend
-    console.log('Requesting new session from backend: ${env.BACKEND_API_URL}/api/session');
-    const response = await fetch(`${env.BACKEND_API_URL}/api/session`, {
+    const backendUrl = (env.BACKEND_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+    console.log(`Requesting new session from backend: ${backendUrl}/api/session`);
+    const response = await fetch(`${backendUrl}/api/session`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
