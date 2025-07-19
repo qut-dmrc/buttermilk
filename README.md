@@ -128,5 +128,23 @@ gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 
 Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
 
+## Deployment
+
+### Production Deployment
+For production deployments, Buttermilk supports automatic credential loading to avoid interactive login flows:
+
+- **Weave/W&B**: Set `WANDB_API_KEY`, `WANDB_PROJECT`, `WANDB_ENTITY` environment variables
+- **Cloud Services**: Use service account keys or workload identity
+- **Secrets**: Store credentials in Google Cloud Secret Manager or Azure Key Vault
+
+See **[External Configuration Guide](docs/user-guide/external-configuration.md#deployment-configuration)** and **[Weave Credentials Guide](docs/weave-credentials.md)** for complete deployment documentation.
+
+### Container Example
+```bash
+docker run -e WANDB_API_KEY=$WANDB_API_KEY \
+           -e WANDB_PROJECT=my-research \
+           buttermilk:latest
+```
+
 ## Instructions for bots
 Read [CLAUDE.md](CLAUDE.md)
