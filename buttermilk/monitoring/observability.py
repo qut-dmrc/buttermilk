@@ -89,6 +89,14 @@ class SimpleHealthMonitor:
         logger.debug(f"Checking interactive flow UI timeout: {session_id} (timeout: {timeout_seconds}s)")
         return True
 
+    async def start_monitoring(self):
+        """Compatibility method - simplified version doesn't need async startup."""
+        logger.info("Started basic health monitoring")
+
+    async def stop_monitoring(self):
+        """Compatibility method - simplified version doesn't need async shutdown."""
+        logger.info("Stopped basic health monitoring")
+
     def get_basic_health_status(self) -> SystemStatus:
         """Get basic system health status."""
         self.last_check = datetime.now()
@@ -133,7 +141,13 @@ class SimpleHealthMonitor:
                 error_message=f"Health check failed: {e}"
             )
 
-    def get_basic_metrics_summary(self) -> Dict[str, Any]:
+    async def start_monitoring(self):
+        """Compatibility method - simplified version doesn't need async startup."""
+        logger.info("Started basic health monitoring")
+
+    async def stop_monitoring(self):
+        """Compatibility method - simplified version doesn't need async shutdown."""
+        logger.info("Stopped basic health monitoring")
         """Get basic metrics summary for simple monitoring."""
         try:
             flow_metrics = self.metrics_collector.get_flow_metrics()
