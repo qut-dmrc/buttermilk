@@ -1,0 +1,13 @@
+host: gemini25flash
+
+cheap:
+  - gemini25flash
+
+general:
+  - gemini25flash
+
+judgers:
+  - gemini25flash
+
+synthesisers:
+  - gemini25flash

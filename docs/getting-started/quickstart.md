@@ -50,57 +50,6 @@ curl -X POST http://localhost:8000/flow/trans_clean \
 
 3. **Use the web interface**: Navigate to http://localhost:8000 in your browser
 
-## 🔧 Understanding the Configuration
-
-### Hierarchical Composition (trans_clean)
-
-Configuration file: `conf/flows/trans_clean.yaml`
-
-```yaml
-# Uses Hydra's defaults to compose from multiple sources
-defaults:
-  - /agents/rag: simple_rag
-  - /data: local_files
-  - /flows/criteria: trans_analysis
-
-# Flow-specific settings
-flow:
-  name: trans_clean
-  description: "Analysis of trans-related content"
-```
-
-**Pros:**
-- Reusable components
-- DRY principle
-- Easy to maintain
-- Consistent across flows
-
-### All-in-One (tox_allinone)
-
-Configuration file: `conf/flows/tox_allinone.yaml`
-
-```yaml
-# Everything defined in one place
-flow:
-  name: tox_allinone
-  description: "Toxicity detection flow"
-  
-agents:
-  - name: toxicity_detector
-    type: LLMAgent
-    model: gpt-4
-    prompt: "Check this content for toxicity..."
-    
-data:
-  source: inline
-  records: []
-```
-
-**Pros:**
-- Self-contained
-- Easy to understand
-- Good for experiments
-- Quick to set up
 
 ## 📚 Key Concepts
 

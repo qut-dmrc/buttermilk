@@ -26,7 +26,9 @@ Key Analysis Steps:
 1. **Trace Data Flow**: YAML → Hydra → OmegaConf → Pydantic → Agent
 2. **Map Dependencies**: What touches what?
 3. **Identify Root Cause**: Not symptoms, but actual problems
-4. **Document Findings**: Update the GitHub issue
+4. **Check Error Propagation**: Are exceptions being caught and logged properly?
+5. **Verify Configuration Chain**: Full module paths in YAML, proper inheritance
+6. **Document Findings**: Update the GitHub issue
 
 ### Phase 3: PLAN - Design Before Code
 Create a clear plan with:
@@ -195,6 +197,20 @@ config = {  # 🚫 Use YAML files
     "model": "gpt-4",
     "temperature": 0.7
 }
+```
+
+#### Ignoring Async Task Exceptions
+```python
+# NEVER: Create tasks without exception handling
+task = asyncio.create_task(some_async_operation())  # 🚫 Exceptions will spill to console
+
+# ALWAYS: Add completion callbacks for proper error logging
+def handle_task_exception(task_future):
+    if task_future.exception() is not None:
+        logger.error(f"Task failed: {task_future.exception()}", exc_info=task_future.exception())
+
+task = asyncio.create_task(some_async_operation())
+task.add_done_callback(handle_task_exception)
 ```
 
 ## Debugging Discipline
