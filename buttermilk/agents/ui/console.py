@@ -218,7 +218,7 @@ class CLIUserAgent(UIAgent):
             # If formatting is successful, print the message to the console.
             self._console.print(formatted_msg)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
 
         Args:
