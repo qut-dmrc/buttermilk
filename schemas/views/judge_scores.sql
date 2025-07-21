@@ -31,8 +31,12 @@ PREDICTIONS AS (
     JSON_VALUE(agent_info, "$.parameters.template") AS judge_template,
     JSON_VALUE(agent_info, "$.parameters.criteria") AS judge_criteria,
     JSON_VALUE(agent_info, "$.role") AS judge_role,
-    JSON_EXTRACT_STRING_ARRAY(outputs, "$.reasons") AS reasons,
-    JSON_VALUE(outputs, "$.conclusion") AS conclusion,
+    -- Calculate full_prediction_summary within this CTE
+    CONCAT(
+      IFNULL(JSON_VALUE(outputs, "$.conclusion"), ''),
+      ' ', -- Add a space separator
+      ARRAY_TO_STRING(JSON_EXTRACT_STRING_ARRAY(outputs, "$.reasons"), '. ', '') -- Join reasons with '. ' and an empty string for nulls
+    ) AS full_prediction_summary,
     CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS violating,
     JSON_VALUE(outputs, "$.confidence") AS confidence
   FROM
@@ -53,14 +57,7 @@ SELECT
   PREDICTIONS.judge_template,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.reasons,
-  PREDICTIONS.conclusion,
-  -- Concatenate conclusion and reasons into a single string
-  CONCAT(
-    IFNULL(PREDICTIONS.conclusion, ''),
-    '\n', -- Add a newline separator
-    ARRAY_TO_STRING(PREDICTIONS.reasons, '\n  - ', '') -- Join reasons with '\n  - ' and an empty string for nulls
-  ) AS full_prediction_summary,
+  PREDICTIONS.full_prediction_summary, -- Use the pre-calculated summary
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
@@ -68,7 +65,7 @@ SELECT
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
   SCORES_AGGREGATED.role,
-  SCORES_AGGREGATED.tracing_link,
+  SCORES_AGGREGATED.tracing_link as scorer_tracing_link,
   ARRAY_AGG(CAST(JSON_VALUE(assessment, '$.correct') AS BOOLEAN) IGNORE NULLS) AS assessment_correct,
   ARRAY_AGG(JSON_VALUE(assessment, '$.feedback') IGNORE NULLS) AS assessment_feedback,
   SCORES_AGGREGATED.correctness
@@ -100,13 +97,11 @@ GROUP BY
   PREDICTIONS.judge_template,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.reasons,
-  PREDICTIONS.conclusion,
-  full_prediction_summary,
+  PREDICTIONS.full_prediction_summary, -- Group by the pre-calculated summary
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
-  SCORES_AGGREGATED.tracing_link,
+  SCORES_AGGREGATED.tracing_link ,
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
