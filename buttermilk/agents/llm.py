@@ -320,7 +320,7 @@ class LLMAgent(Agent):
             error_event = ErrorEvent(source=self.agent_id, content=str(template_fill_error))
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "TemplateError"}, outputs=error_event)
         except Exception as e:  # Catch any other unexpected error during templating
-            logger.error(f"Agent '{self.agent_id}': Unexpected critical error during template processing: {e!s}", exc_info=True)
+            logger.error(f"Agent '{self.agent_id}': Unexpected critical error during template processing: {e!s}", exc_info=False)
             error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
 
