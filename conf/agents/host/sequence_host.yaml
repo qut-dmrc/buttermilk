@@ -7,6 +7,7 @@ sequence_host:
   parameters:
     human_in_loop: ${run.human_in_loop}
     execution_mode: "sequential"  # Execute agents in defined order
+    # error_threshold: 0.5  # Optional: Stop flow if >50% of tasks fail (default: 0.5)
   inputs:
     task: |
       You are the HOST coordinating a sequential workflow.
