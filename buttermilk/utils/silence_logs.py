@@ -132,6 +132,28 @@ def silence_task_logs():
         message="CropBox missing from",
     )
 
+    # Suppress Pydantic deprecation warnings from third-party libraries (especially weave)
+    warnings.filterwarnings(
+        action="ignore",
+        message=".*model_fields.*deprecated.*",
+        category=DeprecationWarning,
+    )
+    warnings.filterwarnings(
+        action="ignore",
+        message=".*__fields__.*deprecated.*",
+        category=DeprecationWarning,
+    )
+    warnings.filterwarnings(
+        action="ignore",
+        message=".*__fields_set__.*deprecated.*",
+        category=DeprecationWarning,
+    )
+    warnings.filterwarnings(
+        action="ignore",
+        message=".*model_computed_fields.*deprecated.*",
+        category=DeprecationWarning,
+    )
+
     # Silence asyncio task execution logs
     logging.getLogger("asyncio").setLevel(logging.ERROR)
     logging.getLogger("asyncio.tasks").setLevel(logging.ERROR)
