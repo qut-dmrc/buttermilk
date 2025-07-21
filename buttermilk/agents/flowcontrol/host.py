@@ -171,8 +171,8 @@ class HostAgent(Agent):
         agent_id_to_update = message.agent_id
 
         async with self._tasks_condition:
-            self._pending_tasks_by_agent[agent_id_to_update] += 1
             self._total_tasks_in_step += 1
+            self._pending_tasks_by_agent[agent_id_to_update] += 1
             logger.info(
                 f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)}. "
