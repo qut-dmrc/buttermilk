@@ -55,7 +55,6 @@ buttermilk/
   - `sequence_host.py`: Sequential execution
 
 ### Specialized Agents
-- **example_tool_agent.py**: Example with tool definitions
 - **ui/**: User interface agents
   - `base.py`: Base UI agent
   - `cli_agent.py`: Terminal interface
