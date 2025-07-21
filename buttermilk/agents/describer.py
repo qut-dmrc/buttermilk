@@ -22,17 +22,17 @@ class MediaDescription(BaseModel):
 
     description: str = Field(
         ...,
-        description="The textual description of the media content (alt text, caption, or transcript)"
+        description="The textual description of the media content (alt text, caption, or transcript)",
     )
     media_type: str = Field(
         ...,
-        description="Type of media described (image, video, audio, text)"
+        description="Type of media described (image, video, audio, text)",
     )
     confidence: float = Field(
         default=1.0,
         ge=0.0,
         le=1.0,
-        description="Confidence level in the description accuracy"
+        description="Confidence level in the description accuracy",
     )
 
 
@@ -58,8 +58,11 @@ class Describer(LLMAgent):
 
     """
 
-    # Force structured output for descriptions
-    _output_model: type[BaseModel] | None = MediaDescription
+    def __init__(self, **kwargs):
+        """Initializes the Judge agent with its specific configuration and output model."""
+        super().__init__(**kwargs)
+        # Set the expected output model for the LLM's response
+        self._output_model = MediaDescription
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentTrace | ErrorEvent:
         """Process the input to generate a media description.
@@ -99,7 +102,7 @@ class Describer(LLMAgent):
             existing_description = MediaDescription(
                 description=record.metadata["alt_text"],
                 media_type="unknown",  # We don't know the original media type
-                confidence=1.0
+                confidence=1.0,
             )
             return AgentTrace(
                 agent_id=self.agent_id,
@@ -117,31 +120,29 @@ class Describer(LLMAgent):
                 # Empty media list, fall back to text
                 if record.text:
                     return self._create_text_response(record)
-                else:
-                    return ErrorEvent(
-                        source=self.agent_id,
-                        error="Record has no media or text content to describe.",
-                        error_code="NO_CONTENT",
-                    )
+                return ErrorEvent(
+                    source=self.agent_id,
+                    error="Record has no media or text content to describe.",
+                    error_code="NO_CONTENT",
+                )
             # Process media content
             return await self._process_media(message, record, **kwargs)
-        elif record.text:
+        if record.text:
             # No media, just text
             return self._create_text_response(record)
-        else:
-            # Neither media nor text
-            return ErrorEvent(
-                source=self.agent_id,
-                error="Record has no content to describe.",
-                error_code="NO_CONTENT",
-            )
+        # Neither media nor text
+        return ErrorEvent(
+            source=self.agent_id,
+            error="Record has no content to describe.",
+            error_code="NO_CONTENT",
+        )
 
     def _create_text_response(self, record: Any) -> AgentTrace:
         """Create a response for text-only records."""
         text_description = MediaDescription(
             description=f"This is a text-only record. Content: {record.text[:200]}...",
             media_type="text",
-            confidence=1.0
+            confidence=1.0,
         )
         return AgentTrace(
             agent_id=self.agent_id,
@@ -174,7 +175,7 @@ class Describer(LLMAgent):
                 logger.error(f"Error downloading media from {record.uri}: {e}", exc_info=True)
                 return ErrorEvent(
                     source=self.agent_id,
-                    error=f"Failed to download media: {str(e)}",
+                    error=f"Failed to download media: {e!s}",
                     error_code="DOWNLOAD_ERROR",
                 )
 

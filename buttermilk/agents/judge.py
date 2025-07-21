@@ -167,13 +167,11 @@ class Judge(LLMAgent):
 
     """
 
-    _output_model: type[BaseModel] | None = JudgeReasons
-    """The Pydantic model (`JudgeReasons`) that the LLM is expected to output.
-    The `LLMAgent`'s `_process` method will use this to parse the LLM's response.
-    """
-
-    # Initialization (`__init__`) is handled by the parent LLMAgent/Agent classes,
-    # which accept AgentConfig detailing model, template, parameters, etc.
+    def __init__(self, **kwargs):
+        """Initializes the Judge agent with its specific configuration and output model."""
+        super().__init__(**kwargs)
+        # Set the expected output model for the LLM's response
+        self._output_model = JudgeReasons
 
     async def evaluate_content(
         self,
