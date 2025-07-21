@@ -615,7 +615,11 @@ class HostAgent(Agent):
 
         # Check if too many tasks failed
         total_failed = sum(self._failed_tasks_by_agent.values())
-        error_ratio = total_failed / max(self._total_tasks_in_step, 1)  # Avoid division by zero
+        if self._total_tasks_in_step == 0:
+            logger.warning(f"Host {self.agent_id} encountered no tasks in the previous step.")
+            error_ratio = 0  # No tasks started, error ratio is undefined or treated as 0
+        else:
+            error_ratio = total_failed / self._total_tasks_in_step
 
         if error_ratio > self._error_threshold:
             msg = (
