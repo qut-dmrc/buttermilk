@@ -4,6 +4,7 @@ WITH SCORES_AGGREGATED AS (
     call_id AS scorer_call_id,
     timestamp,
     error,
+    tracing_link,
     IFNULL(parent_call_id, JSON_VALUE(inputs, "$.inputs.answers[0].answer_id")) as parent_call_id,
     JSON_VALUE(agent_info, "$.name") AS scorer,
     JSON_VALUE(agent_info, "$.parameters.model") AS scoring_model,
@@ -12,7 +13,7 @@ WITH SCORES_AGGREGATED AS (
     CAST(JSON_VALUE(outputs, "$.correctness") AS FLOAT64) AS correctness,
     JSON_EXTRACT_ARRAY(outputs, '$.assessments') AS assessments
   FROM
-    `{DATASET}.{FLOWS_TABLE}`
+    `prosocial-443205.testing.flow`
   WHERE
     JSON_VALUE(agent_info, "$.role") IN ('SCORERS')
 ),
@@ -23,6 +24,7 @@ PREDICTIONS AS (
     timestamp,
     error,
     records as record,
+    tracing_link,
     JSON_VALUE(records, '$.record_id') AS record_id,
     JSON_VALUE(agent_info, "$.name") AS judge,
     JSON_VALUE(agent_info, "$.parameters.model") AS judge_model,
@@ -34,7 +36,7 @@ PREDICTIONS AS (
     CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS violating,
     JSON_VALUE(outputs, "$.confidence") AS confidence
   FROM
-    `{DATASET}.{FLOWS_TABLE}`
+    `prosocial-443205.testing.flow`
     LEFT JOIN UNNEST(JSON_QUERY_ARRAY(inputs, '$.records')) AS records
   WHERE
     JSON_VALUE(agent_info, "$.role") IN ('JUDGE', 'SYNTHESISER')
@@ -55,10 +57,12 @@ SELECT
   PREDICTIONS.conclusion,
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
+  PREDICTIONS.tracing_link,
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
   SCORES_AGGREGATED.role,
+  SCORES_AGGREGATED.tracing_link,
   ARRAY_AGG(CAST(JSON_VALUE(assessment, '$.correct') AS BOOLEAN) IGNORE NULLS) AS assessment_correct,
   ARRAY_AGG(JSON_VALUE(assessment, '$.feedback') IGNORE NULLS) AS assessment_feedback,
   SCORES_AGGREGATED.correctness
@@ -69,8 +73,16 @@ LEFT JOIN
 LEFT JOIN
   UNNEST(SCORES_AGGREGATED.assessments) AS assessment
 WHERE
-  PREDICTIONS.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
-  AND SCORES_AGGREGATED.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+  TRUE
+  -- Bad data before this date
+  AND PREDICTIONS.timestamp >= '2025-05-01' AND SCORES_AGGREGATED.timestamp >= '2025-05-01' 
+
+  -- This should make the join somewhat faster
+  AND SCORES_AGGREGATED.timestamp >= PREDICTIONS.timestamp
+   
+  -- Uncomment these for a snappy last week
+--  AND PREDICTIONS.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+--  AND SCORES_AGGREGATED.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
 GROUP BY
   PREDICTIONS.session_id,
   PREDICTIONS.call_id,
@@ -86,6 +98,8 @@ GROUP BY
   PREDICTIONS.conclusion,
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
+  PREDICTIONS.tracing_link,
+  SCORES_AGGREGATED.tracing_link,
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
