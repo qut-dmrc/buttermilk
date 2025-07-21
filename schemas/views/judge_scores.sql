@@ -55,6 +55,12 @@ SELECT
   PREDICTIONS.judge_role,
   PREDICTIONS.reasons,
   PREDICTIONS.conclusion,
+  -- Concatenate conclusion and reasons into a single string
+  CONCAT(
+    IFNULL(PREDICTIONS.conclusion, ''),
+    '\n', -- Add a newline separator
+    ARRAY_TO_STRING(PREDICTIONS.reasons, '\n  - ', '') -- Join reasons with '\n  - ' and an empty string for nulls
+  ) AS full_prediction_summary,
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
@@ -75,11 +81,11 @@ LEFT JOIN
 WHERE
   TRUE
   -- Bad data before this date
-  AND PREDICTIONS.timestamp >= '2025-05-01' AND SCORES_AGGREGATED.timestamp >= '2025-05-01' 
+  AND PREDICTIONS.timestamp >= '2025-05-01' AND SCORES_AGGREGATED.timestamp >= '2025-05-01'
 
   -- This should make the join somewhat faster
   AND SCORES_AGGREGATED.timestamp >= PREDICTIONS.timestamp
-   
+
   -- Uncomment these for a snappy last week
 --  AND PREDICTIONS.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
 --  AND SCORES_AGGREGATED.timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
@@ -96,6 +102,7 @@ GROUP BY
   PREDICTIONS.judge_role,
   PREDICTIONS.reasons,
   PREDICTIONS.conclusion,
+  full_prediction_summary,
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
@@ -104,6 +111,6 @@ GROUP BY
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
   SCORES_AGGREGATED.role,
-  SCORES_AGGREGATED.correctness 
+  SCORES_AGGREGATED.correctness
 ORDER BY
   PREDICTIONS.timestamp DESC;
