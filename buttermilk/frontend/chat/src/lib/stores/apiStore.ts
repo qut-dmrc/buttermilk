@@ -223,9 +223,14 @@ export async function refetchRecords() {
       if (!response.ok) {
         throw new Error(`Error fetching records: ${response.statusText} (Status: ${response.status})`);
       }
-      const data: RecordItem[] = await response.json();
+      const responseData = await response.json();
       
-      console.log('Records fetched successfully:', data);
+      console.log('Records fetched successfully:', responseData);
+      
+      // Extract records array from response (handle both direct array and {records: [...]} structure)
+      const data: RecordItem[] = Array.isArray(responseData) ? responseData : (responseData.records || []);
+      
+      console.log('Extracted records array:', data);
       
       // Update recordsStore using its internal writable
       recordsStore._store.update(state => ({
