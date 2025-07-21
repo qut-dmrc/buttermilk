@@ -24,7 +24,7 @@ defaults:
 
 trans:
   # Core flow configuration
-  orchestrator: AutogenOrchestrator
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
   name: "trans"
   description: "Journalism quality assessment for trans issues reporting"
 

@@ -27,6 +27,12 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 # Start a flow session (returns session_id)
 uv run python -m buttermilk.debug.ws_debug_cli --json-output start <flow_name> --wait 20
 
+# Start debug session with specific configuration
+uv run python -m buttermilk.debug.ws_debug_cli start-debug trans --record "record_id" --criteria "hrc"
+
+# Start debug server with specific llms config
+uv run python -m buttermilk.debug.ws_debug_cli start-server trans --criteria "hrc"
+
 # Send message to active flow
 uv run python -m buttermilk.debug.ws_debug_cli --json-output send "message" --session <session_id> --wait 10
 
@@ -112,6 +118,106 @@ uv run pytest --pdb tests/test_agent.py
 uv run pytest -vvv tests/
 ```
 
+
+## Common Issue Patterns
+
+### Frontend-Backend Data Flow Issues
+**Symptom**: Frontend components not updating despite successful API calls
+
+**Root Cause Patterns**:
+1. **Reactive Statement Issues**: Check `$store` vs `$store.data` in Svelte components
+2. **API Response Structure Mismatch**: Backend returns `{records: [...]}` but frontend expects direct array
+
+**Debugging Steps**:
+```bash
+# Check API response structure
+curl -s http://localhost:8000/api/records | jq .
+
+# Check browser console for store updates
+# Look for reactive statement patterns in .svelte files
+```
+
+**Common Fix Pattern**:
+```javascript
+// In apiStore.ts - handle both array and object responses
+const data: RecordItem[] = Array.isArray(responseData) ? responseData : (responseData.records || []);
+
+// In Component.svelte - check reactive statements
+$: records = $recordsStore.data || []; // Not just $recordsStore
+```
+
+### Agent Registration Issues  
+**Symptom**: `ValueError` during orchestrator creation, missing agent registration
+
+**Root Cause Patterns**:
+1. **Missing Module Path**: Agent class not fully qualified in YAML config
+2. **Missing Register Method**: RoutedAgent subclasses need explicit `register` classmethod
+3. **Type Checking Logic**: `isinstance(agent_cls, type(Agent))` should be `issubclass(agent_cls, Agent)`
+
+**Debugging Steps**:
+```bash
+# Check agent registration in logs
+grep -E "Registering|register.*agent" /tmp/buttermilk*.log
+
+# Check agent class hierarchy
+uv run python -c "from buttermilk.agents.spy import SpyAgent; print(SpyAgent.__mro__)"
+```
+
+**Common Fix Patterns**:
+```python
+# Add register method to RoutedAgent subclasses
+@classmethod
+async def register(cls, runtime: "AgentRuntime", type: str, factory: Callable[[], Any], ...):
+    return await RoutedAgent.register(runtime=runtime, type=type, factory=factory, ...)
+
+# Fix type checking logic
+if issubclass(agent_cls, Agent):  # Not isinstance
+```
+
+### Unhandled Exception Spillage
+**Symptom**: Exceptions appear in console instead of logs, breaking error handling
+
+**Root Cause Pattern**: Async task exceptions not caught by main exception handlers
+
+**Debugging Steps**:
+```bash
+# Look for uncaught exceptions
+grep -E "Traceback|Exception.*not.*handled" /tmp/buttermilk*.log
+```
+
+**Common Fix Pattern**:
+```python
+# Add task completion callbacks
+def handle_task_exception(task_future):
+    if task_future.exception() is not None:
+        exc = task_future.exception()
+        logger.error(f"🚨 FATAL: Unhandled exception in task: {exc}", exc_info=exc)
+
+task = asyncio.create_task(flow_execution())
+task.add_done_callback(handle_task_exception)
+```
+
+### WebSocket Protocol Issues
+**Symptom**: Messages not reaching intended handlers, parameter not passed
+
+**Root Cause Pattern**: Message format not matching expected protocol
+
+**Expected WebSocket Message Format**:
+```json
+{
+  "type": "run_flow",
+  "flow": "trans", 
+  "prompt": "optional query",
+  "record": "optional_record_id",
+  "criteria": "optional_criteria"
+}
+```
+
+**Debugging Steps**:
+```bash
+# Monitor WebSocket messages
+uv run python -m buttermilk.debug.ws_debug_cli --json-output start trans --record "test" --criteria "hrc"
+```
 
 ## Emergency Procedures
 

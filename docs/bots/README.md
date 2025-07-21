@@ -33,8 +33,9 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Common anti-patterns to avoid
 
 ### [debugging.md](debugging.md) - Debugging Tools & Strategies
-- Available debugging tools and commands
-- Expected flow behavior
+- Available debugging tools and commands (WebSocket CLI, debug agents)
+- Common issue patterns (frontend-backend data flow, agent registration, exception handling)
+- Expected flow behavior and WebSocket protocol
 - Success criteria and troubleshooting
 - Log analysis techniques
 
