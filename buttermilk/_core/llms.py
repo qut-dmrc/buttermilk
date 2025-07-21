@@ -516,6 +516,7 @@ class AutoGenWrapper(RetryWrapper):
 
         Raises:
             ProcessingError: If parsing fails
+
         """
         parsed_object = None
 
@@ -528,7 +529,7 @@ class AutoGenWrapper(RetryWrapper):
             try:
                 # Import locally to avoid circular dependencies
                 from buttermilk.utils.json_parser import ChatParser
-                
+
                 parser = ChatParser()
                 parsed_dict = parser.parse(create_result.content)
                 parsed_object = schema(**parsed_dict) if isinstance(parsed_dict, dict) else None
@@ -540,7 +541,7 @@ class AutoGenWrapper(RetryWrapper):
                     exc_info=True,
                 )
                 raise ProcessingError(
-                    f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}"
+                    f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
         elif hasattr(create_result.content, "model_dump"):
             # Already a Pydantic object, but might be wrong type
@@ -549,21 +550,22 @@ class AutoGenWrapper(RetryWrapper):
             else:
                 logger.warning(
                     f"AutoGenWrapper: Response is {type(create_result.content).__name__}, "
-                    f"expected {schema.__name__}"
+                    f"expected {schema.__name__}",
                 )
 
         # Create ModelOutput with the parsed object
         if parsed_object is None:
             raise ProcessingError(
-                f"AutoGenWrapper requires structured output of type {schema.__name__} but parsing failed"
+                f"AutoGenWrapper requires structured output of type {schema.__name__} but parsing failed",
             )
 
         return ModelOutput(
             content=create_result.content,
             finish_reason=create_result.finish_reason,
             usage=create_result.usage,
-            thought=getattr(create_result, 'thought', None),
+            thought=getattr(create_result, "thought", None),
             parsed_object=parsed_object,
+            cached=create_result.cached,
         )
 
 
@@ -671,7 +673,7 @@ class LLMs(BaseModel):
                 bm_instance = get_bm()  # Get Buttermilk global instance
                 if not bm_instance.gcp_credentials:
                     raise ValueError("GCP credentials not available in Buttermilk instance for Google GenAI.")
-                
+
                 # Create GeminiChatCompletionClient with Vertex AI auth
                 gemini_client_params = client_params.copy()
                 # Set a dummy API key for OpenAI client validation, actual auth is via credentials
@@ -680,7 +682,7 @@ class LLMs(BaseModel):
                 gemini_client_params["location"] = config.configs.get("location", "global")
                 gemini_client_params["credentials"] = bm_instance.gcp_credentials
                 gemini_client_params["model_info"] = config.model_info  # Pass model_info explicitly
-                
+
                 client = GeminiChatCompletionClient(**gemini_client_params)
         elif api_type == "google-vertexai":
             bm_instance = get_bm()  # Get Buttermilk global instance
