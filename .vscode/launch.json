@@ -5,6 +5,58 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "daemon",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": false,
+      "args": [
+        "+flows=[trans,zot,osb]",
+        "+run=api",
+        "verbose=true",
+        "llms=${input:llms}",
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "args": []
+    },
+    {
+      "name": "Test Config",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "env": {
+        "PYDEVD_DISABLE_FILE_VALIDATION": "1",
+        "PYTEST_ADDOPTS": "-n1 -vv --showlocals --tb=short"
+      },
+      "justMyCode": false,
+      "purpose": [
+        "debug-test"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "debug cli frontend",
       "type": "node",
       "request": "launch",
@@ -23,46 +75,6 @@
       "remoteRoot": null
     },
     {
-      "name": "debug cli frontend (attach)",
-      "type": "node",
-      "request": "attach",
-      "port": 9229,
-      "restart": true,
-      "sourceMaps": true,
-      "outFiles": [
-        "${workspaceFolder}/buttermilk/frontend/cli/dist/**/*.js"
-      ],
-      "localRoot": "${workspaceFolder}/buttermilk/frontend/cli/",
-      "remoteRoot": null
-    },
-  {
-      "name": "Python Debugger: FastAPI",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "buttermilk.api.flow:app",
-        "--reload",
-        "+flows=[mock,osb,hate,trans,describer]",
-        "+run=api",
-        "verbose=true",
-        "llms=lite"
-      ],
-      "jinja": true
-    },
-
-    {
-      "name": "Python Debugger: Current File",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "envFile": "${workspaceFolder}/.env",
-      "cwd": "${workspaceFolder}",
-      "justMyCode": false,
-      "console": "integratedTerminal",
-      "args": []
-    },
-    {
       "name": "batch create",
       "type": "debugpy",
       "request": "launch",
@@ -75,107 +87,6 @@
         "flows=[trans]",
         "+flow=trans"
       ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "daemon",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "justMyCode": false,
-      "args": [
-        "+flows=[trans,zot,osb]",
-        "+run=api",
-        "verbose=false",
-        "llms=full",
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-{
-  "name": "batch run",
-  "type": "debugpy",
-  "request": "launch",
-  "module": "buttermilk.runner.cli",
-  "cwd": "${workspaceFolder}",
-  "pythonArgs": [
-    "-Xfrozen_modules=off",
-    "-Xdev"
-  ],
-  "justMyCode": true,
-  "args": [
-    "+run=batch",
-    "run.mode=batch_run",
-    "llms=full",
-  ],
-  "envFile": "${workspaceFolder}/.env",
-  "console": "integratedTerminal"
-},
-{
-      "name": "cli",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "justMyCode": true,
-      "args": [
-        "+run=console",
-        "+flows=[trans,zot,osb]",
-        "+flow=${input:flow}",
-        "llms=lite",
-        "ui=console"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "pubsub",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "justMyCode": true,
-      "args": [
-        "+run=pub/sub",
-        "+run=batch",
-        "flows=[trans]",
-        "+flow=trans",
-        "llms=full",
-        "human_in_loop=false"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "slack debug",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": true,
-      "args": [
-        "hydra.verbose=false",
-        "+flows=[trans,z]",
-        "+run=slackbot",
-        "llms=full",
-        "++name=automod",
-        "++job=development"
-      ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
@@ -203,22 +114,6 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["+experiments=ots", "+data=drag_noalt", "+save=bq"],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Test Config",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "env": {
-        "PYDEVD_DISABLE_FILE_VALIDATION": "1",
-        "PYTEST_ADDOPTS": "-n1 -vv --showlocals --tb=short"
-      },
-      "justMyCode": false,
-      "purpose": ["debug-test"],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
@@ -267,11 +162,22 @@
       "configurations": [
         "daemon",
         "Launch chat web ui",
-        "edge devtools",
+        "attach edge devtools",
       ]
     }
   ],
   "inputs": [
+    {
+      "id": "llms",
+      "type": "pickString",
+      "description": "Which LLMs to use?",
+      "options": [
+        "debug",
+        "lite",
+        "full"
+      ],
+      "default": "debug"
+    },
     {
       "id": "query",
       "type": "promptString",
