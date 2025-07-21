@@ -18,19 +18,18 @@ from typing import TYPE_CHECKING, Any, Self
 import hydra
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage, CreateResult, LLMMessage, UserMessage
+from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
 
 from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import ModelOutput
+from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
 
-if TYPE_CHECKING:
-    from autogen_core.tools import Tool
+from autogen_core.tools import Tool
 
 
 class LLMAgent(Agent):
@@ -330,78 +329,25 @@ class LLMAgent(Agent):
             f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
             f"Configured tools ({len(self._tools)}): {tool_names}",
         )
-        # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
-        # Debug the schema parameter
-        logger.debug(f"Agent {self.agent_name}: About to call LLM with schema: {self._output_model} (type: {type(self._output_model)})")
-        try:
-            chat_result: CreateResult = await model_client.call_chat(
-                messages=llm_messages_to_send,
-                tools_list=self._tools,
-                cancellation_token=cancellation_token,
-                schema=self._output_model,  # Pass expected Pydantic schema for structured output
-            )
-        except Exception as llm_error:
-            # Catch errors during the actual LLM call
-            msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
-            raise ProcessingError(msg) from llm_error
+        # Call the LLM through our helper method
+        chat_result = await self._call_llm(
+            messages=llm_messages_to_send,
+            tools=self._tools,
+            schema=self._output_model,
+            cancellation_token=cancellation_token,
+        )
 
-        llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
+        llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=getattr(chat_result, 'thought', None), source=self.agent_id))
         logger.info(
             f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
 
-        # 3. Parse the LLM response and create an AgentOutput
-        parsed_object = None
-        if schema := self._output_model:
-            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, self._output_model):
-                # If client already parsed into the correct schema object
-                parsed_object = chat_result.parsed_object
-            elif isinstance(chat_result.content, str):
-                # Try to parse the string response
-                logger.debug(f"Agent {self.agent_name}: Attempting to parse string response into {schema.__name__}")
-                try:
-                    # Parse JSON string and validate with Pydantic model
-                    from buttermilk.utils.json_parser import ChatParser
-                    parser = ChatParser()
-                    parsed_dict = parser.parse(chat_result.content)
-                    parsed_object = schema(**parsed_dict) if isinstance(parsed_dict, dict) else None
-                    if parsed_object:
-                        logger.debug(f"Agent {self.agent_name}: Successfully parsed response into {schema.__name__}")
-                except Exception as parse_error:
-                    logger.error(
-                        f"Agent {self.agent_id}: Failed to parse LLM response into {schema.__name__}: {parse_error}",
-                        exc_info=True,
-                    )
-                    # Raise error - no fallback for structured outputs
-                    raise ProcessingError(
-                        f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
-                    ) from parse_error
-            elif hasattr(chat_result.content, "model_dump"):
-                # Already a Pydantic object, but might be wrong type
-                if isinstance(chat_result.content, self._output_model):
-                    parsed_object = chat_result.content
-                else:
-                    logger.warning(
-                        f"Agent {self.agent_name}: Response is {type(chat_result.content).__name__}, "
-                        f"expected {self._output_model.__name__}",
-                    )
-
-        # For structured outputs, require parsed object
-        if self._output_model:
-            if parsed_object is None:
-                raise ProcessingError(
-                    f"Agent {self.agent_name} requires structured output of type {self._output_model.__name__} but parsing failed",
-                )
-            final_output = parsed_object
+        # Extract the final output based on whether we have structured output
+        if self._output_model and isinstance(chat_result, ModelOutput):
+            final_output = chat_result.parsed_object
         else:
-            # Only use raw content if no output model specified
             final_output = chat_result.content
-
-        # Store the model context if available
-        if hasattr(model_client, "_current_messages"):
-            self._model_context = model_client._current_messages
 
         # Prepare metadata for AgentOutput
         output_metadata = {
@@ -417,6 +363,47 @@ class LLMAgent(Agent):
 
         logger.info(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
         return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
+
+    async def _call_llm(
+        self,
+        messages: list[LLMMessage],
+        tools: list[Tool],
+        schema: type[pydantic.BaseModel] | None,
+        cancellation_token: CancellationToken | None,
+    ) -> CreateResult | ModelOutput:
+        """Helper method to call the LLM with proper error handling.
+
+        This method can be overridden by subclasses that need special LLM handling.
+
+        Args:
+            messages: The messages to send to the LLM
+            tools: Available tools for the LLM to call
+            schema: Optional Pydantic schema for structured output
+            cancellation_token: Optional cancellation token
+
+        Returns:
+            CreateResult | ModelOutput: The LLM response, potentially with parsed object
+
+        Raises:
+            ProcessingError: If the LLM call fails
+        """
+        # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
+        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
+
+        logger.debug(f"Agent {self.agent_name}: Calling LLM with schema: {schema} (type: {type(schema)})")
+        try:
+            chat_result = await model_client.call_chat(
+                messages=messages,
+                tools_list=tools,
+                cancellation_token=cancellation_token,
+                schema=schema,
+            )
+        except Exception as llm_error:
+            msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
+            logger.error(msg)
+            raise ProcessingError(msg) from llm_error
+
+        return chat_result
 
     async def _sequence(self) -> AsyncGenerator[Any, None]:
         """Not implemented for LLMAgent.
