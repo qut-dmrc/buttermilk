@@ -527,7 +527,7 @@ class HostAgent(Agent):
                     # break
                     pass
                 # Don't seek confirmation from the manager to send a request to the manager
-                logger.info(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
+                logger.debug(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
                     continue
@@ -595,7 +595,7 @@ class HostAgent(Agent):
         # If successful, clear the pending tasks dictionary for the next step
         async with self._tasks_condition:
             self._pending_tasks_by_agent.clear()
-        logger.info("No pending tasks left over from previous steps, clear to proceed.")
+        logger.debug("No pending tasks left over from previous steps, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:

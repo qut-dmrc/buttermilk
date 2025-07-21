@@ -854,32 +854,45 @@ class BM(SessionInfo):
         # Shorter: Timestamp [short_context] LEVEL filename: Message
         console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
 
+        # Console always shows INFO level, regardless of verbose setting
         coloredlogs.install(
             logger=logger,  # Target Buttermilk's main logger
             fmt=console_format,
             isatty=True,  # Enable colors if output is a TTY
             stream=sys.stdout,  # Log to stdout for better test visibility
-            level=logging.DEBUG if verbose else logging.INFO,
+            level=logging.INFO,  # Always INFO for console
         )
 
-        # Add file logging when verbose is True
-        if verbose:
-            log_filename = f"/tmp/buttermilk_{self.run_id}.log"
+        # Always create an INFO log file
+        info_log_filename = f"/tmp/buttermilk_{self.run_id}_info.log"
+        info_file_handler = logging.FileHandler(info_log_filename, mode="w")
+        info_file_handler.setLevel(logging.INFO)
 
-            # Create file handler
-            file_handler = logging.FileHandler(log_filename, mode="w")
-            file_handler.setLevel(logging.DEBUG)
+        info_file_formatter = logging.Formatter(console_format)
+        info_file_handler.setFormatter(info_file_formatter)
+        info_file_handler.addFilter(context_filter)
+
+        logger.addHandler(info_file_handler)
+        logger.info(f"INFO logging enabled - writing to: {info_log_filename}")
+
+        # Add debug file logging when verbose is True
+        if verbose:
+            debug_log_filename = f"/tmp/buttermilk_{self.run_id}_debug.log"
+
+            # Create debug file handler
+            debug_file_handler = logging.FileHandler(debug_log_filename, mode="w")
+            debug_file_handler.setLevel(logging.DEBUG)
 
             # Use the same format as console but without colors
-            file_formatter = logging.Formatter(console_format)
-            file_handler.setFormatter(file_formatter)
+            debug_file_formatter = logging.Formatter(console_format)
+            debug_file_handler.setFormatter(debug_file_formatter)
 
             # Add the same context filter
-            file_handler.addFilter(context_filter)
+            debug_file_handler.addFilter(context_filter)
 
             # Add handler to the logger
-            logger.addHandler(file_handler)
-            logger.info(f"Verbose logging enabled - also writing to: {log_filename}")
+            logger.addHandler(debug_file_handler)
+            logger.info(f"DEBUG logging enabled - writing to: {debug_log_filename}")
 
         # Defer Google Cloud Logging setup to improve startup performance
         # Cloud logging will be initialized on first cloud operation

@@ -353,15 +353,21 @@ class FlowTestClient:
             logger.error(f"Unexpected error in message listener: {e}")
             raise
 
-    async def start_flow(self, flow_name: str, prompt: str = ""):
+    async def start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = ""):
         """Start a flow."""
         message = {
             "type": MessageType.RUN_FLOW,
             "flow": flow_name,
             "prompt": prompt
         }
+        
+        # Add optional parameters if provided
+        if record:
+            message["record"] = record
+        if criteria:
+            message["criteria"] = criteria
 
-        logger.info(f"Starting flow: {flow_name}")
+        logger.info(f"Starting flow: {flow_name} (record: {record}, criteria: {criteria})")
         await self.ws.send_json(message)
 
     async def send_manager_response(self, content: str):

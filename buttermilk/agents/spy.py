@@ -6,13 +6,17 @@ group chat or message bus, capture `AgentTrace` messages produced by other agent
 and persist them using an asynchronous data uploader.
 """
 
-from typing import Any  # For type hinting
+from typing import TYPE_CHECKING, Any, Callable  # For type hinting
 
 from autogen_core import (  # Autogen core components
+    AgentType,
     MessageContext,
     RoutedAgent,
     message_handler,  # Decorator to register methods as message handlers.
 )
+
+if TYPE_CHECKING:
+    from autogen_core import AgentRuntime
 
 from buttermilk._core import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
@@ -66,6 +70,35 @@ class SpyAgent(RoutedAgent):
             logger.debug(f"SpyAgent: Configured storage for flow '{self.flow_name}'")
         else:
             logger.debug("SpyAgent: No flow_name provided, using session-level storage fallback")
+
+    @classmethod
+    async def register(
+        cls,
+        runtime: "AgentRuntime", 
+        type: str,
+        factory: Callable[[], Any],
+        skip_class_subscriptions: bool = False,
+        skip_direct_message_subscription: bool = False,
+    ) -> AgentType:
+        """Register SpyAgent with AutoGen runtime.
+
+        Args:
+            runtime: The AutoGen runtime to register with
+            type: The agent type identifier  
+            factory: Factory function to create SpyAgent instances
+            skip_class_subscriptions: Whether to skip class-based subscriptions
+            skip_direct_message_subscription: Whether to skip direct message subscriptions
+
+        Returns:
+            AgentType: The registered agent type
+        """
+        return await RoutedAgent.register(
+            runtime=runtime,
+            type=type,
+            factory=factory,
+            skip_class_subscriptions=skip_class_subscriptions,
+            skip_direct_message_subscription=skip_direct_message_subscription,
+        )
 
     @message_handler  # Autogen decorator to register this method as a handler
     async def agent_output_handler(self, message: AgentTrace, ctx: MessageContext) -> ErrorEvent | None:  # Changed to Any to handle type check first

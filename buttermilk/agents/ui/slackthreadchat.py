@@ -144,10 +144,11 @@ class SlackUIAgent(UIAgent):
             )
             self._current_input_message = None
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentTrace | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(message, UIMessage):
             await self._request_input(message)
+        return None
 
     async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
         """Initialize the interface and register handlers"""

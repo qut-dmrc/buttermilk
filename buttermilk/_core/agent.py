@@ -293,7 +293,7 @@ class Agent(RoutedAgent):
         self,
         message: AgentInput,
         **kwargs: Any,
-    ) -> AgentOutput:
+    ) -> AgentOutput | None:
         """Primary execution entry point for the agent, handling a single `AgentInput`.
 
         This method orchestrates the core processing logic of the agent. It is
@@ -320,6 +320,8 @@ class Agent(RoutedAgent):
         Returns:
             AgentOutput: An object containing the results of the agent's processing.
                 The exact structure of `AgentOutput` can vary depending on the agent type.
+
+            None: If the agent does not produce output.
 
         Raises:
             ProcessingError: If an error occurs during the `_process` method execution,
@@ -372,8 +374,14 @@ class Agent(RoutedAgent):
             if parent_call and child_call:
                 parent_call._children.append(child_call)  # Nest this call for tracing
             result = await self._process(message=message)
-            result.call_id = child_call.id
-            result.tracing_link = child_call.ui_url
+
+            # Handle case where _process returns None (e.g., UI agents that don't produce output)
+            if result is None:
+                return None
+
+            if child_call:
+                result.call_id = child_call.id
+                result.tracing_link = child_call.ui_url
 
             return result
         finally:
@@ -387,7 +395,7 @@ class Agent(RoutedAgent):
         self,
         message: AgentInput | StepRequest,
         ctx: MessageContext,
-    ) -> AgentTrace:
+    ) -> AgentTrace | None:
         """Prepare input, calls the agent's core logic, and handles callbacks.
 
         This method provides a more complete interaction pattern than `__call__`.
@@ -416,6 +424,7 @@ class Agent(RoutedAgent):
 
         Returns:
             AgentTrace: An object detailing the agent's execution for this invocation.
+            None: If the agent does not run.
 
         Raises:
             ProcessingError: If `_add_state_to_input` fails. (Errors from `__call__`
@@ -423,7 +432,8 @@ class Agent(RoutedAgent):
 
         """
         if isinstance(message, StepRequest) and message.role != self.role:
-            # Only handle if the role matches this agent's role
+            # Only handle if the role matches this agent's role - create a "skipped" trace
+            logger.warning(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
             return None
 
         is_error = False
@@ -439,6 +449,10 @@ class Agent(RoutedAgent):
 
         try:
             result = await self.__call__(message=final_input)
+
+            # If the agent didn't run, just exit.
+            if not result:
+                return None
 
             # Create the trace here with required values
             trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
@@ -465,7 +479,6 @@ class Agent(RoutedAgent):
                 agent_info=self._cfg,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result,
             )
-
         # Publish status update: Task Complete (including error if error)
         await self.publish_message(
             TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error), topic_id=ctx.topic_id,
@@ -478,7 +491,7 @@ class Agent(RoutedAgent):
         return trace
 
     @abstractmethod
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Abstract method for the agent's core processing logic.
 
         Subclasses **MUST** implement this method to define their specific behavior.
