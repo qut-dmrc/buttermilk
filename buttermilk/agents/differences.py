@@ -9,7 +9,6 @@ The `Differentiator` agent, also defined here, leverages these models to structu
 its output when performing such difference analysis.
 """
 
-from typing import Type  # For type hinting a class type
 
 from pydantic import BaseModel, Field  # Pydantic components for data validation
 
@@ -25,6 +24,7 @@ class Expert(BaseModel):
         answer_id (str): A unique identifier for the specific answer or statement
             provided by this expert. This can be used to link back to the
             original input text.
+
     """
 
     name: str = Field(..., description="Name or identifier of the expert or source.")
@@ -38,6 +38,7 @@ class Position(BaseModel):
         experts (list[Expert]): A list of `Expert` objects who hold or support
             this particular position.
         position (str): A concise summary or statement of the position itself.
+
     """
 
     experts: list[Expert] = Field(..., description="A list of experts who hold or support this position.")
@@ -55,6 +56,7 @@ class Divergence(BaseModel):
         positions (list[Position]): A list of `Position` objects, where each
             represents a distinct stance or viewpoint on the `topic`. This list
             should ideally only include materially different positions.
+
     """
 
     topic: str = Field(..., description="The key topic, point, or fact where differences are noted.")
@@ -75,15 +77,16 @@ class Differences(BaseModel):
         divergences (list[Divergence]): A list of `Divergence` objects, where
             each object details a specific topic of disagreement and the
             various positions taken on it.
+
     """
 
     conclusion: str = Field(
         ...,
-        description="A summary conclusion outlining overall findings, agreements, and unresolved divergences."
+        description="A summary conclusion outlining overall findings, agreements, and unresolved divergences.",
     )
     divergences: list[Divergence] = Field(
         ...,
-        description="A list of specific topics where divergences or disagreements were identified."
+        description="A list of specific topics where divergences or disagreements were identified.",
     )
 
 
@@ -104,6 +107,7 @@ class DifferencesOutput(Differences):
 
         Returns:
             str: A Markdown formatted string summarizing the analysis.
+
         """
         divergences_str_parts: list[str] = []
         for divergence_item in self.divergences:
@@ -113,14 +117,14 @@ class DifferencesOutput(Differences):
                 for pos in divergence_item.positions
             )
             divergences_str_parts.append(
-                f"### Divergence on Topic: {divergence_item.topic}\n{positions_str}"
+                f"### Divergence on Topic: {divergence_item.topic}\n{positions_str}",
             )
 
         final_divergences_str = "\n\n".join(divergences_str_parts)
 
         return (
             f"## Overall Conclusion:\n{self.conclusion}\n\n"
-            f"## Detailed Divergences:\n{final_divergences_str if final_divergences_str else 'No specific divergences listed.'}"
+            f"## Detailed Divergences:\n{final_divergences_str or 'No specific divergences listed.'}"
         )
 
 
@@ -158,8 +162,11 @@ class Differentiator(LLMAgent):
             its LLM output to be parsable into the `Differences` model.
             This is used by the `LLMAgent` base class to automatically attempt
             parsing the LLM's JSON output into this Pydantic model.
+
     """
 
-    _output_model: Type[BaseModel] | None = Differences
-    # This tells the LLMAgent base class to attempt to parse the LLM's output
-    # (if JSON) into the `Differences` model.
+    def __init__(self, **kwargs):
+        """Initializes the Judge agent with its specific configuration and output model."""
+        super().__init__(**kwargs)
+        # Set the expected output model for the LLM's response
+        self._output_model = Differences

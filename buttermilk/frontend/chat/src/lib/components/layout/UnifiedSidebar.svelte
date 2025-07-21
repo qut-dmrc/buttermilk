@@ -97,10 +97,25 @@
   }
   
   // For terminal pages: use the recordsStore
-  $: if (isTerminalPage && $recordsStore) {
-    console.debug('Terminal page - recordsStore data:', $recordsStore.data);
-    records = $recordsStore.data || [];
-    console.debug('Terminal page - local records:', records);
+  $: if (isTerminalPage) {
+    console.debug('Terminal page - full recordsStore:', $recordsStore);
+    console.debug('Terminal page - recordsStore.data:', $recordsStore.data);
+    console.debug('Terminal page - recordsStore.data type:', typeof $recordsStore.data);
+    console.debug('Terminal page - recordsStore.data isArray:', Array.isArray($recordsStore.data));
+    
+    if ($recordsStore.data && Array.isArray($recordsStore.data)) {
+      records = $recordsStore.data;
+      console.debug('Terminal page - local records assigned:', records);
+      console.debug('Terminal page - local records length:', records.length);
+    } else if ($recordsStore.data?.records && Array.isArray($recordsStore.data.records)) {
+      // Handle case where API returns {records: [...]} structure
+      records = $recordsStore.data.records;
+      console.debug('Terminal page - local records assigned from nested structure:', records);
+      console.debug('Terminal page - local records length:', records.length);
+    } else {
+      records = [];
+      console.debug('Terminal page - no valid records data, clearing records');
+    }
   }
   
   // Handle flow change

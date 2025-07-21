@@ -88,13 +88,13 @@ class NonInteractiveDebugClient:
         if self.client:
             await self.client.disconnect()
 
-    async def start_flow(self, flow_name: str, query: str, wait_time: int = 5) -> dict:
+    async def start_flow(self, flow_name: str, query: str, wait_time: int = 5, record: str = "", criteria: str = "") -> dict:
         """Start a flow and wait for initial responses."""
         if not await self.connect():
             return {"error": "Failed to connect to server"}
 
         try:
-            await self.client.start_flow(flow_name, query)
+            await self.client.start_flow(flow_name, query, record, criteria)
 
             # Wait for initial responses
             await asyncio.sleep(wait_time)
@@ -104,6 +104,8 @@ class NonInteractiveDebugClient:
                 "session_id": self.client.session_id,
                 "flow": flow_name,
                 "query": query,
+                "record": record,
+                "criteria": criteria,
                 "messages": []
             }
 
@@ -287,11 +289,13 @@ def cli(ctx, host: str, port: int, json_output: bool):
 @click.argument("flow_name")
 @click.argument("query", default="")
 @click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--record", default="", help="Record ID to process")
+@click.option("--criteria", default="", help="Criteria to use")
 @click.pass_context
-def start(ctx, flow_name: str, query: str, wait: int):
+def start(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str):
     """Start a flow with an optional initial query."""
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.start_flow(flow_name, query, wait))
+    result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
 
     if ctx.obj["JSON_OUTPUT"]:
         print(json.dumps(result, indent=2))
@@ -301,7 +305,12 @@ def start(ctx, flow_name: str, query: str, wait: int):
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
             console.print(f"[green]Started flow '{flow_name}' with session: {result['session_id']}[/green]")
-            console.print(f"Query: {query}")
+            if query:
+                console.print(f"Query: {query}")
+            if record:
+                console.print(f"Record: {record}")
+            if criteria:
+                console.print(f"Criteria: {criteria}")
             console.print(f"\nMessages ({len(result['messages'])}):")
             for msg in result["messages"]:
                 timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
@@ -309,6 +318,110 @@ def start(ctx, flow_name: str, query: str, wait: int):
                 content = msg["content"] or "(no content)"
                 agent = msg["agent_role"] or "system"
                 console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.argument("flow_name")
+@click.argument("query", default="")
+@click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--record", default="", help="Record ID to process")
+@click.option("--criteria", default="hrc", help="Single criteria to use for debugging (default: hrc)")
+@click.pass_context
+def start_debug(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str):
+    """Start a flow with debug configuration (llms=debug, single criteria)."""
+    # Import the runner CLI to start with proper configuration
+    import subprocess
+    import sys
+    import tempfile
+    import time
+    from pathlib import Path
+    
+    console = Console()
+    
+    if flow_name == "trans":
+        # Start the API server with debug configuration in the background
+        console.print(f"[yellow]Starting debug session for {flow_name} flow with criteria={criteria}[/yellow]")
+        
+        # Check if server is already running
+        try:
+            import requests
+            response = requests.get(f"http://{ctx.obj['HOST']}:{ctx.obj['PORT']}/health", timeout=1)
+            if response.status_code == 200:
+                console.print("[green]✓[/green] Server is already running")
+            else:
+                console.print("[red]✗[/red] Server responded with error")
+                return
+        except requests.RequestException:
+            console.print("[red]✗[/red] Server is not running. Please start it with:")
+            console.print(f"[cyan]uv run python -m buttermilk.runner.cli \"+flows=[{flow_name}]\" +run=api llms=debug trans.parameters.criteria=\"[{criteria}]\"[/cyan]")
+            return
+    
+    # Now use the regular start flow functionality with record and criteria
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Started debug session for '{flow_name}' with criteria='{criteria}'[/green]")
+            console.print(f"Session: {result['session_id']}")
+            console.print(f"Query: {query}")
+            if record:
+                console.print(f"Record: {record}")
+            console.print(f"Criteria: {criteria}")
+            console.print(f"\nMessages ({len(result['messages'])}):")
+            for msg in result["messages"]:
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                msg_type = msg["type"]
+                content = msg["content"] or "(no content)"
+                agent = msg["agent_role"] or "system"
+                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.argument("flow_name", default="trans")
+@click.option("--criteria", default="hrc", help="Single criteria to use for debugging")
+@click.option("--host", default="localhost", help="Server host")
+@click.option("--port", default=8000, help="Server port")
+def start_server(flow_name: str, criteria: str, host: str, port: int):
+    """Start the API server with debug configuration."""
+    import subprocess
+    import sys
+    
+    console = Console()
+    
+    # Build the command to start the server with debug configuration
+    if flow_name == "trans":
+        cmd = [
+            sys.executable, "-m", "buttermilk.runner.cli",
+            f"+flows=[{flow_name}]",
+            "+run=api",
+            "llms=debug",
+            f"trans.parameters.criteria=[{criteria}]"
+        ]
+    else:
+        cmd = [
+            sys.executable, "-m", "buttermilk.runner.cli", 
+            f"+flows=[{flow_name}]",
+            "+run=api",
+            "llms=debug"
+        ]
+    
+    console.print(f"[yellow]Starting debug server for {flow_name} flow...[/yellow]")
+    console.print(f"[dim]Command: {' '.join(cmd)}[/dim]")
+    console.print(f"[cyan]To start a flow, run:[/cyan]")
+    console.print(f"[cyan]uv run python -m buttermilk.debug.ws_debug_cli start-debug {flow_name}[/cyan]")
+    
+    # Execute the command
+    try:
+        result = subprocess.run(cmd, check=True, cwd="/src/buttermilk")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Error starting server: {e}[/red]")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped by user[/yellow]")
 
 
 @cli.command()

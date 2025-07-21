@@ -59,7 +59,7 @@ class UIAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,
         **kwargs,
-    ) -> AgentOutput:
+    ) -> AgentOutput | None:
         """Process inputs from the orchestrator and interact with the UI.
 
         Args:

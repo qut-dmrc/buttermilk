@@ -20,6 +20,20 @@
         "panel": "shared"
       },
       "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Restart Active Debug Session",
+      "type": "process",
+      "command": "workbench.action.debug.restart",
+      "problemMatcher": [],
+      "group": {
+        "kind": "none", // Or "none", or "build"
+        "isDefault": false
+      },
+      "runOptions": {
+        "instanceLimit": 1, // Optional: ensure only one instance runs
+        "reevaluateOnRerun": true // Optional
+      }
     }
   ]
 }

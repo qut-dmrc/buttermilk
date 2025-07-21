@@ -5,9 +5,12 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 
 import asyncio
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
+import pydantic
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
-from autogen_core.models import CreateResult
+from autogen_core.models import LLMMessage
+from autogen_core.tools import Tool
 
 from buttermilk import buttermilk as bm
 from buttermilk._core import AgentInput, StepRequest, logger
@@ -15,6 +18,7 @@ from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 
@@ -128,14 +132,37 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             # Send the response back to the group chat
             await self._publish(result)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
-        """Override to handle tool calls by routing them to agents instead of executing.
+    async def _call_llm(
+        self,
+        messages: list[LLMMessage],
+        tools: list[Tool],
+        schema: type[pydantic.BaseModel] | None,
+        cancellation_token: CancellationToken | None,
+    ) -> CreateResult | ModelOutput:
+        """Override to intercept tool calls without executing them.
 
-        This override bypasses the automatic tool execution in the parent class.
-        Instead, when the LLM calls a tool, we convert it to a StepRequest and
-        queue it for the appropriate agent to handle.
+        This allows the StructuredLLMHostAgent to handle tool routing specially.
         """
-        # Fill the template as usual
+        # Get the appropriate AutoGenWrapper instance
+        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
+
+        # Deduplicate tools by name
+        tools_list = list({tool.name: tool for tool in tools}.values())
+
+        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
+        
+        # Use intercept_tools=True to get FunctionCall objects without execution
+        return await model_client.call_chat(
+            messages=messages,
+            tools_list=tools_list,
+            cancellation_token=cancellation_token,
+            schema=schema,
+            intercept_tools=True,  # This is the key flag
+        )
+
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+        """Process the message using the LLM with intercepted tool calls."""
+        # Fill template and call LLM
         try:
             llm_messages_to_send = await self._fill_template(
                 task_params=message.parameters or {},
@@ -148,29 +175,17 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             error_event = ErrorEvent(source=self.agent_id, content=str(e))
             return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, outputs=error_event)
 
-        # Get the LLM client
-        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
-
-        # deduplicate tools by name
-        tools_list = list({tool.name: tool for tool in self._tools}.values())
-
-        # This returns FunctionCall objects without executing them
-        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
-
-        try:
-            create_result: CreateResult = await model_client.create(
-                messages=llm_messages_to_send,
-                tools=tools_list,  # Pass Tool objects
-                cancellation_token=cancellation_token,
-            )
-        except Exception as llm_error:
-            msg = f"StructuredLLMHost {self.agent_id}: Error during LLM call: {llm_error}"
-            logger.error(msg)
-            raise ProcessingError(msg) from llm_error
-
-        # Check if the LLM returned tool calls
-        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
-            tool_calls: list[FunctionCall] = create_result.content
+        # Call LLM with intercept flag
+        chat_result = await self._call_llm(
+            messages=llm_messages_to_send,
+            tools=self._tools,
+            schema=self._output_model,
+            cancellation_token=cancellation_token,
+        )
+        
+        # Check if we got tool calls in the output
+        if isinstance(chat_result.content, list) and all(isinstance(c, FunctionCall) for c in chat_result.content):
+            tool_calls: list[FunctionCall] = chat_result.content
             logger.info(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
 
             # Use the base class helper to route tool calls
@@ -181,15 +196,15 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
             # Return a descriptive acknowledgment
             return AgentOutput(agent_id=self.agent_id, outputs=summary, metadata={"tool_calls": len(tool_calls)})
-
+        
         # If no tool calls, return the LLM response as usual
         return AgentOutput(
             agent_id=self.agent_id,
-            outputs=create_result.content,
+            outputs=chat_result.content,
             metadata={
                 "model": self.parameters["model"],
-                "finish_reason": create_result.finish_reason,
-                "usage": create_result.usage or None,
+                "finish_reason": chat_result.finish_reason,
+                "usage": getattr(chat_result, 'usage', None),
             },
         )
 

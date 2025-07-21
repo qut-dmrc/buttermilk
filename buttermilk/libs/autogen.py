@@ -123,7 +123,7 @@ class AutogenAgentAdapter(RoutedAgent):
         # Initialize with announcement capability
         init_task = self.agent.initialize(
             callback_to_groupchat=self._make_publish_callback(),
-            public_callback=self._make_publish_callback()
+            public_callback=self._make_publish_callback(),
         )
 
         task = asyncio.create_task(init_task)
@@ -178,9 +178,9 @@ class AutogenAgentAdapter(RoutedAgent):
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*self._background_tasks, return_exceptions=True),
-                    timeout=5.0
+                    timeout=5.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"Timeout waiting for background tasks cancellation in adapter for {self.agent.agent_name}")
 
             self._background_tasks.clear()
@@ -352,7 +352,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: AgentInput | StepRequest,  # Handles the standard Buttermilk agent input message.
         ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
-    ) -> AllMessages:
+    ) -> AllMessages | None:
         """Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
 
         This typically corresponds to the Buttermilk agent's `__call__` method.

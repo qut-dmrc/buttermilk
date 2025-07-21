@@ -226,57 +226,65 @@ class AutogenOrchestrator(Orchestrator):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
-                # Define a factory function required by Autogen's registration.
-                if isinstance(agent_cls, type(Agent)):
-                    config_with_session = {**variant_config.model_dump(), "session_id": params.session_id}
+                try:
+                    # Define a factory function required by Autogen's registration.
+                    # Check if this is a Buttermilk Agent subclass
+                    if issubclass(agent_cls, Agent):
+                        config_with_session = {**variant_config.model_dump(), "session_id": params.session_id}
 
-                    # Create factory function for the agent
-                    def agent_factory(
-                        orchestrator_ref,  # Reference to orchestrator for registration
-                        cfg: dict = config_with_session,
-                        cls: type[Agent] = agent_cls,
-                    ) -> Agent:
-                        # Create the agent instance
-                        agent_instance = cls(**cfg)
-                        # Agent registration is now handled by the Agent class itself
-                        return agent_instance
+                        # Create factory function for the agent
+                        def agent_factory(
+                            orchestrator_ref,  # Reference to orchestrator for registration
+                            cfg: dict = config_with_session,
+                            cls: type[Agent] = agent_cls,
+                        ) -> Agent:
+                            # Create the agent instance
+                            agent_instance = cls(**cfg)
+                            # Agent registration is now handled by the Agent class itself
+                            return agent_instance
 
-                    # Register the agent factory with the runtime.
-                    # The runtime will call this factory to create agent instances.
-                    agent_type: AgentType = await Agent.register(
-                        runtime=self._runtime,
-                        type=variant_config.agent_id,  # Use the specific variant ID for registration
-                        factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
-                            orch, cfg=v_cfg, cls=a_cls,
+                        # Register the agent factory with the runtime.
+                        # The runtime will call this factory to create agent instances.
+                        agent_type: AgentType = await Agent.register(
+                            runtime=self._runtime,
+                            type=variant_config.agent_id,  # Use the specific variant ID for registration
+                            factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
+                                orch, cfg=v_cfg, cls=a_cls,
+                            ),
+                        )
+                    else:
+                        # Register AutoGen agents (like SpyAgent) that have their own register method
+                        agent_type: AgentType = await agent_cls.register(
+                            runtime=self._runtime,
+                            type=variant_config.agent_id,  # Use the specific variant ID for registration
+                            factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
+                        )
+                    # Subscribe the newly registered agent type to the main group chat topic.
+                    # This allows it to receive general messages sent to the group.
+                    await self._runtime.add_subscription(
+                        TypeSubscription(
+                            topic_type=self._topic.type,  # Main group chat topic
+                            agent_type=agent_type,
                         ),
                     )
-                else:
-                    # Register the adapter factory with the runtime.
-                    agent_type: AgentType = await agent_cls.register(
-                        runtime=self._runtime,
-                        type=variant_config.agent_id,  # Use the specific variant ID for registration
-                        factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
+
+                    # Also subscribe the agent to a topic specific to its role (e.g., "JUDGE", "SCORER").
+                    # This allows targeted messages to be sent directly to agents fulfilling that specific role.
+                    # Use the actual agent role from config, not the dictionary key
+                    actual_role = step_config.role.upper()
+                    await self._runtime.add_subscription(
+                        TypeSubscription(
+                            topic_type=actual_role,
+                            agent_type=agent_type,
+                        ),
                     )
 
-                # Subscribe the newly registered agent type to the main group chat topic.
-                # This allows it to receive general messages sent to the group.
-                await self._runtime.add_subscription(
-                    TypeSubscription(
-                        topic_type=self._topic.type,  # Main group chat topic
-                        agent_type=agent_type,
-                    ),
-                )
-
-                # Also subscribe the agent to a topic specific to its role (e.g., "JUDGE", "SCORER").
-                # This allows targeted messages to be sent directly to agents fulfilling that specific role.
-                # Use the actual agent role from config, not the dictionary key
-                actual_role = step_config.role.upper()
-                await self._runtime.add_subscription(
-                    TypeSubscription(
-                        topic_type=actual_role,
-                        agent_type=agent_type,
-                    ),
-                )
+                except Exception as e:
+                    # Log detailed error information for agent registration failures
+                    error_msg = f"🚨 FATAL: Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
+                    logger.error(error_msg, exc_info=True)
+                    logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
+                    raise FatalError(f"Agent registration failed for {variant_config.agent_id}: {e}") from e
                 logger.debug(f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'")
 
                 registered_for_role.append((agent_type, variant_config))

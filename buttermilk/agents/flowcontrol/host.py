@@ -547,7 +547,7 @@ class HostAgent(Agent):
                     logger.error(f"Host {self.agent_name}: Stopping flow due to failed completions check")
                     break
                 # Don't seek confirmation from the manager to send a request to the manager
-                logger.info(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
+                logger.debug(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
                     logger.info(f"Host {self.agent_name}: User rejected step or timed out, stopping flow")
@@ -638,7 +638,7 @@ class HostAgent(Agent):
             self._failed_tasks_by_agent.clear()
             self._total_tasks_in_step = 0
             
-        logger.info("No pending tasks left over from previous steps, clear to proceed.")
+        logger.debug("No pending tasks left over from previous steps, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:
