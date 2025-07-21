@@ -1,4 +1,4 @@
-DO NOT PROCEED BEFORE READING @docs/bots/INSTRUCTIONS.MD
+DO NOT PROCEED BEFORE READING @docs/bots/INSTRUCTIONS.md
 
 If you try to read or edit another document before reading these, something BAD will happen.
 
