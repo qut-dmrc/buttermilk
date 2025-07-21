@@ -749,13 +749,21 @@ class Agent(RoutedAgent):
 
     # --- Helper Methods ---
 
-    async def _publish(self, message: Any, highlight: bool = False) -> None:
-        """Publish a message to the group chat."""
-        await self.publish_message(message, topic_id=self._topic_id)
+    async def _publish(self, message: Any, highlight: bool = False, topic_id: TopicId | None = None) -> None:
+        """Publish a message to the group chat or a specific topic.
+        
+        Args:
+            message: The message to publish.
+            highlight: Whether to highlight the message in logs.
+            topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
+        """
+        # Use provided topic_id or fall back to the agent's default topic
+        target_topic = topic_id or self._topic_id
+        await self.publish_message(message, topic_id=target_topic)
         if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
             highlight = True  # Highlight traces and outputs by default
         if highlight:
-            logger.highlight(f"Agent {self.agent_name} published {type(message).__name__} message to topic {self._topic_id}")
+            logger.highlight(f"Agent {self.agent_name} published {type(message).__name__} message to topic {target_topic}")
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Augments an incoming `AgentInput` message with the agent's internal state.
