@@ -186,7 +186,11 @@ class LLMScorer(LLMAgent):
 
     """
 
-    _output_model: type[BaseModel] | None = QualScore  # Expected Pydantic model for LLM output
+    def __init__(self, **kwargs):
+        """Initializes the Judge agent with its specific configuration and output model."""
+        super().__init__(**kwargs)
+        # Set the expected output model for the LLM's response
+        self._output_model = QualScore  # Expected Pydantic model for LLM output
 
     async def _listen(
         self,
