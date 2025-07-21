@@ -19,9 +19,11 @@ class TestHostAgentErrorHandling:
         return HostAgent(
             role="HOST",
             description="Test host agent",
-            parameters={"human_in_loop": False},
+            parameters={
+                "human_in_loop": False,
+                "error_threshold": 0.5,  # 50% error threshold for testing
+            },
             unique_identifier="test_host",
-            error_threshold=0.5,  # 50% error threshold for testing
         )
 
     @pytest.fixture
