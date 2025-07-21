@@ -66,9 +66,9 @@ SELECT
   SCORES_AGGREGATED.scoring_template,
   SCORES_AGGREGATED.role,
   SCORES_AGGREGATED.tracing_link as scorer_tracing_link,
+  SCORES_AGGREGATED.correctness,
   ARRAY_AGG(CAST(JSON_VALUE(assessment, '$.correct') AS BOOLEAN) IGNORE NULLS) AS assessment_correct,
   ARRAY_AGG(JSON_VALUE(assessment, '$.feedback') IGNORE NULLS) AS assessment_feedback,
-  SCORES_AGGREGATED.correctness
 FROM
   PREDICTIONS
 LEFT JOIN
