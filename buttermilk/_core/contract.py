@@ -378,7 +378,7 @@ class StepRequest(AgentInput):
 
     def __str__(self) -> str:
         """Returns a string representation in the format "ROLE: content"."""
-        return f"{self.role}: {self.content}"
+        return f"Request to {self.role}: {super().__str__()}"
 
 
 class AgentOutput(BaseModel):

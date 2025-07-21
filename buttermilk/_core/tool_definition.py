@@ -26,24 +26,23 @@ class AgentToolDefinition(BaseModel):
 
     name: str = Field(
         ...,
-        description="The unique name of the tool, should be snake_case",
-        pattern="^[a-zA-Z][a-zA-Z0-9_]*$"
+        description="The unique name of the tool",
     )
     description: str = Field(
         ...,
-        description="A clear description of what the tool does"
+        description="A clear description of what the tool does",
     )
     input_schema: dict[str, Any] = Field(
         ...,
-        description="JSON Schema format for input validation"
+        description="JSON Schema format for input validation",
     )
     output_schema: dict[str, Any] = Field(
         ...,
-        description="JSON Schema format for output validation"
+        description="JSON Schema format for output validation",
     )
     permissions: list[str] = Field(
         default_factory=list,
-        description="Required permissions for accessing this tool"
+        description="Required permissions for accessing this tool",
     )
 
     # Implement Tool protocol properties and methods
@@ -76,7 +75,7 @@ class AgentToolDefinition(BaseModel):
         """
         raise NotImplementedError(
             f"AgentToolDefinition '{self.name}' is not directly executable. "
-            "Tool calls should be intercepted and routed by the host agent."
+            "Tool calls should be intercepted and routed by the host agent.",
         )
 
     def return_value_as_string(self, value: Any) -> str:
@@ -92,4 +91,3 @@ class AgentToolDefinition(BaseModel):
 
     async def load_state_json(self, state_json: str) -> None:
         """No state to load for stateless tools."""
-        pass

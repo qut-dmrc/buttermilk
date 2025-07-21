@@ -101,7 +101,7 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._output_model: type[pydantic.BaseModel] | None = None
         self._tools: list[Tool] = []
-        
+
         # Control behavior - moved from Field declaration
         self.fail_on_unfilled_parameters: bool = kwargs.get("fail_on_unfilled_parameters", True)
 
@@ -348,7 +348,7 @@ class LLMAgent(Agent):
             raise ProcessingError(msg) from llm_error
 
         llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
-        logger.debug(
+        logger.info(
             f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
 
