@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken, MessageContext, message_handler
+from autogen_core import CancellationToken, DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import (
     Tool,
@@ -19,6 +19,7 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
+    FlowEvent,
     FlowProgressUpdate,
     ManagerMessage,
     StepRequest,
@@ -614,6 +615,14 @@ class HostAgent(Agent):
                 # This event is used in the wait_for predicate.
                 self._step_starting.set()
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
+                
+                # Send a FlowEvent to the main topic to notify UI about the step starting
+                flow_event = FlowEvent(
+                    source=self.agent_id,
+                    content=f"Starting {step.role} step: {self._participants.get(step.role, step.role)}"
+                )
+                await self._publish(flow_event)  # This goes to the main topic
+                
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
                 # Convert StepRequest to UIMessage for frontend display
@@ -626,7 +635,9 @@ class HostAgent(Agent):
             else:
                 logger.warning(f"Host executing step for unknown participant role: {step.role}")
 
-            await self._publish(step)
+            # Route StepRequest to role-specific topic
+            role_topic = DefaultTopicId(type=step.role)
+            await self._publish(step, topic_id=role_topic)
 
     async def _process(
         self,
@@ -680,7 +691,9 @@ class HostAgent(Agent):
                 else:
                     # If human_in_loop is False, we send the step request directly
                     logger.info(f"Host {self.agent_name} routing tool call to agent {role_part}: {step_request}")
-                    await self._publish(step_request)
+                    # Route to role-specific topic
+                    role_topic = DefaultTopicId(type=role_part)
+                    await self._publish(step_request, topic_id=role_topic)
 
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
