@@ -150,9 +150,8 @@ class TestHostAgentErrorHandling:
         strict_host = HostAgent(
             role="HOST",
             description="Strict host agent",
-            parameters={"human_in_loop": False},
+            parameters={"human_in_loop": False, "error_threshold": 0.25},
             unique_identifier="strict_host",
-            error_threshold=0.25,
         )
         
         # Mock the _wait_for_all_tasks_complete method
