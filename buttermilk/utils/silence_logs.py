@@ -1,5 +1,4 @@
-"""
-Utility to silence noisy logs from various libraries.
+"""Utility to silence noisy logs from various libraries.
 This can be imported and used directly without waiting for the main BM setup_logging process.
 """
 
@@ -13,7 +12,7 @@ class WeaveApplicationErrorFilter(logging.Filter):
     This filter allows weave infrastructure errors (like upload failures) to pass through
     while suppressing duplicate application errors that weave is just reporting on.
     """
-    
+
     # Patterns for application errors that weave is just reporting on (should be filtered)
     APPLICATION_ERROR_PATTERNS = [
         r"Return type .* not in return types",
@@ -22,48 +21,46 @@ class WeaveApplicationErrorFilter(logging.Filter):
         r"weave: Return type.*not in return types",
         r"weave: Error in autogen async wrapper",
     ]
-    
+
     # Patterns for genuine weave infrastructure errors (should be preserved)
     INFRASTRUCTURE_ERROR_PATTERNS = [
         r"upload failed",
         r"connection failed",
-        r"authentication failed", 
+        r"authentication failed",
         r"network error",
         r"timeout",
         r"rate limit",
         r"api error",
         r"wandb.*error",
     ]
-    
+
     def __init__(self):
         super().__init__()
         self.app_error_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in self.APPLICATION_ERROR_PATTERNS]
         self.infra_error_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in self.INFRASTRUCTURE_ERROR_PATTERNS]
-    
+
     def filter(self, record):
         """Return False to filter out (suppress) the log record, True to keep it."""
         message = record.getMessage()
-        
+
         # First check if this is a genuine infrastructure error - always keep these
         for regex in self.infra_error_regexes:
             if regex.search(message):
                 return True
-        
+
         # Then check if this is an application error being reported by weave - filter these out
         for regex in self.app_error_regexes:
             if regex.search(message):
                 return False
-        
+
         # Default: keep all other weave messages
         return True
 
 
 def silence_task_logs():
-    """
-    Silence the noisy logging messages from task execution, fsspec, and autogen_core.
+    """Silence the noisy logging messages from task execution, fsspec, and autogen_core.
     This is especially useful for quieting the console output from asyncio tasks.
-"""
-
+    """
     # --- Quieten overly verbose libraries directly ---
 
     logging.getLogger("googleapiclient").setLevel(logging.WARNING)
@@ -144,25 +141,31 @@ def silence_task_logs():
     # Instead of suppressing all weave errors, use custom filter to distinguish
     # between application errors (that weave is just reporting) and weave infrastructure errors
     weave_filter = WeaveApplicationErrorFilter()
-    
+
     # Apply selective filtering to main weave loggers
     weave_loggers = [
         "weave",
-        "weave.trace", 
+        "weave.trace",
         "weave.client",
         "weave.weave_client",
         "weave.trace.weave_client",
+        "wandb",
     ]
-    
+
     for logger_name in weave_loggers:
         logger = logging.getLogger(logger_name)
         logger.setLevel(logging.WARNING)  # Allow warnings and errors, but filter selectively
         logger.addFilter(weave_filter)
-    
+
     # For weave API loggers, still suppress completely since they're mainly connection noise
     logging.getLogger("weave.wandb_api").setLevel(logging.ERROR)
     logging.getLogger("weave.api").setLevel(logging.ERROR)
-    
+    # logging.getLogger("wandb").setLevel(logging.ERROR)
+
+    # I think the correct way to do this is:
+    import wandb
+    wandb.Settings(quiet=True)
+
     # Additional weave-related loggers that might output connection errors
     logging.getLogger("httpx").setLevel(logging.ERROR)
     logging.getLogger("httpcore").setLevel(logging.ERROR)
@@ -174,6 +177,7 @@ def silence_task_logs():
     # Silence autogen_core logs
     logging.getLogger("autogen_core").setLevel(logging.WARNING)
     logging.getLogger("autogen_core._single_threaded_agent_runtime").setLevel(logging.ERROR)
+
 
 # Automatically silence logs when module is imported
 silence_task_logs()
