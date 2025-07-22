@@ -63,8 +63,12 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 Analyse the underlying reasons behind differences among the answers below.
 {# Loop through the provided answers. #}
 {% for answer in answers %}
-<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[-4:]}}>
-{{ answer.result }}
+<BEGIN {{answer['agent_id']}} DRAFT ANSWER #{{answer['answer_id'][-4:]}}>
+{%- if not answer['is_error'] -%}
+{{ answer['result'] }}
+{%- else -%}
+ERROR: {{ answer['error'] }}
+{%- endif -%}
 <END DRAFT ANSWER>
 {% endfor %}
 {% else %}

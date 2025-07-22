@@ -171,7 +171,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         except Exception as e:
             logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")
             error_event = ErrorEvent(source=self.agent_id, content=str(e))
-            return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, outputs=error_event)
+            return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, error=[error_event])
 
         # Call LLM with intercept flag
         chat_result = await self._call_llm(

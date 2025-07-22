@@ -54,7 +54,7 @@ class HostAgent(Agent):
         self._step_starting: asyncio.Event = asyncio.Event()
         self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._participants: dict[str, Any] = {}
-
+        self._host_input_parameters: dict[str, Any] = {}
         # Error tracking for current step
         self._failed_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._total_tasks_in_step: int = 0
@@ -443,32 +443,10 @@ class HostAgent(Agent):
             # Create more descriptive step content using the participant description
             step_description = f"Executing {role.lower()} step: {description}"
 
-            # Create StepRequest with initial parameters if available
-            step_inputs = {}
-            step_parameters = {}
-
-            # Add initial query/prompt if available
-            if hasattr(self, "_initial_query") and self._initial_query:
-                step_inputs["query"] = self._initial_query
-                step_inputs["prompt"] = self._initial_query
-
-            # Add any parameters from the initial inputs
-            if hasattr(self, "_initial_inputs") and isinstance(self._initial_inputs, dict):
-                # Extract parameters from the initial inputs
-                if "parameters" in self._initial_inputs:
-                    step_parameters.update(self._initial_inputs["parameters"])
-
-                # Also check for direct prompt in initial inputs
-                if "prompt" in self._initial_inputs and "prompt" not in step_inputs:
-                    step_inputs["prompt"] = self._initial_inputs["prompt"]
-                if "query" in self._initial_inputs and "query" not in step_inputs:
-                    step_inputs["query"] = self._initial_inputs["query"]
-
             yield StepRequest(
                 role=role,
                 content=step_description,
-                inputs=step_inputs,
-                parameters=step_parameters,
+                parameters=self._host_input_parameters.copy(),
             )
         yield StepRequest(role=END, content="Sequence completed.")
 
@@ -486,9 +464,10 @@ class HostAgent(Agent):
 
         """
         try:
-            logger.info(f"Host {self.agent_name} starting flow execution.")
+            logger.info(
+                f"Host {self.agent_name} starting flow execution with {len(self._participants)} participants: {list(self._participants.keys())}",
+            )
 
-            logger.info(f"Host {self.agent_name} has {len(self._participants)} participants after update: {list(self._participants.keys())}")
             if not self._participants:
                 msg = "Host received ConductorRequest with no participants."
                 logger.error(f"{msg} Aborting.")
@@ -499,6 +478,8 @@ class HostAgent(Agent):
             # Store additional tools if provided
             self._tools.extend(message.additional_tools)
 
+            # Store any parameters passed in
+            self._host_input_parameters = message.inputs
             # Announce, and trigger agents to announce themselves
             msg = AgentAnnouncement(
                 content="Host joining",
@@ -506,32 +487,6 @@ class HostAgent(Agent):
                 announcement_type="initial",
             )
             await self._publish(msg)
-
-            # Extract initial query/prompt from ConductorRequest if available
-            # Parse inputs using the typed model for cleaner extraction
-            from buttermilk._core.contract import HostInputModel
-
-            # Store the raw inputs for backward compatibility
-            self._initial_inputs = message.inputs if hasattr(message, "inputs") else {}
-
-            try:
-                # Parse inputs into our typed model
-                if isinstance(self._initial_inputs, dict):
-                    host_inputs = HostInputModel(**self._initial_inputs)
-                else:
-                    host_inputs = HostInputModel()
-
-                # Extract fields cleanly
-                self._initial_query = host_inputs.initial_query or ""
-                self._initial_parameters = host_inputs.parameters or {}
-
-                logger.info(f"Host {self.agent_name} extracted initial query: {self._initial_query[:100]}, parameters: {list(self._initial_parameters.keys())}")
-
-            except Exception as e:
-                # If parsing fails, fall back to empty values
-                logger.warning(f"Host {self.agent_name} failed to parse inputs: {e}")
-                self._initial_query = None
-                self._initial_parameters = {}
 
             # Start the periodic progress reporter task
             self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())

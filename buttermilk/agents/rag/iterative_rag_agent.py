@@ -92,7 +92,7 @@ class IterativeRagAgent(RagAgent):
             except Exception as llm_error:
                 msg = f"Agent {self.agent_id}: Error during LLM call: {llm_error}"
                 logger.error(msg, exc_info=True)
-                return AgentOutput(agent_id=self.agent_id, outputs=ErrorEvent(source=self.agent_id, content=msg))
+                return AgentOutput(agent_id=self.agent_id, error=[ErrorEvent(source=self.agent_id, content=msg)])
 
             # Add LLM's response to chat history
             chat_history.append(
@@ -186,7 +186,7 @@ class IterativeRagAgent(RagAgent):
                     except Exception as parse_error:
                         msg = f"Failed to parse final LLM response into {self._output_model.__name__}: {parse_error}"
                         logger.error(msg, exc_info=True)
-                        return AgentOutput(agent_id=self.agent_id, outputs=ErrorEvent(source=self.agent_id, content=msg))
+                        return AgentOutput(agent_id=self.agent_id, error=[ErrorEvent(source=self.agent_id, content=msg)])
                 else:
                     return AgentOutput(agent_id=self.agent_id, outputs=chat_result.content, metadata=chat_result.model_dump())
             else:
@@ -220,7 +220,7 @@ class IterativeRagAgent(RagAgent):
             logger.error(f"Error during final synthesis: {final_error}")
             return AgentOutput(
                 agent_id=self.agent_id,
-                outputs=ErrorEvent(
+                error=[ErrorEvent(
                     source=self.agent_id, content=f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}"
-                ),
+                )],
             )

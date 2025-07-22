@@ -126,7 +126,6 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
-    _participants: dict[str, str] = PrivateAttr()
     _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(default_factory=list)
     _is_initialized: bool = PrivateAttr(default=False)
 
@@ -190,10 +189,12 @@ class AutogenOrchestrator(Orchestrator):
         self._pending_messages.clear()
 
         # Start up the host agent with participants and their tools
-        logger.highlight(f"Sending ConductorRequest to topic '{self._topic}' with {len(self._participants)} participants: {list(self._participants.keys())}")
+        logger.highlight(
+            f"Sending ConductorRequest to topic '{self._topic}' with {len(self.agents)} agents: {list(self.agents.keys())} and {len(self.observers)} observers: {list(self.observers.keys())}"
+        )
         conductor_request = ConductorRequest(
             inputs=request.model_dump(),
-            participants=self._participants,
+            participants={v.role: v.description for k, v in self.agents.items()},
         )
         logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
         await self._runtime.publish_message(
@@ -212,15 +213,6 @@ class AutogenOrchestrator(Orchestrator):
         potentially role-specific topics.
         """
         logger.debug("Registering agents with Autogen runtime...")
-
-        # Add flow's static parameters to the request parameters
-        # Create list of participants in the group chat - include both agents AND observers
-        logger.info(f"Creating participants from {len(self.agents)} agents and {len(self.observers)} observers")
-        self._participants = {
-            **{v.role: v.description for k, v in self.agents.items()},
-            **{v.role: v.description for k, v in self.observers.items()},
-        }
-        logger.info(f"Created participants dictionary with {len(self._participants)} entries: {list(self._participants.keys())}")
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
