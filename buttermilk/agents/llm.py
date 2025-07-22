@@ -13,12 +13,13 @@ workflow.
 """
 
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 import hydra
 import pydantic
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
+from autogen_core.tools import Tool
 
 from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
@@ -28,8 +29,6 @@ from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
-
-from autogen_core.tools import Tool
 
 
 class LLMAgent(Agent):
@@ -316,13 +315,16 @@ class LLMAgent(Agent):
                 records=message.records,
             )
         except ProcessingError as template_fill_error:  # Catch specific ProcessingError from _fill_template
-            logger.error(f"Agent '{self.agent_id}': Critical error during prompt template processing: {template_fill_error!s}")
-            error_event = ErrorEvent(source=self.agent_id, content=str(template_fill_error))
-            return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "TemplateError"}, outputs=error_event)
+            msg = f"Critical error during prompt template processing: {template_fill_error!s}"
+            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=False)
+            error_event = ErrorEvent(source=self.agent_id, content=msg)
+            return AgentOutput(agent_id=self.agent_id, error=[error_event])
+
         except Exception as e:  # Catch any other unexpected error during templating
-            logger.error(f"Agent '{self.agent_id}': Unexpected critical error during template processing: {e!s}", exc_info=False)
-            error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
-            return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
+            msg = f"Unexpected template error: {e!s}"
+            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=False)
+            error_event = ErrorEvent(source=self.agent_id, content=msg)
+            return AgentOutput(agent_id=self.agent_id, error=[error_event])
 
         tool_names = [getattr(tool, "name", str(tool)) for tool in self._tools]
         logger.info(
@@ -338,7 +340,9 @@ class LLMAgent(Agent):
             cancellation_token=cancellation_token,
         )
 
-        llm_messages_to_send.append(AssistantMessage(content=chat_result.content, thought=getattr(chat_result, 'thought', None), source=self.agent_id))
+        llm_messages_to_send.append(
+            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id)
+        )
         logger.info(
             f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
@@ -386,6 +390,7 @@ class LLMAgent(Agent):
 
         Raises:
             ProcessingError: If the LLM call fails
+
         """
         # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
         model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
