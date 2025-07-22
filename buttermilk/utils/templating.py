@@ -10,11 +10,10 @@ This module provides functionalities for:
   injecting context and records into specified placeholders (`_parse_prompty`,
   `make_messages`).
 """
-from collections.abc import Mapping, Sequence  # For type hinting
+
 from pathlib import Path
 from typing import Any
 
-import jmespath  # For JMESPath queries, used in _resolve_mappings
 import regex as re  # For regular expression operations, used in _parse_prompty
 from autogen_core.models import AssistantMessage, LLMMessage, SystemMessage, UserMessage  # Autogen message types
 from jinja2 import (  # Jinja2 templating components
@@ -38,15 +37,10 @@ class KeyValueCollector(BaseModel):
     Values associated with a key are stored as a list, allowing multiple values
     to be collected under the same key.
 
-    The `_resolve_mappings` and `_resolve_simple_path` methods suggest capabilities
-    for resolving JMESPath expressions against the collected data, though their
-    current usage within the broader Buttermilk framework might be evolving or deprecated
-    as indicated by a TODO note in the original code.
-
     Attributes:
-        _data (dict[str, Any | list[Any]]): A private dictionary storing the
-            collected key-value pairs. Values are often lists to accumulate multiple
-            items under the same key.
+        _data (dict[str, list[Any]]): A private dictionary storing the
+            collected key-value pairs. Values are stored as lists to accumulate
+            multiple items under the same key.
 
     """
 
@@ -76,6 +70,10 @@ class KeyValueCollector(BaseModel):
             value (Any): The value to add. Can be a single item or a list of items.
 
         """
+        # Filter out empty/None values
+        if value is None or value in ([], {}, "None"):
+            return
+
         # Ensure that value is treated as a list of items to be added
         items_to_add = value if isinstance(value, list) and not isinstance(value, str) else [value]
 
@@ -99,7 +97,7 @@ class KeyValueCollector(BaseModel):
         if value is not None and value not in ([], {}, "None"):
             self._data[key] = [value]  # Store as a list with one item
 
-    def get_dict(self) -> dict[str, list[Any]]:  # Return type updated
+    def get_dict(self) -> dict[str, list[Any]]:
         """Returns a copy of the internal data dictionary.
 
         Returns:
@@ -109,7 +107,7 @@ class KeyValueCollector(BaseModel):
         """
         return dict(self._data)
 
-    def get(self, key: str, default: Any = None) -> list[Any] | Any:  # Return type updated
+    def get(self, key: str, default: Any = None) -> list[Any]:
         """Retrieves the list of values for a key, or a default if the key is not found.
 
         Args:
@@ -124,7 +122,7 @@ class KeyValueCollector(BaseModel):
         """
         return self._data.get(key, default)
 
-    def __getitem__(self, key: str) -> list[Any]:  # Return type updated
+    def __getitem__(self, key: str) -> list[Any]:
         """Allows dictionary-style access to the collected values for a key.
 
         Args:
@@ -154,86 +152,6 @@ class KeyValueCollector(BaseModel):
     def clear(self) -> None:
         """Clears all collected data, resetting the internal dictionary to empty."""
         self._data.clear()
-
-    def _resolve_mappings(self, mappings: dict[str, Any], data: Mapping[str, Any]) -> dict[str, Any]:
-        """Resolves JMESPath expressions defined in `mappings` against `data`. (DEPRECATED or under review)
-
-        This method recursively processes a `mappings` dictionary. For each target
-        key in `mappings`, its corresponding source specification (a JMESPath string,
-        a list of JMESPath strings for aggregation, or a nested mapping) is resolved
-        against the `data` dictionary.
-
-        Note:
-            A TODO comment in the original code suggests this method might be
-            deprecated or no longer needed. Its usage should be reviewed.
-
-        Args:
-            mappings (dict[str, Any]): A dictionary where keys are target variable
-                names and values are JMESPath expressions (str), lists of
-                JMESPath expressions, or nested mapping dictionaries.
-            data (Mapping[str, Any]): The data structure (e.g., from a Pydantic model's
-                `model_dump()`) to query with JMESPath.
-
-        Returns:
-            dict[str, Any]: A dictionary where keys are the target variable names
-            from `mappings` and values are the results of their resolved JMESPath
-            queries against `data`. Empty values or containers are removed.
-
-        """
-        logger.warning("_resolve_mappings is under review and might be deprecated. Current caller should be checked.")
-        resolved: dict[str, Any] = {}
-
-        data_dict = data.model_dump() if hasattr(data, "model_dump") else dict(data)  # Ensure it's a dict
-
-        if isinstance(mappings, str):  # Base case for recursion: a single JMESPath string
-            # This path seems unlikely given the top-level 'mappings' type hint is dict.
-            # It implies this function might be called recursively with a string mapping.
-            # However, the loop below processes dict items. This branch needs clarification.
-            return self._resolve_simple_path(mappings, data_dict) or {}  # Ensure dict return
-
-        for target_key, source_spec in mappings.items():
-            if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):  # List of paths for aggregation
-                aggregated_results = []
-                for src_path in source_spec:
-                    # Recursive call for each path in the list
-                    result = self._resolve_mappings(src_path, data_dict)  # type: ignore # src_path is str, expects dict
-                    if result:  # Append if result is not empty/None
-                        if isinstance(result, list):
-                            aggregated_results.extend(result)
-                        else:
-                            aggregated_results.append(result)
-                if aggregated_results: resolved[target_key] = aggregated_results
-            elif isinstance(source_spec, Mapping):  # Nested mapping dictionary
-                resolved[target_key] = self._resolve_mappings(source_spec, data_dict)  # type: ignore # source_spec is Mapping
-            else:  # Simple JMESPath string
-                resolved_value = self._resolve_simple_path(str(source_spec), data_dict)
-                if resolved_value is not None: resolved[target_key] = resolved_value
-
-        # Remove keys where value is None, or an empty dict/list
-        return {k: v for k, v in resolved.items() if v is not None and v not in ({}, [])}
-
-    def _resolve_simple_path(self, path: str, data: Mapping[str, Any]) -> Any:
-        """Resolves a single JMESPath expression against the provided data. (DEPRECATED or under review)
-
-        Args:
-            path (str): The JMESPath expression string.
-            data (Mapping[str, Any]): The data structure to query.
-
-        Returns:
-            Any: The result of the JMESPath search, or `None` if the path is empty,
-                 invalid, or yields no result.
-
-        """
-        if not path:
-            return None
-        try:
-            return jmespath.search(path, data)
-        except jmespath.exceptions.JMESPathError as e:  # Catch specific JMESPath errors
-            logger.warning(f"JMESPath search failed for path '{path}': {e!s}. Returning None.")
-            return None
-        except Exception as e:  # Catch any other unexpected errors
-            logger.error(f"Unexpected error during JMESPath search for path '{path}': {e!s}", exc_info=True)
-            return None
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2") -> list[tuple[str, str]]:  # Added default extension
@@ -408,15 +326,16 @@ def load_template(
 
 def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
     """Remove duplicate messages from a list while preserving order.
-    
+
     Duplicates are identified by having the same role, content, and source.
     The first occurrence of each unique message is preserved.
-    
+
     Args:
         messages: List of LLMMessage objects to deduplicate
-        
+
     Returns:
         List of LLMMessage objects with duplicates removed
+
     """
     seen = set()
     deduplicated = []
@@ -427,7 +346,7 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
         msg_key = (
             type(msg).__name__,  # Message type (SystemMessage, UserMessage, etc.)
             getattr(msg, "content", ""),
-            getattr(msg, "source", None)
+            getattr(msg, "source", None),
         )
 
         if msg_key not in seen:

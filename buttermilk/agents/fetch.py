@@ -330,5 +330,5 @@ class FetchAgent(Agent):
         error = ErrorEvent(source=self.id, content="No result found in _process")
         return AgentOutput(
             agent_id=self.agent_id,
-            outputs=error,
+            error=[error],
         )

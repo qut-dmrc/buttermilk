@@ -234,7 +234,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     def get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
         This is overridden in the LLMAgent class to load tools from the config.
-        
+
         Returns:
             list[Tool]: List of tools.
 
@@ -248,10 +248,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         ctx: MessageContext,
     ) -> None:
         """Handle ConductorRequest messages by sending agent announcements.
-        
+
         When a conductor requests information about this agent, respond with
         an announcement containing the agent's capabilities and configuration.
-        
+
         Args:
             message: The ConductorRequest message.
             ctx: Message context containing sender and topic information.
@@ -273,15 +273,23 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         await self._publish(
             announcement,
-            topic_id=self._topic_id, highlight=True,
+            topic_id=self._topic_id,
+            highlight=True,
         )
 
         # Mark as announced
         self._announced = True
 
-    async def _publish(self, message: Any, topic_id: TopicId | None = None, *, highlight: bool = False, cancellation_token: CancellationToken | None = None) -> None:
+    async def _publish(
+        self,
+        message: Any,
+        topic_id: TopicId | None = None,
+        *,
+        highlight: bool = False,
+        cancellation_token: CancellationToken | None = None,
+    ) -> None:
         """Publish a message to the group chat or a specific topic.
-        
+
         Args:
             message: The message to publish.
             highlight: Whether to highlight the message in logs.
@@ -297,7 +305,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             highlight = True  # Highlight traces and outputs by default
         if highlight:
             logger.highlight(
-            f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
             )
         else:
             logger.debug(
@@ -349,10 +357,17 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         logger.debug(f"Agent {self.agent_name} received input via __call__.")
 
         # --- Tracing ---
-        trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **message.parameters, **message.metadata, **self.parameters}
+        trace_params = {
+            "name": self.agent_name,
+            "model": self._cfg.parameters.get("model"),
+            **message.parameters,
+            **message.metadata,
+            **self.parameters,
+        }
 
         parent_call: Call | WeaveObject | None = None
         if message.parent_call_id:
+
             async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
                 """Retry getting weave call to handle async upload timing."""
                 return bm.weave.get_call(call_id)
@@ -383,8 +398,13 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # --- Execute Core Logic ---
         try:
-            child_call = bm.weave.create_call(op, inputs=message.model_dump(mode="json"),
-                                              parent=parent_call, display_name=self.agent_name, attributes=trace_params)
+            child_call = bm.weave.create_call(
+                op,
+                inputs=message.model_dump(mode="json"),
+                parent=parent_call,
+                display_name=self.agent_name,
+                attributes=trace_params,
+            )
 
             if parent_call and child_call:
                 parent_call._children.append(child_call)  # Nest this call for tracing
@@ -461,6 +481,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
 
+        call_id = None
+        err_result = None
+        outputs = None
+        tracing_link = None
+
         try:
             result = await self.__call__(message=final_input)
 
@@ -468,56 +493,56 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             if not result:
                 return None
 
-            # Check if the result indicates an error
-            # Fix for issue #147: Set is_error=True when agents return ErrorEvent
-            # Previously, only exceptions set is_error=True, but agents can return 
-            # ErrorEvent from _process() without throwing exceptions
-            if hasattr(result, 'is_error') and result.is_error:
-                is_error = True
+            if isinstance(result, ErrorEvent):
+                err_result = [result]
+            elif hasattr(result, "error") and result.error:
+                err_result = result.error
 
-            # Get tracing link from weave call if available
-            tracing_link = None
-            try:
-                # Try to get the current weave call to extract the tracing link
-                current_call = weave.get_current_call()
-                if current_call and hasattr(current_call, 'ui_url'):
-                    tracing_link = current_call.ui_url
-                elif hasattr(bm.weave, 'get_call') and result.call_id:
-                    # Try to get the call by ID
-                    call = bm.weave.get_call(result.call_id)
-                    if call and hasattr(call, 'ui_url'):
-                        tracing_link = call.ui_url
-            except Exception as e:
-                logger.debug(f"Could not get tracing link for call {result.call_id}: {e}")
+            outputs = result.outputs
+            call_id = result.call_id
 
-            # Create the trace here with required values
-            trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
-                agent_info=self._cfg, tracing_link=tracing_link,
-                inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
-            )
         except ProcessingError as e:
-            logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
-            result = ErrorEvent(source=self.agent_name, content=f"Processing error: {e}")
-            is_error = True
+            logger.error(f"Agent {self.agent_name} error during __call__: {e}")
+            err_result = ErrorEvent(source=self.agent_name, content=f"Processing error: {e}")
             trace = AgentTrace(
-                call_id=result.call_id,
                 agent_id=self.agent_id,
                 agent_info=self._cfg,
                 inputs=final_input,
                 parent_call_id=final_input.parent_call_id,
-                outputs=result,
+                error=[err_result],
             )
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e}", exc_info=True)
-            result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
-            is_error = True
-            trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
-                agent_info=self._cfg,
-                inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result,
-            )
+            err_result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
+
+        try:
+            # Try to get the current weave call to extract the tracing link
+            current_call = weave.get_current_call()
+            if current_call and hasattr(current_call, "ui_url"):
+                tracing_link = current_call.ui_url
+            elif call_id:
+                # Try to get the call by ID
+                call = bm.weave.get_call(call_id)
+                if call and hasattr(call, "ui_url"):
+                    tracing_link = call.ui_url
+        except Exception as e:
+            logger.debug(f"Could not get tracing link for call {call_id}: {e}")
+
+        # Create the trace here with required values
+        trace = AgentTrace(
+            call_id=call_id,
+            agent_id=self.agent_id,
+            agent_info=self._cfg,
+            tracing_link=tracing_link,
+            inputs=final_input,
+            parent_call_id=final_input.parent_call_id,
+            outputs=outputs,
+            error=err_result,
+        )
         # Publish status update: Task Complete (including error if error)
         await self._publish(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error), topic_id=self._topic_id,
+            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=bool(err_result)),
+            topic_id=self._topic_id,
         )
 
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
@@ -725,7 +750,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         ctx: MessageContext,
     ) -> None:
         """Handle heartbeat messages.
-        
+
         Puts the heartbeat signal into the agent's internal heartbeat queue.
         """
         try:
@@ -781,13 +806,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             try:
                 extracted_data = {}
                 for key in self.inputs.keys():  # Iterate over configured input mapping keys
-                    # Retrieve data from self._data; KeyValueCollector stores values in lists
+                    # Retrieve data from self._data; note that KeyValueCollector stores values in lists
                     data_values = self._data.get(key, [])
-                    # Filter out empty/None values from the list
-                    meaningful_values = [v for v in data_values if v is not None and v not in ([], {})]
-                    if meaningful_values:
-                        # If only one meaningful value, unwrap it from the list, else keep as list
-                        extracted_data[key] = meaningful_values[0] if len(meaningful_values) == 1 else meaningful_values
+                    extracted_data[key] = data_values
 
                 # Merge resolved mappings, letting original message inputs override
                 merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
@@ -821,11 +842,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     def get_tool_definitions(self) -> list["AgentToolDefinition"]:
         """Generate structured tool definitions for this agent.
-        
+
         This method creates a tool definition for the agent's primary
         processing capability, allowing it to be invoked as a tool
         in the Autogen groupchat.
-        
+
         Returns:
             List of AgentToolDefinition objects representing this agent's tools.
 
