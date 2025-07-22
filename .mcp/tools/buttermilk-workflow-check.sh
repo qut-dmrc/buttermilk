@@ -84,7 +84,11 @@ case "$STEP" in
         # Check for test files
         echo ""
         echo "Recent test files:"
-        find /src/buttermilk -name "*test*.py" -type f -mmin -60 2>/dev/null | head -5
+        if [[ -z "$BUTTERMILK_DIR" ]]; then
+            echo -e "${RED}❌ Environment variable BUTTERMILK_DIR is not set.${NC}"
+            exit 1
+        fi
+        find "$BUTTERMILK_DIR" -name "*test*.py" -type f -mmin -60 2>/dev/null | head -5
         ;;
     
     "IMPLEMENT")
