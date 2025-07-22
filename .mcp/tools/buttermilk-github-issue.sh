@@ -23,23 +23,6 @@ echo ""
 if ! command -v gh &> /dev/null; then
     echo -e "${RED}❌ GitHub CLI (gh) not installed${NC}"
     echo "Install with: https://cli.github.com/"
-    echo ""
-    echo "Falling back to manual instructions..."
-    
-    case "$ACTION" in
-        "search")
-            echo "To search issues manually:"
-            echo "1. Visit: https://github.com/qut-dmrc/buttermilk/issues"
-            echo "2. Use the search box with query: $QUERY"
-            ;;
-        "create")
-            echo "To create an issue manually:"
-            echo "1. Visit: https://github.com/qut-dmrc/buttermilk/issues/new"
-            echo "2. Title: $QUERY"
-            echo "3. Body: $BODY"
-            echo "4. Labels: $LABELS"
-            ;;
-    esac
     exit 1
 fi
 
