@@ -453,6 +453,13 @@ class Agent(RoutedAgent):
             if not result:
                 return None
 
+            # Check if the result indicates an error
+            # Fix for issue #147: Set is_error=True when agents return ErrorEvent
+            # Previously, only exceptions set is_error=True, but agents can return 
+            # ErrorEvent from _process() without throwing exceptions
+            if hasattr(result, 'is_error') and result.is_error:
+                is_error = True
+
             # Get tracing link from weave call if available
             tracing_link = None
             try:
