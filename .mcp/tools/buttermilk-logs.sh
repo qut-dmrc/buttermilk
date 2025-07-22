@@ -16,16 +16,10 @@ NC='\033[0m' # No Color
 
 # Find the most recent log file
 find_log_file() {
-    # First check for debug log
-    if [ -f "/tmp/buttermilk-debug.log" ]; then
-        echo "/tmp/buttermilk-debug.log"
-        return
-    fi
-    
-    # Then check for timestamped logs
-    local latest_log=$(ls -t /tmp/buttermilk_*.log 2>/dev/null | head -1)
-    if [ -n "$latest_log" ]; then
-        echo "$latest_log"
+    # Check for timestamped logs
+    local latest_logs=$(ls -t /tmp/buttermilk_*.log 2>/dev/null | head -2)
+    if [ -n "$latest_logs" ]; then
+        echo "$latest_logs"
         return
     fi
     
