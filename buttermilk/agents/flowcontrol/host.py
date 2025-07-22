@@ -542,7 +542,7 @@ class HostAgent(Agent):
 
             async for next_step in self._step_generator:
                 logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
-                
+
                 # Don't seek confirmation from the manager to send a request to the manager
                 logger.debug(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
@@ -552,7 +552,7 @@ class HostAgent(Agent):
 
                 # Execute the current step
                 await self._execute_step(next_step)
-                
+
                 # Wait for the current step to complete before moving to the next one
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
@@ -666,14 +666,14 @@ class HostAgent(Agent):
                 # This event is used in the wait_for predicate.
                 self._step_starting.set()
                 logger.debug(f"Host set _step_starting event for role: {step.role}")
-                
+
                 # Send a FlowEvent to the main topic to notify UI about the step starting
                 flow_event = FlowEvent(
                     source=self.agent_id,
-                    content=f"Starting {step.role} step: {self._participants.get(step.role, step.role)}"
+                    content=f"Starting {step.role} step: {self._participants.get(step.role, step.role)}",
                 )
                 await self._publish(flow_event)  # This goes to the main topic
-                
+
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
                 # Convert StepRequest to UIMessage for frontend display
