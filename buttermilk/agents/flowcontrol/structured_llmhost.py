@@ -5,7 +5,6 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING
 
 import pydantic
 from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
@@ -17,7 +16,6 @@ from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentOutput, ErrorEvent
-from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -150,7 +148,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         tools_list = list({tool.name: tool for tool in tools}.values())
 
         logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
-        
+
         # Use intercept_tools=True to get FunctionCall objects without execution
         return await model_client.call_chat(
             messages=messages,
@@ -182,7 +180,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             schema=self._output_model,
             cancellation_token=cancellation_token,
         )
-        
+
         # Check if we got tool calls in the output
         if isinstance(chat_result.content, list) and all(isinstance(c, FunctionCall) for c in chat_result.content):
             tool_calls: list[FunctionCall] = chat_result.content
@@ -196,7 +194,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
             # Return a descriptive acknowledgment
             return AgentOutput(agent_id=self.agent_id, outputs=summary, metadata={"tool_calls": len(tool_calls)})
-        
+
         # If no tool calls, return the LLM response as usual
         return AgentOutput(
             agent_id=self.agent_id,
@@ -204,7 +202,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             metadata={
                 "model": self.parameters["model"],
                 "finish_reason": chat_result.finish_reason,
-                "usage": getattr(chat_result, 'usage', None),
+                "usage": getattr(chat_result, "usage", None),
             },
         )
 
