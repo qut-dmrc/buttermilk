@@ -41,10 +41,10 @@ echo -e "Check interpolations: ${BLUE}$CHECK_INTERPOLATIONS${NC}"
 echo ""
 
 # Create Python validation script
-cat > /tmp/validate_config.py << 'EOF'
+TEMP_SCRIPT=$(mktemp /tmp/validate_config.XXXXXX.py)
+cat > "$TEMP_SCRIPT" << 'EOF'
 #!/usr/bin/env python3
 import sys
-import yaml
 from pathlib import Path
 import re
 from typing import Dict, List, Any, Set
