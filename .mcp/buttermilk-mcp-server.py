@@ -94,7 +94,7 @@ class ButtermilkMCPServer:
                 args,
                 capture_output=True,
                 text=True,
-                timeout=60  # 60 second timeout
+                timeout=tool.get("timeout", 60)  # Configurable timeout with default value
             )
             
             return {
