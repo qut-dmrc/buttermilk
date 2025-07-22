@@ -381,7 +381,6 @@ class Agent(RoutedAgent):
 
             if child_call:
                 result.call_id = child_call.id
-                result.tracing_link = child_call.ui_url
 
             return result
         finally:
@@ -454,9 +453,24 @@ class Agent(RoutedAgent):
             if not result:
                 return None
 
+            # Get tracing link from weave call if available
+            tracing_link = None
+            try:
+                # Try to get the current weave call to extract the tracing link
+                current_call = weave.get_current_call()
+                if current_call and hasattr(current_call, 'ui_url'):
+                    tracing_link = current_call.ui_url
+                elif hasattr(bm.weave, 'get_call') and result.call_id:
+                    # Try to get the call by ID
+                    call = bm.weave.get_call(result.call_id)
+                    if call and hasattr(call, 'ui_url'):
+                        tracing_link = call.ui_url
+            except Exception as e:
+                logger.debug(f"Could not get tracing link for call {result.call_id}: {e}")
+
             # Create the trace here with required values
             trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
-                agent_info=self._cfg, tracing_link=result.tracing_link,
+                agent_info=self._cfg, tracing_link=tracing_link,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
             )
         except ProcessingError as e:
