@@ -109,7 +109,8 @@ EOF
         echo ""
         
         # Create WebSocket test script
-        cat > /tmp/ws_test.py << 'EOF'
+        TEMP_FILE=$(mktemp /tmp/ws_test.XXXXXX.py)
+        cat > "$TEMP_FILE" << 'EOF'
 import asyncio
 import websockets
 import json
