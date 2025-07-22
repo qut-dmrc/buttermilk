@@ -14,7 +14,7 @@ import asyncio
 import warnings
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 from autogen_core import (
     AgentId,
     AgentMetadata,
+    CancellationToken,
     DefaultTopicId,
     MessageContext,
     RoutedAgent,
@@ -67,7 +68,7 @@ from buttermilk.utils.templating import KeyValueCollector  # Utility for managin
 # --- Base Agent Class ---
 
 
-class Agent(RoutedAgent):
+class Agent(RoutedAgent):  # noqa: PLR0904
     """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
 
     This class serves as the foundation for all specialized agents within the
@@ -105,11 +106,6 @@ class Agent(RoutedAgent):
 
     """
 
-    # --- Autogen Core Protocol Implementation ---
-    _id: AgentId | None = None
-    _runtime: Union["AgentRuntime", None] = None
-    _config: AgentConfig
-
     # --- Configuration properties (delegated to _config) ---
     @property
     def agent_id(self) -> str:
@@ -140,8 +136,11 @@ class Agent(RoutedAgent):
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
 
-    def __init__(self, **data: Any) -> None:
+    def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""
+        # Set groupchat topic ID, defaulting to a standard topic if not provided
+        self._topic_id: TopicId = topic_id or DefaultTopicId(type="default")
+
         # Create AgentConfig from the data
         self._config = AgentConfig(**data)
 
@@ -154,7 +153,6 @@ class Agent(RoutedAgent):
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
-        self._topic_id: TopicId = None
 
     @property
     def metadata(self) -> AgentMetadata:
@@ -259,10 +257,6 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        logger.debug(f"Agent {self.agent_name} received ConductorRequest, sending announcement")
-
-        self._topic_id = ctx.topic_id
-
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
 
@@ -277,17 +271,38 @@ class Agent(RoutedAgent):
             source=self.agent_id,
         )
 
-        await self.publish_message(
+        await self._publish(
             announcement,
-            topic_id=ctx.topic_id or DefaultTopicId(type="default"),
-        )
-
-        logger.debug(
-            f"Agent {self.agent_name} ({self.agent_id}) sent announcement to topic {ctx.topic_id or DefaultTopicId(type='default')} with tools: {[tool.name for tool in announcement.tool_definitions]}",
+            topic_id=self._topic_id, highlight=True,
         )
 
         # Mark as announced
         self._announced = True
+
+    async def _publish(self, message: Any, topic_id: TopicId | None = None, *, highlight: bool = False, cancellation_token: CancellationToken | None = None) -> None:
+        """Publish a message to the group chat or a specific topic.
+        
+        Args:
+            message: The message to publish.
+            highlight: Whether to highlight the message in logs.
+            topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
+            cancellation_token: Optional cancellation token to cancel the operation.
+
+        """
+        # Use provided topic_id or fall back to the agent's default topic
+        target_topic = topic_id or self._topic_id
+        await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
+
+        if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
+            highlight = True  # Highlight traces and outputs by default
+        if highlight:
+            logger.highlight(
+            f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
+            )
+        else:
+            logger.debug(
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
+            )
 
     async def __call__(
         self,
@@ -444,7 +459,7 @@ class Agent(RoutedAgent):
             logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
             raise ProcessingError(f"Agent {self.agent_name}: Error preparing input state: {e}") from e
 
-        await self.publish_message(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=ctx.topic_id or DefaultTopicId(type="default"))
+        await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
 
         try:
             result = await self.__call__(message=final_input)
@@ -501,8 +516,8 @@ class Agent(RoutedAgent):
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result,
             )
         # Publish status update: Task Complete (including error if error)
-        await self.publish_message(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error), topic_id=ctx.topic_id,
+        await self._publish(
+            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error), topic_id=self._topic_id,
         )
 
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
@@ -511,7 +526,7 @@ class Agent(RoutedAgent):
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.
-        await self.publish_message(trace, topic_id=self._topic_id)
+        await self._publish(trace, topic_id=self._topic_id)
         return trace
 
     @abstractmethod
@@ -572,13 +587,15 @@ class Agent(RoutedAgent):
     @message_handler
     async def handle_agent_output(
         self,
-        message: AgentOutput,
+        message: AgentOutput | AgentTrace,
         ctx: MessageContext,
     ) -> None:
-        """Handle AgentOutput messages, extracting Records and data based on input mappings.
+        """Handle AgentOutput or AgentTrace messages, extracting Records and data based on our configured input mappings.
+
+        AgentTrace is a subclass of AgentOutput with additional run and tracing information.
 
         Args:
-            message: The AgentOutput message to process.
+            message: The AgentTrace or AgentOutput message to process.
             ctx: Message context containing sender and topic information.
 
         """
@@ -611,67 +628,13 @@ class Agent(RoutedAgent):
             if found_keys:
                 logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
         else:
-            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction for AgentOutput.")
-
-    @message_handler
-    async def handle_agent_trace(
-        self,
-        message: AgentTrace,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle AgentTrace messages, adding relevant content to model context.
-
-        Args:
-            message: The AgentTrace message to process.
-            ctx: Message context containing sender and topic information.
-
-        """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-
-        # Handle AgentTrace containing a Record in its 'outputs'
-        if isinstance(getattr(message, "outputs", None), Record):
-            self._records.append(message.outputs)  # type: ignore
-            logger.debug(f"Agent {self.agent_name} added Record from AgentTrace.outputs to internal state.")
-
-        # Extract data based on input mappings
-        elif self.inputs:  # Only extract if input mappings are defined
-            extracted = extract_message_data(
-                message=message,
-                source=source,
-                input_mappings=self.inputs,
-            )
-            # Add extracted records to self._records
-            extracted_records = extracted.pop("records", [])
-            if extracted_records:
-                self._records.extend(extracted_records)
-                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
-
-            # Add other extracted data to self._data
-            found_keys = []
-            for key, value in extracted.items():
-                if value is not None and value not in ([], {}):  # Ensure value is meaningful
-                    self._data.add(key, value)
-                    found_keys.append(key)
-            if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction.")
 
         # Add relevant message content to the conversation history (_model_context).
-        # Only add traces to context if they are directly relevant to this agent
-        should_add_to_context = (
-            source == self.agent_name or  # Messages from this agent itself
-            source == "manager" or        # Direct user/manager messages
-            (hasattr(message, "agent_info") and
-             getattr(message.agent_info, "role", None) in ["USER", "MANAGER"])  # User-facing roles
-        )
-
-        if should_add_to_context:
-            content_to_add = getattr(message, "contents", None)  # Prefer 'contents' if available
-            if content_to_add is None and hasattr(message, "outputs"):  # Fallback to stringified outputs
-                content_to_add = str(message.outputs) if message.outputs else None
-            if content_to_add:
-                await self._model_context.add_message(
-                    AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
-                )
+        if content_to_add := getattr(message, "contents", None):
+            await self._model_context.add_message(
+                AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
+            )
 
     @message_handler
     async def handle_manager_message(
@@ -772,23 +735,6 @@ class Agent(RoutedAgent):
             logger.debug(f"Heartbeat queue full for agent {self.agent_name}. Agent may be busy or stuck.")
 
     # --- Helper Methods ---
-
-    async def _publish(self, message: Any, highlight: bool = False, topic_id: TopicId | None = None) -> None:
-        """Publish a message to the group chat or a specific topic.
-        
-        Args:
-            message: The message to publish.
-            highlight: Whether to highlight the message in logs.
-            topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
-
-        """
-        # Use provided topic_id or fall back to the agent's default topic
-        target_topic = topic_id or self._topic_id
-        await self.publish_message(message, topic_id=target_topic)
-        if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
-            highlight = True  # Highlight traces and outputs by default
-        if highlight:
-            logger.highlight(f"Agent {self.agent_name} published {type(message).__name__} message to topic {target_topic}")
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Augments an incoming `AgentInput` message with the agent's internal state.
