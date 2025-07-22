@@ -39,7 +39,7 @@ case "$ACTION" in
             echo ""
             
             # Start in debug mode
-            nohup uv run python -m buttermilk.runner.cli "+flows=$FLOWS_ARRAY" +run=api llms=full verbose=true > /dev/null 2>&1 &
+            nohup uv run python -m buttermilk.runner.cli "+flows=$FLOWS_ARRAY" +run=api llms=debug verbose=true > /dev/null 2>&1 &
             
             echo -e "${GREEN}✅ Server starting in debug mode...${NC}"
             echo "Check logs with: ls -la /tmp/buttermilk_*.log | tail -1"
@@ -49,7 +49,7 @@ case "$ACTION" in
             echo ""
             
             # Start in normal mode
-            nohup uv run python -m buttermilk.runner.cli "+flows=$FLOWS_ARRAY" +run=api llms=full > /dev/null 2>&1 &
+            nohup uv run python -m buttermilk.runner.cli "+flows=$FLOWS_ARRAY" +run=api llms=debug > /dev/null 2>&1 &
             
             echo -e "${GREEN}✅ Server starting...${NC}"
         fi
