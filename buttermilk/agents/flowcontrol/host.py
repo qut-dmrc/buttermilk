@@ -174,7 +174,6 @@ class HostAgent(Agent):
         async with self._tasks_condition:
             self._total_tasks_in_step += 1
             self._pending_tasks_by_agent[agent_id_to_update] += 1
-            self._total_tasks_in_step += 1
             logger.info(
                 f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)}. "
@@ -543,11 +542,7 @@ class HostAgent(Agent):
 
             async for next_step in self._step_generator:
                 logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
-                # Wait for tasks from the *previous* step to complete before starting the *next* step
-                if not await self.wait_check_last_step_completions():
-                    # If the wait failed (timeout or error), stop the flow
-                    logger.error(f"Host {self.agent_name}: Stopping flow due to failed completions check")
-                    break
+                
                 # Don't seek confirmation from the manager to send a request to the manager
                 logger.debug(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
@@ -557,6 +552,14 @@ class HostAgent(Agent):
 
                 # Execute the current step
                 await self._execute_step(next_step)
+                
+                # Wait for the current step to complete before moving to the next one
+                # Skip this check for END steps since they don't generate tasks
+                if next_step.role != END:
+                    if not await self.wait_check_current_step_completions():
+                        # If the wait failed (timeout or error), stop the flow
+                        logger.error(f"Host {self.agent_name}: Stopping flow due to failed completions check for step {next_step.role}")
+                        break
 
             # --- Sequence finished ---
             logger.info(f"Host {self.agent_name} flow execution finished.")
@@ -606,19 +609,19 @@ class HostAgent(Agent):
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
 
-    async def wait_check_last_step_completions(self) -> bool:
-        """Wait for tasks from the previous step to complete and check for errors."""
+    async def wait_check_current_step_completions(self) -> bool:
+        """Wait for tasks from the current step to complete and check for errors."""
         # Wait for pending tasks to complete
         last_step_successful = await self._wait_for_all_tasks_complete()
         if not last_step_successful:
-            msg = f"Host {self.agent_id} failed to complete all tasks for the previous step: {dict(self._pending_tasks_by_agent)}"
+            msg = f"Host {self.agent_id} failed to complete all tasks for the current step: {dict(self._pending_tasks_by_agent)}"
             logger.error(msg)
             return False
 
         # Check if too many tasks failed
         total_failed = sum(self._failed_tasks_by_agent.values())
         if self._total_tasks_in_step == 0:
-            logger.warning(f"Host {self.agent_id} encountered no tasks in the previous step.")
+            logger.warning(f"Host {self.agent_id} encountered no tasks in the current step.")
             error_ratio = 0  # No tasks started, error ratio is undefined or treated as 0
         else:
             error_ratio = total_failed / self._total_tasks_in_step
@@ -644,7 +647,7 @@ class HostAgent(Agent):
             self._failed_tasks_by_agent.clear()
             self._total_tasks_in_step = 0
 
-        logger.info("No pending tasks left over from previous steps, clear to proceed.")
+        logger.info("All tasks from current step completed, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:
