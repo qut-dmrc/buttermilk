@@ -1,4 +1,5 @@
 tja:
   type: file
-  path: gs://prosocial-dev/data/tja_train.jsonl
+#  path: gs://prosocial-dev/data/tja_train.jsonl
+  path: gs://prosocial-dev/data/tja_train.parquet
   
