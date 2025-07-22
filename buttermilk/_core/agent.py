@@ -500,8 +500,11 @@ class Agent(RoutedAgent):
 
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
 
-        # Publish the trace
-        await self.publish_message(trace, topic_id=ctx.topic_id or DefaultTopicId(type="default"))
+        # Publish the trace.
+        # Importantly, StepRequests might be sent privately or to a subset of agents. But we
+        # want to publish the trace to the general topic so it can be consumed by any interested parties.
+        # So we publish to self._topic_id, not ctx.topic_id.
+        await self.publish_message(trace, topic_id=self._topic_id)
         return trace
 
     @abstractmethod
@@ -770,6 +773,7 @@ class Agent(RoutedAgent):
             message: The message to publish.
             highlight: Whether to highlight the message in logs.
             topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
+
         """
         # Use provided topic_id or fall back to the agent's default topic
         target_topic = topic_id or self._topic_id
