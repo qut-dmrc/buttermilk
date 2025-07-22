@@ -1,0 +1,148 @@
+{
+  "name": "buttermilk-mcp",
+  "version": "1.0.0",
+  "description": "MCP tools for Buttermilk development workflow",
+  "tools": [
+    {
+      "name": "buttermilk-workflow-check",
+      "description": "Validate the 9-step workflow is being followed",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": ["STOP", "ANALYZE", "PLAN", "TEST", "IMPLEMENT", "DOCUMENT", "VALIDATE", "COMMIT", "REFLECT"],
+            "description": "Current workflow step to validate"
+          },
+          "task_description": {
+            "type": "string",
+            "description": "Description of the current task"
+          }
+        },
+        "required": ["step"]
+      }
+    },
+    {
+      "name": "buttermilk-logs",
+      "description": "View and analyze Buttermilk server logs",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["tail", "errors", "warnings", "search", "websocket", "follow"],
+            "description": "Log viewing mode",
+            "default": "tail"
+          },
+          "lines": {
+            "type": "integer",
+            "description": "Number of lines to show",
+            "default": 50
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Search pattern (for search mode)"
+          }
+        },
+        "required": ["mode"]
+      }
+    },
+    {
+      "name": "buttermilk-server",
+      "description": "Manage Buttermilk API server",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["start", "stop", "status", "health", "flows"],
+            "description": "Server action to perform"
+          },
+          "debug": {
+            "type": "boolean",
+            "description": "Start in debug mode",
+            "default": false
+          },
+          "flows": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Flows to enable (for start action)",
+            "default": ["trans", "zot", "osb"]
+          }
+        },
+        "required": ["action"]
+      }
+    },
+    {
+      "name": "buttermilk-test-flow",
+      "description": "Test a specific Buttermilk flow",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow name to test"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Test prompt/query"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["http", "websocket"],
+            "description": "Test mode",
+            "default": "http"
+          }
+        },
+        "required": ["flow", "prompt"]
+      }
+    },
+    {
+      "name": "buttermilk-config-validate",
+      "description": "Validate Buttermilk YAML configurations",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "config_path": {
+            "type": "string",
+            "description": "Path to config file (relative to /src/buttermilk)"
+          },
+          "check_interpolations": {
+            "type": "boolean",
+            "description": "Check Hydra interpolations",
+            "default": true
+          }
+        },
+        "required": ["config_path"]
+      }
+    },
+    {
+      "name": "buttermilk-github-issue",
+      "description": "Search and manage GitHub issues for the Buttermilk project",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["search", "create", "link"],
+            "description": "Issue action"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query or issue title"
+          },
+          "body": {
+            "type": "string",
+            "description": "Issue body (for create action)"
+          },
+          "labels": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Issue labels"
+          }
+        },
+        "required": ["action", "query"]
+      }
+    }
+  ]
+}
