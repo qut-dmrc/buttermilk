@@ -213,6 +213,27 @@ task = asyncio.create_task(some_async_operation())
 task.add_done_callback(handle_task_exception)
 ```
 
+## Library Integration Best Practices
+
+### Check Upstream Documentation First
+
+Before creating workarounds for library behaviors:
+
+1. **ALWAYS**: Check the official library documentation
+2. **SEARCH**: GitHub issues and discussions for the library
+3. **UNDERSTAND**: The intended way to configure/disable features
+4. **DOCUMENT**: Reference the upstream docs in your code comments
+
+Example:
+```python
+# Good: Reference upstream docs
+# From autogen docs: Set AUTOGEN_DISABLE_RUNTIME_TRACING=true to disable telemetry
+# See: https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/framework/telemetry.html
+
+# Bad: Create custom workaround without checking docs
+# Custom hack to disable tracing...
+```
+
 ## Debugging Discipline
 
 ### When You Hit Errors
