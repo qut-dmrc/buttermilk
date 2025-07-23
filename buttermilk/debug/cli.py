@@ -11,7 +11,6 @@ from .config_validator import validate_configuration
 from .error_capture import analyze_type_checking_errors
 from .gcp_logs import GCPLogAnalyzer
 from .models import StartupTestResult
-from .ws_debug_cli import InteractiveDebugClient
 
 
 @click.group()

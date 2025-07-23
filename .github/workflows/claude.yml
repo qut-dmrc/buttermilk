@@ -55,7 +55,14 @@ jobs:
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           custom_instructions: |
             CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
-
+            
+            Use the MCP tools in .mcp/tools/ for:
+            - Workflow validation: .mcp/tools/buttermilk-workflow-check.sh
+            - Log viewing: .mcp/tools/buttermilk-logs.sh
+            - Server management: .mcp/tools/buttermilk-server.sh
+            - Flow testing: .mcp/tools/buttermilk-test-flow.sh
+            - Config validation: .mcp/tools/buttermilk-config-validate.sh
+            - GitHub issues: .mcp/tools/buttermilk-github-issue.sh
           # Optional: Custom environment variables for Claude
           # claude_env: |
           #   NODE_ENV: test
