@@ -429,8 +429,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """Fetch initial records based on the `RunRequest` if not already loaded.
 
         This helper method checks if `self._records` is empty. If so, and if the
-        `request` provides a `record_id` or `uri`, it attempts to fetch the
-        corresponding record(s). If `request.records` is already populated,
+        `request` provides a `record_id` or `uri` in parameters, it attempts to fetch the
+        corresponding record(s). If `records` are provided in parameters,
         those are used directly.
 
         Args:
@@ -445,23 +445,28 @@ class Orchestrator(OrchestratorProtocol, ABC):
             logger.debug("Orchestrator already has records; skipping initial fetch from RunRequest.")
             return
 
-        if request.records:  # Records provided directly in RunRequest
-            logger.debug(f"Using {len(request.records)} records provided directly in RunRequest.")
-            self._records = request.records
+        # Check for records in parameters
+        records = request.parameters.get("records", [])
+        if records:  # Records provided directly in parameters
+            logger.debug(f"Using {len(records)} records provided directly in RunRequest parameters.")
+            self._records = records
             return
 
-        # If no records yet, try fetching via record_id or uri from RunRequest
-        if request.record_id or request.uri:
-            logger.debug(f"Attempting to fetch initial record(s) based on RunRequest: id='{request.record_id}', uri='{request.uri}'.")
+        # If no records yet, try fetching via record_id or uri from parameters
+        record_id = request.parameters.get("record_id")
+        uri = request.parameters.get("uri")
+        
+        if record_id or uri:
+            logger.debug(f"Attempting to fetch initial record(s) based on RunRequest: id='{record_id}', uri='{uri}'.")
             try:
                 record_to_add: Record | None = None
                 fetch_source_id = ""
-                if request.record_id:
-                    record_to_add = await self.get_record_dataset(request.record_id)
-                    fetch_source_id = request.record_id
-                elif request.uri:
-                    record_to_add = await download_and_convert(request.uri)  # Assumes download_and_convert returns a Record
-                    fetch_source_id = request.uri
+                if record_id:
+                    record_to_add = await self.get_record_dataset(record_id)
+                    fetch_source_id = record_id
+                elif uri:
+                    record_to_add = await download_and_convert(uri)  # Assumes download_and_convert returns a Record
+                    fetch_source_id = uri
 
                 if record_to_add:
                     logger.debug(f"Initial record fetched: {record_to_add.record_id} from source '{fetch_source_id}'.")
@@ -470,10 +475,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     record_to_add.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
                     self._records = [record_to_add]
                 else:
-                    logger.warning(f"No record found for record_id='{request.record_id}' or uri='{request.uri}'.")
+                    logger.warning(f"No record found for record_id='{record_id}' or uri='{uri}'.")
 
             except Exception as e:
-                msg = f"Error fetching initial record from request (id='{request.record_id}', uri='{request.uri}'): {e!s}"
+                msg = f"Error fetching initial record from request (id='{record_id}', uri='{uri}'): {e!s}"
                 logger.error(msg)
                 raise FatalError(msg) from e
         else:
