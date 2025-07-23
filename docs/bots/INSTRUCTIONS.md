@@ -20,7 +20,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 5. **IMPLEMENT**: Make minimal changes that solve the root cause
 6. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
 7. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
-8. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue.
+8. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue. If you're working independently, don't forget to file a pull request with your new changes!
 9. **REFLECT**: Review your performance and update the `docs/bots` instructions if necessary to avoid mistakes.
 
 

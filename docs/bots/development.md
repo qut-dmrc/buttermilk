@@ -77,6 +77,8 @@ gh issue comment 123 --body "Fixed in commit abc123.
 - No regressions found"
 ```
 
+If applicable, don't forget to file a pull request with your new changes!
+
 ## GitHub Workflow
 
 ### Before Starting Work
@@ -94,7 +96,7 @@ gh issue comment 123 --body "Fixed in commit abc123.
 ### After Completion
 1. **Final Update**: Summarize what was done
 2. **Close Issue**: `gh issue close 123`
-3. **Link PR**: If applicable
+3. **Create or Link PR**: If applicable
 
 ## Code Standards
 
