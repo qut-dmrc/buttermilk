@@ -8,7 +8,7 @@ See: https://weave-docs.wandb.ai/guides/tracking/tracing/#post-process-inputs-an
 
 from typing import Any
 
-import weave
+import weave  # Reserved for future implementation of trace filtering logic
 
 
 class NoOpFormatter:
