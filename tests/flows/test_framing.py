@@ -36,7 +36,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
     run_request = RunRequest(  # Replaced Job with RunRequest
         ui_type="testing",  # Mapped source to ui_type
         flow="testflow",  # Mapped flow_id to flow
-        records=[text_record],  # Mapped record to records list
+        parameters={"records": [text_record]},  # Moved records to parameters
         run_info=bm.run_info,
         session_id="test_session",  # Added required session_id
     )
@@ -72,7 +72,7 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     flow = FlowRunner(source="testing", flows=[framer])
 
     record = link_to_video_gcp  # Use the video record directly
-    run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", records=[record], run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args
+    run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", parameters={"records": [record]}, run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args
     async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result
         assert isinstance(result.record, Record)

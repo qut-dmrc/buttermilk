@@ -713,12 +713,14 @@ class MockOrchestrator(Orchestrator):
 
     async def _fetch_initial_records(self, request: RunRequest):
         """Simulate fetching initial records based on the run request."""
-        if request and request.record_id:
-            logger.info(f"Simulating fetching initial record: {request.record_id}")
+        record_id = request.parameters.get("record_id") if request else None
+        
+        if request and record_id:
+            logger.info(f"Simulating fetching initial record: {record_id}")
             # Generate a mock record based on the requested ID
             mock_record = self._generate_record(
-                record_id=request.record_id,
-                content=f"Mock content for record {request.record_id}. This is a simulated document.",
+                record_id=record_id,
+                content=f"Mock content for record {record_id}. This is a simulated document.",
                 metadata={
                     "source": "simulated_fetch",
                     "request_params": request.parameters,
@@ -727,20 +729,6 @@ class MockOrchestrator(Orchestrator):
             )
             await self._publish_message(mock_record)
             await asyncio.sleep(0.5)  # Simulate fetch delay
-
-        if request and request.record_id:
-            logger.info(f"Simulating fetching initial records: {request.record_id}")
-            mock_record = self._generate_record(
-                record_id=request.record_id,
-                content=f"Mock content for record {request.record_id}.",
-                metadata={
-                    "source": "simulated_fetch_list",
-                    "request_params": request.parameters,
-                    "flow_name": request.flow,
-                },
-            )
-            await self._publish_message(mock_record)
-            await asyncio.sleep(0.3)  # Simulate fetch delay for each record
 
     def make_publish_callback(self) -> Callable:
         """Creates an asynchronous callback function for the UI to use.
