@@ -78,7 +78,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, dataset_key: str, include_scores: bool = False) -> list[Record]:
+    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False, dataset_name: str | None = None) -> list[Record]:
         """Get records for a flow
 
         Args:
@@ -93,6 +93,11 @@ class DataService:
         """
         try:
             records = []
+
+            # Require dataset_name to be specified
+            if not dataset_name:
+                available_datasets = list(flow_runner.flows[flow_name].storage.keys())
+                raise ValueError(f"dataset_name is required. Available datasets for flow '{flow_name}': {available_datasets}")
 
             # Get the specified storage configuration
             if dataset_key not in flow_runner.flows[flow_name].storage:
@@ -206,13 +211,11 @@ class DataService:
             for record in storage:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata
-                    record.metadata.update(
-                        {
-                            "dataset": flow_name,
-                            "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
-                            "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
-                        },
-                    )
+                    record.metadata.update({
+                        "dataset": flow_name,
+                        "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
+                        "char_count": len(str(record.content)) if isinstance(record.content, str) else 0
+                    })
                     return record
             return None
         except Exception as e:
