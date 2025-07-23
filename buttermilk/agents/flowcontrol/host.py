@@ -479,10 +479,7 @@ class HostAgent(Agent):
             self._tools.extend(message.additional_tools)
 
             # Store any parameters passed in
-            self._host_initial_inputs = message.inputs
-
-            # Parameters will be passed to agents via StepRequest
-
+            self._host_input_parameters = message.inputs
             # Announce, and trigger agents to announce themselves
             msg = AgentAnnouncement(
                 content="Host joining",
@@ -564,7 +561,6 @@ class HostAgent(Agent):
                 except asyncio.CancelledError:
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
-
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""

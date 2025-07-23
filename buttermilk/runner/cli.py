@@ -75,18 +75,12 @@ def main(conf: DictConfig) -> None:
         case "console":
             ui = CLIUserAgent()
             # Prepare the RunRequest with command-line parameters
-            parameters = {}
-            if conf.get("record_id"):
-                parameters["record_id"] = conf.get("record_id")
-            if conf.get("prompt"):
-                parameters["prompt"] = conf.get("prompt")
-            if conf.get("uri"):
-                parameters["uri"] = conf.get("uri")
-
             run_request = RunRequest(
                 ui_type=conf.ui,
                 flow=conf.get("flow"),
-                inputs=parameters,
+                record_id=conf.get("record_id", ""),
+                prompt=conf.get("prompt", ""),
+                uri=conf.get("uri", ""),
                 callback_to_ui=ui.callback_to_ui,
             )
 

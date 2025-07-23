@@ -148,11 +148,11 @@ class MockOrchestrator(Orchestrator):
             while True:
                 # Choose a message type randomly with weights
                 message_generators = [
-                    (self._generate_agent_trace, 4),       # Higher weight for agent traces
-                    (self._generate_progress_update, 4),   # Medium weight for progress updates
-                    (self._generate_error_event, 1),       # Lower weight for errors
-                    (self._generate_ui_message, 4),        # Medium weight for UI messages
-                    (self._generate_record, 1),            # Lower weight for records
+                    (self._generate_agent_trace, 4),  # Higher weight for agent traces
+                    (self._generate_progress_update, 4),  # Medium weight for progress updates
+                    (self._generate_error_event, 1),  # Lower weight for errors
+                    (self._generate_ui_message, 4),  # Medium weight for UI messages
+                    (self._generate_record, 1),  # Lower weight for records
                 ]
 
                 # Weighted random selection
@@ -275,11 +275,16 @@ class MockOrchestrator(Orchestrator):
 
             differences = Differences(
                 conclusion="Revise the document to address these points before finalization",
-                divergences=[Divergence(topic="Methodology", positions=[
-                    Position(experts=experts_pos1, position="The conclusion section could be strengthened with additional examples"),
-                    Position(experts=experts_pos2, position="Some statistical methods might benefit from more detailed explanation"),
-                    Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings"),
-                ])],
+                divergences=[
+                    Divergence(
+                        topic="Methodology",
+                        positions=[
+                            Position(experts=experts_pos1, position="The conclusion section could be strengthened with additional examples"),
+                            Position(experts=experts_pos2, position="Some statistical methods might benefit from more detailed explanation"),
+                            Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings"),
+                        ],
+                    )
+                ],
             )
 
             critic_result = self._generate_agent_trace(
@@ -341,7 +346,8 @@ class MockOrchestrator(Orchestrator):
 
             # Add a TaskProcessingComplete event
             task_complete = TaskProcessingComplete(
-                agent_id=random.choice(self._agent_ids), role="ASSISTANT",
+                agent_id=random.choice(self._agent_ids),
+                role="ASSISTANT",
             )
             await self._publish_message(task_complete)
             await asyncio.sleep(0.5)
@@ -485,9 +491,9 @@ class MockOrchestrator(Orchestrator):
             parent_call_id=parent_call_id,
         )
 
-    def _generate_progress_update(self, source=None, role=None, step_name=None,
-                                status=None, message=None, total_steps=None,
-                                current_step=None) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
+    def _generate_progress_update(
+        self, source=None, role=None, step_name=None, status=None, message=None, total_steps=None, current_step=None
+    ) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (
             FlowEvent,
@@ -531,28 +537,36 @@ class MockOrchestrator(Orchestrator):
 
             # Adding details to content for better mock representation
             if event_type == "flow_started":
-                details.update({
-                    "flow_name": "mock_flow",
-                    "parameters": {"initial_param": random.choice(["A", "B", "C"])},
-                })
+                details.update(
+                    {
+                        "flow_name": "mock_flow",
+                        "parameters": {"initial_param": random.choice(["A", "B", "C"])},
+                    }
+                )
                 generated_content = f"Flow started: {details.get('flow_name')}"
             elif event_type == "flow_completed":
-                details.update({
-                    "summary": "Mock flow completed successfully.",
-                    "duration_ms": random.randint(1000, 10000),
-                })
+                details.update(
+                    {
+                        "summary": "Mock flow completed successfully.",
+                        "duration_ms": random.randint(1000, 10000),
+                    }
+                )
                 generated_content = f"Flow completed. Summary: {details.get('summary')}"
             elif event_type == "agent_selected":
-                details.update({
-                    "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
-                    "task_description": "Processing a mock task.",
-                })
+                details.update(
+                    {
+                        "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
+                        "task_description": "Processing a mock task.",
+                    }
+                )
                 generated_content = f"Agent selected: {details.get('agent_id')} for task: {details.get('task_description')}"
             elif event_type == "error_occurred":
-                details.update({
-                    "error_message": "A simulated error occurred.",
-                    "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
-                })
+                details.update(
+                    {
+                        "error_message": "A simulated error occurred.",
+                        "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
+                    }
+                )
                 generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
 
             # Note: FlowEvent in contract.py only has 'source' and 'content'.
@@ -735,6 +749,7 @@ class MockOrchestrator(Orchestrator):
             An async callback function that takes a message and publishes it.
 
         """
+
         async def publish_callback(message) -> None:
             # Trigger the interrupt and exit handlers
             await self._interrupt_handler.on_publish(message, message_context=None)

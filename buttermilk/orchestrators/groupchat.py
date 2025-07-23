@@ -360,12 +360,56 @@ class AutogenOrchestrator(Orchestrator):
                 logger.error(f"Error during setup: {e}")
                 raise FatalError from e
 
-            # 2. Pass any initial data handling to the host via ConductorRequest.inputs
-            # The host agent is now responsible for checking if there are records/prompts
-            # in the parameters and handling them appropriately
+            # 2. Load initial data if provided
+            if request:
+                await self._fetch_initial_records(request)  # Use helper for clarity
+                if self._records:
+                    for record in self._records:
+                        # send each record to all clients
+                        logger.debug(f"[AutogenOrchestrator._run] Publishing record: {record}")
+                        await self._runtime.publish_message(record, topic_id=self._topic)
 
             # 3. Wait for termination.
-            await self._runtime.stop_when(lambda: termination_handler.has_terminated)
+            while True:
+                try:
+                    if termination_handler.has_terminated:
+                        logger.info("Termination message received.")
+                        # Send flow_completed event before TaskProcessingComplete
+                        await self._runtime.publish_message(
+                            FlowEvent(source="orchestrator", content="flow_completed"),
+                            topic_id=DefaultTopicId(type=MANAGER),
+                        )
+                        # Publish a TaskProcessingComplete message to the UI
+                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
+                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
+                        await self._runtime.publish_message(
+                            TaskProcessingComplete(
+                                agent_id="orchestrator",
+                                role="orchestrator",
+                                status="COMPLETED",
+                                message="Flow completed successfully.",
+                                more_tasks_remain=False,
+                            ),
+                            topic_id=DefaultTopicId(type=MANAGER),
+                        )
+                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
+                        break
+                    if interrupt_handler.interrupt.is_set():
+                        logger.info("Flow is paused. Waiting for resume...")
+                        while interrupt_handler.interrupt.is_set():
+                            await asyncio.sleep(0.5)
+                        logger.info("Flow resumed.")
+                    await asyncio.sleep(0.1)
+
+                except ProcessingError as e:
+                    # Non-fatal error - let the host agent decide how to recover
+                    logger.error(f"Error in execution: {e}")
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:
+                    raise FatalError from e
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")

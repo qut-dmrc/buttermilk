@@ -390,14 +390,12 @@ class RunRequest(BaseModel):
         flow (str): The name of the flow to be executed. This is a mandatory field.
         session_id (str): A unique identifier for this specific flow execution
             session. Defaults to a new short UUID.
-        parameters (dict): A dictionary of parameters to customize the flow's execution.
-        inputs (dict): A dictionary of inputs sent to agents.
-            Common parameters include:
-            - prompt (str | None): The main prompt, question, or instruction for the run.
-            - record_id (str | None): An optional ID of a specific record to look up and process.
-            - uri (str | None): An optional URI (e.g., URL, file path) from which to fetch initial data.
-            - records (list[Record]): A list of `Record` objects to be used as input for the flow.
-            Flow-specific parameters can also be included. Defaults to an empty dict.
+        uri (str | None): An optional URI (e.g., URL, file path) from which to
+            fetch initial data or a record.
+        records (list[Record]): A list of `Record` objects to be used as input
+            for the flow. This can include ground truth data. Defaults to an empty list.
+        parameters (dict): A dictionary of additional parameters to customize
+            the flow's execution. Defaults to an empty dict.
         callback_to_ui (Any | None): An optional callback function to send updates
             or messages back to a UI. Excluded from serialization.
         ui_type (str): The type of UI initiating the run (e.g., "cli", "api", "streamlit").
@@ -428,11 +426,7 @@ class RunRequest(BaseModel):
     )
     parameters: dict[str, Any] = Field(  # Added type hint for dict value
         default_factory=dict,
-        description="Additional parameter overrides to customize flow execution.",
-    )
-    inputs: dict[str, Any] = Field(  # Added type hint for dict value
-        default_factory=dict,
-        description="Additional inputs to pass to agents, potentially including 'prompt', 'record_id', 'uri', 'records', and other request specific data.",
+        description="Additional parameters to customize flow execution.",
     )
 
     # Fields for client interaction, typically excluded from persisted state
@@ -475,6 +469,24 @@ class RunRequest(BaseModel):
         populate_by_name=True,  # Allows population by field name or alias
     )
 
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def sanitize_prompt(cls, v: Any) -> str | None:  # Allow None to pass through
+        """Sanitizes the `prompt` field by stripping leading/trailing whitespace.
+
+        Args:
+            v: The input value for the `prompt`.
+
+        Returns:
+            str | None: The sanitized prompt string, or None if input was None.
+
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v.strip()
+        return str(v)  # Attempt to convert other types to string
+
     @property
     def is_batch_job(self) -> bool:
         """Checks if this `RunRequest` instance represents a batch job.
@@ -497,9 +509,8 @@ class RunRequest(BaseModel):
             str: The unique job identifier.
 
         """
-        record_id = self.inputs.get("record_id")
-        if self.batch_id and record_id:
-            return f"{self.batch_id}:{record_id}"
+        if self.batch_id and self.record_id:
+            return f"{self.batch_id}:{self.record_id}"
         # Fallback to a new unique ID if not part of a batch or no specific record_id
         return shortuuid.uuid()
 
@@ -539,9 +550,9 @@ class RunRequest(BaseModel):
 
         """
         parts = [self.flow]
-        if record_id := self.inputs.get("record_id"):  # Get from parameters
-            parts.append(record_id)
-        if criteria := self.inputs.get("criteria"):  # Safely get 'criteria'
+        if self.record_id:
+            parts.append(self.record_id)
+        if criteria := self.parameters.get("criteria"):  # Safely get 'criteria'
             parts.append(str(criteria))
 
         # Join non-empty, non-None stringified parts

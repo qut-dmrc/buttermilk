@@ -115,13 +115,9 @@ def create_core_router() -> APIRouter:
 
         # Create RunRequest if not provided
         if not run_request:
-            parameters = {}
-            if prompt:
-                parameters["prompt"] = prompt
-
             run_request = RunRequest(
                 flow=flow_name,
-                inputs=parameters,
+                prompt=prompt or "",
                 ui_type="web",
             )
 

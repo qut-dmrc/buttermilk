@@ -72,9 +72,8 @@ class JobQueueClient(BaseModel):
 
         record = toxic_record()
 
-        inputs = {"criteria": "criteria_ordinary", "records": [record]}
-        data = {"ui_type": "web", "inputs": inputs}
-        request = RunRequest(flow=flow, **data)
+        data = {"ui_type": "web", "parameters": {"criteria": "criteria_ordinary"}}
+        request = RunRequest(flow=flow, records=[record], **data)
         return request
 
     async def pull_single_task(self) -> RunRequest | None:
@@ -135,9 +134,7 @@ class JobQueueClient(BaseModel):
         future = self._publisher.publish(self._jobs_topic_path, message_data)
         message_id = future.result()
 
-        logger.info(
-            f"Published job {job.batch_id}:{job.inputs.get('record_id', 'N/A')} to Pub/Sub (ID: {message_id}, topic: {self._jobs_topic_path})"
-        )
+        logger.info(f"Published job {job.batch_id}:{job.record_id} to Pub/Sub (ID: {message_id}, topic: {self._jobs_topic_path})")
         return message_id
 
     def publish_status_update(self,
@@ -202,9 +199,7 @@ class JobQueueClient(BaseModel):
         self._active_jobs += 1
         try:
             logger.debug(f"Incremented active tasks to {self._active_jobs} for task processing.")
-            logger.info(
-                f"Processing task {run_request.batch_id or 'N/A'}:{run_request.inputs.get('record_id', 'N/A')} (Task ID: {run_request.job_id})"
-            )
+            logger.info(f"Processing task {run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Task ID: {run_request.job_id})")
             if not wait:
                 loop = asyncio.get_running_loop()
                 loop.create_task(self._run_job(run_request))
@@ -213,7 +208,7 @@ class JobQueueClient(BaseModel):
 
             self.publish_status_update(
                 batch_id=run_request.batch_id or "N/A",
-                record_id=run_request.inputs.get("record_id", "N/A"),
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.RUNNING,
             )
 
@@ -233,7 +228,7 @@ class JobQueueClient(BaseModel):
 
     async def _run_job(self, run_request: RunRequest) -> None:
         """Run a task, update its status, and acknowledge the message upon success."""
-        job_desc = f"{run_request.batch_id or 'N/A'}:{run_request.inputs.get('record_id', 'N/A')} (Task ID: {run_request.job_id})"
+        job_desc = f"{run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Task ID: {run_request.job_id})"
 
         try:
             logger.debug(f"Starting flow execution for task {job_desc}")
@@ -244,7 +239,7 @@ class JobQueueClient(BaseModel):
 
             self.publish_status_update(
                 batch_id=run_request.batch_id or "N/A",
-                record_id=run_request.inputs.get("record_id", "N/A"),
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.COMPLETED,
             )
 
@@ -255,7 +250,7 @@ class JobQueueClient(BaseModel):
 
             self.publish_status_update(
                 batch_id=run_request.batch_id or "N/A",
-                record_id=run_request.inputs.get("record_id", "N/A"),
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.FAILED,
                 error=str(e),
             )
