@@ -394,18 +394,15 @@ class RunRequest(BaseModel):
 
     Attributes:
         flow (str): The name of the flow to be executed. This is a mandatory field.
-        prompt (str | None): The main prompt, question, or instruction for the run.
-            Can be aliased as "q". Defaults to an empty string.
-        record_id (str | None): An optional ID of a specific record to look up
-            and process.
         session_id (str): A unique identifier for this specific flow execution
             session. Defaults to a new short UUID.
-        uri (str | None): An optional URI (e.g., URL, file path) from which to
-            fetch initial data or a record.
-        records (list[Record]): A list of `Record` objects to be used as input
-            for the flow. This can include ground truth data. Defaults to an empty list.
-        parameters (dict): A dictionary of additional parameters to customize
-            the flow's execution. Defaults to an empty dict.
+        parameters (dict): A dictionary of parameters to customize the flow's execution.
+            Common parameters include:
+            - prompt (str | None): The main prompt, question, or instruction for the run.
+            - record_id (str | None): An optional ID of a specific record to look up and process.
+            - uri (str | None): An optional URI (e.g., URL, file path) from which to fetch initial data.
+            - records (list[Record]): A list of `Record` objects to be used as input for the flow.
+            Flow-specific parameters can also be included. Defaults to an empty dict.
         callback_to_ui (Any | None): An optional callback function to send updates
             or messages back to a UI. Excluded from serialization.
         ui_type (str): The type of UI initiating the run (e.g., "cli", "api", "streamlit").
@@ -430,30 +427,13 @@ class RunRequest(BaseModel):
 
     # Common flow execution fields
     flow: str = Field(..., description="The name of the Buttermilk flow to execute.")
-    prompt: str | None = Field(
-        default="",
-        description="The main prompt, question, or instruction for the run.",
-        validation_alias=AliasChoices("prompt", "q"),  # Allows using 'q' as an alias
-    )
-    record_id: str | None = Field(
-        default="",
-        description="Optional ID of a specific record to look up and process.",
-    )
     session_id: str = Field(
         default_factory=shortuuid.uuid,  # Use factory for dynamic default
         description="A unique session ID for this specific flow execution.",
     )
-    uri: str | None = Field(
-        default="",
-        description="Optional URI (e.g., URL, file path) to fetch initial data or a record from.",
-    )
-    records: list[Record] = Field(
-        default_factory=list,
-        description="Input `Record` objects for the flow, potentially including ground truth.",
-    )
     parameters: dict[str, Any] = Field(  # Added type hint for dict value
         default_factory=dict,
-        description="Additional parameters to customize flow execution.",
+        description="Additional parameters to customize flow execution. May include 'prompt', 'record_id', 'uri', 'records', and other flow-specific parameters.",
     )
 
     # Fields for client interaction, typically excluded from persisted state
@@ -496,23 +476,6 @@ class RunRequest(BaseModel):
         populate_by_name=True,  # Allows population by field name or alias
     )
 
-    @field_validator("prompt", mode="before")
-    @classmethod
-    def sanitize_prompt(cls, v: Any) -> str | None:  # Allow None to pass through
-        """Sanitizes the `prompt` field by stripping leading/trailing whitespace.
-
-        Args:
-            v: The input value for the `prompt`.
-
-        Returns:
-            str | None: The sanitized prompt string, or None if input was None.
-
-        """
-        if v is None:
-            return None
-        if isinstance(v, str):
-            return v.strip()
-        return str(v)  # Attempt to convert other types to string
 
     @property
     def is_batch_job(self) -> bool:
@@ -529,15 +492,16 @@ class RunRequest(BaseModel):
         """Generates or returns a unique job identifier for this run.
 
         If part of a batch (`batch_id` is set) and processing a specific record
-        (`record_id` is set), it creates a composite ID: "{batch_id}:{record_id}".
+        (`record_id` in parameters is set), it creates a composite ID: "{batch_id}:{record_id}".
         Otherwise, it generates a new short UUID.
 
         Returns:
             str: The unique job identifier.
 
         """
-        if self.batch_id and self.record_id:
-            return f"{self.batch_id}:{self.record_id}"
+        record_id = self.parameters.get("record_id")
+        if self.batch_id and record_id:
+            return f"{self.batch_id}:{record_id}"
         # Fallback to a new unique ID if not part of a batch or no specific record_id
         return shortuuid.uuid()
 
@@ -558,8 +522,6 @@ class RunRequest(BaseModel):
             "session_id": self.session_id,
             "flow_name": self.flow,
             "run_request_name": self.name,  # Use the computed name of the run request
-            "record_id": self.record_id,
-            "uri": self.uri,
             "batch_id": self.batch_id,
         }
         # Filter out any attributes that are None to keep traces clean
@@ -579,8 +541,8 @@ class RunRequest(BaseModel):
 
         """
         parts = [self.flow]
-        if self.record_id:
-            parts.append(self.record_id)
+        if record_id := self.parameters.get("record_id"):  # Get from parameters
+            parts.append(record_id)
         if criteria := self.parameters.get("criteria"):  # Safely get 'criteria'
             parts.append(str(criteria))
 
