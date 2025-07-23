@@ -200,7 +200,7 @@ async def _get_records_impl(
             return JSONResponse(content=error_content, status_code=500)
 
     try:
-        records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores, dataset_name=dataset)
+        records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores, dataset_key=dataset)
         logger.debug(f"Returning data for {len(records)} records")
 
         if "application/json" in accept_header:
@@ -334,7 +334,7 @@ async def _get_record_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        record = await DataService.get_record_by_id(record_id, flow, flows, dataset_name=dataset)
+        record = await DataService.get_record_by_id(record_id, flow, flows, dataset_key=dataset)
 
         if not record:
             raise HTTPException(
