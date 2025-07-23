@@ -99,13 +99,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         if not self._tools:
             msg = f"StructuredLLMHost {self.agent_name} has no tools available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
             logger.error(msg)
-            # Send as AgentOutput for consistency with other agent messages
-            error_response = AgentOutput(
-                agent_id=self.agent_id,
-                outputs="Unable to process request: no tools available.",
-                metadata={"error": True, "reason": "no_tools_available"}
+            # Send as ErrorEvent for error broadcasting
+            error_event = ErrorEvent(
+                source=self.agent_id,
+                content="Unable to process request: no tools available."
             )
-            await self._publish(error_response)
+            await self._publish(error_event)
             return  # Skip processing if no tools are available
 
         # Skip command messages
