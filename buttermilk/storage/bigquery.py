@@ -2,7 +2,8 @@
 
 import datetime
 import json
-from typing import TYPE_CHECKING, Any, Iterator
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Any
 
 from google.cloud import bigquery
 
@@ -30,6 +31,7 @@ class BigQueryStorage(Storage, StorageClient):
         Args:
             config: Storage configuration with BigQuery settings
             bm: Buttermilk instance for BigQuery client access
+
         """
         super().__init__(config, bm)
         StorageClient.__init__(self, config, bm)
@@ -77,6 +79,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         Yields:
             Record objects from the table
+
         """
         try:
             query = self._build_select_query()
@@ -100,6 +103,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         Args:
             records: Single record or list of records to save
+
         """
         if isinstance(records, Record):
             records = [records]
@@ -132,7 +136,7 @@ class BigQueryStorage(Storage, StorageClient):
             result = upload_rows(
                 rows=rows_to_insert,
                 schema=schema,
-                dataset=self.get_table_ref()
+                dataset=self.get_table_ref(),
             )
 
             if result:
@@ -149,6 +153,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         Returns:
             Number of records in the table
+
         """
         try:
             query = f"""
@@ -174,6 +179,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         Returns:
             True if table exists, False otherwise
+
         """
         try:
             self.client.get_table(self.get_table_ref())
@@ -270,7 +276,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         if self.config.split_type:
             parameters.append(
-                bigquery.ScalarQueryParameter("split_type", "STRING", self.config.split_type)
+                bigquery.ScalarQueryParameter("split_type", "STRING", self.config.split_type),
             )
 
         return bigquery.QueryJobConfig(query_parameters=parameters)
@@ -296,8 +302,20 @@ class BigQueryStorage(Storage, StorageClient):
             metadata_field = row_dict.get("metadata", getattr(row, "metadata", None))
             ground_truth_field = row_dict.get("ground_truth", getattr(row, "ground_truth", None))
 
-            metadata = json.loads(metadata_field) if metadata_field else {}
-            ground_truth = json.loads(ground_truth_field) if ground_truth_field else None
+            # Handle cases where fields might already be dictionaries
+            if isinstance(metadata_field, Mapping):
+                metadata = metadata_field
+            elif metadata_field:
+                metadata = json.loads(metadata_field)
+            else:
+                metadata = {}
+
+            if isinstance(ground_truth_field, Mapping):
+                ground_truth = ground_truth_field
+            elif ground_truth_field:
+                ground_truth = json.loads(ground_truth_field)
+            else:
+                ground_truth = None
 
             # Create Record object using mapped fields when available
             record = Record(
@@ -306,7 +324,7 @@ class BigQueryStorage(Storage, StorageClient):
                 metadata=metadata,
                 ground_truth=ground_truth,
                 uri=row_dict.get("uri", getattr(row, "uri", None)),
-                mime=row_dict.get("mime", getattr(row, "mime", "text/plain"))
+                mime=row_dict.get("mime", getattr(row, "mime", "text/plain")),
             )
 
             return record
@@ -317,7 +335,7 @@ class BigQueryStorage(Storage, StorageClient):
             return Record(
                 record_id=getattr(row, "record_id", "error"),
                 content=str(getattr(row, "content", "Error loading content")),
-                metadata={"parse_error": str(e)}
+                metadata={"parse_error": str(e)},
             )
 
     def _record_to_row(self, record: Record) -> dict[str, Any]:

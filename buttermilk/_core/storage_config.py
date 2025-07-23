@@ -3,7 +3,7 @@
 import os
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from buttermilk._core.log import logger
 
@@ -177,6 +177,27 @@ class BigQueryStorageConfig(BaseStorageConfig):
         description="Data split type for datasets (e.g., 'train', 'test', 'validation')."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def parse_full_table_id(cls, data: Any) -> Any:
+        """Parse full_table_id into component parts if provided."""
+        if isinstance(data, dict) and "full_table_id" in data:
+            full_table_id = data.pop("full_table_id")
+            if full_table_id and isinstance(full_table_id, str):
+                # Parse the full table ID into components
+                parts = full_table_id.split(".")
+                if len(parts) == 3:
+                    # Only set if not already provided
+                    if "project_id" not in data:
+                        data["project_id"] = parts[0]
+                    if "dataset_id" not in data:
+                        data["dataset_id"] = parts[1]
+                    if "table_id" not in data:
+                        data["table_id"] = parts[2]
+                else:
+                    raise ValueError(f"Invalid full_table_id format: '{full_table_id}'. Expected 'project.dataset.table'")
+        return data
+
     @model_validator(mode="after")
     def set_project_id_from_env(self) -> "BigQueryStorageConfig":
         """Set project_id from environment if not already set."""
@@ -184,10 +205,13 @@ class BigQueryStorageConfig(BaseStorageConfig):
             self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
         return self
 
-    @computed_field
     @property
     def full_table_id(self) -> str | None:
-        """Compute full BigQuery table identifier from constituent parts."""
+        """Get full BigQuery table identifier from constituent parts.
+        
+        This is a regular property, not a computed field, so it won't be included
+        in model dumps or cause validation errors.
+        """
         if all([self.project_id, self.dataset_id, self.table_id]):
             return f"{self.project_id}.{self.dataset_id}.{self.table_id}"
         return None
