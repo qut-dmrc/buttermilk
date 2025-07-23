@@ -1,5 +1,8 @@
 tja:
-  type: file
-#  path: gs://prosocial-dev/data/tja_train.jsonl
-  path: gs://prosocial-dev/data/tja_train.parquet
-  
+  type: bigquery
+  project_id: prosocial-443205
+  dataset_id: testing
+  table_id: records_tja
+  dataset_name: tja
+  # path: gs://prosocial-dev/data/tja_train.jsonl
+  # path: gs://prosocial-dev/data/tja_train.parquet
