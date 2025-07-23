@@ -78,14 +78,14 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False, dataset_name: str | None = None) -> list[Record]:
+    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False, dataset_key: str | None = None) -> list[Record]:
         """Get records for a flow
 
         Args:
             flow_name: The flow name
             flow_runner: The flow runner instance
             include_scores: Whether to include summary scores in metadata
-            dataset_name: Required dataset name to load from
+            dataset_key: Required dataset configuration key (the top-level key in the storage config)
 
         Returns:
             List[Record]: The list of Record objects with optional score summaries.
@@ -94,20 +94,20 @@ class DataService:
         try:
             records = []
 
-            # Require dataset_name to be specified
-            if not dataset_name:
+            # Require dataset_key to be specified
+            if not dataset_key:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
-                raise ValueError(f"dataset_name is required. Available datasets for flow '{flow_name}': {available_datasets}")
+                raise ValueError(f"dataset_key is required. Available datasets for flow '{flow_name}': {available_datasets}")
 
             # Get the specified storage configuration
-            if dataset_name not in flow_runner.flows[flow_name].storage:
+            if dataset_key not in flow_runner.flows[flow_name].storage:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
-                raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
+                raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
 
             # Use unified storage system instead of deprecated create_data_loader
             from buttermilk._core.dmrc import get_bm
             bm = get_bm()
-            storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_name])
+            storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_key])
 
             for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
@@ -119,7 +119,7 @@ class DataService:
             return records
 
         except Exception as e:
-            logger.warning(f"Error getting records for flow {flow_name}: {e}")
+            logger.error(f"Error getting records for flow {flow_name}: {e}")
             return []
 
     @staticmethod
@@ -180,24 +180,25 @@ class DataService:
             return cls._session_config.defaults.model_dump()
 
     @staticmethod
-    async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_name: str | None = None) -> Record | None:
+    async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_key: str | None = None) -> Record | None:
         """Get a single record by ID for a specific flow
 
         Args:
             record_id: The record ID to fetch
             flow_name: The flow name
             flow_runner: The flow runner instance
-            dataset_name: Optional specific dataset name to load from
+            dataset_key: Optional specific dataset configuration key to load from
 
         Returns:
             Record object or None if not found
+
         """
         try:
             # Get the appropriate storage configuration
-            if dataset_name:
-                if dataset_name not in flow_runner.flows[flow_name].storage:
-                    raise ValueError(f"Dataset '{dataset_name}' not found in flow '{flow_name}'")
-                storage_config_raw = flow_runner.flows[flow_name].storage[dataset_name]
+            if dataset_key:
+                if dataset_key not in flow_runner.flows[flow_name].storage:
+                    raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'")
+                storage_config_raw = flow_runner.flows[flow_name].storage[dataset_key]
             else:
                 # Fallback to first storage configuration for backward compatibility
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
@@ -210,11 +211,13 @@ class DataService:
             for record in storage:
                 if record.record_id == record_id:
                     # Enhance the existing Record object with computed metadata
-                    record.metadata.update({
-                        "dataset": flow_name,
-                        "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
-                        "char_count": len(str(record.content)) if isinstance(record.content, str) else 0
-                    })
+                    record.metadata.update(
+                        {
+                            "dataset": flow_name,
+                            "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
+                            "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
+                        }
+                    )
                     return record
             return None
         except Exception as e:
@@ -223,20 +226,20 @@ class DataService:
 
     @staticmethod
     def _reconstruct_agent_trace_from_row(row: dict) -> AgentTrace:
-        """
-        Convenience method to reconstruct AgentTrace from database row.
-        
+        """Convenience method to reconstruct AgentTrace from database row.
+
         This method centralizes the logic for reconstructing AgentTrace objects
         from database query results, eliminating code duplication.
-        
+
         Args:
             row: Database row containing AgentTrace data
-            
+
         Returns:
             AgentTrace object reconstructed from the row data
-            
+
         Raises:
             Exception: If reconstruction fails due to invalid data
+
         """
         import json
 
@@ -258,13 +261,12 @@ class DataService:
             parameters=inputs_data.get("parameters", {}),
             context=inputs_data.get("context", []),
             records=[Record(**rec) for rec in inputs_data.get("records", [])],
-            parent_call_id=row.get("parent_call_id")
+            parent_call_id=row.get("parent_call_id"),
         )
 
         # Create AgentTrace
         agent_trace = AgentTrace(
-            timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime)
-                     else datetime.datetime.fromisoformat(row["timestamp"]),
+            timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime) else datetime.datetime.fromisoformat(row["timestamp"]),
             call_id=row["call_id"],
             agent_id=agent_config.agent_id,
             metadata=metadata_data,
@@ -276,7 +278,7 @@ class DataService:
             tracing_link=row.get("tracing_link"),
             inputs=agent_input,
             messages=messages_data,
-            error=error_data
+            error=error_data,
         )
 
         return agent_trace
@@ -293,6 +295,7 @@ class DataService:
 
         Returns:
             List[AgentTrace]: List of AgentTrace objects containing the scoring results
+
         """
         try:
             # Get BigQuery client from BM instance
@@ -381,6 +384,7 @@ class DataService:
 
         Returns:
             List[AgentTrace]: List of AgentTrace objects containing the detailed responses
+
         """
         try:
             # Get BigQuery client from BM instance
