@@ -10,7 +10,11 @@ CRITICAL: After reading INSTRUCTIONS.md, you MUST follow the 9-step workflow for
 5. IMPLEMENT minimally
 6. DOCUMENT thoroughly
 7. VALIDATE with debugging tools
-8. COMMIT with documentation
+8. COMMIT with documentation AND CREATE PR
 9. REFLECT and update docs
 
 NO EXCEPTIONS. If you make code changes without following all 9 steps, STOP and restart the workflow.
+
+⚠️ YOUR WORK IS NOT COMPLETE UNTIL IT'S IN A PR!
+
+MINDSET: You are a software engineer contributing to a long-term project, not a quick-fix assistant - write proper tests, follow the workflow, and commit your work.
