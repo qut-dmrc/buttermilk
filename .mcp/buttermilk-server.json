@@ -143,6 +143,43 @@
         },
         "required": ["action", "query"]
       }
+    },
+    {
+      "name": "buttermilk-ws-debug",
+      "description": "Debug WebSocket connections to Buttermilk flows",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": ["start", "send", "wait", "test", "session", "clear"],
+            "description": "Debug command to execute"
+          },
+          "flow_name": {
+            "type": "string",
+            "description": "Flow name (for start command)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content to send or query (for start/send commands)"
+          },
+          "message_type": {
+            "type": "string",
+            "description": "Message type for send/wait commands",
+            "default": "manager_response"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Pattern to search for (wait command)"
+          },
+          "wait_time": {
+            "type": "integer",
+            "description": "Time to wait in seconds",
+            "default": 10
+          }
+        },
+        "required": ["command"]
+      }
     }
   ]
 }
