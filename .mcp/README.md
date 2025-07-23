@@ -113,6 +113,77 @@ buttermilk-github-issue search "MCP tools"
 buttermilk-github-issue create "Add logging feature" "Need better logging"
 ```
 
+### 7. `buttermilk-ws-debug`
+Debug WebSocket connections to Buttermilk flows using standalone scripts.
+
+**Usage:**
+```bash
+buttermilk-ws-debug <command> [options]
+```
+
+**Commands:**
+- `start` - Start a flow
+- `send` - Send message to session
+- `wait` - Wait for messages
+- `test` - Test connection
+- `session` - Show session info
+- `clear` - Clear session
+
+**Example:**
+```bash
+buttermilk-ws-debug start osb "What is AI ethics?"
+buttermilk-ws-debug send "Tell me more"
+```
+
+### 8. `buttermilk-advanced-debug`
+Advanced WebSocket debug CLI with full `ws_debug_cli.py` functionality.
+
+**⚠️ Requirements:** This tool requires full Buttermilk installation and dependencies.
+
+**Usage:**
+```bash
+buttermilk-advanced-debug <command> [options]
+```
+
+**Commands:**
+- `start` - Start a flow with advanced options
+- `start-debug` - Start a flow in debug mode with specific criteria
+- `start-server` - Start the API server with debug configuration
+- `send` - Send messages with session management
+- `wait` - Wait for messages with pattern filtering
+- `session` - Show detailed session information
+- `clear-session` - Clear saved session
+- `logs` - View Buttermilk log files with filtering
+- `list-flows` - List available flows
+- `test-connection` - Test server connectivity
+
+**Advanced Features:**
+- **Debug Server Management**: Can start/manage debug servers with specific criteria
+- **Session Persistence**: Saves and reuses session IDs across commands
+- **Rich Output**: Console formatting and JSON output modes
+- **Log Integration**: Direct access to Buttermilk log files
+- **Flow-Specific Debugging**: Special support for flows like `trans` with criteria filtering
+
+**Example:**
+```bash
+# Start a debug session with specific criteria
+buttermilk-advanced-debug start-debug trans "Analyze this text" --criteria "hrc"
+
+# View recent logs with JSON output
+buttermilk-advanced-debug logs --lines 100 --json-output
+
+# Start a debug server for testing
+buttermilk-advanced-debug start-server trans --criteria "ethics" --port 8001
+
+# Test connection to server
+buttermilk-advanced-debug test-connection
+```
+
+**When to Use:**
+- Use `buttermilk-ws-debug` for basic WebSocket testing without dependencies
+- Use `buttermilk-advanced-debug` for comprehensive debugging with full Buttermilk context
+- Use `buttermilk-advanced-debug` when you need debug server management or log analysis
+
 ## Installation for AI Assistants
 
 ### For Claude (via MCP)
