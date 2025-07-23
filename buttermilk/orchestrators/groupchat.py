@@ -144,6 +144,12 @@ class AutogenOrchestrator(Orchestrator):
 
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
+        
+        # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
+        # From the autogen docs:
+        # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
+        # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
+        # Currently we allow autogen telemetry but filter empty traces with weave post-processing
         self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[termination_handler, interrupt_handler])
 
         # Start the Autogen runtime's processing loop in the background.
