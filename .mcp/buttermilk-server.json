@@ -180,6 +180,80 @@
         },
         "required": ["command"]
       }
+    },
+    {
+      "name": "buttermilk-advanced-debug",
+      "description": "Advanced WebSocket debug CLI with full ws_debug_cli.py functionality - requires Buttermilk installation",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": ["start", "start-debug", "start-server", "send", "wait", "session", "clear-session", "logs", "list-flows", "test-connection"],
+            "description": "Advanced debug command to execute"
+          },
+          "flow_name": {
+            "type": "string",
+            "description": "Flow name (for start/start-debug/start-server commands)"
+          },
+          "query": {
+            "type": "string",
+            "description": "Query text (for start/start-debug commands)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content to send (for send command)"
+          },
+          "wait_time": {
+            "type": "integer",
+            "description": "Time to wait in seconds",
+            "default": 5
+          },
+          "record": {
+            "type": "string",
+            "description": "Record ID to process (for start/start-debug commands)"
+          },
+          "criteria": {
+            "type": "string",
+            "description": "Criteria to use (for start-debug/start-server commands)",
+            "default": "hrc"
+          },
+          "message_type": {
+            "type": "string",
+            "description": "Message type (for send command)",
+            "default": "response"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Pattern to search for (for wait command)"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Session ID to use (for send/wait commands)"
+          },
+          "lines": {
+            "type": "integer",
+            "description": "Number of log lines to show (for logs command)",
+            "default": 50
+          },
+          "host": {
+            "type": "string",
+            "description": "Server host (for start-server command)",
+            "default": "localhost"
+          },
+          "port": {
+            "type": "integer",
+            "description": "Server port (for start-server command)",
+            "default": 8000
+          },
+          "json_output": {
+            "type": "boolean",
+            "description": "Output results as JSON",
+            "default": false
+          }
+        },
+        "required": ["command"]
+      }
     }
   ]
 }

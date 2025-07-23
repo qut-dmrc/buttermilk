@@ -87,6 +87,75 @@ class ButtermilkMCPServer:
                 args.append(arguments["body"])
             if "labels" in arguments:
                 args.append(",".join(arguments["labels"]))
+                
+        elif tool_name == "buttermilk-ws-debug":
+            args.append(arguments.get("command", ""))
+            args.append(arguments.get("flow_name", ""))
+            args.append(arguments.get("content", ""))
+            args.append(arguments.get("message_type", "manager_response"))
+            if "pattern" in arguments:
+                args.append(arguments["pattern"])
+            args.append(str(arguments.get("wait_time", 10)))
+            
+        elif tool_name == "buttermilk-advanced-debug":
+            # Advanced debug tool using full ws_debug_cli.py functionality
+            # Requires Buttermilk installation and provides comprehensive debugging features
+            command = arguments.get("command", "")
+            args.append(command)
+            
+            # Add parameters based on command type
+            if command in ["start", "start-debug"]:
+                args.append(arguments.get("flow_name", ""))
+                args.append(arguments.get("query", ""))
+                args.append(str(arguments.get("wait_time", 5)))
+                if "record" in arguments:
+                    args.append(arguments["record"])
+                else:
+                    args.append("")
+                if "criteria" in arguments:
+                    args.append(arguments["criteria"])
+                else:
+                    args.append("")
+                args.append(str(arguments.get("json_output", False)).lower())
+                
+            elif command == "start-server":
+                args.append(arguments.get("flow_name", "trans"))
+                args.append(arguments.get("criteria", "hrc"))
+                args.append(arguments.get("host", "localhost"))
+                args.append(str(arguments.get("port", 8000)))
+                
+            elif command == "send":
+                args.append(arguments.get("content", ""))
+                args.append(arguments.get("message_type", "response"))
+                args.append(str(arguments.get("wait_time", 5)))
+                if "session_id" in arguments:
+                    args.append(arguments["session_id"])
+                else:
+                    args.append("")
+                args.append(str(arguments.get("json_output", False)).lower())
+                
+            elif command == "wait":
+                args.append(str(arguments.get("wait_time", 5)))
+                if "pattern" in arguments:
+                    args.append(arguments["pattern"])
+                else:
+                    args.append("")
+                if "message_type" in arguments:
+                    args.append(arguments["message_type"])
+                else:
+                    args.append("")
+                if "session_id" in arguments:
+                    args.append(arguments["session_id"])
+                else:
+                    args.append("")
+                args.append(str(arguments.get("json_output", False)).lower())
+                
+            elif command in ["session", "clear-session", "test-connection", "list-flows"]:
+                args.append(str(arguments.get("json_output", False)).lower())
+                
+            elif command == "logs":
+                args.append(str(arguments.get("lines", 50)))
+                args.append(str(arguments.get("json_output", False)).lower())
         
         # Execute the tool
         try:
