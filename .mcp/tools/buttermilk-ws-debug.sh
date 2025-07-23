@@ -1,10 +1,10 @@
 #!/bin/bash
-# Wrapper script for validate_config.py
+# Wrapper script for websocket_debug.py
 # This script delegates to the Python implementation
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PYTHON_SCRIPT="$PROJECT_ROOT/scripts/mcp_debug/validate_config.py"
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/mcp_debug/websocket_debug.py"
 
 # Check if Python script exists
 if [ ! -f "$PYTHON_SCRIPT" ]; then

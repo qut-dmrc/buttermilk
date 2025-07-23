@@ -5,6 +5,69 @@ Buttermilk provides comprehensive debugging tools for LLM-driven development. Th
 
 ## Available Debugging Tools
 
+### MCP Debugging Scripts
+
+Buttermilk provides Python-based debugging scripts in `/scripts/mcp_debug/` that can be used directly or through MCP tools:
+
+#### Server Management
+```bash
+# Start server
+python scripts/mcp_debug/buttermilk_server.py start
+python scripts/mcp_debug/buttermilk_server.py start true  # debug mode
+python scripts/mcp_debug/buttermilk_server.py start true trans,zot  # specific flows
+
+# Server control
+python scripts/mcp_debug/buttermilk_server.py stop
+python scripts/mcp_debug/buttermilk_server.py status
+python scripts/mcp_debug/buttermilk_server.py health
+python scripts/mcp_debug/buttermilk_server.py flows
+```
+
+#### Log Analysis
+```bash
+# View logs
+python scripts/mcp_debug/buttermilk_logs.py tail 100
+python scripts/mcp_debug/buttermilk_logs.py errors
+python scripts/mcp_debug/buttermilk_logs.py warnings
+python scripts/mcp_debug/buttermilk_logs.py search "pattern" 50
+python scripts/mcp_debug/buttermilk_logs.py websocket
+python scripts/mcp_debug/buttermilk_logs.py follow
+python scripts/mcp_debug/buttermilk_logs.py list
+```
+
+#### WebSocket Debugging
+```bash
+# Test WebSocket flows
+python scripts/mcp_debug/websocket_debug.py test
+python scripts/mcp_debug/websocket_debug.py start osb "What is AI?"
+python scripts/mcp_debug/websocket_debug.py send "Tell me more"
+python scripts/mcp_debug/websocket_debug.py wait "task_complete" agent_message 30
+python scripts/mcp_debug/websocket_debug.py session
+python scripts/mcp_debug/websocket_debug.py clear
+```
+
+#### Workflow Validation
+```bash
+# Check workflow compliance
+python scripts/mcp_debug/workflow_check.py STOP
+python scripts/mcp_debug/workflow_check.py ANALYZE "Fix WebSocket issue"
+```
+
+#### Configuration Validation
+```bash
+# Validate YAML configs
+python scripts/mcp_debug/validate_config.py conf/flows/zot.yaml
+python scripts/mcp_debug/validate_config.py conf/flows/trans.yaml false
+```
+
+#### GitHub Issue Management
+```bash
+# Work with GitHub issues
+python scripts/mcp_debug/github_issue.py search "workflow validation"
+python scripts/mcp_debug/github_issue.py create "Add feature" "Description"
+python scripts/mcp_debug/github_issue.py link 123
+```
+
 ### Core Commands
 
 #### 1. API Server Management
@@ -44,20 +107,25 @@ uv run python -m buttermilk.debug.ws_debug_cli --json-output wait --session <ses
 
 In debug environments API logs are saved to the most recent file matching `/tmp/buttermilk*.log`
 
-### Debug Agent
+### MCP Tool Integration
 
-The DebugAgent (`buttermilk.debug.debug_agent`) provides LLM-accessible tools for debugging:
+For LLM agents, the MCP tools in `.mcp/tools/` provide wrapper scripts that call the Python debugging scripts:
 
-```python
-# Available tools:
-- read_log_file(): Read buttermilk log files
-- list_log_files(): List available logs
-- search_logs(): Search logs with grep
-- test_websocket(): Test WebSocket connection
-- start_flow_session(): Start a flow for testing
-- send_flow_message(): Send messages to flows
-- monitor_session(): Watch for new messages
-```
+- `buttermilk-server.sh` - Server management
+- `buttermilk-logs.sh` - Log viewing and analysis  
+- `buttermilk-ws-debug.sh` - WebSocket debugging
+- `buttermilk-workflow-check.sh` - Workflow validation
+- `buttermilk-config-validate.sh` - Configuration validation
+- `buttermilk-github-issue.sh` - GitHub issue management
+- `buttermilk-test-flow.sh` - Flow testing
+
+### Debug Infrastructure
+
+The debug infrastructure is now organized as:
+- **MCP tool definitions**: `.mcp/buttermilk-server.json`
+- **Shell wrappers**: `.mcp/tools/*.sh` (call Python scripts)
+- **Python implementations**: `scripts/mcp_debug/*.py` (actual logic)
+- **Standalone tools**: Don't depend on buttermilk imports
 
 ## Debugging Checklist
 
@@ -219,11 +287,34 @@ task.add_done_callback(handle_task_exception)
 uv run python -m buttermilk.debug.ws_debug_cli --json-output start trans --record "test" --criteria "hrc"
 ```
 
+## Debug Infrastructure Notes
+
+### API Endpoints
+
+The following API endpoints may be useful for debugging:
+- `/api/session` - Create/validate sessions
+- `/api/sessions` - List all active sessions  
+- `/api/session/{session_id}/status` - Get session status
+- `/monitoring/health` - Basic health check
+- `/monitoring/fatal-errors` - Check for fatal errors
+- `/monitoring/metrics/basic` - Basic system metrics
+
+### Design Philosophy
+
+The debugging tools follow the principle of "Simple tools, smart LLM":
+- No intelligence in tools - just raw capabilities
+- LLM reads files/logs directly when possible
+- Focus on MCP tools for LLM integration
+- No reports, suggestions, or pattern matching - just data access
+
 ## Emergency Procedures
 
 ### Server Won't Stop
 ```bash
-# Force kill all Python processes
+# Use the Python script
+python scripts/mcp_debug/buttermilk_server.py stop
+
+# If that fails, force kill
 pkill -9 -f python
 
 # Clear ports
