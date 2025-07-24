@@ -72,8 +72,7 @@ ERROR: {{ answer['error'] }}
 <END DRAFT ANSWER>
 {% endfor %}
 {% else %}
-{# Fallback if 'answers' are not provided. Uses 'context'. #}
-{# TODO: Clarify what 'context' represents here and when this branch is used. #}
+{# Fallback if 'answers' are not provided. Uses 'context': history of messages so far. #}
 # Placeholder:
 {{context}}
 {% endif %}

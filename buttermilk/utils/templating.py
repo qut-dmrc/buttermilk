@@ -363,11 +363,12 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
 
 def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
-    context: list[LLMMessage] | None = None,  # Optional conversation history
-    records: list[Record] | None = None,  # Optional list of records
+    *,
+    context: list[LLMMessage] = [],  # Conversation history
+    records: list[Record] = [],  # Optional list of records
     fail_on_missing_placeholders: bool = False,
 ) -> list[LLMMessage]:
-    """Constructs a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
+    """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
     This function first parses the `local_template` string to separate Prompty
     frontmatter (if any) from the main content. It then uses PromptFlow's utility
@@ -381,8 +382,6 @@ def make_messages(
         non-alphanumerics) will be replaced by the messages in the `context` argument.
     -   A placeholder with content "records" will be replaced by converting each
         `Record` in the `records` argument into an `UserMessage` (using `record.as_message()`).
-    -   Other placeholder contents will raise a `ProcessingError` if
-        `fail_on_missing_placeholders` is True, or log a warning otherwise.
 
     Args:
         local_template (str): The string content of the rendered template,
@@ -402,22 +401,21 @@ def make_messages(
         with an LLM client.
 
     Raises:
-        ValueError: If `local_template` cannot be decoded as a Prompty format
-            (e.g., due to issues in `_parse_prompty`).
-        ProcessingError: If `fail_on_missing_placeholders` is True and an unknown
-            placeholder is encountered.
+        ProcessingError:
+            -   If `fail_on_missing_placeholders` is True and an expected
+                placeholder is not filled.
+
+            -   If `local_template` cannot be decoded as a Prompty format
+                (e.g., due to issues in `_parse_prompty`).
 
     """
     output_messages: list[LLMMessage] = []
-    active_context = context or []  # Ensure list
-    active_records = records or []  # Ensure list
 
     try:
         # Parse main content from Prompty string (strips frontmatter)
         prompty_content_str = _parse_prompty(local_template)
     except Exception as e:  # Broad catch if _parse_prompty itself fails
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
-        logger.error(err_msg, exc_info=True)
         raise ProcessingError(err_msg) from e
 
     # Use PromptFlow's utility to parse chat messages from the Prompty content
@@ -448,13 +446,32 @@ def make_messages(
             output_messages.append(AssistantMessage(content=content_str, source="template_assistant"))  # Add source
         elif role_lower == "placeholder":
             if normalized_placeholder_key == "context":
-                output_messages.extend(active_context)
+                if context:
+                    output_messages.extend(context)
+                elif fail_on_missing_placeholders:
+                    raise ProcessingError(
+                        "Placeholder 'context' found in template but no context provided.",
+                    )
+                else:
+                    logger.warning(
+                        "Placeholder 'context' found in template but no context provided.",
+                    )
+
             elif normalized_placeholder_key == "records":
-                output_messages.extend([rec.as_message() for rec in active_records if isinstance(rec, Record)])
+                if records:
+                    output_messages.extend([rec.as_message() for rec in records if isinstance(rec, Record)])
+                elif fail_on_missing_placeholders:
+                    raise ProcessingError(
+                        "Placeholder 'records' found in template but no records provided.",
+                    )
+                else:
+                    logger.warning(
+                        "Placeholder 'records' found in template but no records provided.",
+                    )
             else:  # empty placeholder
-                pass
+                raise ProcessingError(f"Unrecognized placeholder '{content_str}' found in template.")
         else:  # Unrecognized role
-            logger.warning(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message. Content: '{content_str[:100]}...' Message ignored.")
+            raise ProcessingError(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message.")
 
     # Deduplicate messages before returning
     return _deduplicate_messages(output_messages)

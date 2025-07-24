@@ -24,9 +24,8 @@ class Citator(BaseModel):
             agent_id="citator",
             agent_name="Citator",
             description="Gets citation information from the first page or two.",
-            parameters={"template": "citator", "model": self.model},
+            parameters={"template": "citator", "model": self.model, "fail_on_unfilled_parameters": True},
             inputs={"text_extract": "text_extract"},
-            fail_on_unfilled_parameters=True,
         )
         return self
 
