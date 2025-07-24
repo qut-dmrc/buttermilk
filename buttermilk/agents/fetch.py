@@ -19,6 +19,7 @@ import regex as re  # Regular expression operations
 from autogen_core import CancellationToken  # Buttermilk base agent and types
 from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
 
+from buttermilk import buttermilk as bm
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import ToolConfig  # Base class for tool configurations
 from buttermilk._core.contract import (  # Buttermilk message contracts
@@ -28,7 +29,8 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
     ManagerMessage,
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.log import logger
+from buttermilk._core.storage_config import BaseStorageConfig, StorageFactory
 from buttermilk._core.types import Record
 from buttermilk.data.loaders import DataLoader
 from buttermilk.utils.media import download_and_convert
@@ -77,25 +79,35 @@ class FetchRecord(ToolConfig):
         making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
         """
-        if self.data:  # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
+        if self.data:  # self.data is from ToolConfig, a Mapping[str, BaseStorageConfig]
             self._data_sources = {}
-            for key, config in self.data.items():
-                # Convert config to StorageConfig if needed
-                if hasattr(config, "model_dump"):
-                    # Handle DataSourceConfig or similar
-                    config_dict = config.model_dump()
-                    storage_config = StorageConfig(**config_dict)
-                elif hasattr(config, "__dict__"):
-                    # Handle OmegaConf objects
-                    storage_config = StorageConfig(**dict(config))
-                else:
-                    storage_config = StorageConfig(**config)
 
-                # Use unified storage system instead of deprecated create_data_loader
-                from buttermilk._core.dmrc import get_bm
-                bm = get_bm()
-                storage = bm.get_storage(storage_config)
-                self._data_sources[key] = storage
+            for source_name, config in self.data.items():
+                try:
+                    # The config should already be a BaseStorageConfig from ToolConfig validation
+                    if isinstance(config, BaseStorageConfig):
+                        storage_config = config
+                    else:
+                        # Fallback: convert dict/OmegaConf to StorageConfig using factory
+                        if hasattr(config, "to_container"):
+                            # OmegaConf object - convert to dict
+                            config_dict = config.to_container()
+                        elif isinstance(config, dict):
+                            # Regular dict
+                            config_dict = config
+                        else:
+                            raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
+
+                        # Use StorageFactory to create the proper subclass
+                        storage_config = StorageFactory.create_config(config_dict)
+
+                    # Use unified storage system
+                    storage = bm.get_storage(storage_config)
+                    self._data_sources[source_name] = storage
+                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
+                except Exception as e:
+                    logger.error(f"Failed to create storage for source '{source_name}': {e}")
+                    raise
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
         """Retrieve a record by ID from loaded data sources.
@@ -248,7 +260,7 @@ class FetchAgent(Agent):
         super().__init__(**data)
 
         # Pass storage config as data to FetchRecord
-        self._tools = [FetchRecord(**self.parameters["storage"])]
+        self._tools = [FetchRecord(data=self.parameters["storage"])]
 
     async def _listen(
         self,
