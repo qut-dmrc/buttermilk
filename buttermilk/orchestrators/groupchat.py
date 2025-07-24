@@ -144,7 +144,7 @@ class AutogenOrchestrator(Orchestrator):
 
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
-        
+
         # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
         # From the autogen docs:
         # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
@@ -179,11 +179,25 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
         await self._runtime.publish_message(flow_event, topic_id=topic)
 
-        # Give the MANAGER a moment to process the message
-        await asyncio.sleep(0.5)
+        # Start up the host agent with participants and their tools
+        logger.highlight(
+            f"Sending ConductorRequest to topic '{self._topic}' with {len(self.agents)} agents: {list(self.agents.keys())} and {len(self.observers)} observers: {list(self.observers.keys())}",
+        )
+        conductor_request = ConductorRequest(
+            inputs=request.inputs,
+            participants={v.role: v.description for k, v in self.agents.items()},
+        )
+        logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
+        await self._runtime.publish_message(
+            conductor_request,
+            topic_id=self._topic,
+        )
 
         # Mark as initialized and process any pending messages
         self._is_initialized = True
+
+        # Give the MANAGER a moment to process the message
+        await asyncio.sleep(0.5)
 
         # Process any messages that were queued before initialization
         if self._pending_messages:
@@ -193,20 +207,6 @@ class AutogenOrchestrator(Orchestrator):
 
         # Clear the pending messages
         self._pending_messages.clear()
-
-        # Start up the host agent with participants and their tools
-        logger.highlight(
-            f"Sending ConductorRequest to topic '{self._topic}' with {len(self.agents)} agents: {list(self.agents.keys())} and {len(self.observers)} observers: {list(self.observers.keys())}"
-        )
-        conductor_request = ConductorRequest(
-            inputs=request.model_dump(),
-            participants={v.role: v.description for k, v in self.agents.items()},
-        )
-        logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
-        await self._runtime.publish_message(
-            conductor_request,
-            topic_id=self._topic,
-        )
 
         return termination_handler, interrupt_handler
 
@@ -361,7 +361,7 @@ class AutogenOrchestrator(Orchestrator):
                 logger.error(f"Error during setup: {e}")
                 raise FatalError from e
 
-            # 2. Pass any initial data handling to the host via parameters
+            # 2. Pass any initial data handling to the host via ConductorRequest.inputs
             # The host agent is now responsible for checking if there are records/prompts
             # in the parameters and handling them appropriately
 

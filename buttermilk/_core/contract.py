@@ -621,6 +621,10 @@ class ConductorRequest(AgentInput):
         default_factory=list,
         description="Additional tool definitions.",
     )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Task-specific parameters, not really used at the moment.",
+    )
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,  # Allow Tool type from autogen_core

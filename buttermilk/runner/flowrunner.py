@@ -1048,11 +1048,13 @@ class FlowRunner(BaseModel):
         # Apply iteration values
         for iteration_params in iteration_values:
             for i, record in enumerate(record_ids):
-                job = RunRequest(ui_type="batch",
+                inputs = {**record, **iteration_params}  # Combine record data with iteration parameters
+                job = RunRequest(
+                    ui_type="batch",
                     batch_id=batch_id,
                     flow=flow_name,
-                    record_id=record["record_id"],
-                    parameters=iteration_params, callback_to_ui=None,
+                    inputs=inputs,
+                    callback_to_ui=None,
                 )
                 job_definitions.append(job)
                 logger.debug(f"Created run request: {job.model_dump_json()}")

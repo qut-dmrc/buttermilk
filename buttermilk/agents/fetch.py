@@ -18,7 +18,6 @@ import pydantic  # Pydantic core
 import regex as re  # Regular expression operations
 from autogen_core import CancellationToken  # Buttermilk base agent and types
 from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
-from shortuuid import uuid  # For generating short unique IDs
 
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import ToolConfig  # Base class for tool configurations
@@ -240,21 +239,16 @@ class FetchAgent(Agent):
     Attributes:
         id (str): A unique identifier for the agent instance, typically prefixed
             with "fetch_record_". Defaults to a generated ID.
-        _fetch_tool (FetchRecord): Internal FetchRecord instance for fetching functionality.
+        _tools (list[FetchRecord]): Internal FetchRecord instances for fetching functionality.
 
     """
-
-    id: str = pydantic.Field(
-        default_factory=lambda: f"fetch_record_{uuid()[:4]}",
-        description="Unique identifier for the FetchAgent instance.",
-    )
-    _fetch_tool: FetchRecord = pydantic.PrivateAttr(default=None)
 
     def __init__(self, **data):
         """Initialize the FetchAgent with FetchRecord tool."""
         super().__init__(**data)
-        # Initialize the FetchRecord tool
-        self._fetch_tool = FetchRecord()
+
+        # Pass storage config as data to FetchRecord
+        self._tools = [FetchRecord(**self.parameters["storage"])]
 
     async def _listen(
         self,
@@ -290,33 +284,38 @@ class FetchAgent(Agent):
         if isinstance(message, ManagerMessage):
             if message.content:
                 # Check if the message is a command
-                match = self._fetch_tool._pat.search(message.content)
+                match = self._tools[0]._pat.search(message.content)
                 if match:
                     # Extract the record_id or URL from the message
                     record_id = match.group(1)
                     uri = match.group(2)
                     if uri:
-                        result = await self._fetch_tool.fetch(uri=uri)
+                        result = await self._tools[0].fetch(uri=uri)
                     elif record_id:
-                        result = await self._fetch_tool.fetch(record_id=record_id)
+                        result = await self._tools[0].fetch(record_id=record_id)
                 elif uri := extract_url(message.content):
-                    result = await self._fetch_tool.fetch(uri=uri)
+                    result = await self._tools[0].fetch(uri=uri)
 
-        if result and isinstance(result, Record):
-            # output = AgentOutput(agent_id=self.agent_id,
-            #     outputs=result,
-            #     metadata=result.metadata,
-            # )
+        if result:
+            if isinstance(result, Record):
+                result = AgentOutput(
+                    agent_id=self.agent_id,
+                    outputs=result,
+                    metadata=result.metadata,
+                )
             await public_callback(result)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ErrorEvent:
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
         if isinstance(message, AgentInput):
-            uri = message.inputs.get("uri")
-            record_id = message.inputs.get("record_id")
+            # Check both inputs and parameters for record_id, uri, and prompt
+            uri = message.inputs.get("uri") or message.parameters.get("uri")
+            record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
+            prompt = message.inputs.get("prompt") or message.parameters.get("prompt")
+
             if uri or record_id:
-                result = await self._fetch_tool.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
+                result = await self._tools[0].fetch(record_id=record_id, uri=uri, prompt=prompt)
 
         if result:
             # Wrap the Record in an AgentOutput

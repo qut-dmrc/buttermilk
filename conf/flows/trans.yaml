@@ -5,6 +5,7 @@ defaults:
   - _self_
   # Agents are defined separately and reused across flows
   - /agents@trans.agents: 
+    - fetch
     - judge
     - synth 
     - differences
@@ -13,7 +14,6 @@ defaults:
     - spy
     - owl
     - scorer
-    - fetch
     - host/sequence_host
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
