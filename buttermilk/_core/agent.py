@@ -475,8 +475,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
-            # Log the error and re-raise as ProcessingError
-            logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
             raise ProcessingError(f"Agent {self.agent_name}: Error preparing input state: {e}") from e
 
         await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
@@ -814,7 +812,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
                 updated_inputs.inputs = merged_inputs_dict
             except Exception as e:
-                logger.error(f"Agent {self.agent_name}: Error resolving input mappings: {e!s}")
                 raise ProcessingError(f"Error resolving input mappings for agent {self.agent_id}: {e!s}") from e
 
         # 3. Prepend conversation history from agent's context.

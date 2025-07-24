@@ -154,7 +154,5 @@ class SpyAgent(RoutedAgent):
                 logger.debug(f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}")
         else:
             msg = f"Spy database save agent received incompatible output type: {type(message)} on topic {ctx.topic_id}"
-            logger.error(msg)
-            await self.publish_message(ErrorEvent(source=self.id.type, content=msg), topic_id=ctx.topic_id)
             raise ProcessingError(msg)
         return None

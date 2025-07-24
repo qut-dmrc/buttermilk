@@ -149,11 +149,16 @@
       ],
     },
     {
-      "type": "vscode-edge-devtools.debug",
+      "type": "msedge",
       "request": "attach",
+      "sourceMaps": true,
       "name": "attach edge devtools",
-      "url": "http://localhost:9222",
+      "port": 9222,
+      "url": "http://localhost:5173/terminal",
       "webRoot": "${workspaceFolder}/buttermilk/frontend/chat/src/",
+      "pathMapping": {
+        "/": "${workspaceFolder}/buttermilk/frontend/chat/src/"
+      }
     },
   ],
   "compounds": [

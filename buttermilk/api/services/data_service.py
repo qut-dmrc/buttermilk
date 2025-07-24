@@ -78,7 +78,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, include_scores: bool = False, dataset_key: str | None = None) -> list[Record]:
+    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner, dataset_key: str, include_scores: bool = False) -> list[Record]:
         """Get records for a flow
 
         Args:
@@ -93,11 +93,6 @@ class DataService:
         """
         try:
             records = []
-
-            # Require dataset_key to be specified
-            if not dataset_key:
-                available_datasets = list(flow_runner.flows[flow_name].storage.keys())
-                raise ValueError(f"dataset_key is required. Available datasets for flow '{flow_name}': {available_datasets}")
 
             # Get the specified storage configuration
             if dataset_key not in flow_runner.flows[flow_name].storage:
@@ -216,7 +211,7 @@ class DataService:
                             "dataset": flow_name,
                             "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
                             "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
-                        }
+                        },
                     )
                     return record
             return None
