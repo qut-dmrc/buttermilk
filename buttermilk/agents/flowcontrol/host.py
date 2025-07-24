@@ -54,7 +54,7 @@ class HostAgent(Agent):
         self._step_starting: asyncio.Event = asyncio.Event()
         self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._participants: dict[str, Any] = {}
-        self._host_input_parameters: dict[str, Any] = {}
+        self._host_initial_inputs: dict[str, Any] = {}
         # Error tracking for current step
         self._failed_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._total_tasks_in_step: int = 0
@@ -446,7 +446,7 @@ class HostAgent(Agent):
             yield StepRequest(
                 role=role,
                 content=step_description,
-                parameters=self._host_input_parameters.copy(),
+                inputs=self._host_initial_inputs.copy(),
             )
         yield StepRequest(role=END, content="Sequence completed.")
 
@@ -479,11 +479,10 @@ class HostAgent(Agent):
             self._tools.extend(message.additional_tools)
 
             # Store any parameters passed in
-            self._host_input_parameters = message.inputs
-            
-            # Check for and handle any initial records, prompts, or URIs in parameters
-            await self._handle_initial_data()
-            
+            self._host_initial_inputs = message.inputs
+
+            # Parameters will be passed to agents via StepRequest
+
             # Announce, and trigger agents to announce themselves
             msg = AgentAnnouncement(
                 content="Host joining",
@@ -516,8 +515,6 @@ class HostAgent(Agent):
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
                     if not await self.wait_check_current_step_completions():
-                        # If the wait failed (timeout or error), stop the flow
-                        logger.error(f"Host {self.agent_name}: Stopping flow due to failed completions check for step {next_step.role}")
                         break
 
             # --- Sequence finished ---
@@ -568,43 +565,6 @@ class HostAgent(Agent):
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
 
-    async def _handle_initial_data(self) -> None:
-        """Handle any initial data provided in the parameters.
-        
-        This method checks for records, record_id, uri, or prompt in the
-        parameters and publishes them to the groupchat for all agents to receive.
-        This method is designed to be overridable by subclasses that might want
-        to handle initial data differently.
-        """
-        # Check if we have records directly provided
-        records = self._host_input_parameters.get("records", [])
-        if records:
-            logger.info(f"Host {self.agent_name} publishing {len(records)} initial records to groupchat")
-            for record in records:
-                await self._publish(record)
-            return
-        
-        # Check if we need to fetch a record by ID
-        record_id = self._host_input_parameters.get("record_id")
-        if record_id:
-            logger.info(f"Host {self.agent_name} would fetch record with ID: {record_id} (not implemented)")
-            # TODO: Implement record fetching by ID if needed
-            # This would require access to storage configuration
-            return
-        
-        # Check if we need to fetch from a URI
-        uri = self._host_input_parameters.get("uri")
-        if uri:
-            logger.info(f"Host {self.agent_name} would fetch record from URI: {uri} (not implemented)")
-            # TODO: Implement URI fetching if needed
-            return
-        
-        # Check if there's a prompt to send
-        prompt = self._host_input_parameters.get("prompt")
-        if prompt:
-            logger.info(f"Host {self.agent_name} has initial prompt: {prompt[:50]}...")
-            # The prompt will be available to all agents via _host_input_parameters
-            # which is passed in StepRequest.parameters
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""

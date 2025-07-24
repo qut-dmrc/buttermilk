@@ -3,6 +3,12 @@
         "gh remote": {
             "type": "sse",
             "url": "https://api.githubcopilot.com/mcp/"
+        },
+        "playwright": {
+            "command": "npx",
+            "args": [
+                "@playwright/mcp@latest","--headless", "--save-trace"
+            ]
         }
     }
 }
