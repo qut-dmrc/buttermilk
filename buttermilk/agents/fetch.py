@@ -323,20 +323,13 @@ class FetchAgent(Agent):
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
         if isinstance(message, AgentInput):
-            # Check both inputs and parameters for record_id, uri
+            # Check both inputs and parameters for record_id, uri, and prompt
             uri = message.inputs.get("uri") or message.parameters.get("uri")
             record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
+            prompt = message.inputs.get("prompt") or message.parameters.get("prompt")
 
-            if uri and record_id:
-                return ErrorEvent(source=self.id, content="Cannot provide both uri and record_id.")
-
-            try:
-                if uri:
-                    result = await self._tools[0].fetch(uri=uri)
-                elif record_id:
-                    result = await self._tools[0].fetch(record_id=record_id)
-            except ProcessingError as e:
-                return ErrorEvent(source=self.id, content=str(e))
+            if uri or record_id:
+                result = await self._tools[0].fetch(record_id=record_id, uri=uri, prompt=prompt)
 
         if result and isinstance(result, Record):
             # TODO: See GitHub issue #158 on whether to publish Record, AgentOutput, or both.

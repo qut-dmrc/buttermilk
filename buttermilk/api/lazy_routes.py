@@ -118,10 +118,10 @@ def create_core_router() -> APIRouter:
             parameters = {}
             if prompt:
                 parameters["prompt"] = prompt
-                
+
             run_request = RunRequest(
                 flow=flow_name,
-                parameters=parameters,
+                inputs=parameters,
                 ui_type="web",
             )
 

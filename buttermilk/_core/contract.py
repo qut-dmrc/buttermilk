@@ -46,7 +46,7 @@ from .types import Record  # Core data types like Record
 
 class BaseAgentInputModel(BaseModel):
     """Base model for agent inputs that can be subclassed for specific agent needs.
-    
+
     This provides a strongly-typed alternative to the generic dict[str, Any] in AgentInput.inputs.
     Agents can subclass this to define their specific input requirements.
     """
@@ -228,6 +228,7 @@ class TracingDetails(BaseModel):
             try:
                 # Local import to keep Weave as a soft dependency at module level if needed
                 import weave as wv_internal
+
                 call = wv_internal.get_current_call()
                 # Check if call and its ref attribute and ref.id exist
                 if call and hasattr(call, "ref") and call.ref and hasattr(call.ref, "id"):
@@ -255,6 +256,7 @@ def _get_run_info() -> Any:
     """
     try:
         from buttermilk import buttermilk as bm
+
         return bm.run_info
     except ImportError:
         logger.warning("Buttermilk global instance (bm) not available to get run_info.")
@@ -690,25 +692,32 @@ class ManagerMessage(FlowMessage):
     """
 
     confirm: bool | None = Field(
-        default=False, description="User confirmation (True) or rejection (False).",
+        default=False,
+        description="User confirmation (True) or rejection (False).",
     )
     halt: bool | None = Field(
-        default=False, description="If True, user signals to stop the entire flow.",
+        default=False,
+        description="If True, user signals to stop the entire flow.",
     )
     interrupt: bool | None = Field(
-        default=False, description="If True, user signals a pause for review of feedback.",
+        default=False,
+        description="If True, user signals a pause for review of feedback.",
     )
     human_in_loop: bool | None = Field(
-        default=None, description="If True, indicates active user involvement.",
+        default=None,
+        description="If True, indicates active user involvement.",
     )
     content: str | None = Field(
-        default=None, description="Free-text feedback or instructions from the user.",
+        default=None,
+        description="Free-text feedback or instructions from the user.",
     )
     selection: str | None = Field(
-        default=None, description="The option selected by the user from choices provided.",
+        default=None,
+        description="The option selected by the user from choices provided.",
     )
     params: Mapping[str, Any] | None = Field(
-        default=None, description="Additional parameters or data provided by the user.",
+        default=None,
+        description="Additional parameters or data provided by the user.",
     )
 
 
@@ -817,6 +826,7 @@ class ToolOutput(FunctionExecutionResult):
 
 # --- Status & Coordination Messages ---
 
+
 class TaskProcessingStarted(BaseModel):
     """A signal message indicating that an agent has started processing a task.
 
@@ -856,7 +866,8 @@ class TaskProcessingComplete(TaskProcessingStarted):
         description="True if the agent has more sequential tasks for the current input.",
     )
     is_error: bool = Field(
-        default=False, description="True if the task completed with an error.",
+        default=False,
+        description="True if the task completed with an error.",
     )
 
 
