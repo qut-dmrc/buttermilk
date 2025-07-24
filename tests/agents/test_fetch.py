@@ -7,7 +7,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.exceptions import ProcessingError  # Added ProcessingError
 from buttermilk._core.types import Record
-from buttermilk.agents.fetch import FetchRecord
+from buttermilk.agents.fetch import FetchAgent, FetchRecord
 
 NEWS_RECORDS = [
     (
