@@ -429,12 +429,15 @@
                         <div class="score-details" transition:slide={{ duration: 150 }}>
                           <ul class="assessment-reasons">
                             {#each score.outputs.assessments as assessment}
-                              <!-- Format assessment properly if it's an object -->
-                              <li>
-                                {#if typeof assessment === 'object'}
-                                  {assessment.text || assessment.reason || (assessment.correctness !== undefined ? `Score: ${assessment.correctness}` : JSON.stringify(assessment))}
-                                {:else}
+                              <!-- Format assessment properly based on QualScoreCRA structure -->
+                              <li style="color: {assessment.correct ? '#4caf50' : '#dc3545'}">
+                                {#if typeof assessment === 'object' && assessment.feedback}
+                                  <span class="assessment-icon">{assessment.correct ? '✓' : '✗'}</span>
+                                  {assessment.feedback}
+                                {:else if typeof assessment === 'string'}
                                   {assessment}
+                                {:else}
+                                  {JSON.stringify(assessment)}
                                 {/if}
                               </li>
                             {/each}

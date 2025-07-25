@@ -493,7 +493,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 return None
 
             if isinstance(result, ErrorEvent):
-                err_result = [result]
+                err_result = result
             elif hasattr(result, "error") and result.error:
                 err_result = result.error
 
@@ -527,9 +527,13 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         except Exception as e:
             logger.debug(f"Could not get tracing link for call {call_id}: {e}")
 
+        if not err_result:
+            err_result = []
+        if not isinstance(err_result, list):
+            err_result = [err_result]
         # Create the trace here with required values
         trace = AgentTrace(
-            call_id=call_id,
+            call_id=call_id or "unknown",
             agent_id=self.agent_id,
             agent_info=self._cfg,
             tracing_link=tracing_link,

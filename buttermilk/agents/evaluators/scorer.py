@@ -7,13 +7,13 @@ models (`QualScoreCRA`, `QualScore`, `QualResults`) to structure the scoring
 criteria, individual assessments, and the overall scoring output.
 """
 
-from collections.abc import (
-    Awaitable,  # For type hinting and class types
-    Callable,  # For typing callables
-)
 from typing import Any
 
-from autogen_core import CancellationToken  # Autogen cancellation token
+from autogen_core import (
+    CancellationToken,
+    MessageContext,  # Autogen cancellation token
+    message_handler,
+)
 from pydantic import BaseModel, Field, computed_field  # Pydantic components
 
 # Buttermilk core imports
@@ -22,7 +22,6 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
     AgentOutput,  # Used as return type hint for _process
     AgentTrace,
-    GroupchatMessageTypes,
 )
 from buttermilk._core.message_data import extract_message_data  # Utility for data extraction
 from buttermilk.agents.judge import JudgeReasons  # Expected input model from Judge agent
@@ -192,14 +191,11 @@ class LLMScorer(LLMAgent):
         # Set the expected output model for the LLM's response
         self._output_model = QualScore  # Expected Pydantic model for LLM output
 
-    async def _listen(
+    @message_handler
+    async def _score_judge(
         self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: CancellationToken | None = None,
-        source: str = "",
-        public_callback: Callable[[Any], Awaitable[None]] | None = None,
-        **kwargs: Any,
+        message: AgentTrace,
+        ctx: MessageContext,
     ) -> None:
         """Listens for relevant `AgentTrace` messages and triggers the scoring process.
 
@@ -216,7 +212,7 @@ class LLMScorer(LLMAgent):
         mappings. It then constructs an `AgentInput` tailored for its own `_process`
         method (which will call the LLM for scoring).
 
-        Finally, it invokes its own processing logic (via `self.invoke`, which
+        Finally, it invokes its own processing logic (via `self.__call__`, which
         wraps `self._process`) to perform the scoring. The resulting score
         (as an `AgentTrace` containing `QualResults`) is published using the
         `public_callback`.
@@ -237,12 +233,12 @@ class LLMScorer(LLMAgent):
            not isinstance(message.outputs, JudgeReasons) or \
            not hasattr(message, "inputs") or not message.inputs:  # Ensure inputs exist
             logger.debug(
-                f"Scorer '{self.agent_name}' received message from agent '{source}' that "
+                f"Scorer '{self.agent_name}' received message from '{message.agent_id}' that "
                 "is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
             )
             return
 
-        logger.debug(f"Scorer '{self.agent_name}' received potential scoring target from agent '{source}' (Call ID: {message.call_id}).")
+        logger.debug(f"Scorer '{self.agent_name}' received potential scoring target from agent '{message.agent_id}' (Call ID: {message.call_id}).")
 
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
@@ -251,14 +247,14 @@ class LLMScorer(LLMAgent):
         # Example mapping for 'records': "SourceAgentName.inputs.records"
         extracted_data = extract_message_data(
             message=message,  # The AgentTrace from the Judge
-            source=source,   # The Judge agent's ID/name
+            source=message.agent_id,  # The Judge agent's ID/name
             input_mappings=self.inputs,  # Configured mappings for the Scorer
         )
 
         # Ignore messages that don't have ground truth in the input record
         record = extracted_data.pop("records", [])
         if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
-            logger.debug(f"Scorer {self.agent_name} received message from agent {source} without ground truth.")
+            logger.debug(f"Scorer {self.agent_name} received message from agent {message.agent_id} without ground truth.")
             return
 
         # `records` for scoring should come from the original input to the agent being judged.
@@ -285,19 +281,12 @@ class LLMScorer(LLMAgent):
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )
 
-        logger.debug(f"Scorer '{self.agent_name}' prepared AgentInput for scoring (Parent Call ID: {message.call_id}).")
-
         # Invoke this Scorer's own processing logic.
-        # The public_callback will be used by `invoke` to publish the resulting AgentTrace.
-        if public_callback:
-            await self.invoke(  # self.invoke calls self._process internally
-                message=scorer_agent_input,
-                public_callback=public_callback,
-                cancellation_token=cancellation_token,
-                **kwargs,
-            )
-        else:
-            logger.warning(f"Scorer '{self.agent_name}': No public_callback provided; scoring result will not be published.")
+        score = await self.__call__(
+            message=scorer_agent_input,
+        )
+        await self._publish(score)
+        logger.debug(f"Scorer '{self.agent_name}' published scoring results for {message.agent_id} call {message.call_id}.")
 
     async def _process(
         self,
@@ -375,7 +364,7 @@ class LLMScorer(LLMAgent):
                 )
                 # llm_output_base.outputs remains QualScore in this case
         elif llm_output_base:
-             logger.warning(
+            logger.warning(
                 f"Scorer '{self.agent_id}': LLM output was not of type QualScore. Actual type: {type(llm_output_base.outputs)}. "
                 "Raw output will be returned.",
             )

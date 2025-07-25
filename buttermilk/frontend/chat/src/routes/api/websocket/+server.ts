@@ -1,5 +1,5 @@
-import type { RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import type { RequestEvent } from '@sveltejs/kit';
 
 /**
  * This WebSocket endpoint acts as a proxy to the backend WebSocket server.
@@ -48,14 +48,6 @@ function handleWebSocketProxy(targetUrl: string) {
     // Send connecting message to client
     sendSystemMessage(server, `Connecting to backend at ${targetUrl}...`);
     
-    // In production, this would connect to the actual backend WebSocket
-    // and relay messages between client and backend
-    
-    // For development purposes, we're simulating connectivity
-    setTimeout(() => {
-      sendSystemMessage(server, 'Connected to backend WebSocket server');
-    }, 500);
-    
     // Handle messages from the client
     server.addEventListener('message', (event) => {
       try {
@@ -86,11 +78,6 @@ function handleWebSocketProxy(targetUrl: string) {
         // Echo the user message back to the client
         sendUserMessage(server, typeof message === 'string' ? message : JSON.stringify(message));
         
-        // In production, would forward message to backend WebSocket here
-        // For now, simulate a backend response
-        setTimeout(() => {
-          sendMessage(server, 'Server', `Received: ${typeof message === 'string' ? message : JSON.stringify(message)}`);
-        }, 300);
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
         sendErrorMessage(server, 'Error processing message');

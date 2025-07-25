@@ -189,12 +189,17 @@ export interface Message {
 
 
 // Assessment message types
+export interface QualScoreCRA {
+  correct: boolean;
+  feedback: string;
+}
+
 export interface Assessments {
   assessed_agent_id: string;
   assessed_call_id: string;
-  correctness: string;
+  correctness: number | null;
   score_text: string;
-  assessments: string[];
+  assessments: QualScoreCRA[];
 }
 
 // Record message types

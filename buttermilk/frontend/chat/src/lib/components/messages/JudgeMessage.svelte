@@ -184,7 +184,7 @@
               <div class="assessment-agent">
                 {assessment.agent_info?.agent_name} 
                 <span class="assessment-score" style="color: {getScoreColor(assessment.outputs?.correctness)}">
-                  {assessment.outputs?.correctness ? (parseFloat(assessment.outputs.correctness) * 100).toFixed(0) + '%' : 'N/A'} {scoreToBraille(assessment.outputs?.correctness ? parseFloat(assessment.outputs.correctness) : undefined)}
+                  {assessment.outputs?.correctness !== null && assessment.outputs?.correctness !== undefined ? (assessment.outputs.correctness * 100).toFixed(0) + '%' : 'N/A'} {scoreToBraille(assessment.outputs?.correctness)}
                 </span>
               </div>
               <ul class="assessment-reasons">
