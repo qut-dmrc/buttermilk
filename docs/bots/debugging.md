@@ -3,6 +3,18 @@
 ## Overview
 Buttermilk provides comprehensive debugging tools for LLM-driven development. This guide covers tools, strategies, and best practices for debugging flows and agents.
 
+## Frontend Access Points
+
+### Development Server URLs
+- **Main landing page**: http://localhost:5173 (marketing/info page)
+- **Terminal interface**: http://localhost:5173/terminal (interactive flow execution)
+- **API backend**: http://localhost:8000 (FastAPI server)
+
+### Prerequisites
+1. **Frontend dev server must be running**: `npm run dev` in `/buttermilk/frontend/chat`
+2. **Backend API server must be running**: `uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=full`
+3. **Playwright browser must be installed**: Use `mcp__playwright__browser_install` if you get Chrome not found errors
+
 ## Available Debugging Tools
 
 ### MCP Debugging Scripts
@@ -338,14 +350,63 @@ npx @playwright/mcp@latest
    ```
 5. Monitor network activity during flow execution
 
+**Executing Trans Flow via Frontend**:
+1. Navigate to http://localhost:5173/terminal
+2. Select flow parameters:
+   - Flow: TRANS (or ZOT, OSB depending on available flows)
+   - Dataset: TJA (auto-selected when flow is chosen)
+   - Record: Select from dropdown (e.g., "kansas_highway")
+   - Criteria: Select from dropdown (e.g., "hrc")
+3. Click "Run Flow" to commence
+4. Monitor judge results in the terminal interface:
+   - Judge agents will display assessment scores
+   - Detailed reasons available via "[+] reasons" button
+   - Flow progresses through FETCH → JUDGE → SYNTHESISER steps
+
+**Frontend Flow Selection Behavior**:
+- Datasets auto-populate based on selected flow
+- Records load asynchronously after dataset selection
+- Models may show "No models available" (this is normal)
+- WebSocket connection status shown in top bar
+- "human in loop" button controls auto-approval mode
+
 **Common Frontend Issues Debuggable with Playwright**:
 - Reactive statements not updating (`$:` syntax issues)
 - Store subscriptions not working (evaluate JS to check store values)
 - API response not reflected in UI (monitor network + inspect DOM)
 - WebSocket disconnections (check console logs)
 - CSS/layout problems (screenshot for visual comparison)
+- Flow execution monitoring (capture judge results and agent messages)
 
 For detailed Playwright MCP commands and options, consult the official documentation.
+
+### Frontend Troubleshooting
+
+**Common Issues and Solutions**:
+
+1. **"No flows available" in dropdown**:
+   - Verify backend API is running with flows enabled
+   - Check browser console for API errors
+   - Ensure correct proxy configuration in vite.config.ts
+
+2. **WebSocket connection fails**:
+   - Check that both frontend and backend servers are running
+   - Verify WebSocket proxy configuration in vite.config.ts
+   - Look for CORS errors in browser console
+
+3. **Playwright "Chrome not found" error**:
+   - Run `mcp__playwright__browser_install` before using browser automation
+   - This installs the required Chrome/Chromium browser
+
+4. **Flow execution hangs**:
+   - Check backend logs for agent initialization errors
+   - Verify LLM configuration (llms=full) when starting API server
+   - Monitor WebSocket messages in browser DevTools
+
+5. **Judge results not appearing**:
+   - Ensure proper criteria selection (e.g., "hrc" not "HRC")
+   - Check that record exists in selected dataset
+   - Wait for async loading - judge results may take 10-30 seconds
 
 ## Debug Infrastructure Notes
 
