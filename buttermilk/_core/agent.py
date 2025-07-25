@@ -527,6 +527,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         except Exception as e:
             logger.debug(f"Could not get tracing link for call {call_id}: {e}")
 
+        if not err_result:
+            err_result = []
+        if not isinstance(err_result, list):
+            err_result = [err_result]
         # Create the trace here with required values
         trace = AgentTrace(
             call_id=call_id or "unknown",
@@ -536,7 +540,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             inputs=final_input,
             parent_call_id=final_input.parent_call_id,
             outputs=outputs,
-            error=[err_result],
+            error=err_result,
         )
         # Publish status update: Task Complete (including error if error)
         await self._publish(

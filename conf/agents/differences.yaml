@@ -10,3 +10,4 @@ differentiator:
     template: differences
   inputs:
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_id, result: outputs, answer_id: call_id, is_error: is_error }"
+    records: "[FETCH.outputs]||*.records[]"
