@@ -120,7 +120,7 @@ judge:
     model: ${llms.judgers}
     criteria: [] 
   inputs:
-    records: "FETCH.outputs||*.records[]"
+    records: "[FETCH.outputs]||*.records[]"
 ```
 
 ```yaml
