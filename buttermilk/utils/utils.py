@@ -552,26 +552,23 @@ def clean_empty_values(data):
         data: Dictionary, list, or other value to clean
 
     Returns:
-        The cleaned data structure (modifies dictionaries in-place)
+        A new cleaned data structure (does not modify the original)
 
     """
     if isinstance(data, dict):
-        # Process each key in the dictionary
-        keys_to_delete = []
-        for key, value in list(data.items()):
+        # Create a new dictionary with cleaned values
+        cleaned_dict = {}
+        for key, value in data.items():
             # Recursively clean the value
             cleaned_value = clean_empty_values(value)
 
-            # Check if the cleaned value is empty
-            if cleaned_value is None or cleaned_value == "" or (isinstance(cleaned_value, (dict, list)) and not cleaned_value):
-                keys_to_delete.append(key)
-            else:
-                data[key] = cleaned_value
+            # Only include non-empty values
+            if not (cleaned_value is None or 
+                    cleaned_value == "" or 
+                    (isinstance(cleaned_value, (dict, list)) and not cleaned_value)):
+                cleaned_dict[key] = cleaned_value
 
-        # Remove empty keys
-        for key in keys_to_delete:
-            del data[key]
-        return data
+        return cleaned_dict
 
     if isinstance(data, list):
         # Clean each element in the list

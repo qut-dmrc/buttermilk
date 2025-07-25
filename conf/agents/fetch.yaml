@@ -11,6 +11,7 @@ fetch:
   parameters:
     batch_size: 100  # Default batch size
 
-  # Data source will be determined by flow configuration
+    # Data source will be determined by flow configuration
+    storage: ${....storage}
   inputs:
     prompt: 'prompt||content'

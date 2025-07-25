@@ -1,6 +1,6 @@
 """Lazy route loading system for Phase 2 startup optimizations."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, FastAPI
 
@@ -12,7 +12,7 @@ class LazyRouteManager:
 
     def __init__(self, app: FastAPI):
         self.app = app
-        self._deferred_routers: List[Dict[str, Any]] = []
+        self._deferred_routers: list[dict[str, Any]] = []
         self._core_routes_registered = False
         self._heavy_routes_registered = False
 
@@ -33,11 +33,13 @@ class LazyRouteManager:
 
     def defer_router(self, router: APIRouter, prefix: str = "", **kwargs):
         """Defer registration of a heavy router until first request."""
-        self._deferred_routers.append({
-            "router": router,
-            "prefix": prefix,
-            "kwargs": kwargs
-        })
+        self._deferred_routers.append(
+            {
+                "router": router,
+                "prefix": prefix,
+                "kwargs": kwargs,
+            }
+        )
         logger.info(f"Deferred router registration: {prefix}")
 
     async def load_heavy_routes_on_demand(self):
@@ -52,7 +54,7 @@ class LazyRouteManager:
                 self.app.include_router(
                     router_config["router"],
                     prefix=router_config["prefix"],
-                    **router_config["kwargs"]
+                    **router_config["kwargs"],
                 )
                 logger.info(f"Loaded deferred router: {router_config['prefix']}")
             except Exception as e:
@@ -80,7 +82,7 @@ class LazyRouteManager:
             "/api/records",
             "/api/session",
             "/tools/",
-            "/ws/"
+            "/ws/",
         ]
         return any(path.startswith(prefix) for prefix in heavy_route_prefixes)
 
@@ -133,7 +135,7 @@ def create_core_router() -> APIRouter:
             "session_id": session_id,
             "status": "ready",
             "message": f"Flow '{flow_name}' ready. Connect via WebSocket to /ws/{session_id} to start.",
-            "websocket_url": f"/ws/{session_id}"
+            "websocket_url": f"/ws/{session_id}",
         }
 
     return router

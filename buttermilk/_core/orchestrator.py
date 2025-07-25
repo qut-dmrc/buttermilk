@@ -446,16 +446,16 @@ class Orchestrator(OrchestratorProtocol, ABC):
             return
 
         # Check for records in parameters
-        records = request.parameters.get("records", [])
+        records = request.inputs.get("records", [])
         if records:  # Records provided directly in parameters
             logger.debug(f"Using {len(records)} records provided directly in RunRequest parameters.")
             self._records = records
             return
 
         # If no records yet, try fetching via record_id or uri from parameters
-        record_id = request.parameters.get("record_id")
-        uri = request.parameters.get("uri")
-        
+        record_id = request.inputs.get("record_id")
+        uri = request.inputs.get("uri")
+
         if record_id or uri:
             logger.debug(f"Attempting to fetch initial record(s) based on RunRequest: id='{record_id}', uri='{uri}'.")
             try:

@@ -12,6 +12,7 @@ from buttermilk.api.services.data_service import DataService
 
 FlowRunner = Any
 
+
 #
 # curl -v 'http://127.0.0.1:8000/api/pull_task' -H 'accept: application/json'
 
@@ -81,11 +82,13 @@ async def get_session_endpoint(
                 session = flows.session_manager.sessions[session_id]
                 if session.status.value in ["active", "initializing"]:
                     logger.info(f"Returning existing session: {session_id}")
-                    return JSONResponse({
-                        "sessionId": session_id,
-                        "status": session.status.value,
-                        "created_at": session.created_at.isoformat() if hasattr(session, "created_at") else None
-                    })
+                    return JSONResponse(
+                        {
+                            "sessionId": session_id,
+                            "status": session.status.value,
+                            "created_at": session.created_at.isoformat() if hasattr(session, "created_at") else None,
+                        }
+                    )
 
         # Create a new session ID
         new_session_id = str(uuid.uuid4())
@@ -100,15 +103,18 @@ async def get_session_endpoint(
             await flows.session_manager.get_or_create_session(new_session_id, websocket=None)
             logger.info(f"Pre-created session {new_session_id} in session manager")
 
-        return JSONResponse({
-            "sessionId": new_session_id,
-            "status": "new",
-            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        })
+        return JSONResponse(
+            {
+                "sessionId": new_session_id,
+                "status": "new",
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in session endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create session")
+
 
 @flow_data_router.get("/api/flows")
 async def get_flows_endpoint(
@@ -180,17 +186,20 @@ async def _get_records_impl(
             logger.debug(f"Returning {len(available_datasets)} available datasets for flow {flow}")
 
             if "application/json" in accept_header:
-                return JSONResponse(content={
-                    "error": "dataset parameter required",
-                    "available_datasets": available_datasets,
-                    "message": f"Please specify a dataset. Available options: {', '.join(available_datasets)}"
-                }, status_code=400)
+                return JSONResponse(
+                    content={
+                        "error": "dataset parameter required",
+                        "available_datasets": available_datasets,
+                        "message": f"Please specify a dataset. Available options: {', '.join(available_datasets)}",
+                    },
+                    status_code=400,
+                )
 
             context_data = {
                 "records": [],
                 "error": f"Dataset parameter required. Available datasets: {', '.join(available_datasets)}",
                 "available_datasets": available_datasets,
-                "flow": flow
+                "flow": flow,
             }
             return await negotiate_response(request, context_data, "partials/records_list.html", templates, status_code=400)
 
@@ -217,7 +226,7 @@ async def _get_records_impl(
         logger.error(f"Error getting records for flow {flow}: {e}", exc_info=True)
         error_content = {"error": f"Error getting records for flow {flow}: {e!s}"}
         if "text/html" in accept_header:
-             return templates.TemplateResponse(
+            return templates.TemplateResponse(
                  "partials/debug.html",
                  {
                      "request": request,
@@ -249,7 +258,7 @@ async def get_flowinfo_endpoint(
 
     try:
         criteria = await DataService.get_criteria_for_flow(flow, flows)
-        records = await DataService.get_records_for_flow(flow, flows, include_scores=False)
+        records = []
         models = await DataService.get_models_for_flow(flow, flows)
         datasets = await DataService.get_datasets_for_flow(flow, flows)
         logger.debug(f"Returning data for {len(criteria)} criteria options, {len(records)} record options, and {len(datasets)} dataset options")
@@ -342,8 +351,8 @@ async def _get_record_impl(
                 detail={
                     "error": "Record not found",
                     "detail": f"No record found with id: {record_id} in flow: {flow}",
-                    "code": "RECORD_NOT_FOUND"
-                }
+                    "code": "RECORD_NOT_FOUND",
+                },
             )
 
         # Send native Record object using Pydantic's model_dump()
@@ -404,7 +413,7 @@ async def _get_record_scores_impl(
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         scores_data = {
             "record_id": record_id,
-            "agent_traces": [trace.model_dump() for trace in agent_traces]
+            "agent_traces": [trace.model_dump() for trace in agent_traces],
         }
 
         return JSONResponse(content=scores_data)
@@ -465,7 +474,7 @@ async def _get_record_responses_impl(
         # Send native AgentTrace objects directly using Pydantic's model_dump()
         responses_data = {
             "record_id": record_id,
-            "agent_traces": [trace.model_dump() for trace in agent_traces]
+            "agent_traces": [trace.model_dump() for trace in agent_traces],
         }
 
         return JSONResponse(content=responses_data)
@@ -528,12 +537,12 @@ async def _get_score_page_impl(
         context_data = {
             "flow": flow,
             "dataset": dataset,
-            "record_id": record_id
+            "record_id": record_id,
         }
 
         return templates.TemplateResponse(
             "score.html",
-            {"request": request, **context_data}
+            {"request": request, **context_data},
         )
 
     except Exception as e:

@@ -81,19 +81,13 @@
   
   // For score pages: Don't auto-select flow, let user choose
   
+  let initialDatasetSet = false;
+
   // Auto-select first dataset when datasets become available
   $: if ($datasetsStore.data.length > 0 && !$selectedDataset) {
     console.debug('Auto-selecting first dataset:', $datasetsStore.data[0]);
     selectedDataset.set($datasetsStore.data[0]);
-    
-    // Trigger appropriate action based on page type
-    if (isTerminalPage && $selectedFlow) {
-      console.debug('Auto-triggered refetch for terminal page');
-      refetchRecords();
-    } else if (isScorePage && $selectedFlow) {
-      console.debug('Auto-triggered loadRecordsForFlow for score page');
-      loadRecordsForFlow($selectedFlow, $datasetsStore.data[0]);
-    }
+    initialDatasetSet = true;
   }
   
   // For terminal pages: use the recordsStore
@@ -143,11 +137,10 @@
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
     } else if (isTerminalPage) {
-      console.debug('Terminal page - resetting record and refetching');
+      console.debug('Terminal page - resetting record');
       // Reset record when dataset changes
       selectedRecord.set('');
-      // Trigger refetch for terminal pages
-      refetchRecords();
+      // refetchRecords() is now handled by the store subscriber
     }
   }
   

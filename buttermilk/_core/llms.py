@@ -395,7 +395,6 @@ class AutoGenWrapper(RetryWrapper):
             )
         except Exception as e:
             # The first call failed -- before we have executed any tools
-            logger.error(f"Error executing initial query: {e!s}")
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
         # If the LLM responded with a request to call tools
@@ -418,8 +417,6 @@ class AutoGenWrapper(RetryWrapper):
                     cancellation_token=cancellation_token,
                 )
             except Exception as e:
-                # If tool execution fails, we can log the error and return the original result
-                logger.error(f"Error executing tools: {e!s}")
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
             # Tool results are already FunctionExecutionResult objects
@@ -435,7 +432,6 @@ class AutoGenWrapper(RetryWrapper):
                 )
             except Exception as e:
                 # If tool execution fails, we can log the error and return the original result
-                logger.error(f"Error calling LLM to synthesise tool results: {e!s}")
                 raise ProcessingError(f"Failed to synthesise tool results: {e!s}") from e
 
         return create_result  # type: ignore # Expect CreateResult or ModelOutput
@@ -536,12 +532,8 @@ class AutoGenWrapper(RetryWrapper):
                 if parsed_object:
                     logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
             except Exception as parse_error:
-                logger.error(
-                    f"AutoGenWrapper: Failed to parse LLM response into {schema.__name__}: {parse_error}",
-                    exc_info=True,
-                )
                 raise ProcessingError(
-                    f"Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+                    f"AutoGenWrapper: Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
         elif hasattr(create_result.content, "model_dump"):
             # Already a Pydantic object, but might be wrong type

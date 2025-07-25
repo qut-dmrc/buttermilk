@@ -9,7 +9,7 @@ different components of Buttermilk.
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from pathlib import Path  # For path manipulation
-from typing import TYPE_CHECKING, Any, Literal, Self  # Standard typing utilities
+from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
@@ -25,7 +25,6 @@ except ImportError:
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
-    AliasChoices,  # For field aliasing
     BaseModel,
     ConfigDict,
     Field,
@@ -35,8 +34,6 @@ from pydantic import (
 )
 
 # Conditional imports to avoid circular dependencies
-if TYPE_CHECKING:
-    pass
 
 
 class Record(BaseModel):
@@ -146,13 +143,13 @@ class Record(BaseModel):
 
         Returns:
             str: Text content suitable for vector processing.
+
         """
         if isinstance(self.content, str) and self.content.strip():
             return self.content
-        elif self.alt_text and self.alt_text.strip():
+        if self.alt_text and self.alt_text.strip():
             return self.alt_text
-        else:
-            return str(self.content)
+        return str(self.content)
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
         """Custom model_dump that excludes computed fields by default.
@@ -259,10 +256,7 @@ class Record(BaseModel):
             # Check that at least one item in sequence is meaningful
             has_meaningful_content = False
             for item in v:
-                if isinstance(item, str) and item.strip():
-                    has_meaningful_content = True
-                    break
-                elif not isinstance(item, str):  # Image or other content
+                if (isinstance(item, str) and item.strip()) or not isinstance(item, str):
                     has_meaningful_content = True
                     break
             if not has_meaningful_content:
@@ -518,7 +512,7 @@ class RunRequest(BaseModel):
 
         """
         attributes = {
-            **self.parameters,  # Include all custom parameters
+            **self.inputs,  # Include all custom parameters
             "session_id": self.session_id,
             "flow_name": self.flow,
             "run_request_name": self.name,  # Use the computed name of the run request
