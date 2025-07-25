@@ -35,14 +35,13 @@ from buttermilk._core import (
     AllMessages,
     StepRequest,
 )
-from buttermilk._core.agent import Agent, ProcessingError
+from buttermilk._core.agent import Agent
 from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowMessage,
     ManagerMessage,
-    TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
@@ -366,44 +365,7 @@ class AutogenOrchestrator(Orchestrator):
             # in the parameters and handling them appropriately
 
             # 3. Wait for termination.
-            while True:
-                try:
-                    if termination_handler.has_terminated:
-                        logger.info("Termination message received.")
-                        # Send flow_completed event before TaskProcessingComplete
-                        await self._runtime.publish_message(
-                            FlowEvent(source="orchestrator", content="flow_completed"),
-                            topic_id=DefaultTopicId(type=MANAGER),
-                        )
-                        # Publish a TaskProcessingComplete message to the UI
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
-                        await self._runtime.publish_message(
-                            TaskProcessingComplete(
-                                agent_id="orchestrator",
-                                role="orchestrator",
-                                more_tasks_remain=False,
-                            ),
-                            topic_id=DefaultTopicId(type=MANAGER),
-                        )
-                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
-                        break
-                    if interrupt_handler.interrupt.is_set():
-                        logger.info("Flow is paused. Waiting for resume...")
-                        while interrupt_handler.interrupt.is_set():
-                            await asyncio.sleep(0.5)
-                        logger.info("Flow resumed.")
-                    await asyncio.sleep(0.1)
-
-                except ProcessingError as e:
-                    # Non-fatal error - let the host agent decide how to recover
-                    logger.error(f"Error in execution: {e}")
-                except (StopAsyncIteration, KeyboardInterrupt):
-                    raise
-                except FatalError:
-                    raise
-                except Exception as e:
-                    raise FatalError from e
+            await self._runtime.stop_when(lambda: termination_handler.has_terminated)
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")
