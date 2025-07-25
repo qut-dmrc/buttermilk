@@ -107,7 +107,7 @@ async def get_session_endpoint(
             {
                 "sessionId": new_session_id,
                 "status": "new",
-                "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
         )
 
