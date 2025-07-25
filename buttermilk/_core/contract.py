@@ -561,12 +561,6 @@ class AgentTrace(AgentOutput):
         # Apply the cleaning function to the result
         return clean_empty_values(raw_dump)
 
-    def model_dump(self, *args, **kwargs) -> dict[str, Any]:
-        """Override model_dump to exclude empty collections."""
-        raw_dump = super().model_dump(*args, **kwargs)
-        # Apply the cleaning function to the result
-        return clean_empty_values(raw_dump)
-
     @computed_field
     @property
     def object_type(self) -> str:
@@ -623,7 +617,7 @@ class ConductorRequest(AgentInput):
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
-        description="Task-specific parameters, not really used at the moment.",
+        description="Task-specific parameters that can be used to customize the behavior of the Conductor agent.",
     )
 
     model_config = ConfigDict(

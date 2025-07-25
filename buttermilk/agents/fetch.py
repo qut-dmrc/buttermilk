@@ -223,7 +223,7 @@ class FetchRecord(ToolConfig):
         # This part should ideally not be reached due to the assertion and logic above.
         # For safety, if we somehow end up here without a record:
         raise ProcessingError(
-            "Record fetching failed for an unknown reason. URI: {original_uri}, ID: {original_record_id}",
+            f"Record fetching failed for an unknown reason. URI: {original_uri}, ID: {original_record_id}",
         )
 
 
@@ -255,7 +255,7 @@ class FetchAgent(Agent):
         # Pass storage config as data to FetchRecord
         self._tools = [FetchRecord(data=self.parameters["storage"])]
 
-    # TODO: this needs a messag_handler if we want to use it to respond to in-chat messages
+    # TODO: this needs a message_handler if we want to use it to respond to in-chat messages
     async def _listen(
         self,
         message: AgentInput | GroupchatMessageTypes,  # More specific input type
