@@ -9,5 +9,5 @@ differentiator:
   parameters:
     template: differences
   inputs:
-    answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_id, result: outputs, answer_id: call_id, is_error: is_error }"
+    answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id, error: error }"
     records: "[FETCH.outputs]||*.records[]"
