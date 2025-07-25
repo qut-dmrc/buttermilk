@@ -623,7 +623,7 @@ class ConductorRequest(AgentInput):
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
-        description="Task-specific parameters, not really used at the moment.",
+        description="Task-specific parameters reserved for future functionality or customization. Currently unused.",
     )
 
     model_config = ConfigDict(
