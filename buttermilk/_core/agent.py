@@ -64,6 +64,7 @@ from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
+from buttermilk.utils.utils import clean_empty_values
 
 # --- Base Agent Class ---
 
@@ -624,13 +625,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
 
-        # Handle AgentOutput containing a Record in its 'outputs'
-        if isinstance(getattr(message, "outputs", None), Record):
-            self._records.append(message.outputs)  # type: ignore
-            logger.debug(f"Agent {self.agent_name} added Record from AgentOutput.outputs to internal state.")
-
         # Extract data based on input mappings
-        elif self.inputs:  # Only extract if input mappings are defined
+        if self.inputs:  # Only extract if input mappings are defined
             extracted = extract_message_data(
                 message=message,
                 source=source,
@@ -638,9 +634,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             # Add extracted records to self._records
             extracted_records = extracted.pop("records", [])
-            if extracted_records:
-                self._records.extend(extracted_records)
-                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+            for rec in extracted_records:
+                try:
+                    self._records.append(Record.model_validate(rec))
+                    logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+                except Exception as e:
+                    logger.error(f"Agent {self.agent_name} failed to validate record {rec}: {e}")
 
             # Add other extracted data to self._data
             found_keys = []
@@ -814,7 +813,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             except Exception as e:
                 raise ProcessingError(f"Error resolving input mappings for agent {self.agent_id}: {e!s}") from e
 
-        # 3. Prepend conversation history from agent's context.
+        # 3. Remove empty inputs keys to avoid passing empty data
+        updated_inputs = clean_empty_values(updated_inputs)
+
+        # 4. Prepend conversation history from agent's context.
         if updated_inputs.context is None:
             updated_inputs.context = []
         try:
@@ -824,7 +826,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.error(f"Agent {self.agent_name}: Error retrieving model context: {e!s}")
             # Decide handling: continue without history or raise? For now, log and continue.
 
-        # 4. Ensure records list exists. Use the last saved one if input records are empty.
+        # 5. Ensure records list exists. Use the last saved one if input records are empty.
         if not updated_inputs.records and self._records:
             updated_inputs.records = [self._records[-1]]  # Use only the most recent record as default
 

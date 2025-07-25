@@ -297,7 +297,7 @@ class FlowRunContext(BaseModel):
         """
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.warning(f"[FlowRunner.send_message_to_ui] ⚠️ Message not formatted by MessageService: {message}")
+            logger.warning(f"Unknown message type: {type(message)}, not forwarding to UI.")
             return
 
         try:

@@ -251,6 +251,12 @@ class LLMAgent(Agent):
                 context=context,
                 records=records,
             )
+            # If context or records are provided, remove them from missing variables
+            if context:
+                unfilled_vars.discard("context")
+            if records:
+                unfilled_vars.discard("records")
+
         except ProcessingError:
             raise
         except Exception as e:

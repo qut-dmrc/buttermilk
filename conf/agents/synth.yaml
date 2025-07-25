@@ -14,6 +14,6 @@ synthesiser:
     model: ${llms.synthesisers}
     criteria: [] #${..parameters.criteria}
   inputs:
-    records: "[FETCH]||*.records[]||*.records[]"
+    records: "[FETCH.outputs]||*.records[]"
     answers: "[JUDGE][].{agent_id: agent_id, result: outputs, answer_id: call_id, error: error }"
     feedback: feedback.outputs

@@ -121,7 +121,6 @@ class MessageService:
             elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             else:
-                logger.warning(f"[MessageService] Unknown message type: {type(message)}, not forwarding to UI.")
                 return None
 
             # Repackage
