@@ -7,18 +7,9 @@ properly tracks errors and stops flow execution when too many tasks fail.
 import asyncio
 from unittest.mock import MagicMock
 
-# Set up path to import buttermilk modules
-import sys
-sys.path.insert(0, '/home/runner/work/buttermilk/buttermilk')
-
-try:
-    from buttermilk.agents.flowcontrol.host import HostAgent
-    from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
-    from autogen_core import MessageContext
-except ImportError as e:
-    print(f"Import error: {e}")
-    print("This is expected if dependencies are not installed.")
-    sys.exit(0)
+from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
+from autogen_core import MessageContext
 
 
 async def test_error_handling():
