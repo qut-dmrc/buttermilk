@@ -56,16 +56,12 @@ class UIAgent(Agent):
         self,
         *,
         message: AgentInput,
-        cancellation_token: CancellationToken | None = None,
-        public_callback: Callable | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> AgentOutput | None:
         """Process inputs from the orchestrator and interact with the UI.
 
         Args:
             message: The input to process
-            cancellation_token: Token for cancelling the operation
-            public_callback: Callback for publishing messages to public topics
             **kwargs: Additional parameters
 
         Returns:

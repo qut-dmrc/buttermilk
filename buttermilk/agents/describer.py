@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
-from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk contract types
+from buttermilk._core.contract import AgentOutput, ErrorEvent  # Buttermilk contract types
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
 
 
@@ -64,7 +65,7 @@ class Describer(LLMAgent):
         # Set the expected output model for the LLM's response
         self._output_model = MediaDescription
 
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentTrace | ErrorEvent:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process the input to generate a media description.
 
         This method checks if the record already has alt text or if it's purely
@@ -76,17 +77,15 @@ class Describer(LLMAgent):
             **kwargs: Additional keyword arguments passed to the LLM agent.
 
         Returns:
-            AgentTrace: Contains the generated description or an appropriate
+            AgentOutput | None: Contains the generated description or an appropriate
                 message if no description was needed.
-            ErrorEvent: If an error occurs during processing.
+
+        Raises:
+            ProcessingError: If no records provided or no content to describe.
 
         """
         if not message.records:
-            return ErrorEvent(
-                source=self.agent_id,
-                error="No records provided for description.",
-                error_code="NO_RECORDS",
-            )
+            raise ProcessingError("No records provided for description.")
 
         # Get the record to describe
         record = message.records[0]  # Use the first record if multiple
@@ -104,11 +103,8 @@ class Describer(LLMAgent):
                 media_type="unknown",  # We don't know the original media type
                 confidence=1.0,
             )
-            return AgentTrace(
+            return AgentOutput(
                 agent_id=self.agent_id,
-                agent_type="describer",
-                agent_name=self.agent_name or "Describer",
-                content=existing_description.description,
                 outputs=existing_description,
                 metadata={"source": "existing_alt_text"},
             )
@@ -120,40 +116,29 @@ class Describer(LLMAgent):
                 # Empty media list, fall back to text
                 if record.text:
                     return self._create_text_response(record)
-                return ErrorEvent(
-                    source=self.agent_id,
-                    error="Record has no media or text content to describe.",
-                    error_code="NO_CONTENT",
-                )
+                raise ProcessingError("Record has no media or text content to describe.")
             # Process media content
             return await self._process_media(message, record, **kwargs)
         if record.text:
             # No media, just text
             return self._create_text_response(record)
         # Neither media nor text
-        return ErrorEvent(
-            source=self.agent_id,
-            error="Record has no content to describe.",
-            error_code="NO_CONTENT",
-        )
+        raise ProcessingError("Record has no content to describe.")
 
-    def _create_text_response(self, record: Any) -> AgentTrace:
+    def _create_text_response(self, record: Any) -> AgentOutput:
         """Create a response for text-only records."""
         text_description = MediaDescription(
             description=f"This is a text-only record. Content: {record.text[:200]}...",
             media_type="text",
             confidence=1.0,
         )
-        return AgentTrace(
+        return AgentOutput(
             agent_id=self.agent_id,
-            agent_type="describer",
-            agent_name=self.agent_name or "Describer",
-            content=text_description.description,
             outputs=text_description,
             metadata={"media_type": "text", "skipped_reason": "text_only"},
         )
 
-    async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentTrace | ErrorEvent:
+    async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
         """Process media content and generate description."""
         # Check if we need to download from URI
         if hasattr(record, "uri") and record.uri and not record.media:
@@ -166,18 +151,10 @@ class Describer(LLMAgent):
                 if downloaded_media:
                     record.media = downloaded_media
                 else:
-                    return ErrorEvent(
-                        source=self.agent_id,
-                        error=f"Failed to download media from URI: {record.uri}",
-                        error_code="DOWNLOAD_FAILED",
-                    )
+                    raise ProcessingError(f"Failed to download media from URI: {record.uri}")
             except Exception as e:
                 logger.error(f"Error downloading media from {record.uri}: {e}", exc_info=True)
-                return ErrorEvent(
-                    source=self.agent_id,
-                    error=f"Failed to download media: {e!s}",
-                    error_code="DOWNLOAD_ERROR",
-                )
+                raise ProcessingError(f"Failed to download media: {e!s}") from e
 
         # Determine media type
         media_type = "unknown"

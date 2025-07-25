@@ -381,8 +381,8 @@ export function isAssessment(data: any): data is Assessments {
   return (
     typeof data === 'object' &&
     data !== null &&
-    data.type === 'assessment' &&
-    typeof data.correctness === 'string' &&
+    data.type === 'assessments' &&
+    (typeof data.correctness === 'number' || data.correctness === null) &&
     Array.isArray(data.assessments)
   );
 }

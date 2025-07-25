@@ -37,6 +37,8 @@ python scripts/mcp_debug/buttermilk_server.py flows
 
 #### Log Analysis
 ```bash
+# Get latest log filename:
+python scripts/mcp_debug/buttermilk_logs.py
 # View logs
 python scripts/mcp_debug/buttermilk_logs.py tail 100
 python scripts/mcp_debug/buttermilk_logs.py errors
@@ -132,6 +134,12 @@ uv run python -m buttermilk.debug.ws_debug_cli --json-output send "message" --se
 
 # Monitor session activity
 uv run python -m buttermilk.debug.ws_debug_cli --json-output wait --session <session_id> --wait 30
+
+# View logs (defaults to INFO level)
+uv run python -m buttermilk.debug.ws_debug_cli logs
+
+# View logs with a specific level and line count
+uv run python -m buttermilk.debug.ws_debug_cli logs --level DEBUG --lines 100
 ```
 
 #### Log Analysis
@@ -160,15 +168,43 @@ The debug infrastructure is now organized as:
 - **Python implementations**: `scripts/mcp_debug/*.py` (actual logic)
 - **Standalone tools**: Don't depend on buttermilk imports
 
+## CRITICAL: Debugging Workflow Example
+
+### ❌ WRONG Approach (What NOT to do):
+```
+User: "Debug why assessments aren't coming through to the UI"
+Agent: *Immediately uses grep to search for 'assessment' in source files*
+Agent: *Reads multiple source files trying to understand data flow*
+Agent: *Makes assumptions about the problem based on code inspection*
+```
+
+### ✅ CORRECT Approach (Follow this pattern):
+```bash
+# 1. STOP - Check debugging documentation first
+cat docs/bots/debugging.md
+
+# 2. Use WebSocket debug tools to reproduce and monitor
+uv run python -m buttermilk.debug.ws_debug_cli start trans --record "test" --criteria "hrc"
+# Monitor the actual message flow and agent outputs
+
+# 3. Check logs for error patterns
+python scripts/mcp_debug/buttermilk_logs.py search "assessment" 100
+python scripts/mcp_debug/buttermilk_logs.py errors
+
+# 4. ONLY after understanding the actual data flow, then investigate source code
+```
+
 ## Debugging Checklist
 
 ### Before Debugging
+- [ ] Read `docs/bots/debugging.md` completely
 - [ ] Can reproduce issue consistently
 - [ ] Have minimal test case
 - [ ] Checked recent commits
 - [ ] Read relevant GitHub issues
 
 ### During Debugging
+- [ ] Using documented debugging tools FIRST
 - [ ] Following systematic approach
 - [ ] Taking notes on findings
 - [ ] Testing hypotheses individually
@@ -179,6 +215,23 @@ The debug infrastructure is now organized as:
 - [ ] Fix tested thoroughly
 - [ ] Regression tests added
 - [ ] Documentation updated
+
+## Output Management for Agents
+
+**CRITICAL**: When debugging, focus outputs on the problem at hand:
+- Use `head_limit` parameter in grep commands
+- Extract only relevant JSON fields, not entire objects
+- Summarize patterns rather than showing all occurrences
+- For WebSocket debugging, show only messages related to the issue
+
+**Example of Good vs Bad Output**:
+```bash
+# ❌ BAD: Dumps entire session data
+uv run python -m buttermilk.debug.ws_debug_cli --json-output wait --session xyz
+
+# ✅ GOOD: Focuses on specific message types
+uv run python -m buttermilk.debug.ws_debug_cli wait --session xyz | jq '.messages[] | select(.type == "agent_message") | {agent: .agent, type: .data.type}'
+```
 
 ## Log Analysis Tips
 
@@ -427,6 +480,28 @@ The debugging tools follow the principle of "Simple tools, smart LLM":
 - LLM reads files/logs directly when possible
 - Focus on MCP tools for LLM integration
 - No reports, suggestions, or pattern matching - just data access
+
+## Common Anti-Patterns to Avoid
+
+### 1. Source Code First Approach
+**❌ WRONG**: Immediately grep/read source files when debugging
+**✅ RIGHT**: Use WebSocket CLI and log analyzers to understand actual behavior first
+
+### 2. Assuming Instead of Verifying
+**❌ WRONG**: "The agent probably publishes this way..."
+**✅ RIGHT**: Use `ws_debug_cli` to see exact message format and flow
+
+### 3. Large Unfocused Outputs
+**❌ WRONG**: Dumping entire JSON responses or full log files
+**✅ RIGHT**: Extract only relevant fields using `jq` or focused grep patterns
+
+### 4. Ignoring Documentation Structure
+**❌ WRONG**: Not checking debugging.md when debugging
+**✅ RIGHT**: Always start with documented procedures and tools
+
+### 5. Tool Substitution
+**❌ WRONG**: Using logs when asked to use WebSocket CLI
+**✅ RIGHT**: Use the exact tool requested - each has specific capabilities
 
 ## Emergency Procedures
 

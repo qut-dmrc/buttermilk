@@ -9,7 +9,7 @@ general:
 judgers:
   - gemini25flash
   - gemini25pro
-  - o3mini
+  - o4mini
   - gpt41
   - gpt41mini
   - gpt41nano
@@ -18,7 +18,7 @@ judgers:
 synthesisers:
   - gemini25flash
   - gemini25pro
-  - o3mini
+  - o4mini
   - gpt41
   - gpt41mini
   - llama4maverick

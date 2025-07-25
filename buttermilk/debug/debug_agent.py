@@ -24,7 +24,7 @@ class DebugAgent(Agent):
         super().__init__(**kwargs)
         self._active_clients: dict[str, FlowTestClient] = {}
 
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process debugging requests."""
         # This agent is primarily tool-based, so _process just returns a helpful message
         return AgentOutput(

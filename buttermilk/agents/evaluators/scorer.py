@@ -281,19 +281,17 @@ class LLMScorer(LLMAgent):
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )
 
-        # Invoke this Scorer's own processing logic.
-        score = await self.__call__(
-            message=scorer_agent_input,
-        )
-        await self._publish(score)
-        logger.debug(f"Scorer '{self.agent_name}' published scoring results for {message.agent_id} call {message.call_id}.")
+        # Publish the AgentInput to trigger standard processing flow
+        # This ensures the output is wrapped in AgentTrace and routed to UI
+        await self._publish(scorer_agent_input, topic_id=self._topic_id)
+        logger.debug(f"Scorer '{self.agent_name}' published scoring request for {message.agent_id} call {message.call_id}.")
 
     async def _process(
         self,
+        *,
         message: AgentInput,  # Input for the Scorer LLM
-        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> AgentOutput:  # Returns AgentOutput, which AgentTrace inherits from
+    ) -> AgentOutput | None:
         """Performs the LLM-based scoring and formats the output.
 
         This method overrides the base `LLMAgent._process`. It first calls
@@ -309,20 +307,17 @@ class LLMScorer(LLMAgent):
                 to contain information about the answer being assessed (e.g., under a
                 key like "answers", often from `JudgeReasons.answers`) including
                 `agent_id` and `answer_id` (which corresponds to a `call_id`).
-            cancellation_token: An optional token for cancelling the LLM call.
             **kwargs: Additional keyword arguments for the LLM call.
 
         Returns:
-            AgentOutput: An `AgentOutput` (typically an `AgentTrace` instance via
-            `self.invoke`) where the `outputs` field is populated with a
-            `QualResults` object. If the LLM call fails or parsing is unsuccessful,
+            AgentOutput | None: An `AgentOutput` where the `outputs` field is populated
+            with a `QualResults` object. If the LLM call fails or parsing is unsuccessful,
             the `outputs` might be an error structure or the raw LLM response.
 
         """
         # Call the base LLMAgent's _process to get the LLM's structured score (QualScore)
         llm_output_base = await super()._process(
             message=message,  # This message is the input for the Scorer's LLM
-            cancellation_token=cancellation_token,
             **kwargs,
         )
 
