@@ -223,7 +223,7 @@ class FetchRecord(ToolConfig):
         # This part should ideally not be reached due to the assertion and logic above.
         # For safety, if we somehow end up here without a record:
         raise ProcessingError(
-            "Record fetching failed for an unknown reason. URI: {original_uri}, ID: {original_record_id}",
+            f"Record fetching failed for an unknown reason. URI: {original_uri}, ID: {original_record_id}",
         )
 
 
