@@ -68,6 +68,25 @@ python scripts/mcp_debug/github_issue.py create "Add feature" "Description"
 python scripts/mcp_debug/github_issue.py link 123
 ```
 
+#### Frontend Browser Automation with Playwright MCP
+
+The official Playwright MCP tool (`@playwright/mcp`) provides browser automation capabilities for frontend debugging. 
+
+**Installation**:
+```bash
+# Install the official Playwright MCP tool
+npx @playwright/mcp@latest
+```
+
+**Usage**: The Playwright MCP tool provides standard browser automation commands like:
+- `navigate` - Navigate to URLs
+- `screenshot` - Capture screenshots
+- `click` - Click elements
+- `fill` - Fill form fields
+- `evaluate` - Execute JavaScript in browser context
+
+For detailed usage, refer to the [Playwright MCP documentation](https://github.com/microsoft/playwright/tree/main/packages/playwright-mcp).
+
 ### Core Commands
 
 #### 1. API Server Management
@@ -118,6 +137,8 @@ For LLM agents, the MCP tools in `.mcp/tools/` provide wrapper scripts that call
 - `buttermilk-config-validate.sh` - Configuration validation
 - `buttermilk-github-issue.sh` - GitHub issue management
 - `buttermilk-test-flow.sh` - Flow testing
+
+For browser automation, use the official Playwright MCP tool (`npx @playwright/mcp@latest`)
 
 ### Debug Infrastructure
 
@@ -286,6 +307,45 @@ task.add_done_callback(handle_task_exception)
 # Monitor WebSocket messages
 uv run python -m buttermilk.debug.ws_debug_cli --json-output start trans --record "test" --criteria "hrc"
 ```
+
+### Frontend Debugging with Playwright MCP
+
+**Use Cases**: Debug Svelte component state, validate UI behavior, monitor API integration from browser perspective
+
+**Key Capabilities**:
+1. **Browser Automation**: Navigate, click, fill forms, take screenshots
+2. **JavaScript Evaluation**: Execute code in browser context to inspect state
+3. **Visual Debugging**: Screenshots for layout/styling issues  
+4. **Network Monitoring**: Track API calls from browser perspective
+5. **Interactive Testing**: Simulate complex user interactions
+
+**Setup**:
+```bash
+# Install Playwright MCP tool
+npx @playwright/mcp@latest
+
+# The tool will be available to LLM agents through MCP protocol
+```
+
+**Example Debugging Workflow with Playwright MCP**:
+1. Navigate to the frontend URL (http://localhost:5173)
+2. Take screenshots to verify UI state
+3. Click buttons and fill forms to trigger flows
+4. Evaluate JavaScript to inspect Svelte stores:
+   ```javascript
+   // Example: Get Svelte store values
+   window.__svelte_stores?.recordsStore?.subscribe(v => console.log(v))
+   ```
+5. Monitor network activity during flow execution
+
+**Common Frontend Issues Debuggable with Playwright**:
+- Reactive statements not updating (`$:` syntax issues)
+- Store subscriptions not working (evaluate JS to check store values)
+- API response not reflected in UI (monitor network + inspect DOM)
+- WebSocket disconnections (check console logs)
+- CSS/layout problems (screenshot for visual comparison)
+
+For detailed Playwright MCP commands and options, consult the official documentation.
 
 ## Debug Infrastructure Notes
 
