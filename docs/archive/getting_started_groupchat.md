@@ -48,7 +48,7 @@ flows:
         # Inputs specify what information the agent will extract from the group chat
         # This is expressed in JMESPath format: https://jmespath.org/specification.html
         inputs:
-          records: "FETCH.outputs||*.records[]"
+          records: "[FETCH.outputs]||*.records[]"
 
     # Observers are agents that will participate in the group chat but are not
     # activated by the orchestrator. They are not a 'step' in the 'flow'.

@@ -38,7 +38,6 @@ async def test_HostAgent_round_robin():
         "AGENT3": {"role": "agent3", "description": "Third agent"},
     }
 
-    request = ConductorRequest()
     request = ConductorRequest(inputs={"participants": participants})
 
     # Get the first step

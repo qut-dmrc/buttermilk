@@ -18,8 +18,8 @@ import pydantic  # Pydantic core
 import regex as re  # Regular expression operations
 from autogen_core import CancellationToken  # Buttermilk base agent and types
 from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
-from shortuuid import uuid  # For generating short unique IDs
 
+from buttermilk import buttermilk as bm
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import ToolConfig  # Base class for tool configurations
 from buttermilk._core.contract import (  # Buttermilk message contracts
@@ -29,7 +29,8 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
     ManagerMessage,
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.log import logger
+from buttermilk._core.storage_config import BaseStorageConfig, StorageFactory
 from buttermilk._core.types import Record
 from buttermilk.data.loaders import DataLoader
 from buttermilk.utils.media import download_and_convert
@@ -78,26 +79,37 @@ class FetchRecord(ToolConfig):
         making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
         """
-        if self.data:  # self.data is from ToolConfig, a Mapping[str, DataSourceConfig]
+        if self.data:  # self.data is from ToolConfig, a Mapping[str, BaseStorageConfig]
             self._data_sources = {}
-            for key, config in self.data.items():
-                # Convert config to StorageConfig if needed
-                if hasattr(config, "model_dump"):
-                    # Handle DataSourceConfig or similar
-                    config_dict = config.model_dump()
-                    storage_config = StorageConfig(**config_dict)
-                elif hasattr(config, "__dict__"):
-                    # Handle OmegaConf objects
-                    storage_config = StorageConfig(**dict(config))
-                else:
-                    storage_config = StorageConfig(**config)
 
-                # Use unified storage system instead of deprecated create_data_loader
-                from buttermilk._core.dmrc import get_bm
-                bm = get_bm()
-                storage = bm.get_storage(storage_config)
-                self._data_sources[key] = storage
+            for source_name, config in self.data.items():
+                try:
+                    # The config should already be a BaseStorageConfig from ToolConfig validation
+                    if isinstance(config, BaseStorageConfig):
+                        storage_config = config
+                    else:
+                        # Fallback: convert dict/OmegaConf to StorageConfig using factory
+                        if hasattr(config, "to_container"):
+                            # OmegaConf object - convert to dict
+                            config_dict = config.to_container()
+                        elif isinstance(config, dict):
+                            # Regular dict
+                            config_dict = config
+                        else:
+                            raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
 
+                        # Use StorageFactory to create the proper subclass
+                        storage_config = StorageFactory.create_config(config_dict)
+
+                    # Use unified storage system
+                    storage = bm.get_storage(storage_config)
+                    self._data_sources[source_name] = storage
+                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
+                except Exception as e:
+                    logger.error(f"Failed to create storage for source '{source_name}': {e}")
+                    raise
+
+    # TODO: Add actual search functionality that works for different data loaders instead of just iterating
     async def _get_record_dataset(self, record_id: str) -> Record | None:
         """Retrieve a record by ID from loaded data sources.
 
@@ -132,8 +144,7 @@ class FetchRecord(ToolConfig):
         """
         if not self._fns:
             # self.role is from AgentConfig, inherited via Agent -> ToolConfig (if FetchRecord used as Agent)
-            # If FetchRecord is used purely as ToolConfig, 'role' might not be standard.
-            # Assuming 'name' or a dedicated tool_name field might be more appropriate from ToolConfig.
+            # If FetchRecord is used purely as ToolConfig, 'name' or a dedicated tool_name field might be more appropriate from ToolConfig.
             # For now, using self.role, assuming it's set appropriately in the config.
             getattr(self, "role", "fetch_record_tool")  # Fallback name
             if not self.description:  # Ensure description is set for the tool
@@ -171,10 +182,10 @@ class FetchRecord(ToolConfig):
                 record ID (e.g., "!my_record_123").
 
         Returns:
-            Record | ErrorEvent: The fetched (and potentially converted) `Record` object
-            if successful, or an `ErrorEvent` if no record could be found or fetched.
+            The fetched (and potentially converted) `Record` object.
 
         Raises:
+            ProcessingError: If no record could be found or fetched.
             AssertionError: If it cannot resolve to either a `record_id` or a `uri`,
                             or if both are somehow provided.
 
@@ -187,7 +198,6 @@ class FetchRecord(ToolConfig):
 
         record: Record | None = None
         if record_id:
-            # This breaks now because the code was moved to Orchestrator
             record = await self._get_record_dataset(record_id)
             if record:
                 # Ensure metadata exists and add provenance
@@ -211,16 +221,10 @@ class FetchRecord(ToolConfig):
             raise ProcessingError(f"Record not found for URI: {original_uri or uri}")
 
         # This part should ideally not be reached due to the assertion and logic above.
-        # If it is, it means neither record_id nor uri led to a record or an error for not finding one.
-        # However, the logic above ensures that if a record is not found, an error is raised.
-        # If record is None here, it means neither record_id nor uri was set, which contradicts the assertion.
-        # For safety, though, if we somehow end up here without a record:
-        if original_uri:
-            raise ProcessingError(f"Record not found for URI: {original_uri}")
-        if original_record_id:
-            raise ProcessingError(f"Record not found for ID: {original_record_id}")
-        # Fallback if prompt didn't yield URI or ID.
-        raise ProcessingError("Record not found, and no URI or ID was effectively specified for the fetch attempt.")
+        # For safety, if we somehow end up here without a record:
+        raise ProcessingError(
+            f"Record fetching failed for an unknown reason. URI: {original_uri}, ID: {original_record_id}",
+        )
 
 
 class FetchAgent(Agent):
@@ -240,22 +244,18 @@ class FetchAgent(Agent):
     Attributes:
         id (str): A unique identifier for the agent instance, typically prefixed
             with "fetch_record_". Defaults to a generated ID.
-        _fetch_tool (FetchRecord): Internal FetchRecord instance for fetching functionality.
+        _tools (list[FetchRecord]): Internal FetchRecord instances for fetching functionality.
 
     """
-
-    id: str = pydantic.Field(
-        default_factory=lambda: f"fetch_record_{uuid()[:4]}",
-        description="Unique identifier for the FetchAgent instance.",
-    )
-    _fetch_tool: FetchRecord = pydantic.PrivateAttr(default=None)
 
     def __init__(self, **data):
         """Initialize the FetchAgent with FetchRecord tool."""
         super().__init__(**data)
-        # Initialize the FetchRecord tool
-        self._fetch_tool = FetchRecord()
 
+        # Pass storage config as data to FetchRecord
+        self._tools = [FetchRecord(data=self.parameters["storage"])]
+
+    # TODO: this needs a messag_handler if we want to use it to respond to in-chat messages
     async def _listen(
         self,
         message: AgentInput | GroupchatMessageTypes,  # More specific input type
@@ -290,35 +290,57 @@ class FetchAgent(Agent):
         if isinstance(message, ManagerMessage):
             if message.content:
                 # Check if the message is a command
-                match = self._fetch_tool._pat.search(message.content)
-                if match:
-                    # Extract the record_id or URL from the message
-                    record_id = match.group(1)
-                    uri = match.group(2)
-                    if uri:
-                        result = await self._fetch_tool.fetch(uri=uri)
-                    elif record_id:
-                        result = await self._fetch_tool.fetch(record_id=record_id)
-                elif uri := extract_url(message.content):
-                    result = await self._fetch_tool.fetch(uri=uri)
+                match = self._tools[0]._pat.search(message.content)
+                try:
+                    if match:
+                        # Extract the record_id or URL from the message
+                        record_id = match.group(1)
+                        uri = match.group(2)
+                        if uri:
+                            result = await self._tools[0].fetch(uri=uri)
+                        elif record_id:
+                            result = await self._tools[0].fetch(record_id=record_id)
+                    elif uri := extract_url(message.content):
+                        result = await self._tools[0].fetch(uri=uri)
+                except ProcessingError as e:
+                    logger.warning(f"Error fetching record in _listen: {e}")
+                    error = ErrorEvent(source=self.id, content=str(e))
+                    await self._publish(error)
+                    return
 
-        if result and isinstance(result, Record):
-            # output = AgentOutput(agent_id=self.agent_id,
-            #     outputs=result,
-            #     metadata=result.metadata,
-            # )
-            await public_callback(result)
+        if result:
+            if isinstance(result, Record):
+                output = AgentOutput(
+                    agent_id=self.agent_id,
+                    outputs=result,
+                    metadata=result.metadata,
+                )
+                await self._publish(output)
+            else:
+                await self._publish(result)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ErrorEvent:
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
         if isinstance(message, AgentInput):
-            uri = message.inputs.get("uri")
-            record_id = message.inputs.get("record_id")
-            if uri or record_id:
-                result = await self._fetch_tool.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
+            # Check both inputs and parameters for record_id, uri
+            uri = message.inputs.get("uri") or message.parameters.get("uri")
+            record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
 
-        if result:
+            if uri and record_id:
+                return ErrorEvent(source=self.id, content="Cannot provide both uri and record_id.")
+
+            try:
+                if uri:
+                    result = await self._tools[0].fetch(uri=uri)
+                elif record_id:
+                    result = await self._tools[0].fetch(record_id=record_id)
+            except ProcessingError as e:
+                return ErrorEvent(source=self.id, content=str(e))
+
+        if result and isinstance(result, Record):
+            # TODO: See GitHub issue #158 on whether to publish Record, AgentOutput, or both.
+
             # Wrap the Record in an AgentOutput
             return AgentOutput(
                 agent_id=self.agent_id,
@@ -326,9 +348,5 @@ class FetchAgent(Agent):
                 metadata=result.metadata if hasattr(result, "metadata") else {},
             )
 
-        # Return an ErrorEvent wrapped in AgentOutput
-        error = ErrorEvent(source=self.id, content="No result found in _process")
-        return AgentOutput(
-            agent_id=self.agent_id,
-            error=[error],
-        )
+        # Return an ErrorEvent
+        return ErrorEvent(source=self.id, content="No result found in _process")

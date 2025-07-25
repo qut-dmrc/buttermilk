@@ -12,7 +12,6 @@ LLM interaction, handling the core template rendering and LLM communication
 workflow.
 """
 
-from collections.abc import AsyncGenerator
 from typing import Any, Self
 
 import hydra
@@ -29,53 +28,50 @@ from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
+from buttermilk.utils.utils import clean_empty_values
 
 
 class LLMAgent(Agent):
     """Agent that uses an LLM for text processing and generation.
 
-    `LLMAgent` extends the base `Agent` class to add LLM-powered capabilities.
-    It manages the complete workflow of:
-    1. Loading and rendering prompt templates with provided data
-    2. Communicating with LLMs through the global LLM manager
-    3. Parsing and validating LLM responses
+        `LLMAgent` extends the base `Agent` class to add LLM-powered capabilities.
+        It manages the complete workflow of:
+        1. Loading and rendering prompt templates with provided data
+        2. Communicating with LLMs through the global LLM manager
+        3. Parsing and validating LLM responses
 
-    The agent can work with both unstructured text responses and structured
-    outputs (when `_output_model` is specified as a Pydantic model).
+        The agent can work with both unstructured text responses and structured
+        outputs (when `_output_model` is specified as a Pydantic model).
 
-    Configuration (from `AgentConfig`):
-        template: Name of the prompt template to use (required in parameters)
-        model: Name of the LLM model to use (e.g., 'gpt-4', 'claude-3')
-        temperature: LLM temperature parameter for response variability
-        fail_on_unfilled_parameters: Whether to fail if template variables are missing
-        tools: List of tools (functions) the agent can use
+        Configuration (from `AgentConfig`):
+            template: Name of the prompt template to use (required in parameters)
+            model: Name of the LLM model to use (e.g., 'gpt-4', 'claude-3')
+            temperature: LLM temperature parameter for response variability
+            fail_on_unfilled_parameters: Whether to fail if template variables are missing
+            tools: List of tools (functions) the agent can use
 
     Attributes:
-        _model (str): The name/identifier of the LLM model this agent uses.
-        _output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
-            for structured output parsing.
-        _tools_list (list[Tool]): List of Autogen-compatible tool objects.
-        fail_on_unfilled_parameters (bool): If True, raises an error when
-            template variables are missing from inputs.
+            _model (str): The name/identifier of the LLM model this agent uses.
+            _output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
+                for structured output parsing.
+            _tools_list (list[Tool]): List of Autogen-compatible tool objects.
+    _       _fail_on_unfilled_parameters (bool): If True, raises an error when
+                template variables are missing from inputs.
 
     Example:
-        ```python
-        agent = LLMAgent(
-            agent_name="Analyzer",
-            role="TEXT_ANALYZER",
-            parameters={"template": "analysis_prompt", "model": "gpt-4"},
-            fail_on_unfilled_parameters=True
-        )
-        
-        result = await agent.invoke(
-            AgentInput(inputs={"text": "Hello world"})
-        )
-        ```
+            ```python
+            agent = LLMAgent(
+                agent_name="Analyzer",
+                role="TEXT_ANALYZER",
+                parameters={"template": "analysis_prompt", "model": "gpt-4", "fail_on_unfilled_parameters": True},
+            )
+
+            result = await agent.invoke(
+                AgentInput(inputs={"text": "Hello world"})
+            )
+            ```
 
     """
-
-    # LLM-specific configurations
-    # These are now initialized in __init__ instead of using PrivateAttr
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
@@ -85,15 +81,17 @@ class LLMAgent(Agent):
 
         Args:
             **kwargs: Configuration parameters passed to AgentConfig.
-                Must include 'model' in parameters.
+                Must include 'model' and 'template' in parameters.
 
         Raises:
-            ValueError: If 'model' is not specified in parameters.
+            ValueError: If 'model' and 'template' is not specified in parameters.
 
         """
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
+        if "template" not in self.parameters:
+            raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
 
         # Initialize private attributes
         self._model: str = self.parameters.get("model", "")
@@ -101,7 +99,7 @@ class LLMAgent(Agent):
         self._tools: list[Tool] = []
 
         # Control behavior - moved from Field declaration
-        self.fail_on_unfilled_parameters: bool = kwargs.get("fail_on_unfilled_parameters", True)
+        self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
@@ -192,8 +190,8 @@ class LLMAgent(Agent):
         self,
         task_params: dict[str, Any],
         inputs: dict[str, Any],
-        context: list[LLMMessage] | None = None,  # Made context optional
-        records: list[Record] | None = None,   # Made records optional
+        context: list[LLMMessage] = [],
+        records: list[Record] = [],
     ) -> list[LLMMessage]:
         """Renders the agent's prompt template (e.g., Jinja2/Prompty) with provided data.
 
@@ -220,30 +218,23 @@ class LLMAgent(Agent):
 
         Raises:
             ProcessingError: If no prompt template name is defined in the configuration,
-                if the template parsing fails, or if `fail_on_unfilled_parameters`
+                if the template parsing fails, or if `self._fail_on_unfilled_parameters`
                 is True and required template variables are missing from `inputs`.
 
         """
-        # Ensure context and records are lists if None
-        current_context = context if context is not None else []
-        current_records = records if records is not None else []
-
-        # Template name must be provided in parameters - no fallback chain allowed
-        if "template" not in self.parameters:
-            raise ProcessingError(f"Agent '{self.agent_id}': 'template' is required in agent parameters.")
-
-        template_name = self.parameters["template"]
+        template_name = self.parameters.get("template")
         if not template_name or not isinstance(template_name, str):
-            raise ProcessingError(f"Agent '{self.agent_id}': 'template' parameter must be a non-empty string.")
+            raise ProcessingError(f"Agent '{self.agent_id}': 'template' is a required parameter and must be a non-empty string.")
         logger.debug(f"Agent '{self.agent_name}': Using prompt template '{template_name}'.")
 
         combined_params = {**(self.parameters if self.parameters is not None else {}), **(task_params if task_params is not None else {})}
 
+        filtered_inputs = clean_empty_values(inputs).copy() if inputs else {}
+
         # Check if prompt is already in context to avoid duplication
         # If the last message in context has the same content as the prompt, don't include it again
-        filtered_inputs = inputs.copy() if inputs else {}
-        if current_context and "prompt" in filtered_inputs:
-            last_context_msg = current_context[-1]
+        if context and "prompt" in filtered_inputs:
+            last_context_msg = context[-1]
             if isinstance(last_context_msg, UserMessage) and last_context_msg.content == filtered_inputs["prompt"]:
                 logger.debug(f"Agent '{self.agent_name}': Removing duplicate prompt from inputs (already in context)")
                 del filtered_inputs["prompt"]
@@ -257,22 +248,28 @@ class LLMAgent(Agent):
         try:
             llm_messages: list[LLMMessage] = make_messages(
                 local_template=rendered_template_str,
-                context=current_context,
-                records=current_records,
+                context=context,
+                records=records,
             )
+            # If context or records are provided, remove them from missing variables
+            if context:
+                unfilled_vars.discard("context")
+            if records:
+                unfilled_vars.discard("records")
+
+        except ProcessingError:
+            raise
         except Exception as e:
-            logger.error(f"Agent '{self.agent_name}': Failed to create messages from Prompty structure for template '{template_name}': {e!s}")
             raise ProcessingError(f"Failed to create messages from template '{template_name}' for agent '{self.agent_id}'") from e
 
-        # Identify missing variables, excluding 'records' and 'context' which are handled by make_messages
-        missing_vars_in_template = set(unfilled_vars) - {"records", "context"}
+        # Identify missing variables
+        missing_vars_in_template = set(unfilled_vars)
         if missing_vars_in_template:
             err_msg = (
                 f"Agent '{self.agent_id}' template '{template_name}' has unfilled parameters: "
                 f"{', '.join(sorted(list(missing_vars_in_template)))}"
             )
-            if self.fail_on_unfilled_parameters:
-                logger.error(err_msg)
+            if self._fail_on_unfilled_parameters:
                 raise ProcessingError(err_msg)
             logger.warning(f"{err_msg}. Proceeding as fail_on_unfilled_parameters is False.")
 
@@ -341,7 +338,7 @@ class LLMAgent(Agent):
         )
 
         llm_messages_to_send.append(
-            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id)
+            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
         )
         logger.info(
             f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
@@ -405,20 +402,6 @@ class LLMAgent(Agent):
             )
         except Exception as llm_error:
             msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
-            logger.error(msg)
             raise ProcessingError(msg) from llm_error
 
         return chat_result
-
-    async def _sequence(self) -> AsyncGenerator[Any, None]:
-        """Not implemented for LLMAgent.
-
-        LLMAgent does not use the sequencing functionality from the base Agent class.
-        This method is a placeholder to satisfy the abstract base class requirement.
-
-        Yields:
-            Never yields anything.
-
-        """
-        # LLMAgent doesn't typically use _sequence, but must implement it
-        yield  # This makes it a generator but doesn't yield any actual values

@@ -60,14 +60,14 @@ class JobQueueClient(BaseModel):
 
     async def pull_tox_example(self, flow: str = "tox") -> RunRequest:
         """Pull a toxicity example for testing purposes.
-        
+
         Args:
             flow: Flow configuration to use (defaults to 'tox' for backward compatibility)
-            
+
         Returns:
             RunRequest configured for toxicity testing
-        """
 
+        """
         from buttermilk.toxicity.tox_data import toxic_record
 
         record = toxic_record()

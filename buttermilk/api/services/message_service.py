@@ -121,7 +121,6 @@ class MessageService:
             elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             else:
-                logger.warning(f"[MessageService] Unknown message type: {type(message)}, not forwarding to UI.")
                 return None
 
             # Repackage
@@ -156,7 +155,7 @@ class MessageService:
 
         """
         try:
-            message_type = data.get("type")
+            message_type = data.pop("type", None)
 
             # If no type but has flow field, it's likely a RunRequest
             if not message_type and "flow" in data and "prompt" in data:
@@ -165,11 +164,15 @@ class MessageService:
 
             match message_type:
                 case "run_flow":
+                    parameters = data.get("parameters", {})
+                    if "criteria" in data:
+                        parameters["criteria"] = data.pop("criteria")
+
                     run_request = RunRequest(
                         ui_type="web",
-                        flow=data.get("flow"),
-                        record_id=data.get("record_id"),
-                        parameters={k: v for k, v in data.items() if k not in ["type", "flow", "record_id"]},
+                        flow=data.pop("flow"),
+                        parameters=parameters,
+                        inputs=data,
                     )
                     return run_request
                 case "pull_task":

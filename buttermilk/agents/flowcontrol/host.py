@@ -54,7 +54,7 @@ class HostAgent(Agent):
         self._step_starting: asyncio.Event = asyncio.Event()
         self._pending_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._participants: dict[str, Any] = {}
-        self._host_input_parameters: dict[str, Any] = {}
+        self._host_initial_inputs: dict[str, Any] = {}
         # Error tracking for current step
         self._failed_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._total_tasks_in_step: int = 0
@@ -446,7 +446,7 @@ class HostAgent(Agent):
             yield StepRequest(
                 role=role,
                 content=step_description,
-                parameters=self._host_input_parameters.copy(),
+                inputs=self._host_initial_inputs.copy(),
             )
         yield StepRequest(role=END, content="Sequence completed.")
 
@@ -516,8 +516,6 @@ class HostAgent(Agent):
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
                     if not await self.wait_check_current_step_completions():
-                        # If the wait failed (timeout or error), stop the flow
-                        logger.error(f"Host {self.agent_name}: Stopping flow due to failed completions check for step {next_step.role}")
                         break
 
             # --- Sequence finished ---

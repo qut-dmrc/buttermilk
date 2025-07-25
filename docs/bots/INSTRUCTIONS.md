@@ -12,11 +12,14 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 * Prioritise reproducibility & traceability.
 * Flexible, modular design aimed at future Humanities, Arts, and Social Sciences researchers.
 
+Specific rules:
+- VERIFY SUCCESS, never assume: ALWAYS check the results of commands (exit codes AND result text). 
+
 ## WORKFLOW: Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions. Read relevant documentation to understand the project goals and architecture. Check github issues for relevant past work and discussion; create a new issue if you cannot find an existing one.
 2. **ANALYZE**: Map the system architecture and identify root causes
 3. **PLAN**: Use github issues to track problems and document your plan with clear phases and validation criteria
-4. **TEST**: Write failing tests that capture expected behavior
+4. **TEST**: Write unit tests that capture expected behavior. Save your tests; do not use single-use tests or scripts.
 5. **IMPLEMENT**: Make minimal changes that solve the root cause
 6. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
 7. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
@@ -30,7 +33,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - Architecture: YAML configuration (/conf); FastAPI backend (buttermilk/api); Autogen-based LLM groupchat flows; web (/buttermilk/frontend/chat) and cli (/buttermilk/frontend/cli) frontends.
 - Run python with `uv run ...`
 - **Composable YAML Configuration**: Use Hydra (OmegaConf objects) exclusively for configuration
- 
+- Use heredocs when writing in shell to avoid escaping issues
 
 ## REFLECTIVE and EXPERIMENTAL workflow
 
