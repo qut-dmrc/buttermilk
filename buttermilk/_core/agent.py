@@ -493,7 +493,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 return None
 
             if isinstance(result, ErrorEvent):
-                err_result = [result]
+                err_result = result
             elif hasattr(result, "error") and result.error:
                 err_result = result.error
 
@@ -529,14 +529,14 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Create the trace here with required values
         trace = AgentTrace(
-            call_id=call_id,
+            call_id=call_id or "unknown",
             agent_id=self.agent_id,
             agent_info=self._cfg,
             tracing_link=tracing_link,
             inputs=final_input,
             parent_call_id=final_input.parent_call_id,
             outputs=outputs,
-            error=err_result,
+            error=[err_result],
         )
         # Publish status update: Task Complete (including error if error)
         await self._publish(
