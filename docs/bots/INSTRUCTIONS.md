@@ -13,7 +13,18 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 * Flexible, modular design aimed at future Humanities, Arts, and Social Sciences researchers.
 
 Specific rules:
-- VERIFY SUCCESS, never assume: ALWAYS check the results of commands (exit codes AND result text). 
+- VERIFY SUCCESS, never assume: ALWAYS check the results of commands (exit codes AND result text).
+- When given a specific task with a specific method, you MUST use that exact method. Any deviation is a failure. Success is ONLY achieving the exact outcome requested using the exact method specified. NO SUBSTITUTIONS.
+- If asked to use Tool X, use Tool X. Don't use Tool Y instead. Don't read code instead. Don't check logs instead. Use Tool X.
+- Success = user's definition, not yours. If asked to SHOW something, you must visually demonstrate it, not just prove it exists.
+- When you can't complete a task as specified, STOP immediately and say so. Don't waste time on workarounds.
+- **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md` and use the documented tools (WebSocket CLI, log analyzers, etc.) BEFORE reading source code. Going straight to source code is a workflow violation.
+- **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 50 lines, summarize key findings instead. 
+
+## CRITICAL FIRST STEPS
+1. **For Debugging Tasks**: ALWAYS read `docs/bots/debugging.md` FIRST
+2. **For Development Tasks**: Follow the 9-step workflow below
+3. **For Research Tasks**: Use documented tools, not source code exploration
 
 ## WORKFLOW: Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions. Read relevant documentation to understand the project goals and architecture. Check github issues for relevant past work and discussion; create a new issue if you cannot find an existing one.

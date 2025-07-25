@@ -13,6 +13,7 @@ from autogen_core.models import AssistantMessage
 
 from buttermilk import logger
 from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ToolOutput
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.rag.simple_rag_agent import RagAgent
 
 
@@ -33,7 +34,7 @@ class IterativeRagAgent(RagAgent):
         # Template configuration - moved from Field declaration
         self.template: str = kwargs.get("template", "iterative_rag")
 
-    async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
+    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput | None:
         """Core processing logic for iterative RAG.
 
         This method implements an iterative RAG cycle:
@@ -46,6 +47,9 @@ class IterativeRagAgent(RagAgent):
         """
         logger.debug(f"IterativeRagAgent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
+        # Extract cancellation_token from kwargs if provided
+        cancellation_token = kwargs.get('cancellation_token')
+        
         max_iterations = self.parameters.get("max_iterations", 5)  # Configurable max iterations
         current_iteration = 0
         chat_history = list(message.context) if message.context else []  # Start with initial context
@@ -92,7 +96,7 @@ class IterativeRagAgent(RagAgent):
             except Exception as llm_error:
                 msg = f"Agent {self.agent_id}: Error during LLM call: {llm_error}"
                 logger.error(msg, exc_info=True)
-                return AgentOutput(agent_id=self.agent_id, error=[ErrorEvent(source=self.agent_id, content=msg)])
+                raise ProcessingError(msg) from llm_error
 
             # Add LLM's response to chat history
             chat_history.append(
@@ -186,7 +190,7 @@ class IterativeRagAgent(RagAgent):
                     except Exception as parse_error:
                         msg = f"Failed to parse final LLM response into {self._output_model.__name__}: {parse_error}"
                         logger.error(msg, exc_info=True)
-                        return AgentOutput(agent_id=self.agent_id, error=[ErrorEvent(source=self.agent_id, content=msg)])
+                        raise ProcessingError(msg) from parse_error
                 else:
                     return AgentOutput(agent_id=self.agent_id, outputs=chat_result.content, metadata=chat_result.model_dump())
             else:
@@ -218,9 +222,4 @@ class IterativeRagAgent(RagAgent):
 
         except Exception as final_error:
             logger.error(f"Error during final synthesis: {final_error}")
-            return AgentOutput(
-                agent_id=self.agent_id,
-                error=[ErrorEvent(
-                    source=self.agent_id, content=f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}"
-                )],
-            )
+            raise ProcessingError(f"Max iterations ({max_iterations}) reached and final synthesis failed: {final_error}") from final_error

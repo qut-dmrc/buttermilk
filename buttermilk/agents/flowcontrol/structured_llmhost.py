@@ -16,6 +16,7 @@ from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentOutput, ErrorEvent
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
@@ -128,7 +129,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                     "prompt": str(message.content),
                 },
             ),
-            cancellation_token=ctx.cancellation_token,
+            cancellation_token=ctx.cancellation_token,  # Pass as kwarg
         )
 
         if result:
@@ -163,7 +164,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             intercept_tools=True,  # This is the key flag
         )
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput | None:
         """Process the message using the LLM with intercepted tool calls."""
         # Fill template and call LLM
         try:
@@ -175,10 +176,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             )
         except Exception as e:
             logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")
-            error_event = ErrorEvent(source=self.agent_id, content=str(e))
-            return AgentOutput(agent_id=self.agent_id, metadata={"error": True}, error=[error_event])
+            raise ProcessingError(f"Error during template processing: {e!s}") from e
 
         # Call LLM with intercept flag
+        # Extract cancellation_token from kwargs if provided
+        cancellation_token = kwargs.get('cancellation_token')
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,

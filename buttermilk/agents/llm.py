@@ -22,7 +22,7 @@ from autogen_core.tools import Tool
 
 from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent
+from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
@@ -266,7 +266,7 @@ class LLMAgent(Agent):
         missing_vars_in_template = set(unfilled_vars)
         if missing_vars_in_template:
             err_msg = (
-                f"Agent '{self.agent_id}' template '{template_name}' has unfilled parameters: " f"{', '.join(sorted(list(missing_vars_in_template)))}"
+                f"Agent '{self.agent_id}' template '{template_name}' has unfilled parameters: {', '.join(sorted(list(missing_vars_in_template)))}"
             )
             if self._fail_on_unfilled_parameters:
                 raise ProcessingError(err_msg)
@@ -312,14 +312,12 @@ class LLMAgent(Agent):
         except ProcessingError as template_fill_error:  # Catch specific ProcessingError from _fill_template
             msg = f"Critical error during prompt template processing: {template_fill_error!s}"
             logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=False)
-            error_event = ErrorEvent(source=self.agent_id, content=msg)
-            return AgentOutput(agent_id=self.agent_id, error=[error_event])
+            raise ProcessingError(msg) from template_fill_error
 
         except Exception as e:  # Catch any other unexpected error during templating
             msg = f"Unexpected template error: {e!s}"
-            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=False)
-            error_event = ErrorEvent(source=self.agent_id, content=msg)
-            return AgentOutput(agent_id=self.agent_id, error=[error_event])
+            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=True)
+            raise ProcessingError(msg) from e
 
         tool_names = [getattr(tool, "name", str(tool)) for tool in self._tools]
         logger.info(
@@ -328,6 +326,8 @@ class LLMAgent(Agent):
         )
 
         # Call the LLM through our helper method
+        # Extract cancellation_token from kwargs if provided
+        cancellation_token = kwargs.get("cancellation_token")
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,

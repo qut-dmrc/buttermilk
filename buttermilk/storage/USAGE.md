@@ -67,35 +67,9 @@ storage = BigQueryStorage(config, bm=None)  # Missing BM integration
 
 ## Agent Independence Principle
 
-**Agents are strictly independent from flows** and should not configure storage directly:
-
-### ✅ Correct: Flow-Independent Agent with Config-Based Storage
-```python
-# Agent receives flow_name from config, not hardcoded
-class MyAgent(RoutedAgent):
-    def __init__(self, flow_name: str = "", **kwargs):
-        super().__init__(**kwargs)
-        self.flow_name = flow_name
-        self.uploader = AsyncDataUploader()
-        
-        # Configure storage based on flow_name from config
-        if self.flow_name:
-            self.uploader.configure_storage(self.flow_name)
-
-# Configuration (spy.yaml):
-# parameters:
-#   flow_name: ${name}  # Uses Hydra variable for flow name
-```
-
-### ❌ Incorrect: Flow-Coupled Agent
-```python
-# Don't do this - agent tied to specific flow
-class MyAgent(Agent):
-    def __init__(self, dataset_name="specific_flow"):  # BAD
-        self.uploader = AsyncDataUploader(dataset_name)
-```
-
-This separation allows agents to be reused across different flows while maintaining proper storage configuration.
+- **Agent configuration is STRICTLY independent from flow configuration**. 
+- Required flow configuration should be passed in through composable configuration at run time.
+- This separation allows agents to be reused across different flows.
 
 ## Examples
 

@@ -761,12 +761,12 @@ class BM(SessionInfo):
         requiring interactive login.
         """
         import os
-        
+
         # Check if credentials are already set in environment
         wandb_api_key = os.getenv("WANDB_API_KEY")
-        wandb_project = os.getenv("WANDB_PROJECT") 
+        wandb_project = os.getenv("WANDB_PROJECT")
         wandb_entity = os.getenv("WANDB_ENTITY")
-        
+
         # If not found in environment, try to load from secrets
         if not wandb_api_key or not wandb_project:
             try:
@@ -777,20 +777,20 @@ class BM(SessionInfo):
                         wandb_api_key = creds["WANDB_API_KEY"]
                         os.environ["WANDB_API_KEY"] = wandb_api_key
                         logger.debug("Loaded WANDB_API_KEY from secret manager")
-                    
+
                     if not wandb_project and "WANDB_PROJECT" in creds:
                         wandb_project = creds["WANDB_PROJECT"]
                         os.environ["WANDB_PROJECT"] = wandb_project
                         logger.debug("Loaded WANDB_PROJECT from secret manager")
-                    
+
                     if not wandb_entity and "WANDB_ENTITY" in creds:
                         wandb_entity = creds["WANDB_ENTITY"]
                         os.environ["WANDB_ENTITY"] = wandb_entity
                         logger.debug("Loaded WANDB_ENTITY from secret manager")
-                        
+
             except Exception as e:
                 logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
-        
+
         # Log credential status (without exposing the actual API key)
         if wandb_api_key:
             logger.debug(f"WANDB credentials configured: API_KEY=*****, PROJECT={wandb_project}, ENTITY={wandb_entity}")
@@ -817,7 +817,7 @@ class BM(SessionInfo):
         try:
             # Set up credentials before initializing weave
             self._setup_weave_credentials()
-            
+
             # Try to initialize weave with a reasonable timeout
             logger.debug(f"Initializing Weave with collection: {collection_name}")
             client = weave.init(collection_name)
@@ -925,7 +925,7 @@ class BM(SessionInfo):
         info_file_handler.addFilter(context_filter)
 
         logger.addHandler(info_file_handler)
-        logger.info(f"INFO logging enabled - writing to: {info_log_filename}")
+        logger.highlight(f"INFO logging enabled - writing to: {info_log_filename}")
 
         # Add debug file logging when verbose is True
         if verbose:
@@ -944,7 +944,7 @@ class BM(SessionInfo):
 
             # Add handler to the logger
             logger.addHandler(debug_file_handler)
-            logger.info(f"DEBUG logging enabled - writing to: {debug_log_filename}")
+            logger.highlight(f"DEBUG logging enabled - writing to: {debug_log_filename}")
 
         # Defer Google Cloud Logging setup to improve startup performance
         # Cloud logging will be initialized on first cloud operation

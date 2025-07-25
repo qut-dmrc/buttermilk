@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Iterator
 
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 
@@ -117,8 +118,8 @@ class StorageClient:
                 bq_client = self.get_bq_client()
                 self._schema_cache = bq_client.schema_from_json(self.config.schema_path)
             except Exception as e:
-                logger.warning(f"Failed to load schema from {self.config.schema_path}: {e}")
                 self._schema_cache = None
+                raise FatalError(f"Failed to load schema from {self.config.schema_path}: {e}") from e
         return self._schema_cache
 
     def get_table_ref(self) -> str:

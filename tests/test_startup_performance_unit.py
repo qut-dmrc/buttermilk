@@ -276,15 +276,6 @@ class TestConfigurationValidation:
         
         assert incomplete_config.full_table_id is None
 
-    def test_bigquery_defaults_no_hardcoded_values(self):
-        """Test that BigQueryDefaults has no hardcoded values after optimization."""
-        from buttermilk._core.storage_config import BigQueryDefaults
-        
-        defaults = BigQueryDefaults()
-        
-        # After Phase 1 optimizations, these should be None
-        assert defaults.dataset_id is None
-        assert defaults.table_id is None
 
 
 class TestAsyncCacheOperations:

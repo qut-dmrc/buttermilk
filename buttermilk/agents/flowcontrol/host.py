@@ -651,16 +651,14 @@ class HostAgent(Agent):
         self,
         *,
         message: AgentInput,
-        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> AgentOutput:
+    ) -> AgentOutput | None:
         """Process messages.
         
         Base implementation returns an error since non-LLM hosts don't process direct inputs.
         Subclasses that support LLM-based processing should override this method.
         """
-        placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
-        return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
+        raise ProcessingError("Host agent does not process direct inputs via _process")
 
     async def _route_tool_calls_to_agents(
         self,

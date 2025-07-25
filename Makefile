@@ -9,17 +9,36 @@ all: test
 config:
 	uv run python -m buttermilk.runner.cli -c job
 
+kill_chat:
+    @echo "Killing chat (frontend) process..."
+    @pkill -SIGTERM -f "node.*frontend/chat.*vite dev" || true
+    @sleep 5
+    @pkill -SIGKILL -f "node.*frontend/chat.*vite dev" || true
+
+kill_api:
+    @echo "Killing API (buttermilk) process..."
+    @pkill -SIGTERM -f "python.*buttermilk.runner.cli" || true
+    @sleep 5
+    @pkill -SIGKILL -f "python.*buttermilk.runner.cli" || true
+
+kill: kill_chat kill_api
+    @echo "All Buttermilk processes terminated."
+
+# For production API server ONLY.
 api:
 	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
 
-# Run API server in debug mode with output capture for automated testing
+# Run API server in debug mode. Use this one for development.
 debug:
+	@echo "Killing any existing API processes..."
+	kill_api
 	@echo "Starting Buttermilk API in debug mode..."
 	@echo "Logs are written to: /tmp/buttermilk_<run_id>.log"
-	@echo "To find the latest log: ls -la /tmp/buttermilk_*.log | tail -1"
+	@echo "To find the latest log: ./scripts/mcp_debug/getlog.sh"
 	@echo "Starting server in background..."
-	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full verbose=true > /dev/null 2>&1 &
-	@echo "Server starting... Check logs with: tail -f /tmp/buttermilk_*.log"
+	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=debug verbose=true > /dev/null 2>&1 &
+	@echo "Server starting... Latest log file (waiting...):"
+	sleep 5s && ./scripts/mcp_debug/getlog.sh 
 
 # Run unit tests and generate a coverage report.
 coverage:

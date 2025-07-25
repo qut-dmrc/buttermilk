@@ -1,7 +1,5 @@
 """Test tool calling functionality across all LLM models."""
 
-import json
-from typing import Any
 
 import pytest
 from autogen_core import CancellationToken
@@ -15,7 +13,7 @@ from buttermilk._core.llms import CHATMODELS
 MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
 
 # Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
-MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o3mini"}
+MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
 
 
 class WeatherResponse(BaseModel):
@@ -35,6 +33,7 @@ async def get_weather(location: str) -> WeatherResponse:
 
     Returns:
         WeatherResponse with weather information
+
     """
     # Mock weather data based on location
     weather_data = {
@@ -60,6 +59,7 @@ async def calculate_sum(a: float, b: float) -> float:
 
     Returns:
         The sum of a and b
+
     """
     return a + b
 
@@ -67,7 +67,6 @@ async def calculate_sum(a: float, b: float) -> float:
 @pytest.mark.anyio
 async def test_single_tool_call(llm_expensive):
     """Test that each LLM can make a single tool call."""
-
     # Skip if model doesn't support tools
     model_name = getattr(llm_expensive, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
@@ -105,7 +104,6 @@ async def test_single_tool_call(llm_expensive):
 @pytest.mark.anyio
 async def test_multiple_tool_calls(llm_expensive):
     """Test that LLMs can handle multiple tools and select the right one."""
-
     # Skip if model doesn't support tools
     model_name = getattr(llm_expensive, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
@@ -151,7 +149,6 @@ async def test_multiple_tool_calls(llm_expensive):
 @pytest.mark.anyio
 async def test_no_tool_needed(llm_expensive):
     """Test that LLMs don't use tools when not needed."""
-
     # Skip if model doesn't support tools
     model_name = getattr(llm_expensive, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
@@ -211,7 +208,10 @@ async def test_structured_output_with_tools(llm):
 
     # Test with structured output (tools should not be passed for certain models)
     response = await llm.call_chat(
-        messages=messages, tools_list=[calc_tool], schema=Answer, cancellation_token=CancellationToken()  # This might be ignored for some models
+        messages=messages,
+        tools_list=[calc_tool],
+        schema=Answer,
+        cancellation_token=CancellationToken(),  # This might be ignored for some models
     )
 
     # Verify structured response
@@ -236,7 +236,6 @@ async def test_structured_output_with_tools(llm):
 @pytest.mark.anyio
 async def test_all_models_basic_tool_call(model_name, bm):
     """Test that all configured models can make basic tool calls."""
-
     # Skip if model not available
     if model_name not in bm.llms.connections:
         pytest.skip(f"Model {model_name} not configured")

@@ -1,7 +1,7 @@
 # BigQuery configuration for toxicity flow data
 type: bigquery
 project_id: prosocial-443205
-dataset_id: toxicity
+dataset_id: testing
 table_id: flow
 dataset_name: flow
-schema_path: flow.json
+schema_path: ./schemas/flow.json

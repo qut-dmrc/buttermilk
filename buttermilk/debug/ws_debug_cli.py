@@ -9,12 +9,13 @@ import asyncio
 import glob
 import json
 import os
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import click
+from rich import print
 from rich.console import Console
 
 # Use the flow test client from the agents test utilities
@@ -29,7 +30,7 @@ class NonInteractiveDebugClient:
         self.port = port
         self.base_url = f"http://{host}:{port}"
         self.ws_url = f"ws://{host}:{port}/ws"
-        self.client: Optional[FlowTestClient] = None
+        self.client: FlowTestClient | None = None
         self.console = Console()
         self.session_file = Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
 
@@ -39,11 +40,11 @@ class NonInteractiveDebugClient:
             "session_id": session_id,
             "host": self.host,
             "port": self.port,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         self.session_file.write_text(json.dumps(session_data, indent=2))
 
-    def load_session(self) -> Optional[str]:
+    def load_session(self) -> str | None:
         """Load session ID from file if it exists."""
         if self.session_file.exists():
             try:
@@ -55,7 +56,7 @@ class NonInteractiveDebugClient:
                 pass
         return None
 
-    async def connect(self, session_id: Optional[str] = None):
+    async def connect(self, session_id: str | None = None):
         """Connect to the WebSocket server, optionally reusing a session."""
         try:
             if session_id:
@@ -64,7 +65,7 @@ class NonInteractiveDebugClient:
                 self.client = FlowTestClient(
                     base_url=self.base_url,
                     ws_url=self.ws_url,
-                    direct_ws_url=direct_ws_url
+                    direct_ws_url=direct_ws_url,
                 )
                 await self.client.connect()
                 self.client.session_id = session_id  # Set the session ID manually
@@ -72,7 +73,7 @@ class NonInteractiveDebugClient:
                 # Normal connection that creates a new session
                 self.client = FlowTestClient(
                     base_url=self.base_url,
-                    ws_url=self.ws_url
+                    ws_url=self.ws_url,
                 )
                 await self.client.connect()
                 if self.client.session_id:
@@ -106,17 +107,19 @@ class NonInteractiveDebugClient:
                 "query": query,
                 "record": record,
                 "criteria": criteria,
-                "messages": []
+                "messages": [],
             }
 
             for msg in self.client.collector.all_messages:
-                result["messages"].append({
-                    "timestamp": msg.timestamp.isoformat(),
-                    "type": msg.type,
-                    "content": msg.content,
-                    "agent_role": msg.agent_role,
-                    "data": msg.data
-                })
+                result["messages"].append(
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "type": msg.type,
+                        "content": msg.content,
+                        "agent_role": msg.agent_role,
+                        "data": msg.data,
+                    },
+                )
 
             return result
 
@@ -125,7 +128,7 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def send_message(self, message_type: str, content: str, wait_time: int = 5, session_id: Optional[str] = None) -> dict:
+    async def send_message(self, message_type: str, content: str, wait_time: int = 5, session_id: str | None = None) -> dict:
         """Send a message to an existing session."""
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
@@ -143,7 +146,7 @@ class NonInteractiveDebugClient:
                 # Generic message sending
                 message = {
                     "type": message_type,
-                    "content": content
+                    "content": content,
                 }
                 await self.client.ws.send_json(message)
 
@@ -155,19 +158,21 @@ class NonInteractiveDebugClient:
                 "session_id": session_id,
                 "message_sent": {
                     "type": message_type,
-                    "content": content
+                    "content": content,
                 },
-                "messages": []
+                "messages": [],
             }
 
             for msg in self.client.collector.all_messages:
-                result["messages"].append({
-                    "timestamp": msg.timestamp.isoformat(),
-                    "type": msg.type,
-                    "content": msg.content,
-                    "agent_role": msg.agent_role,
-                    "data": msg.data
-                })
+                result["messages"].append(
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "type": msg.type,
+                        "content": msg.content,
+                        "agent_role": msg.agent_role,
+                        "data": msg.data,
+                    },
+                )
 
             return result
 
@@ -176,8 +181,13 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def wait_for_messages(self, session_id: Optional[str] = None, wait_time: int = 5,
-                               pattern: Optional[str] = None, message_type: Optional[str] = None) -> dict:
+    async def wait_for_messages(
+        self,
+        session_id: str | None = None,
+        wait_time: int = 5,
+        pattern: str | None = None,
+        message_type: str | None = None,
+    ) -> dict:
         """Connect to existing session and wait for messages."""
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
@@ -199,6 +209,7 @@ class NonInteractiveDebugClient:
 
             if pattern:
                 import re
+
                 pattern_re = re.compile(pattern, re.IGNORECASE)
                 messages = [msg for msg in messages if pattern_re.search(msg.content or "")]
 
@@ -207,19 +218,21 @@ class NonInteractiveDebugClient:
                 "session_id": session_id,
                 "filter": {
                     "pattern": pattern,
-                    "message_type": message_type
+                    "message_type": message_type,
                 },
-                "messages": []
+                "messages": [],
             }
 
             for msg in messages:
-                result["messages"].append({
-                    "timestamp": msg.timestamp.isoformat(),
-                    "type": msg.type,
-                    "content": msg.content,
-                    "agent_role": msg.agent_role,
-                    "data": msg.data
-                })
+                result["messages"].append(
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "type": msg.type,
+                        "content": msg.content,
+                        "agent_role": msg.agent_role,
+                        "data": msg.data,
+                    },
+                )
 
             return result
 
@@ -228,8 +241,8 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def get_logs(self, lines: int = 50) -> dict:
-        """Get recent log lines."""
+    async def get_logs(self, lines: int = 50, min_level: str = "INFO") -> dict:
+        """Get recent log lines, with an optional minimum level filter."""
         log_files = glob.glob("/tmp/buttermilk_*.log")
         if not log_files:
             return {"error": "No log files found in /tmp/"}
@@ -237,14 +250,30 @@ class NonInteractiveDebugClient:
         # Get the most recent log file
         latest_log = max(log_files, key=os.path.getmtime)
 
+        levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
+        min_level_num = levels.get(min_level.upper(), 1)
+
+        def get_line_level(line: str) -> int:
+            match = re.search(r" - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ", line)
+            if match:
+                return levels.get(match.group(1), -1)
+            return 99
+
         try:
-            with open(latest_log, "r") as f:
+            with open(latest_log) as f:
                 all_lines = f.readlines()
-                recent_lines = all_lines[-lines:]
+
+                # Filter by level
+                if min_level_num > 0:
+                    filtered_lines = [line for line in all_lines if get_line_level(line) >= min_level_num]
+                else:
+                    filtered_lines = all_lines
+
+                recent_lines = filtered_lines[-lines:]
 
                 return {
                     "log_file": latest_log,
-                    "lines": [line.rstrip() for line in recent_lines]
+                    "lines": [line.rstrip() for line in recent_lines],
                 }
         except Exception as e:
             return {"error": f"Error reading log file: {e}"}
@@ -259,7 +288,7 @@ class NonInteractiveDebugClient:
             # For now, return a placeholder
             return {
                 "note": "Flow listing not yet implemented in server API",
-                "common_flows": ["simple_flow", "test_flow", "debug_flow"]
+                "common_flows": ["simple_flow", "test_flow", "debug_flow"],
             }
         finally:
             await self.disconnect()
@@ -330,21 +359,17 @@ def start(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str
 def start_debug(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str):
     """Start a flow with debug configuration (llms=debug, single criteria)."""
     # Import the runner CLI to start with proper configuration
-    import subprocess
-    import sys
-    import tempfile
-    import time
-    from pathlib import Path
-    
+
     console = Console()
-    
+
     if flow_name == "trans":
         # Start the API server with debug configuration in the background
         console.print(f"[yellow]Starting debug session for {flow_name} flow with criteria={criteria}[/yellow]")
-        
+
         # Check if server is already running
         try:
             import requests
+
             response = requests.get(f"http://{ctx.obj['HOST']}:{ctx.obj['PORT']}/health", timeout=1)
             if response.status_code == 200:
                 console.print("[green]✓[/green] Server is already running")
@@ -353,32 +378,33 @@ def start_debug(ctx, flow_name: str, query: str, wait: int, record: str, criteri
                 return
         except requests.RequestException:
             console.print("[red]✗[/red] Server is not running. Please start it with:")
-            console.print(f"[cyan]uv run python -m buttermilk.runner.cli \"+flows=[{flow_name}]\" +run=api llms=debug trans.parameters.criteria=\"[{criteria}]\"[/cyan]")
+            console.print(
+                f'[cyan]uv run python -m buttermilk.runner.cli "+flows=[{flow_name}]" +run=api llms=debug trans.parameters.criteria="[{criteria}]"[/cyan]',
+            )
             return
-    
+
     # Now use the regular start flow functionality with record and criteria
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
     result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
 
     if ctx.obj["JSON_OUTPUT"]:
         print(json.dumps(result, indent=2))
+    elif "error" in result:
+        console.print(f"[red]Error: {result['error']}[/red]")
     else:
-        if "error" in result:
-            console.print(f"[red]Error: {result['error']}[/red]")
-        else:
-            console.print(f"[green]Started debug session for '{flow_name}' with criteria='{criteria}'[/green]")
-            console.print(f"Session: {result['session_id']}")
-            console.print(f"Query: {query}")
-            if record:
-                console.print(f"Record: {record}")
-            console.print(f"Criteria: {criteria}")
-            console.print(f"\nMessages ({len(result['messages'])}):")
-            for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
-                msg_type = msg["type"]
-                content = msg["content"] or "(no content)"
-                agent = msg["agent_role"] or "system"
-                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+        console.print(f"[green]Started debug session for '{flow_name}' with criteria='{criteria}'[/green]")
+        console.print(f"Session: {result['session_id']}")
+        console.print(f"Query: {query}")
+        if record:
+            console.print(f"Record: {record}")
+        console.print(f"Criteria: {criteria}")
+        console.print(f"\nMessages ({len(result['messages'])}):")
+        for msg in result["messages"]:
+            timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+            msg_type = msg["type"]
+            content = msg["content"] or "(no content)"
+            agent = msg["agent_role"] or "system"
+            console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
 
 
 @cli.command()
@@ -390,31 +416,35 @@ def start_server(flow_name: str, criteria: str, host: str, port: int):
     """Start the API server with debug configuration."""
     import subprocess
     import sys
-    
+
     console = Console()
-    
+
     # Build the command to start the server with debug configuration
     if flow_name == "trans":
         cmd = [
-            sys.executable, "-m", "buttermilk.runner.cli",
+            sys.executable,
+            "-m",
+            "buttermilk.runner.cli",
             f"+flows=[{flow_name}]",
             "+run=api",
             "llms=debug",
-            f"trans.parameters.criteria=[{criteria}]"
+            f"trans.parameters.criteria=[{criteria}]",
         ]
     else:
         cmd = [
-            sys.executable, "-m", "buttermilk.runner.cli", 
+            sys.executable,
+            "-m",
+            "buttermilk.runner.cli",
             f"+flows=[{flow_name}]",
             "+run=api",
-            "llms=debug"
+            "llms=debug",
         ]
-    
+
     console.print(f"[yellow]Starting debug server for {flow_name} flow...[/yellow]")
     console.print(f"[dim]Command: {' '.join(cmd)}[/dim]")
-    console.print(f"[cyan]To start a flow, run:[/cyan]")
+    console.print("[cyan]To start a flow, run:[/cyan]")
     console.print(f"[cyan]uv run python -m buttermilk.debug.ws_debug_cli start-debug {flow_name}[/cyan]")
-    
+
     # Execute the command
     try:
         result = subprocess.run(cmd, check=True, cwd="/src/buttermilk")
@@ -430,7 +460,7 @@ def start_server(flow_name: str, criteria: str, host: str, port: int):
 @click.option("--wait", default=5, help="Seconds to wait for responses")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
-def send(ctx, content: str, msg_type: str, wait: int, session: Optional[str]):
+def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
     """Send a message to the current session."""
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
     result = asyncio.run(client.send_message(msg_type, content, wait, session))
@@ -459,7 +489,7 @@ def send(ctx, content: str, msg_type: str, wait: int, session: Optional[str]):
 @click.option("--type", "msg_type", help="Filter by message type")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
-def wait(ctx, wait: int, pattern: Optional[str], msg_type: Optional[str], session: Optional[str]):
+def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None):
     """Wait for messages from the current session."""
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
     result = asyncio.run(client.wait_for_messages(session, wait, pattern, msg_type))
@@ -524,11 +554,18 @@ def clear_session(ctx):
 
 @cli.command()
 @click.option("--lines", "-n", default=50, help="Number of log lines to show")
+@click.option(
+    "--level",
+    "-l",
+    default="INFO",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    help="Minimum log level to display.",
+)
 @click.pass_context
-def logs(ctx, lines: int):
+def logs(ctx, lines: int, level: str):
     """Show recent log lines from Buttermilk log files."""
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.get_logs(lines))
+    result = asyncio.run(client.get_logs(lines, min_level=level))
 
     if ctx.obj["JSON_OUTPUT"]:
         print(json.dumps(result, indent=2))
@@ -582,8 +619,7 @@ def test_connection(ctx):
         if await client.connect():
             await client.disconnect()
             return {"status": "success", "url": client.ws_url}
-        else:
-            return {"status": "failed", "url": client.ws_url}
+        return {"status": "failed", "url": client.ws_url}
 
     result = asyncio.run(test())
 
