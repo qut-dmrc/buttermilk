@@ -480,6 +480,10 @@ class HostAgent(Agent):
 
             # Store any parameters passed in
             self._host_input_parameters = message.inputs
+            
+            # Check for and handle any initial records, prompts, or URIs in parameters
+            await self._handle_initial_data()
+            
             # Announce, and trigger agents to announce themselves
             msg = AgentAnnouncement(
                 content="Host joining",
@@ -561,6 +565,44 @@ class HostAgent(Agent):
                 except asyncio.CancelledError:
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
+
+    async def _handle_initial_data(self) -> None:
+        """Handle any initial data provided in the parameters.
+        
+        This method checks for records, record_id, uri, or prompt in the
+        parameters and publishes them to the groupchat for all agents to receive.
+        This method is designed to be overridable by subclasses that might want
+        to handle initial data differently.
+        """
+        # Check if we have records directly provided
+        records = self._host_input_parameters.get("records", [])
+        if records:
+            logger.info(f"Host {self.agent_name} publishing {len(records)} initial records to groupchat")
+            for record in records:
+                await self._publish(record)
+            return
+        
+        # Check if we need to fetch a record by ID
+        record_id = self._host_input_parameters.get("record_id")
+        if record_id:
+            logger.info(f"Host {self.agent_name} would fetch record with ID: {record_id} (not implemented)")
+            # TODO: Implement record fetching by ID if needed
+            # This would require access to storage configuration
+            return
+        
+        # Check if we need to fetch from a URI
+        uri = self._host_input_parameters.get("uri")
+        if uri:
+            logger.info(f"Host {self.agent_name} would fetch record from URI: {uri} (not implemented)")
+            # TODO: Implement URI fetching if needed
+            return
+        
+        # Check if there's a prompt to send
+        prompt = self._host_input_parameters.get("prompt")
+        if prompt:
+            logger.info(f"Host {self.agent_name} has initial prompt: {prompt[:50]}...")
+            # The prompt will be available to all agents via _host_input_parameters
+            # which is passed in StepRequest.parameters
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""

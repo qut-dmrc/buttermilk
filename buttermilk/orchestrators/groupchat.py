@@ -360,14 +360,9 @@ class AutogenOrchestrator(Orchestrator):
                 logger.error(f"Error during setup: {e}")
                 raise FatalError from e
 
-            # 2. Load initial data if provided
-            if request:
-                await self._fetch_initial_records(request)  # Use helper for clarity
-                if self._records:
-                    for record in self._records:
-                        # send each record to all clients
-                        logger.debug(f"[AutogenOrchestrator._run] Publishing record: {record}")
-                        await self._runtime.publish_message(record, topic_id=self._topic)
+            # 2. Pass any initial data handling to the host via parameters
+            # The host agent is now responsible for checking if there are records/prompts
+            # in the parameters and handling them appropriately
 
             # 3. Wait for termination.
             while True:
@@ -386,8 +381,6 @@ class AutogenOrchestrator(Orchestrator):
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
                                 role="orchestrator",
-                                status="COMPLETED",
-                                message="Flow completed successfully.",
                                 more_tasks_remain=False,
                             ),
                             topic_id=DefaultTopicId(type=MANAGER),
