@@ -420,14 +420,18 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if hasattr(child_call, "ui_url"):
             tracing_link = child_call.ui_url
 
-            # Handle case where _process returns None (e.g., UI agents that don't produce output)
-            if result is None:
-                return None
+        # Handle case where _process returns None (e.g., UI agents that don't produce output)
+        if result is None:
+            return None
 
         # Create AgentTrace from the result
+        trace_data = result.model_dump()
+
+        # Overwrite the call_id with the child_call's ID from Weave
+        trace_data['call_id'] = child_call.id
+    
         trace = AgentTrace(
-            **result.model_dump() if result else {},
-            call_id=child_call.id,
+            **trace_data,
             agent_info=self._cfg,
             tracing_link=tracing_link,
             parent_call_id=parent_call.id if parent_call else None,
