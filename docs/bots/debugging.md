@@ -112,7 +112,7 @@ uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=fu
 curl -s http://localhost:8000/health | jq .
 
 # Stop API server
-pkill -f "uv run.*buttermilk.runner"
+make kill_api
 ```
 
 #### 2. WebSocket Debug CLI
@@ -511,8 +511,7 @@ The debugging tools follow the principle of "Simple tools, smart LLM":
 python scripts/mcp_debug/buttermilk_server.py stop
 
 # If that fails, force kill
-pkill -9 -f python
+make kill_api 
 
-# Clear ports
-lsof -ti:8000 | xargs kill -9
+# or `make kill_chat` for the frontend, `make kill` for both.
 ```

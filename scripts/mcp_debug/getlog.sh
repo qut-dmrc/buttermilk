@@ -8,5 +8,5 @@ if [ -z "$BMLOG" ]; then
   echo "No buttermilk logs found in /tmp."
   exit 1
 fi
-export BMLOG
-echo "Latest log (\$BMLOG): $BMLOG"
+
+echo $BMLOG
