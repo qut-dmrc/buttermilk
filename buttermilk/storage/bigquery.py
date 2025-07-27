@@ -176,7 +176,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    "Schema is required for BigQuery operations. ",
+                    "Schema is required for BigQuery operations. Please ensure that a valid schema file is provided in the configuration.",
                 )
 
             # Use the proven upload_rows pipeline
