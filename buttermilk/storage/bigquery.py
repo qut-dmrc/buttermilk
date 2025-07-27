@@ -78,7 +78,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    f"Failed to load schema from {self.config.schema_path}. " "BigQuery storage requires a valid schema file.",
+                    f"Failed to load schema from {self.config.schema_path}. BigQuery storage requires a valid schema file."
                 )
             self._schema_validated = True
 
