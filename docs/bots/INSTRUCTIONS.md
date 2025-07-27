@@ -19,7 +19,8 @@ Specific rules:
 - Success = user's definition, not yours. If asked to SHOW something, you must visually demonstrate it, not just prove it exists.
 - When you can't complete a task as specified, STOP immediately and say so. Don't waste time on workarounds.
 - **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md` and use the documented tools (WebSocket CLI, log analyzers, etc.) BEFORE reading source code. Going straight to source code is a workflow violation.
-- **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 50 lines, summarize key findings instead. 
+- **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 50 lines, summarize key findings instead.
+- **NO IMPLICIT DEFAULTS**: NEVER use implicit defaults or fallback behaviors. All configuration must be explicit. If something is missing, FAIL FAST with clear error messages. Do not infer, assume, or provide defaults. 
 
 ## CRITICAL FIRST STEPS
 1. **For Debugging Tasks**: ALWAYS read `docs/bots/debugging.md` FIRST
