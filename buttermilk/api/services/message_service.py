@@ -48,6 +48,7 @@ class ChatMessage(BaseModel):
         "research_result",
         "differences",
         "judge_reasons",
+        "start_flow",
         "system_message",  # Added system_message
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())

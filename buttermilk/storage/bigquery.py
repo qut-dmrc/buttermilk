@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from google.cloud import bigquery
 from pydantic import BaseModel
@@ -51,8 +51,7 @@ class BigQueryStorage(Storage, StorageClient):
         # CRITICAL: Require explicit schema - no implicit defaults allowed
         if not config.schema_path:
             raise StorageError(
-                "BigQuery storage requires explicit schema_path. "
-                "No implicit defaults or schema inference allowed."
+                "BigQuery storage requires explicit schema_path. ",
             )
 
         # Validate that we have the required components for BigQuery table operations
@@ -79,8 +78,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    f"Failed to load schema from {self.config.schema_path}. "
-                    "BigQuery storage requires a valid schema file."
+                    f"Failed to load schema from {self.config.schema_path}. " "BigQuery storage requires a valid schema file.",
                 )
             self._schema_validated = True
 
@@ -124,13 +122,13 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error loading records from BigQuery: {e}")
             raise StorageError(f"Failed to read from BigQuery: {e}") from e
 
-    def save(self, records: list[BaseModel] | BaseModel) -> None:
+    def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
         """Save Pydantic models to BigQuery table.
 
         Uses the existing upload_rows pipeline for proper serialization and error handling.
 
         Args:
-            records: Single Pydantic model or list of models to save
+            records: Single Pydantic model, dict, or list of models/dicts to save
 
         Raises:
             StorageError: If save operation fails
@@ -154,12 +152,21 @@ class BigQueryStorage(Storage, StorageClient):
             # Convert Pydantic models to list of dicts for upload_rows
             rows_to_insert = []
             for record in records:
-                # Use Pydantic's model_dump for proper serialization
-                row = record.model_dump(mode="json")
-                # Add storage metadata
-                row["dataset_name"] = self.config.dataset_name
-                if hasattr(self.config, "split_type") and self.config.split_type:
-                    row["split_type"] = self.config.split_type
+                # Handle both Pydantic models and plain dicts
+                if isinstance(record, dict):
+                    row = record
+                elif hasattr(record, "model_dump"):
+                    # Use Pydantic's model_dump for proper serialization
+                    row = record.model_dump(mode="json")
+                else:
+                    # Fallback for other types - convert to dict if possible
+                    try:
+                        row = dict(record)
+                    except Exception as e:
+                        raise StorageError(
+                            f"Cannot convert record to dict: {type(record)}. Expected Pydantic model or dict. Error: {e}",
+                        )
+
                 rows_to_insert.append(row)
 
             # Use the existing upload_rows function which handles proper serialization
@@ -169,8 +176,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    "Schema is required for BigQuery operations. "
-                    "No implicit defaults allowed."
+                    "Schema is required for BigQuery operations. ",
                 )
 
             # Use the proven upload_rows pipeline
@@ -236,6 +242,7 @@ class BigQueryStorage(Storage, StorageClient):
 
         Raises:
             StorageError: If table creation fails or schema is missing
+
         """
         # Validate schema on first use
         self._validate_schema()
@@ -247,16 +254,14 @@ class BigQueryStorage(Storage, StorageClient):
             expected_schema = self.get_schema()
             if not expected_schema:
                 raise StorageError(
-                    "Schema is required for table creation. "
-                    "Configure schema_path in your storage config."
+                    "Schema is required for table creation. Configure schema_path in your storage config.",
                 )
 
             if self.exists():
                 # CRITICAL: Never modify existing tables
                 logger.info(f"Table {table_id} already exists. Skipping creation.")
                 logger.debug(
-                    "BigQuery storage will not modify existing tables. "
-                    "If schema changes are needed, handle them manually."
+                    "BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
                 )
                 return
 
@@ -377,4 +382,3 @@ class BigQueryStorage(Storage, StorageClient):
                 content=str(getattr(row, "content", "Error loading content")),
                 metadata={"parse_error": str(e)},
             )
-
