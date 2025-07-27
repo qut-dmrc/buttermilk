@@ -360,7 +360,7 @@ class AutogenOrchestrator(Orchestrator):
                 logger.error(f"Error during setup: {e}")
                 raise FatalError from e
 
-            # 2. Pass any initial data handling to the host via parameters
+            # 2. Pass any initial data handling to the host via ConductorRequest.inputs
             # The host agent is now responsible for checking if there are records/prompts
             # in the parameters and handling them appropriately
 

@@ -12,7 +12,8 @@ from pydantic import ConfigDict, Field, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.agent import Agent  # Buttermilk base Agent class
-from buttermilk._core.contract import AgentInput, AgentTrace  # Buttermilk message contracts
+from buttermilk._core.contract import AgentInput, AgentOutput  # Buttermilk message contracts
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk.utils.gsheet import GSheet  # Utility for Google Sheets interaction
 
 
@@ -77,7 +78,7 @@ class GSheetExporter(Agent):
         *,
         message: AgentInput,
         **kwargs: Any, # Allow for additional keyword arguments from base class or callers
-    ) -> AgentTrace:
+    ) -> AgentOutput | None:
         """Processes the input data and exports it to a Google Sheet.
 
         This method takes data from `message.inputs`, converts it to a Pandas
@@ -93,25 +94,19 @@ class GSheetExporter(Agent):
                       but available for future extensions or if called by a wrapper).
 
         Returns:
-            AgentTrace: An `AgentTrace` object. The `outputs` attribute of the
-            trace will contain a dictionary with `sheet_url` and `sheet_id` of
-            the Google Sheet where data was saved, along with other save parameters.
-            If `self.save` is not configured, it might log an error or behave
-            unexpectedly depending on `_gsheet.save_gsheet` implementation.
+            AgentOutput | None: An `AgentOutput` object with `outputs` containing
+            a dictionary with `sheet_url` and `sheet_id` of the Google Sheet where
+            data was saved, along with other save parameters.
+
+        Raises:
+            ProcessingError: If inputs are missing, invalid format, or if saving fails.
         """
         from buttermilk.utils.gsheet import format_strings  # Local import for utility
 
         if not message.inputs:
             logger.warning(f"GSheetExporter '{self.agent_id}': Received message with no inputs to export.")
             # Return an empty or error trace
-            return AgentTrace(
-                agent_id=self.agent_id,
-                session_id=self.session_id,
-                agent_info=self._cfg,
-                inputs=message,
-                outputs={"status": "No data provided in inputs."},
-                error=["No data in message.inputs to export."]
-            )
+            raise ProcessingError("No data in message.inputs to export.")
 
         # Ensure inputs is a list of records for DataFrame conversion
         input_data_list: list[dict[str, Any]]
@@ -121,35 +116,19 @@ class GSheetExporter(Agent):
             input_data_list = message.inputs # type: ignore # Assuming list of dicts
         else:
             logger.error(f"GSheetExporter '{self.agent_id}': message.inputs is not a dict or list of dicts. Type: {type(message.inputs)}")
-            return AgentTrace(
-                agent_id=self.agent_id,
-                session_id=self.session_id,
-                agent_info=self._cfg,
-                inputs=message,
-                outputs={"status": "Invalid input data format."},
-                error=[f"message.inputs type {type(message.inputs)} not supported."]
-            )
+            raise ProcessingError(f"message.inputs type {type(message.inputs)} not supported.")
 
         try:
             dataset_df = pd.DataFrame.from_records(input_data_list)
         except Exception as e:
             logger.error(f"GSheetExporter '{self.agent_id}': Failed to create DataFrame from inputs: {e!s}", exc_info=True)
-            return AgentTrace(
-                agent_id=self.agent_id,
-                session_id=self.session_id,
-                agent_info=self._cfg,
-                inputs=message,
-                outputs={"status": "DataFrame creation failed."},
-                error=[f"Failed to create DataFrame: {e!s}"]
-            )
+            raise ProcessingError(f"Failed to create DataFrame: {e!s}") from e
 
         if dataset_df.empty:
             logger.info(f"GSheetExporter '{self.agent_id}': Input data resulted in an empty DataFrame. Nothing to export.")
-            return AgentTrace(
+            # Empty dataset - return None or minimal output
+            return AgentOutput(
                 agent_id=self.agent_id,
-                session_id=self.session_id,
-                agent_info=self._cfg,
-                inputs=message,
                 outputs={"status": "Empty dataset, nothing exported."},
             )
 
@@ -172,20 +151,9 @@ class GSheetExporter(Agent):
             logger.info(f"GSheetExporter '{self.agent_id}': Successfully saved data to Google Sheet. URL: {sheet_info.url}, ID: {sheet_info.id}")
         except Exception as e:
             logger.error(f"GSheetExporter '{self.agent_id}': Failed to save data to Google Sheet: {e!s}", exc_info=True)
-            return AgentTrace(
-                agent_id=self.agent_id,
-                session_id=self.session_id,
-                agent_info=self._cfg,
-                inputs=message,
-                outputs={"status": "Failed to save to Google Sheet."},
-                error=[f"GSheet save error: {e!s}"]
-            )
+            raise ProcessingError(f"GSheet save error: {e!s}") from e
 
-        trace = AgentTrace(
+        return AgentOutput(
             agent_id=self.agent_id,
-            session_id=self.session_id,
-            agent_info=self._cfg,
-            inputs=message,
             outputs=output_payload,
         )
-        return trace

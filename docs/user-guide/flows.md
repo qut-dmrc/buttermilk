@@ -367,16 +367,15 @@ uv run python -m buttermilk.runner.cli --info searchpath
 uv run python -m buttermilk.runner.cli run=console flow=my_flow --cfg job
 ```
 
-**Server won't start:**
+**Servers won't start:**
 ```bash
-# Check for existing processes
-ps aux | grep buttermilk
-pkill -f buttermilk.runner.cli
+# Terminate existing frontend and backend processes
+make kill
 ```
 
 **Authentication errors:**
 ```bash
-# Re-authenticate
+# Re-authenticate (interactive)
 gcloud auth login
 gcloud auth application-default login
 ```
@@ -387,7 +386,7 @@ Start the API server with enhanced logging:
 
 ```bash
 # Stop existing server
-pkill -f buttermilk.runner.cli
+make kill_api
 
 # Start in debug mode
 make debug

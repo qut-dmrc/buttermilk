@@ -1,27 +1,31 @@
 """Base storage classes for unified storage operations."""
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterator, TypeVar
 
-from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from pydantic import BaseModel
+
+from buttermilk._core.exceptions import FatalError
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
 
+# Generic type for any Pydantic model
+T = TypeVar("T", bound=BaseModel)
+
 
 class Storage(ABC):
     """Base class for unified storage operations (read and write).
-    
+
     This abstract base class defines the interface for storage backends
     that support both reading and writing operations with the same configuration.
     """
 
     def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
         """Initialize storage with configuration and BM instance.
-        
+
         Args:
             config: Storage configuration
             bm: Buttermilk instance for accessing clients and defaults
@@ -30,27 +34,27 @@ class Storage(ABC):
         self.bm = bm
 
     @abstractmethod
-    def __iter__(self) -> Iterator[Record]:
-        """Iterate over records from storage.
-        
+    def __iter__(self) -> Iterator[BaseModel]:
+        """Iterate over items from storage.
+
         Returns:
-            Iterator yielding Record objects
+            Iterator yielding Pydantic model objects
         """
         pass
 
     @abstractmethod
-    def save(self, records: list[Record] | Record) -> None:
-        """Save records to storage.
-        
+    def save(self, records: list[BaseModel] | BaseModel) -> None:
+        """Save Pydantic models to storage.
+
         Args:
-            records: Single record or list of records to save
+            records: Single Pydantic model or list of models to save
         """
         pass
 
     @abstractmethod
     def count(self) -> int:
         """Count total records in storage.
-        
+
         Returns:
             Number of records, or -1 if unknown
         """
@@ -58,7 +62,7 @@ class Storage(ABC):
 
     def exists(self) -> bool:
         """Check if storage location exists.
-        
+
         Returns:
             True if storage location exists
         """
@@ -66,7 +70,7 @@ class Storage(ABC):
 
     def create(self) -> None:
         """Create storage location if it doesn't exist.
-        
+
         This is a no-op by default. Subclasses should override
         if they support creating storage locations.
         """
@@ -82,14 +86,14 @@ class Storage(ABC):
 
 class StorageClient:
     """Base utility class for managing storage clients and connections.
-    
+
     This class provides common functionality for accessing cloud clients,
     schema handling, and configuration management.
     """
 
     def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
         """Initialize storage client.
-        
+
         Args:
             config: Storage configuration
             bm: Buttermilk instance for accessing clients
@@ -117,18 +121,18 @@ class StorageClient:
                 bq_client = self.get_bq_client()
                 self._schema_cache = bq_client.schema_from_json(self.config.schema_path)
             except Exception as e:
-                logger.warning(f"Failed to load schema from {self.config.schema_path}: {e}")
                 self._schema_cache = None
+                raise FatalError(f"Failed to load schema from {self.config.schema_path}: {e}") from e
         return self._schema_cache
 
     def get_table_ref(self) -> str:
         """Get full table reference for BigQuery operations.
-        
+
         Returns the computed full_table_id from constituent parts.
-        
+
         Returns:
             Full table reference in format 'project.dataset.table'
-            
+
         Raises:
             ValueError: If any of project_id, dataset_id, or table_id is missing
         """

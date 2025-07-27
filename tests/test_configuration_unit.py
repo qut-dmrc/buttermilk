@@ -142,37 +142,6 @@ class TestStorageConfigValidation:
         assert new_config.columns == config.columns
 
 
-class TestBigQueryDefaults:
-    """Test BigQueryDefaults configuration after Phase 1 optimizations."""
-
-    def test_bigquery_defaults_no_hardcoded_values(self):
-        """Test that BigQueryDefaults has no hardcoded values."""
-        from buttermilk._core.storage_config import BigQueryDefaults
-        
-        defaults = BigQueryDefaults()
-        
-        # After Phase 1 optimizations, these should be None
-        assert defaults.dataset_id is None
-        assert defaults.table_id is None
-        assert defaults.randomize is True  # Non-None defaults are OK
-        assert defaults.batch_size == 1000
-        assert defaults.auto_create is True
-
-    def test_bigquery_defaults_with_explicit_values(self):
-        """Test BigQueryDefaults with explicit values."""
-        from buttermilk._core.storage_config import BigQueryDefaults
-        
-        defaults = BigQueryDefaults(
-            dataset_id="explicit_dataset",
-            table_id="explicit_table",
-            batch_size=2000
-        )
-        
-        assert defaults.dataset_id == "explicit_dataset"
-        assert defaults.table_id == "explicit_table"
-        assert defaults.batch_size == 2000
-
-
 class TestDataSourceConfigValidation:
     """Test DataSourceConfig validation and conversion."""
 

@@ -12,7 +12,7 @@ case "$ACTION" in
         ;;
     "stop")
         echo "Stopping Buttermilk API server..."
-        pkill -f "buttermilk.runner.cli.*api"
+        make kill_api
         echo "Server stopped"
         ;;
     "restart")

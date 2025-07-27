@@ -13,7 +13,9 @@ from buttermilk._core import (
 )
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
+    AgentOutput,
     AgentTrace,
+    ConductorRequest,
     ErrorEvent,
     FlowEvent,
     FlowMessage,
@@ -46,6 +48,7 @@ class ChatMessage(BaseModel):
         "research_result",
         "differences",
         "judge_reasons",
+        "start_flow",
         "system_message",  # Added system_message
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
@@ -88,7 +91,7 @@ class MessageService:
             preview = getattr(message, "preview", None)
             tracing_link = getattr(message, "tracing_link", None)
 
-            if isinstance(message, AgentTrace):
+            if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
                     message = message.outputs
@@ -99,6 +102,8 @@ class MessageService:
             message_type = None
             if isinstance(message, Record):
                 message_type = "record"
+            elif isinstance(message, ConductorRequest):
+                return None
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):

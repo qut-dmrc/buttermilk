@@ -165,7 +165,7 @@ CHATMODELS = [
     "llama4maverick",
     "llama33_70b",
     "llama32_90b",
-    "o3mini",
+    "o4mini",
     "gpt41",
     "gpt41nano",
     "gpt41mini",
@@ -180,7 +180,7 @@ CHATMODELS = [
 CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini25flash",
-    "o3mini",
+    "o4mini",
     "gpt41mini",
 ]
 

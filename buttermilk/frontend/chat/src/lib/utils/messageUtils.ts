@@ -189,12 +189,17 @@ export interface Message {
 
 
 // Assessment message types
+export interface QualScoreCRA {
+  correct: boolean;
+  feedback: string;
+}
+
 export interface Assessments {
   assessed_agent_id: string;
   assessed_call_id: string;
-  correctness: string;
+  correctness: number | null;
   score_text: string;
-  assessments: string[];
+  assessments: QualScoreCRA[];
 }
 
 // Record message types
@@ -376,8 +381,8 @@ export function isAssessment(data: any): data is Assessments {
   return (
     typeof data === 'object' &&
     data !== null &&
-    data.type === 'assessment' &&
-    typeof data.correctness === 'string' &&
+    data.type === 'assessments' &&
+    (typeof data.correctness === 'number' || data.correctness === null) &&
     Array.isArray(data.assessments)
   );
 }

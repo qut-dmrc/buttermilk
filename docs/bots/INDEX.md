@@ -56,6 +56,14 @@ uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=fu
 uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ```
 
+### 🚨 Debugging Quick Reference
+**ALWAYS START HERE for debugging tasks:**
+1. Read `debugging.md` FIRST (no exceptions)
+2. Use WebSocket CLI to reproduce: `uv run python -m buttermilk.debug.ws_debug_cli start <flow>`
+3. Check logs with focus: `python scripts/mcp_debug/buttermilk_logs.py search "pattern" 50`
+4. ONLY read source code after understanding actual behavior
+5. Keep outputs concise - extract relevant data only
+
 ### Key Principles
 1. **HASS-Centric**: Prioritize humanities researchers' needs
 2. **Reproducibility**: Ensure experiments are traceable

@@ -90,7 +90,16 @@
               <div class="assessment-header">Assessment Details:</div>
               <ul class="assessment-list">
                 {#each message.outputs.assessments as assessment}
-                  <li>{assessment}</li>
+                  <li style="color: {assessment.correct ? '#4caf50' : '#dc3545'}">
+                    {#if typeof assessment === 'object' && assessment.feedback}
+                      <span class="assessment-icon">{assessment.correct ? '✓' : '✗'}</span>
+                      {assessment.feedback}
+                    {:else if typeof assessment === 'string'}
+                      {assessment}
+                    {:else}
+                      {JSON.stringify(assessment)}
+                    {/if}
+                  </li>
                 {/each}
               </ul>
             </div>

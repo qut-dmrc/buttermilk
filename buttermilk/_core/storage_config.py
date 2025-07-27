@@ -1,7 +1,7 @@
 """Storage configuration classes with type-specific schemas."""
 
 import os
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -12,14 +12,14 @@ class AdditionalFieldConfig(BaseModel):
     """Configuration for additional fields to embed in multi-field embedding."""
 
     source_field: str = Field(
-        description="Name of the field in Record.metadata to embed"
+        description="Name of the field in Record.metadata to embed",
     )
     chunk_type: str = Field(
-        description="Type tag for this chunk (used for filtering searches)"
+        description="Type tag for this chunk (used for filtering searches)",
     )
     min_length: int = Field(
         default=10,
-        description="Minimum character length required to embed this field"
+        description="Minimum character length required to embed this field",
     )
 
 
@@ -28,19 +28,19 @@ class MultiFieldEmbeddingConfig(BaseModel):
 
     content_field: str = Field(
         default="content",
-        description="Main content field to chunk and embed (from Record.content)"
+        description="Main content field to chunk and embed (from Record.content)",
     )
     additional_fields: list[AdditionalFieldConfig] = Field(
         default_factory=list,
-        description="Additional fields from Record.metadata to embed as single chunks"
+        description="Additional fields from Record.metadata to embed as single chunks",
     )
     chunk_size: int = Field(
         default=2000,
-        description="Chunk size for main content field"
+        description="Chunk size for main content field",
     )
     chunk_overlap: int = Field(
         default=500,
-        description="Chunk overlap for main content field"
+        description="Chunk overlap for main content field",
     )
 
 
@@ -56,26 +56,26 @@ class BaseStorageConfig(BaseModel):
     # Common fields across all storage types
     dataset_name: str | None = Field(
         default=None,
-        description="Logical dataset name for filtering/grouping"
+        description="Logical dataset name for filtering/grouping",
     )
     randomize: bool = Field(
         default=True,
-        description="Whether to randomize query results"
+        description="Whether to randomize query results",
     )
     batch_size: int = Field(
         default=1000,
         ge=1,
-        description="Batch size for operations"
+        description="Batch size for operations",
     )
     auto_create: bool = Field(
         default=True,
-        description="Whether to auto-create storage if it doesn't exist"
+        description="Whether to auto-create storage if it doesn't exist",
     )
 
     # Data filtering and selection
     filter: dict[str, Any] = Field(
         default_factory=dict,
-        description="Filtering criteria for data operations"
+        description="Filtering criteria for data operations",
     )
     columns: dict[str, Any] = Field(
         default_factory=dict,
@@ -84,31 +84,31 @@ class BaseStorageConfig(BaseModel):
             "Dictionary where keys are target Record field names and values are source field names. "
             "Can be empty ({}) if no field renaming is needed. "
             "Example: {'content': 'text', 'ground_truth': 'expected'}"
-        )
+        ),
     )
     limit: int | None = Field(
         default=None,
-        description="Maximum number of records to process"
+        description="Maximum number of records to process",
     )
 
     # Generic fields that some storage types may use
     name: str = Field(
         default="",
-        description="Name identifier for the storage configuration."
+        description="Name identifier for the storage configuration.",
     )
     schema_path: str | None = Field(
         default=None,
-        description="Path to schema definition file"
+        description="Path to schema definition file",
     )
     uri: str | None = Field(
         default=None,
-        description="URI for data source (alternative to path for some storage types)"
+        description="URI for data source (alternative to path for some storage types)",
     )
 
     # Provider-specific configuration
     db: dict[str, Any] = Field(
         default_factory=dict,
-        description="Database-specific configuration parameters"
+        description="Database-specific configuration parameters",
     )
 
     model_config = {
@@ -136,45 +136,45 @@ class BigQueryStorageConfig(BaseStorageConfig):
     # BigQuery-specific fields
     project_id: str | None = Field(
         default=None,
-        description="Cloud project ID (auto-detected from GOOGLE_CLOUD_PROJECT if not provided)"
+        description="Cloud project ID (auto-detected from GOOGLE_CLOUD_PROJECT if not provided)",
     )
     dataset_id: str | None = Field(
         default=None,
-        description="Dataset identifier"
+        description="Dataset identifier",
     )
     table_id: str | None = Field(
         default=None,
-        description="Table identifier"
+        description="Table identifier",
     )
     clustering_fields: list[str] = Field(
         default=["record_id", "dataset_name"],
-        description="Fields to use for clustering"
+        description="Fields to use for clustering",
     )
 
     # Data organization specific to BigQuery
     max_records_per_group: int = Field(
         default=-1,
-        description="Maximum records to process per group. -1 for no limit."
+        description="Maximum records to process per group. -1 for no limit.",
     )
     join: dict[str, str] = Field(
         default_factory=dict,
-        description="Configuration for joining with other data sources."
+        description="Configuration for joining with other data sources.",
     )
     agg: bool = Field(
         default=False,
-        description="Whether to aggregate results."
+        description="Whether to aggregate results.",
     )
     group: dict[str, str] = Field(
         default_factory=dict,
-        description="Grouping configuration (new_group_col: original_col_or_expr)."
+        description="Grouping configuration (new_group_col: original_col_or_expr).",
     )
     last_n_days: int = Field(
         default=7,
-        description="For time-series data, retrieve from the last N days."
+        description="For time-series data, retrieve from the last N days.",
     )
     split_type: str | None = Field(
         default=None,
-        description="Data split type for datasets (e.g., 'train', 'test', 'validation')."
+        description="Data split type for datasets (e.g., 'train', 'test', 'validation').",
     )
 
     @model_validator(mode="before")
@@ -225,19 +225,19 @@ class FileStorageConfig(BaseStorageConfig):
     # File-specific fields
     path: str | None = Field(
         default=None,
-        description="File path or URI for storage location"
+        description="File path or URI for storage location",
     )
     glob: str = Field(
         default="**/*",
-        description="Glob pattern for matching files."
+        description="Glob pattern for matching files.",
     )
     max_records_per_group: int = Field(
         default=-1,
-        description="Maximum records to process per group. -1 for no limit."
+        description="Maximum records to process per group. -1 for no limit.",
     )
     index: list[str] | None = Field(
         default=None,
-        description="Columns to use as an index"
+        description="Columns to use as an index",
     )
 
 
@@ -249,19 +249,19 @@ class VectorStorageConfig(BaseStorageConfig):
     # Vector storage specific fields
     persist_directory: str | None = Field(
         default=None,
-        description="Directory for persisting vector data"
+        description="Directory for persisting vector data",
     )
     collection_name: str | None = Field(
         default=None,
-        description="Name of the collection"
+        description="Name of the collection",
     )
     embedding_model: str | None = Field(
         default=None,
-        description="Name or path of embedding model"
+        description="Name or path of embedding model",
     )
     dimensionality: int | None = Field(
         default=None,
-        description="Dimensionality of embeddings"
+        description="Dimensionality of embeddings",
     )
 
     # Multi-field embedding configuration
@@ -270,7 +270,7 @@ class VectorStorageConfig(BaseStorageConfig):
         description=(
             "Configuration for embedding multiple fields from records. "
             "Format: {'content_field': 'content', 'additional_fields': [{'source_field': 'summary', 'chunk_type': 'summary', 'min_length': 50}]}"
-        )
+        ),
     )
 
 
@@ -282,11 +282,11 @@ class HuggingFaceStorageConfig(BaseStorageConfig):
     # HuggingFace specific fields
     dataset_id: str | None = Field(
         default=None,
-        description="HuggingFace dataset identifier"
+        description="HuggingFace dataset identifier",
     )
     split: str = Field(
         default="train",
-        description="Data split identifier (train/test/val)."
+        description="Data split identifier (train/test/val).",
     )
 
 
@@ -298,33 +298,9 @@ class GeneratorStorageConfig(BaseStorageConfig):
 
 # Discriminated union for all storage config types
 StorageConfig = Annotated[
-    Union[
-        BigQueryStorageConfig,
-        FileStorageConfig,
-        VectorStorageConfig,
-        HuggingFaceStorageConfig,
-        GeneratorStorageConfig
-    ],
-    Field(discriminator="type")
+    BigQueryStorageConfig | FileStorageConfig | VectorStorageConfig | HuggingFaceStorageConfig | GeneratorStorageConfig,
+    Field(discriminator="type"),
 ]
-
-
-# Legacy compatibility - keep BigQueryDefaults for existing code
-class BigQueryDefaults(BaseModel):
-    """Default configuration values specifically for BigQuery operations."""
-
-    dataset_id: str | None = Field(default=None)
-    table_id: str | None = Field(default=None)
-    randomize: bool = Field(default=True)
-    batch_size: int = Field(default=1000)
-    auto_create: bool = Field(default=True)
-    clustering_fields: list[str] = Field(default=["record_id", "dataset_name"])
-
-    def to_storage_config(self) -> BigQueryStorageConfig:
-        """Convert to a BigQueryStorageConfig object."""
-        return BigQueryStorageConfig(
-            **self.model_dump()
-        )
 
 
 class StorageFactory:
@@ -333,17 +309,18 @@ class StorageFactory:
     @staticmethod
     def create_config(config_dict: dict) -> BaseStorageConfig:
         """Create appropriate config type based on the 'type' field in the dictionary.
-        
+
         Uses the discriminated union to properly validate and create the correct subclass.
-        
+
         Args:
             config_dict: Dictionary with configuration values including 'type'
-            
+
         Returns:
             Appropriate BaseStorageConfig subclass instance
-            
+
         Raises:
             ValueError: If type is missing or not supported
+
         """
         if not isinstance(config_dict, dict):
             raise ValueError(f"Expected dict, got {type(config_dict)}")
@@ -359,15 +336,16 @@ class StorageFactory:
         return adapter.validate_python(config_dict)
 
     @staticmethod
-    def create_storage(config: Union[StorageConfig, BaseStorageConfig], bm_instance=None):
+    def create_storage(config: StorageConfig | BaseStorageConfig, bm_instance=None):
         """Create storage instance based on configuration type.
-        
+
         Args:
             config: StorageConfig instance (from OmegaConf/Hydra)
             bm_instance: BM instance for context (optional)
-            
+
         Returns:
             Storage instance appropriate for the config type
+
         """
         from buttermilk.data.vector import ChromaDBEmbeddings
 
@@ -386,10 +364,10 @@ class StorageFactory:
         if storage_type in ["bigquery", "bq"]:
             from buttermilk.storage.bigquery import BigQueryStorage
             return BigQueryStorage(config, bm_instance)
-        elif storage_type in ["file", "local", "gcs", "s3"]:
+        if storage_type in ["file", "local", "gcs", "s3"]:
             from buttermilk.storage.file import FileStorage
             return FileStorage(config, bm_instance)
-        elif storage_type == "chromadb":
+        if storage_type == "chromadb":
             # Convert VectorStorageConfig to ChromaDBEmbeddings parameters
             chromadb_params = {
                 "collection_name": getattr(config, "collection_name", None) or "default_collection",
@@ -414,10 +392,10 @@ class StorageFactory:
                     chromadb_params[field] = getattr(config, field)
 
             return ChromaDBEmbeddings(**chromadb_params)
-        elif storage_type == "huggingface":
+        if storage_type == "huggingface":
             from buttermilk.storage.huggingface import HuggingFaceStorage
             return HuggingFaceStorage(config, bm_instance)
-        elif storage_type == "plaintext":
+        if storage_type == "plaintext":
             # Use FileStorage with plaintext-specific configuration
             from buttermilk.storage.file import FileStorage
             # For plaintext, we typically use glob patterns
@@ -427,6 +405,4 @@ class StorageFactory:
                 if hasattr(config, "glob"):
                     config.glob = "**/*.txt"
             return FileStorage(config, bm_instance)
-        else:
-            raise ValueError(f"Unsupported storage type: {storage_type}")
-
+        raise ValueError(f"Unsupported storage type: {storage_type}")

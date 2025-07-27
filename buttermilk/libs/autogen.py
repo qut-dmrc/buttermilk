@@ -325,10 +325,11 @@ class AutogenAgentAdapter(RoutedAgent):
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
                 # StepRequest is a subclass of AgentInput, so we can use it directly.
-                response = await self.agent.invoke(message=message,
+                response = await self.agent.trace_and_execute(
+                    message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
-                public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
+                    public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
                 )
             else:
                 # Delegate to the agent's _handle_events method.
@@ -375,7 +376,7 @@ class AutogenAgentAdapter(RoutedAgent):
         try:
             # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
             # Pass the cancellation token from Autogen context.
-            output = await self.agent.invoke(
+            output = await self.agent.trace_and_execute(
                 message=message,
                 cancellation_token=ctx.cancellation_token,
                 # Provide callbacks for the agent to publish messages back if needed during execution.

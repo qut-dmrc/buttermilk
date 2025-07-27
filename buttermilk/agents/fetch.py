@@ -255,7 +255,7 @@ class FetchAgent(Agent):
         # Pass storage config as data to FetchRecord
         self._tools = [FetchRecord(data=self.parameters["storage"])]
 
-    # TODO: this needs a messag_handler if we want to use it to respond to in-chat messages
+    # TODO: this needs a message_handler if we want to use it to respond to in-chat messages
     async def _listen(
         self,
         message: AgentInput | GroupchatMessageTypes,  # More specific input type
@@ -319,7 +319,7 @@ class FetchAgent(Agent):
             else:
                 await self._publish(result)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
         if isinstance(message, AgentInput):
@@ -328,7 +328,7 @@ class FetchAgent(Agent):
             record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
 
             if uri and record_id:
-                return ErrorEvent(source=self.id, content="Cannot provide both uri and record_id.")
+                raise ProcessingError("Cannot provide both uri and record_id.")
 
             try:
                 if uri:
@@ -336,7 +336,8 @@ class FetchAgent(Agent):
                 elif record_id:
                     result = await self._tools[0].fetch(record_id=record_id)
             except ProcessingError as e:
-                return ErrorEvent(source=self.id, content=str(e))
+                logger.error(f"FetchAgent '{self.agent_id}': {e}")
+                raise
 
         if result and isinstance(result, Record):
             # TODO: See GitHub issue #158 on whether to publish Record, AgentOutput, or both.
@@ -348,5 +349,5 @@ class FetchAgent(Agent):
                 metadata=result.metadata if hasattr(result, "metadata") else {},
             )
 
-        # Return an ErrorEvent
-        return ErrorEvent(source=self.id, content="No result found in _process")
+        # No result found
+        raise ProcessingError("No result found in _process")

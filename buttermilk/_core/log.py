@@ -13,11 +13,11 @@ RESET_CODE = "\033[0m"  # Reset
 class BMLogger(logging.Logger):
     """Buttermilk extended logger with custom functionality."""
 
-    def highlight(self, msg: str, *args, **kwargs) -> None:
+    def highlight(self, msg: str, *args, stacklevel=2, **kwargs) -> None:
         """Log a highlighted INFO message that stands out visually."""
         # Add visual separators to make the message stand out
         highlighted_msg = HIGHLIGHT_CODE + f"▶ {msg}" + RESET_CODE
-        self.info(highlighted_msg, *args, **kwargs)
+        self.info(highlighted_msg, *args, stacklevel=stacklevel, **kwargs)
 
 
 # Set custom logger class before creating logger instance

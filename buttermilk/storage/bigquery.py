@@ -1,11 +1,11 @@
 """BigQuery storage implementation for unified storage operations."""
 
-import datetime
 import json
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from google.cloud import bigquery
+from pydantic import BaseModel
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
+
+# Generic type for any Pydantic model
+T = TypeVar("T", bound=BaseModel)
 
 
 class BigQueryStorage(Storage, StorageClient):
@@ -32,6 +35,9 @@ class BigQueryStorage(Storage, StorageClient):
             config: Storage configuration with BigQuery settings
             bm: Buttermilk instance for BigQuery client access
 
+        Raises:
+            StorageError: If schema_path is missing or schema cannot be loaded
+
         """
         super().__init__(config, bm)
         StorageClient.__init__(self, config, bm)
@@ -41,6 +47,12 @@ class BigQueryStorage(Storage, StorageClient):
 
         if not config.dataset_name and not config.dataset_id:
             raise ValueError("BigQuery storage requires either dataset_name or dataset_id")
+
+        # CRITICAL: Require explicit schema - no implicit defaults allowed
+        if not config.schema_path:
+            raise StorageError(
+                "BigQuery storage requires explicit schema_path. Please provide a valid schema_path in the configuration.",
+            )
 
         # Validate that we have the required components for BigQuery table operations
         if not all([config.project_id, config.dataset_id, config.table_id]):
@@ -55,6 +67,20 @@ class BigQueryStorage(Storage, StorageClient):
 
         self._client = None
         self._table = None
+        self._schema_validated = False
+
+    def _validate_schema(self) -> None:
+        """Validate that schema can be loaded.
+
+        Called lazily on first use to avoid requiring BM instance during init.
+        """
+        if not self._schema_validated:
+            schema = self.get_schema()
+            if not schema:
+                raise StorageError(
+                    f"Failed to load schema from {self.config.schema_path}. BigQuery storage requires a valid schema file."
+                )
+            self._schema_validated = True
 
     @property
     def client(self) -> bigquery.Client:
@@ -96,16 +122,22 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error loading records from BigQuery: {e}")
             raise StorageError(f"Failed to read from BigQuery: {e}") from e
 
-    def save(self, records: list[Record] | Record) -> None:
-        """Save records to BigQuery table.
+    def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
+        """Save Pydantic models to BigQuery table.
 
         Uses the existing upload_rows pipeline for proper serialization and error handling.
 
         Args:
-            records: Single record or list of records to save
+            records: Single Pydantic model, dict, or list of models/dicts to save
+
+        Raises:
+            StorageError: If save operation fails
 
         """
-        if isinstance(records, Record):
+        # Validate schema on first use
+        self._validate_schema()
+
+        if isinstance(records, BaseModel):
             records = [records]
 
         if not records:
@@ -117,20 +149,35 @@ class BigQueryStorage(Storage, StorageClient):
             if self.config.auto_create:
                 self.create()
 
-            # Convert records to list of dicts for upload_rows
+            # Convert Pydantic models to list of dicts for upload_rows
             rows_to_insert = []
             for record in records:
-                row = self._record_to_row(record)
+                # Handle both Pydantic models and plain dicts
+                if isinstance(record, dict):
+                    row = record
+                elif hasattr(record, "model_dump"):
+                    # Use Pydantic's model_dump for proper serialization
+                    row = record.model_dump(mode="json")
+                else:
+                    # Fallback for other types - convert to dict if possible
+                    try:
+                        row = dict(record)
+                    except Exception as e:
+                        raise StorageError(
+                            f"Cannot convert record to dict: {type(record)}. Expected Pydantic model or dict. Error: {e}",
+                        )
+
                 rows_to_insert.append(row)
 
             # Use the existing upload_rows function which handles proper serialization
             from buttermilk.utils.save import upload_rows
-            from buttermilk.utils.schema_utils import get_record_bigquery_schema
 
             # Get the schema for proper data transformation
             schema = self.get_schema()
             if not schema:
-                schema = get_record_bigquery_schema()
+                raise StorageError(
+                    "Schema is required for BigQuery operations. Please ensure that a valid schema file is provided in the configuration.",
+                )
 
             # Use the proven upload_rows pipeline
             result = upload_rows(
@@ -188,42 +235,40 @@ class BigQueryStorage(Storage, StorageClient):
             return False
 
     def create(self) -> None:
-        """Create the BigQuery table if it doesn't exist, or update schema if needed."""
+        """Create the BigQuery table if it doesn't exist.
+
+        IMPORTANT: This method will NOT modify existing tables. If a table exists,
+        it will log a message and return without making changes.
+
+        Raises:
+            StorageError: If table creation fails or schema is missing
+
+        """
+        # Validate schema on first use
+        self._validate_schema()
+
         try:
             table_id = self.get_table_ref()
 
-            # Use the schema from Pydantic model
-            from buttermilk.utils.schema_utils import get_record_bigquery_schema
-
-            expected_schema = get_record_bigquery_schema()
-
-            # Use custom schema if provided in config
-            if self.get_schema():
-                expected_schema = self.get_schema()
+            # CRITICAL: Require explicit schema - no implicit defaults
+            expected_schema = self.get_schema()
+            if not expected_schema:
+                raise StorageError(
+                    "Schema is required for table creation. Configure schema_path in your storage config.",
+                )
 
             if self.exists():
-                # Check if schema needs updating
-                existing_table = self.client.get_table(table_id)
-                existing_field_names = {field.name for field in existing_table.schema}
-                expected_field_names = {field.name for field in expected_schema}
-
-                missing_fields = expected_field_names - existing_field_names
-                if missing_fields:
-                    logger.info(f"Table {table_id} exists but missing fields: {missing_fields}")
-                    logger.info("Updating table schema to add missing fields...")
-
-                    # Update the table schema
-                    existing_table.schema = expected_schema
-                    updated_table = self.client.update_table(existing_table, ["schema"])
-                    logger.info(f"Updated BigQuery table schema: {table_id}")
-                else:
-                    logger.debug(f"Table {table_id} exists with correct schema")
+                # CRITICAL: Never modify existing tables
+                logger.info(f"Table {table_id} already exists. Skipping creation.")
+                logger.debug(
+                    "BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
+                )
                 return
 
             # Create new table
             table = bigquery.Table(table_id, schema=expected_schema)
             table.clustering_fields = self.config.clustering_fields or ["dataset_name", "record_id"]
-            table.description = f"Buttermilk Records table for dataset '{self.config.dataset_name}'"
+            table.description = f"Buttermilk table for dataset '{self.config.dataset_name}'"
 
             table = self.client.create_table(table, exists_ok=True)
             logger.info(f"Created BigQuery table: {table_id}")
@@ -337,22 +382,3 @@ class BigQueryStorage(Storage, StorageClient):
                 content=str(getattr(row, "content", "Error loading content")),
                 metadata={"parse_error": str(e)},
             )
-
-    def _record_to_row(self, record: Record) -> dict[str, Any]:
-        """Convert a Record object to a BigQuery row dict.
-        
-        Note: This returns raw Python objects. The upload_rows pipeline will handle
-        proper JSON serialization and datetime formatting for BigQuery.
-        """
-        return {
-            "record_id": record.record_id,
-            "dataset_name": self.config.dataset_name,
-            "split_type": self.config.split_type,
-            "content": record.content,
-            "metadata": record.metadata,
-            "ground_truth": record.ground_truth,
-            "uri": record.uri,
-            "mime": record.mime,
-            "created_at": datetime.datetime.now(datetime.UTC),
-            "updated_at": datetime.datetime.now(datetime.UTC),
-        }
