@@ -103,7 +103,7 @@ class MessageService:
             if isinstance(message, Record):
                 message_type = "record"
             elif isinstance(message, ConductorRequest):
-                message_type = "start_flow"
+                return None
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):

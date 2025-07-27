@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken, DefaultTopicId, MessageContext, message_handler
+from autogen_core import DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import (
     Tool,
@@ -18,7 +18,6 @@ from buttermilk._core.contract import (
     AgentOutput,
     AgentTrace,
     ConductorRequest,
-    ErrorEvent,
     FlowEvent,
     FlowProgressUpdate,
     ManagerMessage,
@@ -484,8 +483,11 @@ class HostAgent(Agent):
             # Parameters will be passed to agents via StepRequest
 
             # Announce, and trigger agents to announce themselves
+            hello_message = f"Starting a new flow with parameters: {message.parameters} and participants: {', '.join(self._participants.keys())}"
+
+            await self._publish(hello_message)
             msg = AgentAnnouncement(
-                content="Host joining",
+                content=hello_message,
                 agent_config=self._config,
                 announcement_type="initial",
             )
@@ -564,7 +566,6 @@ class HostAgent(Agent):
                 except asyncio.CancelledError:
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
-
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""
