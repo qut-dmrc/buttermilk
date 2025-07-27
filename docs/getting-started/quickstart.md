@@ -131,7 +131,7 @@ Start the API server in debug mode with enhanced logging:
 
 ```bash
 # Stop any existing server
-pkill -f buttermilk.runner.cli
+make kill_api
 
 # Start in debug mode
 make debug
@@ -163,12 +163,7 @@ uv run python -m buttermilk.runner.cli --info searchpath
 uv run python -m buttermilk.runner.cli run=console flow=trans_clean --cfg job
 ```
 
-### Server won't start?
-```bash
-# Check for existing processes
-ps aux | grep buttermilk
-pkill -f buttermilk.runner.cli
-```
+- Server won't start? `make kill_api`
 
 ### Need more help?
 - Check the [full troubleshooting guide](../reference/troubleshooting.md)

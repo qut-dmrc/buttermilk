@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator
 from typing import Any  # Import Dict
 
-from autogen_core import CancellationToken, DefaultTopicId, MessageContext, message_handler
+from autogen_core import DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import (
     Tool,
@@ -18,7 +18,6 @@ from buttermilk._core.contract import (
     AgentOutput,
     AgentTrace,
     ConductorRequest,
-    ErrorEvent,
     FlowEvent,
     FlowProgressUpdate,
     ManagerMessage,
@@ -479,14 +478,16 @@ class HostAgent(Agent):
             self._tools.extend(message.additional_tools)
 
             # Store any parameters passed in
-            self._host_input_parameters = message.inputs
-            
-            # Check for and handle any initial records, prompts, or URIs in parameters
-            await self._handle_initial_data()
-            
+            self._host_initial_inputs = message.inputs
+
+            # Parameters will be passed to agents via StepRequest
+
             # Announce, and trigger agents to announce themselves
+            hello_message = f"Starting a new flow with parameters: {message.parameters} and participants: {', '.join(self._participants.keys())}"
+
+            await self._publish(hello_message)
             msg = AgentAnnouncement(
-                content="Host joining",
+                content=hello_message,
                 agent_config=self._config,
                 announcement_type="initial",
             )
@@ -565,44 +566,6 @@ class HostAgent(Agent):
                 except asyncio.CancelledError:
                     pass  # Expected
         logger.info(f"Host {self.agent_name} shutdown complete.")
-
-    async def _handle_initial_data(self) -> None:
-        """Handle any initial data provided in the parameters.
-        
-        This method checks for records, record_id, uri, or prompt in the
-        parameters and publishes them to the groupchat for all agents to receive.
-        This method is designed to be overridable by subclasses that might want
-        to handle initial data differently.
-        """
-        # Check if we have records directly provided
-        records = self._host_input_parameters.get("records", [])
-        if records:
-            logger.info(f"Host {self.agent_name} publishing {len(records)} initial records to groupchat")
-            for record in records:
-                await self._publish(record)
-            return
-        
-        # Check if we need to fetch a record by ID
-        record_id = self._host_input_parameters.get("record_id")
-        if record_id:
-            logger.info(f"Host {self.agent_name} would fetch record with ID: {record_id} (not implemented)")
-            # TODO: Implement record fetching by ID if needed
-            # This would require access to storage configuration
-            return
-        
-        # Check if we need to fetch from a URI
-        uri = self._host_input_parameters.get("uri")
-        if uri:
-            logger.info(f"Host {self.agent_name} would fetch record from URI: {uri} (not implemented)")
-            # TODO: Implement URI fetching if needed
-            return
-        
-        # Check if there's a prompt to send
-        prompt = self._host_input_parameters.get("prompt")
-        if prompt:
-            logger.info(f"Host {self.agent_name} has initial prompt: {prompt[:50]}...")
-            # The prompt will be available to all agents via _host_input_parameters
-            # which is passed in StepRequest.parameters
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""
@@ -689,16 +652,14 @@ class HostAgent(Agent):
         self,
         *,
         message: AgentInput,
-        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> AgentOutput:
+    ) -> AgentOutput | None:
         """Process messages.
         
         Base implementation returns an error since non-LLM hosts don't process direct inputs.
         Subclasses that support LLM-based processing should override this method.
         """
-        placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
-        return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
+        raise ProcessingError("Host agent does not process direct inputs via _process")
 
     async def _route_tool_calls_to_agents(
         self,

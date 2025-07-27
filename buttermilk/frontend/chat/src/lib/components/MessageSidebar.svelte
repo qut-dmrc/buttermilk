@@ -5,6 +5,7 @@
     type SummaryResult,
     getAgentEmoji,
     getScoreColor,
+    getModelIdentifier,
     isSummaryResult
   } from '$lib/utils/messageUtils';
   
@@ -95,6 +96,20 @@
       m.outputs.correctness !== undefined && // Ensure it's an assessment message
       m.outputs.assessed_call_id === judgeMessageId // Match the target message ID
     ); 
+  }
+
+  // Calculate average score from multiple score messages
+  function calculateAverageScore(scores: Message[]): number | null {
+    if (!scores || scores.length === 0) return null;
+    
+    const validScores = scores
+      .map(s => s.outputs?.correctness)
+      .filter(c => c !== null && c !== undefined && typeof c === 'number');
+    
+    if (validScores.length === 0) return null;
+    
+    const sum = validScores.reduce((acc, score) => acc + score, 0);
+    return sum / validScores.length;
   }
 
 
@@ -396,14 +411,13 @@
                 {#if getPanelState(message.message_id, 'assessments')}
                   <div class="score-chips" transition:slide={{ duration: 150 }}>
                     {#each scores as score}
-                      {@const scoreValue = score.outputs?.correctness ? parseFloat(score.outputs.correctness) : null}
+                      {@const scoreValue = score.outputs?.correctness !== undefined ? score.outputs.correctness : null}
                       {@const scoreColor = getScoreColor(scoreValue)}
                       {@const hasReasons = score.outputs?.assessments && score.outputs.assessments.length > 0}
                       
                       {#each [score] as scoreItem}
                         {@const modelName = score.agent_info?.parameters?.model || ''}
-                        {@const identifier = getModelIdentifier(score.agent_info?.agent_name || modelName || score.agent_info?.agent_id || 'Score')}
-                        {score.agent_info?.agent_name}
+                        {@const identifier = getModelIdentifier(score)}
                         <div class="score-chip" on:click={() => {
                             // Set a unique detail key for this score
                             const detailKey = `${message.message_id}_${score.message_id}`;
@@ -429,12 +443,15 @@
                         <div class="score-details" transition:slide={{ duration: 150 }}>
                           <ul class="assessment-reasons">
                             {#each score.outputs.assessments as assessment}
-                              <!-- Format assessment properly if it's an object -->
-                              <li>
-                                {#if typeof assessment === 'object'}
-                                  {assessment.text || assessment.reason || (assessment.correctness !== undefined ? `Score: ${assessment.correctness}` : JSON.stringify(assessment))}
-                                {:else}
+                              <!-- Format assessment properly based on QualScoreCRA structure -->
+                              <li style="color: {assessment.correct ? '#4caf50' : '#dc3545'}">
+                                {#if typeof assessment === 'object' && assessment.feedback}
+                                  <span class="assessment-icon">{assessment.correct ? '✓' : '✗'}</span>
+                                  {assessment.feedback}
+                                {:else if typeof assessment === 'string'}
                                   {assessment}
+                                {:else}
+                                  {JSON.stringify(assessment)}
                                 {/if}
                               </li>
                             {/each}

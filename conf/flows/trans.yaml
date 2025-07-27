@@ -20,6 +20,7 @@ defaults:
   # Data source configuration
   - /storage@trans.storage: 
     - tja
+  # Storage configuration for saving outputs
   - /storage@trans.parameters.save: flows
 
 trans:

@@ -6,7 +6,8 @@ group chat or message bus, capture `AgentTrace` messages produced by other agent
 and persist them using an asynchronous data uploader.
 """
 
-from typing import TYPE_CHECKING, Any, Callable  # For type hinting
+from collections.abc import Callable  # For type hinting
+from typing import TYPE_CHECKING, Any
 
 from autogen_core import (  # Autogen core components
     AgentType,
@@ -15,12 +16,17 @@ from autogen_core import (  # Autogen core components
     message_handler,  # Decorator to register methods as message handlers.
 )
 
+from buttermilk._core.storage_config import StorageConfig, StorageFactory
+
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
 from buttermilk._core import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
+
+# Import the global Buttermilk instance getter
+from buttermilk._core.dmrc import get_bm
 from buttermilk.utils.uploader import AsyncDataUploader  # Utility for asynchronous data upload
 
 BATCH_SIZE = 10
@@ -49,32 +55,29 @@ class SpyAgent(RoutedAgent):
 
     def __init__(
         self,
-        flow_name: str = "",
+        save: StorageConfig,
         **_kwargs: Any,
     ) -> None:
         """Initializes the SpyAgent.
 
         Args:
-            flow_name: Name of the flow this agent is part of, provided by orchestrator
+            save (StorageConfig): Defines where and how to save captured data.
             **_kwargs: Additional keyword arguments passed to the `RoutedAgent`
                 superclass constructor.
 
         """
         super().__init__(description="Save results to storage")
-        self.flow_name = flow_name
-        self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE)
+        bm = get_bm()  # Get the global Buttermilk instance
 
-        # Configure storage based on flow_name provided by orchestrator
-        if self.flow_name:
-            self.manager.configure_storage(self.flow_name)
-            logger.debug(f"SpyAgent: Configured storage for flow '{self.flow_name}'")
-        else:
-            logger.debug("SpyAgent: No flow_name provided, using session-level storage fallback")
+        save = StorageFactory.create_config(save)
+        # Use unified storage system
+        self.storage = bm.get_storage(save)
+        self.manager = AsyncDataUploader(storage=self.storage, buffer_size=BATCH_SIZE)
 
     @classmethod
     async def register(
         cls,
-        runtime: "AgentRuntime", 
+        runtime: "AgentRuntime",
         type: str,
         factory: Callable[[], Any],
         skip_class_subscriptions: bool = False,
@@ -84,13 +87,14 @@ class SpyAgent(RoutedAgent):
 
         Args:
             runtime: The AutoGen runtime to register with
-            type: The agent type identifier  
+            type: The agent type identifier
             factory: Factory function to create SpyAgent instances
             skip_class_subscriptions: Whether to skip class-based subscriptions
             skip_direct_message_subscription: Whether to skip direct message subscriptions
 
         Returns:
             AgentType: The registered agent type
+
         """
         return await RoutedAgent.register(
             runtime=runtime,
@@ -141,14 +145,14 @@ class SpyAgent(RoutedAgent):
         if isinstance(message, AgentTrace):
             if message.outputs:
                 logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
-                # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.
-                if message.inputs and message.inputs.records:
-                    for record in message.inputs.records:
-                        if hasattr(record, "text") and hasattr(record, "content"):
-                            # This shouldn't happen because the pydantic model excludes text.
-                            # But for some reason it does, so we need to handle it.
-                            message.inputs.records = [x.model_dump(exclude="text") for x in message.inputs.records]
-                            break
+                # # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.
+                # if message.inputs and message.inputs.records:
+                #     for record in message.inputs.records:
+                #         if hasattr(record, "text") and hasattr(record, "content"):
+                #             # This shouldn't happen because the pydantic model excludes text.
+                #             # But for some reason it does, so we need to handle it.
+                #             message.inputs.records = [x.model_dump(exclude="text") for x in message.inputs.records]
+                #             break
                 await self.manager.add(message)
             else:
                 logger.debug(f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}")

@@ -391,6 +391,7 @@ class RunRequest(BaseModel):
         session_id (str): A unique identifier for this specific flow execution
             session. Defaults to a new short UUID.
         parameters (dict): A dictionary of parameters to customize the flow's execution.
+        inputs (dict): A dictionary of inputs sent to agents.
             Common parameters include:
             - prompt (str | None): The main prompt, question, or instruction for the run.
             - record_id (str | None): An optional ID of a specific record to look up and process.
@@ -427,7 +428,11 @@ class RunRequest(BaseModel):
     )
     parameters: dict[str, Any] = Field(  # Added type hint for dict value
         default_factory=dict,
-        description="Additional parameters to customize flow execution. May include 'prompt', 'record_id', 'uri', 'records', and other flow-specific parameters.",
+        description="Additional parameter overrides to customize flow execution.",
+    )
+    inputs: dict[str, Any] = Field(  # Added type hint for dict value
+        default_factory=dict,
+        description="Additional inputs to pass to agents, potentially including 'prompt', 'record_id', 'uri', 'records', and other request specific data.",
     )
 
     # Fields for client interaction, typically excluded from persisted state
@@ -470,7 +475,6 @@ class RunRequest(BaseModel):
         populate_by_name=True,  # Allows population by field name or alias
     )
 
-
     @property
     def is_batch_job(self) -> bool:
         """Checks if this `RunRequest` instance represents a batch job.
@@ -493,7 +497,7 @@ class RunRequest(BaseModel):
             str: The unique job identifier.
 
         """
-        record_id = self.parameters.get("record_id")
+        record_id = self.inputs.get("record_id")
         if self.batch_id and record_id:
             return f"{self.batch_id}:{record_id}"
         # Fallback to a new unique ID if not part of a batch or no specific record_id
@@ -535,9 +539,9 @@ class RunRequest(BaseModel):
 
         """
         parts = [self.flow]
-        if record_id := self.parameters.get("record_id"):  # Get from parameters
+        if record_id := self.inputs.get("record_id"):  # Get from parameters
             parts.append(record_id)
-        if criteria := self.parameters.get("criteria"):  # Safely get 'criteria'
+        if criteria := self.inputs.get("criteria"):  # Safely get 'criteria'
             parts.append(str(criteria))
 
         # Join non-empty, non-None stringified parts

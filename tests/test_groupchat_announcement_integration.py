@@ -1,14 +1,12 @@
 """Tests for agent announcement integration in group chat."""
 
-import asyncio
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core import DefaultTopicId, TypeSubscription
+from autogen_core import DefaultTopicId
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentAnnouncement, FlowEvent
+from buttermilk._core.contract import AgentAnnouncement
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.libs.autogen import AutogenAgentAdapter
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator
@@ -16,16 +14,16 @@ from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 
 class MockButtermilkAgent:
     """Mock Buttermilk agent for testing."""
-    
+
     def __init__(self, **kwargs):
-        self.agent_id = kwargs.get('agent_id', 'TEST-123')
-        self.role = kwargs.get('role', 'TEST')
+        self.agent_id = kwargs.get("agent_id", "TEST-123")
+        self.role = kwargs.get("role", "TEST")
         self.agent_name = f"{self.role}-test"
-        self.description = kwargs.get('description', f"Test agent with role {self.role}")
+        self.description = kwargs.get("description", f"Test agent with role {self.role}")
         self._cfg = AgentConfig(
             role=self.role,
             description="Test agent",
-            agent_id=self.agent_id
+            agent_id=self.agent_id,
         )
         self._listen = AsyncMock()
         self.get_available_tools = MagicMock(return_value=["test_tool"])
@@ -53,12 +51,12 @@ class TestGroupChatAnnouncementIntegration:
     @pytest.fixture
     def orchestrator(self, mock_runtime):
         """Create an AutogenOrchestrator with mocked runtime."""
-        with patch('buttermilk.orchestrators.groupchat.SingleThreadedAgentRuntime', return_value=mock_runtime):
+        with patch("buttermilk.orchestrators.groupchat.SingleThreadedAgentRuntime", return_value=mock_runtime):
             orch = AutogenOrchestrator(
                 name="test_orchestrator",
                 agents={},
                 observers={},
-                parameters={}
+                parameters={},
             )
             orch._runtime = mock_runtime
             orch._topic = DefaultTopicId(type="test-topic")
@@ -71,26 +69,26 @@ class TestGroupChatAnnouncementIntegration:
         agent_config = AgentConfig(
             role="WORKER",
             description="Test worker",
-            agent_id="WORKER-123"
+            agent_id="WORKER-123",
         )
         announcement = AgentAnnouncement(
             content="Worker joining",
             agent_config=agent_config,
             available_tools=["process"],
             announcement_type="initial",
-            status="joining"
+            status="joining",
         )
 
         # Broadcast the announcement
         await orchestrator._runtime.publish_message(
             announcement,
-            topic_id=orchestrator._topic
+            topic_id=orchestrator._topic,
         )
 
         # Verify the announcement was published to the main topic
         mock_runtime.publish_message.assert_called_once_with(
             announcement,
-            topic_id=orchestrator._topic
+            topic_id=orchestrator._topic,
         )
 
     @pytest.mark.anyio
@@ -101,9 +99,9 @@ class TestGroupChatAnnouncementIntegration:
 
         # Create adapter
         adapter = AutogenAgentAdapter(
-            agent_cfg={'agent_id': 'JUDGE-456', 'role': 'JUDGE'},
+            agent_cfg={"agent_id": "JUDGE-456", "role": "JUDGE"},
             agent_cls=type(mock_agent),
-            topic_type="test-topic"
+            topic_type="test-topic",
         )
         adapter.agent = mock_agent
 
@@ -118,7 +116,7 @@ class TestGroupChatAnnouncementIntegration:
             content="Worker joining",
             agent_config=AgentConfig(role="WORKER", description="Worker", agent_id="WORKER-123"),
             available_tools=["process"],
-            announcement_type="initial"
+            announcement_type="initial",
         )
 
         # Process announcement through adapter
@@ -127,8 +125,8 @@ class TestGroupChatAnnouncementIntegration:
         # Verify agent's _listen was called with the announcement
         mock_agent._listen.assert_called_once()
         call_args = mock_agent._listen.call_args
-        assert call_args[1]['message'] == announcement
-        assert call_args[1]['source'] == "WORKER-123"
+        assert call_args[1]["message"] == announcement
+        assert call_args[1]["source"] == "WORKER-123"
 
     @pytest.mark.anyio
     async def test_host_agent_broadcasts_initial_announcement(self, orchestrator, mock_runtime):
@@ -137,11 +135,12 @@ class TestGroupChatAnnouncementIntegration:
         host_agent = HostAgent(
             role="HOST",
             description="Group chat host",
-            unique_identifier="host123"
+            unique_identifier="host123",
         )
 
         # Create a mock callback that will capture messages
         announcements_sent = []
+
         async def capture_announcement(message):
             if isinstance(message, AgentAnnouncement):
                 announcements_sent.append(message)
@@ -149,7 +148,7 @@ class TestGroupChatAnnouncementIntegration:
         # Initialize with announcement
         await host_agent.initialize(
             callback_to_groupchat=mock_runtime.publish_message,
-            public_callback=capture_announcement
+            public_callback=capture_announcement,
         )
 
         # Verify announcement was sent
@@ -168,9 +167,9 @@ class TestGroupChatAnnouncementIntegration:
 
         # Create adapter
         adapter = AutogenAgentAdapter(
-            agent_cfg={'agent_id': 'ANALYST-789', 'role': 'ANALYST'},
+            agent_cfg={"agent_id": "ANALYST-789", "role": "ANALYST"},
             agent_cls=type(mock_agent),
-            topic_type="test-topic"
+            topic_type="test-topic",
         )
         adapter.agent = mock_agent
 
@@ -178,14 +177,14 @@ class TestGroupChatAnnouncementIntegration:
         async def mock_listen(message, **kwargs):
             if isinstance(message, AgentAnnouncement) and message.agent_config.role == "HOST":
                 # Simulate sending response announcement
-                await kwargs['public_callback'](
+                await kwargs["public_callback"](
                     AgentAnnouncement(
                         content="Responding to host",
                         agent_config=mock_agent._cfg,
                         announcement_type="response",
                         responding_to=message.agent_config.agent_id,
-                        status="active"
-                    )
+                        status="active",
+                    ),
                 )
 
         mock_agent._listen.side_effect = mock_listen
@@ -195,7 +194,7 @@ class TestGroupChatAnnouncementIntegration:
         host_announcement = AgentAnnouncement(
             content="Host joining",
             agent_config=host_config,
-            announcement_type="initial"
+            announcement_type="initial",
         )
 
         # Create mock context
@@ -206,6 +205,7 @@ class TestGroupChatAnnouncementIntegration:
 
         # Track published messages
         published_messages = []
+
         async def capture_publish(msg, topic_id=None):
             published_messages.append(msg)
 
@@ -226,9 +226,9 @@ class TestGroupChatAnnouncementIntegration:
         """Test that announcement routing preserves the source agent ID."""
         # Create adapter
         adapter = AutogenAgentAdapter(
-            agent_cfg={'agent_id': 'RECEIVER-123', 'role': 'RECEIVER'},
+            agent_cfg={"agent_id": "RECEIVER-123", "role": "RECEIVER"},
             agent_cls=MockButtermilkAgent,
-            topic_type="test-topic"
+            topic_type="test-topic",
         )
 
         # Create mock agent
@@ -240,7 +240,7 @@ class TestGroupChatAnnouncementIntegration:
             content="Sender announcement",
             agent_config=AgentConfig(role="SENDER", description="Sender", agent_id="SENDER-456"),
             announcement_type="initial",
-            source="SENDER-456"  # Explicitly set source
+            source="SENDER-456",  # Explicitly set source
         )
 
         # Create context with sender info
@@ -254,7 +254,7 @@ class TestGroupChatAnnouncementIntegration:
 
         # Verify source was preserved
         call_args = mock_agent._listen.call_args
-        assert call_args[1]['source'] == "SENDER-456"
+        assert call_args[1]["source"] == "SENDER-456"
 
     @pytest.mark.anyio
     async def test_announcement_during_groupchat_lifecycle(self, orchestrator, mock_runtime):
@@ -268,7 +268,7 @@ class TestGroupChatAnnouncementIntegration:
             content="Agent 1 joining",
             agent_config=AgentConfig(role="AGENT1", description="Agent 1", agent_id="AGENT1-123"),
             announcement_type="initial",
-            status="joining"
+            status="joining",
         )
         await orchestrator._runtime.publish_message(agent1_announcement, topic_id=orchestrator._topic)
 
@@ -277,7 +277,7 @@ class TestGroupChatAnnouncementIntegration:
             content="Agent 1 active",
             agent_config=AgentConfig(role="AGENT1", description="Agent 1", agent_id="AGENT1-123"),
             announcement_type="update",
-            status="active"
+            status="active",
         )
         await orchestrator._runtime.publish_message(agent1_active, topic_id=orchestrator._topic)
 
@@ -286,7 +286,7 @@ class TestGroupChatAnnouncementIntegration:
             content="Agent 1 leaving",
             agent_config=AgentConfig(role="AGENT1", description="Agent 1", agent_id="AGENT1-123"),
             announcement_type="update",
-            status="leaving"
+            status="leaving",
         )
         await orchestrator._runtime.publish_message(agent1_leaving, topic_id=orchestrator._topic)
 
@@ -301,14 +301,14 @@ class TestGroupChatAnnouncementIntegration:
         # Create adapter with mock agent
         mock_agent = MockButtermilkAgent(role="WORKER", agent_id="WORKER-123")
         adapter = AutogenAgentAdapter(
-            agent_cfg={'agent_id': 'WORKER-123', 'role': 'WORKER'},
+            agent_cfg={"agent_id": "WORKER-123", "role": "WORKER"},
             agent_cls=type(mock_agent),
-            topic_type="test-topic"
+            topic_type="test-topic",
         )
         adapter.agent = mock_agent
 
         # Simulate cleanup with announcement
-        with patch.object(mock_agent, 'cleanup_with_announcement', new_callable=AsyncMock) as mock_cleanup:
+        with patch.object(mock_agent, "cleanup_with_announcement", new_callable=AsyncMock) as mock_cleanup:
             # Trigger cleanup (simulating disconnection)
             await adapter.on_unregister()
 
@@ -321,9 +321,9 @@ class TestGroupChatAnnouncementIntegration:
         """Test that invalid announcements are handled gracefully."""
         mock_agent = MockButtermilkAgent()
         adapter = AutogenAgentAdapter(
-            agent_cfg={'agent_id': 'TEST-123', 'role': 'TEST'},
+            agent_cfg={"agent_id": "TEST-123", "role": "TEST"},
             agent_cls=type(mock_agent),
-            topic_type="test-topic"
+            topic_type="test-topic",
         )
         adapter.agent = mock_agent
 
@@ -339,5 +339,5 @@ class TestGroupChatAnnouncementIntegration:
                 content="Invalid response",
                 agent_config=AgentConfig(role="TEST", description="Test"),
                 announcement_type="response",  # Response type
-                responding_to=None  # But no responding_to
+                responding_to=None,  # But no responding_to
             )

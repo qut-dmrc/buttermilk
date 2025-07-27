@@ -727,7 +727,7 @@ class MockOrchestrator(Orchestrator):
 
     async def _fetch_initial_records(self, request: RunRequest):
         """Simulate fetching initial records based on the run request."""
-        if record_id := request.parameters.get("record_id"):
+        if record_id := request.inputs.get("record_id"):
             logger.info(f"Simulating fetching initial record: {record_id}")
             # Generate a mock record based on the requested ID
             mock_record = self._generate_record(
