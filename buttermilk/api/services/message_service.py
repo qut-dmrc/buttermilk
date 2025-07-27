@@ -13,7 +13,9 @@ from buttermilk._core import (
 )
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
-    AgentTrace,AgentOutput,
+    AgentOutput,
+    AgentTrace,
+    ConductorRequest,
     ErrorEvent,
     FlowEvent,
     FlowMessage,
@@ -99,6 +101,8 @@ class MessageService:
             message_type = None
             if isinstance(message, Record):
                 message_type = "record"
+            elif isinstance(message, ConductorRequest):
+                message_type = "start_flow"
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):

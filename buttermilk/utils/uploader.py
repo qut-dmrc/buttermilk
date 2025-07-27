@@ -11,15 +11,19 @@ from typing import Any
 from pydantic import BaseModel
 
 from buttermilk._core.log import logger
+from buttermilk.storage import Storage
 
 
 class AsyncDataUploader:
+
     def __init__(
         self,
+        storage: Storage,
+        *,
         buffer_size: int = 10,
         flush_interval: int = 30,
     ):
-        self.dataset_name = None  # Will be determined from flow context
+        self.storage: Storage = storage
 
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
@@ -36,14 +40,6 @@ class AsyncDataUploader:
         atexit.register(self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
         signal.signal(signal.SIGINT, self.shutdown)
-
-    def configure_storage(self, dataset_name: str) -> None:
-        """Configure storage destination. Should be called by orchestrator/flow, not agent.
-        
-        Args:
-            dataset_name: Dataset name for BigQuery storage
-        """
-        self.dataset_name = dataset_name
 
     async def add(self, item: Any):
         """Add item to upload queue."""
@@ -86,17 +82,7 @@ class AsyncDataUploader:
             return
 
         try:
-            from buttermilk._core.dmrc import get_bm
-            bm = get_bm()
-
-            # Determine storage from flow context or use default
-            # The flow/orchestrator should configure storage, not the agent
-            if self.dataset_name:
-                storage = bm.get_bigquery_storage(self.dataset_name)
-                storage.save(self.buffer)
-            else:
-                # Fallback: use BM's session-level save for agent traces
-                bm.save(self.buffer, extension=".json")
+            self.storage.save(self.buffer)
 
             self.last_flush = time.time()
             self.buffer = []
@@ -122,15 +108,7 @@ class AsyncDataUploader:
         # Handle synchronously to avoid event loop issues
         if self.buffer:
             try:
-                from buttermilk._core.dmrc import get_bm
-                bm = get_bm()
-
-                if self.dataset_name:
-                    storage = bm.get_bigquery_storage(self.dataset_name)
-                    storage.save(self.buffer)
-                else:
-                    # Fallback: use BM's session-level save
-                    bm.save(self.buffer, extension=".json")
+                self.storage.save(self.buffer)
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
                 from buttermilk._core.dmrc import get_bm

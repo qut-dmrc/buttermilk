@@ -10,7 +10,6 @@ criteria, individual assessments, and the overall scoring output.
 from typing import Any
 
 from autogen_core import (
-    CancellationToken,
     MessageContext,  # Autogen cancellation token
     message_handler,
 )
@@ -242,9 +241,7 @@ class LLMScorer(LLMAgent):
 
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
-        # and 'criteria' (if criteria are dynamic or passed through).
-        # Example mapping for 'answers': "SourceAgentName.outputs" (if source is Judge's name)
-        # Example mapping for 'records': "SourceAgentName.inputs.records"
+        # and 'criteria' (if the criteria template is dynamic).
         extracted_data = extract_message_data(
             message=message,  # The AgentTrace from the Judge
             source=message.agent_id,  # The Judge agent's ID/name
@@ -281,10 +278,11 @@ class LLMScorer(LLMAgent):
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )
 
-        # Publish the AgentInput to trigger standard processing flow
-        # This ensures the output is wrapped in AgentTrace and routed to UI
-        await self._publish(scorer_agent_input, topic_id=self._topic_id)
-        logger.debug(f"Scorer '{self.agent_name}' published scoring request for {message.agent_id} call {message.call_id}.")
+        # Invoke the scoring process using the LLM
+        logger.debug(f"Scorer '{self.agent_name}' scoring request for {message.agent_id} call {message.call_id}.")
+        response = await self.invoke(message=scorer_agent_input)
+
+        await self._publish(response)
 
     async def _process(
         self,

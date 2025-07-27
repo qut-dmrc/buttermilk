@@ -8,6 +8,7 @@
       "name": "daemon",
       "type": "debugpy",
       "request": "launch",
+      "consoleName": "Buttermilk Daemon",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": [

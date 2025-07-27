@@ -598,7 +598,7 @@ class AgentTrace(AgentOutput):
         parent_call_id: str | None = None,
         tracing_link: str | None = None,
     ) -> "AgentTrace":
-        """Creates an AgentTrace instance from an existing AgentOutput.
+        """Create an AgentTrace instance from an existing AgentOutput.
 
         Args:
             output (AgentOutput): The output from which to create the trace.
@@ -895,8 +895,9 @@ class TaskProcessingComplete(TaskProcessingStarted):
 
 
 class ProceedToNextTaskSignal(BaseModel):
-    """A control signal, typically from a controller or orchestrator, instructing
-    an agent to proceed with its next internal task or step.
+    """A control signal, typically from a controller or orchestrator.
+
+    Instructs an agent to proceed with its next internal task or step.
 
     The exact usage context for this signal might depend on specific orchestrator
     implementations.

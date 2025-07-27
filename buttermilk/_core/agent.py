@@ -50,12 +50,10 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
-    HeartBeat,
     ManagerMessage,  # Messages from the user
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
-    ToolOutput,
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
@@ -476,7 +474,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         raise NotImplementedError("Subclasses must implement the _process method.")
 
     # --- Message Handlers ---
-    @message_handler
+    @message_handler  # Announce on ConductorRequest
     async def handle_conductor_request(
         self,
         message: "ConductorRequest",
@@ -515,7 +513,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # Mark as announced
         self._announced = True
 
-    @message_handler
+    @message_handler  # Invoke on StepRequest
     async def handle_request(
         self,
         message: StepRequest,
@@ -548,7 +546,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         return await self.invoke(message=message)
 
-    @message_handler
+    @message_handler  # Add agent output messages to model context
     async def handle_agent_output(
         self,
         message: AgentOutput | AgentTrace,
@@ -598,7 +596,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
             )
 
-    @message_handler
+    @message_handler  # Add ManagerMessage content to model context
     async def handle_manager_message(
         self,
         message: ManagerMessage,
@@ -640,61 +638,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             content_str = str(message.content)
             if not content_str.startswith(COMMAND_SYMBOL):  # Avoid adding command-like messages to history
                 await self._model_context.add_message(UserMessage(content=content_str, source=source))
-
-    @message_handler
-    async def handle_tool_output(
-        self,
-        message: ToolOutput,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle ToolOutput messages, extracting data based on input mappings.
-
-        Args:
-            message: The ToolOutput message to process.
-            ctx: Message context containing sender and topic information.
-
-        """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
-
-        # Extract data based on input mappings
-        if self.inputs:  # Only extract if input mappings are defined
-            extracted = extract_message_data(
-                message=message,
-                source=source,
-                input_mappings=self.inputs,
-            )
-            # Add extracted records to self._records
-            extracted_records = extracted.pop("records", [])
-            if extracted_records:
-                self._records.extend(extracted_records)
-                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
-
-            # Add other extracted data to self._data
-            found_keys = []
-            for key, value in extracted.items():
-                if value is not None and value not in ([], {}):  # Ensure value is meaningful
-                    self._data.add(key, value)
-                    found_keys.append(key)
-            if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
-        else:
-            logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction for ToolOutput.")
-
-    @message_handler
-    async def handle_heartbeat(
-        self,
-        message: HeartBeat,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle heartbeat messages.
-
-        Puts the heartbeat signal into the agent's internal heartbeat queue.
-        """
-        try:
-            self._heartbeat.put_nowait(message.go_next)
-        except asyncio.QueueFull:
-            # If the agent isn't processing heartbeats quickly enough.
-            logger.debug(f"Heartbeat queue full for agent {self.agent_name}. Agent may be busy or stuck.")
 
     # --- Helper Methods ---
 
