@@ -61,7 +61,7 @@ class SpyAgent(RoutedAgent):
         """Initializes the SpyAgent.
 
         Args:
-            data (StorageConfig): Defines where and how to save captured data.
+            save (StorageConfig): Defines where and how to save captured data.
             **_kwargs: Additional keyword arguments passed to the `RoutedAgent`
                 superclass constructor.
 
