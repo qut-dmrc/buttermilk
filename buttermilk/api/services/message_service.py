@@ -13,7 +13,7 @@ from buttermilk._core import (
 )
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
-    AgentTrace,
+    AgentTrace,AgentOutput,
     ErrorEvent,
     FlowEvent,
     FlowMessage,
@@ -88,7 +88,7 @@ class MessageService:
             preview = getattr(message, "preview", None)
             tracing_link = getattr(message, "tracing_link", None)
 
-            if isinstance(message, AgentTrace):
+            if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
                     message = message.outputs

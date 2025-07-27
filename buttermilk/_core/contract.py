@@ -322,7 +322,7 @@ class AgentInput(FlowMessage):
             prompt_summary = str(prompt)[:50] + "..." if len(str(prompt)) > 50 else str(prompt)
             parts.append(f"Prompt: '{prompt_summary}'")
         if self.inputs:
-            parts.append(f"{len(self.inputs)} inputs keys")
+            parts.append(f"{len(self.inputs)} inputs keys: [{', '.join(self.inputs.keys())}]")
         if self.parameters:
             parts.append(f"{len(self.parameters)} parameters")
         if self.records:
@@ -462,11 +462,14 @@ class AgentOutput(BaseModel):
 
         """
         try:
+            if self.is_error:
+                return f"AgentOutput call_id: {self.call_id}, ERROR: {self.error}"
             if self.outputs is not None:
-                return str(self.outputs)
+                return f"AgentOutput call_id: {self.call_id}: {self.outputs}"
+
         except Exception as e:
             logger.warning(f"Could not convert AgentOutput.outputs to string: {e!s}")
-        return ""
+        return f"AgentOutput (No outputs, call_id: {self.call_id})"
 
     def __str__(self) -> str:
         """Returns the `content` (string representation of `outputs`) of the agent output."""
@@ -584,6 +587,42 @@ class AgentTrace(AgentOutput):
         """Returns the `content` (string representation of `outputs`) of the agent trace."""
         # Inherits content property from AgentOutput
         return super().content
+
+    @classmethod
+    def from_output(
+        cls,
+        output: AgentOutput,
+        inputs: AgentInput,
+        agent_info: AgentConfig,
+        call_id: str | None = None,
+        parent_call_id: str | None = None,
+        tracing_link: str | None = None,
+    ) -> "AgentTrace":
+        """Creates an AgentTrace instance from an existing AgentOutput.
+
+        Args:
+            output (AgentOutput): The output from which to create the trace.
+            inputs (AgentInput): The input that was processed to produce this output.
+            agent_info (AgentConfig): The configuration of the agent that produced the output.
+            parent_call_id (str | None): ID of the parent Weave call for tracing nested operations.
+            tracing_link (str | None): Direct URL/link to the trace in a tracing system.
+
+        Returns:
+            AgentTrace: A new instance of AgentTrace populated with data from the output and inputs.
+
+        """
+        return cls(
+            call_id=call_id or output.call_id,
+            agent_id=output.agent_id,
+            outputs=output.outputs,
+            messages=output.messages,
+            metadata=output.metadata,
+            error=output.error,
+            agent_info=agent_info,
+            parent_call_id=parent_call_id,
+            tracing_link=tracing_link,
+            inputs=inputs,
+        )
 
 
 # --- Manager / Conductor / UI Interaction Messages ---

@@ -39,8 +39,13 @@ python scripts/mcp_debug/buttermilk_server.py flows
 ```bash
 # Get latest log filename:
 python scripts/mcp_debug/buttermilk_logs.py
-# View logs
-python scripts/mcp_debug/buttermilk_logs.py tail 100
+
+# View logs - IMPORTANT: Always specify --level to get desired log level
+python scripts/mcp_debug/buttermilk_logs.py tail 100 --level INFO   # INFO and above
+python scripts/mcp_debug/buttermilk_logs.py tail 100 --level DEBUG  # DEBUG and above
+python scripts/mcp_debug/buttermilk_logs.py tail 100               # Without --level shows ALL logs including DEBUG
+
+# Other log commands
 python scripts/mcp_debug/buttermilk_logs.py errors
 python scripts/mcp_debug/buttermilk_logs.py warnings
 python scripts/mcp_debug/buttermilk_logs.py search "pattern" 50
@@ -441,6 +446,7 @@ For detailed Playwright MCP commands and options, consult the official documenta
    - Verify backend API is running with flows enabled
    - Check browser console for API errors
    - Ensure correct proxy configuration in vite.config.ts
+   - **Be patient**: Frontend elements often need time to populate. Wait 5-10 seconds before assuming something is broken.
 
 2. **WebSocket connection fails**:
    - Check that both frontend and backend servers are running
@@ -459,7 +465,8 @@ For detailed Playwright MCP commands and options, consult the official documenta
 5. **Judge results not appearing**:
    - Ensure proper criteria selection (e.g., "hrc" not "HRC")
    - Check that record exists in selected dataset
-   - Wait for async loading - judge results may take 10-30 seconds
+   - **Be patient**: Judge results may take 10-30 seconds to appear
+   - Known issue: Assessment counts may show "(0)" even when judges are producing results
 
 ## Debug Infrastructure Notes
 

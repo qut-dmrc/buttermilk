@@ -181,6 +181,7 @@ ignore = [
     "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
     "PLR0904",  # Too many public methods
+    "RET504",  # Unnecessary variable assignment before return
 ]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 

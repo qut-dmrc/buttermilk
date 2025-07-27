@@ -17,7 +17,6 @@ from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing - core dependency
-from weave.trace.weave_client import Call, WeaveObject
 
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
@@ -61,7 +60,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
-from buttermilk._core.retry import RetryWrapper
+from buttermilk._core.tracing import get_parent_call  # Function to retrieve parent call for tracing
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -399,10 +398,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             attributes=trace_params,
         )
 
-        if parent_call:
-            parent_call._children.append(child_call)  # Nest this call for tracing
+        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
         try:
+            logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")
             result = await self._process(message=message)
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
@@ -424,17 +423,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if result is None:
             return None
 
-        # Create AgentTrace from the result
-        trace_data = result.model_dump()
-
-        # Overwrite the call_id with the child_call's ID from Weave
-        trace_data['call_id'] = child_call.id
-    
-        trace = AgentTrace(
-            **trace_data,
+        # Create AgentTrace from the result, overwriting call_id and parent_call_id with
+        # values directly from Weave.
+        trace = AgentTrace.from_output(
+            result,
+            parent_call_id=parent_call.id if parent_call else None,
+            call_id=child_call.id,
+            inputs=message,
             agent_info=self._cfg,
             tracing_link=tracing_link,
-            parent_call_id=parent_call.id if parent_call else None,
         )
 
         return trace
@@ -521,7 +518,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     @message_handler
     async def handle_request(
         self,
-        message: AgentInput | StepRequest,
+        message: StepRequest,
         ctx: MessageContext,
     ) -> AgentTrace | None:
         """Handle an invocation message, preparing input and calling the agent's core logic.
@@ -544,9 +541,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
 
         """
-        if isinstance(message, StepRequest) and message.role != self.role:
+        if message.role != self.role:
             # Only handle if the role matches this agent's role - create a "skipped" trace
-            logger.warning(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
+            logger.debug(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
             return None
 
         return await self.invoke(message=message)
@@ -596,7 +593,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction.")
 
         # Add relevant message content to the conversation history (_model_context).
-        if content_to_add := getattr(message, "contents", None):
+        if content_to_add := getattr(message, "content", None):
             await self._model_context.add_message(
                 AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
             )
@@ -770,6 +767,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if not updated_inputs.records and self._records:
             updated_inputs.records = [self._records[-1]]  # Use only the most recent record as default
 
+        # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
+
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "
             f"Final input keys: {list(updated_inputs.inputs.keys()) if updated_inputs.inputs else []}, "
@@ -818,38 +817,3 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         )
 
         return [tool_def]
-
-
-async def get_parent_call(
-    message: AgentInput | None = None,
-) -> Call | WeaveObject | None:
-
-    parent_call: Call | WeaveObject | None = None
-
-    if message and message.parent_call_id:
-
-        async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
-            """Retry getting weave call to handle async upload timing."""
-            return bm.weave.get_call(call_id)
-
-        # Use RetryWrapper with shorter delays for weave call retrieval
-        retry_wrapper = RetryWrapper(
-            client=None,  # Not using client, just the retry logic
-            max_retries=3,
-            min_wait_seconds=0.1,
-            max_wait_seconds=1.0,
-            jitter_seconds=0.1,
-            cooldown_seconds=0,
-        )
-
-        try:
-            parent_call = await retry_wrapper._execute_with_retry(
-                get_weave_call_with_retry,
-                message.parent_call_id,
-            )
-        except Exception as e:  # Broad exception for Weave call retrieval
-            logger.error(f"Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
-            parent_call = weave.get_current_call()  # Fallback to current call if specified parent not found
-    else:
-        parent_call = weave.get_current_call()
-    return parent_call

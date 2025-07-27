@@ -13,7 +13,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 try:
     from rich import print
@@ -28,7 +27,7 @@ class LogViewer:
         self.levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
         self.min_level_num = self.levels.get(min_level.upper(), 0)
 
-    def find_latest_log(self) -> Optional[str]:
+    def find_latest_log(self) -> str | None:
         """Find the most recent debug log file. If not found, falls back to the most recent info log file."""
         all_logs = sorted(glob.glob(self.log_pattern), key=os.path.getmtime, reverse=True)
         if not all_logs:
@@ -43,7 +42,7 @@ class LogViewer:
         # Otherwise, return the most recent log file.
         return all_logs[0]
 
-    def list_logs(self) -> List[dict]:
+    def list_logs(self) -> list[dict]:
         """List all log files with metadata."""
         log_files = glob.glob(self.log_pattern)
         if not log_files:
@@ -61,7 +60,7 @@ class LogViewer:
                     "size_mb": round(size_mb, 2),
                     "modified": mod_time.strftime("%Y-%m-%d %H:%M:%S"),
                     "lines": self._count_lines(log_file),
-                }
+                },
             )
 
         return logs_info
@@ -82,7 +81,7 @@ class LogViewer:
             return self.levels.get(level_name, -1)
         return 99  # Lines without a level are always included
 
-    def _filter_by_level(self, lines: List[str]) -> List[str]:
+    def _filter_by_level(self, lines: list[str]) -> list[str]:
         """Filter lines by the minimum log level."""
         if self.min_level_num == 0:  # if DEBUG, no filtering needed
             return lines
@@ -273,13 +272,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Buttermilk Log Viewer Tool",
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog='''
+        epilog="""
 Examples:
-  buttermilk_logs.py tail --lines 100
+  buttermilk_logs.py tail --lines 30
   buttermilk_logs.py tail --level INFO
   buttermilk_logs.py errors
-  buttermilk_logs.py search 'pattern' --lines 50
-''',
+  buttermilk_logs.py search 'pattern' --lines 20
+""",
     )
 
     parser.add_argument(
@@ -290,7 +289,7 @@ Examples:
         help="The mode to run in. If no mode is provided, it prints the path of the latest log.",
     )
     parser.add_argument("pattern", nargs="?", default=None, help="The pattern to search for (in search mode).")
-    parser.add_argument("-n", "--lines", type=int, default=50, help="Number of lines to show.")
+    parser.add_argument("-n", "--lines", type=int, default=20, help="Number of lines to show.")
     parser.add_argument(
         "-l",
         "--level",
