@@ -297,7 +297,7 @@ class FlowRunContext(BaseModel):
         """
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.warning(f"Unknown message type: {type(message)}, not forwarding to UI.")
+            logger.debug(f"Unhandled message type: {type(message)}, not forwarding to UI.")
             return
 
         try:
@@ -787,32 +787,6 @@ class FlowRunner(BaseModel):
     # New session management
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
-
-    # I think we comment this out because in flowrunner, we deal with Configs, not instantiated orchestrators. We instantiate later.
-    # @field_validator("flows", mode="before")
-    # @classmethod
-    # def validate_flows(cls, v):
-    #     """Convert OmegaConf flow configurations to Orchestrator instances."""
-    #     if not v:
-    #         return v
-
-    #     from buttermilk._core.orchestrator import OrchestratorProtocol
-    #     from omegaconf import DictConfig, OmegaConf
-
-    #     converted_flows = {}
-    #     for flow_name, flow_config in v.items():
-
-    #         orchestrator_class_path = flow_config.orchestrator
-    #         if orchestrator_class_path:
-    #             module_path, class_name = orchestrator_class_path.rsplit(".", 1)
-    #             import importlib
-
-    #             module = importlib.import_module(module_path)
-    #             orchestrator_class = getattr(module, class_name)
-    #             converted_flows[flow_name] = orchestrator_class.model_validate(flow_config)
-    #         else:
-    #             converted_flows[flow_name] = Orchestrator.model_validate(flow_config)
-    #     return converted_flows
 
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""

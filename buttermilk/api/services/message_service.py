@@ -48,6 +48,7 @@ class ChatMessage(BaseModel):
         "research_result",
         "differences",
         "judge_reasons",
+        "start_flow",
         "system_message",  # Added system_message
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
@@ -102,7 +103,7 @@ class MessageService:
             if isinstance(message, Record):
                 message_type = "record"
             elif isinstance(message, ConductorRequest):
-                message_type = "start_flow"
+                return None
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):
