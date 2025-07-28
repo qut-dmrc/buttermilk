@@ -814,41 +814,14 @@ class BM(SessionInfo):
 
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
 
-        try:
-            # Set up credentials before initializing weave
-            self._setup_weave_credentials()
+        # Set up credentials before initializing weave
+        self._setup_weave_credentials()
 
-            # Try to initialize weave with a reasonable timeout
-            logger.debug(f"Initializing Weave with collection: {collection_name}")
-            client = weave.init(collection_name)
-            logger.debug("Weave initialized successfully")
-            return client
-        except Exception as e:
-            # Log the error but don't fail the entire initialization
-            logger.warning(f"Weave initialization failed: {e}. Continuing without weave tracing.")
-
-            # Return a mock client that provides the basic interface but does nothing
-            class MockWeaveClient:
-                def __init__(self):
-                    self.collection_name = collection_name
-
-                def create_call(self, *args, **kwargs):
-                    return None
-
-                def finish_call(self, *args, **kwargs):
-                    pass
-
-                def get_call(self, *args, **kwargs):
-                    return None
-
-                def __getattr__(self, name):
-                    # Return a no-op function for any other method calls
-                    def noop(*args, **kwargs):
-                        return None
-
-                    return noop
-
-            return MockWeaveClient()
+        # Try to initialize weave with a reasonable timeout
+        logger.debug(f"Initializing Weave with collection: {collection_name}")
+        client = weave.init(collection_name)
+        logger.debug("Weave initialized successfully")
+        return client
 
     @property
     def credentials(self) -> dict[str, str]:

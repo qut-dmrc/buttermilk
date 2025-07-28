@@ -222,20 +222,6 @@ class CloudManager:
         elif hasattr(tracing_cfg, "provider") and tracing_cfg.provider == "google":
             self._setup_google_tracing()
 
-    def _setup_wandb_tracing(self) -> None:
-        """Set up W&B tracing."""
-        try:
-            from traceloop.sdk import Traceloop
-
-            WANDB_BASE_URL = "https://trace.wandb.ai"
-            os.environ["TRACELOOP_BASE_URL"] = f"{WANDB_BASE_URL}/otel/v1/traces"
-            Traceloop.init(disable_batch=True)
-            logger.info("Initialized W&B tracing")
-        except ImportError as e:
-            logger.warning(f"Failed to initialize W&B tracing - missing dependencies: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize W&B tracing: {e}")
-
     def _setup_google_tracing(self) -> None:
         """Set up Google Cloud Trace."""
         try:
