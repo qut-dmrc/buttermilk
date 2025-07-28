@@ -270,14 +270,11 @@ class BigQueryStorage(Storage, StorageClient):
 
     def _build_select_query(self) -> str:
         """Build SQL query for selecting records."""
+        # TODO: Improve this to dynamically build SELECT based on schema and column mappings
+        # Currently using SELECT * to avoid hardcoding column names that may not exist
+        # or may be mapped differently by the user
         base_query = f"""
-        SELECT
-            record_id,
-            content,
-            metadata,
-            ground_truth,
-            uri,
-            mime
+        SELECT *
         FROM `{self.get_table_ref()}`
         WHERE dataset_name = @dataset_name
         """
