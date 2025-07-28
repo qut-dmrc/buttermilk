@@ -84,7 +84,7 @@ class QualResults(QualScore):
             correctness score as a simple average of the `correct` fields from
             all assessments (fraction of criteria marked as correct). Returns
             `None` if there are no assessments. This is an unweighted average.
-        score_text (str): A property that provides a human-readable string
+        score_text (str): A computed property that provides a human-readable string
             representation of the `correctness` score (e.g., "75%").
 
     """
