@@ -152,21 +152,12 @@ class BigQueryStorage(Storage, StorageClient):
             # Convert Pydantic models to list of dicts for upload_rows
             rows_to_insert = []
             for record in records:
-                # Handle both Pydantic models and plain dicts
                 if isinstance(record, dict):
                     row = record
-                elif hasattr(record, "model_dump"):
-                    # Use Pydantic's model_dump for proper serialization
-                    row = record.model_dump(mode="json")
                 else:
-                    # Fallback for other types - convert to dict if possible
-                    try:
-                        row = dict(record)
-                    except Exception as e:
-                        raise StorageError(
-                            f"Cannot convert record to dict: {type(record)}. Expected Pydantic model or dict. Error: {e}",
-                        )
-
+                    # Assume it's a Pydantic model with model_dump
+                    row = record.model_dump(mode="json")
+                
                 rows_to_insert.append(row)
 
             # Use the existing upload_rows function which handles proper serialization
@@ -328,57 +319,26 @@ class BigQueryStorage(Storage, StorageClient):
 
     def _parse_record(self, row: bigquery.Row) -> Record:
         """Parse a BigQuery row into a Record object."""
-        try:
-            # Convert row to dictionary for easier column mapping
-            row_dict = dict(row.items())
+        # Convert row to dictionary
+        row_dict = dict(row.items())
 
-            # Apply column mapping if specified
-            if self.config.columns:
-                mapped_row = {}
-                for new_name, old_name in self.config.columns.items():
-                    if old_name in row_dict:
-                        mapped_row[new_name] = row_dict[old_name]
-                    elif hasattr(row, old_name):
-                        mapped_row[new_name] = getattr(row, old_name)
-                # Update row_dict with mapped values
-                row_dict.update(mapped_row)
+        # Apply column mapping if specified
+        if self.config.columns:
+            for new_name, old_name in self.config.columns.items():
+                row_dict[new_name] = row_dict[old_name]
 
-            # Parse JSON fields (handle both mapped and original names)
-            metadata_field = row_dict.get("metadata", getattr(row, "metadata", None))
-            ground_truth_field = row_dict.get("ground_truth", getattr(row, "ground_truth", None))
+        # Parse JSON fields - metadata and ground_truth are stored as JSON strings in BigQuery
+        metadata = json.loads(row_dict["metadata"]) if isinstance(row_dict["metadata"], str) else row_dict["metadata"]
+        
+        ground_truth = None
+        if "ground_truth" in row_dict and row_dict["ground_truth"]:
+            ground_truth = json.loads(row_dict["ground_truth"]) if isinstance(row_dict["ground_truth"], str) else row_dict["ground_truth"]
 
-            # Handle cases where fields might already be dictionaries
-            if isinstance(metadata_field, Mapping):
-                metadata = metadata_field
-            elif metadata_field:
-                metadata = json.loads(metadata_field)
-            else:
-                metadata = {}
-
-            if isinstance(ground_truth_field, Mapping):
-                ground_truth = ground_truth_field
-            elif ground_truth_field:
-                ground_truth = json.loads(ground_truth_field)
-            else:
-                ground_truth = None
-
-            # Create Record object using mapped fields when available
-            record = Record(
-                record_id=row_dict.get("record_id", getattr(row, "record_id", "unknown")),
-                content=row_dict.get("content", getattr(row, "content", "")),
-                metadata=metadata,
-                ground_truth=ground_truth,
-                uri=row_dict.get("uri", getattr(row, "uri", None)),
-                mime=row_dict.get("mime", getattr(row, "mime", "text/plain")),
-            )
-
-            return record
-
-        except Exception as e:
-            logger.warning(f"Error parsing BigQuery row {getattr(row, 'record_id', 'unknown')}: {e}")
-            # Return a minimal record on parse error
-            return Record(
-                record_id=getattr(row, "record_id", "error"),
-                content=str(getattr(row, "content", "Error loading content")),
-                metadata={"parse_error": str(e)},
-            )
+        # Create Record object from row data
+        return Record(
+            record_id=row_dict["record_id"],
+            content=row_dict["content"],
+            metadata=metadata,
+            ground_truth=ground_truth,
+            mime=row_dict.get("mime", "text/plain"),
+        )
