@@ -13,8 +13,8 @@ async def test_record_remote_load(multimodal_record):
 
 
 def test_record_no_keywords():
-    record = Record(text="test")
-    assert not record.uri
+    record = Record(content="test")
+    assert not record.metadata.get("uri")
     assert len(record.components) == 1
     assert record.components[0].mime == "text/plain"
     assert record.components[0].base_64 is None
@@ -32,7 +32,7 @@ async def test_from_path_valid():
         mime="image/jpeg",
         title="Test Image",
     )
-    assert record.uri == test_image_path
+    assert record.metadata.get("uri") == test_image_path
     assert record.metadata["title"] == "Test Image"
     assert len(record.components) == 1
     assert record.components[0].mime == "image/jpeg"
@@ -49,7 +49,7 @@ async def test_from_uri_valid():
         mime="image/jpeg",
         title="Test Image",
     )
-    assert record.uri == test_image_path
+    assert record.metadata.get("uri") == test_image_path
     assert record.metadata["title"] == "Test Image"
     assert len(record.components) == 1
     assert record.components[0].mime == "image/jpeg"
@@ -81,7 +81,7 @@ async def test_from_uri_article(id, url, test_str):
 @pytest.mark.anyio
 async def test_from_uri_invalid():
     record = await download_and_convert("invalid_uri", mime="image/png")
-    assert not record.uri
+    assert not record.metadata.get("uri")
     assert record.all_text == "invalid_uri"
 
 

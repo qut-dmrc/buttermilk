@@ -139,7 +139,8 @@ class TextToImageClient(RetryWrapper):
 
             # Save the image and update the URI in the record
             # The save method is part of ImageRecord
-            generated_image_record.uri = generated_image_record.save(final_save_path)
+            saved_uri = generated_image_record.save(final_save_path)
+            generated_image_record.metadata["uri"] = saved_uri
 
             # Ensure prompt, negative_prompt, and other relevant params are in the final record
             generated_image_record.prompt = text

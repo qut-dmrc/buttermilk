@@ -81,5 +81,5 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
 
 @pytest.fixture(scope="session")
 def link_to_video_gcp() -> Record:
-    obj = Record(uri="gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4", content="Video content", mime="video/mp4")
+    obj = Record(metadata={"uri": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}, content="Video content", mime="video/mp4")
     return obj
