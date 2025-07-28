@@ -341,7 +341,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 runtime parameters for the flow. It also includes tracing attributes.
 
         """
-        display_name = f"{self.name} {request.name}"
+        display_name = request.name
         logger.info(f"Starting run for orchestrator flow {display_name}.")
 
         # Get the singleton instance using our new module-level function
@@ -357,7 +357,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         try:
             # Execute the core run logic.
             await self._run(request=request)
-            logger.info(f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}")
+            logger.highlight(f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}")
         except Exception as e:
             logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
             # Optionally re-raise or handle the error further.

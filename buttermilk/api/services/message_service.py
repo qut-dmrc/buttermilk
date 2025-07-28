@@ -95,6 +95,8 @@ class MessageService:
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
                     message = message.outputs
+                elif message.error:
+                    message = message.error
                 else:
                     logger.warning(f"[MessageService] AgentTrace object with no outputs: {message}, returning None.")
                     return None

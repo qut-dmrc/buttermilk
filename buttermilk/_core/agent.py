@@ -329,7 +329,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if not trace:
             return None
 
-        # Publish the AgentTrace result.
+        # Publish the AgentTrace result ONLY to a topic set aside for logging.
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.

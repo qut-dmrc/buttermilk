@@ -92,7 +92,7 @@ class ChatParser(BaseModel):
             # re.DOTALL allows '.' to match newlines.
             json_block_match = re.search(r"\{(?:[^{}]|(?R))*\}", text, re.DOTALL)  # More robust for nested {}
             if not json_block_match:  # Fallback for array-first JSON or simpler cases
-                 json_block_match = re.search(r"\[(?:[^\[\]]|(?R))*\]", text, re.DOTALL)
+                json_block_match = re.search(r"\[(?:[^\[\]]|(?R))*\]", text, re.DOTALL)
 
             if not json_block_match:  # Fallback for simple {} or [] if regex above fails
                 # This simpler regex might be problematic with nested structures if not careful
@@ -119,11 +119,10 @@ class ChatParser(BaseModel):
             logger.debug(f"ChatParser: Successfully parsed. Type: {type(parsed_output)}")
 
         except JSONDecodeError as e:
-            raise ProcessingError from e
+            raise ProcessingError(f"Failed to parse JSON. Error: {e}") from e
 
         if not isinstance(parsed_output, dict):
-            logger.warning(f"Unable to decode JSON in result: {text}")
-            parsed_output = dict(response=text)
+            raise ProcessingError(f"Unable to decode JSON in result type: {type(parsed_output)}")
 
         # Recursively convert stringified bools/numbers to actual types
         return convert_dict_types(parsed_output)

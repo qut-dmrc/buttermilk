@@ -25,6 +25,7 @@ from autogen_core import (
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
 )
+from opentelemetry.trace import NoOpTracerProvider
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import (
@@ -149,10 +150,10 @@ class AutogenOrchestrator(Orchestrator):
         # From the autogen docs:
         # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
-        # Currently we allow autogen telemetry but filter empty traces with weave post-processing
 
         self._runtime = SingleThreadedAgentRuntime(
-            # tracer_provider=NoOpTracerProvider(), intervention_handlers=[termination_handler, interrupt_handler]
+            tracer_provider=NoOpTracerProvider(),
+            intervention_handlers=[termination_handler, interrupt_handler],
         )
 
         # Start the Autogen runtime's processing loop in the background.
@@ -291,7 +292,7 @@ class AutogenOrchestrator(Orchestrator):
                     logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
                     raise FatalError(f"Agent registration failed for {variant_config.agent_id}: {e}") from e
                 logger.debug(
-                    f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'"
+                    f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
                 )
 
                 registered_for_role.append((agent_type, variant_config))
