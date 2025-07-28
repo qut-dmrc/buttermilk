@@ -182,7 +182,7 @@ defaults:
 - Fail fast with clear messages
 - Validation at boundaries
 - No defensive programming
-- No backwards compatability
+- Trust data contracts
 
 
 Remember: Every technical decision should support HASS researchers' needs. Performance optimizations should never compromise usability or reproducibility.

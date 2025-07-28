@@ -28,7 +28,8 @@ Key Analysis Steps:
 3. **Identify Root Cause**: Not symptoms, but actual problems
 4. **Check Error Propagation**: Are exceptions being caught and logged properly?
 5. **Verify Configuration Chain**: Full module paths in YAML, proper inheritance
-6. **Document Findings**: Update the GitHub issue
+6. **Check Schema Contracts**: Ensure data structures match across all components
+7. **Document Findings**: Update the GitHub issue
 
 ### Phase 3: PLAN - Design Before Code
 Create a clear plan with:
@@ -190,6 +191,18 @@ def process(self, data):
     if not hasattr(data, 'content'):  # 🚫 Let it fail
         return None
     # Just process it!
+```
+
+#### Schema Violations
+```python
+# NEVER: Support multiple field locations
+uri = record.metadata.get('uri', record.uri)  # 🚫 Pick ONE location
+
+# NEVER: Provide safe defaults for missing data
+value = data.get('field', 'default')  # 🚫 Let KeyError happen
+
+# ALWAYS: Trust the schema
+uri = record.metadata['uri']  # ✓ Clear contract
 ```
 
 #### Manual Configuration

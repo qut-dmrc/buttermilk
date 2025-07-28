@@ -39,6 +39,13 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Success criteria and troubleshooting
 - Log analysis techniques
 
+### [data-architecture.md](data-architecture.md) - Data Architecture & Schema Contracts
+- Schema-data contract principles
+- No defensive programming philosophy
+- Data model structure and evolution
+- Testing data integrity
+- Common data handling pitfalls
+
 ## 🚀 Quick Reference
 
 ### Essential Commands

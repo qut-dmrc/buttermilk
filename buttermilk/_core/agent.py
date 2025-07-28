@@ -575,7 +575,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             for rec in extracted_records:
                 try:
                     self._records.append(Record.model_validate(rec))
-                    logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+                     logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
                 except Exception as e:
                     logger.error(f"Agent {self.agent_name} failed to validate record {rec}: {e}")
 
