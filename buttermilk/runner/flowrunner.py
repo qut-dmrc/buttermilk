@@ -954,7 +954,7 @@ class FlowRunner(BaseModel):
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
-        logger.info(
+        logger.highlight(
             f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id}) | "
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
             f"New flow instance created",

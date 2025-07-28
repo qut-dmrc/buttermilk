@@ -48,13 +48,11 @@ class Record(BaseModel):
         record_id (str): A unique identifier for the record. Defaults to a
             new short UUID.
         metadata (dict[str, Any]): A dictionary for storing arbitrary metadata
-            associated with the record (e.g., source, creation date, tags).
+            associated with the record (e.g., source, creation date, tags, uri).
         alt_text (str | None): A textual description or transcript of the media
             objects contained in this record, especially useful for non-text content.
         ground_truth (dict | None): Optional dictionary containing ground truth
             data associated with this record, for evaluation or reference.
-        uri (str | None): An optional URI pointing to the original source or
-            location of the record's content.
         content (str | Sequence[str | Image]): The main content of the record.
             Can be a simple string (for text-only records) or a sequence of
             strings and Pillow `Image` objects for multimodal content.
@@ -86,10 +84,6 @@ class Record(BaseModel):
     ground_truth: dict[str, Any] | None = Field(  # Added type hint for dict value
         default=None,
         description="Optional ground truth data associated with this record for evaluation.",
-    )
-    uri: str | None = Field(
-        default=None,
-        description="Optional URI pointing to the original source of the record's content.",
     )
     content: str | Sequence[str | Image] = Field(
         description="Main content of the record: a string, or a sequence of strings and Pillow Images.",
@@ -300,30 +294,6 @@ class Record(BaseModel):
                     self.metadata[key] = value
         return self
 
-    @field_validator("uri")
-    @classmethod
-    def vld_path(cls, path: Any) -> str | None:  # path can be various types initially
-        """Validates and normalizes the `uri` attribute.
-
-        Converts `CloudPath` instances to their URI string representation and
-        `Path` (local path) instances to their POSIX string representation.
-        Other types are converted to string.
-
-        Args:
-            path: The input value for the `uri`.
-
-        Returns:
-            str | None: The normalized string representation of the URI/path,
-            or `None` if the input `path` is None.
-
-        """
-        if path is None:
-            return None
-        if isinstance(path, CloudPath):
-            return path.as_uri()
-        if isinstance(path, Path):
-            return path.as_posix()
-        return str(path)  # Fallback to string conversion
 
     @property
     def title(self) -> str | None:

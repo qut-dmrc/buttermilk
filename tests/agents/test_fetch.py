@@ -196,7 +196,7 @@ async def test_run_record_agent(
             return None  # Simulate fetch failure for this URI
         # Fallback for other URIs:
         mock_r = MagicMock(spec=Record)
-        mock_r.uri = uri
+        mock_r.metadata = {"uri": uri}
         mock_r.text = f"Mock content for {uri}"
         mock_r.fulltext = f"Mock content for {uri}"
         return mock_r

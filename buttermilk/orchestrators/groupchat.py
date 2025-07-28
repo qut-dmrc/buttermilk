@@ -42,8 +42,9 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
     ManagerMessage,
+    TaskProcessingComplete,
 )
-from buttermilk._core.exceptions import FatalError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
 
@@ -149,7 +150,10 @@ class AutogenOrchestrator(Orchestrator):
         # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
         # Currently we allow autogen telemetry but filter empty traces with weave post-processing
-        self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[termination_handler, interrupt_handler])
+
+        self._runtime = SingleThreadedAgentRuntime(
+            # tracer_provider=NoOpTracerProvider(), intervention_handlers=[termination_handler, interrupt_handler]
+        )
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
@@ -246,7 +250,9 @@ class AutogenOrchestrator(Orchestrator):
                             runtime=self._runtime,
                             type=variant_config.agent_id,  # Use the specific variant ID for registration
                             factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
-                                orch, cfg=v_cfg, cls=a_cls,
+                                orch,
+                                cfg=v_cfg,
+                                cls=a_cls,
                             ),
                         )
                     else:
@@ -254,7 +260,7 @@ class AutogenOrchestrator(Orchestrator):
                         agent_type: AgentType = await agent_cls.register(
                             runtime=self._runtime,
                             type=variant_config.agent_id,  # Use the specific variant ID for registration
-                            factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
+                            factory=lambda params=variant_config.parameters, cls=agent_cls: cls(**params),
                         )
                     # Subscribe the newly registered agent type to the main group chat topic.
                     # This allows it to receive general messages sent to the group.
@@ -278,11 +284,15 @@ class AutogenOrchestrator(Orchestrator):
 
                 except Exception as e:
                     # Log detailed error information for agent registration failures
-                    error_msg = f"🚨 FATAL: Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
+                    error_msg = (
+                        f"🚨 FATAL: Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
+                    )
                     logger.error(error_msg, exc_info=True)
                     logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
                     raise FatalError(f"Agent registration failed for {variant_config.agent_id}: {e}") from e
-                logger.debug(f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'")
+                logger.debug(
+                    f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'"
+                )
 
                 registered_for_role.append((agent_type, variant_config))
 
@@ -404,7 +414,7 @@ class AutogenOrchestrator(Orchestrator):
                 except Exception as e:
                     raise FatalError from e
 
-        except (KeyboardInterrupt):
+        except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
         except (FatalError, Exception) as e:
             logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
@@ -419,6 +429,7 @@ class AutogenOrchestrator(Orchestrator):
             An async callback function that takes a `FlowMessage` and publishes it.
 
         """
+
         async def publish_callback(message: FlowMessage) -> None:
             logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
 

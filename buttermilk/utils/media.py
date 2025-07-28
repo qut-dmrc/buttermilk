@@ -97,6 +97,7 @@ async def download_and_convert(
     # `label` is not directly used in Record creation here but is part of kwargs.
     active_metadata = {k: v for k, v in kwargs.items() if v is not None}
     active_mime = mime  # Use provided mime as default
+    source_uri = None  # Track the source URI/path for metadata
 
     # Attempt to decode obj if it's bytes (e.g. from a file read or download)
     # This is a general attempt; specific handling below might re-process `obj`.
@@ -123,7 +124,7 @@ async def download_and_convert(
         if isinstance(obj, bytes):
             with contextlib.suppress(Exception):
                 obj = obj.decode("utf-8", errors="replace")  # Replace errors to avoid crash
-        uri = final_uri  # Ensure uri field in Record is set to what was downloaded
+        source_uri = final_uri  # Track the source URI
 
     # Handle filepath or filepath-like string in obj
     elif filepath or (isinstance(obj, str) and is_filepath(obj)):
@@ -135,6 +136,7 @@ async def download_and_convert(
         guessed_type, _ = mimetypes.guess_type(final_filepath)
         if guessed_type and (not active_mime or active_mime == "application/octet-stream"):
             active_mime = guessed_type
+        source_uri = final_filepath  # Track the source filepath
 
     # Determine final content and process based on type/mime
     final_content: Any
@@ -176,12 +178,19 @@ async def download_and_convert(
             active_mime = "text/plain"
 
     elif isinstance(obj, bytes) or (isinstance(obj, str) and is_b64(obj)):  # Raw bytes or obj is a b64 string (implicit image)
-        logger.debug(f"download_and_convert: Processing as implicit image/binary data (type: {type(obj)}).")
-        # read_image handles bytes or base64 string and returns an ImageRecord
-        image_rec_from_obj = read_image(data=obj)
-        final_content = image_rec_from_obj.content
-        if image_rec_from_obj.mime: active_mime = image_rec_from_obj.mime
-        active_metadata.update(image_rec_from_obj.metadata)
+        # Check if mime type indicates it's text
+        if active_mime and active_mime.startswith("text/"):
+            logger.debug("download_and_convert: Processing bytes as text.")
+            final_content = obj.decode("utf-8", errors="replace") if isinstance(obj, bytes) else obj
+            if not active_mime or active_mime == "application/octet-stream":
+                active_mime = "text/plain"
+        else:
+            logger.debug(f"download_and_convert: Processing as implicit image/binary data (type: {type(obj)}).")
+            # read_image handles bytes or base64 string and returns an ImageRecord
+            image_rec_from_obj = read_image(data=obj)
+            final_content = image_rec_from_obj.content
+            if image_rec_from_obj.mime: active_mime = image_rec_from_obj.mime
+            active_metadata.update(image_rec_from_obj.metadata)
 
     elif obj is not None:  # Fallback for other types of obj not caught above
         logger.debug(f"download_and_convert: Processing obj of type {type(obj)} as generic content.")
@@ -192,7 +201,9 @@ async def download_and_convert(
         logger.error("download_and_convert: Reached final content determination with no valid data.")
         return None
 
-    return Record(content=final_content, metadata=active_metadata, uri=uri, mime=active_mime)
+    if source_uri:
+        active_metadata["uri"] = source_uri
+    return Record(content=final_content, metadata=active_metadata, mime=active_mime)
 
 
 def get_news_record_from_uri(uri: str) -> Record:
@@ -238,7 +249,8 @@ def get_news_record_from_uri(uri: str) -> Record:
     record_metadata = {k: v for k, v in record_metadata.items() if v is not None}
 
     # Create Record with simple text content
-    return Record(uri=uri, content=content, metadata=record_metadata, mime="text/plain")
+    record_metadata["uri"] = uri
+    return Record(content=content, metadata=record_metadata, mime="text/plain")
 
 
 def extract_main_content(html: str, **kwargs: Any) -> dict[str, Any]:
