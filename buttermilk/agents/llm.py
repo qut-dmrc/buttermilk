@@ -328,6 +328,7 @@ class LLMAgent(Agent):
         # Call the LLM through our helper method
         # Extract cancellation_token from kwargs if provided
         cancellation_token = kwargs.get("cancellation_token")
+        
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,
