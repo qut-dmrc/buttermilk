@@ -2,9 +2,9 @@
 # Wrapper script for buttermilk_logs.py
 # This script delegates to the Python implementation
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PYTHON_SCRIPT="$PROJECT_ROOT/scripts/mcp_debug/buttermilk_logs.py"
+# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PYTHON_SCRIPT="scripts/mcp_debug/buttermilk_logs.py"
 
 # Check if Python script exists
 if [ ! -f "$PYTHON_SCRIPT" ]; then
