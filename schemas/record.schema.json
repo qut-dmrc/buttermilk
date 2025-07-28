@@ -42,12 +42,6 @@
         "description": "Ground truth data for evaluation"
     },
     {
-        "name": "uri",
-        "type": "STRING",
-        "mode": "NULLABLE",
-        "description": "URI pointing to original source of content"
-    },
-    {
         "name": "mime",
         "type": "STRING",
         "mode": "NULLABLE",

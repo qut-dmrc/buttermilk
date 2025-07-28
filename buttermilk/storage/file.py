@@ -336,8 +336,8 @@ class FileStorage(Storage):
             result["alt_text"] = record.alt_text
         if record.ground_truth:
             result["ground_truth"] = record.ground_truth
-        if record.uri:
-            result["uri"] = record.uri
+        if record.metadata.get("uri"):
+            result["uri"] = record.metadata.get("uri")
         if record.mime and record.mime != "text/plain":
             result["mime"] = record.mime
 

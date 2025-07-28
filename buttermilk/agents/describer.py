@@ -141,19 +141,20 @@ class Describer(LLMAgent):
     async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
         """Process media content and generate description."""
         # Check if we need to download from URI
-        if hasattr(record, "uri") and record.uri and not record.media:
-            logger.info(f"Downloading media from URI: {record.uri}")
+        uri = record.metadata.get("uri") if hasattr(record, "metadata") else None
+        if uri and not record.media:
+            logger.info(f"Downloading media from URI: {uri}")
             try:
                 # Import here to avoid circular imports
                 from buttermilk.utils.media import download_and_convert
 
-                downloaded_media = await download_and_convert(record.uri)
+                downloaded_media = await download_and_convert(uri)
                 if downloaded_media:
                     record.media = downloaded_media
                 else:
-                    raise ProcessingError(f"Failed to download media from URI: {record.uri}")
+                    raise ProcessingError(f"Failed to download media from URI: {uri}")
             except Exception as e:
-                logger.error(f"Error downloading media from {record.uri}: {e}", exc_info=True)
+                logger.error(f"Error downloading media from {uri}: {e}", exc_info=True)
                 raise ProcessingError(f"Failed to download media: {e!s}") from e
 
         # Determine media type

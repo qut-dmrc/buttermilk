@@ -106,7 +106,7 @@ def read_image(
     # reopen
     img = Image.open(data)
     data.seek(0)  # go to the start of the image again
-    rec = Record(content=[img], uri=path)
+    rec = Record(content=[img], metadata={"uri": path})
 
     return rec
 

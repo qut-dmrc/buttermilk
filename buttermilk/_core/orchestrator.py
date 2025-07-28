@@ -23,7 +23,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Self
 
-import shortuuid  # For generating unique IDs
+import shortuuid
 
 try:
     import weave  # For tracing capabilities
@@ -357,7 +357,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         try:
             # Execute the core run logic.
             await self._run(request=request)
-            logger.info(f"Orchestrator '{self.name}' run '{request.name}' finished successfully.")
+            logger.info(f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}")
         except Exception as e:
             logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
             # Optionally re-raise or handle the error further.
