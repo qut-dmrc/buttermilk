@@ -51,7 +51,7 @@ class BigQueryStorage(Storage, StorageClient):
         # CRITICAL: Require explicit schema - no implicit defaults allowed
         if not config.schema_path:
             raise StorageError(
-                "BigQuery storage requires explicit schema_path. ",
+                "BigQuery storage requires explicit schema_path in the configuration.",
             )
 
         # Validate that we have the required components for BigQuery table operations
@@ -78,7 +78,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    f"Failed to load schema from {self.config.schema_path}. " "BigQuery storage requires a valid schema file.",
+                    f"Failed to load schema from {self.config.schema_path}. BigQuery storage requires a valid schema file."
                 )
             self._schema_validated = True
 
@@ -176,7 +176,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    "Schema is required for BigQuery operations. ",
+                    "Schema is required for BigQuery operations. Please ensure that a valid schema file is provided in the configuration.",
                 )
 
             # Use the proven upload_rows pipeline

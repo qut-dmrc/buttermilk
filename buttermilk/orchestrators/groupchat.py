@@ -35,14 +35,13 @@ from buttermilk._core import (
     AllMessages,
     StepRequest,
 )
-from buttermilk._core.agent import Agent, ProcessingError
+from buttermilk._core.agent import Agent
 from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowMessage,
     ManagerMessage,
-    TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.

@@ -16,6 +16,7 @@ FlowRunner = Any
 #
 # curl -v 'http://127.0.0.1:8000/api/pull_task' -H 'accept: application/json'
 
+
 # --- Dependency Provider Functions ---
 async def get_templates(request: Request) -> Jinja2Templates:
     templates = getattr(request.app.state, "templates", None)
@@ -26,6 +27,7 @@ async def get_templates(request: Request) -> Jinja2Templates:
 
 async def get_flows(request: Request) -> FlowRunner:
     from buttermilk.runner.flowrunner import FlowRunner as FlowRunner_object
+
     flows = getattr(request.app.state, "flow_runner", None)
     if flows is None or not isinstance(flows, FlowRunner_object):
         raise RuntimeError("FlowRunner not found in app.state.flows")
@@ -65,6 +67,7 @@ async def negotiate_response(
 
 # --- Routes ---
 
+
 @flow_data_router.get("/api/session")
 async def get_session_endpoint(
     request: Request,
@@ -87,7 +90,7 @@ async def get_session_endpoint(
                             "sessionId": session_id,
                             "status": session.status.value,
                             "created_at": session.created_at.isoformat() if hasattr(session, "created_at") else None,
-                        }
+                        },
                     )
 
         # Create a new session ID
@@ -108,7 +111,7 @@ async def get_session_endpoint(
                 "sessionId": new_session_id,
                 "status": "new",
                 "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
-            }
+            },
         )
 
     except Exception as e:
@@ -176,7 +179,11 @@ async def _get_records_impl(
             return JSONResponse(content={"error": error_msg}, status_code=400)
         context_data = {"records": [], "error": error_msg}
         return await negotiate_response(
-            request, context_data, "partials/records_list.html", templates, status_code=400,
+            request,
+            context_data,
+            "partials/records_list.html",
+            templates,
+            status_code=400,
         )
 
     # If no dataset specified, return available datasets instead of records
@@ -227,14 +234,14 @@ async def _get_records_impl(
         error_content = {"error": f"Error getting records for flow {flow}: {e!s}"}
         if "text/html" in accept_header:
             return templates.TemplateResponse(
-                 "partials/debug.html",
-                 {
-                     "request": request,
-                     "now": datetime.datetime.now(),
-                     "error": error_content["error"],
-                 },
-                 status_code=500,
-             )
+                "partials/debug.html",
+                {
+                    "request": request,
+                    "now": datetime.datetime.now(),
+                    "error": error_content["error"],
+                },
+                status_code=500,
+            )
         return JSONResponse(content=error_content, status_code=500)
 
 
@@ -253,7 +260,11 @@ async def get_flowinfo_endpoint(
         error_msg = "Missing 'flow' parameter."
         context_data = {"criteria": [], "record_ids": [], "error": error_msg}
         return await negotiate_response(
-            request, context_data, "partials/flow_dependent_data.html", templates, status_code=400,
+            request,
+            context_data,
+            "partials/flow_dependent_data.html",
+            templates,
+            status_code=400,
         )
 
     try:
@@ -272,14 +283,14 @@ async def get_flowinfo_endpoint(
         error_content = {"error": f"Error getting data for flow {flow}: {e!s}"}
         if "text/html" in accept_header:
             return templates.TemplateResponse(
-                 "partials/debug.html",
-                 {
-                     "request": request,
-                     "now": datetime.datetime.now(),
-                     "error": error_content["error"],
-                 },
-                 status_code=500,
-             )
+                "partials/debug.html",
+                {
+                    "request": request,
+                    "now": datetime.datetime.now(),
+                    "error": error_content["error"],
+                },
+                status_code=500,
+            )
         return JSONResponse(content=error_content, status_code=500)
 
 
@@ -288,12 +299,15 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
     logger.debug(f"Request received for /api/pull_task (Accept: {request.headers.get('accept', '')})")
     try:
         from buttermilk.api.job_queue import JobQueueClient
+
         run_request = await JobQueueClient().pull_single_task()
 
-        asyncio.create_task(request.app.state.flow_runner.run_flow(
-                    run_request=run_request,
-                    wait_for_completion=False,
-                ))
+        asyncio.create_task(
+            request.app.state.flow_runner.run_flow(
+                run_request=run_request,
+                wait_for_completion=False,
+            )
+        )
 
     except Exception as e:
         logger.error(f"Error pulling task: {e}", exc_info=True)
@@ -485,6 +499,7 @@ async def _get_record_responses_impl(
 
 
 # --- Score Page Routes ---
+
 
 @flow_data_router.get("/score/{flow}/{record_id}")
 async def get_score_page_endpoint_flow_only(
