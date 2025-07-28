@@ -232,12 +232,12 @@ class LLMScorer(LLMAgent):
            not isinstance(message.outputs, JudgeReasons) or \
            not hasattr(message, "inputs") or not message.inputs:  # Ensure inputs exist
             logger.debug(
-                f"Scorer '{self.agent_name}' received message from '{message.agent_id}' that "
+                f"Scorer '{self.agent_id}' received message from '{message.agent_id}' that "
                 "is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
             )
             return
 
-        logger.debug(f"Scorer '{self.agent_name}' received potential scoring target from agent '{message.agent_id}' (Call ID: {message.call_id}).")
+        logger.debug(f"Scorer '{self.agent_id}' received potential scoring target from agent '{message.agent_id}' (Call ID: {message.call_id}).")
 
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
@@ -282,7 +282,7 @@ class LLMScorer(LLMAgent):
         logger.debug(f"Scorer '{self.agent_name}' scoring request for {message.agent_id} call {message.call_id}.")
         response = await self.invoke(message=scorer_agent_input)
 
-        await self._publish(response)
+        # We don't publish here, because the invoke() method have already published the result.
 
     async def _process(
         self,

@@ -253,11 +253,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             highlight = True  # Highlight traces and outputs by default
         if highlight:
             logger.highlight(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
             )
         else:
             logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {topic_id}.",
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
             )
 
     def get_available_tools(self) -> list[Tool]:
@@ -329,7 +329,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if not trace:
             return None
 
-        # Publish the trace.
+        # Publish the AgentTrace result.
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.
@@ -575,7 +575,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             for rec in extracted_records:
                 try:
                     self._records.append(Record.model_validate(rec))
-                     logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
+                    logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
                 except Exception as e:
                     logger.error(f"Agent {self.agent_name} failed to validate record {rec}: {e}")
 

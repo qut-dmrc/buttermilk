@@ -783,7 +783,7 @@ class AgentConfig(BaseModel):
         # This context should contain fields that name_components might refer to,
         # respecting aliases and excluding None values. Ensure 'unique_identifier'
         # and the canonical 'agent_id' are in the context.
-        context_for_jmespath = {**self.model_dump(include={"unique_identifier", "agent_id", "role"}), **self.parameters}
+        context_for_jmespath = {**self.model_dump(include={"agent_id", "role"}), **self.parameters, "unique_identifier": self.unique_identifier}
 
         for comp_path in self.name_components:
             part = None

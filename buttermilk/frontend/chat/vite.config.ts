@@ -6,7 +6,7 @@ export default defineConfig({
 	server: {
 		// Add proper CORS handling
 		cors: true,
-		allowedHosts: ['localhost', 'nichome.stoat-musical.ts.net', 'services.stoat-musical.ts.net', 'nichome', 'wsl','services'],
+		allowedHosts: ['localhost', 'nichome.stoat-musical.ts.net', 'services.stoat-musical.ts.net', 'nichome', 'wsl','services', 'nicdev', 'nicdev.stoat-musical.ts.net'],
 		// Configure proxy for backend websocket connections
 		proxy: {
 			'/ws': {

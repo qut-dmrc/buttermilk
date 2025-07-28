@@ -42,7 +42,7 @@ from rich import print  # For rich console output
 from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
-from buttermilk._core.storage_config import BaseStorageConfig  # Storage config models
+from buttermilk._core.storage_config import BaseStorageConfig
 
 try:
     from buttermilk._core.llms import LLMs  # Manages LLM clients
