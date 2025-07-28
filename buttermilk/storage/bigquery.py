@@ -51,7 +51,7 @@ class BigQueryStorage(Storage, StorageClient):
         # CRITICAL: Require explicit schema - no implicit defaults allowed
         if not config.schema_path:
             raise StorageError(
-                "BigQuery storage requires explicit schema_path. Please provide a valid schema_path in the configuration.",
+                "BigQuery storage requires explicit schema_path in the configuration.",
             )
 
         # Validate that we have the required components for BigQuery table operations
