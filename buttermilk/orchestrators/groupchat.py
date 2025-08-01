@@ -163,8 +163,8 @@ class AutogenOrchestrator(Orchestrator):
 
         await self.register_ui(callback_to_ui=request.callback_to_ui)
 
-        # Give the UI registration time to complete
-        await asyncio.sleep(2)
+        # Give the UI registration an opportunity to run
+        await asyncio.sleep(0.1)
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
         logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
@@ -174,7 +174,7 @@ class AutogenOrchestrator(Orchestrator):
         )
 
         # Give agents a moment to initialize
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         # Send a welcome message to the UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
@@ -200,7 +200,7 @@ class AutogenOrchestrator(Orchestrator):
         self._is_initialized = True
 
         # Give the MANAGER a moment to process the message
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         # Process any messages that were queued before initialization
         if self._pending_messages:
@@ -339,7 +339,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
 
         # Give the agent time to fully register
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
         logger.debug("[AutogenOrchestrator.register_ui] Registration complete after delay")
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
