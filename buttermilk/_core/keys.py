@@ -35,7 +35,7 @@ class SecretsManager(CloudProviderCfg):
             if not GCP_SECRETS_AVAILABLE:
                 raise ImportError("Google Cloud Secret Manager not available. Install google-cloud-secret-manager.")
             client = secretmanager.SecretManagerServiceClient()
-            self._path = f"projects/{self.project}/secrets"
+            self._path = f"projects/{self.project_id}/secrets"
         elif self.type == "azure":
             if not AZURE_AVAILABLE:
                 raise ImportError("Azure Key Vault not available. Install azure-identity and azure-keyvault-secrets.")

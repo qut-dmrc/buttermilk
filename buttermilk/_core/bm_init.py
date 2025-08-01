@@ -528,7 +528,7 @@ class BM(SessionInfo):
                 cloud_logging_resource = gcp_logging.Resource(
                     type="generic_task",
                     labels={
-                        "project": self.logger_cfg.project,
+                        "project": self.logger_cfg.project_id,
                         "location": self.logger_cfg.location,
                         "namespace": self.name,
                         "job": self.job,
@@ -550,7 +550,7 @@ class BM(SessionInfo):
                 logger.error(
                     f"Cloud logging setup failed due to configuration issue: {e}. "
                     f"Logger config: type={self.logger_cfg.type}, "
-                    f"project={self.logger_cfg.project}, "
+                    f"project={self.logger_cfg.project_id}, "
                     f"location={self.logger_cfg.location}",
                 )
 

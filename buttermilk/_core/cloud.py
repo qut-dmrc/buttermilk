@@ -162,7 +162,7 @@ class CloudManager:
         if not logger_cfg:
             raise RuntimeError("Logger config needed for GCS Log Client")
 
-        project = logger_cfg.project
+        project = logger_cfg.project_id
         if not project:
             raise RuntimeError("Logger config missing 'project' attribute")
 
