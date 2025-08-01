@@ -299,8 +299,84 @@ class AutoGenWrapper(RetryWrapper):
         )
 
         json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
+        fake_schema_tool = None  # Will hold our fake tool if needed
+        
         if is_valid_schema_type and self.model_info.get("structured_output"):
             json_output_requested = schema  # type: ignore # Pass the schema for structured output
+        elif is_valid_schema_type and not self.model_info.get("structured_output") and not tools and self.model_info.get("function_calling", True):
+            # Create a fake tool for models that support function calling but not structured output
+            # This allows us to get structured output via tool calling
+            from autogen_core.tools import FunctionTool
+            
+            # Create a function that validates the schema
+            # Instead of using FunctionTool, we'll create a simple Tool that matches the schema
+            from autogen_core.tools import Tool, ToolSchema
+            
+            # Create parameters schema from the Pydantic model
+            parameters = {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+            
+            for field_name, field_info in schema.model_fields.items():
+                # Add field to properties
+                field_schema = {"type": "string"}  # Default to string
+                if field_info.annotation == int:
+                    field_schema["type"] = "integer"
+                elif field_info.annotation == float:
+                    field_schema["type"] = "number"
+                elif field_info.annotation == bool:
+                    field_schema["type"] = "boolean"
+                
+                if field_info.description:
+                    field_schema["description"] = field_info.description
+                    
+                parameters["properties"][field_name] = field_schema
+                
+                # Add to required if not optional
+                if field_info.is_required():
+                    parameters["required"].append(field_name)
+            
+            # Create a simple tool class
+            class FakeSchemaToolImpl(Tool):
+                def __init__(self, schema_cls):
+                    self._schema_cls = schema_cls
+                    self._name = f"create_{schema_cls.__name__.lower()}"
+                    self._description = f"Create a {schema_cls.__name__} object with the specified fields"
+                
+                @property
+                def name(self) -> str:
+                    return self._name
+                
+                @property
+                def description(self) -> str:
+                    return self._description
+                
+                @property
+                def schema(self) -> ToolSchema:
+                    return ToolSchema(
+                        name=self._name,
+                        description=self._description,
+                        parameters=parameters
+                    )
+                
+                async def run(self, args: Any, cancellation_token: CancellationToken) -> Any:
+                    return self._schema_cls(**args)
+                
+                async def run_json(self, args: dict[str, Any], cancellation_token: CancellationToken) -> Any:
+                    return await self.run(args, cancellation_token)
+                
+                def return_value_as_string(self, return_value: Any) -> str:
+                    if hasattr(return_value, 'model_dump_json'):
+                        return return_value.model_dump_json()
+                    return str(return_value)
+            
+            # Create the fake tool
+            fake_schema_tool = FakeSchemaToolImpl(schema)
+            
+            # Add the fake tool to the tools list
+            tools = [fake_schema_tool]
 
         # Some models don't support simultaneous tool calling and structured output
         # Check model family to determine capabilities
@@ -347,8 +423,34 @@ class AutoGenWrapper(RetryWrapper):
             raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
 
         # Handle structured output parsing if schema was provided
-        if schema and is_valid_schema_type:
-            return await self._parse_structured_output(create_result, schema)
+        if schema and is_valid_schema_type and not (tools and not fake_schema_tool):
+            # Only parse if: we have a schema AND (we created a fake tool OR no tools were provided)
+            # Check if we used a fake tool and got a tool call response
+            if fake_schema_tool and isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+                # Extract the tool call and execute it to get the structured object
+                tool_calls = create_result.content
+                if len(tool_calls) == 1 and tool_calls[0].name == fake_schema_tool.name:
+                    # Execute the fake tool to get the structured object
+                    arguments = json.loads(tool_calls[0].arguments)
+                    
+                    # Call the schema constructor directly with the arguments
+                    try:
+                        parsed_object = schema(**arguments)
+                    except Exception as e:
+                        raise ProcessingError(f"Failed to create {schema.__name__} from tool arguments: {e}")
+                    
+                    # Return ModelOutput with the parsed object
+                    return ModelOutput(
+                        content=json.dumps(parsed_object.model_dump()),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=parsed_object,
+                        cached=create_result.cached,
+                    )
+            else:
+                # Regular structured output parsing
+                return await self._parse_structured_output(create_result, schema)
 
         return create_result  # type: ignore # Expect CreateResult or compatible
 

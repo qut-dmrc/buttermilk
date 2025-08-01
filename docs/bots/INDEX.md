@@ -85,6 +85,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 - **ALWAYS** trace data flow when debugging validation errors
 - **NEVER** commit without updating relevant documentation
 - **ALWAYS** use the provided debugging framework
+- **NEVER** create test files outside `tests/` directory - Use pytest conventions ONLY
 
 ## 🔗 External Resources
 - [Main Project README](/README.md)

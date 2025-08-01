@@ -29,11 +29,25 @@ Specific rules:
 2. **For Development Tasks**: Follow the 9-step workflow below
 3. **For Research Tasks**: Use documented tools, not source code exploration
 
+## 🚨 TESTING CHECKPOINT: STOP BEFORE CREATING ANY TEST FILES
+**IF you are about to test, validate, or verify ANY code behavior:**
+- ❌ NEVER create `test_*.py` files outside the `tests/` directory
+- ❌ NEVER create "quick test scripts" or "throwaway validation files"
+- ❌ NEVER use phrases like "let me test this", "validate my implementation", or "check if it works" followed by standalone scripts
+- ✅ ALWAYS use `uv run pytest tests/` with proper test files in the existing test suite
+- ✅ ALWAYS write tests that integrate with CI/CD pipeline and project structure
+
+**Red flag phrases that MUST trigger pytest workflow:**
+- "test my implementation" → Write proper pytest
+- "validate this works" → Write proper pytest
+- "check the behavior" → Write proper pytest
+- "see if this runs" → Write proper pytest
+
 ## WORKFLOW: Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions. Read relevant documentation to understand the project goals and architecture. Check github issues for relevant past work and discussion; create a new issue if you cannot find an existing one.
 2. **ANALYZE**: Map the system architecture and identify root causes
 3. **PLAN**: Use github issues to track problems and document your plan with clear phases and validation criteria
-4. **TEST**: Write unit tests that capture expected behavior. Save your tests; do not use single-use tests or scripts.
+4. **TEST**: Write unit tests in `tests/` directory using pytest conventions that capture expected behavior. NO standalone test scripts anywhere else.
 5. **IMPLEMENT**: Make minimal changes that solve the root cause
 6. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
 7. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
