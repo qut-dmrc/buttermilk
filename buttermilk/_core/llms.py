@@ -533,7 +533,7 @@ class AutoGenWrapper(RetryWrapper):
                     logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
             except Exception as parse_error:
                 raise ProcessingError(
-                    f"AutoGenWrapper: Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+                    f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
         elif hasattr(create_result.content, "model_dump"):
             # Already a Pydantic object, but might be wrong type
@@ -629,9 +629,9 @@ class LLMs(BaseModel):
                 are missing.
 
         """
-        # Check cache first (though current implementation always creates new, which might be intended for some reason)
-        # if name in self.autogen_models:
-        #     return self.autogen_models[name]
+        # Check cache first
+        if name in self.autogen_models:
+            return self.autogen_models[name]
 
         if name not in self.connections:
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")

@@ -25,6 +25,7 @@ from autogen_core import (
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
 )
+from opentelemetry.trace import NoOpTracerProvider
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import (
@@ -149,10 +150,10 @@ class AutogenOrchestrator(Orchestrator):
         # From the autogen docs:
         # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
-        # Currently we allow autogen telemetry but filter empty traces with weave post-processing
 
         self._runtime = SingleThreadedAgentRuntime(
-            # tracer_provider=NoOpTracerProvider(), intervention_handlers=[termination_handler, interrupt_handler]
+            tracer_provider=NoOpTracerProvider(),
+            intervention_handlers=[termination_handler, interrupt_handler],
         )
 
         # Start the Autogen runtime's processing loop in the background.
@@ -163,8 +164,8 @@ class AutogenOrchestrator(Orchestrator):
 
         await self.register_ui(callback_to_ui=request.callback_to_ui)
 
-        # Give the UI registration time to complete
-        await asyncio.sleep(2)
+        # Give the UI registration an opportunity to run
+        await asyncio.sleep(0.1)
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
         logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
@@ -174,7 +175,7 @@ class AutogenOrchestrator(Orchestrator):
         )
 
         # Give agents a moment to initialize
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         # Send a welcome message to the UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
@@ -200,7 +201,7 @@ class AutogenOrchestrator(Orchestrator):
         self._is_initialized = True
 
         # Give the MANAGER a moment to process the message
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         # Process any messages that were queued before initialization
         if self._pending_messages:
@@ -291,7 +292,7 @@ class AutogenOrchestrator(Orchestrator):
                     logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
                     raise FatalError(f"Agent registration failed for {variant_config.agent_id}: {e}") from e
                 logger.debug(
-                    f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'"
+                    f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
                 )
 
                 registered_for_role.append((agent_type, variant_config))
@@ -339,7 +340,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
 
         # Give the agent time to fully register
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
         logger.debug("[AutogenOrchestrator.register_ui] Registration complete after delay")
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:

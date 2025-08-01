@@ -544,6 +544,69 @@ def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dic
     return obj
 
 
+def convert_numpy_to_list(obj):
+    """Recursively convert numpy arrays to lists in nested structures"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: convert_numpy_to_list(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy_to_list(item) for item in obj]
+    return obj
+
+
+def unwrap_parquet_lists(obj):
+    """Convert Parquet list format back to regular Python lists"""
+    if isinstance(obj, dict):
+        if "list" in obj and isinstance(obj["list"], list):
+            # This is a Parquet list representation
+            return [unwrap_parquet_lists(item.get("element", item)) for item in obj["list"]]
+        # Regular dict, recurse into it
+        return {k: unwrap_parquet_lists(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [unwrap_parquet_lists(item) for item in obj]
+    return obj
+
+
+def unwrap_numpy_arrow_types(obj):
+    """Convert numpy arrays and Arrow/Parquet type representations to native Python types"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+
+    if isinstance(obj, dict):
+        # Check for list types
+        if "list" in obj and isinstance(obj["list"], list):
+            return [unwrap_numpy_arrow_types(item.get("element", item)) for item in obj["list"]]
+
+        # Check for large_list types
+        if "large_list" in obj and isinstance(obj["large_list"], list):
+            return [unwrap_numpy_arrow_types(item.get("element", item)) for item in obj["large_list"]]
+
+        # Check for map types
+        if "key_value" in obj and isinstance(obj["key_value"], list):
+            return {
+                unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(item["value"])
+                for item in obj["key_value"]
+                if "key" in item and "value" in item
+            }
+
+        # Check for entries (another map representation)
+        if "entries" in obj and isinstance(obj["entries"], list):
+            return {
+                unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(item["value"])
+                for item in obj["entries"]
+                if "key" in item and "value" in item
+            }
+
+        # Regular dict or struct type
+        return {k: unwrap_numpy_arrow_types(v) for k, v in obj.items()}
+
+    if isinstance(obj, list):
+        return [unwrap_numpy_arrow_types(item) for item in obj]
+
+    return obj
+
+
 def clean_empty_values(data):
     """Recursively removes keys with empty values from a nested dictionary structure.
     Empty values are: None, empty strings, empty lists, and empty dictionaries.
@@ -563,9 +626,7 @@ def clean_empty_values(data):
             cleaned_value = clean_empty_values(value)
 
             # Only include non-empty values
-            if not (cleaned_value is None or 
-                    cleaned_value == "" or 
-                    (isinstance(cleaned_value, (dict, list)) and not cleaned_value)):
+            if not (cleaned_value is None or cleaned_value == "" or (isinstance(cleaned_value, (dict, list)) and not cleaned_value)):
                 cleaned_dict[key] = cleaned_value
 
         return cleaned_dict
@@ -604,21 +665,22 @@ def _get_download_lock(persist_directory: str) -> threading.Lock:
 
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     """Ensure ChromaDB database files are available locally, downloading from remote if needed.
-    
+
     This function handles:
     1. Checking if the ChromaDB files already exist in cache
     2. Thread-safe downloading to prevent multiple concurrent downloads
     3. Downloading the complete ChromaDB directory structure from GCS/remote storage
-    
+
     Args:
         persist_directory: The remote path (e.g., "gs://bucket/path") or local path to ChromaDB data
-        
+
     Returns:
         pathlib.Path: Local path to the cached ChromaDB directory
-        
+
     Raises:
         ValueError: If the persist_directory format is invalid
         OSError: If download fails or files are corrupted
+
     """
     # If it's already a local path, return as-is
     try:
@@ -702,10 +764,11 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
 
 def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Path) -> None:
     """Recursively download ChromaDB directory structure.
-    
+
     Args:
         remote_path: CloudPath to remote ChromaDB directory
         local_path: Local path to download to
+
     """
     try:
         # List all items in the remote directory
@@ -732,12 +795,13 @@ def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Pat
 
 async def get_chromadb_cache_size(persist_directory: str) -> int:
     """Get the size of cached ChromaDB files in bytes.
-    
+
     Args:
         persist_directory: The persist_directory identifier
-        
+
     Returns:
         int: Size in bytes, or 0 if cache doesn't exist
+
     """
     cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
     cache_dir = _get_cache_dir()
@@ -758,12 +822,13 @@ async def get_chromadb_cache_size(persist_directory: str) -> int:
 
 async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
     """Clear ChromaDB cache files.
-    
+
     Args:
         persist_directory: Specific cache to clear, or None to clear all caches
-        
+
     Returns:
         int: Number of bytes freed
+
     """
     cache_dir = _get_cache_dir()
 
@@ -783,38 +848,38 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
             return total_freed
 
         return await asyncio.to_thread(_clear_all)
-    else:
-        # Clear specific cache
-        cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
-        local_cache_path = cache_dir / cache_key
+    # Clear specific cache
+    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    local_cache_path = cache_dir / cache_key
 
-        if not local_cache_path.exists():
-            return 0
+    if not local_cache_path.exists():
+        return 0
 
-        def _clear_specific():
-            total_freed = 0
-            for file_path in local_cache_path.rglob("*"):
-                if file_path.is_file():
-                    total_freed += file_path.stat().st_size
-            shutil.rmtree(local_cache_path, ignore_errors=True)
-            return total_freed
+    def _clear_specific():
+        total_freed = 0
+        for file_path in local_cache_path.rglob("*"):
+            if file_path.is_file():
+                total_freed += file_path.stat().st_size
+        shutil.rmtree(local_cache_path, ignore_errors=True)
+        return total_freed
 
-        return await asyncio.to_thread(_clear_specific)
+    return await asyncio.to_thread(_clear_specific)
 
 
 async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -> None:
     """Upload local ChromaDB cache to remote storage.
-    
+
     This function uploads a local ChromaDB directory to remote storage (GCS, S3, etc.)
     to persist local changes back to the shared remote storage.
-    
+
     Args:
         local_cache_path: Path to local ChromaDB directory to upload
         persist_directory: Remote destination path (e.g., "gs://bucket/path")
-        
+
     Raises:
         ValueError: If paths are invalid
         OSError: If upload fails
+
     """
     local_path = pathlib.Path(local_cache_path)
 
@@ -851,10 +916,11 @@ async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -
 
 def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath) -> None:
     """Recursively upload ChromaDB directory structure.
-    
+
     Args:
         local_path: Local path to ChromaDB directory
         remote_path: CloudPath to remote destination
+
     """
     try:
         # Upload all items in the local directory
@@ -882,18 +948,18 @@ def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath)
 # Image utility functions (replaces MediaObj functionality)
 def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest_edge: int = -1) -> str:
     """Convert PIL Image to base64 string with optional resizing.
-    
+
     Args:
         image: PIL Image object
         format: Image format for encoding (PNG, JPEG, etc.)
         longest_edge: Resize to this max size on longest edge
         shortest_edge: Resize to this max size on shortest edge
-        
+
     Returns:
         Base64 encoded string
+
     """
     from io import BytesIO
-
 
     # Resize if requested
     if longest_edge > 0:
@@ -924,14 +990,15 @@ def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest
 
 def image_to_content_part(image, model_type: str = "openai", mime_type: str = "image/png") -> dict[str, Any]:
     """Convert PIL Image to LLM-specific content part format.
-    
+
     Args:
         image: PIL Image object
         model_type: Target LLM provider ("openai" or "anthropic")
         mime_type: MIME type for the image
-        
+
     Returns:
         Dictionary in the appropriate format for the LLM provider
+
     """
     b64_data = image_to_base64(image)
 
@@ -940,7 +1007,7 @@ def image_to_content_part(image, model_type: str = "openai", mime_type: str = "i
             "type": "image_url",
             "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
         }
-    elif model_type == "anthropic":
+    if model_type == "anthropic":
         return {
             "type": "image",
             "source": {
@@ -949,19 +1016,19 @@ def image_to_content_part(image, model_type: str = "openai", mime_type: str = "i
                 "data": b64_data,
             },
         }
-    else:
-        # Fallback format
-        return {"type": "image", "data": b64_data, "mime_type": mime_type}
+    # Fallback format
+    return {"type": "image", "data": b64_data, "mime_type": mime_type}
 
 
 def base64_to_image(b64_string: str):
     """Convert base64 string to PIL Image.
-    
+
     Args:
         b64_string: Base64 encoded image data
-        
+
     Returns:
         PIL Image object
+
     """
     from io import BytesIO
 

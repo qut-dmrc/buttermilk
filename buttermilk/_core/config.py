@@ -81,7 +81,7 @@ class CloudProviderCfg(BaseModel):
     """
 
     type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
-    project: str | None = Field(default=None, description="Cloud project ID")
+    project_id: str | None = Field(default=None, description="Cloud project ID")
     location: str | None = Field(default=None, description="Cloud region/location")
 
     model_config = ConfigDict(
@@ -106,8 +106,8 @@ class LoggerConfig(CloudProviderCfg):
         """Validate that required fields are present for logger configurations."""
         if self.type == "gcp":
             missing_fields = []
-            if not self.project:
-                missing_fields.append("project")
+            if not self.project_id:
+                missing_fields.append("project_id")
             if not self.location:
                 missing_fields.append("location")
 

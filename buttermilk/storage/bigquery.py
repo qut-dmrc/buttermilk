@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
 from .base import Storage, StorageClient, StorageError
 
@@ -78,7 +79,7 @@ class BigQueryStorage(Storage, StorageClient):
             schema = self.get_schema()
             if not schema:
                 raise StorageError(
-                    f"Failed to load schema from {self.config.schema_path}. BigQuery storage requires a valid schema file."
+                    f"Failed to load schema from {self.config.schema_path}. BigQuery storage requires a valid schema file.",
                 )
             self._schema_validated = True
 
@@ -157,7 +158,6 @@ class BigQueryStorage(Storage, StorageClient):
                 else:
                     # Assume it's a Pydantic model with model_dump
                     row = record.model_dump(mode="json")
-                
                 rows_to_insert.append(row)
 
             # Use the existing upload_rows function which handles proper serialization
@@ -319,6 +319,10 @@ class BigQueryStorage(Storage, StorageClient):
         # Convert row to dictionary
         row_dict = dict(row.items())
 
+        # Unwrap numpy/arrow types if present
+        # This is necessary because BigQuery can return numpy/arrow types in the row data
+        row_dict = unwrap_numpy_arrow_types(row_dict)
+
         # Apply column mapping if specified
         if self.config.columns:
             for new_name, old_name in self.config.columns.items():
@@ -326,9 +330,9 @@ class BigQueryStorage(Storage, StorageClient):
 
         # Parse JSON fields - metadata and ground_truth are stored as JSON strings in BigQuery
         metadata = json.loads(row_dict["metadata"]) if isinstance(row_dict["metadata"], str) else row_dict["metadata"]
-        
+
         ground_truth = None
-        if "ground_truth" in row_dict and row_dict["ground_truth"]:
+        if row_dict.get("ground_truth"):
             ground_truth = json.loads(row_dict["ground_truth"]) if isinstance(row_dict["ground_truth"], str) else row_dict["ground_truth"]
 
         # Create Record object from row data

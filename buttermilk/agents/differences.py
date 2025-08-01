@@ -35,13 +35,13 @@ class Position(BaseModel):
     """Represents a distinct position or viewpoint on a topic, potentially held by multiple experts.
 
     Attributes:
-        experts (list[Expert]): A list of `Expert` objects who hold or support
+        experts (list[str]): A list of `Expert` objects who hold or support
             this particular position.
         position (str): A concise summary or statement of the position itself.
 
     """
 
-    experts: list[Expert] = Field(..., description="A list of experts who hold or support this position.")
+    experts: list[str] = Field(..., description="A list of experts who hold or support this position.")
     position: str = Field(..., description="A concise summary or statement of the position.")
 
 
