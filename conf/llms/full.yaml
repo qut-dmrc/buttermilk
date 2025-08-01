@@ -5,6 +5,8 @@ general:
   - gpt41
   - gemini25flash
   - llama4maverick
+  - opus
+  - sonnet
 
 judgers:
   - gemini25flash
@@ -14,6 +16,8 @@ judgers:
   - gpt41mini
   - gpt41nano
   - llama4maverick
+  - opus
+  - sonnet
 
 synthesisers:
   - gemini25flash
@@ -22,3 +26,5 @@ synthesisers:
   - gpt41
   - gpt41mini
   - llama4maverick
+  - opus
+  - sonnet

@@ -2,9 +2,43 @@
 
 Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
+**🚨 CRITICAL: READ [exploration-before-implementation.md](exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
+
+# 🚨 CRITICAL FAILURE MODE: RUSH-TO-CODE PREVENTION 🚨
+
+**BEFORE READING ANYTHING ELSE: YOU HAVE A DOCUMENTED PATTERN OF JUMPING TO IMPLEMENTATION WITHOUT EXPLORATION. THIS MUST STOP.**
+
+## MANDATORY EXPLORATION CHECKPOINT
+**BEFORE writing ANY code, you MUST:**
+1. **EXPLORATION PHASE** (MINIMUM 3 searches):
+   - Search for existing similar functionality in the codebase
+   - Look for base classes, utilities, or patterns that solve the same problem
+   - Check autogen documentation/examples for built-in solutions
+   - Document what you found (even if "nothing relevant")
+
+2. **VALIDATION CHECKPOINT**:
+   - Can you reuse existing code instead of writing new?
+   - Are you building something that already exists?
+   - Did you check the framework's built-in capabilities?
+   - **IF ANY ANSWER IS UNCLEAR, STOP AND EXPLORE MORE**
+
+3. **IMPLEMENTATION JUSTIFICATION**:
+   - Write 2-3 sentences explaining WHY your approach is necessary
+   - Explain WHY simpler alternatives won't work
+   - **IF YOU CAN'T JUSTIFY, YOU'RE PROBABLY OVERENGINEERING**
+
+**RED FLAG PHRASES THAT MEAN YOU'RE RUSHING:**
+- "Let me implement..."
+- "I'll create a custom..."
+- "I'll build a new..."
+- "Let me write..."
+
+**WHEN YOU CATCH YOURSELF USING THESE PHRASES: STOP. EXPLORE FIRST.**
+
 # CRITICAL RULES for 🤖 LLM Agents: 
 
 * ALWAYS follow the workflow. No exceptions.
+* **EXPLORATION BEFORE IMPLEMENTATION**: NEVER code without first searching for existing solutions
 * ASK FOR HELP WHEN YOU NEED IT. 
 * DO NOT try to fix errors you do not fully understand.
 * STOP if you get stuck. No workarounds.
@@ -45,14 +79,30 @@ Specific rules:
 
 ## WORKFLOW: Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions. Read relevant documentation to understand the project goals and architecture. Check github issues for relevant past work and discussion; create a new issue if you cannot find an existing one.
-2. **ANALYZE**: Map the system architecture and identify root causes
-3. **PLAN**: Use github issues to track problems and document your plan with clear phases and validation criteria
-4. **TEST**: Write unit tests in `tests/` directory using pytest conventions that capture expected behavior. NO standalone test scripts anywhere else.
-5. **IMPLEMENT**: Make minimal changes that solve the root cause
-6. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
-7. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
-8. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue. If you're working independently, don't forget to file a pull request with your new changes!
-9. **REFLECT**: Review your performance and update the `docs/bots` instructions if necessary to avoid mistakes.
+
+2. **🔍 MANDATORY EXPLORATION PHASE** (CANNOT BE SKIPPED):
+   - **Search existing codebase**: Use Grep/Glob to find similar functionality, base classes, utilities
+   - **Check framework capabilities**: Search autogen docs, examine base classes in the project
+   - **Document findings**: Write what you found, even if "no existing solution found"
+   - **CHECKPOINT**: Can you reuse/extend existing code instead of writing from scratch?
+   - **JUSTIFICATION**: Explain in 2-3 sentences WHY you need to build something new
+   - **IF YOU CANNOT JUSTIFY BUILDING NEW CODE, STOP AND RECONSIDER**
+
+3. **ANALYZE**: Map the system architecture and identify root causes
+
+4. **PLAN**: Use github issues to track problems and document your plan with clear phases and validation criteria
+
+5. **TEST**: Write unit tests in `tests/` directory using pytest conventions that capture expected behavior. NO standalone test scripts anywhere else.
+
+6. **IMPLEMENT**: Make minimal changes that solve the root cause
+
+7. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
+
+8. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
+
+9. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue. If you're working independently, don't forget to file a pull request with your new changes!
+
+10. **REFLECT**: Review your performance and update the `docs/bots` instructions if necessary to avoid mistakes.
 
 
 ## Key technical hints

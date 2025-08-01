@@ -26,6 +26,12 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Common configuration patterns
 - Interpolation and overrides
 
+### [exploration-before-implementation.md](exploration-before-implementation.md) - CRITICAL: Rush-to-Code Prevention
+- **MANDATORY READ**: Documented failure pattern and prevention protocol
+- Required exploration phases before any implementation
+- Red flag detection and recovery procedures
+- Concrete search techniques and justification requirements
+
 ### [development.md](development.md) - Development Workflow
 - Systematic development approach (STOP → ANALYZE → PLAN → TEST → IMPLEMENT)
 - GitHub workflow and issue tracking
@@ -63,6 +69,13 @@ uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=fu
 uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ```
 
+### 🚨 CRITICAL FAILURE MODE PREVENTION
+**RUSH-TO-CODE PATTERN DETECTED - MANDATORY CHECKPOINT:**
+1. **BEFORE ANY IMPLEMENTATION**: Complete exploration phase (minimum 3 searches)
+2. **SEARCH EXISTING CODE**: Find base classes, utilities, framework capabilities
+3. **JUSTIFY NEW CODE**: Explain why existing solutions won't work
+4. **IF YOU CAN'T JUSTIFY**: You're probably overengineering
+
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
 1. Read `debugging.md` FIRST (no exceptions)
@@ -96,6 +109,9 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ## 📋 Development Checklist
 Before working on any task:
 - [ ] Read all files in this directory
+- [ ] **MANDATORY EXPLORATION**: Search codebase for existing solutions (minimum 3 searches)
+- [ ] **MANDATORY EXPLORATION**: Check framework/autogen built-in capabilities
+- [ ] **MANDATORY JUSTIFICATION**: Explain why new code is necessary vs. reusing existing
 - [ ] Check GitHub issues for related work
 - [ ] Understand the data flow and architecture
 - [ ] Plan your approach systematically
