@@ -629,9 +629,9 @@ class LLMs(BaseModel):
                 are missing.
 
         """
-        # Check cache first (though current implementation always creates new, which might be intended for some reason)
-        # if name in self.autogen_models:
-        #     return self.autogen_models[name]
+        # Check cache first
+        if name in self.autogen_models:
+            return self.autogen_models[name]
 
         if name not in self.connections:
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
