@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk._core import AgentInput
 from buttermilk.agents.rag.rag_zotero import RagZotero, ZoteroResearchResult, ZoteroReference
-from buttermilk._core.llms import CHATMODELS
+from buttermilk._core.llms import CHAT_MODELS
 
 
 # Mock search results to simulate vector search
@@ -36,7 +36,7 @@ async def mock_vector_search(query: str, k: int = 5) -> list[dict]:
     return MOCK_SEARCH_RESULTS[:k]
 
 
-@pytest.mark.parametrize("model_name", CHATMODELS)
+@pytest.mark.parametrize("model_name", CHAT_MODELS)
 @pytest.mark.anyio
 async def test_rag_zotero_with_structured_output(model_name, bm):
     """Test RagZotero agent with each LLM model for structured output generation."""

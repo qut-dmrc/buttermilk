@@ -161,7 +161,7 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHATMODELS = [
+CHAT_MODELS = [
     "llama4maverick",
     "llama33_70b",
     "llama32_90b",

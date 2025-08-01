@@ -7,7 +7,7 @@ from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field
 
-from buttermilk._core.llms import CHATMODELS
+from buttermilk._core.llms import CHAT_MODELS
 
 # Models known to not support tool calling
 MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
@@ -232,7 +232,7 @@ async def test_structured_output_with_tools(llm):
             assert "tokyo" in response.content.lower()
 
 
-@pytest.mark.parametrize("model_name", CHATMODELS)
+@pytest.mark.parametrize("model_name", CHAT_MODELS)
 @pytest.mark.anyio
 async def test_all_models_basic_tool_call(model_name, bm):
     """Test that all configured models can make basic tool calls."""

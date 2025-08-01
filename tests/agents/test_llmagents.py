@@ -2,7 +2,7 @@ import pytest
 
 # Buttermilk core imports
 from buttermilk._core.contract import AgentInput, AgentTrace, AgentOutput
-from buttermilk._core.llms import CHEAP_CHAT_MODELS
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
 from buttermilk.agents.judge import Judge, Reasons, JudgeReasons # Import Judge and its output model
 
@@ -42,7 +42,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
+@pytest.mark.parametrize("model_name", CHAT_MODELS)  
 async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
@@ -73,8 +73,8 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     # This is harder to make deterministic without mocking the LLM.
     # We can check if certain keywords appear, but the exact output varies.
     reasons_text = " ".join(result.outputs.reasons).lower()
-    # Depending on criteria, check for other keywords like 'surrender', 'fight', etc.
-    assert "joseph" in reasons_text or "surrender" in reasons_text or "fight no more" in reasons_text, "Reasons should relate to the speech content"
+    # Depending on criteria, check for keywords like 'surrender', 'fight', etc.
+    assert "surrender" in reasons_text or "fight" in reasons_text, "Reasons should relate to the speech content"
 
 
 @pytest.mark.anyio

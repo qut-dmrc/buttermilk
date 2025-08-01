@@ -135,7 +135,7 @@
         "${workspaceFolder}/buttermilk/frontend/chat/dist/**/*.js"
       ],
       "type": "node",
-      "envFile": "${workspaceFolder}/.env",
+      "envFile": "${workspaceFolder}/buttermilk/frontend/chat/.env",
       "console": "integratedTerminal"
     },
     {

@@ -12,7 +12,7 @@ def get_bm():
 
 
 from buttermilk._core.bm_init import BM
-from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
 
 # Don't initialize BM here, we'll let the fixture handle it
@@ -82,7 +82,7 @@ def llm(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(params=CHATMODELS)
+@pytest.fixture(params=CHAT_MODELS)
 def llm_expensive(request, bm: BM):
     return bm.llms[request.param]
 
