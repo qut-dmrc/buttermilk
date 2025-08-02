@@ -161,7 +161,7 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHATMODELS = [
+CHAT_MODELS = [
     "llama4maverick",
     "llama33_70b",
     "llama32_90b",
@@ -299,8 +299,36 @@ class AutoGenWrapper(RetryWrapper):
         )
 
         json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
+        fake_schema_tool = None  # Will hold our fake tool if needed
+        
         if is_valid_schema_type and self.model_info.get("structured_output"):
             json_output_requested = schema  # type: ignore # Pass the schema for structured output
+        elif is_valid_schema_type and not self.model_info.get("structured_output") and not tools and self.model_info.get("function_calling", True):
+            # Create a fake tool for models that support function calling but not structured output
+            # This allows us to get structured output via tool calling
+            from autogen_core.tools import BaseTool
+            
+            class PydanticModelTool(BaseTool[BaseModel, BaseModel]):
+                """A tool that creates instances of a Pydantic model."""
+                
+                def __init__(self, model: type[BaseModel]):
+                    super().__init__(
+                        args_type=model,
+                        return_type=model,
+                        name=f"create_{model.__name__.lower()}",
+                        description=f"Create a {model.__name__} object with the specified fields"
+                    )
+                    self._model = model
+                
+                async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
+                    # args is already validated as our model type by BaseTool
+                    return args
+            
+            # Create the fake tool
+            fake_schema_tool = PydanticModelTool(schema)
+            
+            # Add the fake tool to the tools list
+            tools = [fake_schema_tool]
 
         # Some models don't support simultaneous tool calling and structured output
         # Check model family to determine capabilities
@@ -347,8 +375,34 @@ class AutoGenWrapper(RetryWrapper):
             raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
 
         # Handle structured output parsing if schema was provided
-        if schema and is_valid_schema_type:
-            return await self._parse_structured_output(create_result, schema)
+        if schema and is_valid_schema_type and not (tools and not fake_schema_tool):
+            # Only parse if: we have a schema AND (we created a fake tool OR no tools were provided)
+            # Check if we used a fake tool and got a tool call response
+            if fake_schema_tool and isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+                # Extract the tool call and execute it to get the structured object
+                tool_calls = create_result.content
+                if len(tool_calls) == 1 and tool_calls[0].name == fake_schema_tool.name:
+                    # Execute the fake tool to get the structured object
+                    arguments = json.loads(tool_calls[0].arguments)
+                    
+                    # Call the schema constructor directly with the arguments
+                    try:
+                        parsed_object = schema(**arguments)
+                    except Exception as e:
+                        raise ProcessingError(f"Failed to create {schema.__name__} from tool arguments: {e}")
+                    
+                    # Return ModelOutput with the parsed object
+                    return ModelOutput(
+                        content=json.dumps(parsed_object.model_dump()),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=parsed_object,
+                        cached=create_result.cached,
+                    )
+            else:
+                # Regular structured output parsing
+                return await self._parse_structured_output(create_result, schema)
 
         return create_result  # type: ignore # Expect CreateResult or compatible
 
@@ -533,7 +587,7 @@ class AutoGenWrapper(RetryWrapper):
                     logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
             except Exception as parse_error:
                 raise ProcessingError(
-                    f"AutoGenWrapper: Failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+                    f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
         elif hasattr(create_result.content, "model_dump"):
             # Already a Pydantic object, but might be wrong type
@@ -629,9 +683,9 @@ class LLMs(BaseModel):
                 are missing.
 
         """
-        # Check cache first (though current implementation always creates new, which might be intended for some reason)
-        # if name in self.autogen_models:
-        #     return self.autogen_models[name]
+        # Check cache first
+        if name in self.autogen_models:
+            return self.autogen_models[name]
 
         if name not in self.connections:
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")

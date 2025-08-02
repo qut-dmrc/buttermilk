@@ -64,7 +64,7 @@ MANAGER = "MANAGER"
 or an external UI. This agent handles user input, feedback, and confirmations.
 """
 
-CLOSURE = "COLLECTOR"
+COLLECTOR = "COLLECTOR"
 """Role name for an agent that collects, aggregates, or finalizes results
 at the end of a flow or a specific phase of processing.
 """

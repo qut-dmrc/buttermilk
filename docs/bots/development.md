@@ -39,14 +39,23 @@ Create a clear plan with:
 - Rollback strategy
 
 ### Phase 4: TEST - Failing Tests First
+**CRITICAL: Tests MUST be in `tests/` directory using pytest conventions**
+
 ```python
-# Write test that demonstrates the problem
-def test_expected_behavior():
+# File: tests/agents/test_my_agent.py (NEVER create test files elsewhere)
+import pytest
+from buttermilk.agents.my_agent import MyAgent
+
+@pytest.mark.anyio
+async def test_expected_behavior():
+    """Test that demonstrates the problem."""
     # This should pass when fixed
     agent = MyAgent(config)
-    result = agent.process(test_input)
+    result = await agent.process(test_input)
     assert result.status == "expected"
 ```
+
+**Run tests with:** `uv run pytest tests/`
 
 ### Phase 5: IMPLEMENT - Minimal Changes
 - Make the smallest change that fixes root cause
@@ -159,13 +168,45 @@ async def test_agent_handles_empty_content():
 ## Anti-Patterns to Avoid
 
 ### 🚫 Red Flags - Stop Immediately If You're:
-1. Proposing config changes without understanding data flow
-2. Making multiple small fixes instead of one root cause fix
-3. Suggesting "try this" without a systematic plan
-4. Modifying code without tests demonstrating the problem
-5. Making "quick fixes" to suppress errors
+1. About to create ANY test file outside `tests/` directory
+2. Saying "let me test this" or "validate my implementation" without using pytest
+3. Proposing config changes without understanding data flow
+4. Making multiple small fixes instead of one root cause fix
+5. Suggesting "try this" without a systematic plan
+6. Modifying code without tests demonstrating the problem
+7. Making "quick fixes" to suppress errors
 
 ### 🚫 Never Do These:
+
+#### Standalone Test Scripts
+```python
+# NEVER: Create validation scripts outside tests/
+# test_fake_schema_tool.py  🚫 DON'T CREATE THIS
+# test_dynamic_schema_tool.py  🚫 DON'T CREATE THIS
+from my_agent import MyAgent
+
+def test_it():
+    agent = MyAgent()
+    result = agent.run()
+    print(f"Result: {result}")
+
+if __name__ == "__main__":
+    test_it()  # 🚫 WRONG: Use pytest instead
+```
+
+```python
+# ALWAYS: Use proper pytest in tests/ directory
+# tests/agents/test_my_agent.py  ✓ CORRECT LOCATION
+import pytest
+from buttermilk.agents.my_agent import MyAgent
+
+@pytest.mark.anyio
+async def test_agent_behavior():
+    """Test agent behavior properly."""
+    agent = MyAgent(config)
+    result = await agent.process(input_data)
+    assert result.is_valid()
+```
 
 #### Superficial Fixes
 ```python
@@ -276,20 +317,34 @@ Example:
 
 ## Testing Guidelines
 
+### Test Location & Structure
+**ALL tests MUST be in `tests/` directory following project structure:**
+```
+tests/
+├── agents/test_agent_name.py
+├── flows/test_flow_name.py
+├── conftest.py (shared fixtures)
+└── ...
+```
+
 ### Test Categories
-- **Unit Tests**: Single function/method
-- **Integration Tests**: Component interaction
-- **Flow Tests**: End-to-end scenarios
+- **Unit Tests**: Single function/method (`tests/agents/`, `tests/utils/`)
+- **Integration Tests**: Component interaction (`tests/flows/`)
+- **Flow Tests**: End-to-end scenarios (`tests/flows/`)
 
 ### Test Requirements
 ```python
-# Every bug fix needs:
-def test_bug_reproduction():
+# File: tests/agents/test_agent_name.py
+# Every bug fix needs proper pytest integration:
+
+@pytest.mark.anyio
+async def test_bug_reproduction():
     """Test that reproduces issue #123."""
     # Should fail before fix
     # Should pass after fix
 
-def test_bug_fix_no_regression():
+@pytest.mark.anyio  
+async def test_bug_fix_no_regression():
     """Ensure fix doesn't break existing behavior."""
     # Should pass before and after
 ```

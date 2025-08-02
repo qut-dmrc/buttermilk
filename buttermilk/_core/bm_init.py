@@ -528,7 +528,7 @@ class BM(SessionInfo):
                 cloud_logging_resource = gcp_logging.Resource(
                     type="generic_task",
                     labels={
-                        "project": self.logger_cfg.project,
+                        "project": self.logger_cfg.project_id,
                         "location": self.logger_cfg.location,
                         "namespace": self.name,
                         "job": self.job,
@@ -550,7 +550,7 @@ class BM(SessionInfo):
                 logger.error(
                     f"Cloud logging setup failed due to configuration issue: {e}. "
                     f"Logger config: type={self.logger_cfg.type}, "
-                    f"project={self.logger_cfg.project}, "
+                    f"project={self.logger_cfg.project_id}, "
                     f"location={self.logger_cfg.location}",
                 )
 
@@ -814,41 +814,17 @@ class BM(SessionInfo):
 
         collection_name = f"{self.name}-{self.job}"  # Construct collection name
 
-        try:
-            # Set up credentials before initializing weave
-            self._setup_weave_credentials()
+        # Set up credentials before initializing weave
+        self._setup_weave_credentials()
 
-            # Try to initialize weave with a reasonable timeout
-            logger.debug(f"Initializing Weave with collection: {collection_name}")
-            client = weave.init(collection_name)
-            logger.debug("Weave initialized successfully")
-            return client
-        except Exception as e:
-            # Log the error but don't fail the entire initialization
-            logger.warning(f"Weave initialization failed: {e}. Continuing without weave tracing.")
+        # Try to initialize weave with a reasonable timeout
+        logger.debug(f"Initializing Weave with collection: {collection_name}")
 
-            # Return a mock client that provides the basic interface but does nothing
-            class MockWeaveClient:
-                def __init__(self):
-                    self.collection_name = collection_name
-
-                def create_call(self, *args, **kwargs):
-                    return None
-
-                def finish_call(self, *args, **kwargs):
-                    pass
-
-                def get_call(self, *args, **kwargs):
-                    return None
-
-                def __getattr__(self, name):
-                    # Return a no-op function for any other method calls
-                    def noop(*args, **kwargs):
-                        return None
-
-                    return noop
-
-            return MockWeaveClient()
+        # We disable weave autopatching for Autogen because it's too noisy and slow
+        # We will instead trace manually.
+        client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
+        logger.debug("Weave initialized successfully")
+        return client
 
     @property
     def credentials(self) -> dict[str, str]:

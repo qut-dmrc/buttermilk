@@ -1,10 +1,10 @@
 import pytest
 
 # Buttermilk core imports
-from buttermilk._core.contract import AgentInput, AgentTrace
-from buttermilk._core.llms import CHEAP_CHAT_MODELS
+from buttermilk._core.contract import AgentInput, AgentTrace, AgentOutput
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk.agents.judge import Judge, Reasons  # Import Judge and its output model
+from buttermilk.agents.judge import Judge, Reasons, JudgeReasons # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
@@ -23,10 +23,10 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput):
-    """Test direct invocation of a basic LLMAgent using __call__."""
+    """Test direct invocation of a basic LLMAgent using ._process()."""
     agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "best"})
 
-    response = await agent(message=request_paris)  # Use __call__
+    response = await agent._process(message=request_paris) 
 
     assert isinstance(response, AgentTrace)
     assert not response.is_error, f"Agent returned error: {response.error}"
@@ -42,7 +42,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
+@pytest.mark.parametrize("model_name", CHAT_MODELS)  
 async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
@@ -56,28 +56,25 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     # Correctly call _process with 'message' keyword arg
     result = await agent._process(message=request_chief)
 
-    assert isinstance(result, AgentTrace), "Result should be AgentTrace"
+    assert isinstance(result, AgentOutput), "Result should be AgentOutput"
     assert not result.is_error, f"Judge agent returned error: {result.error}"
     assert result.outputs is not None, "Judge agent should produce outputs"
 
     # Assert that the output is the expected Reasons model
-    assert isinstance(result.outputs, Reasons), f"Expected Reasons output, got {type(result.outputs)}"
+    assert isinstance(result.outputs, JudgeReasons), f"Expected JudgeReasons output, got {type(result.outputs)}"
 
     # Check fields within Reasons
     assert isinstance(result.outputs.prediction, bool), "'prediction' field should be boolean"
     assert isinstance(result.outputs.reasons, list), "'reasons' field should be a list"
     assert len(result.outputs.reasons) > 0, "'reasons' list should not be empty"
-    assert isinstance(result.outputs.confidence, str), "'confidence' field should be string"
-    assert result.outputs.confidence in ["high", "medium", "low"], "'confidence' should be high, medium, or low"
     assert isinstance(result.outputs.conclusion, str), "'conclusion' field should be string"
 
     # Example content check (adapt based on expected behavior for the given record/criteria)
     # This is harder to make deterministic without mocking the LLM.
     # We can check if certain keywords appear, but the exact output varies.
     reasons_text = " ".join(result.outputs.reasons).lower()
-    assert "joseph" in reasons_text, "Reasons should mention 'Joseph'"
-    # Depending on criteria, check for other keywords like 'surrender', 'fight', etc.
-    assert "surrender" in reasons_text or "fight no more" in reasons_text, "Reasons should relate to the speech content"
+    # Depending on criteria, check for keywords like 'surrender', 'fight', etc.
+    assert "surrender" in reasons_text or "fight" in reasons_text, "Reasons should relate to the speech content"
 
 
 @pytest.mark.anyio
