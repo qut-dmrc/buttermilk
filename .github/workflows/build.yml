@@ -25,6 +25,15 @@ jobs:
           workload_identity_provider: 'projects/984609701316/locations/global/workloadIdentityPools/devops/providers/github-actions'
           service_account: 'services@prosocial-443205.iam.gserviceaccount.com'
 
+
+      - name: 'Set up gcloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          version: '>= 363.0.0'
+      - name: Test GCP Credentials
+        run: |
+          gcloud secrets list
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -39,9 +48,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: deploy
           push: true
-          file: Dockerfile
+          file: ./deploy/Dockerfile
           tags: us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
