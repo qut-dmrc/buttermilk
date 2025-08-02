@@ -22,7 +22,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/prosocial-443205/locations/global/workloadIdentityPools/devops/providers/github-actions'
+          workload_identity_provider: 'projects/984609701316/locations/global/workloadIdentityPools/devops/providers/github-actions'
           service_account: 'services@prosocial-443205.iam.gserviceaccount.com'
 
       - name: Set up Docker Buildx
