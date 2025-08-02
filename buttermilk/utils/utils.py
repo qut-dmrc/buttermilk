@@ -1007,7 +1007,7 @@ def image_to_content_part(image, model_type: str = "openai", mime_type: str = "i
             "type": "image_url",
             "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
         }
-    if model_type == "anthropic":
+    elif model_type == "anthropic":
         return {
             "type": "image",
             "source": {
