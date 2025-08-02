@@ -25,10 +25,6 @@ touch /home/$USER/.zshrc || echo "Unable to create /home/$USER/.zshrc"
 # # Apply the new PATH setting
 # source ~/.bashrc
 
-# # Now reinstall Claude Code in the new location
-# npm install -g @anthropic-ai/claude-code
-echo 'alias claude="/home/debian/.claude/local/claude"' >> /home/$USER/.zshrc
-
 # Optional: Reinstall your previous global packages in the new location
 # Look at ~/npm-global-packages.txt and install packages you want to keep
 # npm install -g package1 package2 package3...
