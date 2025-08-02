@@ -29,7 +29,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
 
 ##### INSTALL PYTHON DEPENDENCIES #####
 # Copy only the files required to install dependencies, so we separate out the layers for docker
-COPY requirements.txt /tmp/requirements.txt
+COPY ./deploy/requirements.txt /tmp/requirements.txt
 RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
 
