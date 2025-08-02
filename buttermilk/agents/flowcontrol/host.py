@@ -150,7 +150,7 @@ class HostAgent(Agent):
                 if self._pending_tasks_by_agent[agent_id_to_update] <= 0:
                     del self._pending_tasks_by_agent[agent_id_to_update]
 
-                logger.info(
+                logger.debug(
                     f"Host noted TaskComplete from agent {agent_id_to_update} for role '{message.role}' "
                     f"(error: {message.is_error}). "
                     f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
@@ -173,7 +173,7 @@ class HostAgent(Agent):
         async with self._tasks_condition:
             self._total_tasks_in_step += 1
             self._pending_tasks_by_agent[agent_id_to_update] += 1
-            logger.info(
+            logger.debug(
                 f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)}. "
                 f"Total tasks in step: {self._total_tasks_in_step}.",

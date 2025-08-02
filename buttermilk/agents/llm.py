@@ -320,7 +320,7 @@ class LLMAgent(Agent):
             raise ProcessingError(msg) from e
 
         tool_names = [getattr(tool, "name", str(tool)) for tool in self._tools]
-        logger.info(
+        logger.debug(
             f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
             f"Configured tools ({len(self._tools)}): {tool_names}",
         )
@@ -328,7 +328,7 @@ class LLMAgent(Agent):
         # Call the LLM through our helper method
         # Extract cancellation_token from kwargs if provided
         cancellation_token = kwargs.get("cancellation_token")
-        
+
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,
@@ -339,7 +339,7 @@ class LLMAgent(Agent):
         llm_messages_to_send.append(
             AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
         )
-        logger.info(
+        logger.debug(
             f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
 
