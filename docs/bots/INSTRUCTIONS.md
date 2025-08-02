@@ -4,9 +4,67 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **🚨 CRITICAL: READ [exploration-before-implementation.md](exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
 
-# 🚨 CRITICAL FAILURE MODE: RUSH-TO-CODE PREVENTION 🚨
+# 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
-**BEFORE READING ANYTHING ELSE: YOU HAVE A DOCUMENTED PATTERN OF JUMPING TO IMPLEMENTATION WITHOUT EXPLORATION. THIS MUST STOP.**
+**YOU HAVE TWO DOCUMENTED PATTERNS THAT MUST STOP:**
+1. **RUSH-TO-CODE**: Jumping to implementation without exploration
+2. **STANDALONE TEST SCRIPTS**: Creating single-use test files instead of proper pytest tests
+
+## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
+
+**BEFORE you test, validate, or verify ANY code behavior, you MUST:**
+
+### ❌ NEVER CREATE THESE FILES:
+- `test_*.py` files outside the `tests/` directory
+- "Quick test scripts" or "validation files" in the project root
+- Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
+
+### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
+- "Let me create a test to..."
+- "I'll write a quick test..."
+- "Let me verify this works..."
+- "I'll test the serialization..."
+- "Let me check if this runs..."
+- "I'll validate my implementation..."
+- "Let me see if this works..."
+- "I'll create a script to test..."
+
+### ✅ CORRECT APPROACH - ALWAYS USE PYTEST:
+- Create tests in `tests/` directory following existing structure
+- Use proper pytest conventions with `def test_*()` functions
+- Import required modules properly
+- Use pytest fixtures and assertions
+- Ensure tests integrate with CI/CD pipeline
+
+### 📋 CONCRETE EXAMPLE:
+
+**❌ WRONG (Standalone Script)**:
+```python
+# test_something.py in project root
+import json
+from my_module import MyClass
+obj = MyClass()
+result = obj.serialize()
+print("Success!")
+assert result["field"] == "expected"
+```
+
+**✅ CORRECT (Proper Pytest)**:
+```python
+# tests/unit/test_something.py
+import pytest
+from my_module import MyClass
+
+def test_myclass_serialization():
+    """Test that MyClass serializes correctly."""
+    obj = MyClass()
+    result = obj.serialize()
+    
+    assert result["field"] == "expected"
+    assert isinstance(result, dict)
+```
+
+**ENFORCEMENT**: If you catch yourself about to create a test file, STOP and ask: "Am I creating this in the tests/ directory using proper pytest conventions?" If no, RESTART your approach.
 
 ## MANDATORY EXPLORATION CHECKPOINT
 **BEFORE writing ANY code, you MUST:**
@@ -27,13 +85,19 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
    - Explain WHY simpler alternatives won't work
    - **IF YOU CAN'T JUSTIFY, YOU'RE PROBABLY OVERENGINEERING**
 
-**RED FLAG PHRASES THAT MEAN YOU'RE RUSHING:**
+**RED FLAG PHRASES THAT MEAN YOU'RE RUSHING TO CODE:**
 - "Let me implement..."
 - "I'll create a custom..."
 - "I'll build a new..."
 - "Let me write..."
 
-**WHEN YOU CATCH YOURSELF USING THESE PHRASES: STOP. EXPLORE FIRST.**
+**RED FLAG PHRASES THAT MEAN YOU'RE ABOUT TO CREATE STANDALONE TESTS:**
+- "Let me create a test..."
+- "I'll write a test script..."
+- "Let me verify this works..."
+- "I'll test the implementation..."
+
+**WHEN YOU CATCH YOURSELF USING THESE PHRASES: STOP. FOLLOW THE PROPER WORKFLOW.**
 
 # CRITICAL RULES for 🤖 LLM Agents: 
 
@@ -63,19 +127,11 @@ Specific rules:
 2. **For Development Tasks**: Follow the 9-step workflow below
 3. **For Research Tasks**: Use documented tools, not source code exploration
 
-## 🚨 TESTING CHECKPOINT: STOP BEFORE CREATING ANY TEST FILES
-**IF you are about to test, validate, or verify ANY code behavior:**
-- ❌ NEVER create `test_*.py` files outside the `tests/` directory
-- ❌ NEVER create "quick test scripts" or "throwaway validation files"
-- ❌ NEVER use phrases like "let me test this", "validate my implementation", or "check if it works" followed by standalone scripts
-- ✅ ALWAYS use `uv run pytest tests/` with proper test files in the existing test suite
-- ✅ ALWAYS write tests that integrate with CI/CD pipeline and project structure
-
-**Red flag phrases that MUST trigger pytest workflow:**
-- "test my implementation" → Write proper pytest
-- "validate this works" → Write proper pytest
-- "check the behavior" → Write proper pytest
-- "see if this runs" → Write proper pytest
+## TESTING WORKFLOW REMINDER
+**When implementing tests (covered in detail above):**
+- Use `uv run pytest tests/` to run the test suite
+- Follow existing test patterns in the codebase
+- Write tests that integrate with CI/CD pipeline
 
 ## WORKFLOW: Before Making Any Code Changes
 1. **STOP**: Understand the full problem scope before proposing solutions. Read relevant documentation to understand the project goals and architecture. Check github issues for relevant past work and discussion; create a new issue if you cannot find an existing one.
@@ -92,7 +148,7 @@ Specific rules:
 
 4. **PLAN**: Use github issues to track problems and document your plan with clear phases and validation criteria
 
-5. **TEST**: Write unit tests in `tests/` directory using pytest conventions that capture expected behavior. NO standalone test scripts anywhere else.
+5. **TEST**: Write unit tests in `tests/` directory using pytest conventions that capture expected behavior. **CRITICAL**: NO standalone test scripts anywhere else - violating this rule means starting over.
 
 6. **IMPLEMENT**: Make minimal changes that solve the root cause
 
