@@ -27,11 +27,7 @@ RUN apt update && apt install -y --no-install-recommends --upgrade curl less wge
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
     apt-get install -y nodejs
 
-##### INSTALL PYTHON DEPENDENCIES #####
-# Copy only the files required to install dependencies, so we separate out the layers for docker
-COPY ./deploy/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m pip install --upgrade pip uv
 
 
 ################################
@@ -41,6 +37,10 @@ RUN python3 -m pip install --upgrade pip && \
 FROM python-base AS builder-base
 ARG VENV_PATH
 WORKDIR /src
+
+##### COPY REQUIREMENTS FOR LATER USE #####
+# Copy only the files required to install dependencies, so we separate out the layers for docker
+COPY ./deploy/requirements.txt /tmp/requirements.txt
 
 # install runtime deps into $VENV_PATH
 RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
