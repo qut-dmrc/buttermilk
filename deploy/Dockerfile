@@ -64,7 +64,7 @@ RUN mkdir -p ${APP_PATH} ${VENV_PATH}
 WORKDIR ${APP_PATH}
 
 ##### COPY VENV AND SOURCE REPOSITORIES IN FULL #######
-# Copy source from github actions
+# Copy source from build context (repository root)
 COPY . ${APP_PATH}
 WORKDIR ${APP_PATH}
 

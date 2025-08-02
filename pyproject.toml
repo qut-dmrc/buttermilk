@@ -1,5 +1,5 @@
 [project]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<=3.12"
 authors = [
     {name = "Nicolas Suzor", email = "nic@suzor.com"},
 ]
@@ -159,6 +159,7 @@ warn_untyped_fields = true
 [tool.uv]
 upgrade = true
 default-groups = [] # Add the groups you want installed by default
+prerelease = "if-necessary-or-explicit"
 
 [tool.uv.sources]
 buttermilk = { workspace = true }
