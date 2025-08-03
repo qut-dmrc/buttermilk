@@ -1773,7 +1773,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
                 )
                 try:
-                    failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                    failed_doc_filename = Path(bm.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     logger.info(
                         f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                     )
@@ -1872,7 +1872,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"Failed to upsert document {doc.record_id}: {e}")
             # Save the failed document for retry
             try:
-                failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                failed_doc_filename = Path(bm.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 logger.info(
                     f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                 )
