@@ -51,56 +51,25 @@ async def test_agent_registry_population_and_get_config():
     # The RunRequest for _register_agents
     test_run_request = RunRequest(flow="test_flow", session_id="test_session_123")
 
-    # Mock the AutogenAgentAdapter.register to simulate it calling the registration_callback.
+    # Mock the Agent.register to simulate it calling the registration_callback.
     # This is crucial for testing the registry logic without a full Autogen runtime.
-    async def mock_adapter_register(runtime, type, factory):
-        # The factory passed to AutogenAgentAdapter.register is a lambda:
-        #   lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls, t_type=self._topic.type:
-        #       agent_factory(orch, cfg=v_cfg, cls=a_cls, topic_type=t_type)
-        #
-        # The agent_factory itself is:
-        #   def agent_factory(orchestrator_ref, cfg, cls, topic_type):
-        #       return AutogenAgentAdapter(
-        #           agent_cfg=cfg,
-        #           agent_cls=cls,
-        #           topic_type=topic_type,
-        #           registration_callback=orchestrator_ref._register_buttermilk_agent_instance
-        #       )
-        #
-        # When AutogenAgentAdapter is initialized (by the factory call), it will instantiate
-        # the actual Buttermilk agent (MockTestAgent in this case) and then call the
-        # registration_callback.
-
-        # We need to retrieve the actual AgentConfig and agent_cls as prepared by
-        # AgentVariants.get_configs() because this is what _register_agents uses.
+    async def mock_agent_register(runtime, type, factory):
+        # The factory passed to Agent.register creates the agent instance directly
         # get_configs returns a list of (agent_cls, agent_config_instance)
         agent_cls_from_variant, agent_config_from_variant = mock_agent_variant.get_configs(params=test_run_request)[0]
 
-        # Simulate the instantiation of the agent and the callback
-        # The agent_id is generated within AgentConfig and then within the Agent itself.
-        # The callback expects agent_id and the agent_instance.
-
-        # The config_with_session is created inside _register_agents,
-        # so agent_config_from_variant already includes session_id if parameters are merged.
-        # Let's refine how config_with_session is handled.
-        # The parameters from orchestrator and session_id are merged into variant_config
-        # *before* calling get_configs if we follow the _register_agents logic closely.
-        # However, for this mock, we can assume agent_config_from_variant is what the agent gets.
-
-        # The Agent class itself generates its agent_id if not provided in config.
-        # The AgentConfig from AgentVariants should have the agent_id.
-
+        # Simulate the instantiation of the agent
         agent_instance = agent_cls_from_variant(**agent_config_from_variant.model_dump())
 
         # Directly call the orchestrator's registration method,
-        # simulating what AutogenAgentAdapter's __init__ would do.
+        # simulating what the Agent registration would do.
         orchestrator._register_buttermilk_agent_instance(agent_instance.agent_id, agent_instance)
 
-        # AutogenAgentAdapter.register returns an AgentType (which is a string alias)
+        # Agent.register returns an AgentType (which is a string alias)
         return AgentType(agent_config_from_variant.agent_id)  # Return a mock AgentType
 
-    # Patch AutogenAgentAdapter.register
-    with patch("buttermilk.libs.autogen.AutogenAgentAdapter.register", side_effect=mock_adapter_register) as mock_register_call:
+    # Patch Agent.register
+    with patch.object(Agent, "register", side_effect=mock_agent_register) as mock_register_call:
         # Minimally mock _runtime and _topic as they are accessed in _register_agents
         orchestrator._runtime = MagicMock(spec=SingleThreadedAgentRuntime)
         orchestrator._topic = DefaultTopicId(type="test_topic")  # Needs to be a TopicId instance
@@ -110,12 +79,12 @@ async def test_agent_registry_population_and_get_config():
 
     # 1. Test registry population
     mock_register_call.assert_called()  # Ensure the mocked register was actually called
-    assert expected_agent_id in orchestrator._agent_registry, \
-        f"Agent ID {expected_agent_id} not found in registry. Found: {list(orchestrator._agent_registry.keys())}"
+    assert (
+        expected_agent_id in orchestrator._agent_registry
+    ), f"Agent ID {expected_agent_id} not found in registry. Found: {list(orchestrator._agent_registry.keys())}"
 
     registered_agent = orchestrator._agent_registry[expected_agent_id]
-    assert isinstance(registered_agent, MockTestAgent), \
-        f"Registered agent is not an instance of MockTestAgent, but {type(registered_agent)}"
+    assert isinstance(registered_agent, MockTestAgent), f"Registered agent is not an instance of MockTestAgent, but {type(registered_agent)}"
     assert registered_agent.agent_id == expected_agent_id
     assert registered_agent.role == agent_config_data["role"]
     assert registered_agent.name == agent_config_data["name"]  # Check name
@@ -123,8 +92,7 @@ async def test_agent_registry_population_and_get_config():
 
     # 2. Test get_agent_config for an existing agent
     retrieved_config = orchestrator.get_agent_config(expected_agent_id)
-    assert isinstance(retrieved_config, AgentConfig), \
-        f"retrieved_config is not AgentConfig, but {type(retrieved_config)}"
+    assert isinstance(retrieved_config, AgentConfig), f"retrieved_config is not AgentConfig, but {type(retrieved_config)}"
 
     assert retrieved_config.agent_id == expected_agent_id
     assert retrieved_config.role == agent_config_data["role"]
@@ -137,8 +105,7 @@ async def test_agent_registry_population_and_get_config():
 
     # Test get_agent_config for a non-existent agent
     non_existent_agent_id = "NON_EXISTENT_ID"
-    assert orchestrator.get_agent_config(non_existent_agent_id) is None, \
-        f"get_agent_config for {non_existent_agent_id} should return None"
+    assert orchestrator.get_agent_config(non_existent_agent_id) is None, f"get_agent_config for {non_existent_agent_id} should return None"
 
     # Test with another agent to ensure registry handles multiple entries
     agent_config2_data = {
@@ -246,7 +213,7 @@ async def test_agent_registry_population_and_get_config():
 
         raise Exception(f"Mock adapter register could not find agent for type_id: {type_id_from_register_call}")
 
-    with patch("buttermilk.libs.autogen.AutogenAgentAdapter.register", side_effect=dynamic_mock_adapter_register) as mock_register_call_multi:
+    with patch.object(Agent, "register", side_effect=dynamic_mock_adapter_register) as mock_register_call_multi:
         orchestrator._runtime = MagicMock(spec=SingleThreadedAgentRuntime)
         orchestrator._topic = DefaultTopicId(type="test_topic_multi")
         await orchestrator._register_agents(params=test_run_request)

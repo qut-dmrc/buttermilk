@@ -324,17 +324,17 @@ class BM(BaseModel):
             session_info_temp = SessionInfo(**run_info)
         else:
             session_info_temp = run_info
-        
+
         # Initialize BM with remaining fields
         super().__init__(**data)
-        
+
         # Now set the private attributes
         self._session_info = session_info_temp
         self._initialization_complete = asyncio.Event()
         self._initialization_error: Exception | None = None
         self._ip = self._session_info.ip if self._session_info else None
         self._get_ip_task = None
-        
+
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
@@ -705,32 +705,32 @@ class BM(BaseModel):
     def save_dir(self) -> str | None:
         """Backward compatibility property for direct save_dir access."""
         return self.run_info.save_dir
-    
+
     @property
     def name(self) -> str:
         """Backward compatibility property for direct name access."""
         return self.run_info.name
-    
+
     @property
     def job(self) -> str:
         """Backward compatibility property for direct job access."""
         return self.run_info.job
-    
+
     @property
     def run_id(self) -> str:
         """Backward compatibility property for direct run_id access."""
         return self.run_info.run_id
-    
+
     @property
     def platform(self) -> str:
         """Backward compatibility property for direct platform access."""
         return self.run_info.platform
-    
+
     @property
     def node_name(self) -> str:
         """Backward compatibility property for direct node_name access."""
         return self.run_info.node_name
-    
+
     @property
     def flow_api(self) -> str | None:
         """Backward compatibility property for direct flow_api access."""
@@ -750,7 +750,7 @@ class BM(BaseModel):
                 self._session_info.ip = self._get_ip_task.result()
             except Exception:  # Catch potential exceptions from the task
                 logger.warning("Failed to get IP address from async task result.")
-        
+
         return self._session_info
 
     @property
@@ -871,9 +871,10 @@ class BM(BaseModel):
         # Try to initialize weave with a reasonable timeout
         logger.debug(f"Initializing Weave with collection: {collection_name}")
 
+        client = weave.init(collection_name)
         # We disable weave autopatching for Autogen because it's too noisy and slow
         # We will instead trace manually.
-        client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
+        # client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
         logger.debug("Weave initialized successfully")
         return client
 
