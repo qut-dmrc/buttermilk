@@ -11,6 +11,4 @@ bm:
   run_info:
     name: ${run.name}
     job: ${run.job}
-    platform: ${bm.platform:local}
-    flow_api: ${bm.flow_api:"http://localhost:8000/flow/"}
   llms: ${llms}

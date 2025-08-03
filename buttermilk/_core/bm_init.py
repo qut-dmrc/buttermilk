@@ -205,7 +205,7 @@ class BM(BaseModel):
     """
 
     # Session information
-    _session_info: SessionInfo = PrivateAttr()
+    run_info: SessionInfo = Field(..., description="Session information including run ID, job name, etc.")
 
     # BM-specific fields
     connections: list[str] = Field(
@@ -278,62 +278,38 @@ class BM(BaseModel):
             f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
         )
 
-    # @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
-    # @classmethod
-    # def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-    #     """Removes the `_target_` attribute commonly added by Hydra from input values.
+    @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
+    @classmethod
+    def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Removes the `_target_` attribute commonly added by Hydra from input values.
 
-    #     This is a pre-validation step to clean up configuration data before
-    #     it's parsed by Pydantic.
-
-    #     Args:
-    #         values: The dictionary of raw input values for the model.
-
-    #     Returns:
-    #         dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
-
-    #     """
-    #     values.pop("_target_", None)  # Remove if exists, do nothing otherwise
-    #     return values
-
-    def __init__(self, run_info: SessionInfo | dict[str, Any] | None = None, **data: Any) -> None:
-        """Initializes the BM instance with provided configuration data.
-
-        After standard Pydantic model initialization, it creates/stores a SessionInfo
-        instance and calls `_post_init_setup` to perform further setup tasks 
-        like logging, directory creation, and cloud logins.
+        This is a pre-validation step to clean up configuration data before
+        it's parsed by Pydantic.
 
         Args:
-            run_info: Either a SessionInfo instance or a dict with session fields
-                (platform, name, job, run_id, ip, node_name, save_dir, flow_api).
-                If None, will be created from fields in **data for backward compatibility.
+            values: The dictionary of raw input values for the model.
+
+        Returns:
+            dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
+
+        """
+        values.pop("_target_", None)  # Remove if exists, do nothing otherwise
+        return values
+
+    def __init__(self, **data: Any) -> None:
+        """Initializes the BM instance with provided configuration data.
+
+        After standard Pydantic model initialization, it calls `_post_init_setup`
+        to perform further setup tasks like logging, directory creation, and cloud logins.
+
+        Args:
             **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
-        # Handle run_info initialization BEFORE calling super().__init__
-        session_info_temp = None
-        if run_info is None:
-            # Backward compatibility: extract SessionInfo fields from data
-            session_fields = {}
-            session_field_names = {'platform', 'name', 'job', 'run_id', 'ip', 'node_name', 'save_dir', 'flow_api'}
-            for field in list(data.keys()):  # Use list() to avoid dict modification during iteration
-                if field in session_field_names:
-                    session_fields[field] = data.pop(field)
-            session_info_temp = SessionInfo(**session_fields)
-        elif isinstance(run_info, dict):
-            session_info_temp = SessionInfo(**run_info)
-        else:
-            session_info_temp = run_info
-
-        # Initialize BM with remaining fields
         super().__init__(**data)
 
-        # Now set the private attributes
-        self._session_info = session_info_temp
         self._initialization_complete = asyncio.Event()
         self._initialization_error: Exception | None = None
-        self._ip = self._session_info.ip if self._session_info else None
-        self._get_ip_task = None
 
         self._post_init_setup()
 
@@ -352,7 +328,7 @@ class BM(BaseModel):
         """
         # Construct full save directory path
         save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
-        self._session_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
+        self.run_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
@@ -700,59 +676,6 @@ class BM(BaseModel):
             self._query_runner = QueryRunner(bq_client=self.bq)  # Delegates bq client access
         return self._query_runner
 
-    # Backward compatibility properties
-    @property
-    def save_dir(self) -> str | None:
-        """Backward compatibility property for direct save_dir access."""
-        return self.run_info.save_dir
-
-    @property
-    def name(self) -> str:
-        """Backward compatibility property for direct name access."""
-        return self.run_info.name
-
-    @property
-    def job(self) -> str:
-        """Backward compatibility property for direct job access."""
-        return self.run_info.job
-
-    @property
-    def run_id(self) -> str:
-        """Backward compatibility property for direct run_id access."""
-        return self.run_info.run_id
-
-    @property
-    def platform(self) -> str:
-        """Backward compatibility property for direct platform access."""
-        return self.run_info.platform
-
-    @property
-    def node_name(self) -> str:
-        """Backward compatibility property for direct node_name access."""
-        return self.run_info.node_name
-
-    @property
-    def flow_api(self) -> str | None:
-        """Backward compatibility property for direct flow_api access."""
-        return self.run_info.flow_api
-
-    @property
-    def run_info(self) -> SessionInfo:
-        """Provides the `SessionInfo` object representing the current execution session.
-
-        Returns:
-            SessionInfo: The session information object.
-
-        """
-        # Update IP if the async task has completed
-        if self._get_ip_task and self._get_ip_task.done():
-            try:
-                self._session_info.ip = self._get_ip_task.result()
-            except Exception:  # Catch potential exceptions from the task
-                logger.warning("Failed to get IP address from async task result.")
-
-        return self._session_info
-
     @property
     def gcp_credentials(self) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
         """Provides access to Google Cloud Platform (GCP) credentials.
@@ -1028,7 +951,7 @@ class BM(BaseModel):
 
                     async def _fetch_and_set_ip():
                         ip = await get_ip()
-                        self._session_info.ip = ip
+                        self.run_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
                     self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
