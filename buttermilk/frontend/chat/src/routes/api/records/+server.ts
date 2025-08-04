@@ -121,7 +121,7 @@ export const GET: RequestHandler = async ({ fetch, request, url }) => {
   }
   
   // Get backend base URL from environment or use default
-  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+  const backendUrl = env.BACKEND_API_URL;
   
   try {
     // Create headers for the backend request

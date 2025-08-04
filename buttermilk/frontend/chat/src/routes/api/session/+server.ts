@@ -1,6 +1,6 @@
+import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
 // Define interface for session data
 interface SessionData {
@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
         // const validateResponse = await fetch(`${env.BACKEND_API_URL}/api/session/validate?sessionId=${existingSessionId}`);
         
         // For now, let's use the session directly and assume it's valid if we don't get an error
-        const backendUrl = (env.BACKEND_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const backendUrl = env.BACKEND_API_URL.replace(/\/$/, '');
         const validateResponse = await fetch(`${backendUrl}/api/session?sessionId=${existingSessionId}`, {
           method: 'GET',
           headers: {
@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
     }
     
     // Get a new session ID from the backend
-    const backendUrl = (env.BACKEND_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+    const backendUrl = env.BACKEND_API_URL.replace(/\/$/, '');
     console.log(`Requesting new session from backend: ${backendUrl}/api/session`);
     const response = await fetch(`${backendUrl}/api/session`, {
       method: 'GET',
