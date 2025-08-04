@@ -699,17 +699,15 @@ class LLMs(BaseModel):
             **config.configs,
         }
 
-        # Create client based on client_type - clean single branch per type
-        client_type = config.client_type
-        
-        if client_type == ClientType.OPENAI:
+        # Create client based on config.client_type - clean single branch per type
+        if config.client_type == ClientType.OPENAI:
             client = OpenAIChatCompletionClient(
                 base_url=config.base_url or "",  # Provide default empty string if None
                 model_info=config.model_info,
                 **client_params,
             )
             
-        elif client_type == ClientType.AZURE:
+        elif config.client_type == ClientType.AZURE:
             if not config.base_url:
                 raise ValueError("Azure endpoint URL is required for Azure client")
             client = AzureOpenAIChatCompletionClient(
@@ -717,11 +715,11 @@ class LLMs(BaseModel):
                 **client_params,
             )
             
-        elif client_type == ClientType.ANTHROPIC:
+        elif config.client_type == ClientType.ANTHROPIC:
             # Direct Anthropic API
             client = AnthropicChatCompletionClient(**client_params)
             
-        elif client_type == ClientType.ANTHROPIC_VERTEX:
+        elif config.client_type == ClientType.ANTHROPIC_VERTEX:
             # Anthropic via Vertex AI
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
@@ -746,7 +744,7 @@ class LLMs(BaseModel):
                 logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                 raise
                 
-        elif client_type == ClientType.GEMINI:
+        elif config.client_type == ClientType.GEMINI:
             # Google Generative AI (Gemini) API
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
@@ -755,7 +753,7 @@ class LLMs(BaseModel):
                 model_info=config.model_info,
                 **client_params,
             )
-        elif client_type == ClientType.GEMINI_VERTEX:
+        elif config.client_type == ClientType.GEMINI_VERTEX:
             raise NotImplementedError(
                 "Gemini native client for Vertex is not yet implemented. "
                 "Please use the Gemini API or OpenAIChatCompletionClient with Vertex parameters.",
@@ -770,11 +768,11 @@ class LLMs(BaseModel):
                 "credentials": bm_instance.gcp_credentials,
             }
             vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
-            gemini_client = genai.Client(  # not used yet, not compatbile with autogen
+            gemini_client = genai.Client(  # not used yet, not compatible with autogen
                 vertexai=True, **vertex_params
             )
             
-        elif client_type == ClientType.VERTEX_OPENAI:
+        elif config.client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
@@ -801,7 +799,7 @@ class LLMs(BaseModel):
                 **vertex_params,
             )
         else:
-            raise ProcessingError(f"Unsupported client_type: {client_type}")
+            raise ProcessingError(f"Unsupported client_type: {config.client_type}")
 
         # Wrap with AutoGenWrapper and cache
         wrapped_client = AutoGenWrapper(client=client, model_info=config.model_info)
