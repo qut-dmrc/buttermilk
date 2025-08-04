@@ -619,7 +619,7 @@ class BM(BaseModel):
             # If not loaded from cache, get from secret manager
             if connections_data is None:
                 try:
-                    # Do this scynchronously so we don't repeat the fetch
+                    # Do this synchronously so we don't repeat the fetch
                     connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
                     if not isinstance(connections_data, dict):  # Validate type from secrets
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
