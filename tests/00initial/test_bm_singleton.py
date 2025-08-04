@@ -14,21 +14,21 @@ from buttermilk._core.exceptions import FatalError
 def test_conf(conf):
     """Test that the test configuration is loaded correctly."""
     assert conf.job == "testing"
-    assert conf.bm.job == "testing"
+    assert conf.bm.run_info.job == "testing"
     assert conf.name == "buttermilk"
-    assert conf.bm.name == "buttermilk"
+    assert conf.bm.run_info.name == "buttermilk"
 
 
 def test_bm_instance(bm):
-    assert bm.job == "testing"
-    assert bm.name == "buttermilk"
+    assert bm.run_info.job == "testing"
+    assert bm.run_info.name == "buttermilk"
 
 
 def test_instantiate_hydra(conf):
     """I'm not sure whether this should work."""
     bm = hydra.utils.instantiate(conf.bm)
     assert bm is not None, "BM instance should not be None"
-    assert bm.job == "testing", "BM instance job should be 'testing'"
+    assert bm.run_info.job == "testing", "BM instance job should be 'testing'"
 
 
 def test_initialize_bm(conf):
@@ -36,7 +36,7 @@ def test_initialize_bm(conf):
     # Initialize BM with the test configuration
     bm = hydra.utils.instantiate(conf.bm)
     assert bm is not None, "BM instance should not be None"
-    assert bm.job == "testing", "BM instance job should be 'testing'"
+    assert bm.run_info.job == "testing", "BM instance job should be 'testing'"
 
 
 def test_singleton_instance(bm, conf):
@@ -64,7 +64,7 @@ def test_singleton_instance(bm, conf):
 def test_singleton_with_kwargs_update_fails(conf, bm):
     """Test that creating a singleton with kwargs updates existing attributes."""
     # Initial values
-    assert bm.job == "testing", "Initial job should be 'testing'"
+    assert bm.run_info.job == "testing", "Initial job should be 'testing'"
 
     # Creating a new instance should fail
     with pytest.raises(FatalError):
@@ -77,7 +77,7 @@ def test_singleton_between_modules(bm):
     """Test that BM stays a singleton when accessed from different module functions."""
     # First initialize BM
     bm1 = bm
-    assert bm.job == "testing"
+    assert bm.run_info.job == "testing"
 
     # Now import a module that will access BM (this simulates another module using BM)
     # We'll use a function for simplicity

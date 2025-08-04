@@ -138,7 +138,7 @@ class AutogenOrchestrator(Orchestrator):
         """Initializes the Autogen runtime and registers all configured agents."""
         # Initialize the topic ID if not already set
         if self._topic is None:
-            self._topic = DefaultTopicId(type=f"{bm.name}-{bm.job}-{shortuuid.uuid()[:8]}")
+            self._topic = DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}")
 
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")

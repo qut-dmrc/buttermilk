@@ -230,7 +230,7 @@ class TestAsyncBackgroundOperations:
             )
             
             # Config saving should not block BM creation
-            assert bm.name == "test"
+            assert bm.run_info.name == "test"
 
     async def test_ip_fetching_is_background(self):
         """Test that IP address fetching happens in background."""
@@ -258,7 +258,7 @@ class TestAsyncBackgroundOperations:
             
             # Should be fast despite slow IP fetch
             assert creation_time < 0.10
-            assert bm.name == "test"
+            assert bm.run_info.name == "test"
 
 
 class TestMemoryEfficiency:

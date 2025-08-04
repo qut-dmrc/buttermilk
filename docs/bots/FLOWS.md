@@ -62,7 +62,7 @@ Agent (ABC) <- AgentConfig
 
 1. **Orchestrator Setup**: `AutogenOrchestrator._setup()` registers agents with `SingleThreadedAgentRuntime`
 2. **Agent Registration**: Each Buttermilk `Agent` registers directly with the runtime
-3. **Topic Subscription**: Agents subscribe to main topic (`{bm.name}-{job}-{uuid}`) and role topics
+3. **Topic Subscription**: Agents subscribe to main topic (`{bm.run_info.name}-{job}-{uuid}`) and role topics
 4. **Message Flow**: Host agent sends `ConductorRequest` and `AgentInput`; other agents respond via internal pub/sub (managed by Autogen)
 5. **Session Cleanup**: `SessionManager` handles resource cleanup and timeout
 
