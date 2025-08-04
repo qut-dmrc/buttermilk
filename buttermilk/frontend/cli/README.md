@@ -46,10 +46,6 @@ buttermilk-cli
 Once connected, you can start flows using these commands:
 
 ```bash
-# Start a flow with a prompt
-/flow osb What is the impact of social media on teens?
-/run osb Analyze climate change policies
-
 # Start a test flow
 /flow test
 
@@ -62,10 +58,6 @@ Once connected, you can start flows using these commands:
 # Regular messages (sent as user_message)
 Hello, how are you?
 ```
-
-### Interactive Flows
-
-Some flows (like OSB) are interactive and will prompt you for responses. Simply type your response when prompted.
 
 ## Message Types Supported
 
@@ -89,15 +81,6 @@ Some flows (like OSB) are interactive and will prompt you for responses. Simply 
 - Agent outputs with content and tool calls
 - Agent traces with full execution details
 - Step requests and conductor decisions
-
-### OSB Messages
-- Multi-agent analysis from:
-  - Researcher (blue)
-  - Policy Analyst (magenta)
-  - Fact Checker (yellow)
-  - Explorer (cyan)
-  - Synthesizer (green)
-- Policy violations and recommendations
 
 ## Connection States
 
