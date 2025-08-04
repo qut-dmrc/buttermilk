@@ -70,11 +70,19 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ```
 
 ### 🚨 CRITICAL FAILURE MODE PREVENTION
-**RUSH-TO-CODE PATTERN DETECTED - MANDATORY CHECKPOINT:**
+**TWO DOCUMENTED PATTERNS - MANDATORY CHECKPOINTS:**
+
+**RUSH-TO-CODE PATTERN:**
 1. **BEFORE ANY IMPLEMENTATION**: Complete exploration phase (minimum 3 searches)
 2. **SEARCH EXISTING CODE**: Find base classes, utilities, framework capabilities
 3. **JUSTIFY NEW CODE**: Explain why existing solutions won't work
 4. **IF YOU CAN'T JUSTIFY**: You're probably overengineering
+
+**STANDALONE TEST SCRIPT PATTERN:**
+1. **NEVER** create `test_*.py` files outside `tests/` directory
+2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "Let me test the serialization..."
+3. **ALWAYS** use proper pytest in `tests/` directory with existing patterns
+4. **ENFORCEMENT**: Creating standalone tests = restart the entire task
 
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
@@ -98,7 +106,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 - **ALWAYS** trace data flow when debugging validation errors
 - **NEVER** commit without updating relevant documentation
 - **ALWAYS** use the provided debugging framework
-- **NEVER** create test files outside `tests/` directory - Use pytest conventions ONLY
+- **NEVER** create test files outside `tests/` directory - Use pytest conventions ONLY (violating this = restart task)
 
 ## 🔗 External Resources
 - [Main Project README](/README.md)

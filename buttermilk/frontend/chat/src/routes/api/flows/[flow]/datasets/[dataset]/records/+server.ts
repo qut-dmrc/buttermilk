@@ -1,6 +1,6 @@
+import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
 export const GET: RequestHandler = async ({ fetch, request, params, url }) => {
   const { flow, dataset } = params;
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ fetch, request, params, url }) => {
   }
   
   // Get backend base URL from environment or use default
-  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+  const backendUrl = env.BACKEND_API_URL;
   
   try {
     // Create headers for the backend request

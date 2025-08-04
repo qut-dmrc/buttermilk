@@ -132,7 +132,7 @@ class SessionInfo(BaseModel):
 
     """
 
-    platform: str = Field(description="Platform where the session is running (e.g., 'local', 'gcp').")
+    platform: str = Field(default="local", description="Platform where the session is running (e.g., 'local', 'gcp').")
     name: str = Field(..., description="User-defined name for the current session or project.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
     run_id: str = Field(default_factory=_make_run_id, description="Unique identifier for this execution run.")
@@ -153,7 +153,7 @@ class SessionInfo(BaseModel):
         }
 
 
-class BM(SessionInfo):
+class BM(BaseModel):
     """Central singleton-like class for Buttermilk, providing access to all resources.
 
     `BM` (often instantiated as `bm`) serves as the primary gateway to Buttermilk's
@@ -163,8 +163,7 @@ class BM(SessionInfo):
     and offers a unified, simplified interface for accessing them from anywhere
     in the application code.
 
-    It inherits from `SessionInfo` to also carry context about the current
-    execution session.
+    It contains session information accessible via the `run_info` property.
 
     Typical Usage:
     ```python
@@ -205,6 +204,10 @@ class BM(SessionInfo):
 
     """
 
+    # Session information
+    run_info: SessionInfo = Field(..., description="Session information including run ID, job name, etc.")
+
+    # BM-specific fields
     connections: list[str] = Field(
         default_factory=list,
         description="List of connection names (purpose may vary depending on context, e.g., active LLM connections).",
@@ -275,39 +278,39 @@ class BM(SessionInfo):
             f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
         )
 
-    # @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
-    # @classmethod
-    # def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-    #     """Removes the `_target_` attribute commonly added by Hydra from input values.
+    @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
+    @classmethod
+    def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Removes the `_target_` attribute commonly added by Hydra from input values.
 
-    #     This is a pre-validation step to clean up configuration data before
-    #     it's parsed by Pydantic.
+        This is a pre-validation step to clean up configuration data before
+        it's parsed by Pydantic.
 
-    #     Args:
-    #         values: The dictionary of raw input values for the model.
+        Args:
+            values: The dictionary of raw input values for the model.
 
-    #     Returns:
-    #         dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
+        Returns:
+            dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
 
-    #     """
-    #     values.pop("_target_", None)  # Remove if exists, do nothing otherwise
-    #     return values
+        """
+        values.pop("_target_", None)  # Remove if exists, do nothing otherwise
+        return values
 
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 
         After standard Pydantic model initialization, it calls `_post_init_setup`
-        to perform further setup tasks like logging, directory creation, and
-        cloud logins.
+        to perform further setup tasks like logging, directory creation, and cloud logins.
 
         Args:
-            **data: Keyword arguments representing the configuration fields for
-                `BM` and its parent `SessionInfo`.
+            **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
         super().__init__(**data)
+
         self._initialization_complete = asyncio.Event()
         self._initialization_error: Exception | None = None
+
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
@@ -324,8 +327,8 @@ class BM(SessionInfo):
         in CloudProviderCfg, providing early validation with better error messages.
         """
         # Construct full save directory path
-        save_dir_path = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
-        self.save_dir = str(save_dir_path)  # Store as string
+        save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
+        self.run_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
 
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
@@ -460,7 +463,7 @@ class BM(SessionInfo):
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
         try:
-            if self.save_dir:
+            if self.run_info.save_dir:
                 # Data to save: BM config and run_info
                 config_data_to_save = [
                     self.model_dump(exclude_none=True),  # Current BM instance config
@@ -470,11 +473,11 @@ class BM(SessionInfo):
                     data=config_data_to_save,
                     basename="initial_bm_config",  # More descriptive basename
                     extension=".json",
-                    # save_dir is implicitly self.save_dir if not provided to self.save
+                    # save_dir is implicitly self.run_info.save_dir if not provided to self.save
                 )
                 logger.debug("Initial BM config saved successfully")
             else:  # Should not happen if save_dir_base defaults to mkdtemp
-                logger.warning("BM.save_dir is not set. Skipping saving initial config.")
+                logger.warning("BM.run_info.save_dir is not set. Skipping saving initial config.")
         except Exception as e:
             logger.error(f"Could not save initial BM config to default save directory: {e!s}")
 
@@ -530,17 +533,17 @@ class BM(SessionInfo):
                     labels={
                         "project": self.logger_cfg.project_id,
                         "location": self.logger_cfg.location,
-                        "namespace": self.name,
-                        "job": self.job,
-                        "task_id": self.run_id,
+                        "namespace": self.run_info.name,
+                        "job": self.run_info.job,
+                        "task_id": self.run_info.run_id,
                     },
                 )
 
                 cloudHandler = CloudLoggingHandler(
                     client=self._cloud_manager.gcs_log_client(self.logger_cfg),
                     resource=cloud_logging_resource,
-                    name=self.name,
-                    labels=self.model_dump(include={"run_id", "name", "job", "platform"}),
+                    name=self.run_info.name,
+                    labels=self.run_info.model_dump(include={"run_id", "name", "job", "platform"}),
                 )
                 cloudHandler.setLevel(logging.INFO)
                 logger.addHandler(cloudHandler)
@@ -616,24 +619,13 @@ class BM(SessionInfo):
             # If not loaded from cache, get from secret manager
             if connections_data is None:
                 try:
+                    # Do this synchronously so we don't repeat the fetch
                     connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
                     if not isinstance(connections_data, dict):  # Validate type from secrets
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
                     logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
-
-                    # Defer cache writing to background task - Phase 2 optimization
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self._cache_llm_connections_async(connections_data, cache_path))
-                        else:
-                            # If no event loop is running, cache synchronously as fallback
-                            logger.info("No async loop running, caching LLM connections synchronously")
-                            self._write_cache_sync(connections_data, cache_path)
-                    except RuntimeError:
-                        # No event loop available, cache synchronously
-                        logger.info("No event loop available, caching LLM connections synchronously")
-                        self._write_cache_sync(connections_data, cache_path)
+                    # Cache the connections data for future runs
+                    self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
                     logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
                     raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
@@ -656,6 +648,7 @@ class BM(SessionInfo):
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
 
+        logger.info(f"Caching LLM connections synchronously to {cache_path}")
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @cached_property
@@ -672,35 +665,6 @@ class BM(SessionInfo):
         if self._query_runner is None:
             self._query_runner = QueryRunner(bq_client=self.bq)  # Delegates bq client access
         return self._query_runner
-
-    @property
-    def run_info(self) -> SessionInfo:
-        """Provides a `SessionInfo` object representing the current execution session.
-
-        This is a snapshot of the session-specific details managed by the `BM` instance.
-
-        Returns:
-            SessionInfo: An object containing current session information.
-
-        """
-        # Ensure _ip is fetched if the task has completed
-        fetched_ip = self._ip
-        if self._get_ip_task and self._get_ip_task.done():
-            try:
-                fetched_ip = self._get_ip_task.result()
-            except Exception:  # Catch potential exceptions from the task
-                logger.warning("Failed to get IP address from async task result.")
-
-        return SessionInfo(
-            platform=self.platform,
-            name=self.name,
-            job=self.job,
-            run_id=self.run_id,  # run_id is from BM instance itself
-            node_name=self.node_name,
-            ip=fetched_ip,  # Use potentially updated IP
-            save_dir=self.save_dir,
-            flow_api=self.flow_api,
-        )
 
     @property
     def gcp_credentials(self) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
@@ -812,7 +776,7 @@ class BM(SessionInfo):
         """
         import weave  # Ensure weave is imported - deferred until first access
 
-        collection_name = f"{self.name}-{self.job}"  # Construct collection name
+        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
 
         # Set up credentials before initializing weave
         self._setup_weave_credentials()
@@ -820,6 +784,7 @@ class BM(SessionInfo):
         # Try to initialize weave with a reasonable timeout
         logger.debug(f"Initializing Weave with collection: {collection_name}")
 
+        # client = weave.init(collection_name)
         # We disable weave autopatching for Autogen because it's too noisy and slow
         # We will instead trace manually.
         client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
@@ -892,7 +857,7 @@ class BM(SessionInfo):
         )
 
         # Always create an INFO log file
-        info_log_filename = f"/tmp/buttermilk_{self.run_id}_info.log"
+        info_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_info.log"
         info_file_handler = logging.FileHandler(info_log_filename, mode="w")
         info_file_handler.setLevel(logging.INFO)
 
@@ -905,7 +870,7 @@ class BM(SessionInfo):
 
         # Add debug file logging when verbose is True
         if verbose:
-            debug_log_filename = f"/tmp/buttermilk_{self.run_id}_debug.log"
+            debug_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_debug.log"
 
             # Create debug file handler
             debug_file_handler = logging.FileHandler(debug_log_filename, mode="w")
@@ -945,7 +910,7 @@ class BM(SessionInfo):
             pass
 
         # Log initialization message
-        log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.save_dir}"
+        log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.run_info.save_dir}"
         # Note: cloud_logging_resource is only available if cloud logging is active
         # It's set up in _setup_cloud_logging() which is called lazily
 
@@ -975,8 +940,9 @@ class BM(SessionInfo):
                 if not hasattr(self, "_get_ip_task") or self._get_ip_task is None or self._get_ip_task.done():
 
                     async def _fetch_and_set_ip():
-                        self._ip = await get_ip()
-                        logger.debug(f"Fetched IP address: {self._ip}")
+                        ip = await get_ip()
+                        self.run_info.ip = ip
+                        logger.debug(f"Fetched IP address: {ip}")
 
                     self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
             # else: No event loop running, cannot start async task
@@ -1014,8 +980,8 @@ class BM(SessionInfo):
         effective_save_dir_str: str
         if save_dir:
             effective_save_dir_str = str(save_dir)
-        elif self.save_dir:
-            effective_save_dir_str = self.save_dir
+        elif self.run_info.save_dir:
+            effective_save_dir_str = self.run_info.save_dir
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
@@ -1038,7 +1004,7 @@ class BM(SessionInfo):
                 {
                     "message": f"Successfully saved data to: {saved_file_path}",
                     "uri": str(saved_file_path),  # Ensure URI is a string
-                    "run_id": self.run_id,  # Include run_id for context
+                    "run_id": self.run_info.run_id,  # Include run_id for context
                 },
             )
             return str(saved_file_path)  # Return path as string
@@ -1088,7 +1054,7 @@ class BM(SessionInfo):
             overwrite=overwrite,
             do_not_return_results=do_not_return_results,
             save_to_gcs=save_to_gcs,
-            save_dir=self.save_dir,  # Pass BM's default save directory
+            save_dir=self.run_info.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )
 

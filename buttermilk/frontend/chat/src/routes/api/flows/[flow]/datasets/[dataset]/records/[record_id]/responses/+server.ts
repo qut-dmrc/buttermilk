@@ -87,7 +87,7 @@ export const GET: RequestHandler = async ({ params, fetch, request, url }) => {
   const include_reasoning = url.searchParams.get('include_reasoning') !== 'false'; // Default true
   
   // Get backend base URL from environment or use default
-  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+  const backendUrl = env.BACKEND_API_URL;
   
   try {
     // Create headers for the backend request
