@@ -138,5 +138,6 @@ def test_agenttrace_handles_missing_bm_gracefully(monkeypatch, agent_config, age
     serialized = trace.model_dump(mode="json")
     
     # When run_info is None, it's excluded from serialization due to exclude_none=True
-    # This is OK for BigQuery as the field is REQUIRED but can handle missing values in practice
+    # Note: If the BigQuery schema marks run_info as REQUIRED, it must always be present and non-null.
+    # This test checks behavior when run_info is missing, which is only valid if the field is NULLABLE.
     assert "run_info" not in serialized or serialized.get("run_info") is None
