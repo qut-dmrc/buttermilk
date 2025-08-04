@@ -83,18 +83,29 @@ class MLPlatformTypes(Enum):
     azure = "azure"
 
 
+class ClientType(Enum):
+    """Enumeration of supported LLM client types.
+    
+    Each value maps to a specific client implementation.
+    """
+    OPENAI = "openai"
+    AZURE = "azure"
+    ANTHROPIC = "anthropic"
+    ANTHROPIC_VERTEX = "anthropic_vertex"
+    GEMINI = "gemini"
+    GEMINI_VERTEX = "gemini_vertex"
+    VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
+
+
 class LLMConfig(BaseModel):
     """Configuration for a specific Language Model (LLM).
 
-    Defines the model object to instantiate, API type, API key, custom base URL,
-    model-specific information, and any additional configurations required by the
-    LLM client.
+    Defines the client type, API key, custom base URL, model-specific information,
+    and any additional configurations required by the LLM client.
 
     Attributes:
-        obj (str): The name of the specific model object or deployment to
-            instantiate (e.g., "gpt-4-turbo", "gemini-1.5-pro", "claude-3-opus").
-        api_type (str): The type of API the model uses (e.g., "openai",
-            "google-genai", "google-vertexai", "azure", "anthropic").
+        client_type (ClientType): The type of client to instantiate (e.g., "openai",
+            "anthropic", "gemini_vertex"). This determines which client class to use.
         api_key (str | None): The API key required for authenticating with the
             LLM provider. Can be None if authentication is handled differently
             (e.g., via environment variables or instance metadata).
@@ -109,9 +120,8 @@ class LLMConfig(BaseModel):
 
     """
 
-    obj: str = Field(..., description="Name of the model object to instantiate")
-    api_type: MLPlatformTypes = Field(
-        description="Type of API to use (e.g. openai, vertex, azure)",
+    client_type: ClientType = Field(
+        description="Type of client to instantiate (determines which client class to use)",
     )
     api_key: str | None = Field(
         default=None,
@@ -122,38 +132,38 @@ class LLMConfig(BaseModel):
     model_info: ModelInfo
     configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
 
-    @field_validator("api_type", mode="before")
+    @field_validator("client_type", mode="before")
     @classmethod
-    def validate_api_type(cls, v: Any) -> MLPlatformTypes:
-        """Validate api_type and convert string values to MLPlatformTypes enum.
+    def validate_client_type(cls, v: Any) -> ClientType:
+        """Validate client_type and convert string values to ClientType enum.
 
         Args:
             v: The input value to validate (typically from models.json)
 
         Returns:
-            MLPlatformTypes: The validated enum value
+            ClientType: The validated enum value
 
         Raises:
-            ValueError: If the api_type string is not supported
+            ValueError: If the client_type string is not supported
 
         """
-        if isinstance(v, MLPlatformTypes):
+        if isinstance(v, ClientType):
             return v
         if isinstance(v, str):
             # Try to match the string value to an enum member
             try:
-                return MLPlatformTypes(v)
+                return ClientType(v)
             except ValueError:
                 # If direct value match fails, try case-insensitive matching
-                for platform_type in MLPlatformTypes:
-                    if platform_type.value.lower() == v.lower():
-                        return platform_type
+                for client_type in ClientType:
+                    if client_type.value.lower() == v.lower():
+                        return client_type
                 # If no match found, raise a descriptive error
-                supported_values = [pt.value for pt in MLPlatformTypes]
+                supported_values = [ct.value for ct in ClientType]
                 raise ValueError(
-                    f"Unsupported api_type '{v}'. Supported values are: {supported_values}",
+                    f"Unsupported client_type '{v}'. Supported values are: {supported_values}",
                 )
-        raise ValueError(f"api_type must be a string or MLPlatformTypes enum, got {type(v)}")
+        raise ValueError(f"client_type must be a string or ClientType enum, got {type(v)}")
 
 
 # Generate with:
@@ -691,137 +701,126 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-        client: ChatCompletionClient | None = None  # Initialize client as None
-
+        
+        # Prepare client parameters from configs
         client_params: dict[str, Any] = {
-            "model": config.configs.get("model", config.obj),  # Use model from configs if available
+            "model": config.configs.get("model"),
             "api_key": config.api_key,
             **config.configs,
         }
 
-        api_type = config.api_type.value.lower()  # Get string value from enum and normalize
-
-        if api_type == "azure":
+        # Create client based on client_type - clean single branch per type
+        client_type = config.client_type
+        
+        if client_type == ClientType.OPENAI:
+            client = OpenAIChatCompletionClient(
+                base_url=config.base_url or "",  # Provide default empty string if None
+                model_info=config.model_info,
+                **client_params,
+            )
+            
+        elif client_type == ClientType.AZURE:
+            if not config.base_url:
+                raise ValueError("Azure endpoint URL is required for Azure client")
             client = AzureOpenAIChatCompletionClient(
                 azure_endpoint=config.base_url,
                 **client_params,
             )
-        elif api_type == "google-genai":
-            # Check if it's using OpenAI-compatible endpoint
+            
+        elif client_type == ClientType.ANTHROPIC:
+            # Direct Anthropic API
+            client = AnthropicChatCompletionClient(**client_params)
+            
+        elif client_type == ClientType.ANTHROPIC_VERTEX:
+            # Anthropic via Vertex AI
+            bm_instance = get_bm()
+            if not bm_instance.gcp_credentials:
+                raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
+            
+            vertex_params = {
+                "region": config.configs.get("region"),
+                "project_id": config.configs.get("project_id"),
+                "credentials": bm_instance.gcp_credentials,
+            }
+            vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
+            
+            try:
+                vertex_client = AsyncAnthropicVertex(**vertex_params)
+                # Remove api_key for Vertex auth
+                vertex_client_params = client_params.copy()
+                vertex_client_params.pop("api_key", None)
+                
+                client = AnthropicChatCompletionClient(**vertex_client_params)
+                client._client = vertex_client
+            except Exception as e:
+                logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
+                raise
+                
+        elif client_type == ClientType.GEMINI:
+            # Native Gemini client (via google.genai)
             if config.base_url and "openai" in config.base_url:
+                # OpenAI-compatible endpoint
                 client = OpenAIChatCompletionClient(
                     base_url=config.base_url,
-                    model_info=config.model_info,  # Pass model_info explicitly for custom models
+                    model_info=config.model_info,
                     **client_params,
                 )
             else:
-                # Use native google.genai.Client with Vertex AI authentication
-                bm_instance = get_bm()  # Get Buttermilk global instance
-                if not bm_instance.gcp_credentials:
-                    raise ValueError("GCP credentials not available in Buttermilk instance for Google GenAI.")
-
-                # Create GeminiChatCompletionClient with Vertex AI auth
-                gemini_client_params = client_params.copy()
-                # Set a dummy API key for OpenAI client validation, actual auth is via credentials
-                gemini_client_params["api_key"] = "dummy-key-for-vertex-gemini"
-                gemini_client_params["project_id"] = config.configs.get("project_id")
-                gemini_client_params["location"] = config.configs.get("location", "global")
-                gemini_client_params["credentials"] = bm_instance.gcp_credentials
-                gemini_client_params["model_info"] = config.model_info  # Pass model_info explicitly
-
-                client = GeminiChatCompletionClient(**gemini_client_params)
-        elif api_type == "google-vertexai":
-            bm_instance = get_bm()  # Get Buttermilk global instance
-            if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available in Buttermilk instance for Vertex AI.")
-
-            if "anthropic" in config.obj.lower() or "claude" in config.configs.get("model", "").lower():
-                # Get region and project_id from config.configs
-                _vertex_params = {
-                    "region": config.configs.get("region"),
-                    "project_id": config.configs.get("project_id"),
-                    "credentials": bm_instance.gcp_credentials,
-                }
-                # AsyncAnthropicVertex doesn't need additional parameters from configs
-                _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
-
-                try:
-                    _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-                    # For Vertex, remove api_key from client_params as auth is via GCP
-                    vertex_client_params = client_params.copy()
-                    vertex_client_params.pop("api_key", None)
-                    logger.debug(f"Creating AnthropicChatCompletionClient wrapper for Vertex with params: {vertex_client_params}")
-                    client = AnthropicChatCompletionClient(**vertex_client_params)
-                    client._client = _vertex_client
-                except Exception as e:
-                    logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
-                    raise
-            else:  # Default to OpenAI compatible client for other Vertex models (e.g., Gemini, Llama)
-                # For Vertex models, use OAuth2 bearer token for authentication
-                vertex_params = client_params.copy()
-
-                # Set up headers with bearer token using BM's token method
-                headers = {
-                    "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
-                }
-
-                # For Vertex endpoints, we need a dummy API key to satisfy OpenAI client validation
-                # The actual auth is done via the Authorization header
-                if vertex_params.get("api_key") is None:
-                    vertex_params["api_key"] = "dummy-key-for-vertex"
-
-                # Add default_headers to vertex_params
-                vertex_params["default_headers"] = headers
-
+                # Direct Gemini API
                 client = OpenAIChatCompletionClient(
-                    base_url=config.base_url,
-                    model_info=config.model_info,  # Pass model_info for custom models
-                    **vertex_params,
+                    base_url=config.base_url or "https://generativelanguage.googleapis.com/v1beta/openai/",
+                    model_info=config.model_info,
+                    **client_params,
                 )
-
-        elif api_type == "anthropic":  # Direct Anthropic API (not via Vertex)
-            # Check if this is actually Anthropic via Vertex based on connection type
-            if config.api_type == MLPlatformTypes.anthropic and "anthropic" in config.obj.lower():
-                # This is Anthropic via Vertex, not direct Anthropic
-                bm_instance = get_bm()
-                if not bm_instance.gcp_credentials:
-                    raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
-
-                # Get region and project_id from config.configs
-                _vertex_params = {
-                    "region": config.configs.get("region"),
-                    "project_id": config.configs.get("project_id"),
-                    "credentials": bm_instance.gcp_credentials,
-                }
-                # AsyncAnthropicVertex doesn't need additional parameters from configs
-                _vertex_params = {k: v for k, v in _vertex_params.items() if v is not None}
-
-                try:
-                    _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-                    # For Vertex, remove api_key from client_params as auth is via GCP
-                    vertex_client_params = client_params.copy()
-                    vertex_client_params.pop("api_key", None)
-                    logger.debug(f"Creating AnthropicChatCompletionClient wrapper for Vertex with params: {vertex_client_params}")
-                    client = AnthropicChatCompletionClient(**vertex_client_params)
-                    client._client = _vertex_client
-                except Exception as e:
-                    logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
-                    raise
-            else:
-                # Direct Anthropic API
-                client = AnthropicChatCompletionClient(**client_params)
-        else:  # Default to OpenAIChatCompletionClient for "openai" or unknown types
+                
+        elif client_type == ClientType.GEMINI_VERTEX:
+            # Gemini via Vertex AI with GCP credentials
+            bm_instance = get_bm()
+            if not bm_instance.gcp_credentials:
+                raise ValueError("GCP credentials not available for Gemini via Vertex AI.")
+            
+            gemini_params = client_params.copy()
+            gemini_params["api_key"] = "dummy-key-for-vertex-gemini"
+            gemini_params["project_id"] = config.configs.get("project_id")
+            gemini_params["location"] = config.configs.get("location", "global")
+            gemini_params["credentials"] = bm_instance.gcp_credentials
+            gemini_params["model_info"] = config.model_info
+            
+            client = GeminiChatCompletionClient(**gemini_params)
+            
+        elif client_type == ClientType.VERTEX_OPENAI:
+            # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
+            bm_instance = get_bm()
+            if not bm_instance.gcp_credentials:
+                raise ValueError("GCP credentials not available for Vertex AI.")
+            
+            vertex_params = client_params.copy()
+            
+            # Set up OAuth2 bearer token authentication
+            headers = {
+                "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
+            }
+            
+            # Dummy API key for OpenAI client validation
+            if vertex_params.get("api_key") is None:
+                vertex_params["api_key"] = "dummy-key-for-vertex"
+            
+            vertex_params["default_headers"] = headers
+            
+            if not config.base_url:
+                raise ValueError("Base URL is required for Vertex OpenAI endpoint")
             client = OpenAIChatCompletionClient(
                 base_url=config.base_url,
-                model_info=config.model_info,  # Pass model_info for custom models
-                **client_params,
+                model_info=config.model_info,
+                **vertex_params,
             )
+            
+        else:
+            raise ProcessingError(f"Unsupported client_type: {client_type}")
 
-        if client is None:  # Should not happen if logic is correct
-            raise ProcessingError(f"Could not instantiate LLM client for '{name}' with api_type '{api_type}'.")
-
-        # Wrap with AutoGenWrapper
+        # Wrap with AutoGenWrapper and cache
         wrapped_client = AutoGenWrapper(client=client, model_info=config.model_info)
+        self.autogen_models[name] = wrapped_client
         return wrapped_client
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:

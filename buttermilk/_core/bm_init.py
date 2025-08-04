@@ -619,24 +619,13 @@ class BM(BaseModel):
             # If not loaded from cache, get from secret manager
             if connections_data is None:
                 try:
+                    # Do this scynchronously so we don't repeat the fetch
                     connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
                     if not isinstance(connections_data, dict):  # Validate type from secrets
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
                     logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
-
-                    # Defer cache writing to background task - Phase 2 optimization
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self._cache_llm_connections_async(connections_data, cache_path))
-                        else:
-                            # If no event loop is running, cache synchronously as fallback
-                            logger.info("No async loop running, caching LLM connections synchronously")
-                            self._write_cache_sync(connections_data, cache_path)
-                    except RuntimeError:
-                        # No event loop available, cache synchronously
-                        logger.info("No event loop available, caching LLM connections synchronously")
-                        self._write_cache_sync(connections_data, cache_path)
+                    # Cache the connections data for future runs
+                    self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
                     logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
                     raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
@@ -659,6 +648,7 @@ class BM(BaseModel):
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
 
+        logger.info(f"Caching LLM connections synchronously to {cache_path}")
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @cached_property
