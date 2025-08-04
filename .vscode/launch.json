@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "daemon",
+      "name": "Buttermilk API daemon",
       "type": "debugpy",
       "request": "launch", 
       "consoleName": "Buttermilk Daemon",
@@ -23,6 +23,26 @@
         "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Chat web ui",
+      "request": "launch",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/buttermilk/frontend/chat/",
+      "runtimeExecutable": "npm",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/buttermilk/frontend/chat/dist/**/*.js"
+      ],
+      "type": "node",
+      "envFile": "${workspaceFolder}/buttermilk/frontend/chat/.env",
       "console": "integratedTerminal"
     },
     {
@@ -116,26 +136,6 @@
       "justMyCode": false,
       "args": ["+experiments=ots", "+data=drag_noalt", "+save=bq"],
       "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Launch chat web ui",
-      "request": "launch",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
-      "sourceMaps": true,
-      "cwd": "${workspaceFolder}/buttermilk/frontend/chat/",
-      "runtimeExecutable": "npm",
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/buttermilk/frontend/chat/dist/**/*.js"
-      ],
-      "type": "node",
-      "envFile": "${workspaceFolder}/buttermilk/frontend/chat/.env",
       "console": "integratedTerminal"
     },
     {
