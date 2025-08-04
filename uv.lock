@@ -362,18 +362,6 @@ openai = [
 ]
 
 [[package]]
-name = "autogen-openaiext-client"
-version = "0.0.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "autogen-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/46/09/929af370ec810f2cc653fb9ffe41a9e18bcc5c2c9a4ed4540f2c43a2bb41/autogen_openaiext_client-0.0.3.tar.gz", hash = "sha256:8dcd7ca43f41d8362f2930deeb96c33aacbb5b9a7b366c5ef02e191d5ec8441c", size = 7376, upload-time = "2025-01-23T04:39:56.669Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/c5/a8d744502d05cb8a31ee1bc8e3a7b71a05e837c863f53310f6ea3ffe5bd6/autogen_openaiext_client-0.0.3-py3-none-any.whl", hash = "sha256:6f275fe960de3aef97a9022b7a5899900883728985c9d36494ef2828acbb6153", size = 6819, upload-time = "2025-01-23T04:39:54.784Z" },
-]
-
-[[package]]
 name = "azure-ai-agents"
 version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1060,7 +1048,6 @@ dependencies = [
     { name = "autogen-agentchat" },
     { name = "autogen-core" },
     { name = "autogen-ext", extra = ["azure", "gemini", "openai"] },
-    { name = "autogen-openaiext-client" },
     { name = "azure-ai-contentsafety" },
     { name = "azure-cognitiveservices-vision-contentmoderator" },
     { name = "azure-identity" },
@@ -1191,7 +1178,6 @@ requires-dist = [
     { name = "autogen-agentchat", specifier = ">=0.4.9.2" },
     { name = "autogen-core", specifier = ">=0.4.9.2" },
     { name = "autogen-ext", extras = ["azure", "gemini", "openai"], specifier = ">=0.4.9" },
-    { name = "autogen-openaiext-client", specifier = ">=0.0.3" },
     { name = "azure-ai-contentsafety", specifier = ">=1.0.0,<2.0.0" },
     { name = "azure-cognitiveservices-vision-contentmoderator", specifier = ">=1.0.0,<2.0.0" },
     { name = "azure-identity", specifier = ">=1.17.1,<2.0.0" },

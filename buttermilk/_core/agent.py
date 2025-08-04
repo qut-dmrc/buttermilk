@@ -400,7 +400,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")
-            result = await self._process(message=message)
+            result, _call = await process_op.call(message=message)
+            # result = await self._process(message=message)
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
             # Create an ErrorEvent to capture the error

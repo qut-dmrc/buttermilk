@@ -784,10 +784,10 @@ class BM(BaseModel):
         # Try to initialize weave with a reasonable timeout
         logger.debug(f"Initializing Weave with collection: {collection_name}")
 
-        client = weave.init(collection_name)
+        # client = weave.init(collection_name)
         # We disable weave autopatching for Autogen because it's too noisy and slow
         # We will instead trace manually.
-        # client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
+        client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
         logger.debug("Weave initialized successfully")
         return client
 

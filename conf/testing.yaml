@@ -10,8 +10,9 @@ defaults:
 verbose: true
 
 bm:
-  name: buttermilk
-  job: testing
+  run_info:
+    name: buttermilk
+    job: testing
 
 run:
   mode: console

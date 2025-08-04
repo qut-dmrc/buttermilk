@@ -152,7 +152,7 @@ class AutogenOrchestrator(Orchestrator):
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
 
         self._runtime = SingleThreadedAgentRuntime(
-            tracer_provider=NoOpTracerProvider(),
+#            tracer_provider=NoOpTracerProvider(),
             intervention_handlers=[termination_handler, interrupt_handler],
         )
 

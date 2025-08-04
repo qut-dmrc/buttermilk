@@ -21,7 +21,7 @@ import weave
 from anthropic import (
     AsyncAnthropicVertex,
 )
-
+from google import genai  # Google Generative AI library
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (
@@ -40,7 +40,6 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
-from autogen_openaiext_client import GeminiChatCompletionClient  # Autogen Gemini client
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
 
@@ -60,34 +59,23 @@ from .retry import RetryWrapper  # Retry logic wrapper
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
 
 
-class MLPlatformTypes(Enum):
-    """Enumeration of supported Machine Learning platform types.
+class ClientType(Enum):
+    """Enumeration of supported LLM client types.
 
     Used to categorize LLM providers or services.
 
     Attributes:
-        openai: OpenAI platform.
-        google_genai: Google Generative AI platform (e.g., Gemini API).
-        google_vertexai: Google Vertex AI platform.
-        anthropic: Anthropic platform (e.g., Claude models).
+        OPENAI: OpenAI platform.
+        GEMINI: Google Generative AI platform (e.g., Gemini API).
+        GEMINI_VERTEX: Gemini client on vertex platform.
+        VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint.
+        ANTHROPIC: Anthropic platform (e.g., Claude models).
+        ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
         llama: Llama models (often self-hosted or via specific providers).
-        azure: Microsoft Azure AI platform (e.g., Azure OpenAI).
+        AZURE: Microsoft Azure AI platform (e.g., Azure OpenAI).
 
     """
 
-    openai = "openai"
-    google_genai = "google-genai"
-    google_vertexai = "google-vertexai"
-    anthropic = "anthropic"
-    llama = "llama"
-    azure = "azure"
-
-
-class ClientType(Enum):
-    """Enumeration of supported LLM client types.
-    
-    Each value maps to a specific client implementation.
-    """
     OPENAI = "openai"
     AZURE = "azure"
     ANTHROPIC = "anthropic"
@@ -95,6 +83,8 @@ class ClientType(Enum):
     GEMINI = "gemini"
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
+
+
 
 
 class LLMConfig(BaseModel):
@@ -757,36 +747,32 @@ class LLMs(BaseModel):
                 raise
                 
         elif client_type == ClientType.GEMINI:
-            # Native Gemini client (via google.genai)
-            if config.base_url and "openai" in config.base_url:
-                # OpenAI-compatible endpoint
-                client = OpenAIChatCompletionClient(
-                    base_url=config.base_url,
-                    model_info=config.model_info,
-                    **client_params,
-                )
-            else:
-                # Direct Gemini API
-                client = OpenAIChatCompletionClient(
-                    base_url=config.base_url or "https://generativelanguage.googleapis.com/v1beta/openai/",
-                    model_info=config.model_info,
-                    **client_params,
-                )
-                
-        elif client_type == ClientType.GEMINI_VERTEX:
-            # Gemini via Vertex AI with GCP credentials
+            # Google Generative AI (Gemini) API
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available for Gemini via Vertex AI.")
-            
-            gemini_params = client_params.copy()
-            gemini_params["api_key"] = "dummy-key-for-vertex-gemini"
-            gemini_params["project_id"] = config.configs.get("project_id")
-            gemini_params["location"] = config.configs.get("location", "global")
-            gemini_params["credentials"] = bm_instance.gcp_credentials
-            gemini_params["model_info"] = config.model_info
-            
-            client = GeminiChatCompletionClient(**gemini_params)
+                raise ValueError("GCP credentials not available for Gemini API.")
+            client = OpenAIChatCompletionClient(
+                model_info=config.model_info,
+                **client_params,
+            )
+        elif client_type == ClientType.GEMINI_VERTEX:
+            raise NotImplementedError(
+                "Gemini native client for Vertex is not yet implemented. "
+                "Please use the Gemini API or OpenAIChatCompletionClient with Vertex parameters.",
+            )
+
+            bm_instance = get_bm()
+            if not bm_instance.gcp_credentials:
+                raise ValueError("GCP credentials not available for Vertex AI.")
+            vertex_params = {
+                "region": config.configs.get("region"),
+                "project_id": config.configs.get("project_id"),
+                "credentials": bm_instance.gcp_credentials,
+            }
+            vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
+            gemini_client = genai.Client(  # not used yet, not compatbile with autogen
+                vertexai=True, **vertex_params
+            )
             
         elif client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
@@ -814,7 +800,6 @@ class LLMs(BaseModel):
                 model_info=config.model_info,
                 **vertex_params,
             )
-            
         else:
             raise ProcessingError(f"Unsupported client_type: {client_type}")
 
