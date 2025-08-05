@@ -14,9 +14,6 @@ from buttermilk._core.dmrc import get_bm
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 
-# Import ChromaDBEmbeddings for type hinting
-from buttermilk.data.vector import ChromaDBEmbeddings
-
 # Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
 # and causes circular import issues. If they are in the same module or structure prevents
 # circular imports, this might not be strictly necessary but is good practice.
@@ -170,6 +167,9 @@ class ZotDownloader(BaseModel):
                 else:
                     logger.debug(f"PDF file already exists: {pdf_file}")
 
+                # --- Download full text from Zotero ---
+                fulltext = self._zot.fulltext_item(key)
+
                 # --- Save Item JSON ---
                 try:
                     with json_file.open("w", encoding="utf-8") as f:
@@ -180,14 +180,15 @@ class ZotDownloader(BaseModel):
                         f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
                     )
 
+                # Extract annotations
                 # --- Prepare Record ---
-                metadata = {"title": title, "doi_or_url": doi_or_url, "zotero_data": zotero_data}
+                metadata = {"title": title, "doi_or_url": doi_or_url,"uri": pdf_file.as_posix(), "zotero_data": zotero_data}
                 record = Record(
                     record_id=key,
-                    content="",  # PDF text will be extracted later
+                    content=fulltext, 
                     file_path=pdf_file.as_posix(),
                     metadata=metadata,
-                    uri=pdf_file.as_posix(),
+                    
                 )
                 return record
 

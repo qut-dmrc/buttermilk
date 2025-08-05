@@ -117,10 +117,16 @@
       "request": "launch",
       "module": "buttermilk.data.vector",
       "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
       "justMyCode": false,
       "args": [
-        "+run=vectorise",
+        "run=vectorise_zotero",
+        "+storage=zot",
+        "+max_docs=50",
+        "+quiet=false"
         // "experiments.model=[haiku]"
       ],
       "envFile": "${workspaceFolder}/.env",

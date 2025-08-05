@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import signal
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
@@ -14,7 +15,9 @@ import hydra
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pydantic
-from chromadb import Collection, EmbeddingFunction, Embeddings
+from omegaconf import OmegaConf
+from chromadb import Collection
+from chromadb import Documents, EmbeddingFunction, Embeddings
 from chromadb.api import ClientAPI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field, PrivateAttr
@@ -25,6 +28,8 @@ from vertexai.language_models import (
     TextEmbeddingModel,
 )
 
+
+from google import genai
 from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
     logger,
@@ -146,12 +151,6 @@ class InputDocument(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-# --- Compatibility Functions ---
-# REMOVED: Deprecated compatibility functions
-# - create_input_document_from_record: Use Record directly
-# - InputDocument_compat: Use Record class directly
-
-
 # --- Type Aliases ---
 ProcessorCallable = Callable[[InputDocument], Awaitable[InputDocument]]
 
@@ -271,27 +270,35 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
             )
         return None
 
-
-class VertexAIEmbeddingFunction(EmbeddingFunction):
+class GeminiEmbeddingFunction(EmbeddingFunction):
     def __init__(
         self,
         embedding_model: str,
         dimensionality: int = 3072,
     ):
         self.dimensionality = dimensionality
-        self._embedding_model = TextEmbeddingModel.from_pretrained(embedding_model)
-
-    def __call__(self, input) -> Embeddings:
-        kwargs = dict(
-            auto_truncate=False,
-            output_dimensionality=self.dimensionality,
+        self.client = genai.Client()
+        self._embedding_model = embedding_model
+        
+    def __call__(self, input: Documents) -> Embeddings:
+        title = "Custom query"
+        response = self.client.models.embed_content(
+            model=self._embedding_model,
+            contents=input,
+            config=genai.types.EmbedContentConfig(
+                task_type="retrieval_document",
+                title=title,
+                output_dimensionality=self.dimensionality
+            )
         )
 
-        # Vertex batch_size is 1
-        results = self._embedding_model.get_embeddings(texts=input, **kwargs)
-
-        # convert from numpy
-        return [cast("list[float]", r.values) for r in results]
+        # Extract embeddings from response
+        embeddings = []
+        for embedding in response.embeddings:
+            embeddings.append(embedding.values)
+        
+        return embeddings
+  
 
 
 # --- Core Embedding and DB Interaction Class ---
@@ -301,7 +308,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     type: Literal["chromadb"] = "chromadb"
     model_config = pydantic.ConfigDict(extra="ignore")
 
-    embedding_model: str = Field(default=MODEL_NAME)
     task: str = "RETRIEVAL_DOCUMENT"
     collection_name: str = Field(default=...)
     dimensionality: int = Field(default=3072)
@@ -328,7 +334,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
-    _embedding_model: TextEmbeddingModel = PrivateAttr()
+    _embedding_model: str = PrivateAttr()
     _retry_wrapper: RetryWrapper = PrivateAttr()
     _embedding_function: Callable = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
@@ -352,11 +358,15 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         self._sync_interval_seconds = self.sync_interval_minutes * 60
 
         logger.info(f"Loading embedding model: {self.embedding_model}")
-        self._embedding_model = TextEmbeddingModel.from_pretrained(self.embedding_model)
-
+        self._embedding_model = self.embedding_model  # Store the model name
+        
+        self._embedding_function = GeminiEmbeddingFunction(
+            embedding_model=self.embedding_model,
+            dimensionality=self.dimensionality,
+        )
         # Wrap embedding model with retry logic
         self._retry_wrapper = RetryWrapper(
-            client=self._embedding_model,
+            client=self._embedding_function,
             max_retries=self.embedding_max_retries,
             min_wait_seconds=self.embedding_min_wait_seconds,
             max_wait_seconds=self.embedding_max_wait_seconds,
@@ -365,10 +375,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         )
         logger.info(f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff")
 
-        self._embedding_function = VertexAIEmbeddingFunction(
-            embedding_model=self.embedding_model,
-            dimensionality=self.dimensionality,
-        )
 
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
@@ -1024,7 +1030,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         start_time = time.time()
 
         # Override embedding model if specified
-        effective_embedding_model = embedding_model_override or self.embedding_model
+        effective_embedding_model = embedding_model_override or self._embedding_model
 
         try:
             # Step 1: Check if we should skip this record
@@ -1418,6 +1424,78 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.warning(f"Failed to generate embedding for chunk {idx}")
 
         logger.debug(f"Generated embeddings for {len([c for c in chunks if c.embedding is not None])} out of {len(chunks)} chunks")
+    
+    async def _embed(self, embeddings_input: list[tuple[int, Any]]) -> list[tuple[int, list[float] | None]]:
+        """Generate embeddings for a list of text inputs.
+        
+        Args:
+            embeddings_input: List of tuples (index, TextEmbeddingInput)
+            
+        Returns:
+            List of tuples (index, embedding vector or None)
+        """
+        if not embeddings_input:
+            return []
+            
+        # Extract just the texts from the input tuples
+        texts = []
+        indices = []
+        for idx, text_input in embeddings_input:
+            indices.append(idx)
+            # Handle different input types
+            if hasattr(text_input, 'text'):
+                texts.append(text_input.text)
+            elif isinstance(text_input, str):
+                texts.append(text_input)
+            else:
+                texts.append(str(text_input))
+        
+        try:
+            # Use retry wrapper to call embedding function
+            embeddings = await self._retry_wrapper.call_with_retry(
+                self._embedding_function,
+                texts
+            )
+            
+            # Pair indices with embeddings
+            results = []
+            for i, idx in enumerate(indices):
+                if i < len(embeddings):
+                    results.append((idx, embeddings[i]))
+                else:
+                    results.append((idx, None))
+                    
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {e}")
+            self._convert_embedding_errors(e)
+            # Return None for all inputs on failure
+            return [(idx, None) for idx in indices]
+
+    def create_multi_field_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
+        """Create chunks for multiple content types from InputDocument.
+        
+        This is a compatibility method that converts InputDocument to Record format
+        and calls create_multi_field_chunks_for_record.
+        
+        Args:
+            doc: InputDocument instance to chunk
+            
+        Returns:
+            list[ChunkedDocument]: List of chunks created from the document
+        """
+        # Create a temporary Record object from InputDocument
+        record = Record(
+            record_id=doc.record_id,
+            content=doc.full_text,
+            metadata={
+                **doc.metadata,
+                'title': doc.title
+            }
+        )
+        
+        return self.create_multi_field_chunks_for_record(record)
 
     async def process_with_multi_field_chunks(self, doc: InputDocument) -> InputDocument | None:
         """Process document with configuration-driven multi-field chunking."""
@@ -1448,8 +1526,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         # Store in ChromaDB
         return await self._store_chunks(doc_with_embeddings)
 
-    # REMOVED: process_with_enhanced_metadata (legacy redirect)
-    # Use process_record() for Record objects directly
 
     async def _store_chunks(self, doc: InputDocument) -> InputDocument:
         """Store document chunks with metadata in ChromaDB."""
@@ -1639,53 +1715,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         if any(keyword in error_str for keyword in ["quota", "rate limit", "429", "too many requests"]):
             raise RateLimit(str(exc)) from exc
 
-    async def _run_embedding_task(
-        self,
-        chunk_input: TextEmbeddingInput,
-        index: int,
-    ) -> tuple[int, list[float | int] | None]:
-        """Helper coroutine to run a single embedding task with retry logic."""
-        async with self._embedding_semaphore:
-            kwargs = dict(
-                output_dimensionality=self.dimensionality,
-                auto_truncate=False,
-            )
-
-            async def _embedding_call():
-                """Wrapper function to add error conversion."""
-                try:
-                    return await self._embedding_model.get_embeddings_async([chunk_input], **kwargs)
-                except Exception as exc:
-                    # Convert quota/rate limit errors to RateLimit exceptions
-                    self._convert_embedding_errors(exc)
-                    raise  # Re-raise if not a quota error
-
-            try:
-                # Use retry wrapper for embedding calls to handle quota errors
-                embeddings_result: list[TextEmbedding] = await self._retry_wrapper._execute_with_retry(_embedding_call)
-
-                if embeddings_result:
-                    return index, embeddings_result[0].values
-                logger.warning(f"No embedding result returned for input {index}.")
-                return index, None
-            except Exception as exc:
-                logger.error(
-                    f"Error getting embedding for input {index} after {self.embedding_max_retries} retries: {exc} {exc.args=}",
-                )
-                return index, None
-
-    async def _embed(
-        self,
-        inputs: Sequence[tuple[int, TextEmbeddingInput]],
-    ) -> list[tuple[int, list[float | int] | None]]:
-        """Internal async method to call the Vertex AI embedding model concurrently."""
-        if not inputs:
-            return []
-        tasks = [self._run_embedding_task(chunk_input=chunk_input, index=idx) for idx, chunk_input in inputs]
-        results: list[tuple[int, list[float | int] | None]] = await asyncio.gather(
-            *tasks,
-        )
-        return results
 
     # --- DB Interaction ---
     def check_document_exists(self, document_id: str) -> bool:
@@ -1935,16 +1964,17 @@ class DocProcessor(BaseModel):
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
         self._semaphore = asyncio.Semaphore(self.concurrency)
-        if hasattr(self._processor, "__name__"):
-            self._name = self._processor.__name__
+        # Access the processor from the regular field
+        if hasattr(self.processor, "__name__"):
+            self._name = self.processor.__name__
         else:
-            self._name = self._processor.__class__.__name__
+            self._name = self.processor.__class__.__name__
         return self
 
     async def _process(self, doc: InputDocument) -> InputDocument | None:
         async with self._semaphore:
             try:
-                processed_doc = await self._processor(doc)
+                processed_doc = await self.processor(doc)
                 return processed_doc
             except Exception as e:
                 logger.error(
@@ -1968,7 +1998,7 @@ class DocProcessor(BaseModel):
                 # Add new tasks up to our max_pending limit
                 while len(pending_tasks) < max_pending and not iterator_exhausted:
                     try:
-                        doc = await anext(self._doc_iterator)
+                        doc = await anext(self.doc_iterator)
                         task = asyncio.create_task(self._process(doc))
                         pending_tasks.add(task)
                         # Set up task completion callback to remove it from pending set
@@ -2013,12 +2043,37 @@ class DocProcessor(BaseModel):
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg) -> None:
-    objs = hydra.utils.instantiate(cfg)
-    vectoriser: ChromaDBEmbeddings = objs.vectoriser
-    input_docs_source = objs.input_docs
-    preprocessor_instance = objs.preprocessor
-    processor_instance = objs.processor
-    text_splitter_instance = objs.chunker
+    # Track start time for statistics
+    start_time = time.time()
+    interrupted = False
+    
+    OmegaConf.resolve(cfg)
+    bm = hydra.utils.instantiate(cfg.bm)
+    
+    vectoriser: ChromaDBEmbeddings = cfg.vectoriser
+    input_docs_source = cfg.input_docs
+    preprocessor_instance = cfg.preprocessor
+    processor_instance = cfg.processor
+    text_splitter_instance = cfg.chunker
+
+    # Set up signal handlers for graceful shutdown
+    def handle_interrupt(signum, frame):
+        nonlocal interrupted
+        logger.warning("🛑 Interrupt received, finishing current batch...")
+        interrupted = True
+    
+    signal.signal(signal.SIGINT, handle_interrupt)
+    signal.signal(signal.SIGTERM, handle_interrupt)
+    
+    # Print startup banner
+    logger.info("🚀 Vector Database Builder")
+    logger.info("=" * 50)
+    if hasattr(cfg, 'name'):
+        logger.info(f"Job: {cfg.name}")
+    if hasattr(cfg, 'storage'):
+        logger.info(f"Storage: {cfg.storage.collection_name} at {cfg.storage.persist_directory}")
+    logger.info("=" * 50)
+    
 
     logger.info("Setting vector store instance on input document source.")
     input_docs_source.set_vector_store(vectoriser)
@@ -2028,63 +2083,104 @@ def main(cfg) -> None:
 
     async def run_pipeline():
         logger.info("Starting data processing pipeline...")
+        
+        # Initialize cache for remote storage
+        await vectoriser.ensure_cache_initialized()
+        
+        # Get existing stats
+        existing_count = vectoriser.collection.count()
+        logger.info(f"📊 Existing embeddings in collection: {existing_count}")
 
         # 1. Source Documents
-        doc_iterator = input_docs_source.get_all_records(start=objs.start_from)
+        start_from = getattr(cfg, 'start_from', 0)
+        doc_iterator = input_docs_source.get_all_records(start=start_from)
 
         # 2. Pre-process (Extract Text if needed)
         pre_processed_iterator = DocProcessor(
-            _doc_iterator=doc_iterator,
-            _processor=preprocessor_instance.process,
+            doc_iterator=doc_iterator,
+            processor=preprocessor_instance.process,
         )
 
         # 3. Process Documents (e.g., add citations)
         processed_doc_iterator = DocProcessor(
-            _doc_iterator=pre_processed_iterator(),
-            _processor=processor_instance.process,
+            doc_iterator=pre_processed_iterator(),
+            processor=processor_instance.process,
         )
 
         # 4. Chunk Documents (Adds chunks to InputDocument)
         chunked_doc_iterator = DocProcessor(
-            _doc_iterator=processed_doc_iterator(),
-            _processor=text_splitter_instance.process,
+            doc_iterator=processed_doc_iterator(),
+            processor=text_splitter_instance.process,
         )
 
         # 5. Vectorize and Upsert - now using the same DocProcessor pattern
         vectorizer_processor = DocProcessor(
-            _doc_iterator=chunked_doc_iterator(),
-            _processor=vectoriser.process,
+            doc_iterator=chunked_doc_iterator(),
+            processor=vectoriser.process,
             concurrency=vectoriser.concurrency,
         )
 
         # Process documents through the complete pipeline with a limit
-        max_docs = MAX_TOTAL_TASKS_PER_RUN
-        pbar = tqdm(total=max_docs, desc="Processing documents")
+        max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
+        quiet = getattr(cfg, 'quiet', False)
+        
+        pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
         stats = {
-            "preprocessed": 0,
-            "processed": 0,
-            "chunked": 0,
+            "total": 0,
             "embedded": 0,
+            "skipped": 0,
+            "failed": 0,
         }
 
         # Use the pipeline to process documents
-
         async for doc in vectorizer_processor():
+            if interrupted:
+                logger.warning("🛑 Processing interrupted by user")
+                break
+                
+            stats["total"] += 1
+            
             if doc is not None:
                 stats["embedded"] += 1
-                pbar.update(1)
-                pbar.set_postfix(stats)
+            else:
+                stats["failed"] += 1
+                
+            pbar.update(1)
+            pbar.set_postfix({
+                "processed": stats["embedded"],
+                "failed": stats["failed"],
+            })
 
             if stats["embedded"] >= max_docs:
                 logger.info(f"Reached document limit: {max_docs}")
                 break
 
         pbar.close()
+        
+        # Final sync for remote storage
+        if not interrupted:
+            logger.info("🔄 Performing final sync...")
+            await vectoriser.finalize_processing()
 
-        # Log final stats
-        logger.info(
-            f"Pipeline complete! Documents successfully processed: {stats['embedded']}",
-        )
+        # Print summary statistics
+        duration = time.time() - start_time
+        final_count = vectoriser.collection.count()
+        
+        logger.info("\n" + "="*50)
+        logger.info("📊 PROCESSING SUMMARY")
+        logger.info("="*50)
+        logger.info(f"Total documents found: {stats['total']}")
+        logger.info(f"Successfully processed: {stats['embedded']}")
+        logger.info(f"Failed: {stats['failed']}")
+        logger.info(f"Time elapsed: {duration:.1f} seconds")
+        logger.info(f"Processing rate: {stats['total']/duration:.1f} docs/second")
+        logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
+        logger.info("="*50)
+        
+        if interrupted:
+            logger.warning("⚠️  Processing was interrupted. Run again to resume.")
+        else:
+            logger.info("✅ Processing completed successfully!")
 
     loop.run_until_complete(run_pipeline())
 
