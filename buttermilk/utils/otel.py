@@ -25,8 +25,11 @@ Note:
 import base64
 import os  # Added for os.environ usage
 
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
+from opentelemetry import trace
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 # Import trace_sdk at the top level for clarity, though original was inline
 from opentelemetry.sdk import trace as trace_sdk
 
@@ -75,21 +78,11 @@ try:
         # Other options like `timeout` or `compression` can be set here if needed.
     )
 
-    # Create a BatchSpanProcessor and add the OTLP exporter to it.
-    # The BatchSpanProcessor collects spans and sends them in batches.
-    # TODO: The original code initializes tracer_provider and exporter but doesn't
-    # register the exporter with the provider (e.g., via a SpanProcessor) or set
-    # this provider as the global one. This setup might be incomplete or rely on
-    # other parts of the system (like Weave integration) to complete it.
-    # For a standard OTEL setup, one would typically do:
-    #   from opentelemetry import trace
-    #   from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    #   span_processor = BatchSpanProcessor(otlp_exporter)
-    #   tracer_provider.add_span_processor(span_processor)
-    #   trace.set_tracer_provider(tracer_provider)
-    # This ensures that tracers obtained via `trace.get_tracer(__name__)` use this config.
-    # The current code only sets up the exporter but doesn't seem to make it active globally.
-    # This might be intentional if another part of Buttermilk (e.g. Weave) consumes these.
+    span_processor = BatchSpanProcessor(otlp_exporter)
+
+    # Add the exporter to the tracer provider
+    tracer_provider.add_span_processor(span_processor)
+    trace.set_tracer_provider(tracer_provider)
 
     logger.info(
         "OpenTelemetry (OTEL) tracing components initialized for W&B export. "

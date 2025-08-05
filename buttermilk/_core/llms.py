@@ -406,6 +406,7 @@ class AutoGenWrapper(RetryWrapper):
 
         return create_result  # type: ignore # Expect CreateResult or compatible
 
+    @weave.op
     async def call_chat(
         self,
         messages: list[LLMMessage],  # Made mutable for extending with tool results

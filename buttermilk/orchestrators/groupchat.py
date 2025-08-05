@@ -146,6 +146,10 @@ class AutogenOrchestrator(Orchestrator):
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
 
+                
+        from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+        OpenAIInstrumentor().instrument()
+
         # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
         # From the autogen docs:
         # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
