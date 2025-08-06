@@ -276,18 +276,26 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         self.dimensionality = dimensionality
         self.client = genai.Client()
         self._embedding_model = embedding_model
+        self._current_title = None  # Store title for current batch
+        
+    def set_title(self, title: str) -> None:
+        """Set the title to use for the next embedding batch."""
+        self._current_title = title
         
     def __call__(self, input: Documents) -> Embeddings:
+        config_params = {
+            "task_type": "retrieval_document",
+            "output_dimensionality": self.dimensionality
+        }
+        
+        # Add title if available
+        if self._current_title:
+            config_params["title"] = self._current_title
+            
         response = self.client.models.embed_content(
             model=self._embedding_model,
             contents=input,
-            
-            config=genai.types.EmbedContentConfig(
-                task_type="retrieval_document",
-                # Todo: this should send all documents for a Record, and pass 
-                # the record name as the 'title' field
-                output_dimensionality=self.dimensionality
-            )
+            config=genai.types.EmbedContentConfig(**config_params)
         )
 
         # Extract embeddings from response
@@ -1070,7 +1078,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
 
             # Step 4: Generate embeddings for all chunks
-            await self._embed_chunks(record.chunks)
+            await self._embed_chunks(record.chunks, record_title=record.title)
 
             # Step 5: Enhance chunk metadata with provenance tracking
             content_hash = self._get_content_hash(record)
@@ -1382,15 +1390,20 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             },
         )
 
-    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> None:
+    async def _embed_chunks(self, chunks: list[ChunkedDocument], record_title: str | None = None) -> None:
         """Generate embeddings for a list of chunks in place.
 
         Args:
             chunks: List of ChunkedDocument objects to embed
+            record_title: Optional title of the record containing these chunks
 
         """
         if not chunks:
             return
+
+        # Set the title for this batch if provided
+        if record_title and hasattr(self._embedding_function, 'set_title'):
+            self._embedding_function.set_title(record_title)
 
         # Prepare embedding inputs
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []

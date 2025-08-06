@@ -2,5 +2,5 @@ type: chromadb
 persist_directory: "gs://prosocial-dev/data/zotero-prosocial-fulltext/files"
 # persist_directory: ".cache/zot/files"
 collection_name: "prosocial_zot"
-embedding_model: "gemini-embedding-exp-03-07"
+embedding_model: "gemini-embedding-001"
 dimensionality: 3072
