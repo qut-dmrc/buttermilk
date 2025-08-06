@@ -20,7 +20,7 @@ vectoriser:
   collection_name: ${storage.collection_name}
   embedding_model: ${storage.embedding_model}
   dimensionality: ${storage.dimensionality}
-  arrow_save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/embeddings
+  arrow_save_dir: ${oc.env:HOME}/.cache/zotero/embeddings
   concurrency: 20
   sync_batch_size: 50
   sync_interval_minutes: 10
@@ -51,7 +51,7 @@ chunker:
 input_docs:
   _target_: buttermilk.libs.zotero.ZotDownloader
   library: ${oc.env:ZOTERO_LIBRARY_ID}
-  save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/pdfs
+  save_dir: ${oc.env:HOME}/.cache/zotero/items
 
 # PDF text extraction
 preprocessor:

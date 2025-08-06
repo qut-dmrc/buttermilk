@@ -45,13 +45,25 @@ class ZotDownloader(BaseModel):
         self._vector_store = vectoriser
         logger.info("Vector store instance set for ZotDownloader.")
 
+
+    # TODO: Update to only fetch updated items since last run.
+    # Zotero HTTP response will includes `last-modified-version` header
+    # (e.g. `last-modified-version: 48830`). Each item itself has a `version` field. 
+    # From docs:
+    # The Last-Modified-Version response header indicates the current version of either a library (for multi-object requests) or an individual object (for single-object requests). If changes are made to a library in a write request, the library's version number will be increased, any objects modified in the same request will be set to the new version number, and the new version number will be returned in the Last-Modified-Version header. 
+    # 
+    # We should store the `version` of the last full batch we successfully processed. Then 
+    # we should only fetch items with a `version` greater than that stored version.
+    # The .items search supports a 'since' parameter to filter items by version, and
+    # we can sort with "sort=dateModified" and "direction=asc" to process
+    # items in the order they were last modified.
     async def get_all_records(self, **kwargs) -> AsyncIterator[Record]:
         """Fetches Zotero items, checks existence, downloads, extracts, and yields Records."""
         items = []
         try:
-            # Fetch only parent items (books, articles), not attachments directly
+            # Fetch only parent items (books, articles, ...), not attachments directly
             items.extend(
-                self._zot.items(itemType="book || journalArticle", limit=100, **kwargs),
+                self._zot.items(itemType="-attachment", limit=100, **kwargs),
             )
             _next = self._zot.links.get("next")
         except Exception as e:
@@ -156,19 +168,24 @@ class ZotDownloader(BaseModel):
         if (attachment.get("attachmentType") == "application/pdf") and (pdf_attachment := attachment.get("href")):
             attachment_key = pdf_attachment.split("/")[-1]
             try:
-                # --- Download PDF ---
-                if not pdf_file.exists():
-                    logger.debug(
-                        f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
-                    )
-                    # Zotero python library is synchronous.
-                    # Don't try to get around it, it's not thread safe
-                    self._zot.dump(attachment_key, str(pdf_file))
-                else:
-                    logger.debug(f"PDF file already exists: {pdf_file}")
-
                 # --- Download full text from Zotero ---
-                fulltext = self._zot.fulltext_item(key)
+                fulltext = self._zot.fulltext_item(attachment_key)
+
+                if fulltext:
+                    item["fulltext"] = fulltext
+                    logger.debug(f"Full text downloaded for item {key}.")
+
+                else:
+                    # --- Download PDF ---
+                    if not pdf_file.exists():
+                        logger.debug(
+                            f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
+                        )
+                        # Zotero python library is synchronous.
+                        # Don't try to get around it, it's not thread safe
+                        self._zot.dump(attachment_key, str(pdf_file))
+                    else:
+                        logger.debug(f"PDF file already exists: {pdf_file}")
 
                 # --- Save Item JSON ---
                 try:
@@ -190,6 +207,7 @@ class ZotDownloader(BaseModel):
                     metadata=metadata,
                     
                 )
+                
                 return record
 
             except Exception as e:

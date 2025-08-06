@@ -39,6 +39,9 @@ from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk 
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import MultiFieldEmbeddingConfig, VectorStorageConfig
 from buttermilk._core.types import Record
+from typing import Literal
+
+ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
@@ -115,7 +118,7 @@ class ChromaDBConfig(BaseModel):
 
 
 class ChunkedDocument(BaseModel):
-    """Represents a single chunk derived from an InputDocument."""
+    """Represents a single chunk derived from a Record."""
 
     model_config = pydantic.ConfigDict(extra="ignore")
 
@@ -123,7 +126,7 @@ class ChunkedDocument(BaseModel):
     document_title: str
     chunk_index: int
     chunk_text: str
-    document_id: str  # References InputDocument.record_id
+    document_id: str  # References Record.record_id
     embedding: Sequence[float] | Sequence[int] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -133,26 +136,8 @@ class ChunkedDocument(BaseModel):
         return f"{self.document_title}_{self.chunk_index}"
 
 
-class InputDocument(BaseModel):
-    """Represents a single input document with its text content."""
-
-    model_config = pydantic.ConfigDict(extra="ignore")
-
-    record_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    file_path: str = Field(...)
-    record_path: str = Field(default="")
-    chunks_path: str = Field(
-        default="",
-        description="Path to PyArrow file with chunks and embeddings.",
-    )
-    full_text: str = Field(default="")
-    chunks: list[ChunkedDocument] = Field(default_factory=list)
-    title: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
 # --- Type Aliases ---
-ProcessorCallable = Callable[[InputDocument], Awaitable[InputDocument]]
+ProcessorCallable = Callable[[Record], Awaitable[Record | ProcessingResult | None]]
 
 
 # --- Helper Functions ---
@@ -227,17 +212,27 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
             f"Initialized RecursiveCharacterTextSplitter (chunk_size={chunk_size}, chunk_overlap={chunk_overlap})",
         )
 
-    async def process(self, doc: InputDocument, **kwargs) -> InputDocument | None:
-        """Chunks documents and adds the chunks list to the InputDocument."""
-        if not doc.full_text:
+    async def process(self, doc: Record, **kwargs) -> Record | None:
+        """Chunks documents and adds the chunks list to the Record."""
+        # Extract text content from Record
+        if hasattr(doc, 'content'):
+            text_content = doc.content if isinstance(doc.content, str) else str(doc.content)
+        else:
             logger.warning(
-                f"Skipping chunking for record {doc.record_id} due to missing full_text.",
+                f"Skipping chunking for record {doc.record_id} due to missing content.",
             )
             return None
+            
+        if not text_content:
+            logger.warning(
+                f"Skipping chunking for record {doc.record_id} due to empty content.",
+            )
+            return None
+            
         try:
             text_chunks = await asyncio.to_thread(
                 self.split_text,
-                doc.full_text,
+                text_content,
             )
             doc.chunks = []
             doc_chunk_count = 0
@@ -246,11 +241,13 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
                     continue
                 doc.chunks.append(
                     ChunkedDocument(
-                        document_title=doc.title,
+                        document_title=doc.metadata.get('title', '') if hasattr(doc, 'metadata') else doc.title,
                         chunk_index=i,
                         chunk_text=text_chunk.strip(),
                         document_id=doc.record_id,
-                        metadata=doc.metadata.copy(),
+                        chunk_id=f"{doc.record_id}_{i}",
+                        chunk_title=f"Chunk {i}",
+                        metadata=doc.metadata.copy() if hasattr(doc, 'metadata') else {},
                     ),
                 )
                 doc_chunk_count += 1
@@ -761,12 +758,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         return collection
 
-    # REMOVED: record_to_input_document (deprecated)
-    # Use process_record() directly with Record for better performance
-
-    # REMOVED: create_multi_field_chunks (redundant with create_multi_field_chunks_for_record)
-    # Use create_multi_field_chunks_for_record for Record objects
-
     def create_multi_field_chunks_for_record(self, record: Record) -> list[ChunkedDocument]:
         """Create chunks for multiple content types directly from Record.
 
@@ -1150,6 +1141,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 metadata={"error": str(e)},
             )
 
+
     async def _store_chunks_for_record(self, record: Record) -> None:
         """Store record chunks with metadata in ChromaDB.
 
@@ -1451,8 +1443,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 texts.append(str(text_input))
         
         try:
-            # Use retry wrapper to call embedding function
-            embeddings = await self._retry_wrapper.call_with_retry(
+            # Call embedding function directly (it handles its own retries)
+            embeddings = await asyncio.to_thread(
                 self._embedding_function,
                 texts
             )
@@ -1473,208 +1465,23 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # Return None for all inputs on failure
             return [(idx, None) for idx in indices]
 
-    def create_multi_field_chunks(self, doc: InputDocument) -> list[ChunkedDocument]:
-        """Create chunks for multiple content types from InputDocument.
-        
-        This is a compatibility method that converts InputDocument to Record format
-        and calls create_multi_field_chunks_for_record.
-        
-        Args:
-            doc: InputDocument instance to chunk
-            
-        Returns:
-            list[ChunkedDocument]: List of chunks created from the document
-        """
-        # Create a temporary Record object from InputDocument
-        record = Record(
-            record_id=doc.record_id,
-            content=doc.full_text,
-            metadata={
-                **doc.metadata,
-                'title': doc.title
-            }
-        )
-        
-        return self.create_multi_field_chunks_for_record(record)
 
-    async def process_with_multi_field_chunks(self, doc: InputDocument) -> InputDocument | None:
-        """Process document with configuration-driven multi-field chunking."""
-        # Create chunks using configuration (generic approach)
-        doc.chunks = self.create_multi_field_chunks(doc)
-
-        if not doc.chunks:
-            logger.warning(f"No chunks created for document {doc.record_id}")
-            return None
-
-        # Log chunk breakdown if multi-field config is used
-        if self.multi_field_config:
-            chunk_types = {}
-            for chunk in doc.chunks:
-                content_type = chunk.metadata.get("content_type", "unknown")
-                chunk_types[content_type] = chunk_types.get(content_type, 0) + 1
-
-            breakdown = ", ".join([f"{count} {ctype}" for ctype, count in chunk_types.items()])
-            logger.info(f"Multi-field chunks for {doc.record_id}: {breakdown}")
-        else:
-            logger.info(f"Single-field chunks for {doc.record_id}: {len(doc.chunks)} content")
-
-        # Continue with normal embedding and storage process
-        doc_with_embeddings = await self.embed_document(doc)
-        if not doc_with_embeddings:
-            return None
-
-        # Store in ChromaDB
-        return await self._store_chunks(doc_with_embeddings)
-
-
-    async def _store_chunks(self, doc: InputDocument) -> InputDocument:
-        """Store document chunks with metadata in ChromaDB."""
-        try:
-            ids = []
-            documents = []
-            embeddings_list = []
-            metadatas = []
-
-            chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
-
-            for chunk in chunks_to_upsert:
-                ids.append(chunk.chunk_id)
-                documents.append(chunk.chunk_text)
-                embeddings_list.append(list(chunk.embedding))  # type: ignore
-
-                # Enhanced metadata with content type tagging
-                enhanced_metadata = {
-                    "document_title": chunk.document_title,
-                    "chunk_index": chunk.chunk_index,
-                    "document_id": chunk.document_id,
-                    "content_type": chunk.metadata.get("content_type", "unknown"),
-                    "chunk_type": chunk.metadata.get("chunk_type", "unknown"),
-                    **{k: v for k, v in chunk.metadata.items() if k not in ["content_type", "chunk_type"]},
-                }
-                metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
-
-            logger.info(f"Upserting {len(ids)} enhanced chunks for document {doc.record_id}...")
-
-            # Execute the upsert operation
-            await asyncio.to_thread(
-                self.collection.upsert,
-                ids=ids,
-                embeddings=embeddings_list,
-                metadatas=metadatas,
-                documents=documents,
-            )
-
-            logger.info(f"Successfully stored enhanced chunks for document {doc.record_id}")
-
-            # Increment processed records counter
-            self._processed_records_count += 1
-
-            # Conditionally sync based on batch/time thresholds (not after every document!)
-            sync_performed = await self._conditional_sync_to_remote()
-            if sync_performed:
-                logger.info(f"🔄 Performed batch sync after processing document {doc.record_id}")
-
-            return doc
-
-        except Exception as e:
-            logger.error(f"Failed to store enhanced chunks for document {doc.record_id}: {e}")
-            return None
-
-    async def embed_document(
-        self,
-        input_doc: InputDocument,
-    ) -> InputDocument | None:
-        """Generates embeddings asynchronously for chunks within an InputDocument,
-        assigns them, and saves the result to a Parquet file.
-        """
-        if not input_doc.chunks:
+    def _write_record_to_parquet(self, record: Record, file_path: Path):
+        """Synchronous helper to write Record chunks to a Parquet file."""
+        if not record.chunks:
             logger.warning(
-                f"No chunks found for document {input_doc.record_id}, cannot embed or save.",
-            )
-            return None
-
-        logger.debug(
-            f"Generating embeddings asynchronously for doc {input_doc.record_id} with {len(input_doc.chunks)} chunks.",
-        )
-
-        embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
-        for chunk in input_doc.chunks:
-            if chunk.chunk_index is not None:
-                embeddings_input.append(
-                    (
-                        chunk.chunk_index,
-                        TextEmbeddingInput(
-                            text=chunk.chunk_text,
-                            task_type=self.task,
-                            title=chunk.chunk_title,
-                        ),
-                    ),
-                )
-            else:
-                logger.warning(
-                    f"Chunk missing index in doc {input_doc.record_id}, skipping embedding for this chunk.",
-                )
-
-        embedding_results = await self._embed(embeddings_input)
-
-        successful_embeddings = 0
-        for idx, embedding in embedding_results:
-            try:
-                list_index = next(i for i, chk in enumerate(input_doc.chunks) if chk.chunk_index == idx)
-                if embedding is not None:
-                    input_doc.chunks[list_index].embedding = embedding
-                    successful_embeddings += 1
-                else:
-                    logger.warning(
-                        f"Embedding failed for chunk index {idx} in doc {input_doc.record_id}",
-                    )
-            except StopIteration:
-                logger.error(
-                    f"Could not find chunk with index {idx} in doc {input_doc.record_id} to assign embedding.",
-                )
-
-        if successful_embeddings == 0 and len(input_doc.chunks) > 0:
-            logger.error(
-                f"All embeddings failed for document {input_doc.record_id}. Skipping save.",
-            )
-            return None
-
-        arrow_file_path = Path(self.arrow_save_dir) / f"{input_doc.record_id}.parquet"
-        input_doc.chunks_path = arrow_file_path.as_posix()
-
-        try:
-            await asyncio.to_thread(
-                self._write_document_to_parquet,
-                input_doc,
-                arrow_file_path,
-            )
-            logger.info(
-                f"Successfully saved document chunks and embeddings to {arrow_file_path}",
-            )
-            return input_doc
-        except Exception as e:
-            logger.error(
-                f"Failed to save document {input_doc.record_id} to Parquet file {arrow_file_path}: {e} {e.args=}",
-            )
-            input_doc.chunks_path = ""
-            return None
-
-    def _write_document_to_parquet(self, doc: InputDocument, file_path: Path):
-        """Synchronous helper to write InputDocument chunks to a Parquet file."""
-        if not doc.chunks:
-            logger.warning(
-                f"Attempted to write empty chunks for doc {doc.record_id} to {file_path}. Skipping.",
+                f"Attempted to write empty chunks for record {record.record_id} to {file_path}. Skipping.",
             )
             return
 
         data = {
-            "chunk_id": [c.chunk_id for c in doc.chunks],
-            "document_id": [c.document_id for c in doc.chunks],
-            "document_title": [c.document_title for c in doc.chunks],
-            "chunk_index": [c.chunk_index for c in doc.chunks],
-            "chunk_text": [c.chunk_text for c in doc.chunks],
-            "embedding": [list(c.embedding) if c.embedding is not None else None for c in doc.chunks],
-            "chunk_metadata": [json.dumps(c.metadata) if c.metadata else None for c in doc.chunks],
+            "chunk_id": [c.chunk_id for c in record.chunks],
+            "document_id": [c.document_id for c in record.chunks],
+            "document_title": [c.document_title for c in record.chunks],
+            "chunk_index": [c.chunk_index for c in record.chunks],
+            "chunk_text": [c.chunk_text for c in record.chunks],
+            "embedding": [list(c.embedding) if c.embedding is not None else None for c in record.chunks],
+            "chunk_metadata": [json.dumps(c.metadata) if c.metadata else None for c in record.chunks],
         }
 
         embedding_type = pa.list_(pa.float32())
@@ -1695,14 +1502,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         table = pa.Table.from_pydict(data, schema=schema)
 
-        doc_meta_serializable = {
-            "record_id": doc.record_id,
-            "title": doc.title,
-            "file_path": doc.file_path,
-            "record_path": doc.record_path,
-            "metadata": json.dumps(doc.metadata),
+        record_meta_serializable = {
+            "record_id": record.record_id,
+            "title": record.metadata.get('title', ''),
+            "file_path": record.metadata.get('file_path', ''),
+            "record_path": record.metadata.get('record_path', ''),
+            "metadata": json.dumps(record.metadata),
         }
-        arrow_metadata = {k.encode("utf-8"): str(v).encode("utf-8") for k, v in doc_meta_serializable.items()}
+        arrow_metadata = {k.encode("utf-8"): str(v).encode("utf-8") for k, v in record_meta_serializable.items()}
 
         final_schema = table.schema.with_metadata(arrow_metadata)
         table = table.cast(final_schema)
@@ -1739,9 +1546,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def upsert_document_chunks(
         self,
-        doc_iterator: AsyncIterator[InputDocument],
+        doc_iterator: AsyncIterator[Record],
     ) -> tuple[int, int]:
-        """Upserts all chunks for each InputDocument from the iterator into ChromaDB."""
+        """Upserts all chunks for each Record from the iterator into ChromaDB."""
         total_docs_processed = 0
         successful_docs_upserted = 0
         failed_docs_upserted = 0
@@ -1824,137 +1631,16 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         return successful_docs_upserted, failed_docs_upserted
 
-    async def process(self, doc: InputDocument) -> InputDocument | None:
-        """Process a document by embedding, saving to parquet, and upserting to ChromaDB.
-
-        Follows the ProcessorCallable signature for compatibility with DocProcessor.
-        
-        If multi_field_config is provided and doc has no chunks, will create chunks using
-        the multi-field approach. Otherwise expects chunks to already exist.
-        """
-        # If no chunks exist and we have multi-field config, create chunks automatically
-        if not doc.chunks and self.multi_field_config:
-            doc.chunks = self.create_multi_field_chunks(doc)
-
-        if not doc.chunks:
-            logger.warning(
-                f"Document {doc.record_id} has no chunks, skipping embedding and upsert.",
-            )
-            return None
-
-        # 1. Generate embeddings and save to Parquet
-        doc_with_embeddings = await self.embed_document(doc)
-        if not doc_with_embeddings:
-            logger.warning(
-                f"Embedding failed for document {doc.record_id}, skipping upsert.",
-            )
-            return None
-
-        # 2. Upsert to ChromaDB
-        try:
-            ids = []
-            documents = []
-            embeddings_list = []
-            metadatas = []
-
-            chunks_to_upsert = [c for c in doc_with_embeddings.chunks if c.embedding is not None]
-
-            for chunk in chunks_to_upsert:
-                ids.append(chunk.chunk_id)
-                documents.append(chunk.chunk_text)
-                embeddings_list.append(list(chunk.embedding))  # type: ignore
-
-                base_meta = {
-                    "document_title": chunk.document_title,
-                    "chunk_index": chunk.chunk_index,
-                    "document_id": chunk.document_id,
-                }
-                combined_meta = {**chunk.metadata, **base_meta}
-                metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
-
-            logger.info(f"Upserting {len(ids)} chunks for document {doc.record_id}...")
-
-            # Execute the upsert operation
-            await asyncio.to_thread(
-                self.collection.upsert,
-                ids=ids,
-                embeddings=embeddings_list,
-                metadatas=metadatas,
-                documents=documents,
-            )
-
-            logger.info(
-                f"Successfully processed document {doc.record_id} - embedded, saved, and upserted.",
-            )
-
-            # Increment processed records counter
-            self._processed_records_count += 1
-
-            # Conditionally sync based on batch/time thresholds (not after every document!)
-            sync_performed = await self._conditional_sync_to_remote()
-            if sync_performed:
-                logger.info(f"🔄 Performed batch sync after processing document {doc.record_id}")
-
-            return doc_with_embeddings
-
-        except Exception as e:
-            logger.error(f"Failed to upsert document {doc.record_id}: {e}")
-            # Save the failed document for retry
-            try:
-                failed_doc_filename = Path(bm.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
-                logger.info(
-                    f"Saving failed document {doc.record_id} to {failed_doc_filename}",
-                )
-                bm.save(doc_with_embeddings, failed_doc_filename)
-            except Exception as save_e:
-                logger.error(
-                    f"Could not save failed document {doc.record_id}: {save_e}",
-                )
-
-            return None
 
 
 # --- Async Pipeline Stages ---
-async def preprocess_documents(
-    doc_iterator: AsyncIterator[InputDocument],
-    extractor: Callable[[str], Awaitable[str | None]],
-) -> AsyncIterator[InputDocument]:
-    """Extracts full text for documents that don't have it."""
-    processed_count = 0
-    async for doc in doc_iterator:
-        if doc.full_text:
-            yield doc
-            continue
-        try:
-            full_text = await asyncio.to_thread(extractor, doc.file_path)
-            if full_text is None:
-                logger.warning(
-                    f"Text extraction failed for {doc.record_id} ({doc.file_path}). Skipping doc.",
-                )
-                continue
-
-            doc.full_text = full_text
-            processed_count += 1
-            yield doc
-        except Exception as e:
-            logger.error(
-                f"Text extraction processor failed for doc {doc.record_id}: {e} {e.args=}",
-            )
-            logger.warning(
-                f"Skipping document {doc.record_id} due to extraction processor error.",
-            )
-    logger.info(
-        f"Text Extractor finished. Processed {processed_count} documents needing extraction.",
-    )
-
-
 class DocProcessor(BaseModel):
     """Callable class for processing documents from an iterator."""
 
     concurrency: int = Field(default=20)
     _semaphore: asyncio.Semaphore = PrivateAttr()
-    doc_iterator: AsyncIterator[InputDocument] = Field(default=None, exclude=True)
-    processor: ProcessorCallable = Field(default=None, exclude=True)
+    doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
+    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
     _name: str = PrivateAttr(default="")
 
     model_config = pydantic.ConfigDict(
@@ -1971,11 +1657,16 @@ class DocProcessor(BaseModel):
             self._name = self.processor.__class__.__name__
         return self
 
-    async def _process(self, doc: InputDocument) -> InputDocument | None:
+    async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
-                processed_doc = await self.processor(doc)
-                return processed_doc
+                result = await self.processor(doc)
+                # Handle ProcessingResult or Record return types
+                if isinstance(result, ProcessingResult):
+                    return result.record if result.status == "processed" else None
+                else:
+                    # Direct Record or None return
+                    return result
             except Exception as e:
                 logger.error(
                     f"Error processing document {doc.record_id}: {e} {e.args=}",
@@ -1985,7 +1676,7 @@ class DocProcessor(BaseModel):
                 )
                 return None
 
-    async def __call__(self) -> AsyncIterator[InputDocument]:
+    async def __call__(self) -> AsyncIterator[Record]:
         """Processes documents from the iterator, yielding them as they complete."""
         processed_count = 0
         pending_tasks = set()
@@ -2107,7 +1798,7 @@ def main(cfg) -> None:
             processor=processor_instance.process,
         )
 
-        # 4. Chunk Documents (Adds chunks to InputDocument)
+        # 4. Chunk Documents (Adds chunks to Record)
         chunked_doc_iterator = DocProcessor(
             doc_iterator=processed_doc_iterator(),
             processor=text_splitter_instance.process,
@@ -2116,7 +1807,7 @@ def main(cfg) -> None:
         # 5. Vectorize and Upsert - now using the same DocProcessor pattern
         vectorizer_processor = DocProcessor(
             doc_iterator=chunked_doc_iterator(),
-            processor=vectoriser.process,
+            processor=vectoriser.process_record,
             concurrency=vectoriser.concurrency,
         )
 
