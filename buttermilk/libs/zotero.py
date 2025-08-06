@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self  # Import TYPE_CHECKING
 
 import pydantic
-from pydantic import BaseModel, PrivateAttr  # Import Field
+from pydantic import BaseModel, PrivateAttr, Field, TypeAdapter
 from pyzotero import zotero
 
 # Import bm for credentials access
@@ -39,13 +39,22 @@ class ZotDownloader(BaseModel):
         save_dir: Directory path for saving downloaded files and sync state
         library: Zotero library ID to sync from
     """
-    save_dir: str
-    library: str
+    save_dir: str = Field(..., description="Directory to save downloaded files and sync state")
+    library: str = Field(..., description="Zotero library ID to sync from")
+    local: bool = Field(default=False, description="Use local mode for Zotero API")
 
     _zot: zotero.Zotero = PrivateAttr()
     # Add private attribute to store the vector store instance
     _vector_store: "ChromaDBEmbeddings | None" = PrivateAttr(default=None)
 
+
+    @pydantic.field_validator("local")
+    @classmethod
+    def validate_local(cls, v) -> bool:
+        if v is None:
+            return False
+        return TypeAdapter(bool).validate_python(v)
+    
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
         bm = get_bm()
@@ -53,6 +62,7 @@ class ZotDownloader(BaseModel):
             library_id=self.library,
             library_type="group",
             api_key=bm.credentials.get("ZOTERO_API_KEY"),
+            local=self.local,  # Use local mode if specified
         )
         os.makedirs(self.save_dir, exist_ok=True)
         return self
@@ -290,7 +300,7 @@ class ZotDownloader(BaseModel):
                 # (By default Zotero indexes the first 100 pages.)
                 if fulltext and fulltext['indexedPages'] > 0 and fulltext['indexedPages'] >= (fulltext['totalPages'] * .9):
                     item["content"] = fulltext['content']
-                    logger.debug(f"Full text downloaded for item {key}; {fulltext['indexedPages']} indexed by zotero out of {fulltext['totalPages']}.")
+                    logger.debug(f"Full text downloaded for item {key}; {fulltext['indexedPages']} pages indexed by zotero out of {fulltext['totalPages']} total.")
 
                 else:
                     # --- Download PDF ---

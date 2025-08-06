@@ -29,8 +29,8 @@ vectoriser:
   # Multi-field configuration for Zotero data
   multi_field_config:
     content_field: text_content
-    chunk_size: 4000
-    chunk_overlap: 1000
+    chunk_size: 1000
+    chunk_overlap: 250
     additional_fields:
       - source_field: abstract
         chunk_type: abstract
@@ -53,6 +53,7 @@ input_docs:
   _target_: buttermilk.libs.zotero.ZotDownloader
   library: ${oc.env:ZOTERO_LIBRARY_ID}
   save_dir: ${oc.env:HOME}/.cache/zotero/items
+  local: ${oc.env:ZOTERO_LOCAL}
 
 # PDF text extraction
 preprocessor:
@@ -62,4 +63,5 @@ preprocessor:
 # Optional: Add citation extraction or other processing
 processor:
   _target_: buttermilk.tools.citator.Citator
-  model: gemini25flash  # Faster model for processing
+  parameters:
+    model: gemini25flash  # Faster model for processing

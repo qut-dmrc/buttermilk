@@ -32,6 +32,7 @@ preprocessor:
 
 processor:
   _target_: buttermilk.tools.citator.Citator
-  model: "gemini25pro"
+  parameters:
+    model: "gemini25pro"
 
   

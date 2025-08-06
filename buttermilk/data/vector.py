@@ -1642,7 +1642,6 @@ class DocProcessor(BaseModel):
     doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
     processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
     _name: str = PrivateAttr(default="")
-    parent_call: Any = Field(default=None, exclude=True)  # Optional parent trace call
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
@@ -1661,13 +1660,7 @@ class DocProcessor(BaseModel):
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
-                # Check if processor accepts parent_call parameter
-                import inspect
-                sig = inspect.signature(self.processor)
-                if self.parent_call and 'parent_call' in sig.parameters:
-                    result = await self.processor(doc, parent_call=self.parent_call)
-                else:
-                    result = await self.processor(doc)
+                result = await self.processor(doc)
                 # Handle ProcessingResult or Record return types
                 if isinstance(result, ProcessingResult):
                     return result.record if result.status == "processed" else None
@@ -1820,7 +1813,6 @@ def main(cfg) -> None:
             processed_doc_iterator = DocProcessor(
                 doc_iterator=pre_processed_iterator(),
                 processor=processor_instance.process,
-                parent_call=trace.trace_call,  # Pass the trace context
             )
 
             # 4. Chunk Documents (Adds chunks to Record)
