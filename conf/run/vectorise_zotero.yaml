@@ -1,19 +1,20 @@
-# Enhanced Zotero vectorization configuration
-# Usage: python -m buttermilk.data.vector +run=vectorise_zotero
-
 # @package _global_
+
+# Enhanced Zotero vectorization configuration
+# Usage: python -m buttermilk.data.vector +run=vectorise_zotero +storage=zot
+
 
 defaults:
   - _self_
-  - /storage: zot  # Use zot.yaml for ChromaDB configuration
 
 # Optional: start from a specific offset (for resuming)
 # start_from: 0
 
-name: zotero_vectorizer
-job: zotero
+run:
+  name: zotero_vectorizer
+  job: zotero
 
-# ChromaDB vector store configuration (inherits from storage/zot.yaml)
+# ChromaDB vector store configuration (inherits from storage/xxx)
 vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
   persist_directory: ${storage.persist_directory}

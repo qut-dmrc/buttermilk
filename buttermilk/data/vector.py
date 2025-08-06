@@ -1739,13 +1739,19 @@ def main(cfg) -> None:
     interrupted = False
     
     OmegaConf.resolve(cfg)
+    
     bm = hydra.utils.instantiate(cfg.bm)
     
-    vectoriser: ChromaDBEmbeddings = cfg.vectoriser
-    input_docs_source = cfg.input_docs
-    preprocessor_instance = cfg.preprocessor
-    processor_instance = cfg.processor
-    text_splitter_instance = cfg.chunker
+    from buttermilk._core.dmrc import set_bm
+
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+
+    objs = hydra.utils.instantiate(cfg)
+    vectoriser: ChromaDBEmbeddings = objs.vectoriser
+    input_docs_source = objs.input_docs
+    preprocessor_instance = objs.preprocessor
+    processor_instance = objs.processor
+    text_splitter_instance = objs.chunker
 
     # Set up signal handlers for graceful shutdown
     def handle_interrupt(signum, frame):
