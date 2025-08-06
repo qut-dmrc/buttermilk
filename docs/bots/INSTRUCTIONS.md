@@ -18,6 +18,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - `test_*.py` files outside the `tests/` directory
 - "Quick test scripts" or "validation files" in the project root
 - Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
+- `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
 
 ### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
 - "Let me create a test to..."
@@ -28,6 +29,16 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - "I'll validate my implementation..."
 - "Let me see if this works..."
 - "I'll create a script to test..."
+- "Let me create an example..."
+- "I'll make a demo..."
+- "Here's a sample script..."
+
+### 🤖 SUBAGENT AVAILABLE:
+When you need to create examples or demonstrations, use:
+```
+Task: example-redirect
+```
+This specialized agent ensures all examples are created as proper pytest tests.
 
 ### ✅ CORRECT APPROACH - ALWAYS USE PYTEST:
 - Create tests in `tests/` directory following existing structure
@@ -65,6 +76,23 @@ def test_myclass_serialization():
 ```
 
 **ENFORCEMENT**: If you catch yourself about to create a test file, STOP and ask: "Am I creating this in the tests/ directory using proper pytest conventions?" If no, RESTART your approach.
+
+## 📚 EXAMPLE CREATION PROTOCOL
+
+**CRITICAL**: When asked to create examples, demos, or show how something works:
+
+1. **DO NOT** create standalone scripts
+2. **IMMEDIATELY** invoke the example-redirect subagent:
+   ```
+   Task: example-redirect - Create a proper test example for [feature]
+   ```
+3. The subagent will create tests in `tests/examples/` that serve as living documentation
+
+**WHY THIS MATTERS**:
+- Examples in tests are verified by CI/CD
+- They can't become outdated
+- They provide actual test coverage
+- They're discoverable by other developers
 
 ## MANDATORY EXPLORATION CHECKPOINT
 **BEFORE writing ANY code, you MUST:**
