@@ -29,14 +29,17 @@ class Citator(BaseModel):
         )
         return self
 
-    async def process(self, item: Record, **kwargs) -> Record | None:
+    async def process(self, item: Record, parent_call=None, **kwargs) -> Record | None:
         try:
             # Take the first N characters for citation generation
             citation_text = item.text_content[:CITATION_TEXT_CHAR_LIMIT]
             input_data = AgentInput(
                 inputs={"text_extract": citation_text},
             )
-            result = await self._agent(input_data, **kwargs)
+            # If we have a parent call context, add it to the input
+            if parent_call is not None and hasattr(input_data, "parent_call_id"):
+                input_data.parent_call_id = parent_call.id
+            result = await self._agent.invoke(input_data, **kwargs)
 
             if not result or result.error:
                 logger.error(

@@ -62,4 +62,4 @@ preprocessor:
 # Optional: Add citation extraction or other processing
 processor:
   _target_: buttermilk.tools.citator.Citator
-  model: gemini-1.5-flash-latest  # Faster model for processing
+  model: gemini25flash  # Faster model for processing

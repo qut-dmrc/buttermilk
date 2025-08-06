@@ -245,6 +245,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             cancellation_token: Optional cancellation token to cancel the operation.
 
         """
+        # If we are not running within an autogen runtime, just log the message
+        if not hasattr(self, "_runtime") or not self._runtime:
+            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__}.")
+            return
+
         # Use provided topic_id or fall back to the agent's default topic
         target_topic = topic_id or self._topic_id
         await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
@@ -396,7 +401,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             attributes=trace_params,
         )
 
-        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
+        if parent_call is not None:
+            parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")

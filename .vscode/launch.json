@@ -125,7 +125,7 @@
       "args": [
         "run=vectorise_zotero",
         "+storage=zot",
-        "+max_docs=50",
+        "+max_docs=5",
         "+quiet=false"
         // "experiments.model=[haiku]"
       ],

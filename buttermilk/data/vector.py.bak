@@ -1642,7 +1642,6 @@ class DocProcessor(BaseModel):
     doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
     processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
     _name: str = PrivateAttr(default="")
-    parent_call: Any = Field(default=None, exclude=True)  # Optional parent trace call
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
@@ -1661,13 +1660,7 @@ class DocProcessor(BaseModel):
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
-                # Check if processor accepts parent_call parameter
-                import inspect
-                sig = inspect.signature(self.processor)
-                if self.parent_call and 'parent_call' in sig.parameters:
-                    result = await self.processor(doc, parent_call=self.parent_call)
-                else:
-                    result = await self.processor(doc)
+                result = await self.processor(doc)
                 # Handle ProcessingResult or Record return types
                 if isinstance(result, ProcessingResult):
                     return result.record if result.status == "processed" else None
@@ -1810,93 +1803,92 @@ def main(cfg) -> None:
             start_from = getattr(cfg, 'start_from', 0)
             doc_iterator = input_docs_source.get_all_records(start=start_from)
 
-            # 2. Pre-process (Extract Text if needed)
-            pre_processed_iterator = DocProcessor(
-                doc_iterator=doc_iterator,
-                processor=preprocessor_instance.process,
-            )
+        # 2. Pre-process (Extract Text if needed)
+        pre_processed_iterator = DocProcessor(
+            doc_iterator=doc_iterator,
+            processor=preprocessor_instance.process,
+        )
 
-            # 3. Process Documents (e.g., add citations)
-            processed_doc_iterator = DocProcessor(
-                doc_iterator=pre_processed_iterator(),
-                processor=processor_instance.process,
-                parent_call=trace.trace_call,  # Pass the trace context
-            )
+        # 3. Process Documents (e.g., add citations)
+        processed_doc_iterator = DocProcessor(
+            doc_iterator=pre_processed_iterator(),
+            processor=processor_instance.process,
+        )
 
-            # 4. Chunk Documents (Adds chunks to Record)
-            chunked_doc_iterator = DocProcessor(
-                doc_iterator=processed_doc_iterator(),
-                processor=text_splitter_instance.process,
-            )
+        # 4. Chunk Documents (Adds chunks to Record)
+        chunked_doc_iterator = DocProcessor(
+            doc_iterator=processed_doc_iterator(),
+            processor=text_splitter_instance.process,
+        )
 
-            # 5. Vectorize and Upsert - now using the same DocProcessor pattern
-            vectorizer_processor = DocProcessor(
-                doc_iterator=chunked_doc_iterator(),
-                processor=vectoriser.process_record,
-                concurrency=vectoriser.concurrency,
-            )
+        # 5. Vectorize and Upsert - now using the same DocProcessor pattern
+        vectorizer_processor = DocProcessor(
+            doc_iterator=chunked_doc_iterator(),
+            processor=vectoriser.process_record,
+            concurrency=vectoriser.concurrency,
+        )
 
-            # Process documents through the complete pipeline with a limit
-            max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
-            quiet = getattr(cfg, 'quiet', False)
-            
-            pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
-            stats = {
-                "total": 0,
-                "embedded": 0,
-                "skipped": 0,
-                "failed": 0,
-            }
+        # Process documents through the complete pipeline with a limit
+        max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
+        quiet = getattr(cfg, 'quiet', False)
+        
+        pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
+        stats = {
+            "total": 0,
+            "embedded": 0,
+            "skipped": 0,
+            "failed": 0,
+        }
 
-            # Use the pipeline to process documents
-            async for doc in vectorizer_processor():
-                if interrupted:
-                    logger.warning("🛑 Processing interrupted by user")
-                    break
-                    
-                stats["total"] += 1
-                
-                if doc is not None:
-                    stats["embedded"] += 1
-                else:
-                    stats["failed"] += 1
-                    
-                pbar.update(1)
-                pbar.set_postfix({
-                    "processed": stats["embedded"],
-                    "failed": stats["failed"],
-                })
-
-                if stats["embedded"] >= max_docs:
-                    logger.info(f"Reached document limit: {max_docs}")
-                    break
-
-            pbar.close()
-            
-            # Final sync for remote storage
-            if not interrupted:
-                logger.info("🔄 Performing final sync...")
-                await vectoriser.finalize_processing()
-
-            # Print summary statistics
-            duration = time.time() - start_time
-            final_count = vectoriser.collection.count()
-            
-            logger.info("\n" + "="*50)
-            logger.info("📊 PROCESSING SUMMARY")
-            logger.info("="*50)
-            logger.info(f"Total documents found: {stats['total']}")
-            logger.info(f"Successfully processed: {stats['embedded']}")
-            logger.info(f"Failed: {stats['failed']}")
-            logger.info(f"Time elapsed: {duration:.1f} seconds")
-            logger.info(f"Processing rate: {stats['total']/duration:.1f} docs/second")
-            logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
-            logger.info("="*50)
-            
+        # Use the pipeline to process documents
+        async for doc in vectorizer_processor():
             if interrupted:
-                logger.warning("⚠️  Processing was interrupted. Run again to resume.")
+                logger.warning("🛑 Processing interrupted by user")
+                break
+                
+            stats["total"] += 1
+            
+            if doc is not None:
+                stats["embedded"] += 1
             else:
-                logger.info("✅ Processing completed successfully!")
+                stats["failed"] += 1
+                
+            pbar.update(1)
+            pbar.set_postfix({
+                "processed": stats["embedded"],
+                "failed": stats["failed"],
+            })
+
+            if stats["embedded"] >= max_docs:
+                logger.info(f"Reached document limit: {max_docs}")
+                break
+
+        pbar.close()
+        
+        # Final sync for remote storage
+        if not interrupted:
+            logger.info("🔄 Performing final sync...")
+            await vectoriser.finalize_processing()
+
+        # Print summary statistics
+        duration = time.time() - start_time
+        final_count = vectoriser.collection.count()
+        
+        logger.info("\n" + "="*50)
+        logger.info("📊 PROCESSING SUMMARY")
+        logger.info("="*50)
+        logger.info(f"Total documents found: {stats['total']}")
+        logger.info(f"Successfully processed: {stats['embedded']}")
+        logger.info(f"Failed: {stats['failed']}")
+        logger.info(f"Time elapsed: {duration:.1f} seconds")
+        logger.info(f"Processing rate: {stats['total']/duration:.1f} docs/second")
+        logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
+        logger.info("="*50)
+        
+        if interrupted:
+            logger.warning("⚠️  Processing was interrupted. Run again to resume.")
+        else:
+            logger.info("✅ Processing completed successfully!")
 
     loop.run_until_complete(run_pipeline())
 

@@ -149,7 +149,11 @@ class ZotDownloader(BaseModel):
         )
 
     async def download_record(self, item) -> Record | None:
-        """Downloads PDF, saves item JSON, and creates a Record."""
+        """Downloads PDF/full text, saves item JSON, and creates a Record.
+        
+        Tries first to download the full text if available, otherwise downloads the PDF.
+        Returns a Record if successful, None if not.
+        """
         key = item.get("key")
         title = item.get("data", {}).get("title", "Unknown Title")
         doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
@@ -171,9 +175,12 @@ class ZotDownloader(BaseModel):
                 # --- Download full text from Zotero ---
                 fulltext = self._zot.fulltext_item(attachment_key)
 
-                if fulltext:
-                    item["fulltext"] = fulltext
-                    logger.debug(f"Full text downloaded for item {key}.")
+                # Here we check that the zotero index contains at least 90% of the PDF pages, 
+                # otherwise we'll download the PDF instead. 
+                # (By default Zotero indexes the first 100 pages.)
+                if fulltext and fulltext['indexedPages'] > 0 and fulltext['indexedPages'] >= (fulltext['totalPages'] * .9):
+                    item["content"] = fulltext['content']
+                    logger.debug(f"Full text downloaded for item {key}; {fulltext['indexedPages']} indexed by zotero out of {fulltext['totalPages']}.")
 
                 else:
                     # --- Download PDF ---
@@ -202,7 +209,7 @@ class ZotDownloader(BaseModel):
                 metadata = {"title": title, "doi_or_url": doi_or_url,"uri": pdf_file.as_posix(), "zotero_data": zotero_data}
                 record = Record(
                     record_id=key,
-                    content=fulltext, 
+                    content=item.get('content', ''),
                     file_path=pdf_file.as_posix(),
                     metadata=metadata,
                     
