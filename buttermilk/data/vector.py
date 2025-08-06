@@ -278,13 +278,14 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         self._embedding_model = embedding_model
         
     def __call__(self, input: Documents) -> Embeddings:
-        title = "Custom query"
         response = self.client.models.embed_content(
             model=self._embedding_model,
             contents=input,
+            
             config=genai.types.EmbedContentConfig(
                 task_type="retrieval_document",
-                title=title,
+                # Todo: this should send all documents for a Record, and pass 
+                # the record name as the 'title' field
                 output_dimensionality=self.dimensionality
             )
         )

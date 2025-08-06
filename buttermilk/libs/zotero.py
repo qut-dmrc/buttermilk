@@ -42,6 +42,7 @@ class ZotDownloader(BaseModel):
     save_dir: str = Field(..., description="Directory to save downloaded files and sync state")
     library: str = Field(..., description="Zotero library ID to sync from")
     local: bool = Field(default=False, description="Use local mode for Zotero API")
+    download_concurrency: int = Field(default=20, description="Maximum concurrent downloads from Zotero")
 
     _zot: zotero.Zotero = PrivateAttr()
     # Add private attribute to store the vector store instance
@@ -179,11 +180,13 @@ class ZotDownloader(BaseModel):
         processed_count = 0
         skipped_count = 0
 
-        while items or _next:
-            tasks = []
-            items_to_process_this_batch = []
-
-            while items:
+        # Use a set to track pending tasks across all batches
+        pending_tasks = set()
+        max_concurrent = self.download_concurrency  # Limit concurrent downloads
+        
+        while items or _next or pending_tasks:
+            # Process items from current batch and create tasks
+            while items and len(pending_tasks) < max_concurrent:
                 item = items.pop(0)  # Process in order
                 key = item.get("key")
 
@@ -202,37 +205,36 @@ class ZotDownloader(BaseModel):
                     continue
                 # --- End existence check ---
 
-                # If not skipped, add to list for task creation
-                items_to_process_this_batch.append(item)
-
-            # Create tasks only for items not skipped
-            for item_to_process in items_to_process_this_batch:
+                # Create task for this item
                 try:
-                    # Run download_and_convert in a separate thread to avoid blocking
-                    # the event loop with synchronous file I/O and API calls within the loop.
-                    # Note: self._zot calls might still be synchronous internally.
-                    # Consider a thread pool executor for true non-blocking I/O if needed.
-                    tasks.append(
-                        asyncio.create_task(self.download_record(item_to_process)),
-                    )
+                    task = asyncio.create_task(self.download_record(item))
+                    pending_tasks.add(task)
                 except Exception as e:
                     logger.error(
-                        f"Error creating task for {item_to_process.get('key', 'unknown')}: {e} {e.args=}",
+                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
                     )
 
-            # Process completed tasks for this batch
-            for future in asyncio.as_completed(tasks):
-                try:
-                    result = await future
-                    if result:
-                        processed_count += 1
-                        yield result
-                except Exception as e:
-                    logger.error(
-                        f"Error processing download/convert result: {e} {e.args=}",
-                    )
-            # Fetch next page if available
-            if _next:
+            # If we have pending tasks, wait for at least one to complete
+            if pending_tasks:
+                done, pending_tasks = await asyncio.wait(
+                    pending_tasks, 
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                # Process completed tasks immediately
+                for task in done:
+                    try:
+                        result = await task
+                        if result:
+                            processed_count += 1
+                            yield result
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing download/convert result: {e} {e.args=}",
+                        )
+            
+            # Fetch next page if needed and we have capacity
+            if _next and not items and len(pending_tasks) < max_concurrent:
                 try:
                     logger.debug(f"Following 'next' link for more Zotero items: {_next}")
                     response = self._zot._retrieve_data(_next)
