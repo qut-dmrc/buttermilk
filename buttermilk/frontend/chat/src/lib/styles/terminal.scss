@@ -214,14 +214,13 @@
 .message-terminal {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 12px;
-  margin-bottom: 0px;
+  margin-bottom: 0;
   white-space: pre-wrap;
   word-break: break-word;
   color: #e0fbfc;
-  // display: flex;
-  padding: 0px;
+  padding: 0;
   word-wrap: break-word;
-  line-height: 1.2em;
+  line-height: 1.1em;
 }
 
 .message-line {
@@ -284,15 +283,15 @@
 // Expanded content container
 .expanded-content {
   margin-left: 24px;
-  margin-bottom: 0px;
+  margin-bottom: 0;
   padding: 0px 2px;
   background-color: rgba(0, 0, 0, 0.2);
   border-left: 2px solid #5fad4e;
   white-space: pre-wrap;
   
   p  {
-    margin-bottom: 0px;
-    padding-bottom: 0px;
+    margin-bottom: 0;
+    padding-bottom: 0;
     line-height: 1.1em;
     color: #cfd5db;
     font-size: 0.7rem;
