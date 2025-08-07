@@ -116,7 +116,7 @@ Specific rules:
 - If asked to use Tool X, use Tool X. Don't use Tool Y instead. Don't read code instead. Don't check logs instead. Use Tool X.
 - Success = user's definition, not yours. If asked to SHOW something, you must visually demonstrate it, not just prove it exists.
 - When you can't complete a task as specified, STOP immediately and say so. Don't waste time on workarounds.
-- **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md` and use the documented tools (WebSocket CLI, log analyzers, etc.) BEFORE reading source code. Going straight to source code is a workflow violation.
+- **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md`. You MUST use the "golden path" tools documented there (e.g. `ws_debug_cli.py`, `buttermilk_logs.py`, Playwright MCP) BEFORE reading source code. Going straight to source code is a workflow violation.
 - **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 50 lines, summarize key findings instead.
 - **NO IMPLICIT DEFAULTS**: NEVER use implicit defaults or fallback behaviors. All configuration must be explicit. If something is missing, FAIL FAST with clear error messages. Do not infer, assume, or provide defaults.
 - **DATA CONTRACTS**: Schema changes require updating ALL components atomically. See `docs/bots/data-architecture.md` for data contract principles. No defensive programming - trust schemas and let errors propagate.

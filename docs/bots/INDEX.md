@@ -38,12 +38,16 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Commit standards and documentation
 - Common anti-patterns to avoid
 
-### [debugging.md](debugging.md) - Debugging Tools & Strategies
-- Available debugging tools and commands (WebSocket CLI, debug agents)
-- Common issue patterns (frontend-backend data flow, agent registration, exception handling)
-- Expected flow behavior and WebSocket protocol
-- Success criteria and troubleshooting
-- Log analysis techniques
+### [debugging.md](debugging.md) - The Golden Path to Debugging
+- The single, authoritative guide to debugging and validation.
+- Provides a simple, clear workflow for the most common tasks.
+
+### [logs.md](logs.md) - Log Analysis Guide
+- Finding and accessing debug logs
+- Common log patterns and pre-built searches
+- Building custom grep commands for log analysis
+- Time-based filtering and performance tips
+- Log file management commands
 
 ### [data-architecture.md](data-architecture.md) - Data Architecture & Schema Contracts
 - Schema-data contract principles

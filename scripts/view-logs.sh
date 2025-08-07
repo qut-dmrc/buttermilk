@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Default number of lines to show
+DEFAULT_LINES=50
+
+# Allow override via command line argument
+if [ -n "$1" ] && [[ "$1" =~ ^[0-9]+$ ]]; then
+    DEFAULT_LINES=$1
+    echo "Using custom line count: $DEFAULT_LINES"
+fi
+
 echo "📋 Buttermilk Server Log Viewer"
 echo "==============================="
 echo ""
@@ -29,7 +38,7 @@ echo ""
 
 # Menu
 echo "Options:"
-echo "1. Show last 50 lines"
+echo "1. Show last $DEFAULT_LINES lines"
 echo "2. Show errors only"
 echo "3. Show warnings and errors"
 echo "4. Follow log (tail -f)"
@@ -41,16 +50,16 @@ read -p "Choose option (1-6): " choice
 
 case $choice in
     1)
-        echo -e "\n📋 Last 20 lines:\n"
-        tail -20 "$LOG_FILE"
+        echo -e "\n📋 Last $DEFAULT_LINES lines:\n"
+        tail -$DEFAULT_LINES "$LOG_FILE"
         ;;
     2)
         echo -e "\n❌ Errors:\n"
-        grep -i "error\|exception\|traceback" "$LOG_FILE" | tail -20
+        grep -i "error\|exception\|traceback" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     3)
         echo -e "\n⚠️  Warnings and Errors:\n"
-        grep -i "warn\|error\|exception" "$LOG_FILE" | tail -20
+        grep -i "warn\|error\|exception" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     4)
         echo -e "\n👀 Following log (Ctrl+C to stop):\n"
@@ -59,11 +68,11 @@ case $choice in
     5)
         read -p "Enter search pattern: " pattern
         echo -e "\n🔍 Searching for '$pattern':\n"
-        grep -i "$pattern" "$LOG_FILE" | tail -20   
+        grep -i "$pattern" "$LOG_FILE" | tail -$DEFAULT_LINES   
         ;;
     6)
         echo -e "\n🌐 WebSocket messages:\n"
-        grep -i "websocket\|ws\|message_service" "$LOG_FILE" | tail -20
+        grep -i "websocket\|ws\|message_service" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     *)
         echo "Invalid option"
