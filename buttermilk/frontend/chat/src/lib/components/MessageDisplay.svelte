@@ -53,9 +53,9 @@
 {:else if messageType === 'differences'}
   <DifferencesMessage {message} {expanded} />
 {:else if messageType === 'system_update'}
-  <BasicMessage {message} {expanded} />
+  
 {:else if messageType === 'system_error'}
   <BasicMessage {message} {expanded} />
 {:else }
-  <BasicMessage {message} {expanded} />
+  
 {/if}
