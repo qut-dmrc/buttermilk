@@ -11,6 +11,7 @@ from buttermilk._core import (
     TaskProcessingComplete,
     UIMessage,
 )
+from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
     AgentOutput,
@@ -57,6 +58,9 @@ class ChatMessage(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
     agent_info: AgentConfig | None = Field(None, description="Agent information")
     tracing_link: str | None = Field(None, description="Link to the tracing information")
+    prompt_tokens: int = Field(default=0, description="Number of prompt/input tokens used")
+    completion_tokens: int = Field(default=0, description="Number of completion/output tokens used") 
+    cost_usd: float = Field(default=0.0, description="Estimated cost in USD for this message")
 
 
 class MessageService:
@@ -91,12 +95,42 @@ class MessageService:
             preview = getattr(message, "preview", None)
             tracing_link = getattr(message, "tracing_link", None)
 
+            # Initialize token tracking variables
+            prompt_tokens = 0
+            completion_tokens = 0
+            cost_usd = 0.0
+            
             if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
+                # Extract token/cost data from metadata
+                if hasattr(message, 'metadata') and message.metadata:
+                    usage_data = extract_usage_from_metadata(message.metadata)
+                    if usage_data:
+                        # Get model name from agent_info or metadata
+                        model_name = None
+                        if agent_info and hasattr(agent_info, 'parameters'):
+                            model_name = agent_info.parameters.get('model')
+                        elif 'agent_model' in message.metadata:
+                            model_name = message.metadata['agent_model']
+                        
+                        if model_name:
+                            prompt_tokens, completion_tokens, cost_usd = calculate_token_cost(
+                                model=model_name,
+                                usage_dict=usage_data
+                            )
+                            logger.debug(
+                                f"[MessageService] Extracted usage for {model_name}: "
+                                f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
+                            )
+                
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
                     message = message.outputs
                 elif message.error:
-                    message = message.error
+                    # Handle error - convert to ErrorEvent if it's a list
+                    if isinstance(message.error, list) and message.error:
+                        message = message.error[0] if isinstance(message.error[0], ErrorEvent) else ErrorEvent(source=agent_info.name if agent_info else "unknown", content=str(message.error[0]))
+                    else:
+                        message = ErrorEvent(source=agent_info.name if agent_info else "unknown", content=str(message.error))
                 else:
                     logger.warning(f"[MessageService] AgentTrace object with no outputs: {message}, returning None.")
                     return None
@@ -139,6 +173,9 @@ class MessageService:
                 agent_info=agent_info,
                 tracing_link=tracing_link,
                 timestamp=datetime.datetime.now(),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cost_usd=cost_usd,
             )
             return output
 

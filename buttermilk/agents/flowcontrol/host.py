@@ -407,24 +407,39 @@ class HostAgent(Agent):
                 if self._pending_tasks_by_agent:
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
 
+                # Calculate dynamic timeout based on number of tasks
+                # Base timeout + (60 seconds per task / 6 parallel capacity)
+                # With 6 parallel tasks potentially taking 1 minute each due to rate limits
+                # But capped between 5-20 minutes (300-1200 seconds) per step
+                total_pending_tasks = sum(self._pending_tasks_by_agent.values())
+                additional_time = (total_pending_tasks * 60) / 6  # Assuming 6 parallel workers
+                calculated_timeout = self._max_wait_time + additional_time
+                # Ensure timeout is between 5 and 20 minutes
+                dynamic_timeout = max(300, min(calculated_timeout, 1200))
+                
+                logger.info(f"Using dynamic timeout of {dynamic_timeout:.0f}s for {total_pending_tasks} pending tasks")
+
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
                 # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
-                    timeout=self._max_wait_time,
+                    timeout=dynamic_timeout,
                 )
                 return True
         except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
+            # Note: We can't access total_pending_tasks here as it was in the async with block
+            # but we can still show the pending tasks
             msg = (
-                f"Timeout waiting for task completion condition. "
-                f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self._max_wait_time}s."
+                f"Timeout waiting for task completion. "
+                f"Pending tasks will be treated as failed: {dict(self._pending_tasks_by_agent)}. "
+                f"Flow will continue if error threshold not exceeded."
             )
             logger.warning(msg)
             self._step_starting.clear()  # Reset the event to allow for new steps
-            return False  # Indicate failure due to timeout
+            return False  # Indicate timeout occurred
         except Exception as e:
             # Catch other potential errors during wait
             logger.exception(f"Unexpected error during task completion wait: {e}")
@@ -571,12 +586,21 @@ class HostAgent(Agent):
         """Wait for tasks from the current step to complete and check for errors."""
         # Wait for pending tasks to complete
         last_step_successful = await self._wait_for_all_tasks_complete()
+        
+        # If timeout occurred, treat timed-out tasks as errors
         if not last_step_successful:
-            msg = f"Host {self.agent_id} failed to complete all tasks for the current step: {dict(self._pending_tasks_by_agent)}"
-            logger.error(msg)
-            return False
+            # Record timed-out tasks as failures
+            async with self._tasks_condition:
+                timed_out_agents = dict(self._pending_tasks_by_agent)  # Copy pending tasks
+                for agent_id, pending_count in timed_out_agents.items():
+                    self._failed_tasks_by_agent[agent_id] += pending_count
+                    logger.warning(
+                        f"Host {self.agent_id} marking {pending_count} timed-out tasks from agent {agent_id} as failed."
+                    )
+                # Clear the pending tasks since we're treating them as completed (with errors)
+                self._pending_tasks_by_agent.clear()
 
-        # Check if too many tasks failed
+        # Check if too many tasks failed (including timeouts)
         total_failed = sum(self._failed_tasks_by_agent.values())
         if self._total_tasks_in_step == 0:
             logger.warning(f"Host {self.agent_id} encountered no tasks in the current step.")
@@ -599,13 +623,12 @@ class HostAgent(Agent):
                 f"({error_ratio:.1%} ≤ {self._error_threshold:.1%} threshold)",
             )
 
-        # If successful, clear the pending tasks and error tracking for the next step
+        # Clear error tracking for the next step
         async with self._tasks_condition:
-            self._pending_tasks_by_agent.clear()
             self._failed_tasks_by_agent.clear()
             self._total_tasks_in_step = 0
 
-        logger.info("All tasks from current step completed, clear to proceed.")
+        logger.info("Current step completed, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:

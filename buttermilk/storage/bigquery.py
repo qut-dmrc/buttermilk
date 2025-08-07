@@ -178,7 +178,7 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
             if result:
-                logger.info(f"Successfully saved {len(records)} records to {self.get_table_ref()}")
+                logger.debug(f"Successfully saved {len(records)} records to {self.get_table_ref()}")
             else:
                 raise StorageError("Upload failed - no result returned from upload_rows")
 
@@ -250,9 +250,7 @@ class BigQueryStorage(Storage, StorageClient):
 
             if self.exists():
                 # CRITICAL: Never modify existing tables
-                logger.info(f"Table {table_id} already exists. Skipping creation.")
-                logger.debug(
-                    "BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
+                logger.debug(f"Table {table_id} already exists. Skipping creation. BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
                 )
                 return
 

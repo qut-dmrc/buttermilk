@@ -5,4 +5,4 @@
 repository: qut-dmrc/buttermilk
 
 # Additional gh configurations
-default_branch: main
+default_branch: dev
