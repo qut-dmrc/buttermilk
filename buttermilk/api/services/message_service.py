@@ -124,7 +124,7 @@ class MessageService:
             elif isinstance(message, ErrorEvent):
                 message_type = "system_error"
             elif isinstance(message, FlowEvent):
-                message_type = "system_message"
+                message_type = "system_update"
             elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             else:

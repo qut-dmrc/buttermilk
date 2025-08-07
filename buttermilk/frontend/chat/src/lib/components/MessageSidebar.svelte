@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { fly, slide } from 'svelte/transition';
-  import { 
-    type Message, 
-    type SummaryResult,
-    getAgentEmoji,
-    getScoreColor,
-    getModelIdentifier,
-    isSummaryResult
+  import {
+  	type Message,
+  	getAgentEmoji,
+  	getModelIdentifier,
+  	getScoreColor,
+  	isSummaryResult
   } from '$lib/utils/messageUtils';
+  import { fly, slide } from 'svelte/transition';
   
   import { flowRunning } from '$lib/stores/apiStore';
   
@@ -843,7 +842,8 @@
   .agent-metadata {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px; /* Reduced from 4px */
+    font-size: 1em;
+    gap: 4px; /* Reduced from 4px */
     margin-top: 1px; /* Reduced from 2px */
     margin-bottom: 2px; /* Reduced from 4px */
   }

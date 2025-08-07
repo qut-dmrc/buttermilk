@@ -1,10 +1,9 @@
 <script lang="ts">
+  import { type Message } from '$lib/utils/messageUtils';
   import { onMount } from 'svelte';
   import { slide } from 'svelte/transition';
-  import { getAgentStyle, getAgentEmoji, type Message, getModelIdentifier } from '$lib/utils/messageUtils';
   import BasicMessage from './BasicMessage.svelte';
-  
-  // Import common expandable details styles
+// Import common expandable details styles
   import '$lib/styles/expandable-details.scss';
 
   // Props
@@ -41,7 +40,7 @@
   $: differencesData = message.outputs as DifferencesData;  
   // Derive short ID and name
   $: shortAgentId = (message.agent_info?.agent_id ?? 'System' as string).toUpperCase();
-  $: modelName = getModelIdentifier(message) || '';
+  $: modelName = message.agent_info?.parameters?.model; //getModelIdentifier(message) || '';
 
 
   // Lifecycle
