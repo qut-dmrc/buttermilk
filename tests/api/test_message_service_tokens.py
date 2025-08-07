@@ -27,7 +27,7 @@ class TestMessageServiceTokenExtraction:
         # Create test AgentOutput with usage metadata
         agent_config = AgentConfig(
             name="test_agent",
-            parameters={"model": "gpt-4"}
+            parameters={"model": "gpt41"}
         )
         
         # Create AgentOutput with AssistantMessage as output
@@ -37,7 +37,7 @@ class TestMessageServiceTokenExtraction:
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
             metadata={
-                "agent_model": "gpt-4",
+                "agent_model": "gpt41",
                 "usage": {
                     "prompt_tokens": 100,
                     "completion_tokens": 50
@@ -65,7 +65,7 @@ class TestMessageServiceTokenExtraction:
             # Verify mocks were called correctly
             mock_extract.assert_called_once()
             mock_calculate.assert_called_once_with(
-                model="gpt-4",
+                model="gpt41",
                 usage_dict={"prompt_tokens": 100, "completion_tokens": 50}
             )
 
@@ -81,7 +81,7 @@ class TestMessageServiceTokenExtraction:
         
         agent_config = AgentConfig(
             name="test_agent",
-            parameters={"model": "claude-3-sonnet"}
+            parameters={"model": "sonnet"}
         )
         
         agent_input = AgentInput(
@@ -99,7 +99,7 @@ class TestMessageServiceTokenExtraction:
             inputs=agent_input,
             outputs=AssistantMessage(content="Test response", source="test_agent"),
             metadata={
-                "agent_model": "claude-3-sonnet",
+                "agent_model": "sonnet",
                 "outputs": {
                     "usage": {
                         "input_tokens": 200,
@@ -178,7 +178,7 @@ class TestMessageServiceTokenExtraction:
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
             metadata={
-                "agent_model": "gpt-3.5-turbo",
+                "agent_model": "gpt41mini",
                 "usage": {
                     "prompt_tokens": 50,
                     "completion_tokens": 25
@@ -194,6 +194,6 @@ class TestMessageServiceTokenExtraction:
         assert result.cost_usd == 0.001
         
         mock_calculate.assert_called_with(
-            model="gpt-3.5-turbo",
+            model="gpt41mini",
             usage_dict={"prompt_tokens": 50, "completion_tokens": 25}
         )

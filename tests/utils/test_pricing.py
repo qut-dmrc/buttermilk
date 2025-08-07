@@ -22,7 +22,7 @@ class TestCalculateTokenCost:
         }
         
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model="gpt-4",
+            model="gpt41",
             usage_dict=usage_dict
         )
         
@@ -30,7 +30,7 @@ class TestCalculateTokenCost:
         assert completion_tokens == 50
         assert total_cost == 0.003  # mock returns total cost: 0.001 (prompt) + 0.002 (completion)
         mock_cost_per_token.assert_called_once_with(
-            model="gpt-4",
+            model="azure/gpt-4.1",  # Should map to azure model
             prompt_tokens=100,
             completion_tokens=50
         )
@@ -46,7 +46,7 @@ class TestCalculateTokenCost:
         }
         
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model="claude-3-sonnet",
+            model="sonnet",
             usage_dict=usage_dict
         )
         
@@ -54,7 +54,7 @@ class TestCalculateTokenCost:
         assert completion_tokens == 75
         assert total_cost == 0.004  # 0.0015 + 0.0025 = 0.004
         mock_cost_per_token.assert_called_once_with(
-            model="claude-3-sonnet",
+            model="vertex_ai/claude-sonnet-4@20250514",  # Should map to vertex AI model
             prompt_tokens=200,
             completion_tokens=75
         )
@@ -104,6 +104,34 @@ class TestCalculateTokenCost:
             assert prompt_tokens == 100
             assert completion_tokens == 50
             assert total_cost == 0.0
+
+    @patch('buttermilk.utils.pricing.cost_per_token')
+    def test_model_mapping(self, mock_cost_per_token):
+        """Test that buttermilk model names are properly mapped to litellm names."""
+        mock_cost_per_token.return_value = (0.001, 0.002)
+        
+        # Test different model mappings
+        test_cases = [
+            ("o4mini", "azure/o4-mini"),
+            ("gemini25flash", "gemini/gemini-2.5-flash-preview-05-20"),
+            ("sonnet", "vertex_ai/claude-sonnet-4@20250514"),
+            ("unknown-model", "unknown-model"),  # Should pass through unmapped
+        ]
+        
+        for buttermilk_model, expected_litellm_model in test_cases:
+            mock_cost_per_token.reset_mock()
+            
+            calculate_token_cost(
+                model=buttermilk_model,
+                prompt_tokens=100,
+                completion_tokens=50
+            )
+            
+            mock_cost_per_token.assert_called_once_with(
+                model=expected_litellm_model,
+                prompt_tokens=100,
+                completion_tokens=50
+            )
 
 
 class TestExtractUsageFromMetadata:

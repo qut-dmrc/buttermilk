@@ -16,6 +16,30 @@ except ImportError:
     cost_per_token = None
 
 
+# Mapping from buttermilk model names to litellm-compatible model names
+MODEL_MAPPING = {
+    # Azure OpenAI models
+    "o4mini": "azure/o4-mini",
+    "gpt41": "azure/gpt-4.1",
+    "gpt41nano": "azure/gpt-4.1-nano", 
+    "gpt41mini": "azure/gpt-4.1-mini",
+    
+    # Anthropic models (via Vertex)
+    "sonnet": "vertex_ai/claude-sonnet-4@20250514",
+    "opus": "vertex_ai/claude-opus-4-1-20250805",
+    "haiku": "vertex_ai/claude-3-5-haiku",
+    
+    # Google Gemini models
+    "gemini25pro": "gemini/gemini-2.5-pro-preview-03-25",
+    "gemini25flash": "gemini/gemini-2.5-flash-preview-05-20",
+    
+    # Meta Llama models (via Vertex)
+    "llama4maverick": "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas",
+    "llama33_70b": "vertex_ai/meta/llama-3.3-70b-instruct-maas",
+    "llama32_90b": "vertex_ai/meta/llama-3.2-90b-vision-instruct-maas",
+}
+
+
 def calculate_token_cost(
     model: str,
     prompt_tokens: int = 0,
@@ -49,10 +73,13 @@ def calculate_token_cost(
             prompt_tokens = usage_dict.get("input_tokens", 0)
             completion_tokens = usage_dict.get("output_tokens", 0)
     
+    # Map buttermilk model names to litellm-compatible names
+    litellm_model = MODEL_MAPPING.get(model, model)
+    
     try:
         # Get cost per token for this model
         prompt_cost, completion_cost = cost_per_token(
-            model=model,
+            model=litellm_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens
         )
@@ -60,13 +87,13 @@ def calculate_token_cost(
         total_cost = prompt_cost + completion_cost
         
         logger.debug(
-            f"Token cost for {model}: {prompt_tokens} prompt + {completion_tokens} completion = ${total_cost:.6f}"
+            f"Token cost for {model} (mapped to {litellm_model}): {prompt_tokens} prompt + {completion_tokens} completion = ${total_cost:.6f}"
         )
         
         return prompt_tokens, completion_tokens, total_cost
         
     except Exception as e:
-        logger.warning(f"Could not calculate token cost for model {model}: {e}")
+        logger.warning(f"Could not calculate token cost for model {model} (mapped to {litellm_model}): {e}")
         return prompt_tokens, completion_tokens, 0.0
 
 
