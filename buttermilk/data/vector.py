@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar, cast  # Corrected import for Tuple
-
+import semchunk
 import chromadb
 import hydra
 import pyarrow as pa
@@ -126,6 +126,7 @@ class ChunkedDocument(BaseModel):
     document_title: str
     chunk_index: int
     chunk_text: str
+    offset: str | None | tuple[int, int] = Field(default=None, description="Offset of chunk in the original text")
     document_id: str  # References Record.record_id
     embedding: Sequence[float] | Sequence[int] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -198,20 +199,31 @@ async def list_to_async_iterator(items: list[T]) -> AsyncIterator[T]:
         yield item
         await asyncio.sleep(0)  # Yield control briefly
 
+class SemanticSplitter(BaseModel):
+    # Defaults are roughly 750 words per chunk, with 250 word overlap
+    chunk_size: int = Field(default=1000)
+    chunk_overlap: int = Field(default=250)
+    _chunker: semchunk.SemanticChunker = PrivateAttr()
 
-class DefaultTextSplitter(RecursiveCharacterTextSplitter):
-    def __init__(self, chunk_size: int = 9000, chunk_overlap: int = 1000):
-        super().__init__(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=len,
-            is_separator_regex=False,
-            add_start_index=False,
-        )
+    model_config = pydantic.ConfigDict(extra="ignore")
+
+    @pydantic.model_validator(mode="after")
+    def initialize_chunker(self) -> Self:
+        """Initializes the semantic chunker with the specified parameters."""
+        
+        self._chunker = semchunk.chunkerify('cl100k_base', chunk_size)
         logger.info(
-            f"Initialized RecursiveCharacterTextSplitter (chunk_size={chunk_size}, chunk_overlap={chunk_overlap})",
+            f"Initialized SemanticSplitter (chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap})",
         )
+        return self
 
+    def _create_chunks(self, text) -> Tuple[List[str], List[Tuple[int, int]]]:
+        # Pass an `offsets` argument to return the offsets of chunks, as well as an `overlap`
+        # argument to overlap chunks by a ratio (if < 1) or an absolute number of tokens (if >= 1).
+        chunks, offsets = chunker(text, offsets = True, overlap = self.overlap)
+
+        return chunks, offsets
+    
     async def process(self, doc: Record, **kwargs) -> Record | None:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
@@ -230,24 +242,23 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
             return None
             
         try:
-            text_chunks = await asyncio.to_thread(
-                self.split_text,
-                text_content,
-            )
+            chunk_data = self._create_chunks(text_content)
+            
             doc.chunks = []
             doc_chunk_count = 0
-            for i, text_chunk in enumerate(text_chunks):
+            for i, chunk_data in enumerate(text_chunks):
+                text_chunk, offset = chunk_data
                 if not text_chunk.strip():
                     continue
                 doc.chunks.append(
                     ChunkedDocument(
-                        document_title=doc.metadata.get('title', '') if hasattr(doc, 'metadata') else doc.title,
+                        document_title=doc.title,
                         chunk_index=i,
                         chunk_text=text_chunk.strip(),
+                        offset=offset,
                         document_id=doc.record_id,
                         chunk_id=f"{doc.record_id}_{i}",
-                        chunk_title=f"Chunk {i}",
-                        metadata=doc.metadata.copy() if hasattr(doc, 'metadata') else {},
+                        metadata=doc.metadata.copy(),
                     ),
                 )
                 doc_chunk_count += 1
@@ -786,7 +797,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         if not self.multi_field_config:
             content_text = record.text_content
             if content_text:
-                text_splitter = DefaultTextSplitter(chunk_size=2000, chunk_overlap=500)
+                text_splitter = SemanticSplitter(chunk_size=1000, chunk_overlap=250)
                 content_chunks = text_splitter.split_text(content_text)
 
                 for i, chunk_text in enumerate(content_chunks):
@@ -809,7 +820,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         content_text = getattr(record, config.content_field, record.text_content)
         if isinstance(content_text, str) and content_text:
             logger.debug(f"Content text length for {record.record_id}: {len(content_text)} chars (from {config.content_field})")
-            text_splitter = DefaultTextSplitter(
+            text_splitter = SemanticSplitter(
                 chunk_size=config.chunk_size,
                 chunk_overlap=config.chunk_overlap,
             )
