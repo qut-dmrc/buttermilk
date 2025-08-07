@@ -52,7 +52,7 @@ class TestCalculateTokenCost:
         
         assert prompt_tokens == 200
         assert completion_tokens == 75
-        assert total_cost == 0.004  # 0.0015 + 0.0025
+        assert total_cost == 0.004  # 0.0015 + 0.0025 = 0.004
         mock_cost_per_token.assert_called_once_with(
             model="claude-3-sonnet",
             prompt_tokens=200,
