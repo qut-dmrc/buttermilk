@@ -185,6 +185,9 @@ export interface Message {
   type: MessageType;
   message_id: string;
   tracing_link?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cost_usd?: number;
 }
 
 
@@ -427,6 +430,9 @@ export function normalizeWebSocketMessage(data: any): Message {
       timestamp: data.timestamp,
       outputs: data.outputs || null,
       agent_info: data.agent_info as AgentInfo|| null,
+      prompt_tokens: data.prompt_tokens || 0,
+      completion_tokens: data.completion_tokens || 0,
+      cost_usd: data.cost_usd || 0,
     };
 
     return normalizedMessage;

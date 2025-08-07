@@ -71,7 +71,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/984609701316/locations/global/workloadIdentityPools/devops/providers/github-actions'
+          workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
           service_account: 'services@prosocial-443205.iam.gserviceaccount.com'
 
       - name: 'Generate GitHub App Token'
