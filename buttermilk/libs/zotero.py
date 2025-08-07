@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Self  # Import TYPE_CHECKING
 
 import pydantic
 from pydantic import BaseModel, PrivateAttr, Field, TypeAdapter
-from pyzotero import zotero
+from pyzotero import zotero, zotero_errors
 
 # Import bm for credentials access
 from buttermilk._core.dmrc import get_bm
@@ -121,7 +121,7 @@ class ZotDownloader(BaseModel):
             logger.info("Sync state reset. Next sync will fetch all items.")
 
 
-    async def get_all_records(self, force_full_sync: bool = False, **kwargs) -> AsyncIterator[Record]:
+    async def get_all_records(self, force_full_sync: bool = False, max_docs: int | None = None, **kwargs) -> AsyncIterator[Record]:
         """Fetches Zotero items, checks existence, downloads, extracts, and yields Records.
         
         This method implements incremental sync by default, only fetching items that have
@@ -129,6 +129,7 @@ class ZotDownloader(BaseModel):
         
         Args:
             force_full_sync: If True, bypasses incremental sync and fetches all items
+            max_docs: Maximum number of records to yield before stopping (None = no limit)
             **kwargs: Additional parameters to pass to the Zotero API
             
         Yields:
@@ -185,34 +186,42 @@ class ZotDownloader(BaseModel):
         max_concurrent = self.download_concurrency  # Limit concurrent downloads
         
         while items or _next or pending_tasks:
-            # Process items from current batch and create tasks
-            while items and len(pending_tasks) < max_concurrent:
-                item = items.pop(0)  # Process in order
-                key = item.get("key")
+            # Stop creating new tasks if we're close to max_docs limit
+            if max_docs is not None and (processed_count + len(pending_tasks)) >= max_docs:
+                # Just process remaining pending tasks
+                if not pending_tasks:
+                    break
+            else:
+                # Process items from current batch and create tasks
+                while items and len(pending_tasks) < max_concurrent:
+                    item = items.pop(0)  # Process in order
+                    key = item.get("key")
 
-                if not key:
-                    logger.warning(
-                        f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
-                    )
-                    continue
+                    if not key:
+                        logger.warning(
+                            f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
+                        )
+                        continue
 
-                # --- Check for existence using the stored vector_store ---
-                if self._vector_store and self._vector_store.check_document_exists(key):
-                    logger.info(
-                        f"Document {key} already exists in vector store, skipping.",
-                    )
-                    skipped_count += 1
-                    continue
-                # --- End existence check ---
+                    # --- Check for existence using the stored vector_store ---
+                    if self._vector_store and self._vector_store.check_document_exists(key):
+                        logger.info(
+                            f"Document {key} already exists in vector store, skipping.",
+                        )
+                        skipped_count += 1
+                        continue
+                    # --- End existence check ---
 
-                # Create task for this item
-                try:
-                    task = asyncio.create_task(self.download_record(item))
-                    pending_tasks.add(task)
-                except Exception as e:
-                    logger.error(
-                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
-                    )
+                    # Create task for this item
+                    try:
+                        title = item.get('data', {}).get('title', 'Unknown')[:50]
+                        logger.debug(f"🔵 [ZOTERO-{key}] Creating download task for '{title}' (pending: {len(pending_tasks)})")
+                        task = asyncio.create_task(self.download_record(item))
+                        pending_tasks.add(task)
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
+                        )
 
             # If we have pending tasks, wait for at least one to complete
             if pending_tasks:
@@ -227,7 +236,16 @@ class ZotDownloader(BaseModel):
                         result = await task
                         if result:
                             processed_count += 1
+                            logger.debug(f"🟢 [ZOTERO-{result.record_id}] Yielding record '{result.title[:50] if result.title else 'Unknown'}' to pipeline")
                             yield result
+                            
+                            # Check if we've reached max_docs limit
+                            if max_docs is not None and processed_count >= max_docs:
+                                logger.info(f"Reached max_docs limit ({max_docs}), stopping Zotero sync")
+                                # Cancel any remaining pending tasks
+                                for pending_task in pending_tasks:
+                                    pending_task.cancel()
+                                return
                     except Exception as e:
                         logger.error(
                             f"Error processing download/convert result: {e} {e.args=}",
@@ -280,6 +298,8 @@ class ZotDownloader(BaseModel):
         title = item.get("data", {}).get("title", "Unknown Title")
         doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
         zotero_data = item.get("data", {})
+        
+        logger.info(f"⬇️  [ZOTERO-{key}] Starting full-text download for '{title[:50]}'...")
 
         if not key:
             logger.warning(f"Item missing key: {item}")
@@ -316,6 +336,9 @@ class ZotDownloader(BaseModel):
                     else:
                         logger.debug(f"PDF file already exists: {pdf_file}")
 
+                    # TODO: Extract content from the PDF 
+                    
+
                 # --- Save Item JSON ---
                 try:
                     with json_file.open("w", encoding="utf-8") as f:
@@ -337,8 +360,13 @@ class ZotDownloader(BaseModel):
                     
                 )
                 
+                logger.debug(f"✅ [ZOTERO-{key}] Download complete for '{title[:50]}'")
                 return record
-
+            except zotero_errors.ResourceNotFoundError as e:
+                logger.error(
+                    f"Resource not found for item {key}: {e} {e.args=}",
+                )
+                return None
             except Exception as e:
                 logger.error(
                     f"Error during download/convert for {key}: {e} {e.args=}",

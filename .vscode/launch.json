@@ -126,6 +126,9 @@
         "run=vectorise_zotero",
         "+storage=zot",
         "+max_docs=5",
+        "+input_docs.download_concurrency=2",
+        "vectoriser.concurrency=1",
+        "vectoriser.sync_batch_size=2",
         "+quiet=false"
         // "experiments.model=[haiku]"
       ],

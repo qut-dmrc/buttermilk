@@ -1031,6 +1031,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Override embedding model if specified
         effective_embedding_model = embedding_model_override or self._embedding_model
+        
+        logger.info(f"🟣 [VECTORIZER-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
             # Step 1: Check if we should skip this record
@@ -1063,6 +1065,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     )
 
             # Step 3: Create chunks using configuration
+            logger.debug(f"🔪 [VECTORIZER-{record.record_id}] Creating chunks...")
             record.chunks = self.create_multi_field_chunks_for_record(record)
 
             if not record.chunks:
@@ -1078,6 +1081,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
 
             # Step 4: Generate embeddings for all chunks
+            logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
             await self._embed_chunks(record.chunks, record_title=record.title)
 
             # Step 5: Enhance chunk metadata with provenance tracking
@@ -1107,6 +1111,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     chunk.metadata["processing_run_id"] = run_id
 
             # Step 6: Store chunks in ChromaDB
+            logger.debug(f"💾 [VECTORIZER-{record.record_id}] Storing chunks in ChromaDB...")
             await self._store_chunks_for_record(record)
 
             # Step 7: Track successful processing
@@ -1121,7 +1126,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 chunk_type = chunk.metadata.get("chunk_type", "content")
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
 
-            logger.info(f"✅ Processed record {record.record_id}: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms")
+            logger.info(f"✅ [VECTORIZER-{record.record_id}] Successfully processed: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms")
 
             return ProcessingResult(
                 record=record,
@@ -1652,6 +1657,7 @@ class DocProcessor(BaseModel):
     """Callable class for processing documents from an iterator."""
 
     concurrency: int = Field(default=20)
+    max_docs: int | None = Field(default=None, description="Maximum documents to process")
     _semaphore: asyncio.Semaphore = PrivateAttr()
     doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
     processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
@@ -1674,12 +1680,20 @@ class DocProcessor(BaseModel):
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
+                logger.info(f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'")
                 result = await self.processor(doc)
                 # Handle ProcessingResult or Record return types
                 if isinstance(result, ProcessingResult):
-                    return result.record if result.status == "processed" else None
+                    if result.status == "processed":
+                        logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
+                        return result.record
+                    else:
+                        logger.debug(f"⏭️  [{self._name}-{doc.record_id}] Skipped: {result.reason}")
+                        return None
                 else:
                     # Direct Record or None return
+                    if result:
+                        logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
                     return result
             except Exception as e:
                 logger.error(
@@ -1700,17 +1714,23 @@ class DocProcessor(BaseModel):
             # Start initial tasks up to our limit
             iterator_exhausted = False
             while not iterator_exhausted:
-                # Add new tasks up to our max_pending limit
-                while len(pending_tasks) < max_pending and not iterator_exhausted:
-                    try:
-                        doc = await anext(self.doc_iterator)
-                        task = asyncio.create_task(self._process(doc))
-                        pending_tasks.add(task)
-                        # Set up task completion callback to remove it from pending set
-                        task.add_done_callback(pending_tasks.discard)
-                    except StopAsyncIteration:
-                        iterator_exhausted = True
+                # Check if we should stop creating new tasks due to max_docs
+                if self.max_docs is not None and (processed_count + len(pending_tasks)) >= self.max_docs:
+                    # Just process remaining pending tasks
+                    if not pending_tasks:
                         break
+                else:
+                    # Add new tasks up to our max_pending limit
+                    while len(pending_tasks) < max_pending and not iterator_exhausted:
+                        try:
+                            doc = await anext(self.doc_iterator)
+                            task = asyncio.create_task(self._process(doc))
+                            pending_tasks.add(task)
+                            # Set up task completion callback to remove it from pending set
+                            task.add_done_callback(pending_tasks.discard)
+                        except StopAsyncIteration:
+                            iterator_exhausted = True
+                            break
 
                 if not pending_tasks:
                     break
@@ -1728,6 +1748,15 @@ class DocProcessor(BaseModel):
                         if result is not None:
                             processed_count += 1
                             yield result
+                            
+                            # Check if we've reached max_docs limit
+                            if self.max_docs is not None and processed_count >= self.max_docs:
+                                logger.info(f"DocProcessor {self._name} reached max_docs limit ({self.max_docs})")
+                                # Cancel remaining tasks
+                                for pending_task in pending_tasks:
+                                    if not pending_task.done():
+                                        pending_task.cancel()
+                                return
                     except Exception as e:
                         logger.error(f"Task raised an exception: {e}")
 
@@ -1815,24 +1844,28 @@ def main(cfg) -> None:
 
             # 1. Source Documents
             start_from = getattr(cfg, 'start_from', 0)
-            doc_iterator = input_docs_source.get_all_records(start=start_from)
+            max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
+            doc_iterator = input_docs_source.get_all_records(start=start_from, max_docs=max_docs)
 
             # 2. Pre-process (Extract Text if needed)
             pre_processed_iterator = DocProcessor(
                 doc_iterator=doc_iterator,
                 processor=preprocessor_instance.process,
+                max_docs=max_docs,
             )
 
             # 3. Process Documents (e.g., add citations)
             processed_doc_iterator = DocProcessor(
                 doc_iterator=pre_processed_iterator(),
                 processor=processor_instance.process,
+                max_docs=max_docs,
             )
 
             # 4. Chunk Documents (Adds chunks to Record)
             chunked_doc_iterator = DocProcessor(
                 doc_iterator=processed_doc_iterator(),
                 processor=text_splitter_instance.process,
+                max_docs=max_docs,
             )
 
             # 5. Vectorize and Upsert - now using the same DocProcessor pattern
@@ -1840,10 +1873,10 @@ def main(cfg) -> None:
                 doc_iterator=chunked_doc_iterator(),
                 processor=vectoriser.process_record,
                 concurrency=vectoriser.concurrency,
+                max_docs=max_docs,
             )
 
             # Process documents through the complete pipeline with a limit
-            max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
             quiet = getattr(cfg, 'quiet', False)
             
             pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
