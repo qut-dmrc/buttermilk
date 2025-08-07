@@ -361,7 +361,7 @@ class LLMAgent(Agent):
         if chat_result.usage:
             output_metadata["usage"] = chat_result.usage
 
-        logger.info(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
+        logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
         return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
 
     async def _call_llm(

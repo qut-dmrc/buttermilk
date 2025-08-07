@@ -407,20 +407,34 @@ class HostAgent(Agent):
                 if self._pending_tasks_by_agent:
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
 
+                # Calculate dynamic timeout based on number of tasks
+                # Base timeout + (60 seconds per task / 6 parallel capacity)
+                # With 6 parallel tasks potentially taking 1 minute each due to rate limits
+                # But capped between 5-20 minutes (300-1200 seconds) per step
+                total_pending_tasks = sum(self._pending_tasks_by_agent.values())
+                additional_time = (total_pending_tasks * 60) / 6  # Assuming 6 parallel workers
+                calculated_timeout = self._max_wait_time + additional_time
+                # Ensure timeout is between 5 and 20 minutes
+                dynamic_timeout = max(300, min(calculated_timeout, 1200))
+                
+                logger.info(f"Using dynamic timeout of {dynamic_timeout:.0f}s for {total_pending_tasks} pending tasks")
+
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
                 # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
-                    timeout=self._max_wait_time,
+                    timeout=dynamic_timeout,
                 )
                 return True
         except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
+            # Note: We can't access total_pending_tasks here as it was in the async with block
+            # but we can still show the pending tasks
             msg = (
                 f"Timeout waiting for task completion condition. "
-                f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self._max_wait_time}s."
+                f"Pending tasks: {dict(self._pending_tasks_by_agent)}."
             )
             logger.warning(msg)
             self._step_starting.clear()  # Reset the event to allow for new steps
