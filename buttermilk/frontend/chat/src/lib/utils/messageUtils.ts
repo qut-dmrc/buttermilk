@@ -1,21 +1,21 @@
 // Agent type styling
 export const AGENT_STYLES = {
-  default: { color: "#6c757d", background: "#f8f9fa", border: "#dee2e6" },
-  judge: { color: "#495057", background: "#e9ecef", border: "#ced4da" },
-  scorer: { color: "#212529", background: "#f8f9fa", border: "#adb5bd" },
-  assistant: { color: "#0d6efd", background: "#e7f1ff", border: "#b6d4fe" },
-  describer: { color: "#6610f2", background: "#eee6ff", border: "#d0bfff" },
-  fetch: { color: "#fd7e14", background: "#fff3cd", border: "#ffecb5" },
-  imagegen: { color: "#d63384", background: "#f7d6e6", border: "#efadce" },
-  reasoning: { color: "#20c997", background: "#d1f2eb", border: "#a3e4d7" },
-  scraper: { color: "#6f42c1", background: "#e6d9f2", border: "#d2b5e8" },
-  spy: { color: "#212529", background: "#e2e3e5", border: "#c9cccf" },
-  synthesiser: { color: "#0c4128", background: "#d0f0e0", border: "#a0d0b0" },
-  tool: { color: "#198754", background: "#d1e7dd", border: "#badbcc" },
-  instructions: { color: "#0dcaf0", background: "#cff4fc", border: "#9eeaf9" },
-  record: { color: "#6c757d", background: "#f8f9fa", border: "#dee2e6" },
-  summary: { color: "#007bff", background: "#e7f1ff", border: "#b6d4fe" },
-  researcher: { color: "#5fadaa", background: "#d1f0f0", border: "#a0d0d0" },
+  default: { color: '#A9A9A9', background: '#f8f9fa', border: '#dee2e6' }, // DarkGray
+  judge: { color: '#8A2BE2', background: '#e9ecef', border: '#ced4da' }, // BlueViolet
+  scorer: { color: '#FF4500', background: '#f8f9fa', border: '#adb5bd' }, // OrangeRed
+  assistant: { color: '#1E90FF', background: '#e7f1ff', border: '#b6d4fe' }, // DodgerBlue
+  describer: { color: '#9932CC', background: '#eee6ff', border: '#d0bfff' }, // DarkOrchid
+  fetch: { color: '#FFD700', background: '#fff3cd', border: '#ffecb5' }, // Gold
+  imagegen: { color: '#FF69B4', background: '#f7d6e6', border: '#efadce' }, // HotPink
+  reasoning: { color: '#32CD32', background: '#d1f2eb', border: '#a3e4d7' }, // LimeGreen
+  scraper: { color: '#4B0082', background: '#e6d9f2', border: '#d2b5e8' }, // Indigo
+  spy: { color: '#2F4F4F', background: '#e2e3e5', border: '#c9cccf' }, // DarkSlateGray
+  synthesiser: { color: '#008080', background: '#d0f0e0', border: '#a0d0b0' }, // Teal
+  tool: { color: '#228B22', background: '#d1e7dd', border: '#badbcc' }, // ForestGreen
+  instructions: { color: '#00BFFF', background: '#cff4fc', border: '#9eeaf9' }, // DeepSkyBlue
+  record: { color: '#696969', background: '#f8f9fa', border: '#dee2e6' }, // DimGray
+  summary: { color: '#4682B4', background: '#e7f1ff', border: '#b6d4fe' }, // SteelBlue
+  researcher: { color: '#DAA520', background: '#d1f0f0', border: '#a0d0d0' }, // GoldenRod
 };
 
 

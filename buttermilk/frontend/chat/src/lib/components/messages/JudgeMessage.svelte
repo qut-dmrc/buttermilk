@@ -130,12 +130,9 @@
 <div class="message-terminal" style="color: {modelBasedColor}">
   <BasicMessage message={message}>
     <svelte:fragment slot="messagePrefix">
-        <i class="bi bi-cpu"></i>|{modelName}|
-        <i class="bi bi-file-earmark-text"></i>{message.agent_info?.parameters?.template}
-        <i class="bi bi-list-check"></i>{message.agent_info?.parameters?.criteria}
+        <i class="bi bi-cpu"></i>|{modelName}| <i class="bi bi-file-earmark-text"></i>{message.agent_info?.parameters?.template} <i class="bi bi-list-check"></i>{message.agent_info?.parameters?.criteria}
         {#if prediction !== undefined}<i class="bi {prediction ? 'bi-x-circle' : 'bi-check-circle'}"></i>{/if}
         {#if uncertainty}<i class="bi {uncertainty.icon}">{uncertainty.text}</i>{/if}
-        <br>
         <span class="avg-score" style="color: {getScoreColor(averageScore)}">
           Average: {averageScore !== null ? (averageScore * 100).toFixed(0) + '%' : 'N/A'} 
           {generateMultiScoreBar(assessments)}

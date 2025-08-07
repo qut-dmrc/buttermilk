@@ -391,22 +391,6 @@ import {
             };
             console.debug('Updated flow progress status:', systemUpdateStatus);
           
-          } else if (normalizedMessage.type === 'agent_announcement') {
-            // Handle agent announcements - update system status but don't add to message display
-            const agentId = outputs?.agent_id || 'Unknown';
-            const action = outputs?.action || 'update';
-            const statusMessage = outputs?.status_message || `Agent ${action}`;
-            
-            systemUpdateStatus = {
-              source: agentId,
-              step_name: statusMessage,
-              status: action === 'joined' ? 'STARTED' : action === 'left' ? 'COMPLETED' : 'IN_PROGRESS',
-              message: statusMessage,
-              timestamp: normalizedMessage.timestamp || new Date().toISOString(),
-              waiting_on: {}
-            };
-            console.debug('Updated agent status:', systemUpdateStatus);
-          
           } else {
             // Add the message to the display
             console.debug('added message for display: ', normalizedMessage);
@@ -676,6 +660,11 @@ import {
             {#if systemUpdateStatus.waiting_on}
               <span class="waiting-on">
                 Waiting on: {Object.keys(systemUpdateStatus.waiting_on).join(', ')}
+              </span>
+            {/if}
+            {#if systemUpdateStatus.active_agents}
+              <span class="active-agents">
+                ({systemUpdateStatus.active_agents} agents active)
               </span>
             {/if}
           </div>
