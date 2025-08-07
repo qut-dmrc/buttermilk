@@ -81,7 +81,16 @@ def extract_usage_from_metadata(metadata: Dict[str, Any]) -> Optional[Dict[str, 
     """
     # Direct usage field
     if "usage" in metadata:
-        return metadata["usage"]
+        usage = metadata["usage"]
+        # If it's a RequestUsage object, convert to dict
+        if hasattr(usage, "prompt_tokens") and hasattr(usage, "completion_tokens"):
+            return {
+                "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(usage, "completion_tokens", 0)
+            }
+        # If it's already a dict, return it
+        elif isinstance(usage, dict):
+            return usage
     
     # Nested in outputs
     if "outputs" in metadata:
