@@ -6,6 +6,7 @@ import { flowRunning, selectedFlow as flowStore, selectedRecord as recordStore, 
 import { messageHistory } from './stores/messageHistoryStore';
 import { addMessage as addToMessageStore } from './stores/messageStore';
 import { sessionId } from './stores/sessionStore';
+import { tokenUsageDisplay } from './stores/tokenUsageStore';
 import './styles/terminal.scss';
 import {
 	type ManagerMessage,
@@ -683,6 +684,14 @@ import {
                 ({systemUpdateStatus.active_agents} agents active)
               </span>
             {/if}
+          </div>
+        {/if}
+        
+        <!-- Token usage display -->
+        {#if $tokenUsageDisplay.messageCount > 0}
+          <div class="token-usage">
+            <span class="token-count">{$tokenUsageDisplay.totalTokens} tokens</span>
+            <span class="token-cost">{$tokenUsageDisplay.cost}</span>
           </div>
         {/if}
       </div>

@@ -238,8 +238,9 @@ jobs:
           settings: |-
             {
               "maxSessionTurns": 50,
+              "selectedAuthType": "vertex-ai",
               "telemetry": {
-                "enabled": false,
+                "enabled": true,
                 "target": "gcp"
               }
             }

@@ -48,6 +48,7 @@ dependencies = [
     "google-cloud-language<3.0.0,>=2.15.1",
     "gspread<7.0.0,>=6.1.2",
     "anyio<5.0.0,>=4.7.0",
+    "litellm>=1.0.0",
     "slack-bolt<2.0.0,>=1.21.2",
     "google-cloud-bigquery-storage<3.0.0,>=2.27.0",
     "google-cloud-storage<3.0.0,>=2.19.0",

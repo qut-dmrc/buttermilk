@@ -175,8 +175,8 @@
     {
       "name": "Debug web frontend",
       "configurations": [
-        "daemon",
-        "Launch chat web ui",
+        "Buttermilk API daemon",
+        "Chat web ui",
         "attach edge devtools",
       ]
     }
