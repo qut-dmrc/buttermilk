@@ -2,7 +2,7 @@ name: '📋 Gemini Scheduled Issue Triage'
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
+    - cron: '20 18 * * *' # Runs every day
   workflow_dispatch:
 
 concurrency:
@@ -28,12 +28,12 @@ jobs:
       - name: 'Checkout repository'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
+
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/984609701316/locations/global/workloadIdentityPools/devops/providers/github-actions'
-          service_account: 'services@prosocial-443205.iam.gserviceaccount.com'
-
+          workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
       - name: 'Generate GitHub App Token'
         id: 'generate_token'
         if: |-

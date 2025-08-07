@@ -91,7 +91,7 @@
 <div class="message-terminal">
   <BasicMessage message={message}>
 
-    <svelte:fragment slot="agentNick">[RECORD]</svelte:fragment>
+    <svelte:fragment slot="agentNick"><i class="bi bi-newspaper"></i> [RECORD]</svelte:fragment>
     <svelte:fragment slot="messagePrefix">
       <span class="record-title-inline">{message.outputs?.metadata?.title}</span>
 

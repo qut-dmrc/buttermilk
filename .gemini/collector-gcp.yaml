@@ -1,0 +1,34 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 'localhost:4317'
+processors:
+  batch:
+    timeout: '1s'
+exporters:
+  googlecloud:
+    project: 'prosocial-443205'
+    metric:
+      prefix: 'custom.googleapis.com/gemini_cli'
+    log:
+      default_log_name: 'gemini_cli'
+service:
+  telemetry:
+    logs:
+      level: 'debug'
+    metrics:
+      level: 'none'
+  pipelines:
+    traces:
+      receivers: ['otlp']
+      processors: ['batch']
+      exporters: ['googlecloud']
+    metrics:
+      receivers: ['otlp']
+      processors: ['batch']
+      exporters: ['googlecloud']
+    logs:
+      receivers: ['otlp']
+      processors: ['batch']
+      exporters: ['googlecloud']

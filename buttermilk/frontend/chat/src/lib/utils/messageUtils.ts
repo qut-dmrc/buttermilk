@@ -1,21 +1,21 @@
 // Agent type styling
 export const AGENT_STYLES = {
-  default: { color: "#6c757d", background: "#f8f9fa", border: "#dee2e6" },
-  judge: { color: "#495057", background: "#e9ecef", border: "#ced4da" },
-  scorer: { color: "#212529", background: "#f8f9fa", border: "#adb5bd" },
-  assistant: { color: "#0d6efd", background: "#e7f1ff", border: "#b6d4fe" },
-  describer: { color: "#6610f2", background: "#eee6ff", border: "#d0bfff" },
-  fetch: { color: "#fd7e14", background: "#fff3cd", border: "#ffecb5" },
-  imagegen: { color: "#d63384", background: "#f7d6e6", border: "#efadce" },
-  reasoning: { color: "#20c997", background: "#d1f2eb", border: "#a3e4d7" },
-  scraper: { color: "#6f42c1", background: "#e6d9f2", border: "#d2b5e8" },
-  spy: { color: "#212529", background: "#e2e3e5", border: "#c9cccf" },
-  synthesiser: { color: "#0c4128", background: "#d0f0e0", border: "#a0d0b0" },
-  tool: { color: "#198754", background: "#d1e7dd", border: "#badbcc" },
-  instructions: { color: "#0dcaf0", background: "#cff4fc", border: "#9eeaf9" },
-  record: { color: "#6c757d", background: "#f8f9fa", border: "#dee2e6" },
-  summary: { color: "#007bff", background: "#e7f1ff", border: "#b6d4fe" },
-  researcher: { color: "#5fadaa", background: "#d1f0f0", border: "#a0d0d0" },
+  default: { color: '#A9A9A9', background: '#f8f9fa', border: '#dee2e6' }, // DarkGray
+  judge: { color: '#8A2BE2', background: '#e9ecef', border: '#ced4da' }, // BlueViolet
+  scorer: { color: '#FF4500', background: '#f8f9fa', border: '#adb5bd' }, // OrangeRed
+  assistant: { color: '#1E90FF', background: '#e7f1ff', border: '#b6d4fe' }, // DodgerBlue
+  describer: { color: '#9932CC', background: '#eee6ff', border: '#d0bfff' }, // DarkOrchid
+  fetch: { color: '#FFD700', background: '#fff3cd', border: '#ffecb5' }, // Gold
+  imagegen: { color: '#FF69B4', background: '#f7d6e6', border: '#efadce' }, // HotPink
+  reasoning: { color: '#32CD32', background: '#d1f2eb', border: '#a3e4d7' }, // LimeGreen
+  scraper: { color: '#4B0082', background: '#e6d9f2', border: '#d2b5e8' }, // Indigo
+  spy: { color: '#2F4F4F', background: '#e2e3e5', border: '#c9cccf' }, // DarkSlateGray
+  synthesiser: { color: '#008080', background: '#d0f0e0', border: '#a0d0b0' }, // Teal
+  tool: { color: '#228B22', background: '#d1e7dd', border: '#badbcc' }, // ForestGreen
+  instructions: { color: '#00BFFF', background: '#cff4fc', border: '#9eeaf9' }, // DeepSkyBlue
+  record: { color: '#696969', background: '#f8f9fa', border: '#dee2e6' }, // DimGray
+  summary: { color: '#4682B4', background: '#e7f1ff', border: '#b6d4fe' }, // SteelBlue
+  researcher: { color: '#DAA520', background: '#d1f0f0', border: '#a0d0d0' }, // GoldenRod
 };
 
 
@@ -26,6 +26,7 @@ export function getModelColor(modelName: string | undefined): string {
   if (modelLower.includes('gpt-4') || modelLower.includes('gpt4')) return '#10a37f'; // OpenAI green
   if (modelLower.includes('gpt-3.5')) return '#1f85de'; // OpenAI blue
   if (modelLower.includes('o3')) return '#00d4aa'; // OpenAI teal for o3 series
+  if (modelLower.includes('o4')) return '#00d4aa'; // OpenAI teal for o4 series
   if (modelLower.includes('claude') || modelLower.includes('opus') || modelLower.includes('haiku') || modelLower.includes('sonnet')) return '#ff6b35'; // Anthropic orange
   if (modelLower.includes('gemini')) return '#4285f4'; // Google blue
   if (modelLower.includes('llama')) return '#0866ff'; // Meta blue (Facebook/Meta's brand color)
@@ -52,14 +53,16 @@ export function getModelIdentifier(message: Message): string {
   const idLower = message.agent_info.parameters.model.toLowerCase();
   if (idLower.includes('gpt4') || idLower.includes('gpt-4')) return 'GPT4';
   if (idLower.includes('gpt3') || idLower.includes('gpt-3')) return 'GPT3';
+  if (idLower.includes('o3mini')) return 'O3-';
   if (idLower.includes('o3')) return 'O3';
+  if (idLower.includes('o4mini')) return 'O4-';
+  if (idLower.includes('o4')) return 'O4';
   if (idLower.includes('sonnet')) return 'SNNT';
   if (idLower.includes('opus')) return 'OPUS';
   if (idLower.includes('haiku')) return 'HAIK';
-  if (idLower.includes('claude')) return 'CLDE'; // Fallback for other Claude models
   if (idLower.includes('gemini')) return 'GEMN';
   if (idLower.includes('llama')) return 'LLMA';
-  return 'UNKN';
+  return 'UNKN'; // Unknown model
 }
 
 export function getRoleIdentifier(message: Message): string {

@@ -96,6 +96,11 @@ jobs:
           app-id: '${{ vars.APP_ID }}'
           private-key: '${{ secrets.APP_PRIVATE_KEY }}'
 
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
       - name: 'Get context from event'
         id: 'get_context'
         env:
