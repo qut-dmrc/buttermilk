@@ -29,7 +29,7 @@ api:
 	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
 
 # Run API server in debug mode. Use this one for development.
-debug: kill_api
+debug: 
 	@echo "Starting Buttermilk API in debug mode..."
 	@echo "Logs are written to: /tmp/buttermilk_<run_id>.log"
 	@echo "To find the latest log: ./scripts/mcp_debug/getlog.sh"
