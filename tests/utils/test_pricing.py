@@ -28,7 +28,7 @@ class TestCalculateTokenCost:
         
         assert prompt_tokens == 100
         assert completion_tokens == 50
-        assert total_cost == 0.003  # 0.001 + 0.002
+        assert total_cost == 0.003  # mock returns total cost: 0.001 (prompt) + 0.002 (completion)
         mock_cost_per_token.assert_called_once_with(
             model="gpt-4",
             prompt_tokens=100,
