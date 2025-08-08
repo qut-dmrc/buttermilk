@@ -38,14 +38,14 @@ jobs:
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@beta
+        env:
+          ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GOOGLE_CLOUD_PROJECT }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-          # Optional: Specify the tools Claude can use
-          # since this is running in a GitHub Actions virtual machine (which is isolated and ephemeral), we can safely give Claude Code broader bash permissions.
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,LS"
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
@@ -60,14 +60,6 @@ jobs:
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           custom_instructions: |
             CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
-            
-            Use the MCP tools in .mcp/tools/ for:
-            - Workflow validation: .mcp/tools/buttermilk-workflow-check.sh
-            - Log viewing: .mcp/tools/buttermilk-logs.sh
-            - Server management: .mcp/tools/buttermilk-server.sh
-            - Flow testing: .mcp/tools/buttermilk-test-flow.sh
-            - Config validation: .mcp/tools/buttermilk-config-validate.sh
-            - GitHub issues: .mcp/tools/buttermilk-github-issue.sh
           # Optional: Custom environment variables for Claude
           # claude_env: |
           #   NODE_ENV: test
