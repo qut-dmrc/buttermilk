@@ -49,7 +49,7 @@ jobs:
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,LS,mcp__github,mcp__github__create_pull_request,mcp__github__create_issue,mcp__github__comment_on_issue,mcp__github__comment_on_pr,mcp__github__list_files,mcp__github__get_file_content"
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
-          model: "claude-opus-4"
+          model: "claude-opus-4-1"
 
           # Optional: Customize the trigger phrase (default: @claude)
           # trigger_phrase: "/claude"
