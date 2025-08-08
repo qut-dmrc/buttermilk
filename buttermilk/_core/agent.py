@@ -58,7 +58,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
-from buttermilk._core.tracing import get_parent_call  # Function to retrieve parent call for tracing
+from buttermilk._core.tracing import get_parent_call_weave  # Function to retrieve parent call for tracing
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -386,7 +386,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         }
 
         process_op = weave.op(self._process, call_display_name=self.agent_name)
-        parent_call = await get_parent_call(message)
+        parent_call = await get_parent_call_weave(message)
 
         child_call = bm.weave.create_call(
             process_op,

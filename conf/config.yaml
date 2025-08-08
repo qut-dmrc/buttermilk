@@ -12,3 +12,5 @@ bm:
     name: ${run.name}
     job: ${run.job}
   llms: ${llms}
+  tracing:
+    enabled: true

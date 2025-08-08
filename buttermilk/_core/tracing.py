@@ -1,18 +1,39 @@
 import weave  # For tracing - core dependency
-from weave.trace.weave_client import Call, WeaveObject
-
-# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
+from weave.trace.weave_client import Call, WeaveClient, WeaveObject
 
 # Buttermilk core imports
 from buttermilk._core.contract import (
     AgentInput,
 )
+from buttermilk._core.dmrc import get_bm
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.retry import RetryWrapper
 
 
-async def get_parent_call(
+def get_weave() -> WeaveClient:
+    """Provides access to the Weights & Biases Weave client for tracing.
+
+    Initializes Weave with a collection name derived from `self.name` (flow name)
+    and `self.job` (job name). Sets up credentials from environment variables or
+    secret manager before initialization to avoid interactive login flows.
+    Handles connection failures gracefully by falling back to a mock client.
+
+    Returns:
+        Any: The initialized Weave client instance, or a mock client if initialization fails.
+
+    """
+    bm = get_bm()
+    collection_name = f"{bm.run_info.name}-{bm.run_info.job}"  # Construct collection name
+
+    # client = weave.init(collection_name)
+    # We disable weave autopatching for Autogen because it's too noisy and slow
+    # We will instead trace manually.
+    client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
+    logger.debug("Weave initialized successfully")
+    return client
+
+
+async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
 
@@ -20,7 +41,7 @@ async def get_parent_call(
 
         async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
             """Retry getting weave call to handle async upload timing."""
-            return bm.weave.get_call(call_id)
+            return get_bm().weave.get_call(call_id)
 
         # Use RetryWrapper with shorter delays for weave call retrieval
         retry_wrapper = RetryWrapper(

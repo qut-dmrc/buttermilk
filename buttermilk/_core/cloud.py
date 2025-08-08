@@ -1,7 +1,7 @@
 """Cloud provider client management and connection utilities."""
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
@@ -89,6 +89,7 @@ class CloudManager:
         
         Returns:
             str: A valid OAuth2 access token
+
         """
         creds = self.gcp_credentials
 
@@ -101,7 +102,7 @@ class CloudManager:
         return creds.token
 
     @cached_property
-    def gcs(self) -> Optional[Any]:
+    def gcs(self) -> Any | None:
         """Get Google Cloud Storage client instance.
 
         Returns:
@@ -124,7 +125,7 @@ class CloudManager:
             raise RuntimeError(f"Failed to initialize GCS client: {e}") from e
 
     @cached_property
-    def bq(self) -> Optional[Any]:
+    def bq(self) -> Any | None:
         """Get Google BigQuery client instance.
 
         Returns:
@@ -146,7 +147,7 @@ class CloudManager:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize BigQuery client: {e}") from e
 
-    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Optional[Any]:
+    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Any | None:
         """Get Google Cloud Logging client instance.
 
         Args:
@@ -188,60 +189,21 @@ class CloudManager:
         from vertexai import init as aiplatform_init
 
         # Ensure required attributes exist
-        project = getattr(cloud, "project", None)
+        project_id = getattr(cloud, "project_id", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 
-        if project and location and bucket:
+        if project_id and location and bucket:
             try:
                 aiplatform_init(
-                    project=project,
+                    project=project_id,
                     location=location,
                     staging_bucket=bucket,
                 )
-                logger.info(f"Initialized Vertex AI: project={project}, location={location}")
+                logger.info(f"Initialized Vertex AI: project={project_id}, location={location}")
             except Exception as e:
                 logger.warning(f"Failed to initialize Vertex AI: {e}")
         else:
-            logger.warning(
-                "Skipping Vertex AI initialization due to missing project, location, or bucket in config.",
+            raise FatalError(
+                "Unable to complete Vertex AI initialization due to missing project, location, or bucket in config.",
             )
-
-    def setup_tracing(self, tracing_cfg: Any | None = None) -> None:
-        """Set up cloud tracing if configured.
-
-        Args:
-            tracing_cfg: Tracing configuration
-
-        """
-        if not tracing_cfg:
-            return
-
-        if hasattr(tracing_cfg, "provider") and tracing_cfg.provider == "wandb":
-            self._setup_wandb_tracing()
-        elif hasattr(tracing_cfg, "provider") and tracing_cfg.provider == "google":
-            self._setup_google_tracing()
-
-    def _setup_google_tracing(self) -> None:
-        """Set up Google Cloud Trace."""
-        try:
-            from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
-            from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
-            from opentelemetry.exporter.cloud_logging import CloudLoggingLogRecordExporter
-            from traceloop.sdk import Traceloop
-
-            trace_exporter = CloudTraceSpanExporter()
-            metrics_exporter = CloudMonitoringMetricsExporter()
-            logs_exporter = CloudLoggingLogRecordExporter()
-
-            Traceloop.init(
-                app_name="buttermilk",
-                exporter=trace_exporter,
-                metrics_exporter=metrics_exporter,
-                logging_exporter=logs_exporter,
-            )
-            logger.info("Initialized Google Cloud tracing")
-        except ImportError as e:
-            logger.warning(f"Failed to initialize Google Cloud tracing - missing dependencies: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Google Cloud tracing: {e}")
