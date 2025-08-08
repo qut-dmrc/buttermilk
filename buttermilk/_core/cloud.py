@@ -225,14 +225,14 @@ class CloudManager:
     def _setup_google_tracing(self) -> None:
         """Set up Google Cloud Trace."""
         try:
-            from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
-            from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
             from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+            from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
+            from opentelemetry.exporter.cloud_logging import CloudLoggingLogRecordExporter
             from traceloop.sdk import Traceloop
 
             trace_exporter = CloudTraceSpanExporter()
             metrics_exporter = CloudMonitoringMetricsExporter()
-            logs_exporter = CloudLoggingExporter()
+            logs_exporter = CloudLoggingLogRecordExporter()
 
             Traceloop.init(
                 app_name="buttermilk",
