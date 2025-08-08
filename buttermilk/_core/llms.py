@@ -21,7 +21,7 @@ import weave
 from anthropic import (
     AsyncAnthropicVertex,
 )
-from google import genai  # Google Generative AI library
+
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (
@@ -40,6 +40,7 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
+from google import genai  # Google Generative AI library
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
 
@@ -47,6 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
     from buttermilk._core.dmrc import get_bm as _get_bm  # Actual import of get_bm
+
     return _get_bm()
 
 
@@ -85,8 +87,6 @@ class ClientType(Enum):
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
 
 
-
-
 class LLMConfig(BaseModel):
     """Configuration for a specific Language Model (LLM).
 
@@ -119,7 +119,7 @@ class LLMConfig(BaseModel):
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
-    model_info: ModelInfo
+    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
 
     @field_validator("client_type", mode="before")
@@ -162,23 +162,18 @@ class LLMConfig(BaseModel):
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHAT_MODELS = [
-    "llama4maverick",
-    "llama33_70b",
-    "llama32_90b",
-    "o4mini",
-    "gpt41",
-    "gpt41nano",
-    "gpt41mini",
-    "sonnet",
-    "opus",
-    "haiku",
-    "gemini25pro",
     "gemini25flash",
+    "gemini25pro",
+    "gpt5mini",
+    "gpt5nano",
+    "gpt5chat",
+    "llama4maverick",
+    "opus",
+    "sonnet",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "haiku",
     "gemini25flash",
     "o4mini",
     "gpt41mini",
@@ -250,8 +245,8 @@ class AutoGenWrapper(RetryWrapper):
 
     """
 
-    client: ChatCompletionClient
-    model_info: ModelInfo
+    client: ChatCompletionClient = Field(..., description="The underlying Autogen client instance.")
+    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
 
     @weave.op
     async def create(
@@ -300,33 +295,38 @@ class AutoGenWrapper(RetryWrapper):
 
         json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
         fake_schema_tool = None  # Will hold our fake tool if needed
-        
+
         if is_valid_schema_type and self.model_info.get("structured_output"):
             json_output_requested = schema  # type: ignore # Pass the schema for structured output
-        elif is_valid_schema_type and not self.model_info.get("structured_output") and not tools and self.model_info.get("function_calling", True):
+        elif (
+            is_valid_schema_type
+            and not self.model_info.get("structured_output")
+            and not tools
+            and self.model_info.get("function_calling", True)
+        ):
             # Create a fake tool for models that support function calling but not structured output
             # This allows us to get structured output via tool calling
             from autogen_core.tools import BaseTool
-            
+
             class PydanticModelTool(BaseTool[BaseModel, BaseModel]):
                 """A tool that creates instances of a Pydantic model."""
-                
+
                 def __init__(self, model: type[BaseModel]):
                     super().__init__(
                         args_type=model,
                         return_type=model,
                         name=f"create_{model.__name__.lower()}",
-                        description=f"Create a {model.__name__} object with the specified fields"
+                        description=f"Create a {model.__name__} object with the specified fields",
                     )
                     self._model = model
-                
+
                 async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
                     # args is already validated as our model type by BaseTool
                     return args
-            
+
             # Create the fake tool
             fake_schema_tool = PydanticModelTool(schema)
-            
+
             # Add the fake tool to the tools list
             tools = [fake_schema_tool]
 
@@ -348,7 +348,12 @@ class AutoGenWrapper(RetryWrapper):
         # Some other models also have this limitation (discovered through testing)
         models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
 
-        if tools and model_family in models_with_tool_schema_conflict and json_output_requested and isinstance(json_output_requested, type):
+        if (
+            tools
+            and model_family in models_with_tool_schema_conflict
+            and json_output_requested
+            and isinstance(json_output_requested, type)
+        ):
             # For models that can't handle tools + structured output together, we don't ask for a structured output
             json_output_requested = False
 
@@ -371,26 +376,34 @@ class AutoGenWrapper(RetryWrapper):
         if isinstance(create_result.content, str) and not create_result.content.strip():
             raise ProcessingError("Empty string response from LLM.")
         # Check if content is a list and if all items are FunctionCall (valid tool call scenario)
-        if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
-            raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
+        if isinstance(create_result.content, list) and not all(
+            isinstance(item, FunctionCall) for item in create_result.content
+        ):
+            raise ProcessingError(
+                "Unexpected response type from LLM when expecting tool calls or text.", create_result.content
+            )
 
         # Handle structured output parsing if schema was provided
         if schema and is_valid_schema_type and not (tools and not fake_schema_tool):
             # Only parse if: we have a schema AND (we created a fake tool OR no tools were provided)
             # Check if we used a fake tool and got a tool call response
-            if fake_schema_tool and isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+            if (
+                fake_schema_tool
+                and isinstance(create_result.content, list)
+                and all(isinstance(c, FunctionCall) for c in create_result.content)
+            ):
                 # Extract the tool call and execute it to get the structured object
                 tool_calls = create_result.content
                 if len(tool_calls) == 1 and tool_calls[0].name == fake_schema_tool.name:
                     # Execute the fake tool to get the structured object
                     arguments = json.loads(tool_calls[0].arguments)
-                    
+
                     # Call the schema constructor directly with the arguments
                     try:
                         parsed_object = schema(**arguments)
                     except Exception as e:
                         raise ProcessingError(f"Failed to create {schema.__name__} from tool arguments: {e}")
-                    
+
                     # Return ModelOutput with the parsed object
                     return ModelOutput(
                         content=json.dumps(parsed_object.model_dump()),
@@ -419,8 +432,8 @@ class AutoGenWrapper(RetryWrapper):
 
         This method sends an initial set of messages to the LLM. If the LLM
         responds with tool call requests, this method executes those tools
-        (unless intercept_tools is True), appends their results back to the 
-        message history, and sends the updated history back to the LLM to get 
+        (unless intercept_tools is True), appends their results back to the
+        message history, and sends the updated history back to the LLM to get
         a final response.
 
         Args:
@@ -596,8 +609,7 @@ class AutoGenWrapper(RetryWrapper):
                 parsed_object = create_result.content
             else:
                 logger.warning(
-                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, "
-                    f"expected {schema.__name__}",
+                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
                 )
 
         # Create ModelOutput with the parsed object
@@ -692,7 +704,15 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-        
+
+        # Optionally annotate resolved litellm identifier for downstream cost/accounting
+        # Import here to avoid circular import issues
+        from buttermilk.utils.model_registry import resolve_litellm_model_name
+
+        resolved_litellm = resolve_litellm_model_name(name)
+        # Expose for inspection (non-destructive; do not overwrite 'model')
+        config.configs.setdefault("_resolved_litellm_model", resolved_litellm)
+
         # Prepare client parameters from configs
         client_params: dict[str, Any] = {
             "model": config.configs.get("model"),
@@ -707,44 +727,45 @@ class LLMs(BaseModel):
                 model_info=config.model_info,
                 **client_params,
             )
-            
+
         elif config.client_type == ClientType.AZURE:
             if not config.base_url:
                 raise ValueError("Azure endpoint URL is required for Azure client")
             client = AzureOpenAIChatCompletionClient(
                 azure_endpoint=config.base_url,
+                model_info=config.model_info,
                 **client_params,
             )
-            
+
         elif config.client_type == ClientType.ANTHROPIC:
             # Direct Anthropic API
             client = AnthropicChatCompletionClient(**client_params)
-            
+
         elif config.client_type == ClientType.ANTHROPIC_VERTEX:
             # Anthropic via Vertex AI
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
-            
+
             vertex_params = {
                 "region": config.configs.get("region"),
                 "project_id": config.configs.get("project_id"),
                 "credentials": bm_instance.gcp_credentials,
             }
             vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
-            
+
             try:
                 vertex_client = AsyncAnthropicVertex(**vertex_params)
                 # Remove api_key for Vertex auth
                 vertex_client_params = client_params.copy()
                 vertex_client_params.pop("api_key", None)
-                
+
                 client = AnthropicChatCompletionClient(**vertex_client_params)
                 client._client = vertex_client
             except Exception as e:
                 logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                 raise
-                
+
         elif config.client_type == ClientType.GEMINI:
             # Google Generative AI (Gemini) API
             bm_instance = get_bm()
@@ -769,26 +790,30 @@ class LLMs(BaseModel):
                 "credentials": bm_instance.gcp_credentials,
             }
             vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
-            
+            gemini_client = genai.Client(  # not used yet, not compatible with autogen
+                vertexai=True,
+                **vertex_params,
+            )
+
         elif config.client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
             bm_instance = get_bm()
             if not bm_instance.gcp_credentials:
                 raise ValueError("GCP credentials not available for Vertex AI.")
-            
+
             vertex_params = client_params.copy()
-            
+
             # Set up OAuth2 bearer token authentication
             headers = {
                 "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
             }
-            
+
             # Dummy API key for OpenAI client validation
             if vertex_params.get("api_key") is None:
                 vertex_params["api_key"] = "dummy-key-for-vertex"
-            
+
             vertex_params["default_headers"] = headers
-            
+
             if not config.base_url:
                 raise ValueError("Base URL is required for Vertex OpenAI endpoint")
             client = OpenAIChatCompletionClient(
@@ -807,7 +832,9 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
         if __name not in self.connections:
-            raise AttributeError(f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}")
+            raise AttributeError(
+                f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}"
+            )
         return self.get_autogen_chat_client(__name)
 
     def __getitem__(self, __name: str) -> AutoGenWrapper:

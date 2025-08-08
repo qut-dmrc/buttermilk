@@ -1,7 +1,7 @@
 {
   "[python]": {
     // "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
@@ -15,6 +15,7 @@
   "ruff.configuration": "/src/buttermilk/pyproject.toml",
   "editor.defaultFormatter": "charliermarsh.ruff",
   "ruff.lineLength": 120,
+  "python.analysis.languageServerMode": "full",
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.include": [
     "buttermilk"
@@ -29,15 +30,13 @@
     "**/__pycache__"
   ],
   "python.analysis.extraPaths": [
-    "tests",
-    "/src/buttermilk"
-    // ".venv/**/*"
   ],
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.autoSearchPaths": false,
   "python.analysis.useLibraryCodeForTypes": false,
   "python.analysis.indexing": true,
   "python.analysis.autoImportCompletions": true,
+  "python.analysis.enablePytestSupport": false,
   "python.analysis.packageIndexDepths": [
     {
       "name": "sklearn",
