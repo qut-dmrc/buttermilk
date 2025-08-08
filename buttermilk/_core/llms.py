@@ -118,7 +118,7 @@ class LLMConfig(BaseModel):
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
-    model_info: ModelInfo
+    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
 
     @field_validator("client_type", mode="before")
@@ -161,18 +161,18 @@ class LLMConfig(BaseModel):
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHAT_MODELS = [
-"gemini25flash",
-"gemini25pro",
-"gpt5mini",
-"gpt5nano",
-"llama4maverick",
-"opus",
-"sonnet",
+    "gemini25flash",
+    "gemini25pro",
+    "gpt5mini",
+    "gpt5nano",
+    "gpt5chat",
+    "llama4maverick",
+    "opus",
+    "sonnet",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "haiku",
     "gemini25flash",
     "o4mini",
     "gpt41mini",
@@ -244,8 +244,8 @@ class AutoGenWrapper(RetryWrapper):
 
     """
 
-    client: ChatCompletionClient
-    model_info: ModelInfo
+    client: ChatCompletionClient = Field(..., description="The underlying Autogen client instance.")
+    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
 
     @weave.op
     async def create(
@@ -714,6 +714,7 @@ class LLMs(BaseModel):
                 raise ValueError("Azure endpoint URL is required for Azure client")
             client = AzureOpenAIChatCompletionClient(
                 azure_endpoint=config.base_url,
+                model_info=config.model_info,
                 **client_params,
             )
 
