@@ -89,8 +89,8 @@ def is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | No
     if "/" not in model_name:
         return False
     first = model_name.split("/", 1)[0]
-    reg = registry if registry is not None else load_model_registry()
-    return first in _KNOWN_LITELLM_PROVIDERS and model_name not in reg
+    keys = set(registry.keys()) if registry is not None else get_model_registry_keys()
+    return first in _KNOWN_LITELLM_PROVIDERS and model_name not in keys
 
 
 def resolve_litellm_model_name(internal_name: str) -> str:
