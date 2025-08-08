@@ -13,7 +13,7 @@ async def test_all_llm(llm_expensive):
     assert llm_expensive
 
     messages = [
-        SystemMessage(content="You are a helpful assistant. Answer in JSON.", source="system"),
+        SystemMessage(content="You are a helpful assistant. Answer in JSON."),
         UserMessage(content="What is the capital of France?", source="user"),
     ]
     response = await llm_expensive.create(messages=messages)
