@@ -37,7 +37,18 @@ To interact with flows, use the primary WebSocket debug client: `ws_debug_cli.py
 uv run python -m buttermilk.debug.ws_debug_cli <command>
 ```
 
-**Common Commands:**
+### Available Commands
+
+**Flow Control:**
+- `start <flow_name> [query]` - Start a flow with optional initial query
+- `send <text>` - Send a response to the current flow
+- `logs [n]` - Show last n lines from latest log file
+
+**Session Control:**
+- `clear-session` - Clear message history
+- `list-flows` - Get available flows
+- `export <file>` - Export messages to JSON file
+- `help` - Show available commands
 
 *   **Test Connection:**
     ```bash
@@ -47,7 +58,7 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 *   **Start a Flow:**
     ```bash
     # Usage: uv run python -m buttermilk.debug.ws_debug_cli start <flow_name> --record <record_id> --criteria <criteria>
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "tja-001" --criteria "trans"
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte"
     ```
     This will return a `session_id` for use in other commands.
 
@@ -61,46 +72,19 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
     uv run python -m buttermilk.debug.ws_debug_cli wait --session <session_id>
     ```
 
----
-
 ## 3. Analyze the Logs
 
 To inspect the detailed logs from the running server, use the `buttermilk_logs.py` script directly.
 
 **Canonical command:**
 ```bash
-python scripts/mcp_debug/buttermilk_logs.py <command>
+scripts/view-logs.sh <command>
 ```
 
-**Common Commands:**
-
-*   **Tail the latest log:**
-    ```bash
-    python scripts/mcp_debug/buttermilk_logs.py tail 100
-    ```
-
-*   **Show only errors:**
-    ```bash
-    python scripts/mcp_debug/buttermilk_logs.py errors
-    ```
-
-*   **Search for a pattern:**
-    ```bash
-    python scripts/mcp_debug/buttermilk_logs.py search "YourPattern" 50
-    ```
-
----
 
 ## 4. Validate the Frontend
 
 To validate the web interface, use the official Playwright MCP tool. This allows you to automate browser actions and inspect the UI.
-
-**Installation (if needed):**
-```bash
-npx @playwright/mcp@latest
-```
-
-**Usage:**
 
 The Playwright tool provides commands like `navigate`, `screenshot`, `click`, and `fill`. You must use these commands to interact with the frontend at `http://localhost:5173`.
 
@@ -111,8 +95,6 @@ The Playwright tool provides commands like `navigate`, `screenshot`, `click`, an
 3.  **Interact with elements:** Use `click` and `fill` to select a flow, record, and criteria.
 4.  **Run the flow:** Use `click` on the "Run Flow" button.
 5.  **Observe results:** Use `screenshot` and `evaluate` to check if the output appears correctly in the UI.
-
----
 
 ## 5. Stop the Server
 
