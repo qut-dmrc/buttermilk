@@ -27,7 +27,7 @@ import base64
 import os  # Added for os.environ usage
 
 from opentelemetry import trace
-from opentelemetry.exporter.cloud_logging import CloudLoggingLogRecordExporter
+from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
 from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -61,7 +61,7 @@ def setup_tracing(tracing_cfg: Tracing) -> None:
     # Configure the GCP Cloud Trace Span Exporter
     trace_exporter = CloudTraceSpanExporter()
     metrics_exporter = CloudMonitoringMetricsExporter()
-    logs_exporter = CloudLoggingLogRecordExporter()
+    logs_exporter = CloudLoggingExporter()
 
     Traceloop.init(
         app_name="buttermilk",

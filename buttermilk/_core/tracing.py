@@ -1,5 +1,6 @@
+
 import weave  # For tracing - core dependency
-from weave.trace.weave_client import Call, WeaveClient, WeaveObject
+from weave.trace.weave_client import Call, WeaveObject
 
 # Buttermilk core imports
 from buttermilk._core.contract import (
@@ -8,29 +9,6 @@ from buttermilk._core.contract import (
 from buttermilk._core.dmrc import get_bm
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.retry import RetryWrapper
-
-
-def get_weave() -> WeaveClient:
-    """Provides access to the Weights & Biases Weave client for tracing.
-
-    Initializes Weave with a collection name derived from `self.name` (flow name)
-    and `self.job` (job name). Sets up credentials from environment variables or
-    secret manager before initialization to avoid interactive login flows.
-    Handles connection failures gracefully by falling back to a mock client.
-
-    Returns:
-        Any: The initialized Weave client instance, or a mock client if initialization fails.
-
-    """
-    bm = get_bm()
-    collection_name = f"{bm.run_info.name}-{bm.run_info.job}"  # Construct collection name
-
-    # client = weave.init(collection_name)
-    # We disable weave autopatching for Autogen because it's too noisy and slow
-    # We will instead trace manually.
-    client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
-    logger.debug("Weave initialized successfully")
-    return client
 
 
 async def get_parent_call_weave(

@@ -27,6 +27,7 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 import asyncio
 import datetime
 import logging
+import os
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -35,6 +36,7 @@ from typing import Any
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
+import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
@@ -712,10 +714,34 @@ class BM(BaseModel):
         return self.cloud_manager.bq
 
     @cached_property
-    def weave(self):
-        """Provides access to the Weights & Biases Weave client for tracing."""
-        from tracing import get_weave  # Import get_weave to avoid circular imports
-        return get_weave()
+    def weave(self) -> weave.trace.weave_client.WeaveClient:
+        """Provide access to the Weights & Biases Weave client for tracing.
+
+        Initializes Weave with a collection name derived from `self.name` (flow name)
+        and `self.job` (job name). Sets up credentials from environment variables or
+        secret manager before initialization to avoid interactive login flows.
+        Handles connection failures gracefully by falling back to a mock client.
+
+        Returns:
+            Any: The initialized Weave client instance, or a mock client if initialization fails.
+
+        """
+        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
+
+        # Retrieve necessary credentials from the global Buttermilk instance.
+        # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
+        creds = self.credentials
+
+        if not os.getenv("WANDB_API_KEY"):
+            os.environ["WANDB_API_KEY"] = creds["WANDB_API_KEY"]
+            os.environ["WANDB_PROJECT"] = creds["WANDB_PROJECT"]
+
+        # client = weave.init(collection_name)
+        # We disable weave autopatching for Autogen because it's too noisy and slow
+        # We will instead trace manually.
+        client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
+        logger.debug("Weave initialized successfully")
+        return client
 
     @property
     def credentials(self) -> dict[str, str]:
