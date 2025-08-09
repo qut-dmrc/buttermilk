@@ -12,7 +12,6 @@
   "python.testing.pytestEnabled": true,
   "python.defaultInterpreterPath": "/src/buttermilk/.venv/bin/python",
   "python.terminal.activateEnvironment": false,
-  "ruff.configuration": "/src/buttermilk/pyproject.toml",
   "editor.defaultFormatter": "charliermarsh.ruff",
   "ruff.lineLength": 120,
   "python.analysis.languageServerMode": "full",
@@ -29,8 +28,7 @@
     "**/site-packages",
     "**/__pycache__"
   ],
-  "python.analysis.extraPaths": [
-  ],
+  "python.analysis.extraPaths": [],
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.autoSearchPaths": false,
   "python.analysis.useLibraryCodeForTypes": false,
@@ -65,10 +63,6 @@
   ],
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
-  },
-  "editor.codeActionsOnSave": {
-"source.organizeImports": "explicit",
-"source.fixAll.ruff": "explicit"
   },
   "files.exclude": {
     "**/*.backup": true
