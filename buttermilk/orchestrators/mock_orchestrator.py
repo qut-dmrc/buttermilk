@@ -283,7 +283,7 @@ class MockOrchestrator(Orchestrator):
                             Position(experts=experts_pos2, position="Some statistical methods might benefit from more detailed explanation"),
                             Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings"),
                         ],
-                    )
+                    ),
                 ],
             )
 
@@ -486,13 +486,12 @@ class MockOrchestrator(Orchestrator):
             metadata=metadata,
             timestamp=datetime.now(UTC),
             agent_info=agent_info,
-            session_id=self.trace_id,
             inputs=agent_input,
             parent_call_id=parent_call_id,
         )
 
     def _generate_progress_update(
-        self, source=None, role=None, step_name=None, status=None, message=None, total_steps=None, current_step=None
+        self, source=None, role=None, step_name=None, status=None, message=None, total_steps=None, current_step=None,
     ) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (
@@ -541,7 +540,7 @@ class MockOrchestrator(Orchestrator):
                     {
                         "flow_name": "mock_flow",
                         "parameters": {"initial_param": random.choice(["A", "B", "C"])},
-                    }
+                    },
                 )
                 generated_content = f"Flow started: {details.get('flow_name')}"
             elif event_type == "flow_completed":
@@ -549,7 +548,7 @@ class MockOrchestrator(Orchestrator):
                     {
                         "summary": "Mock flow completed successfully.",
                         "duration_ms": random.randint(1000, 10000),
-                    }
+                    },
                 )
                 generated_content = f"Flow completed. Summary: {details.get('summary')}"
             elif event_type == "agent_selected":
@@ -557,7 +556,7 @@ class MockOrchestrator(Orchestrator):
                     {
                         "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
                         "task_description": "Processing a mock task.",
-                    }
+                    },
                 )
                 generated_content = f"Agent selected: {details.get('agent_id')} for task: {details.get('task_description')}"
             elif event_type == "error_occurred":
@@ -565,7 +564,7 @@ class MockOrchestrator(Orchestrator):
                     {
                         "error_message": "A simulated error occurred.",
                         "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
-                    }
+                    },
                 )
                 generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
 
