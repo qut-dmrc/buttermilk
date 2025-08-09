@@ -58,7 +58,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
-from buttermilk._core.tracing import get_parent_call  # Function to retrieve parent call for tracing
+from buttermilk._core.tracing import get_parent_call_weave  # Function to retrieve parent call for tracing
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -313,7 +313,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
 
         """
-        await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
+        await self._publish(
+            TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id
+        )
 
         # --- Prepare the input state for processing ---
         try:
@@ -342,7 +344,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Publish status update: Task Complete (including error if error)
         await self._publish(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error),
+            TaskProcessingComplete(
+                agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error
+            ),
             topic_id=self._topic_id,
         )
 
@@ -391,8 +395,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         }
 
         process_op = weave.op(self._process, call_display_name=self.agent_name)
-        
-        parent_call = await get_parent_call(message)
+
+        parent_call = await get_parent_call_weave(message)
 
         child_call = bm.weave.create_call(
             process_op,
@@ -549,7 +553,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         if message.role != self.role:
             # Only handle if the role matches this agent's role - create a "skipped" trace
-            logger.debug(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
+            logger.debug(
+                f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}"
+            )
             return None
 
         return await self.invoke(message=message)
@@ -594,7 +600,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     self._data.add(key, value)
                     found_keys.append(key)
             if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+                logger.debug(
+                    f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings."
+                )
         else:
             logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction.")
 
@@ -639,7 +647,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     self._data.add(key, value)
                     found_keys.append(key)
             if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+                logger.debug(
+                    f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings."
+                )
 
         # Add to model context if not a command
         if message.content:

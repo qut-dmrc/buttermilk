@@ -1,9 +1,6 @@
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
-# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
-
 # Buttermilk core imports
 from buttermilk._core.contract import (
     AgentInput,
@@ -12,26 +9,24 @@ from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.retry import RetryWrapper
 
 
-async def get_parent_call(
+async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
-
     current_call = weave.get_current_call()
 
     if message is None or message.parent_call_id is None:
         # If no message or no parent call ID, return current call as parent
         return current_call
-    
+
     # Unless calls are out of order, there's a good chance the current call is the parent.
     if message.parent_call_id == current_call.id:
         return current_call
-
 
     # If not, we have to go out and find the parent call from the Weave API.
     # This sometimes fails because the call hasn't been uploaded yet.
     # We retry a few times to handle this.
     #
-    # TODO: check whether this is actually necessary; can we just use the ID to 
+    # TODO: check whether this is actually necessary; can we just use the ID to
     # associate calls together in a meaningful hiearchy?
 
     async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
@@ -57,4 +52,3 @@ async def get_parent_call(
     except Exception as e:  # Broad exception for Weave call retrieval
         logger.error(f"Could not retrieve parent call ID {message.parent_call_id} after retries. Error: {e}")
         return current_call
-

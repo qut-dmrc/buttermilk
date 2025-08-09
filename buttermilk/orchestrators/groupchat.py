@@ -146,17 +146,17 @@ class AutogenOrchestrator(Orchestrator):
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
 
-                
-        from opentelemetry.instrumentation.openai import OpenAIInstrumentor
-        OpenAIInstrumentor().instrument()
+        # Set up tracing if configured and enabled
+        from buttermilk.utils.otel import setup_tracing
+        setup_tracing(bm.tracing)
 
         # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
         # From the autogen docs:
-        # - Set trace_provider to opentelemetry.trace.NoOpTraceProvider in the runtime constructor
+        # - Set trace_provider to opentelemetry.trace.NoOpTracerProvider in the runtime constructor
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
 
         self._runtime = SingleThreadedAgentRuntime(
-#            tracer_provider=NoOpTracerProvider(),
+           tracer_provider=NoOpTracerProvider(),
             intervention_handlers=[termination_handler, interrupt_handler],
         )
 
@@ -224,59 +224,59 @@ class AutogenOrchestrator(Orchestrator):
         # Collect all registration tasks
         registration_tasks = []
         role_mapping = {}  # Maps task index to (role_name, actual_role)
-        
+
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
                 actual_role = step_config.role.upper()
                 task_index = len(registration_tasks)
                 role_mapping[task_index] = (role_name, actual_role)
-                
+
                 # Create registration task
                 task = self._register_single_agent(
                     agent_cls=agent_cls,
                     variant_config=variant_config,
                     params=params,
                     actual_role=actual_role,
-                    role_name=role_name
+                    role_name=role_name,
                 )
                 registration_tasks.append(task)
-        
+
         # Execute all registrations in parallel
         try:
             registration_results = await asyncio.gather(*registration_tasks, return_exceptions=True)
         except Exception as e:
             logger.critical(f"Critical error during parallel agent registration: {e}")
             raise
-        
+
         # Process results and organize by role
         for task_index, result in enumerate(registration_results):
             role_name, actual_role = role_mapping[task_index]
-            
+
             if isinstance(result, Exception):
                 # Re-raise the exception with context
                 error_msg = f"🚨 FATAL: Agent registration failed for role '{role_name}': {result}"
                 logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
                 raise FatalError(error_msg) from result
-            
+
             agent_type, variant_config = result
-            
+
             # Store in agent_types dictionary
             if role_name.upper() not in self._agent_types:
                 self._agent_types[role_name.upper()] = []
             self._agent_types[role_name.upper()].append((agent_type, variant_config))
-        
+
         # Log summary
         for role_name, agents in self._agent_types.items():
             logger.debug(f"Registered {len(agents)} agent variants for role '{role_name}'.")
-    
+
     async def _register_single_agent(
         self,
         agent_cls: type,
         variant_config: Any,
         params: RunRequest,
         actual_role: str,
-        role_name: str
+        role_name: str,
     ) -> tuple[AgentType, Any]:
         """Register a single agent with the runtime.
         
@@ -285,6 +285,7 @@ class AutogenOrchestrator(Orchestrator):
             
         Raises:
             Exception: Any exception that occurs during registration
+
         """
         try:
             # Define a factory function required by Autogen's registration.
@@ -321,7 +322,7 @@ class AutogenOrchestrator(Orchestrator):
                     type=variant_config.agent_id,  # Use the specific variant ID for registration
                     factory=lambda params=variant_config.parameters, cls=agent_cls: cls(**params),
                 )
-            
+
             # Subscribe the newly registered agent type to the main group chat topic.
             # This allows it to receive general messages sent to the group.
             await self._runtime.add_subscription(
@@ -343,7 +344,7 @@ class AutogenOrchestrator(Orchestrator):
             logger.debug(
                 f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
             )
-            
+
             return agent_type, variant_config
 
         except Exception as e:

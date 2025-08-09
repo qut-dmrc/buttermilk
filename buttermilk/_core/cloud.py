@@ -44,7 +44,9 @@ class CloudManager:
             if location:
                 os.environ["GOOGLE_CLOUD_LOCATION"] = os.environ.get("GOOGLE_CLOUD_LOCATION", location)
             if quota_project_id:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get(
+                    "GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id
+                )
 
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""
@@ -88,7 +90,7 @@ class CloudManager:
 
     def get_access_token(self) -> str:
         """Get a valid access token from GCP credentials, refreshing if needed.
-        
+
         Returns:
             str: A valid OAuth2 access token
 
@@ -98,6 +100,7 @@ class CloudManager:
         # Refresh if needed
         if not creds.valid:
             from google.auth.transport.requests import Request
+
             request = Request()
             creds.refresh(request)
 
@@ -225,60 +228,21 @@ class CloudManager:
         from vertexai import init as aiplatform_init
 
         # Ensure required attributes exist
-        project = getattr(cloud, "project", None)
+        project_id = getattr(cloud, "project_id", None)
         location = getattr(cloud, "location", None)
         bucket = getattr(cloud, "bucket", None)
 
-        if project and location and bucket:
+        if project_id and location and bucket:
             try:
                 aiplatform_init(
-                    project=project,
+                    project=project_id,
                     location=location,
                     staging_bucket=bucket,
                 )
-                logger.info(f"Initialized Vertex AI: project={project}, location={location}")
+                logger.info(f"Initialized Vertex AI: project={project_id}, location={location}")
             except Exception as e:
                 logger.warning(f"Failed to initialize Vertex AI: {e}")
         else:
-            logger.warning(
-                "Skipping Vertex AI initialization due to missing project, location, or bucket in config.",
+            raise FatalError(
+                "Unable to complete Vertex AI initialization due to missing project, location, or bucket in config.",
             )
-
-    def setup_tracing(self, tracing_cfg: Any | None = None) -> None:
-        """Set up cloud tracing if configured.
-
-        Args:
-            tracing_cfg: Tracing configuration
-
-        """
-        if not tracing_cfg:
-            return
-
-        if hasattr(tracing_cfg, "provider") and tracing_cfg.provider == "wandb":
-            self._setup_wandb_tracing()
-        elif hasattr(tracing_cfg, "provider") and tracing_cfg.provider == "google":
-            self._setup_google_tracing()
-
-    def _setup_google_tracing(self) -> None:
-        """Set up Google Cloud Trace."""
-        try:
-            from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
-            from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
-            from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
-            from traceloop.sdk import Traceloop
-
-            trace_exporter = CloudTraceSpanExporter()
-            metrics_exporter = CloudMonitoringMetricsExporter()
-            logs_exporter = CloudLoggingExporter()
-
-            Traceloop.init(
-                app_name="buttermilk",
-                exporter=trace_exporter,
-                metrics_exporter=metrics_exporter,
-                logging_exporter=logs_exporter,
-            )
-            logger.info("Initialized Google Cloud tracing")
-        except ImportError as e:
-            logger.warning(f"Failed to initialize Google Cloud tracing - missing dependencies: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Google Cloud tracing: {e}")

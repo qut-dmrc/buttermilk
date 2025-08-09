@@ -27,6 +27,7 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 import asyncio
 import datetime
 import logging
+import os
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -35,6 +36,7 @@ from typing import Any
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
+import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
@@ -362,7 +364,9 @@ class BM(BaseModel):
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
 
-            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
+            logger.debug(
+                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
+            )
 
     def _schedule_background_init(self) -> None:
         """Schedule non-critical initialization tasks in the background.
@@ -449,7 +453,9 @@ class BM(BaseModel):
         """
         await self._initialization_complete.wait()
         if self._initialization_error:
-            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
+            raise RuntimeError(
+                f"BM initialization failed: {self._initialization_error}"
+            ) from self._initialization_error
         logger.debug("BM initialization verified complete")
 
     def _save_initial_config(self) -> None:
@@ -497,21 +503,14 @@ class BM(BaseModel):
         This method is called lazily when the cloud_manager is first accessed,
         rather than during __post_init__, to improve startup performance.
         """
-        try:
-            if self._cloud_manager:
-                logger.debug("Performing lazy cloud authentication...")
-                self._cloud_manager.login_clouds()  # Perform logins
+        if self._cloud_manager:
+            logger.debug("Performing lazy cloud authentication...")
+            self._cloud_manager.login_clouds()  # Perform logins
 
-                # Set up tracing if configured and enabled
-                if self.tracing and self.tracing.enabled:
-                    self._cloud_manager.setup_tracing(self.tracing)
+            # Set up cloud logging now that cloud manager is authenticated
+            self._setup_cloud_logging()
 
-                # Set up cloud logging now that cloud manager is authenticated
-                self._setup_cloud_logging()
-
-                logger.debug("Cloud authentication completed")
-        except Exception as e:
-            logger.warning(f"Error during cloud authentication: {e}")
+            logger.debug("Cloud authentication completed")
 
     def _setup_cloud_logging(self) -> None:
         """Set up Google Cloud Logging after cloud authentication."""
@@ -600,7 +599,9 @@ class BM(BaseModel):
 
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):  # Validate type from cache
-                        logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
+                        logger.warning(
+                            f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets."
+                        )
                         connections_data = None
                     else:
                         logger.info(f"Loaded LLM connections from cache: {cache_path}")
@@ -659,7 +660,9 @@ class BM(BaseModel):
         return self._query_runner
 
     @property
-    def gcp_credentials(self) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
+    def gcp_credentials(
+        self,
+    ) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
         """Provides access to Google Cloud Platform (GCP) credentials.
 
         Delegates to `self.cloud_manager.gcp_credentials`.
@@ -719,12 +722,12 @@ class BM(BaseModel):
 
     def _setup_weave_credentials(self) -> None:
         """Set up Weave/WANDB credentials from environment variables or secret manager.
-        
+
         This method attempts to load WANDB credentials from multiple sources in order:
         1. Environment variables (WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY)
         2. Secret manager using existing credentials
         3. Gracefully handle missing credentials
-        
+
         Environment variables are set so that weave.init() can authenticate without
         requiring interactive login.
         """
@@ -766,8 +769,8 @@ class BM(BaseModel):
             logger.debug("No WANDB credentials found - weave will try default authentication or fail gracefully")
 
     @cached_property
-    def weave(self) -> Any:  # Type hint could be weave.weave_types.WeaveClient
-        """Provides access to the Weights & Biases Weave client for tracing.
+    def weave(self) -> weave.trace.weave_client.WeaveClient:
+        """Provide access to the Weights & Biases Weave client for tracing.
 
         Initializes Weave with a collection name derived from `self.name` (flow name)
         and `self.job` (job name). Sets up credentials from environment variables or
@@ -778,15 +781,15 @@ class BM(BaseModel):
             Any: The initialized Weave client instance, or a mock client if initialization fails.
 
         """
-        import weave  # Ensure weave is imported - deferred until first access
-
         collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
 
-        # Set up credentials before initializing weave
-        self._setup_weave_credentials()
+        # Retrieve necessary credentials from the global Buttermilk instance.
+        # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
+        creds = self.credentials
 
-        # Try to initialize weave with a reasonable timeout
-        logger.debug(f"Initializing Weave with collection: {collection_name}")
+        if not os.getenv("WANDB_API_KEY"):
+            os.environ["WANDB_API_KEY"] = creds["WANDB_API_KEY"]
+            os.environ["WANDB_PROJECT"] = creds["WANDB_PROJECT"]
 
         # client = weave.init(collection_name)
         # We disable weave autopatching for Autogen because it's too noisy and slow
@@ -989,7 +992,9 @@ class BM(BaseModel):
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
-            logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
+            logger.warning(
+                f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}"
+            )
 
         # Ensure extension starts with a dot if provided, otherwise default to .json
         effective_extension = extension or ".json"
@@ -1013,7 +1018,9 @@ class BM(BaseModel):
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
-            logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
+            logger.error(
+                f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}"
+            )
             return None  # Indicate save failure
 
     def run_query(

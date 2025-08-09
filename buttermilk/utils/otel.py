@@ -1,12 +1,14 @@
 """Configures OpenTelemetry (OTEL) tracing for the Buttermilk framework.
 
-This module sets up global OpenTelemetry tracing, specifically configured to
-export trace data to Weights & Biases (W&B) using the OTLP (OpenTelemetry Protocol)
-gRPC exporter. The setup is performed automatically when this module is imported.
+This module sets up global OpenTelemetry tracing, configured to export trace data to:
+1. Weights & Biases (W&B) using the OTLP (OpenTelemetry Protocol) gRPC exporter
+2. Google Cloud Platform (GCP) using the Cloud Trace exporter
 
-It relies on credentials (WANDB_API_KEY, WANDB_PROJECT) being available via
-the global Buttermilk instance (`bm.credentials`). If setup fails, a warning
-is logged, and tracing may not function.
+The setup is performed automatically when this module is imported.
+
+It relies on credentials being available via the global Buttermilk instance:
+- For W&B: WANDB_API_KEY, WANDB_PROJECT in `bm.credentials`
+- For GCP: Uses Application Default Credentials or environment variables
 
 Key Constants:
     WANDB_BASE_URL (str): Base URL for Weights & Biases tracing.
@@ -19,77 +21,151 @@ Note:
     define reusable public functions or classes for direct invocation beyond setup.
     Actual trace creation (spans, etc.) would use standard OpenTelemetry APIs
     elsewhere in the codebase, relying on this global setup.
-    The `os.environ` import was missing; it's added for completeness as
-    `os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]` is used.
+
 """
 import base64
-import os  # Added for os.environ usage
+import os
+import urllib  # Added for os.environ usage
 
-from opentelemetry.instrumentation.openai import OpenAIInstrumentor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
+import weave
 from opentelemetry import trace
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-# Import trace_sdk at the top level for clarity, though original was inline
-from opentelemetry.sdk import trace as trace_sdk
+from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
+from opentelemetry.instrumentation.google_generativeai import GoogleGenerativeAiInstrumentor
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
+# Import trace_sdk at the top level for clarity, though original was inline
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from traceloop.sdk import Traceloop
+
+# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
+# Buttermilk core imports
+from buttermilk._core.config import FatalError, Tracing
 from buttermilk._core.log import logger
 
-# --- OpenTelemetry Tracing Setup for Weights & Biases ---
-
-WANDB_BASE_URL = "https://trace.wandb.ai"
 """Base URL for Weights & Biases tracing services."""
+WANDB_BASE_URL = "https://trace.wandb.ai"
 
-OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
-"""The full OTLP endpoint URL where trace data will be sent for W&B."""
 
-# Set the OTLP endpoint as an environment variable, which some OTel components might read.
-os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
+def setup_tracing(tracing_cfg: Tracing) -> None:
+    if not tracing_cfg.enabled:
+        return
 
-try:
-    # Retrieve necessary credentials from the global Buttermilk instance.
-    # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
-    creds = bm.credentials
-    if not creds or "WANDB_API_KEY" not in creds or "WANDB_PROJECT" not in creds:
-        raise KeyError("W&B API key or project information not found in bm.credentials.")
+    # Configure Tracing
+    provider = TracerProvider()
 
-    # Prepare authentication header for W&B OTLP exporter.
-    # The AUTH string is typically "api:<YOUR_WANDB_API_KEY>".
-    auth_string = f"api:{creds['WANDB_API_KEY']}"
-    auth_header_value = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
+    # instrument OpenAI and Google Generative AI manually
+    OpenAIInstrumentor().instrument(tracer_provider=provider)
+    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
 
-    OTEL_EXPORTER_OTLP_HEADERS = {
-        "Authorization": f"Basic {auth_header_value}", # Basic authentication header
-        "project_id": creds["WANDB_PROJECT"],          # W&B Project ID for trace grouping
-    }
-    """Headers required for the OTLP exporter, including authorization for W&B
-    and the W&B project ID.
-    """
+    # Configure the GCP Cloud Trace Span Exporter
+    # metrics_exporter = CloudMonitoringMetricsExporter()
+    # logs_exporter = CloudLoggingExporter()
 
-    # Initialize the OpenTelemetry SDK's TracerProvider.
-    # This provider manages the creation of tracers.
-    tracer_provider = trace_sdk.TracerProvider()
+    gcp_exporter = CloudTraceSpanExporter()
+    provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
+    logger.info("Initialized tracing with Google Cloud")
 
-    # Configure the OTLP Span Exporter to send traces to W&B.
-    otlp_exporter = OTLPSpanExporter(
-        endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
-        headers=OTEL_EXPORTER_OTLP_HEADERS,
-        # Other options like `timeout` or `compression` can be set here if needed.
-    )
+    # Set global tracer provider
+    trace.set_tracer_provider(provider)
 
-    span_processor = BatchSpanProcessor(otlp_exporter)
+    # # get wandb exporter
+    # if wandb_exporter := setup_wandb_otel_tracing():
+    #     wandb_processor = BatchSpanProcessor(wandb_exporter)
+    #     provider.add_span_processor(wandb_processor)
+    #     logger.info("OpenTelemetry W&B exporter configured successfully")
 
-    # Add the exporter to the tracer provider
-    tracer_provider.add_span_processor(span_processor)
-    trace.set_tracer_provider(tracer_provider)
+    # This doesn't work yet -- authorization header isn't right in the docs?
+    # if traceloop_exporter := setup_traceloop_otel():
+    #     traceloop_processor = BatchSpanProcessor(traceloop_exporter)
+    #     provider.add_span_processor(traceloop_processor)
+    #     logger.info("Traceloop OTLP exporter configured successfully")
 
-    logger.info(
-        "OpenTelemetry (OTEL) tracing components initialized for W&B export. "
-        "Ensure a SpanProcessor and global provider are set if direct OTEL API usage is intended. "
-        "Weave integration might handle further OTEL setup on its first access."
-    )
-except KeyError as e_key:
-    logger.warning(f"OpenTelemetry tracing setup for W&B skipped: Missing required credential '{e_key.args[0]}' in bm.credentials.")
-except Exception as e_otel: # Catch any other errors during setup
-    logger.warning(f"Error during OpenTelemetry tracing setup for W&B: {e_otel!s}. OTEL tracing might not function.", exc_info=True)
+    # Instead we'll rely on the traceloop and weave sdks.
+    #
+    # The disadvantage of using this approach is that it relies on Traceloop's
+    # and/or Weave's magic to instrument everything, and that's often TOO MUCH.
+
+    from buttermilk._core.dmrc import get_bm
+
+    bm = get_bm()
+    collection_name = f"{bm.run_info.name}-{bm.run_info.job}"  # Construct collection name
+
+    Traceloop.init(app_name="buttermilk")
+    logger.info("Traceloop initialized.")
+    weave.init(collection_name, autopatch_settings={"autogen": {"enabled": True}})
+    logger.info("Weave initialized successfully")
+
+    logger.info("OpenTelemetry tracing setup complete")
+
+
+def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
+    """Initialize Traceloop for OpenTelemetry tracing."""
+    from buttermilk._core.dmrc import get_bm
+
+    try:
+        bm = get_bm()
+        creds = bm.credentials
+
+        traceloop_api_key = os.getenv("TRACELOOP_API_KEY") or creds["TRACELOOP_API_KEY"]
+        traceloop_base_url = os.getenv("TRACELOOP_BASE_URL") or creds["TRACELOOP_BASE_URL"]
+        traceloop_endpoint = f"{traceloop_base_url}/v1/traces"
+        traceloop_auth_header = urllib.parse.quote(f"Bearer {traceloop_api_key}")
+        traceloop_headers = {"Authorization": traceloop_auth_header}
+        traceloop_exporter = OTLPHttpSpanExporter(endpoint=traceloop_endpoint, headers=traceloop_headers)
+        return traceloop_exporter
+
+    except Exception as e_traceloop:
+        logger.warning(f"Error configuring traceloop exporter: {e_traceloop}")
+        return None
+
+
+# --- OpenTelemetry Tracing Setup for Weights & Biases ---
+def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
+    # set the full OTLP endpoint URL where trace data will be sent for W&B.
+    wandb_endpoint = f"{WANDB_BASE_URL}/otel/v1/traces"
+
+    # Configure W&B exporter
+    try:
+        # Retrieve necessary credentials from the global Buttermilk instance.
+        # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
+        from buttermilk._core.dmrc import get_bm
+
+        bm = get_bm()
+        creds = bm.credentials
+
+        wandb_api_key = os.getenv("WANDB_API_KEY") or creds["WANDB_API_KEY"]
+        wandb_project = os.getenv("WANDB_PROJECT") or creds["WANDB_PROJECT"]
+        wandb_entity = os.getenv("WANDB_ENTITY") or creds["WANDB_ENTITY"]
+        if not (wandb_api_key and wandb_project and wandb_entity):
+            raise FatalError(
+                "W&B tracing is enabled but missing required credentials: "
+                "WANDB_API_KEY, WANDB_PROJECT, or WANDB_ENTITY.",
+            )
+
+        # Prepare authentication header for W&B OTLP exporter.
+        # The AUTH string is typically "api:<YOUR_WANDB_API_KEY>".
+        auth_string = f"api:{wandb_api_key}"
+        auth_header_value = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
+
+        # Headers required for the OTLP exporter, including authorization for W&B
+        # and the W&B project ID.
+        wandb_headers = {
+            "Authorization": f"Basic {auth_header_value}",  # Basic authentication header
+            "project_id": f"{wandb_entity}/{wandb_project}",           # W&B Project ID for trace grouping
+        }
+
+        # Configure the OTLP Span Exporter to send traces to W&B.
+        wandb_exporter = OTLPSpanExporter(
+            endpoint=wandb_endpoint,
+            headers=wandb_headers,
+            # Other options like `timeout` or `compression` can be set here if needed.
+        )
+
+        return wandb_exporter
+
+    except Exception as e_wandb:
+        logger.warning(f"Error configuring W&B exporter: {e_wandb}")
+        return None

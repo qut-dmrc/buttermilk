@@ -210,8 +210,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     specific to the orchestration strategy.
 
     Internal State Attributes:
-        trace_id (str): A unique ID for the current flow execution session, primarily
-            used for tracing purposes (e.g., with Weave). Defaults to a new short UUID.
         _flow_data (KeyValueCollector): An internal state collector used to store
             and manage data passed between steps or used for templating within the flow.
         _input_loaders (dict[str, DataLoader]): A dictionary to store loaded input data loaders,
@@ -225,10 +223,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
             - `populate_by_name`: True.
     """
 
-    trace_id: str = Field(
-        default_factory=shortuuid.uuid,
-        description="Unique ID for this specific flow execution session, used for tracing.",
-    )
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _input_loaders: dict[str, DataLoader] = PrivateAttr(default_factory=dict)  # Input data loaders
     _records: list[Record] = PrivateAttr(default_factory=list)
@@ -353,7 +347,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             display_name=display_name,
             attributes=request.tracing_attributes,
         )
-        self.trace_id = orchestrator_trace.trace_id
+        
         try:
             # Execute the core run logic.
             await self._run(request=request)
