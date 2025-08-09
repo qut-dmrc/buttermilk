@@ -27,6 +27,7 @@ import base64
 import os
 import urllib  # Added for os.environ usage
 
+import weave
 from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -55,6 +56,10 @@ def setup_tracing(tracing_cfg: Tracing) -> None:
     # Configure Tracing
     provider = TracerProvider()
 
+    # instrument OpenAI and Google Generative AI manually
+    OpenAIInstrumentor().instrument(tracer_provider=provider)
+    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
+
     # Configure the GCP Cloud Trace Span Exporter
     # metrics_exporter = CloudMonitoringMetricsExporter()
     # logs_exporter = CloudLoggingExporter()
@@ -63,11 +68,14 @@ def setup_tracing(tracing_cfg: Tracing) -> None:
     provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
     logger.info("Initialized tracing with Google Cloud")
 
-    # get wandb exporter
-    if wandb_exporter := setup_wandb_otel_tracing():
-        wandb_processor = BatchSpanProcessor(wandb_exporter)
-        provider.add_span_processor(wandb_processor)
-        logger.info("OpenTelemetry W&B exporter configured successfully")
+    # Set global tracer provider
+    trace.set_tracer_provider(provider)
+
+    # # get wandb exporter
+    # if wandb_exporter := setup_wandb_otel_tracing():
+    #     wandb_processor = BatchSpanProcessor(wandb_exporter)
+    #     provider.add_span_processor(wandb_processor)
+    #     logger.info("OpenTelemetry W&B exporter configured successfully")
 
     # This doesn't work yet -- authorization header isn't right in the docs?
     # if traceloop_exporter := setup_traceloop_otel():
@@ -75,17 +83,20 @@ def setup_tracing(tracing_cfg: Tracing) -> None:
     #     provider.add_span_processor(traceloop_processor)
     #     logger.info("Traceloop OTLP exporter configured successfully")
 
+    # Instead we'll rely on the traceloop and weave sdks.
+    #
     # The disadvantage of using this approach is that it relies on Traceloop's
-    # magic to instrument everything, and that's often TOO MUCH.
+    # and/or Weave's magic to instrument everything, and that's often TOO MUCH.
+
+    from buttermilk._core.dmrc import get_bm
+
+    bm = get_bm()
+    collection_name = f"{bm.run_info.name}-{bm.run_info.job}"  # Construct collection name
+
     Traceloop.init(app_name="buttermilk")
-    logger.info("Traceloop initialized for Buttermilk")
-
-    # instrument OpenAI and Google Generative AI manually
-    OpenAIInstrumentor().instrument(tracer_provider=provider)
-    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
-
-    # Set global tracer provider
-    trace.set_tracer_provider(provider)
+    logger.info("Traceloop initialized.")
+    weave.init(collection_name, autopatch_settings={"autogen": {"enabled": True}})
+    logger.info("Weave initialized successfully")
 
     logger.info("OpenTelemetry tracing setup complete")
 
