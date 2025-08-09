@@ -35,18 +35,15 @@ RUN python3 -m pip install --upgrade pip uv
 # Used to build deps + create our virtual environment
 ################################
 FROM python-base AS builder-base
-ARG VENV_PATH
 WORKDIR /src
 
 ##### COPY REQUIREMENTS FOR LATER USE #####
 # Copy only the files required to install dependencies, so we separate out the layers for docker
 COPY ./deploy/requirements.txt /tmp/requirements.txt
 
-# install runtime deps into $VENV_PATH
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
-    python3 -m venv ${VENV_PATH} && \
-    . ${VENV_PATH}/bin/activate && \
-    pip install -r /tmp/requirements.txt
+# Download packages to /wheels directory to be used in the next stage
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip download -r /tmp/requirements.txt -o /wheels
 
 
 #############################################################
@@ -59,7 +56,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG APP_PATH
 ARG VENV_PATH
 
-RUN mkdir -p ${APP_PATH} ${VENV_PATH} 
+RUN mkdir -p ${APP_PATH}
 
 WORKDIR ${APP_PATH}
 
@@ -68,10 +65,19 @@ WORKDIR ${APP_PATH}
 COPY . ${APP_PATH}
 WORKDIR ${APP_PATH}
 
-# Install virtual environment
-COPY --link --from=builder-base ${VENV_PATH} ${VENV_PATH}
+# Copy wheels from builder-base
+COPY --link --from=builder-base /wheels /wheels
+
+# Create venv and install from wheels
+RUN uv venv ${VENV_PATH} --seed && \
+    . ${VENV_PATH}/bin/activate && \
+    uv pip sync ./deploy/requirements.txt --find-links /wheels --no-index
+
+# Clean up wheels
+RUN rm -rf /wheels
 
 # prepend venv to path
 ENV PATH="$VENV_PATH/bin:$PATH"
+
 
 CMD ["bash", "-c", "${APP_PATH}/deploy/startapi.sh", "${FLOW_PARAMS}"]
