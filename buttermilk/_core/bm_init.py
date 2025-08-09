@@ -511,11 +511,6 @@ class BM(BaseModel):
             logger.debug("Performing lazy cloud authentication...")
             self._cloud_manager.login_clouds()  # Perform logins
 
-            # Set up tracing if configured and enabled
-            if self.tracing and self.tracing.enabled:
-                from buttermilk.utils.otel import setup_tracing
-                setup_tracing(self.tracing)
-
             # Set up cloud logging now that cloud manager is authenticated
             self._setup_cloud_logging()
 

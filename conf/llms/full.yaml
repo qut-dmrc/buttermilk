@@ -2,8 +2,9 @@ host: gemini25flash
 
 general:
   - gemini25pro
-  - gpt41
   - gemini25flash
+  - gpt5chat
+  - gpt5mini
   - llama4maverick
   - opus
   - sonnet
@@ -11,10 +12,8 @@ general:
 judgers:
   - gemini25flash
   - gemini25pro
-  - o4mini
-  - gpt41
-  - gpt41mini
-  - gpt41nano
+  - gpt5chat
+  - gpt5mini
   - llama4maverick
   - opus
   - sonnet
@@ -22,9 +21,8 @@ judgers:
 synthesisers:
   - gemini25flash
   - gemini25pro
-  - o4mini
-  - gpt41
-  - gpt41mini
+  - gpt5chat
+  - gpt5mini
   - llama4maverick
   - opus
   - sonnet
