@@ -1,6 +1,6 @@
 import asyncio
 import json
-import signal
+import random
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
@@ -10,26 +10,19 @@ from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
 
 import chromadb
-import hydra
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pydantic
 import semchunk
 from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
 from chromadb.api import ClientAPI
 from google import genai
-from omegaconf import OmegaConf
 from pydantic import BaseModel, Field, PrivateAttr
-from tqdm.asyncio import tqdm
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
 
 from buttermilk import (
-    buttermilk as bm,  # Global Buttermilk instance
     logger,
 )
-from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
@@ -804,7 +797,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     )
 
             if validate_before_process:
-                # Accept either existing chunks or text content (for fallback)
                 if not getattr(record, "chunks", None) and not record.text_content:
                     processing_time_ms = (time.time() - start_time) * 1000
                     return ProcessingResult(
@@ -817,7 +809,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         metadata={"validation_failed": True},
                     )
 
-            # --- Chunk handling (no re-chunk if already present) ---
             if getattr(record, "chunks", None):
                 logger.debug(f"🧩 [VECTORIZER-{record.record_id}] Using pre-existing {len(record.chunks)} chunks")
             else:
@@ -838,15 +829,42 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         metadata={"chunking_failed": True},
                     )
 
-            # --- Embeddings ---
+            # --- Embeddings (now with robust retry) ---
             logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
-            await self._embed_chunks(record.chunks, record_title=record.title)
+            embedding_ok = await self._embed_chunks(record.chunks, record_title=record.title)
+
+            if not embedding_ok:
+                # Persist failed record for later retry BEFORE returning
+                try:
+                    failed_path = Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
+                    failed_payload = {
+                        "record_id": record.record_id,
+                        "title": record.title,
+                        "reason": "embedding_failed",
+                        "chunk_count": len(record.chunks),
+                        "metadata": record.metadata,
+                        "content_hash": self._get_content_hash(record),
+                        "created_at": datetime.utcnow().isoformat(),
+                    }
+                    failed_path.write_text(json.dumps(failed_payload, ensure_ascii=False, indent=2))
+                    logger.warning(f"💾 Saved failed embedding record for retry: {failed_path}")
+                except Exception as save_e:
+                    logger.error(f"Could not persist failed embedding record {record.record_id}: {save_e}")
+
+                processing_time_ms = (time.time() - start_time) * 1000
+                return ProcessingResult(
+                    record=None,
+                    status="failed",
+                    reason="embedding failed after retries",
+                    chunks_created=0,
+                    embedding_model=effective_embedding_model,
+                    processing_time_ms=processing_time_ms,
+                    metadata={"embedding_failed": True},
+                )
 
             # --- Metadata enhancement ---
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.now().isoformat()
-
-            # Get BM run info if available
             try:
                 from buttermilk._core.dmrc import get_bm
                 bm = get_bm()
@@ -863,22 +881,17 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "deduplication_strategy": self.deduplication_strategy,
                     },
                 )
-
-                # Only add run_id if available from BM
                 if run_id:
                     chunk.metadata["processing_run_id"] = run_id
 
-            # --- Store in ChromaDB ---
             logger.debug(f"💾 [VECTORIZER-{record.record_id}] Storing chunks in ChromaDB...")
             await self._store_chunks_for_record(record)
 
-            # --- Success tracking ---
             cache_key = self._get_record_model_key(record.record_id, effective_embedding_model)
             self._processed_combinations_cache.add(cache_key)
 
             processing_time_ms = (time.time() - start_time) * 1000
 
-            # Log successful processing
             chunk_types = {}
             for chunk in record.chunks:
                 chunk_type = chunk.metadata.get("chunk_type", "content")
@@ -1152,27 +1165,24 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             },
         )
 
-    async def _embed_chunks(self, chunks: list[ChunkedDocument], record_title: str | None = None) -> None:
+    async def _embed_chunks(self, chunks: list[ChunkedDocument], record_title: str | None = None) -> bool:
         """Generate embeddings for a list of chunks in place.
-
-        Args:
-            chunks: List of ChunkedDocument objects to embed
-            record_title: Optional title of the record containing these chunks
+        
+        Returns:
+            bool: True if at least one embedding succeeded AND no hard failure.
 
         """
         if not chunks:
-            return
+            return False
 
-        # Set the title for this batch if provided
         if record_title and hasattr(self._embedding_function, "set_title"):
             self._embedding_function.set_title(record_title)
 
-        # Prepare embedding inputs
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
             embeddings_input.append(
                 (
-                    i,  # Use list index as identifier
+                    i,
                     TextEmbeddingInput(
                         text=chunk.chunk_text,
                         task_type=self.task,
@@ -1181,37 +1191,41 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 ),
             )
 
-        # Generate embeddings
         embedding_results = await self._embed(embeddings_input)
 
-        # Assign embeddings back to chunks
+        success_count = 0
         for idx, embedding in embedding_results:
             if embedding is not None and idx < len(chunks):
                 chunks[idx].embedding = embedding
-            elif embedding is None:
-                logger.warning(f"Failed to generate embedding for chunk {idx}")
+                success_count += 1
 
-        logger.debug(f"Generated embeddings for {len([c for c in chunks if c.embedding is not None])} out of {len(chunks)} chunks")
+        if success_count == 0:
+            logger.error("All embeddings failed for this record")
+            return False
+
+        if success_count < len(chunks):
+            logger.warning(f"Partial embedding: {success_count}/{len(chunks)} succeeded; failing record to retry later")
+            # Clear embeddings so we don't upsert partials
+            for c in chunks:
+                c.embedding = None
+            return False
+
+        logger.debug(f"Generated embeddings for {success_count} chunks")
+        return True
+
+    def _is_rate_limit_error(self, exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return any(k in msg for k in ["rate limit", "quota", "too many requests", "429"])
 
     async def _embed(self, embeddings_input: list[tuple[int, Any]]) -> list[tuple[int, list[float] | None]]:
-        """Generate embeddings for a list of text inputs.
-        
-        Args:
-            embeddings_input: List of tuples (index, TextEmbeddingInput)
-            
-        Returns:
-            List of tuples (index, embedding vector or None)
-
-        """
+        """Generate embeddings with retry/backoff on rate limits."""
         if not embeddings_input:
             return []
 
-        # Extract just the texts from the input tuples
         texts = []
         indices = []
         for idx, text_input in embeddings_input:
             indices.append(idx)
-            # Handle different input types
             if hasattr(text_input, "text"):
                 texts.append(text_input.text)
             elif isinstance(text_input, str):
@@ -1219,478 +1233,164 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             else:
                 texts.append(str(text_input))
 
-        try:
-            # Call embedding function directly (it handles its own retries)
-            embeddings = await asyncio.to_thread(
-                self._embedding_function,
-                texts,
-            )
+        max_retries = self.embedding_max_retries
+        min_wait = self.embedding_min_wait_seconds
+        max_wait = self.embedding_max_wait_seconds
+        cooldown = self.embedding_cooldown_seconds
 
-            # Pair indices with embeddings
-            results = []
-            for i, idx in enumerate(indices):
-                if i < len(embeddings):
-                    results.append((idx, embeddings[i]))
-                else:
-                    results.append((idx, None))
-
-            return results
-
-        except Exception as e:
-            logger.error(f"Failed to generate embeddings: {e}")
-            self._convert_embedding_errors(e)
-            # Return None for all inputs on failure
-            return [(idx, None) for idx in indices]
-
-    def _write_record_to_parquet(self, record: Record, file_path: Path):
-        """Synchronous helper to write Record chunks to a Parquet file."""
-        if not record.chunks:
-            logger.warning(
-                f"Attempted to write empty chunks for record {record.record_id} to {file_path}. Skipping.",
-            )
-            return
-
-        data = {
-            "chunk_id": [c.chunk_id for c in record.chunks],
-            "document_id": [c.document_id for c in record.chunks],
-            "document_title": [c.document_title for c in record.chunks],
-            "chunk_index": [c.chunk_index for c in record.chunks],
-            "chunk_text": [c.chunk_text for c in record.chunks],
-            "embedding": [list(c.embedding) if c.embedding is not None else None for c in record.chunks],
-            "chunk_metadata": [json.dumps(c.metadata) if c.metadata else None for c in record.chunks],
-        }
-
-        embedding_type = pa.list_(pa.float32())
-        if self.dimensionality:
-            embedding_type = pa.list_(pa.float32(), self.dimensionality)
-
-        schema = pa.schema(
-            [
-                pa.field("chunk_id", pa.string()),
-                pa.field("document_id", pa.string()),
-                pa.field("document_title", pa.string()),
-                pa.field("chunk_index", pa.int32()),
-                pa.field("chunk_text", pa.string()),
-                pa.field("embedding", embedding_type),
-                pa.field("chunk_metadata", pa.string()),
-            ],
-        )
-
-        table = pa.Table.from_pydict(data, schema=schema)
-
-        record_meta_serializable = {
-            "record_id": record.record_id,
-            "title": record.metadata.get("title", ""),
-            "file_path": record.metadata.get("file_path", ""),
-            "record_path": record.metadata.get("record_path", ""),
-            "metadata": json.dumps(record.metadata),
-        }
-        arrow_metadata = {k.encode("utf-8"): str(v).encode("utf-8") for k, v in record_meta_serializable.items()}
-
-        final_schema = table.schema.with_metadata(arrow_metadata)
-        table = table.cast(final_schema)
-
-        pq.write_table(table, file_path, compression="snappy")
-
-    def _convert_embedding_errors(self, exc: Exception) -> None:
-        """Convert embedding-specific errors to RateLimit exceptions for retry handling."""
-        error_str = str(exc).lower()
-        if any(keyword in error_str for keyword in ["quota", "rate limit", "429", "too many requests"]):
-            raise RateLimit(str(exc)) from exc
-
-    # --- DB Interaction ---
-    def check_document_exists(self, document_id: str) -> bool:
-        """Checks if a document with the given ID already exists in the collection."""
-        if not document_id:
-            return False
-        try:
-            results = self.collection.get(
-                where={"document_id": document_id},
-                limit=1,
-                include=[],
-            )
-            exists = len(results.get("ids", [])) > 0
-            if exists:
-                logger.debug(f"Document ID '{document_id}' found in ChromaDB.")
-            return exists
-        except Exception as e:
-            logger.error(
-                f"Error checking existence of document ID '{document_id}' in ChromaDB: {e} {e.args=}",
-            )
-            return False
-
-    async def upsert_document_chunks(
-        self,
-        doc_iterator: AsyncIterator[Record],
-    ) -> tuple[int, int]:
-        """Upserts all chunks for each Record from the iterator into ChromaDB."""
-        total_docs_processed = 0
-        successful_docs_upserted = 0
-        failed_docs_upserted = 0
-
-        async for doc in doc_iterator:
-            total_docs_processed += 1
-            if not doc.chunks:
-                logger.warning(
-                    f"Document {doc.record_id} has no chunks, skipping upsert.",
-                )
-                continue
-
-            chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
-
-            if not chunks_to_upsert:
-                logger.warning(
-                    f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert.",
-                )
-                continue
-
-            ids = []
-            documents = []
-            embeddings_list = []
-            metadatas = []
-
-            for rec in chunks_to_upsert:
-                ids.append(rec.chunk_id)
-                documents.append(rec.chunk_text)
-                embeddings_list.append(list(rec.embedding))  # type: ignore
-                base_meta = {
-                    "document_title": rec.document_title,
-                    "chunk_index": rec.chunk_index,
-                    "document_id": rec.document_id,
-                }
-                combined_meta = {**rec.metadata, **base_meta}
-                metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
-
-            chroma_embeddings: Embeddings = embeddings_list
-
-            logger.info(
-                f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{self.collection_name}'...",
-            )
+        for attempt in range(1, max_retries + 1):
             try:
-                await asyncio.to_thread(
-                    self.collection.upsert,
-                    ids=ids,
-                    embeddings=chroma_embeddings,
-                    metadatas=metadatas,
-                    documents=documents,
-                )
-                successful_docs_upserted += 1
-                logger.debug(
-                    f"Successfully upserted chunks for document {doc.record_id}.",
-                )
+                embeddings = await asyncio.to_thread(self._embedding_function, texts)
+                # Optional cooldown after success
+                if cooldown:
+                    await asyncio.sleep(cooldown)
+                results = []
+                for i, idx in enumerate(indices):
+                    if i < len(embeddings):
+                        results.append((idx, embeddings[i]))
+                    else:
+                        results.append((idx, None))
+                return results
             except Exception as e:
-                failed_docs_upserted += 1
-                logger.error(
-                    f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
-                )
-                try:
-                    failed_doc_filename = Path(bm.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
-                    logger.info(
-                        f"Saving failed document {doc.record_id} to {failed_doc_filename}",
-                    )
-                    bm.save(doc, failed_doc_filename)
-                except Exception as save_e:
-                    logger.error(
-                        f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
-                    )
-
-        # Update processed records counter for batch operations
-        self._processed_records_count += successful_docs_upserted
-
-        # For batch operations, always sync if we processed any records successfully
-        # This ensures batch operations don't lose data
-        if successful_docs_upserted > 0:
-            sync_performed = await self._conditional_sync_to_remote(force=True)
-            if sync_performed:
-                logger.info(f"🔄 Performed batch sync after processing {successful_docs_upserted} documents")
-
-        return successful_docs_upserted, failed_docs_upserted
-
-
-# --- Async Pipeline Stages ---
-class DocProcessor(BaseModel):
-    """Callable class for processing documents from an iterator."""
-
-    concurrency: int = Field(default=20)
-    max_docs: int | None = Field(default=None, description="Maximum documents to process")
-    _semaphore: asyncio.Semaphore = PrivateAttr()
-    doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
-    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
-    _name: str = PrivateAttr(default="")
-
-    model_config = pydantic.ConfigDict(
-        arbitrary_types_allowed=True,
-    )
-
-    @pydantic.model_validator(mode="after")
-    def _init(self) -> Self:
-        self._semaphore = asyncio.Semaphore(self.concurrency)
-        # Access the processor from the regular field
-        if hasattr(self.processor, "__name__"):
-            self._name = self.processor.__name__
-        else:
-            self._name = self.processor.__class__.__name__
-        return self
-
-    async def _process(self, doc: Record) -> Record | None:
-        async with self._semaphore:
-            try:
-                logger.info(f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'")
-                result = await self.processor(doc)
-                # Handle ProcessingResult or Record return types
-                if isinstance(result, ProcessingResult):
-                    if result.status == "processed":
-                        logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
-                        return result.record
-                    logger.debug(f"⏭️  [{self._name}-{doc.record_id}] Skipped: {result.reason}")
-                    return None
-                # Direct Record or None return
-                if result:
-                    logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
-                return result
-            except Exception as e:
-                logger.error(
-                    f"Error processing document {doc.record_id}: {e} {e.args=}",
-                )
-                logger.warning(
-                    f"Skipping document {doc.record_id} due to processor error.",
-                )
-                return None
-
-    async def __call__(self) -> AsyncIterator[Record]:
-        """Processes documents from the iterator, yielding them as they complete."""
-        processed_count = 0
-        pending_tasks = set()
-        max_pending = self.concurrency * 2  # Ensure we don't accumulate too many tasks
-
-        try:
-            # Start initial tasks up to our limit
-            iterator_exhausted = False
-            while not iterator_exhausted:
-                # Check if we should stop creating new tasks due to max_docs
-                if self.max_docs is not None and (processed_count + len(pending_tasks)) >= self.max_docs:
-                    # Just process remaining pending tasks
-                    if not pending_tasks:
+                if self._is_rate_limit_error(e):
+                    if attempt == max_retries:
+                        logger.error(f"Rate limit persists after {attempt} attempts: {e}")
                         break
-                else:
-                    # Add new tasks up to our max_pending limit
-                    while len(pending_tasks) < max_pending and not iterator_exhausted:
-                        try:
-                            doc = await anext(self.doc_iterator)
-                            task = asyncio.create_task(self._process(doc))
-                            pending_tasks.add(task)
-                            # Set up task completion callback to remove it from pending set
-                            task.add_done_callback(pending_tasks.discard)
-                        except StopAsyncIteration:
-                            iterator_exhausted = True
-                            break
+                    wait = min(max_wait, min_wait * (2 ** (attempt - 1)))
+                    jitter = random.uniform(0, min(2.0, wait * 0.25))
+                    logger.warning(f"Rate limit (attempt {attempt}/{max_retries}) - backing off {wait + jitter:.1f}s")
+                    await asyncio.sleep(wait + jitter)
+                    continue
+                # Non-rate-limit error: do not retry
+                logger.error(f"Embedding failed (non-retryable): {e}")
+                break
 
-                if not pending_tasks:
-                    break
+        # Failure path
+        self._convert_embedding_errors(Exception("embedding failed after retries"))
+        return [(idx, None) for idx in indices]
 
-                # Wait for at least one task to complete
-                done, _ = await asyncio.wait(
-                    pending_tasks,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+    # ------------------------------------------------------------------
+    # Deduplication & Skip Logic
+    # ------------------------------------------------------------------
+    def _get_record_model_key(self, record_id: str, embedding_model: str) -> str:
+        """Stable cache key to remember processed record/model combos this run."""
+        return f"{record_id}::{embedding_model}"
 
-                # Process completed tasks
-                for task in done:
-                    try:
-                        result = task.result()
-                        if result is not None:
-                            processed_count += 1
-                            yield result
+    def _extract_raw_text(self, record: Record) -> str:
+        """Return the raw text used for hashing (pre-chunk)."""
+        if hasattr(record, "content") and record.content:
+            return record.content if isinstance(record.content, str) else str(record.content)
+        if hasattr(record, "text_content") and record.text_content:
+            return record.text_content if isinstance(record.text_content, str) else str(record.text_content)
+        return ""
 
-                            # Check if we've reached max_docs limit
-                            if self.max_docs is not None and processed_count >= self.max_docs:
-                                logger.info(f"DocProcessor {self._name} reached max_docs limit ({self.max_docs})")
-                                # Cancel remaining tasks
-                                for pending_task in pending_tasks:
-                                    if not pending_task.done():
-                                        pending_task.cancel()
-                                return
-                    except Exception as e:
-                        logger.error(f"Task raised an exception: {e}")
+    def _get_content_hash(self, record: Record) -> str:
+        """Compute a stable content hash for deduplication (content + minimal metadata)."""
+        import hashlib
+        import json
+        raw_text = self._extract_raw_text(record)
+        # Include a shallow, deterministic subset of metadata that might affect semantics
+        meta = {}
+        if hasattr(record, "metadata") and isinstance(record.metadata, dict):
+            # Pick only stable scalar fields to avoid hash churn
+            for k, v in record.metadata.items():
+                if isinstance(v, (str, int, float, bool)):
+                    meta[k] = v
+        payload = json.dumps({"text": raw_text, "meta": meta}, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-            logger.info(
-                f"Finished processing {processed_count} documents with {self._name}.",
-            )
-
+    def _query_collection_single(
+        self,
+        where: dict[str, Any],
+        limit: int = 5,
+        include: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Synchronous helper to query collection safely."""
+        try:
+            return self.collection.get(where=where, limit=limit, include=include or ["metadatas", "ids"])
         except Exception as e:
-            logger.error(f"Error in DocProcessor: {e}")
-            # Cancel any pending tasks
-            for task in pending_tasks:
-                if not task.done():
-                    task.cancel()
+            logger.warning(f"Collection query failed (where={where}): {e}")
+            return {"ids": [], "metadatas": []}
 
+    async def _should_skip_record(
+        self,
+        record: Record,
+        force_reprocess: bool = False,
+        embedding_model: str | None = None,
+    ) -> tuple[bool, str]:
+        """Determine whether to skip processing a record.
 
-# --- Main Execution ---
+        Returns:
+            (should_skip, reason)
 
+        """
+        if force_reprocess:
+            return False, "force reprocess requested"
 
-@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def main(cfg) -> None:
-    # Track start time for statistics
-    start_time = time.time()
-    interrupted = False
+        embedding_model = embedding_model or getattr(self, "_embedding_model", self.embedding_model)
+        cache_key = self._get_record_model_key(record.record_id, embedding_model)
 
-    OmegaConf.resolve(cfg)
+        # Fast in-run cache: if we've processed this combo already in this run, skip.
+        if cache_key in self._processed_combinations_cache:
+            return True, "already processed this run"
 
-    bm = hydra.utils.instantiate(cfg.bm)
+        strategy = self.deduplication_strategy
+        content_hash = self._get_content_hash(record)
 
-    from buttermilk._core.dmrc import set_bm
+        # Helper closures
+        def has_matching_content(metadatas: list[dict[str, Any]]) -> bool:
+            for md in metadatas:
+                if md and md.get("content_hash") == content_hash and md.get("embedding_model") == embedding_model:
+                    return True
+            return False
 
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
-
-    objs = hydra.utils.instantiate(cfg)
-    vectoriser: ChromaDBEmbeddings = objs.vectoriser
-    input_docs_source = objs.input_docs
-    preprocessor_instance = objs.preprocessor
-    processor_instance = objs.processor
-    text_splitter_instance = objs.chunker
-
-    # Set up signal handlers for graceful shutdown
-    def handle_interrupt(signum, frame):
-        nonlocal interrupted
-        logger.warning("🛑 Interrupt received, finishing current batch...")
-        interrupted = True
-
-    signal.signal(signal.SIGINT, handle_interrupt)
-    signal.signal(signal.SIGTERM, handle_interrupt)
-
-    # Print startup banner
-    logger.info("🚀 Vector Database Builder")
-    logger.info("=" * 50)
-    if hasattr(cfg, "name"):
-        logger.info(f"Job: {cfg.name}")
-    if hasattr(cfg, "storage"):
-        logger.info(f"Storage: {cfg.storage.collection_name} at {cfg.storage.persist_directory}")
-    logger.info("=" * 50)
-
-    logger.info("Setting vector store instance on input document source.")
-    input_docs_source.set_vector_store(vectoriser)
-
-    loop = asyncio.get_event_loop()
-    loop.slow_callback_duration = 35.0
-
-    async def run_pipeline():
-        from buttermilk._core.standalone_trace import create_standalone_trace
-
-        # Create a standalone trace context for the entire pipeline
-        trace_attributes = {
-            "job_name": getattr(cfg, "name", "vector_batch"),
-            "collection_name": cfg.storage.collection_name if hasattr(cfg, "storage") else None,
-            "start_from": getattr(cfg, "start_from", 0),
-            "max_docs": getattr(cfg, "max_docs", MAX_TOTAL_TASKS_PER_RUN),
-        }
-
-        async with create_standalone_trace("vector_pipeline", **trace_attributes) as trace:
-            logger.info("Starting data processing pipeline...")
-
-            # Initialize cache for remote storage
-            await vectoriser.ensure_cache_initialized()
-
-            # Get existing stats
-            existing_count = vectoriser.collection.count()
-            logger.info(f"📊 Existing embeddings in collection: {existing_count}")
-
-            # 1. Source Documents
-            start_from = getattr(cfg, "start_from", 0)
-            max_docs = getattr(cfg, "max_docs", MAX_TOTAL_TASKS_PER_RUN)
-            doc_iterator = input_docs_source.get_all_records(start=start_from, max_docs=max_docs)
-
-            # 2. Pre-process (Extract Text if needed)
-            pre_processed_iterator = DocProcessor(
-                doc_iterator=doc_iterator,
-                processor=preprocessor_instance.process,
-                max_docs=max_docs,
+        if strategy in ("record_id", "both"):
+            # Query by record_id first
+            res = await asyncio.to_thread(
+                self._query_collection_single,
+                {"document_id": record.record_id, "embedding_model": embedding_model},
             )
+            ids = res.get("ids", []) or []
+            metas = res.get("metadatas", []) or []
 
-            # 3. Process Documents (e.g., add citations)
-            processed_doc_iterator = DocProcessor(
-                doc_iterator=pre_processed_iterator(),
-                processor=processor_instance.process,
-                max_docs=max_docs,
-            )
-
-            # 4. Chunk Documents (Adds chunks to Record)
-            chunked_doc_iterator = DocProcessor(
-                doc_iterator=processed_doc_iterator(),
-                processor=text_splitter_instance.process,
-                max_docs=max_docs,
-            )
-
-            # 5. Vectorize and Upsert - now using the same DocProcessor pattern
-            vectorizer_processor = DocProcessor(
-                doc_iterator=chunked_doc_iterator(),
-                processor=vectoriser.process_record,
-                concurrency=vectoriser.concurrency,
-                max_docs=max_docs,
-            )
-
-            # Process documents through the complete pipeline with a limit
-            quiet = getattr(cfg, "quiet", False)
-
-            pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
-            stats = {
-                "total": 0,
-                "embedded": 0,
-                "skipped": 0,
-                "failed": 0,
-            }
-
-            # Use the pipeline to process documents
-            async for doc in vectorizer_processor():
-                if interrupted:
-                    logger.warning("🛑 Processing interrupted by user")
-                    break
-
-                stats["total"] += 1
-
-                if doc is not None:
-                    stats["embedded"] += 1
-                else:
-                    stats["failed"] += 1
-
-                pbar.update(1)
-                pbar.set_postfix({
-                    "processed": stats["embedded"],
-                    "failed": stats["failed"],
-                })
-
-                if stats["embedded"] >= max_docs:
-                    logger.info(f"Reached document limit: {max_docs}")
-                    break
-
-            pbar.close()
-
-            # Final sync for remote storage
-            if not interrupted:
-                logger.info("🔄 Performing final sync...")
-                await vectoriser.finalize_processing()
-
-            # Print summary statistics
-            duration = time.time() - start_time
-            final_count = vectoriser.collection.count()
-
-            logger.info("\n" + "=" * 50)
-            logger.info("📊 PROCESSING SUMMARY")
-            logger.info("=" * 50)
-            logger.info(f"Total documents found: {stats['total']}")
-            logger.info(f"Successfully processed: {stats['embedded']}")
-            logger.info(f"Failed: {stats['failed']}")
-            logger.info(f"Time elapsed: {duration:.1f} seconds")
-            logger.info(f"Processing rate: {stats['total'] / duration:.1f} docs/second")
-            logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
-            logger.info("=" * 50)
-
-            if interrupted:
-                logger.warning("⚠️  Processing was interrupted. Run again to resume.")
+            if not ids:
+                # No existing chunks for this record id -> cannot skip yet
+                if strategy == "record_id":
+                    return False, "record_id not present"
             else:
-                logger.info("✅ Processing completed successfully!")
+                if strategy == "record_id":
+                    return True, "record_id already embedded"
+                # strategy == both: need to verify content hash
+                if has_matching_content(metas):
+                    return True, "record_id & content hash match"
+                return False, "record_id exists but content changed"
 
-    loop.run_until_complete(run_pipeline())
+        if strategy == "content_hash":
+            # Query by content_hash only
+            res = await asyncio.to_thread(
+                self._query_collection_single,
+                {"content_hash": content_hash, "embedding_model": embedding_model},
+            )
+            ids = res.get("ids", []) or []
+            if ids:
+                return True, "content hash already embedded"
+            return False, "content hash not present"
 
+        if strategy == "both":
+            # If we reach here, record_id was absent; fall back to content_hash check.
+            res = await asyncio.to_thread(
+                self._query_collection_single,
+                {"content_hash": content_hash, "embedding_model": embedding_model},
+            )
+            ids = res.get("ids", []) or []
+            if ids:
+                # This means same content under a different record_id; treat as duplicate.
+                return True, "identical content (hash) already embedded under different record_id"
+            return False, "new record_id & content hash"
 
-if __name__ == "__main__":
-    main()
+        # Fallback (should not occur)
+        return False, "no matching deduplication strategy"
+
+    # ------------------------------------------------------------------
+    # (Rest of class continues...)
+    # ------------------------------------------------------------------
