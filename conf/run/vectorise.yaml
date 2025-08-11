@@ -17,7 +17,7 @@ vectoriser:
   arrow_save_dir: "/home/nic/data/prosocial_zot/data"
   
 chunker:
-  _target_: buttermilk.data.vector.DefaultTextSplitter
+  _target_: buttermilk.data.vector.SemanticSplitter
   chunk_size: 9000
   chunk_overlap: 3000
 

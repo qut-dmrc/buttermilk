@@ -8,28 +8,24 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Self, TypeVar, cast  # Corrected import for Tuple
-import semchunk
+from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
+
 import chromadb
 import hydra
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pydantic
-from omegaconf import OmegaConf
-from chromadb import Collection
-from chromadb import Documents, EmbeddingFunction, Embeddings
+import semchunk
+from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
 from chromadb.api import ClientAPI
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from google import genai
+from omegaconf import OmegaConf
 from pydantic import BaseModel, Field, PrivateAttr
 from tqdm.asyncio import tqdm
 from vertexai.language_models import (
-    TextEmbedding,
     TextEmbeddingInput,
-    TextEmbeddingModel,
 )
 
-
-from google import genai
 from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
     logger,
@@ -39,7 +35,6 @@ from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk 
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import MultiFieldEmbeddingConfig, VectorStorageConfig
 from buttermilk._core.types import Record
-from typing import Literal
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import ensure_chromadb_cache
@@ -199,61 +194,60 @@ async def list_to_async_iterator(items: list[T]) -> AsyncIterator[T]:
         yield item
         await asyncio.sleep(0)  # Yield control briefly
 
+
 class SemanticSplitter(BaseModel):
     # Defaults are roughly 750 words per chunk, with 250 word overlap
     chunk_size: int = Field(default=1000)
     chunk_overlap: int = Field(default=250)
-    _chunker: semchunk.SemanticChunker = PrivateAttr()
+    _chunker: semchunk.Chunker = PrivateAttr()
 
     model_config = pydantic.ConfigDict(extra="ignore")
 
     @pydantic.model_validator(mode="after")
     def initialize_chunker(self) -> Self:
         """Initializes the semantic chunker with the specified parameters."""
-        
-        self._chunker = semchunk.chunkerify('cl100k_base', chunk_size)
+        self._chunker = semchunk.chunkerify("cl100k_base", self.chunk_size)
         logger.info(
             f"Initialized SemanticSplitter (chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap})",
         )
         return self
 
-    def _create_chunks(self, text) -> Tuple[List[str], List[Tuple[int, int]]]:
+    def _create_chunks(self, text) -> tuple[list[str], list[tuple[int, int]]]:
         # Pass an `offsets` argument to return the offsets of chunks, as well as an `overlap`
         # argument to overlap chunks by a ratio (if < 1) or an absolute number of tokens (if >= 1).
-        chunks, offsets = chunker(text, offsets = True, overlap = self.overlap)
+        chunks, offsets = self._chunker(text, offsets=True, overlap=self.chunk_overlap)
 
         return chunks, offsets
-    
+
     async def process(self, doc: Record, **kwargs) -> Record | None:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
-        if hasattr(doc, 'content'):
+        if hasattr(doc, "content"):
             text_content = doc.content if isinstance(doc.content, str) else str(doc.content)
         else:
             logger.warning(
                 f"Skipping chunking for record {doc.record_id} due to missing content.",
             )
             return None
-            
+
         if not text_content:
             logger.warning(
                 f"Skipping chunking for record {doc.record_id} due to empty content.",
             )
             return None
-            
+
         try:
             chunk_data = self._create_chunks(text_content)
-            
+
             doc.chunks = []
             doc_chunk_count = 0
-            for i, chunk_data in enumerate(text_chunks):
-                text_chunk, offset = chunk_data
+            for text_chunk, offset in enumerate(chunk_data):
                 if not text_chunk.strip():
                     continue
                 doc.chunks.append(
                     ChunkedDocument(
                         document_title=doc.title,
-                        chunk_index=i,
+                        chunk_index=doc_chunk_count,
                         chunk_text=text_chunk.strip(),
                         offset=offset,
                         document_id=doc.record_id,
@@ -278,6 +272,7 @@ class SemanticSplitter(BaseModel):
             )
         return None
 
+
 class GeminiEmbeddingFunction(EmbeddingFunction):
     def __init__(
         self,
@@ -288,34 +283,33 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         self.client = genai.Client()
         self._embedding_model = embedding_model
         self._current_title = None  # Store title for current batch
-        
+
     def set_title(self, title: str) -> None:
         """Set the title to use for the next embedding batch."""
         self._current_title = title
-        
+
     def __call__(self, input: Documents) -> Embeddings:
         config_params = {
             "task_type": "retrieval_document",
-            "output_dimensionality": self.dimensionality
+            "output_dimensionality": self.dimensionality,
         }
-        
+
         # Add title if available
         if self._current_title:
             config_params["title"] = self._current_title
-            
+
         response = self.client.models.embed_content(
             model=self._embedding_model,
             contents=input,
-            config=genai.types.EmbedContentConfig(**config_params)
+            config=genai.types.EmbedContentConfig(**config_params),
         )
 
         # Extract embeddings from response
         embeddings = []
         for embedding in response.embeddings:
             embeddings.append(embedding.values)
-        
+
         return embeddings
-  
 
 
 # --- Core Embedding and DB Interaction Class ---
@@ -376,7 +370,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = self.embedding_model  # Store the model name
-        
+
         self._embedding_function = GeminiEmbeddingFunction(
             embedding_model=self.embedding_model,
             dimensionality=self.dimensionality,
@@ -391,7 +385,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             jitter_seconds=2.0,  # Add some jitter for quota management
         )
         logger.info(f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff")
-
 
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
@@ -1042,7 +1035,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Override embedding model if specified
         effective_embedding_model = embedding_model_override or self._embedding_model
-        
+
         logger.info(f"🟣 [VECTORIZER-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
@@ -1165,7 +1158,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 processing_time_ms=processing_time_ms,
                 metadata={"error": str(e)},
             )
-
 
     async def _store_chunks_for_record(self, record: Record) -> None:
         """Store record chunks with metadata in ChromaDB.
@@ -1418,7 +1410,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return
 
         # Set the title for this batch if provided
-        if record_title and hasattr(self._embedding_function, 'set_title'):
+        if record_title and hasattr(self._embedding_function, "set_title"):
             self._embedding_function.set_title(record_title)
 
         # Prepare embedding inputs
@@ -1446,7 +1438,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.warning(f"Failed to generate embedding for chunk {idx}")
 
         logger.debug(f"Generated embeddings for {len([c for c in chunks if c.embedding is not None])} out of {len(chunks)} chunks")
-    
+
     async def _embed(self, embeddings_input: list[tuple[int, Any]]) -> list[tuple[int, list[float] | None]]:
         """Generate embeddings for a list of text inputs.
         
@@ -1455,30 +1447,31 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             
         Returns:
             List of tuples (index, embedding vector or None)
+
         """
         if not embeddings_input:
             return []
-            
+
         # Extract just the texts from the input tuples
         texts = []
         indices = []
         for idx, text_input in embeddings_input:
             indices.append(idx)
             # Handle different input types
-            if hasattr(text_input, 'text'):
+            if hasattr(text_input, "text"):
                 texts.append(text_input.text)
             elif isinstance(text_input, str):
                 texts.append(text_input)
             else:
                 texts.append(str(text_input))
-        
+
         try:
             # Call embedding function directly (it handles its own retries)
             embeddings = await asyncio.to_thread(
                 self._embedding_function,
-                texts
+                texts,
             )
-            
+
             # Pair indices with embeddings
             results = []
             for i, idx in enumerate(indices):
@@ -1486,15 +1479,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     results.append((idx, embeddings[i]))
                 else:
                     results.append((idx, None))
-                    
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Failed to generate embeddings: {e}")
             self._convert_embedding_errors(e)
             # Return None for all inputs on failure
             return [(idx, None) for idx in indices]
-
 
     def _write_record_to_parquet(self, record: Record, file_path: Path):
         """Synchronous helper to write Record chunks to a Parquet file."""
@@ -1534,9 +1526,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         record_meta_serializable = {
             "record_id": record.record_id,
-            "title": record.metadata.get('title', ''),
-            "file_path": record.metadata.get('file_path', ''),
-            "record_path": record.metadata.get('record_path', ''),
+            "title": record.metadata.get("title", ""),
+            "file_path": record.metadata.get("file_path", ""),
+            "record_path": record.metadata.get("record_path", ""),
             "metadata": json.dumps(record.metadata),
         }
         arrow_metadata = {k.encode("utf-8"): str(v).encode("utf-8") for k, v in record_meta_serializable.items()}
@@ -1551,7 +1543,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         error_str = str(exc).lower()
         if any(keyword in error_str for keyword in ["quota", "rate limit", "429", "too many requests"]):
             raise RateLimit(str(exc)) from exc
-
 
     # --- DB Interaction ---
     def check_document_exists(self, document_id: str) -> bool:
@@ -1662,7 +1653,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         return successful_docs_upserted, failed_docs_upserted
 
 
-
 # --- Async Pipeline Stages ---
 class DocProcessor(BaseModel):
     """Callable class for processing documents from an iterator."""
@@ -1698,14 +1688,12 @@ class DocProcessor(BaseModel):
                     if result.status == "processed":
                         logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
                         return result.record
-                    else:
-                        logger.debug(f"⏭️  [{self._name}-{doc.record_id}] Skipped: {result.reason}")
-                        return None
-                else:
-                    # Direct Record or None return
-                    if result:
-                        logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
-                    return result
+                    logger.debug(f"⏭️  [{self._name}-{doc.record_id}] Skipped: {result.reason}")
+                    return None
+                # Direct Record or None return
+                if result:
+                    logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
+                return result
             except Exception as e:
                 logger.error(
                     f"Error processing document {doc.record_id}: {e} {e.args=}",
@@ -1759,7 +1747,7 @@ class DocProcessor(BaseModel):
                         if result is not None:
                             processed_count += 1
                             yield result
-                            
+
                             # Check if we've reached max_docs limit
                             if self.max_docs is not None and processed_count >= self.max_docs:
                                 logger.info(f"DocProcessor {self._name} reached max_docs limit ({self.max_docs})")
@@ -1791,11 +1779,11 @@ def main(cfg) -> None:
     # Track start time for statistics
     start_time = time.time()
     interrupted = False
-    
+
     OmegaConf.resolve(cfg)
-    
+
     bm = hydra.utils.instantiate(cfg.bm)
-    
+
     from buttermilk._core.dmrc import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
@@ -1812,19 +1800,18 @@ def main(cfg) -> None:
         nonlocal interrupted
         logger.warning("🛑 Interrupt received, finishing current batch...")
         interrupted = True
-    
+
     signal.signal(signal.SIGINT, handle_interrupt)
     signal.signal(signal.SIGTERM, handle_interrupt)
-    
+
     # Print startup banner
     logger.info("🚀 Vector Database Builder")
     logger.info("=" * 50)
-    if hasattr(cfg, 'name'):
+    if hasattr(cfg, "name"):
         logger.info(f"Job: {cfg.name}")
-    if hasattr(cfg, 'storage'):
+    if hasattr(cfg, "storage"):
         logger.info(f"Storage: {cfg.storage.collection_name} at {cfg.storage.persist_directory}")
     logger.info("=" * 50)
-    
 
     logger.info("Setting vector store instance on input document source.")
     input_docs_source.set_vector_store(vectoriser)
@@ -1834,28 +1821,28 @@ def main(cfg) -> None:
 
     async def run_pipeline():
         from buttermilk._core.standalone_trace import create_standalone_trace
-        
+
         # Create a standalone trace context for the entire pipeline
         trace_attributes = {
-            "job_name": getattr(cfg, 'name', 'vector_batch'),
-            "collection_name": cfg.storage.collection_name if hasattr(cfg, 'storage') else None,
-            "start_from": getattr(cfg, 'start_from', 0),
-            "max_docs": getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN),
+            "job_name": getattr(cfg, "name", "vector_batch"),
+            "collection_name": cfg.storage.collection_name if hasattr(cfg, "storage") else None,
+            "start_from": getattr(cfg, "start_from", 0),
+            "max_docs": getattr(cfg, "max_docs", MAX_TOTAL_TASKS_PER_RUN),
         }
-        
+
         async with create_standalone_trace("vector_pipeline", **trace_attributes) as trace:
             logger.info("Starting data processing pipeline...")
-            
+
             # Initialize cache for remote storage
             await vectoriser.ensure_cache_initialized()
-            
+
             # Get existing stats
             existing_count = vectoriser.collection.count()
             logger.info(f"📊 Existing embeddings in collection: {existing_count}")
 
             # 1. Source Documents
-            start_from = getattr(cfg, 'start_from', 0)
-            max_docs = getattr(cfg, 'max_docs', MAX_TOTAL_TASKS_PER_RUN)
+            start_from = getattr(cfg, "start_from", 0)
+            max_docs = getattr(cfg, "max_docs", MAX_TOTAL_TASKS_PER_RUN)
             doc_iterator = input_docs_source.get_all_records(start=start_from, max_docs=max_docs)
 
             # 2. Pre-process (Extract Text if needed)
@@ -1888,8 +1875,8 @@ def main(cfg) -> None:
             )
 
             # Process documents through the complete pipeline with a limit
-            quiet = getattr(cfg, 'quiet', False)
-            
+            quiet = getattr(cfg, "quiet", False)
+
             pbar = tqdm(total=max_docs, desc="Processing documents", disable=quiet)
             stats = {
                 "total": 0,
@@ -1903,14 +1890,14 @@ def main(cfg) -> None:
                 if interrupted:
                     logger.warning("🛑 Processing interrupted by user")
                     break
-                    
+
                 stats["total"] += 1
-                
+
                 if doc is not None:
                     stats["embedded"] += 1
                 else:
                     stats["failed"] += 1
-                    
+
                 pbar.update(1)
                 pbar.set_postfix({
                     "processed": stats["embedded"],
@@ -1922,7 +1909,7 @@ def main(cfg) -> None:
                     break
 
             pbar.close()
-            
+
             # Final sync for remote storage
             if not interrupted:
                 logger.info("🔄 Performing final sync...")
@@ -1931,18 +1918,18 @@ def main(cfg) -> None:
             # Print summary statistics
             duration = time.time() - start_time
             final_count = vectoriser.collection.count()
-            
-            logger.info("\n" + "="*50)
+
+            logger.info("\n" + "=" * 50)
             logger.info("📊 PROCESSING SUMMARY")
-            logger.info("="*50)
+            logger.info("=" * 50)
             logger.info(f"Total documents found: {stats['total']}")
             logger.info(f"Successfully processed: {stats['embedded']}")
             logger.info(f"Failed: {stats['failed']}")
             logger.info(f"Time elapsed: {duration:.1f} seconds")
-            logger.info(f"Processing rate: {stats['total']/duration:.1f} docs/second")
+            logger.info(f"Processing rate: {stats['total'] / duration:.1f} docs/second")
             logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
-            logger.info("="*50)
-            
+            logger.info("=" * 50)
+
             if interrupted:
                 logger.warning("⚠️  Processing was interrupted. Run again to resume.")
             else:

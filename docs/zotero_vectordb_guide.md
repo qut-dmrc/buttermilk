@@ -106,7 +106,7 @@ vectoriser:
   
 # Chunking configuration  
 chunker:
-  _target_: buttermilk.data.vector.DefaultTextSplitter
+  _target_: buttermilk.data.vector.SemanticSplitter
   chunk_size: 4000
   chunk_overlap: 1000
 
