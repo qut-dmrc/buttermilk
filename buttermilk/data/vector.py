@@ -1,6 +1,5 @@
 import asyncio
 import json
-import random
 import signal
 import time
 import uuid
@@ -281,29 +280,17 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         dimensionality: int = 3072,
     ):
         self.dimensionality = dimensionality
-        self.client = genai.Client()
+        self.client: genai.Client = genai.Client()
         self._embedding_model = embedding_model
-        self._current_title = None  # Store title for current batch
-
-    def set_title(self, title: str) -> None:
-        """Set the title to use for the next embedding batch."""
-        self._current_title = title
 
     def __call__(self, input: Documents) -> Embeddings:
-        config_params = {
-            "task_type": "retrieval_document",
-            "output_dimensionality": self.dimensionality,
-        }
-
-        # Add title if available
-        if self._current_title:
-            config_params["title"] = self._current_title
 
         response = self.client.models.embed_content(
             model=self._embedding_model,
             contents=input,
-            config=genai.types.EmbedContentConfig(**config_params),
-        )
+            config={
+                "output_dimensionality": self.dimensionality,
+            })
 
         # Extract embeddings from response
         embeddings = []
@@ -1234,48 +1221,47 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         indices = []
         for idx, text_input in embeddings_input:
             indices.append(idx)
-            if hasattr(text_input, "text"):
-                texts.append(text_input.text)
-            elif isinstance(text_input, str):
-                texts.append(text_input)
-            else:
-                texts.append(str(text_input))
+            texts.append(text_input)
 
-        max_retries = self.embedding_max_retries
-        min_wait = self.embedding_min_wait_seconds
-        max_wait = self.embedding_max_wait_seconds
-        cooldown = self.embedding_cooldown_seconds
-
-        for attempt in range(1, max_retries + 1):
+        # Lazily initialize a retry wrapper tuned for embeddings if not already set.
+        # We intentionally use higher wait times than the default because the
+        # embedding API is prone to rate limiting in our workloads.
+        if not hasattr(self, "_retry_wrapper") or self._retry_wrapper is None:
             try:
-                embeddings = await asyncio.to_thread(self._embedding_function, texts)
-                # Optional cooldown after success
-                if cooldown:
-                    await asyncio.sleep(cooldown)
-                results = []
-                for i, idx in enumerate(indices):
-                    if i < len(embeddings):
-                        results.append((idx, embeddings[i]))
-                    else:
-                        results.append((idx, None))
-                return results
-            except Exception as e:
-                if self._is_rate_limit_error(e):
-                    if attempt == max_retries:
-                        logger.error(f"Rate limit persists after {attempt} attempts: {e}")
-                        break
-                    wait = min(max_wait, min_wait * (2 ** (attempt - 1)))
-                    jitter = random.uniform(0, min(2.0, wait * 0.25))
-                    logger.warning(f"Rate limit (attempt {attempt}/{max_retries}) - backing off {wait + jitter:.1f}s")
-                    await asyncio.sleep(wait + jitter)
-                    continue
-                # Non-rate-limit error: do not retry
-                logger.error(f"Embedding failed (non-retryable): {e}")
-                break
+                self._retry_wrapper = RetryWrapper(
+                    client=None,  # not used directly; we pass the callable
+                    cooldown_seconds=self.embedding_cooldown_seconds,
+                    max_retries=self.embedding_max_retries,
+                    # Ensure minimum waits are elevated (at least 5s) and allow a higher ceiling.
+                    min_wait_seconds=max(5.0, getattr(self, "embedding_min_wait_seconds", 5.0)),
+                    max_wait_seconds=max(180.0, getattr(self, "embedding_max_wait_seconds", 120.0)),
+                    jitter_seconds=10.0,
+                )
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"Failed to init embedding retry wrapper, falling back to single attempt: {e}")
+                self._retry_wrapper = None
 
-        # Failure path
-        self._convert_embedding_errors(Exception("embedding failed after retries"))
-        return [(idx, None) for idx in indices]
+        async def _run_embed() -> list[Any]:
+            return await asyncio.to_thread(self._embedding_function, texts)
+
+        try:
+            if self._retry_wrapper:
+                embeddings = await self._retry_wrapper._execute_with_retry(_run_embed)
+            else:
+                embeddings = await _run_embed()
+        except Exception as e:  # All retries exhausted or non-retryable error surfaced
+            logger.error(f"Embedding failed after retries: {e}")
+            self._convert_embedding_errors(e)
+            return [(idx, None) for idx in indices]
+
+        # Successful path
+        results: list[tuple[int, list[float] | None]] = []
+        for i, idx in enumerate(indices):
+            if i < len(embeddings):
+                results.append((idx, embeddings[i]))
+            else:
+                results.append((idx, None))
+        return results
 
     # ------------------------------------------------------------------
     # Deduplication & Skip Logic
