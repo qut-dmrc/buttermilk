@@ -91,6 +91,7 @@ dependencies = [
     "pandas>=2.3.0",
     "google-genai[aiohttp]>=1.25.0",
     "uv>=0.8.4",
+    "semchunk>=3.2.2",
 ]
 
 [dependency-groups]
