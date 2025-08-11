@@ -27,8 +27,8 @@ RUN apt update && apt install -y --no-install-recommends --upgrade curl less wge
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
     apt-get install -y nodejs
 
-RUN python3 -m pip install --upgrade pip uv
-
+##### INSTALL UV #######
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ################################
 # BUILDER-BASE
