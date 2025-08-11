@@ -5,18 +5,14 @@ functionality that allows different types of content (full text, abstracts,
 annotations, metadata) to be embedded with different configurations.
 """
 
-import asyncio
-import json
 import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from buttermilk._core.log import logger
-from buttermilk._core.storage_config import MultiFieldEmbeddingConfig, AdditionalFieldConfig
+from buttermilk._core.storage_config import AdditionalFieldConfig, MultiFieldEmbeddingConfig
 from buttermilk._core.types import Record
-from buttermilk.data.vector import ChromaDBEmbeddings, ChunkedDocument
+from buttermilk.data.vector import ChromaDBEmbeddings
 
 
 class TestZoteroMultiFieldEmbeddings:
@@ -27,7 +23,7 @@ class TestZoteroMultiFieldEmbeddings:
         """Mock embedding generation with different dimensions."""
         with patch("buttermilk.data.vector.TextEmbeddingModel") as mock_model:
             instance = mock_model.from_pretrained.return_value
-            
+
             # Return different embeddings based on content to verify they're different
             def mock_embed(inputs, **kwargs):
                 embeddings = []
@@ -41,7 +37,7 @@ class TestZoteroMultiFieldEmbeddings:
                     else:
                         embeddings.append(Mock(values=[0.4] * 768))
                 return embeddings
-            
+
             instance.get_embeddings_async = AsyncMock(side_effect=mock_embed)
             yield instance
 
@@ -146,11 +142,10 @@ class TestZoteroMultiFieldEmbeddings:
                 collection_name="test_multifield",
                 embedding_model="text-embedding-005",
                 dimensionality=768,
-                multi_field_config=config,
             )
 
             chunks = vector_store.create_multi_field_chunks_for_record(
-                zotero_record_with_rich_metadata
+                zotero_record_with_rich_metadata,
             )
 
             # Verify chunks were created for each content type
@@ -161,16 +156,16 @@ class TestZoteroMultiFieldEmbeddings:
 
             # Should have multiple content chunks (main text is long)
             assert chunk_types.get("content", 0) > 1
-            
+
             # Should have one abstract chunk
             assert chunk_types.get("abstract", 0) == 1
-            
+
             # Should have annotation chunks (3 annotations consolidated)
             assert chunk_types.get("annotation", 0) >= 1
-            
+
             # Should have keyword chunk
             assert chunk_types.get("keyword", 0) == 1
-            
+
             # Should have citation chunk
             assert chunk_types.get("citation", 0) == 1
 
@@ -188,7 +183,7 @@ class TestZoteroMultiFieldEmbeddings:
 
     @pytest.mark.anyio
     async def test_multifield_embeddings_generation(
-        self, zotero_record_with_rich_metadata, mock_embeddings, mock_chromadb
+        self, zotero_record_with_rich_metadata, mock_embeddings, mock_chromadb,
     ):
         """Test that different field types generate different embeddings."""
         _, mock_collection = mock_chromadb
@@ -217,7 +212,6 @@ class TestZoteroMultiFieldEmbeddings:
                 collection_name="test_embeddings",
                 embedding_model="text-embedding-005",
                 dimensionality=768,
-                multi_field_config=config,
             )
 
             await vector_store.ensure_cache_initialized()
@@ -238,11 +232,10 @@ class TestZoteroMultiFieldEmbeddings:
             assert mock_collection.upsert.called
             call_args = mock_collection.upsert.call_args
             metadatas = call_args[1]["metadatas"]
-            
+
             # Check that different chunk types have appropriate metadata
             content_types_in_metadata = set()
-            for metadata in metadatas:
-                content_types_in_metadata.add(metadata.get("chunk_type"))
+            content_types_in_metadata.update(metadata.get("chunk_type") for metadata in metadatas)
 
             assert "content" in content_types_in_metadata
             assert "abstract" in content_types_in_metadata
@@ -311,7 +304,6 @@ class TestZoteroMultiFieldEmbeddings:
                 collection_name="test_annotations",
                 embedding_model="text-embedding-005",
                 dimensionality=768,
-                multi_field_config=config,
             )
 
             chunks = vector_store.create_multi_field_chunks_for_record(record)
@@ -394,7 +386,6 @@ class TestZoteroMultiFieldEmbeddings:
                 collection_name="test_metadata_chunks",
                 embedding_model="text-embedding-005",
                 dimensionality=768,
-                multi_field_config=config,
             )
 
             await vector_store.ensure_cache_initialized()
@@ -402,7 +393,7 @@ class TestZoteroMultiFieldEmbeddings:
             result = await vector_store.process_record(record)
 
             assert result.status == "processed"
-            
+
             # Verify all metadata types were processed
             chunk_types = result.metadata.get("chunk_types", {})
             assert "author_info" in chunk_types
@@ -412,7 +403,7 @@ class TestZoteroMultiFieldEmbeddings:
 
             # Verify the chunks were created correctly
             chunks = vector_store.create_multi_field_chunks_for_record(record)
-            
+
             # Check contributions formatting (list to text)
             contrib_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "contributions"]
             assert len(contrib_chunks) == 1
@@ -474,10 +465,7 @@ class TestZoteroMultiFieldEmbeddings:
                 collection_name="test_empty_fields",
                 embedding_model="text-embedding-005",
                 dimensionality=768,
-                multi_field_config=config,
             )
-
-            chunks = vector_store.create_multi_field_chunks_for_record(record)
 
             # Should only have content chunks, no chunks for empty fields
             chunk_types = set(c.metadata.get("chunk_type", "content") for c in chunks)

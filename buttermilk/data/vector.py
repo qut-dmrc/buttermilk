@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import signal
 import time
@@ -33,7 +32,7 @@ from buttermilk import (
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
-from buttermilk._core.storage_config import MultiFieldEmbeddingConfig, VectorStorageConfig
+from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
@@ -107,7 +106,8 @@ class ChromaDBConfig(BaseModel):
     sync_batch_size: int = 50
     sync_interval_minutes: int = 10
     disable_auto_sync: bool = False
-    multi_field_config: MultiFieldEmbeddingConfig | None = None
+    # (multi-field embedding removed)
+
 
 # --- Pydantic Models ---
 
@@ -237,11 +237,11 @@ class SemanticSplitter(BaseModel):
             return None
 
         try:
-            chunk_data = self._create_chunks(text_content)
+            text_chunks, offsets = self._create_chunks(text_content)
 
             doc.chunks = []
             doc_chunk_count = 0
-            for text_chunk, offset in enumerate(chunk_data):
+            for text_chunk, offset in zip(text_chunks, offsets, strict=True):
                 if not text_chunk.strip():
                     continue
                 doc.chunks.append(
@@ -251,7 +251,7 @@ class SemanticSplitter(BaseModel):
                         chunk_text=text_chunk.strip(),
                         offset=offset,
                         document_id=doc.record_id,
-                        chunk_id=f"{doc.record_id}_{i}",
+                        chunk_id=f"{doc.record_id}_{doc_chunk_count}",
                         metadata=doc.metadata.copy(),
                     ),
                 )
@@ -327,7 +327,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
-    multi_field_config: MultiFieldEmbeddingConfig | None = Field(default=None)
 
     # New sync configuration options
     sync_batch_size: int = Field(default=50, description="Sync every N records")
@@ -771,242 +770,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         return collection
 
-    def create_multi_field_chunks_for_record(self, record: Record) -> list[ChunkedDocument]:
-        """Create chunks for multiple content types directly from Record.
-
-        Uses multi_field_config to determine which fields to embed.
-        Works directly with Record without conversion overhead.
-
-        Args:
-            record: Record instance to chunk
-
-        Returns:
-            list[ChunkedDocument]: List of chunks created from the record
-
-        """
-        chunks = []
-
-        # If no multi-field config, use traditional single-field chunking
-        if not self.multi_field_config:
-            content_text = record.text_content
-            if content_text:
-                text_splitter = SemanticSplitter(chunk_size=1000, chunk_overlap=250)
-                content_chunks = text_splitter.split_text(content_text)
-
-                for i, chunk_text in enumerate(content_chunks):
-                    if chunk_text.strip():
-                        chunks.append(
-                            ChunkedDocument(
-                                document_title=record.title or f"Record {record.record_id}",
-                                chunk_index=len(chunks),
-                                chunk_text=chunk_text.strip(),
-                                document_id=record.record_id,
-                                metadata=record.metadata,
-                            ),
-                        )
-            return chunks
-
-        # Multi-field chunking based on configuration
-        config = self.multi_field_config
-
-        # 1. Main content field (chunked) - use content field configured in multi_field_config
-        content_text = getattr(record, config.content_field, record.text_content)
-        if isinstance(content_text, str) and content_text:
-            logger.debug(f"Content text length for {record.record_id}: {len(content_text)} chars (from {config.content_field})")
-            text_splitter = SemanticSplitter(
-                chunk_size=config.chunk_size,
-                chunk_overlap=config.chunk_overlap,
-            )
-            content_chunks = text_splitter.split_text(content_text)
-            logger.debug(f"Text splitter with chunk_size={config.chunk_size} created {len(content_chunks)} content chunks for {record.record_id}")
-
-            for i, chunk_text in enumerate(content_chunks):
-                if chunk_text.strip():
-                    chunks.append(
-                        ChunkedDocument(
-                            document_title=record.title or f"Record {record.record_id}",
-                            chunk_index=len(chunks),
-                            chunk_text=chunk_text.strip(),
-                            document_id=record.record_id,
-                            metadata={
-                                **record.metadata,
-                                "content_type": config.content_field,
-                                "chunk_type": "content",
-                            },
-                        ),
-                    )
-
-        # 2. Additional fields (single chunks each)
-        for field_config in config.additional_fields:
-            field_value = record.metadata.get(field_config.source_field, "")
-
-            # Convert structured data to readable text
-            if field_value:
-                if isinstance(field_value, list):
-                    # Join list items with newlines for better readability
-                    chunk_text = "\n".join(str(item).strip() for item in field_value if str(item).strip())
-                elif isinstance(field_value, dict):
-                    # Convert dict to key-value pairs
-                    chunk_text = "\n".join(f"{k}: {v}" for k, v in field_value.items() if v)
-                else:
-                    # Handle simple strings and other types
-                    chunk_text = str(field_value).strip()
-
-                if chunk_text and len(chunk_text) >= field_config.min_length:
-                    chunks.append(
-                        ChunkedDocument(
-                            document_title=record.title or f"Record {record.record_id}",
-                            chunk_index=len(chunks),
-                            chunk_text=chunk_text,
-                            document_id=record.record_id,
-                            metadata={
-                                **record.metadata,
-                                "content_type": field_config.source_field,
-                                "chunk_type": field_config.chunk_type,
-                                "original_type": type(field_value).__name__,  # Track original data type
-                            },
-                        ),
-                    )
-
-        return chunks
-
-    def _get_record_model_key(self, record_id: str, embedding_model: str) -> str:
-        """Generate unique key for record+model combination."""
-        return f"{record_id}:{embedding_model}"
-
-    def _get_content_hash(self, record: Record) -> str:
-        """Generate content hash for a record based on text content."""
-        content = record.text_content or ""
-        # Include metadata that affects embeddings
-        metadata_str = json.dumps({
-            k: v for k, v in sorted(record.metadata.items())
-            if k in ["title", "summary", "description"]  # Only include fields that affect embedding
-        }, sort_keys=True)
-        combined_content = f"{content}|{metadata_str}"
-        return hashlib.sha256(combined_content.encode()).hexdigest()
-
-    async def _check_record_exists(self, record: Record) -> ExistenceCheck:
-        """Check if record+model combination already has embeddings.
-
-        Args:
-            record: Record to check
-
-        Returns:
-            ExistenceCheck: Detailed information about existence
-
-        """
-        cache_key = self._get_record_model_key(record.record_id, self.embedding_model)
-
-        # Check in-memory cache first
-        if cache_key in self._processed_combinations_cache:
-            return ExistenceCheck(
-                exists=True,
-                embedding_model=self.embedding_model,
-                chunk_count=0,  # Not available from cache
-                last_processed=None,  # Not available from cache
-                metadata_hash=None,
-            )
-
-        # Check ChromaDB for existing chunks with this record+model
-        try:
-            results = self.collection.get(
-                where={
-                    "$and": [
-                        {"document_id": record.record_id},
-                        {"embedding_model": self.embedding_model},
-                    ],
-                },
-                limit=10,  # Get a few to count and check metadata
-                include=["metadatas"],
-            )
-
-            exists = len(results.get("ids", [])) > 0
-            chunk_count = len(results.get("ids", []))
-
-            # Try to extract timestamp and content hash from metadata
-            last_processed = None
-            metadata_hash = None
-
-            if exists and results.get("metadatas"):
-                for metadata in results["metadatas"]:
-                    if metadata:
-                        # Try to parse timestamp
-                        if "created_timestamp" in metadata:
-                            try:
-                                last_processed = datetime.fromisoformat(metadata["created_timestamp"])
-                            except:
-                                pass
-
-                        # Get content hash if available
-                        if "content_hash" in metadata:
-                            metadata_hash = metadata["content_hash"]
-                            break
-
-            if exists:
-                # Add to cache for future checks
-                self._processed_combinations_cache.add(cache_key)
-                logger.debug(f"Found existing record {record.record_id} with {self.embedding_model}: {chunk_count} chunks")
-
-            return ExistenceCheck(
-                exists=exists,
-                embedding_model=self.embedding_model,
-                chunk_count=chunk_count,
-                last_processed=last_processed,
-                metadata_hash=metadata_hash,
-            )
-
-        except Exception as e:
-            logger.error(f"Error checking record+model existence: {e}")
-            # Default to not exists to allow processing
-            return ExistenceCheck(
-                exists=False,
-                embedding_model=self.embedding_model,
-                chunk_count=0,
-                last_processed=None,
-                metadata_hash=None,
-            )
-
-    async def _should_skip_record(self, record: Record, force_reprocess: bool = False) -> tuple[bool, str]:
-        """Determine if a record should be skipped based on deduplication strategy.
-
-        Args:
-            record: Record to check
-            force_reprocess: Force reprocessing even if exists
-
-        Returns:
-            tuple: (should_skip, reason)
-
-        """
-        if force_reprocess:
-            return False, "forced reprocessing"
-
-        existence_check = await self._check_record_exists(record)
-
-        if not existence_check.exists:
-            return False, "new record"
-
-        # Handle different deduplication strategies
-        if self.deduplication_strategy == "record_id":
-            return True, f"record_id already exists with {self.embedding_model}"
-
-        if self.deduplication_strategy == "content_hash":
-            current_hash = self._get_content_hash(record)
-            if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
-                return True, f"content unchanged (hash: {current_hash[:8]}...)"
-            return (
-                False,
-                f"content changed (old: {existence_check.metadata_hash[:8] if existence_check.metadata_hash else 'unknown'}..., new: {current_hash[:8]}...)",
-            )
-
-        if self.deduplication_strategy == "both":
-            # More conservative - skip only if record_id exists AND content is the same
-            current_hash = self._get_content_hash(record)
-            if existence_check.metadata_hash and existence_check.metadata_hash == current_hash:
-                return True, "record_id and content both unchanged"
-            return False, "record exists but content may have changed"
-
-        return False, "unknown deduplication strategy"
-
     async def process_record(
         self,
         record: Record,
@@ -1016,30 +779,16 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         embedding_model_override: str | None = None,
         force_reprocess: bool = False,
     ) -> ProcessingResult:
-        """Process a Record object with comprehensive deduplication and validation.
+        """Process a Record object with deduplication & embedding.
 
-        Breaking Change: Now returns ProcessingResult instead of Record | None.
-
-        Args:
-            record: Record instance to process
-            skip_existing: Whether to skip existing records (default: True)
-            validate_before_process: Whether to validate before processing (default: True)
-            embedding_model_override: Override embedding model for this record
-            force_reprocess: Force reprocessing even if exists (default: False)
-
-        Returns:
-            ProcessingResult: Comprehensive result with status and metadata
-
+        NOTE: Assumes prior pipeline stage already chunked (SemanticSplitter).
+        Falls back to simple semantic splitting only if no chunks are present.
         """
         start_time = time.time()
-
-        # Override embedding model if specified
         effective_embedding_model = embedding_model_override or self._embedding_model
-
         logger.info(f"🟣 [VECTORIZER-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
-            # Step 1: Check if we should skip this record
             if skip_existing and not force_reprocess:
                 should_skip, skip_reason = await self._should_skip_record(record, force_reprocess)
                 if should_skip:
@@ -1054,9 +803,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         metadata={"skip_validation": True},
                     )
 
-            # Step 2: Validate record if requested
             if validate_before_process:
-                if not record.text_content and not any(hasattr(record, field) for field in ["title", "summary", "description"]):
+                # Accept either existing chunks or text content (for fallback)
+                if not getattr(record, "chunks", None) and not record.text_content:
                     processing_time_ms = (time.time() - start_time) * 1000
                     return ProcessingResult(
                         record=None,
@@ -1068,27 +817,32 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         metadata={"validation_failed": True},
                     )
 
-            # Step 3: Create chunks using configuration
-            logger.debug(f"🔪 [VECTORIZER-{record.record_id}] Creating chunks...")
-            record.chunks = self.create_multi_field_chunks_for_record(record)
+            # --- Chunk handling (no re-chunk if already present) ---
+            if getattr(record, "chunks", None):
+                logger.debug(f"🧩 [VECTORIZER-{record.record_id}] Using pre-existing {len(record.chunks)} chunks")
+            else:
+                logger.debug(f"🔪 [VECTORIZER-{record.record_id}] No chunks present, performing fallback semantic split")
+                fallback_splitter = SemanticSplitter(chunk_size=1000, chunk_overlap=250)
+                processed = await fallback_splitter.process(record)
+                if processed:
+                    record = processed
+                if not getattr(record, "chunks", None):
+                    processing_time_ms = (time.time() - start_time) * 1000
+                    return ProcessingResult(
+                        record=None,
+                        status="failed",
+                        reason="no chunks created (fallback)",
+                        chunks_created=0,
+                        embedding_model=effective_embedding_model,
+                        processing_time_ms=processing_time_ms,
+                        metadata={"chunking_failed": True},
+                    )
 
-            if not record.chunks:
-                processing_time_ms = (time.time() - start_time) * 1000
-                return ProcessingResult(
-                    record=None,
-                    status="failed",
-                    reason="no chunks created",
-                    chunks_created=0,
-                    embedding_model=effective_embedding_model,
-                    processing_time_ms=processing_time_ms,
-                    metadata={"chunking_failed": True},
-                )
-
-            # Step 4: Generate embeddings for all chunks
+            # --- Embeddings ---
             logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
             await self._embed_chunks(record.chunks, record_title=record.title)
 
-            # Step 5: Enhance chunk metadata with provenance tracking
+            # --- Metadata enhancement ---
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.now().isoformat()
 
@@ -1114,11 +868,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 if run_id:
                     chunk.metadata["processing_run_id"] = run_id
 
-            # Step 6: Store chunks in ChromaDB
+            # --- Store in ChromaDB ---
             logger.debug(f"💾 [VECTORIZER-{record.record_id}] Storing chunks in ChromaDB...")
             await self._store_chunks_for_record(record)
 
-            # Step 7: Track successful processing
+            # --- Success tracking ---
             cache_key = self._get_record_model_key(record.record_id, effective_embedding_model)
             self._processed_combinations_cache.add(cache_key)
 

@@ -26,21 +26,6 @@ vectoriser:
   sync_batch_size: 50
   sync_interval_minutes: 10
   deduplication_strategy: both
-  # Multi-field configuration for Zotero data
-  multi_field_config:
-    content_field: text_content
-    chunk_size: 1000
-    chunk_overlap: 250
-    additional_fields:
-      - source_field: abstract
-        chunk_type: abstract
-        min_length: 100
-      - source_field: annotations
-        chunk_type: annotation
-        min_length: 50
-      - source_field: tags
-        chunk_type: tags
-        min_length: 20
 
 # Text chunking configuration
 chunker:

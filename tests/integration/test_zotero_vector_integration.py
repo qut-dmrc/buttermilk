@@ -246,8 +246,7 @@ class TestZoteroVectorIntegration:
             persist_directory=vector_dir,
             collection_name="test_zotero",
             embedding_model="text-embedding-005",
-            dimensionality=768,
-            multi_field_config=multi_config,
+            dimensionality=768
         )
 
         # Ensure cache is initialized
@@ -516,16 +515,7 @@ async def test_full_pipeline_integration():
             persist_directory=str(vector_dir),
             collection_name="zotero_integration_test",
             embedding_model="text-embedding-005",
-            dimensionality=768,
-            multi_field_config=MultiFieldEmbeddingConfig(
-                content_field="text_content",
-                chunk_size=2000,
-                chunk_overlap=500,
-                additional_fields=[
-                    {"source_field": "abstract", "chunk_type": "abstract", "min_length": 100},
-                    {"source_field": "annotations", "chunk_type": "annotation", "min_length": 50},
-                ]
-            )
+            dimensionality=768
         )
         
         await vector_store.ensure_cache_initialized()
