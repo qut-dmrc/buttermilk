@@ -8,7 +8,6 @@ different components of Buttermilk.
 
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
-from pathlib import Path  # For path manipulation
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
@@ -22,7 +21,6 @@ except ImportError:
     UserMessage = None
     AUTOGEN_AVAILABLE = False
 
-from cloudpathlib import CloudPath  # For handling cloud storage paths
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
     BaseModel,
@@ -81,7 +79,7 @@ class Record(BaseModel):
         default=None,
         description="Textual description or transcript of media content within this record.",
     )
-    ground_truth: dict[str, Any] | None = Field(  # Added type hint for dict value
+    ground_truth: dict[str, Any] | list[str | dict[str, str]] | None = Field(  # Added type hint for dict value
         default=None,
         description="Optional ground truth data associated with this record for evaluation.",
     )
@@ -293,7 +291,6 @@ class Record(BaseModel):
                 elif value is not None:  # Add to metadata if value is not None
                     self.metadata[key] = value
         return self
-
 
     @property
     def title(self) -> str | None:

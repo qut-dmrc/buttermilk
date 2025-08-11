@@ -9,7 +9,7 @@ import pytest
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.llms import CHEAP_CHAT_MODELS  # Use cheaper models for testing
-from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA  # Scorer and its output models
+from buttermilk.agents.evaluators.scorer import LLMScorer, QualResults, QualScoreCRA  # Scorer and its output models
 
 # Agent classes and models
 
@@ -121,7 +121,6 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
 
     # Create the AgentInput for the scorer
     scorer_input_data = AgentInput(
-        role="scorer",  # Set the role for context if needed
         # Provide the judge's output and ground truth under keys expected by the scorer's template/input mapping
         inputs={
             "judge_outputs": judge_outputs_data,  # Pass the judge's structured output
@@ -134,17 +133,17 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
 
     # 2. Execute Scorer Agent
     # Use the standard __call__ method
-    result = await scorer_agent(message=scorer_input_data)
+    result = await scorer_agent.invoke(message=scorer_input_data)
 
     # 3. Assertions
     assert isinstance(result, AgentTrace), "Scorer should return an AgentTrace object."
     assert not result.is_error, f"Scorer returned an error: {result.error}"
     assert result.outputs is not None, "Scorer output should not be None."
 
-    # Check if the output conforms to the QualScore model
-    assert isinstance(result.outputs, QualScore), f"Scorer output type is {type(result.outputs)}, expected QualScore."
+    # Check if the output conforms to the QualResults model
+    assert isinstance(result.outputs, QualResults), f"Scorer output type is {type(result.outputs)}, expected QualScore."
 
-    # Check the structure of QualScore
+    # Check the structure of QualResults
     assert hasattr(result.outputs, "assessments"), "QualScore output must have 'assessments' field."
     assert isinstance(result.outputs.assessments, list), "'assessments' field should be a list."
 
