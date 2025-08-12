@@ -280,11 +280,10 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         dimensionality: int = 3072,
     ):
         self.dimensionality = dimensionality
-        self.client: genai.Client = genai.Client()
+        self.client: genai.Client = bm.genai
         self._embedding_model = embedding_model
 
     def __call__(self, input: Documents) -> Embeddings:
-
         response = self.client.models.embed_content(
             model=self._embedding_model,
             contents=input,

@@ -713,6 +713,18 @@ class BM(BaseModel):
         """
         return self.cloud_manager.bq
 
+    @property
+    def genai(self) -> Any:  # Type hint could be genai.Client
+        """Provides access to the Google GenAI client with Vertex AI configuration.
+
+        Delegates to `self.cloud_manager.genai`.
+
+        Returns:
+            Any: The GenAI client instance configured with vertex=True.
+
+        """
+        return self.cloud_manager.genai
+
     def _setup_weave_credentials(self) -> None:
         """Set up Weave/WANDB credentials from environment variables or secret manager.
         

@@ -208,3 +208,4 @@ tests/frontend/playwright-report
 package-lock.json
 package.json
 tja_train.parquet
+failed_upsert_batches

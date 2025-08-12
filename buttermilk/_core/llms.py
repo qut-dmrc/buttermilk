@@ -768,9 +768,6 @@ class LLMs(BaseModel):
                 "credentials": bm_instance.gcp_credentials,
             }
             vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
-            gemini_client = genai.Client(  # not used yet, not compatible with autogen
-                vertexai=True, **vertex_params
-            )
             
         elif config.client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
