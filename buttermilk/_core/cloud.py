@@ -1,7 +1,7 @@
 """Cloud provider client management and connection utilities."""
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from google import genai
 from google.auth import default
@@ -35,13 +35,14 @@ class CloudManager:
 
         # Initialize environment variables if GCP config exists
         if self.gcp_cloud_cfg:
-            # Try both 'project_id' (config field) and 'project' (legacy field)
-            project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
+            project_id = getattr(self.gcp_cloud_cfg, "project_id", None)
+            location = getattr(self.gcp_cloud_cfg, "location", None)
             quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
             if project_id:
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
-
+            if location:
+                os.environ["GOOGLE_CLOUD_LOCATION"] = os.environ.get("GOOGLE_CLOUD_LOCATION", location)
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
 
@@ -90,6 +91,7 @@ class CloudManager:
         
         Returns:
             str: A valid OAuth2 access token
+
         """
         creds = self.gcp_credentials
 
@@ -102,7 +104,7 @@ class CloudManager:
         return creds.token
 
     @cached_property
-    def gcs(self) -> Optional[Any]:
+    def gcs(self) -> Any | None:
         """Get Google Cloud Storage client instance.
 
         Returns:
@@ -125,7 +127,7 @@ class CloudManager:
             raise RuntimeError(f"Failed to initialize GCS client: {e}") from e
 
     @cached_property
-    def bq(self) -> Optional[Any]:
+    def bq(self) -> Any | None:
         """Get Google BigQuery client instance.
 
         Returns:
@@ -148,11 +150,11 @@ class CloudManager:
             raise RuntimeError(f"Failed to initialize BigQuery client: {e}") from e
 
     @cached_property
-    def genai(self) -> Optional[Any]:
+    def genai(self) -> Any | None:
         """Get Google GenAI client instance with Vertex AI configuration.
 
         Returns:
-            Authenticated GenAI client with vertex=True or None if Google Cloud not available
+            Authenticated GenAI client with vertexai=True or None if Google Cloud not available
 
         Raises:
             RuntimeError: If client initialization fails
@@ -162,7 +164,7 @@ class CloudManager:
             raise RuntimeError("No GCP cloud configuration found for GenAI client")
 
         # Get project and location from the GCP config
-        project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
+        project_id = getattr(self.gcp_cloud_cfg, "project_id", None)
         location = getattr(self.gcp_cloud_cfg, "location", None)
 
         if not project_id:
@@ -174,14 +176,14 @@ class CloudManager:
         try:
             # Initialize GenAI client with Vertex AI configuration
             return genai.Client(
-                vertex=True,
+                vertexai=True,
                 project=project_id,
                 location=location,
             )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize GenAI client: {e}") from e
 
-    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Optional[Any]:
+    def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> Any | None:
         """Get Google Cloud Logging client instance.
 
         Args:

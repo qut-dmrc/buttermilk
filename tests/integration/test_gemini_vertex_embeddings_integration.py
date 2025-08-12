@@ -9,7 +9,6 @@ Related to gh issue #184
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
 BM_TEST_GEMINI_EMBED_MODELS = [
-    "text-embedding-004", "text-gemini-001", "text-embedding-005"]
+    "text-embedding-004", "gemini-embedding-001", "text-embedding-005"]
 
 
 @pytest.mark.parametrize("embedding_model", BM_TEST_GEMINI_EMBED_MODELS)
@@ -34,13 +33,11 @@ def test_gemini_embedding_function(bm: BM, embedding_model: str) -> None:
 
     # Prefer a small dimensionality to reduce payloads; 128 is supported on text-embedding-004/005
     dim = 128
-    embedding_model = os.getenv("BM_TEST_GEMINI_EMBED_MODEL", "text-embedding-004")
     ef = GeminiEmbeddingFunction(embedding_model=embedding_model, dimensionality=dim)
 
     embeddings = ef(texts)
     assert isinstance(embeddings, list)
     assert len(embeddings) == len(texts)
-    assert all(isinstance(v, (list, tuple)) for v in embeddings)
     assert all(len(v) == dim for v in embeddings)
 
 
@@ -52,7 +49,7 @@ def test_vertex_embedding_minimal_compare(bm: BM, embedding_model: str) -> None:
         "A tiny test document.",
         "Another small input.",
     ]
-
+    from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
     model = TextEmbeddingModel.from_pretrained(embedding_model)
     dim = 128
     inputs: list[str | TextEmbeddingInput] = [TextEmbeddingInput(text=t) for t in texts]

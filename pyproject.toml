@@ -85,8 +85,8 @@ dependencies = [
     "shiny>=1.4.0",
     "streamlit>=1.45.0",
     "opentelemetry-exporter-gcp-trace>=1.9.0",
-    "opentelemetry-exporter-gcp-monitoring>=1.9.0a0",
-    "opentelemetry-exporter-gcp-logging>=1.9.0a0",
+    "opentelemetry-exporter-gcp-monitoring>=1.8.0",
+    "opentelemetry-exporter-gcp-logging>=1.8.0",
     "pandas>=2.3.0",
     "google-genai[aiohttp]>=1.25.0",
     "uv>=0.8.4",
@@ -98,6 +98,11 @@ dependencies = [
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.1",
     "pytest-timeout>=2.4.0",
+    "opentelemetry-semantic-conventions>=0.56",
+    "azure-ai-inference>=1.0.0b9",
+    "opentelemetry-resourcedetector-gcp>=1.8",
+    "azure-monitor-opentelemetry-exporter>=1.0.0",
+    "opentelemetry-instrumentation-logging>=0.56",
 ]
 
 [dependency-groups]

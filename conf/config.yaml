@@ -5,6 +5,7 @@ defaults:
   - llms: lite
 
 verbose: false
+flows: {}
 
 bm:
   _target_: buttermilk._core.bm_init.BM
