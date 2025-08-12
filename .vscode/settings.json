@@ -12,9 +12,7 @@
   "python.testing.pytestEnabled": true,
   "python.defaultInterpreterPath": "/src/buttermilk/.venv/bin/python",
   "python.terminal.activateEnvironment": false,
-  "ruff.interpreter": [
-    "/src/buttermilk/.venv/bin/python"
-  ],
+  "ruff.configuration": "/src/buttermilk/pyproject.toml",
   "editor.defaultFormatter": "charliermarsh.ruff",
   "ruff.lineLength": 120,
   "python.analysis.typeCheckingMode": "standard",
@@ -79,4 +77,5 @@
   "explorer.excludeGitIgnore": true,
   "python-envs.pythonProjects": [],
   "terminal.integrated.env.linux": {},
+  "ruff.configurationPreference": "filesystemFirst",
 }

@@ -51,8 +51,7 @@ class TestLLMScorerListen:
         # Mock _process and _extract_vars methods
         scorer._process = AsyncMock(name="_process")
         scorer._extract_vars = AsyncMock(name="_extract_vars")
-        # Initialization might be needed if _listen relies on initialized state
-        # await scorer.initialize() # Can't await in sync fixture, do in test if needed
+
         return scorer
 
     @pytest.fixture

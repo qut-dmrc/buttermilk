@@ -34,6 +34,7 @@ from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk 
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import Record
+from datetime import UTC
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
@@ -294,7 +295,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         # Extract embeddings from response
         embeddings = []
         for embedding in response.embeddings:
-            # Convert to regular Python floats to ensure compatibility with ChromaDB
+            # Convert to list if it's a numpy array
             embeddings.append(convert_numpy_to_list(embedding.values))
 
         return embeddings
@@ -315,6 +316,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
+    embeddings_cache_dir: str = Field(default=".cache/embeddings", description="Directory to cache embeddings")
 
     # New sync configuration options
     sync_batch_size: int = Field(default=50, description="Sync every N records")
@@ -393,7 +395,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         logger.info(f"🔍 Deduplication strategy: {self.deduplication_strategy}")
 
         Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
-        Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
+        if self.arrow_save_dir:
+            Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
         return self
 
     async def ensure_cache_initialized(self) -> None:
@@ -810,9 +814,21 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"Record {record.record_id} has no chunks to process. Ensure it was chunked before processing.",
                 )
 
-            # --- Embeddings (now with robust retry) ---
-            logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
-            embedding_ok = await self._embed_chunks(record.chunks)
+            # --- Try to load embeddings from cache first ---
+            cache_loaded = await self._load_embeddings_from_cache(record)
+            
+            if cache_loaded:
+                # Embeddings loaded from cache, skip API call
+                embedding_ok = True
+                logger.info(f"📋 [VECTORIZER-{record.record_id}] Using cached embeddings, skipping API call")
+            else:
+                # --- Embeddings (now with robust retry) ---
+                logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
+                embedding_ok = await self._embed_chunks(record.chunks)
+                
+                # Save embeddings to cache if successful
+                if embedding_ok:
+                    await self._save_embeddings_to_cache(record)
 
             if not embedding_ok:
                 # Persist failed record for later retry BEFORE returning
@@ -1151,6 +1167,101 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 "require_all_new": require_all_new,
             },
         )
+
+    def _get_embeddings_cache_path(self, record: Record) -> Path:
+        """Get the path to the embeddings cache file for a record.
+        
+        Returns the cache file path using the configured embeddings cache directory.
+        """
+        cache_dir = Path(self.embeddings_cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / f"{record.record_id}_embeddings.json"
+
+    async def _save_embeddings_to_cache(self, record: Record) -> bool:
+        """Save embeddings to cache file.
+        
+        Returns True if successfully saved, False otherwise.
+        """
+        cache_path = self._get_embeddings_cache_path(record)
+        
+        try:
+            # Prepare embeddings data
+            embeddings_data = {
+                "record_id": record.record_id,
+                "embedding_model": self._embedding_model,
+                "dimensionality": self.dimensionality,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "chunks": []
+            }
+            
+            for chunk in record.chunks:
+                if chunk.embedding is not None:
+                    chunk_data = {
+                        "chunk_id": chunk.chunk_id,
+                        "chunk_index": chunk.chunk_index,
+                        "embedding": convert_numpy_to_list(chunk.embedding)  # Ensure it's regular Python list
+                    }
+                    embeddings_data["chunks"].append(chunk_data)
+            
+            # Save to file
+            with cache_path.open("w", encoding="utf-8") as f:
+                json.dump(embeddings_data, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"💾 Saved embeddings to cache: {cache_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to save embeddings cache for {record.record_id}: {e}")
+            return False
+
+    async def _load_embeddings_from_cache(self, record: Record) -> bool:
+        """Load embeddings from cache file if available and valid.
+        
+        Returns True if embeddings were loaded from cache, False otherwise.
+        """
+        cache_path = self._get_embeddings_cache_path(record)
+        if not cache_path.exists():
+            return False
+        
+        try:
+            with cache_path.open("r", encoding="utf-8") as f:
+                embeddings_data = json.load(f)
+            
+            # Validate cache is for correct model and record
+            if (embeddings_data.get("record_id") != record.record_id or
+                embeddings_data.get("embedding_model") != self._embedding_model):
+                logger.debug(f"Cache mismatch for {record.record_id}")
+                return False
+            
+            # Check if we have the right number of chunks
+            cached_chunks = embeddings_data.get("chunks", [])
+            if len(cached_chunks) != len(record.chunks):
+                logger.debug(f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}")
+                return False
+            
+            # Load embeddings into chunks
+            chunk_map = {chunk.chunk_id: chunk for chunk in record.chunks}
+            loaded_count = 0
+            
+            for cached_chunk in cached_chunks:
+                chunk_id = cached_chunk.get("chunk_id")
+                if chunk_id in chunk_map:
+                    chunk_map[chunk_id].embedding = cached_chunk.get("embedding")
+                    loaded_count += 1
+            
+            if loaded_count == len(record.chunks):
+                logger.info(f"✅ Loaded {loaded_count} embeddings from cache for record {record.record_id}")
+                return True
+            else:
+                logger.warning(f"Only loaded {loaded_count}/{len(record.chunks)} embeddings from cache")
+                # Clear partial embeddings
+                for chunk in record.chunks:
+                    chunk.embedding = None
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to load embeddings cache for {record.record_id}: {e}")
+            return False
 
     async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
         """Generate embeddings for a list of chunks in place.

@@ -101,7 +101,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.56",
     "azure-ai-inference>=1.0.0b9",
     "opentelemetry-resourcedetector-gcp>=1.8",
-    "azure-monitor-opentelemetry-exporter>=1.0.0",
+    "azure-monitor-opentelemetry-exporter==1.0.0b41",
     "opentelemetry-instrumentation-logging>=0.56",
 ]
 
@@ -194,7 +194,8 @@ ignore = [
     "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
     "PLR0904",  # Too many public methods
-    "RET504",  # Unnecessary variable assignment before return
+    "PLR0915",  # Too many public methods
+    "W293",
 ]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 

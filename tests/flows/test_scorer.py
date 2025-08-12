@@ -132,9 +132,6 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
         records=judge_records[-1:],  # Pass only the last record (containing GT)
     )
 
-    # Initialize the scorer agent (important if it has async init tasks)
-    await scorer_agent.initialize()
-
     # 2. Execute Scorer Agent
     # Use the standard __call__ method
     result = await scorer_agent(message=scorer_input_data)
@@ -168,5 +165,3 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
     assert isinstance(correctness, float) or correctness is None, "'correctness' should be float or None."
     if isinstance(correctness, float):
         assert 0.0 <= correctness <= 1.0, "'correctness' score must be between 0.0 and 1.0."
-
-    logger.info(f"Scorer result (Correctness: {correctness}): {result.outputs}")
