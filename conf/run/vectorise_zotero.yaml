@@ -30,8 +30,8 @@ vectoriser:
 # Text chunking configuration
 chunker:
   _target_: buttermilk.data.vector.SemanticSplitter
-  chunk_size: 4000
-  chunk_overlap: 1000
+  chunk_size: 2000
+  chunk_overlap: 500
 
 # Zotero data source
 input_docs:
