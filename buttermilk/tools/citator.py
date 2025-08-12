@@ -1,57 +1,80 @@
-from typing import Self
+from typing import Self, Any
 
 import pydantic
 from pydantic import BaseModel, PrivateAttr
 
-from buttermilk._core.contract import AgentInput
+import weave
+from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.agents.llm import LLMAgent
 
 CITATION_TEXT_CHAR_LIMIT = 4000  # characters
 
+class FormattedCitation(BaseModel):
+    """Model for formatted citation."""
+    text: str = pydantic.Field(..., description="Formatted citation text")
+    style: str = pydantic.Field(..., description="Citation style used (e.g., APA, MLA)")
+    error: str | None = pydantic.Field(None, description="Error message if citation generation failed")
 
-class Citator(BaseModel):
+class Citator(LLMAgent):
     """Generates a citation for a given text using an LLM."""
+    def __init__(self, **kwargs):
+        # Set defaults for agent configuration
+        kwargs["agent_id"] = kwargs.get("agent_id", "citator")
+        kwargs["description"] = kwargs.get("description", "Generates a citation for a given text using an LLM.")
+        
+        # Ensure we have the required inputs
+        if "inputs" not in kwargs:
+            kwargs["inputs"] = {}
+        kwargs["inputs"]["text_extract"] = "text_extract"
+        
+        # Ensure we have the required parameters with defaults
+        if "parameters" not in kwargs:
+            kwargs["parameters"] = {}
+        kwargs["parameters"]["template"] = kwargs["parameters"].get("template", "citator")
+        kwargs["parameters"]["fail_on_unfilled_parameters"] = kwargs["parameters"].get("fail_on_unfilled_parameters", True)
+        
+        # Initialize parent class with all kwargs
+        super().__init__(**kwargs)
+        
+        # Set the expected output model for the LLM's response
+        self._output_model = FormattedCitation
 
-    template: str = "citator"
-    model: str
-    _agent: LLMAgent = PrivateAttr()
+    async def process(self, item: Record) -> Record | None:
+        """
+        Process a Record to generate a citation using the LLM.
+        Args:
+            item (Record): The Record containing the text to cite.
+        Returns:
+            Record | None: The updated Record with the generated citation or None if processing failed.
+        """
 
-    @pydantic.model_validator(mode="after")
-    def _init_agent(self) -> Self:
-        self._agent = LLMAgent(
-            agent_id="citator",
-            agent_name="Citator",
-            description="Gets citation information from the first page or two.",
-            parameters={"template": "citator", "model": self.model, "fail_on_unfilled_parameters": True},
-            inputs={"text_extract": "text_extract"},
+        # Take the first N characters for citation generation
+        citation_text = item.content[:CITATION_TEXT_CHAR_LIMIT]
+        
+        input_data = AgentInput(
+            inputs={"text_extract": citation_text}
         )
-        return self
-
-    async def process(self, item: Record, **kwargs) -> Record | None:
         try:
-            # Take the first N characters for citation generation
-            citation_text = item.text_content[:CITATION_TEXT_CHAR_LIMIT]
-            input_data = AgentInput(
-                inputs={"text_extract": citation_text},
-            )
-            result = await self._agent(input_data, **kwargs)
-
-            if not result or result.error:
-                logger.error(
-                    f"Error generating citation for doc {item.record_id}: {result.error}",
-                )
-                return item
-            generated_citation = result.outputs["citation"]
+            result = await self.invoke(input_data)
+            
+            # Extract the formatted citation from the result
+            if isinstance(result.outputs, FormattedCitation):
+                citation = result.outputs
+            else:
+                # Handle case where outputs might be a dict
+                citation = FormattedCitation(**result.outputs)
+            
             # Store it in the metadata (overwrites if 'citation' key already exists)
-            item.metadata["citation"] = generated_citation
+            item.metadata["citation"] = citation.text
             logger.debug(
-                f"Generated citation for doc {item.record_id}: '{generated_citation[:100]}...'",
+                f"Generated citation for doc {item.record_id}: '{citation.text[:100]}...'",
             )
             return item
         except Exception as e:
             logger.error(
                 f"Error generating citation for doc {item.record_id}: {e} {e.args=}",
             )
+            item.metadata["citation"] = f"Error generating citation: {str(e)}"
             return item

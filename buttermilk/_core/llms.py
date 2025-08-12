@@ -48,6 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
     from buttermilk._core.dmrc import get_bm as _get_bm  # Actual import of get_bm
+
     return _get_bm()
 
 
@@ -297,7 +298,12 @@ class AutoGenWrapper(RetryWrapper):
 
         if is_valid_schema_type and self.model_info.get("structured_output"):
             json_output_requested = schema  # type: ignore # Pass the schema for structured output
-        elif is_valid_schema_type and not self.model_info.get("structured_output") and not tools and self.model_info.get("function_calling", True):
+        elif (
+            is_valid_schema_type
+            and not self.model_info.get("structured_output")
+            and not tools
+            and self.model_info.get("function_calling", True)
+        ):
             # Create a fake tool for models that support function calling but not structured output
             # This allows us to get structured output via tool calling
             from autogen_core.tools import BaseTool
@@ -342,7 +348,12 @@ class AutoGenWrapper(RetryWrapper):
         # Some other models also have this limitation (discovered through testing)
         models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
 
-        if tools and model_family in models_with_tool_schema_conflict and json_output_requested and isinstance(json_output_requested, type):
+        if (
+            tools
+            and model_family in models_with_tool_schema_conflict
+            and json_output_requested
+            and isinstance(json_output_requested, type)
+        ):
             # For models that can't handle tools + structured output together, we don't ask for a structured output
             json_output_requested = False
 
@@ -365,14 +376,22 @@ class AutoGenWrapper(RetryWrapper):
         if isinstance(create_result.content, str) and not create_result.content.strip():
             raise ProcessingError("Empty string response from LLM.")
         # Check if content is a list and if all items are FunctionCall (valid tool call scenario)
-        if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
-            raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
+        if isinstance(create_result.content, list) and not all(
+            isinstance(item, FunctionCall) for item in create_result.content
+        ):
+            raise ProcessingError(
+                "Unexpected response type from LLM when expecting tool calls or text.", create_result.content
+            )
 
         # Handle structured output parsing if schema was provided
         if schema and is_valid_schema_type and not (tools and not fake_schema_tool):
             # Only parse if: we have a schema AND (we created a fake tool OR no tools were provided)
             # Check if we used a fake tool and got a tool call response
-            if fake_schema_tool and isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+            if (
+                fake_schema_tool
+                and isinstance(create_result.content, list)
+                and all(isinstance(c, FunctionCall) for c in create_result.content)
+            ):
                 # Extract the tool call and execute it to get the structured object
                 tool_calls = create_result.content
                 if len(tool_calls) == 1 and tool_calls[0].name == fake_schema_tool.name:
@@ -413,8 +432,8 @@ class AutoGenWrapper(RetryWrapper):
 
         This method sends an initial set of messages to the LLM. If the LLM
         responds with tool call requests, this method executes those tools
-        (unless intercept_tools is True), appends their results back to the 
-        message history, and sends the updated history back to the LLM to get 
+        (unless intercept_tools is True), appends their results back to the
+        message history, and sends the updated history back to the LLM to get
         a final response.
 
         Args:
@@ -590,8 +609,7 @@ class AutoGenWrapper(RetryWrapper):
                 parsed_object = create_result.content
             else:
                 logger.warning(
-                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, "
-                    f"expected {schema.__name__}",
+                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
                 )
 
         # Create ModelOutput with the parsed object
@@ -690,6 +708,7 @@ class LLMs(BaseModel):
         # Optionally annotate resolved litellm identifier for downstream cost/accounting
         # Import here to avoid circular import issues
         from buttermilk.utils.model_registry import resolve_litellm_model_name
+
         resolved_litellm = resolve_litellm_model_name(name)
         # Expose for inspection (non-destructive; do not overwrite 'model')
         config.configs.setdefault("_resolved_litellm_model", resolved_litellm)
@@ -772,7 +791,8 @@ class LLMs(BaseModel):
             }
             vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
             gemini_client = genai.Client(  # not used yet, not compatible with autogen
-                vertexai=True, **vertex_params,
+                vertexai=True,
+                **vertex_params,
             )
 
         elif config.client_type == ClientType.VERTEX_OPENAI:
@@ -812,7 +832,9 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
         if __name not in self.connections:
-            raise AttributeError(f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}")
+            raise AttributeError(
+                f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}"
+            )
         return self.get_autogen_chat_client(__name)
 
     def __getitem__(self, __name: str) -> AutoGenWrapper:

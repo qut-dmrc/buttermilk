@@ -376,16 +376,6 @@ class StorageFactory:
                 "dimensionality": getattr(config, "dimensionality", None) or 3072,
             }
 
-            # Add multi-field embedding configuration if specified
-            multi_field_embedding = getattr(config, "multi_field_embedding", None)
-            if multi_field_embedding:
-                try:
-                    # Parse multi-field config into proper Pydantic model
-                    multi_field_config = MultiFieldEmbeddingConfig(**multi_field_embedding)
-                    chromadb_params["multi_field_config"] = multi_field_config
-                except Exception as e:
-                    logger.warning(f"Invalid multi_field_embedding config, using default: {e}")
-
             # Add other ChromaDB-specific fields if present in config
             for field in ["concurrency", "upsert_batch_size", "embedding_batch_size", "arrow_save_dir"]:
                 if hasattr(config, field) and getattr(config, field) is not None:

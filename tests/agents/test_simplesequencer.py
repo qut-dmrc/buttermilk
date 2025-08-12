@@ -10,7 +10,6 @@ async def test_HostAgent_initialization():
     """Test that HostAgent initializes correctly."""
     agent = HostAgent(role="HostAgent", name="Test HostAgent", description="A test HostAgent")
 
-    await agent.initialize()
     assert agent.role == "HostAgent"
     assert "Test HostAgent" in agent.name  # Checks generated name
 
@@ -28,8 +27,6 @@ async def test_HostAgent_initialization():
 async def test_HostAgent_round_robin():
     """Test that HostAgent produces a round-robin sequence of steps."""
     agent = HostAgent(role="HostAgent", name="Test HostAgent", description="A test HostAgent")
-
-    await agent.initialize()
 
     # Create a conductor request with participants
     participants = {

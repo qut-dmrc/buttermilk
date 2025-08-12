@@ -245,6 +245,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             cancellation_token: Optional cancellation token to cancel the operation.
 
         """
+        # If we are not running within an autogen runtime, just log the message
+        if not hasattr(self, "_runtime") or not self._runtime:
+            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__}.")
+            return
+
         # Use provided topic_id or fall back to the agent's default topic
         target_topic = topic_id or self._topic_id
         await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
@@ -308,7 +313,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
 
         """
-        await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
+        await self._publish(
+            TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id
+        )
 
         # --- Prepare the input state for processing ---
         try:
@@ -337,7 +344,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Publish status update: Task Complete (including error if error)
         await self._publish(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error),
+            TaskProcessingComplete(
+                agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error
+            ),
             topic_id=self._topic_id,
         )
 
@@ -396,7 +405,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             attributes=trace_params,
         )
 
-        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
+        if parent_call is not None:
+            parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")
@@ -542,7 +552,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         if message.role != self.role:
             # Only handle if the role matches this agent's role - create a "skipped" trace
-            logger.debug(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
+            logger.debug(
+                f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}"
+            )
             return None
 
         return await self.invoke(message=message)
@@ -587,7 +599,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     self._data.add(key, value)
                     found_keys.append(key)
             if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+                logger.debug(
+                    f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings."
+                )
         else:
             logger.debug(f"Agent {self.agent_name} has no input mappings defined; skipping data extraction.")
 
@@ -632,7 +646,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     self._data.add(key, value)
                     found_keys.append(key)
             if found_keys:
-                logger.debug(f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings.")
+                logger.debug(
+                    f"Agent {self.agent_name} extracted data for keys {found_keys} from {source} via mappings."
+                )
 
         # Add to model context if not a command
         if message.content:
