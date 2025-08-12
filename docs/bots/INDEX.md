@@ -56,6 +56,12 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Testing data integrity
 - Common data handling pitfalls
 
+### [standalone-tracing.md](standalone-tracing.md) - Standalone Tracing for Batch Processes
+- Tracing outside orchestrator context
+- StandaloneTraceContext usage
+- Integration with DocProcessor and agents
+- Examples for scripts and CLI tools
+
 ## 🚀 Quick Reference
 
 ### Essential Commands

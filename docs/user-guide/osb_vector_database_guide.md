@@ -257,26 +257,6 @@ vector_store = ChromaDBEmbeddings(
 )
 ```
 
-### Text Chunking Options
-
-```python
-from buttermilk.data.vector import DefaultTextSplitter
-
-# Standard chunking for legal text
-splitter = DefaultTextSplitter(
-    chunk_size=1500,      # Larger chunks for legal context
-    chunk_overlap=300     # Preserve context across chunks
-)
-
-# Custom chunking for case structure
-class LegalTextSplitter(DefaultTextSplitter):
-    def __init__(self):
-        super().__init__(
-            chunk_size=2000,
-            chunk_overlap=400,
-            separators=["\n\n", "\n", ". ", " "]  # Legal document structure
-        )
-```
 
 ### Remote Storage and Caching
 

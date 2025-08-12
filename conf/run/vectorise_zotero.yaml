@@ -1,0 +1,52 @@
+# @package _global_
+
+# Enhanced Zotero vectorization configuration
+# Usage: python -m buttermilk.data.vector +run=vectorise_zotero +storage=zot
+
+
+defaults:
+  - _self_
+
+# Optional: start from a specific offset (for resuming)
+# start_from: 0
+
+run:
+  name: zotero_vectorizer
+  job: zotero
+
+# ChromaDB vector store configuration (inherits from storage/xxx)
+vectoriser:
+  _target_: buttermilk.data.vector.ChromaDBEmbeddings
+  persist_directory: ${storage.persist_directory}
+  collection_name: ${storage.collection_name}
+  embedding_model: ${storage.embedding_model}
+  dimensionality: ${storage.dimensionality}
+  arrow_save_dir: ${oc.env:HOME}/.cache/zotero/embeddings
+  concurrency: 20
+  sync_batch_size: 50
+  sync_interval_minutes: 10
+  deduplication_strategy: both
+
+# Text chunking configuration
+chunker:
+  _target_: buttermilk.data.vector.SemanticSplitter
+  chunk_size: 4000
+  chunk_overlap: 1000
+
+# Zotero data source
+input_docs:
+  _target_: buttermilk.libs.zotero.ZotDownloader
+  library: ${oc.env:ZOTERO_LIBRARY_ID}
+  save_dir: ${oc.env:HOME}/.cache/zotero/items
+  local: ${oc.env:ZOTERO_LOCAL}
+
+# PDF text extraction
+preprocessor:
+  _target_: buttermilk.tools.pdf_extractor.PdfTextExtractor
+  save_dir: ${..input_docs.save_dir}
+
+# Optional: Add citation extraction or other processing
+processor:
+  _target_: buttermilk.tools.citator.Citator
+  parameters:
+    model: gemini25flash  # Faster model for processing

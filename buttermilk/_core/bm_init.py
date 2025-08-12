@@ -364,7 +364,9 @@ class BM(BaseModel):
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
 
-            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
+            logger.debug(
+                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
+            )
 
     def _schedule_background_init(self) -> None:
         """Schedule non-critical initialization tasks in the background.
@@ -451,7 +453,9 @@ class BM(BaseModel):
         """
         await self._initialization_complete.wait()
         if self._initialization_error:
-            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
+            raise RuntimeError(
+                f"BM initialization failed: {self._initialization_error}"
+            ) from self._initialization_error
         logger.debug("BM initialization verified complete")
 
     def _save_initial_config(self) -> None:
@@ -595,7 +599,9 @@ class BM(BaseModel):
 
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):  # Validate type from cache
-                        logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
+                        logger.warning(
+                            f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets."
+                        )
                         connections_data = None
                     else:
                         logger.info(f"Loaded LLM connections from cache: {cache_path}")
@@ -654,7 +660,9 @@ class BM(BaseModel):
         return self._query_runner
 
     @property
-    def gcp_credentials(self) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
+    def gcp_credentials(
+        self,
+    ) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
         """Provides access to Google Cloud Platform (GCP) credentials.
 
         Delegates to `self.cloud_manager.gcp_credentials`.
@@ -699,6 +707,66 @@ class BM(BaseModel):
 
         """
         return self.cloud_manager.bq
+
+    @property
+    def genai(self) -> Any:  # Type hint could be genai.Client
+        """Provides access to the Google GenAI client with Vertex AI configuration.
+
+        Delegates to `self.cloud_manager.genai`.
+
+        Returns:
+            Any: The GenAI client instance configured with vertex=True.
+
+        """
+        return self.cloud_manager.genai
+
+    def _setup_weave_credentials(self) -> None:
+        """Set up Weave/WANDB credentials from environment variables or secret manager.
+
+        This method attempts to load WANDB credentials from multiple sources in order:
+        1. Environment variables (WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY)
+        2. Secret manager using existing credentials
+        3. Gracefully handle missing credentials
+
+        Environment variables are set so that weave.init() can authenticate without
+        requiring interactive login.
+        """
+        import os
+
+        # Check if credentials are already set in environment
+        wandb_api_key = os.getenv("WANDB_API_KEY")
+        wandb_project = os.getenv("WANDB_PROJECT")
+        wandb_entity = os.getenv("WANDB_ENTITY")
+
+        # If not found in environment, try to load from secrets
+        if not wandb_api_key or not wandb_project:
+            try:
+                # Try to get WANDB credentials from the existing credential system
+                creds = self.credentials
+                if creds:
+                    if not wandb_api_key and "WANDB_API_KEY" in creds:
+                        wandb_api_key = creds["WANDB_API_KEY"]
+                        os.environ["WANDB_API_KEY"] = wandb_api_key
+                        logger.debug("Loaded WANDB_API_KEY from secret manager")
+
+                    if not wandb_project and "WANDB_PROJECT" in creds:
+                        wandb_project = creds["WANDB_PROJECT"]
+                        os.environ["WANDB_PROJECT"] = wandb_project
+                        logger.debug("Loaded WANDB_PROJECT from secret manager")
+
+                    if not wandb_entity and "WANDB_ENTITY" in creds:
+                        wandb_entity = creds["WANDB_ENTITY"]
+                        os.environ["WANDB_ENTITY"] = wandb_entity
+                        logger.debug("Loaded WANDB_ENTITY from secret manager")
+
+            except Exception as e:
+                logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
+
+        # Log credential status (without exposing the actual API key)
+        if wandb_api_key:
+            logger.debug(f"WANDB credentials configured: API_KEY=*****, PROJECT={wandb_project}, ENTITY={wandb_entity}")
+        else:
+            logger.debug("No WANDB credentials found - weave will try default authentication or fail gracefully")
 
     @cached_property
     def weave(self) -> weave.trace.weave_client.WeaveClient:
@@ -924,7 +992,9 @@ class BM(BaseModel):
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
-            logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
+            logger.warning(
+                f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}"
+            )
 
         # Ensure extension starts with a dot if provided, otherwise default to .json
         effective_extension = extension or ".json"
@@ -948,7 +1018,9 @@ class BM(BaseModel):
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
-            logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
+            logger.error(
+                f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}"
+            )
             return None  # Indicate save failure
 
     def run_query(

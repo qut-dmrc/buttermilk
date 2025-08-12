@@ -41,7 +41,7 @@ def mock_host_agent():
 class TestHostTopicRouting:
     """Test cases for host agent topic routing."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_step_request_routes_to_role_topic(self, mock_host_agent):
         """Test that StepRequest messages are routed to role-specific topics."""
         # Create a StepRequest
@@ -67,7 +67,7 @@ class TestHostTopicRouting:
         assert isinstance(second_call[0][0], StepRequest)
         assert second_call[1]["topic_id"] == DefaultTopicId(type="RESEARCHER")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_flow_event_sent_before_step_request(self, mock_host_agent):
         """Test that FlowEvent is sent to main topic before StepRequest."""
         step = StepRequest(
@@ -84,7 +84,7 @@ class TestHostTopicRouting:
         assert "Starting WRITER step" in flow_event.content
         assert "Writing agent" in flow_event.content
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_manager_step_sends_ui_message_only(self, mock_host_agent):
         """Test that MANAGER steps only send UIMessage to main topic."""
         step = StepRequest(
@@ -103,7 +103,7 @@ class TestHostTopicRouting:
         assert message.content == "What would you like to do next?"
         assert call_args[1]["topic_id"] == mock_host_agent._topic_id
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_end_step_routes_to_main_topic(self, mock_host_agent):
         """Test that END steps are sent to main topic."""
         from buttermilk._core.constants import END
@@ -121,7 +121,7 @@ class TestHostTopicRouting:
         assert isinstance(call_args[0][0], StepRequest)
         assert call_args[1]["topic_id"] == mock_host_agent._topic_id
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_unknown_role_still_routes_to_role_topic(self, mock_host_agent):
         """Test that unknown roles still route to role-specific topics."""
         step = StepRequest(
@@ -137,7 +137,7 @@ class TestHostTopicRouting:
         assert isinstance(call_args[0][0], StepRequest)
         assert call_args[1]["topic_id"] == DefaultTopicId(type="UNKNOWN_ROLE")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_route_tool_calls_uses_role_topics(self, mock_host_agent):
         """Test that _route_tool_calls_to_agents routes to role-specific topics."""
         # Mock tool call
@@ -157,7 +157,7 @@ class TestHostTopicRouting:
         assert message.role == "RESEARCHER"
         assert call_args[1]["topic_id"] == DefaultTopicId(type="RESEARCHER")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_base_agent_publish_with_topic_parameter(self, mock_host_agent):
         """Test that base Agent._publish method accepts topic_id parameter."""
         from buttermilk._core.agent import Agent
@@ -175,7 +175,7 @@ class TestHostTopicRouting:
             topic_id=test_topic
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_base_agent_publish_defaults_to_agent_topic(self, mock_host_agent):
         """Test that base Agent._publish defaults to agent's topic when no topic specified."""
         test_message = FlowEvent(content="Test message", source="test")

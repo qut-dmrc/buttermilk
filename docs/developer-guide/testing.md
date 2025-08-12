@@ -180,7 +180,7 @@ class TestFlowExecution:
     def flow_runner(self):
         return FlowRunner.from_config("test_flow")
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_complete_flow_execution(self, flow_runner):
         # Arrange
         record = Record(id="test_1", content="Test content for analysis")
@@ -193,7 +193,7 @@ class TestFlowExecution:
         assert result.outputs
         assert len(result.outputs) > 0
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_flow_with_multiple_agents(self, flow_runner):
         # Test that agents are executed in correct order
         record = Record(id="test_1", content="Multi-agent test")
@@ -216,14 +216,14 @@ class TestLLMIntegration:
     def llm_client(self):
         return LLMClient(model="gemini-pro")
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llm_generation(self, llm_client):
         # This test requires real LLM access
         response = await llm_client.generate("What is 2+2?")
         assert response
         assert "4" in response
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llm_with_system_prompt(self, llm_client):
         system_prompt = "You are a helpful math tutor."
         response = await llm_client.generate(
@@ -424,13 +424,13 @@ def test_flow_configuration():
 import pytest
 import asyncio
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_async_agent_processing():
     agent = AsyncAgent(config)
     result = await agent.process(record)
     assert result.success
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_processing():
     agent = AsyncAgent(config)
     records = [Record(id=f"test_{i}") for i in range(5)]

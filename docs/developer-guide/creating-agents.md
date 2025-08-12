@@ -275,7 +275,7 @@ class TestContentAnalyzer:
 ### Integration Tests
 
 ```python
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_with_real_llm():
     agent = ContentAnalyzer(
         agent_id="integration_test",
