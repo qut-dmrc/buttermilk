@@ -68,7 +68,7 @@ async def test_rag_zotero_with_structured_output(model_name, bm):
 
     try:
         # Process the request
-        result = await agent(agent_input)
+        result = await agent.invoke(message=agent_input.inputs["prompt"], context=agent_input.inputs.get("context", ""))
 
         # Verify the output structure
         assert hasattr(result, "outputs"), f"{model_name}: Result should have outputs attribute"
