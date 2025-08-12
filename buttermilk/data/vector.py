@@ -36,7 +36,7 @@ from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import ensure_chromadb_cache
+from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -294,7 +294,8 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         # Extract embeddings from response
         embeddings = []
         for embedding in response.embeddings:
-            embeddings.append(embedding.values)
+            # Convert to regular Python floats to ensure compatibility with ChromaDB
+            embeddings.append(convert_numpy_to_list(embedding.values))
 
         return embeddings
 
@@ -769,7 +770,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """Process a Record object with deduplication & embedding.
 
         NOTE: Assumes prior pipeline stage already chunked (SemanticSplitter).
-        Falls back to simple semantic splitting only if no chunks are present.
         """
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
@@ -806,26 +806,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             if getattr(record, "chunks", None):
                 logger.debug(f"🧩 [VECTORIZER-{record.record_id}] Using pre-existing {len(record.chunks)} chunks")
             else:
-                logger.debug(f"🔪 [VECTORIZER-{record.record_id}] No chunks present, performing fallback semantic split")
-                fallback_splitter = SemanticSplitter(chunk_size=1000, chunk_overlap=250)
-                processed = await fallback_splitter.process(record)
-                if processed:
-                    record = processed
-                if not getattr(record, "chunks", None):
-                    processing_time_ms = (time.time() - start_time) * 1000
-                    return ProcessingResult(
-                        record=None,
-                        status="failed",
-                        reason="no chunks created (fallback)",
-                        chunks_created=0,
-                        embedding_model=effective_embedding_model,
-                        processing_time_ms=processing_time_ms,
-                        metadata={"chunking_failed": True},
-                    )
+                raise ValueError(
+                    f"Record {record.record_id} has no chunks to process. Ensure it was chunked before processing.",
+                )
 
             # --- Embeddings (now with robust retry) ---
             logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
-            embedding_ok = await self._embed_chunks(record.chunks, record_title=record.title)
+            embedding_ok = await self._embed_chunks(record.chunks)
 
             if not embedding_ok:
                 # Persist failed record for later retry BEFORE returning
@@ -946,7 +933,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             for chunk in chunks_to_upsert:
                 ids.append(chunk.chunk_id)
                 documents.append(chunk.chunk_text)
-                embeddings_list.append(list(chunk.embedding))  # type: ignore
+                # Convert numpy array or list of numpy floats to regular Python floats
+                if hasattr(chunk.embedding, "tolist"):
+                    # It's a numpy array
+                    embeddings_list.append(chunk.embedding.tolist())
+                else:
+                    # Convert any numpy float32/float64 to regular Python floats
+                    embeddings_list.append([float(x) for x in chunk.embedding])  # type: ignore
 
                 # Enhanced metadata with content type tagging
                 enhanced_metadata = {
@@ -981,7 +974,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.info(f"🔄 Performed batch sync after processing record {record.record_id}")
 
         except Exception as e:
-            logger.error(f"Failed to store chunks for record {record.record_id}: {e}")
+            logger.error(f"Failed to store chunks for record {record.record_id}: {str(e)[:500]}")
             raise
 
     async def validate_incremental_update(self, new_records: list[Record]) -> dict[str, Any]:
@@ -1159,7 +1152,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             },
         )
 
-    async def _embed_chunks(self, chunks: list[ChunkedDocument], record_title: str | None = None) -> bool:
+    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
         """Generate embeddings for a list of chunks in place.
         
         Returns:
@@ -1168,9 +1161,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         if not chunks:
             return False
-
-        if record_title and hasattr(self._embedding_function, "set_title"):
-            self._embedding_function.set_title(record_title)
 
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
@@ -1494,7 +1484,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             for rec in chunks_to_upsert:
                 ids.append(rec.chunk_id)
                 documents.append(rec.chunk_text)
-                embeddings_list.append(list(rec.embedding))  # type: ignore
+                # Convert numpy array or list of numpy floats to regular Python floats
+                if hasattr(rec.embedding, "tolist"):
+                    # It's a numpy array
+                    embeddings_list.append(rec.embedding.tolist())
+                else:
+                    # Convert any numpy float32/float64 to regular Python floats
+                    embeddings_list.append([float(x) for x in rec.embedding])  # type: ignore
                 base_meta = {
                     "document_title": rec.document_title,
                     "chunk_index": rec.chunk_index,
