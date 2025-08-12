@@ -395,7 +395,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         }
 
         process_op = weave.op(self._process, call_display_name=self.agent_name)
-
         parent_call = await get_parent_call_weave(message)
 
         child_call = bm.weave.create_call(
