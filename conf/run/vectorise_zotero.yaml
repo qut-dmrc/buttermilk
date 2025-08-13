@@ -8,7 +8,7 @@ defaults:
   - _self_
   - /storage/zot
 
-max_docs: 1000
+max_docs: 5000
 
 # Optional: start from a specific offset (for resuming)
 # start_from: 0
@@ -25,9 +25,9 @@ vectoriser:
   embedding_model: ${storage.embedding_model}
   dimensionality: ${storage.dimensionality}
   arrow_save_dir: ${oc.env:HOME}/.cache/zotero/embeddings
-  concurrency: 2
-  sync_batch_size: 20
-  sync_interval_minutes: 10
+  concurrency: 4
+  sync_batch_size: 2000
+  sync_interval_minutes: 300
   deduplication_strategy: both
   
 
@@ -43,7 +43,7 @@ input_docs:
   library: ${oc.env:ZOTERO_LIBRARY_ID}
   save_dir: ${oc.env:HOME}/.cache/zotero/items
   local: ${oc.env:ZOTERO_LOCAL}
-  download_concurrency: 20
+  download_concurrency: 8
 
 # PDF text extraction
 preprocessor:

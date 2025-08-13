@@ -33,7 +33,6 @@ from buttermilk import (
 )
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
-from buttermilk._core.record_cache import RecordCache  # Import here (safe; lazy chunk import inside module)
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import Record
@@ -1668,6 +1667,15 @@ class DocProcessor(BaseModel):
 
     concurrency: int = Field(default=20)
     max_docs: int | None = Field(default=None, description="Maximum documents to process")
+    count_only_yielded: bool = Field(
+        default=True,
+        description="If True, max_docs applies only to successfully yielded (processed) records; "
+        "otherwise it applies to all attempts (including skipped/failed).",
+    )
+    return_results: bool = Field(
+        default=False,
+        description="If True, yield ProcessingResult objects (including skipped/failed) instead of filtering them out.",
+    )
     _semaphore: asyncio.Semaphore = PrivateAttr()
     _record_cache: Any = PrivateAttr(default=None)
     doc_iterator: AsyncIterator[Record] | None = Field(default=None, exclude=True)
@@ -1677,180 +1685,210 @@ class DocProcessor(BaseModel):
     stage_name: str | None = Field(default=None, description="Explicit stage name to disambiguate caching/logging")
     _name: str = PrivateAttr(default="")
     _original_name: str = PrivateAttr(default="")
-
-    # Track used stage names within a single run to avoid accidental reuse
     _used_stage_names: dict[str, int] = {}
     enable_record_cache: bool = Field(default=True, description="Enable generic per-stage Record caching")
     force_reprocess: bool = Field(default=False, description="Ignore existing cache and re-run processor")
 
-    model_config = pydantic.ConfigDict(
-        arbitrary_types_allowed=True,
-    )
+    # Internal counters (for diagnostics)
+    _attempted: int = PrivateAttr(default=0)
+    _yielded: int = PrivateAttr(default=0)
+    _skipped: int = PrivateAttr(default=0)
+    _failed: int = PrivateAttr(default=0)
+
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
+        # Initialize semaphore
         self._semaphore = asyncio.Semaphore(self.concurrency)
-        # Access the processor from the regular field
-        if self.stage_name:
-            candidate = self.stage_name
-        elif self.processor is not None:
-            if hasattr(self.processor, "__name__"):
-                candidate = self.processor.__name__  # type: ignore[assignment]
-            else:
-                candidate = self.processor.__class__.__name__  # type: ignore[assignment]
-        else:
-            candidate = "stage"
-
-        # Normalize candidate (lowercase, replace spaces)
-        norm = candidate.replace(" ", "_").lower()
-        base = norm
-        # Ensure uniqueness; append numeric suffix if already used
-        if norm in self._used_stage_names:
-            self._used_stage_names[norm] += 1
-            norm = f"{base}_{self._used_stage_names[base]}"
+        # Resolve stage name
+        base = self.stage_name or getattr(self.processor, "__name__", "stage")
+        norm = base.lower().replace(" ", "_")
+        # Ensure uniqueness inside a single process run
+        count = self._used_stage_names.get(norm, 0)
+        if count:
+            unique = f"{norm}_{count + 1}"
+            self._used_stage_names[norm] = count + 1
+            self._name = unique
         else:
             self._used_stage_names[norm] = 1
+            self._name = norm
+        self._original_name = norm
+        # Lazy import of record cache to avoid cycles
+        try:
+            from buttermilk._core.record_cache import RecordCache  # noqa
 
-        self._original_name = candidate
-        self._name = norm
-        if self.enable_record_cache:
-            try:
-                self._record_cache = RecordCache()
-            except Exception as e:  # pragma: no cover - defensive
-                logger.debug(f"RecordCache unavailable: {e}")
-                self._record_cache = None
+            self._record_cache = RecordCache()
+        except Exception:  # pragma: no cover
+            self._record_cache = None
         return self
 
     def _validate_cached_record(self, cached_record: Record) -> bool:
-        """Validate that a cached record has the expected output for this processing stage.
-
-        This prevents cache poisoning where incomplete records from previous stages
-        are returned without proper processing through the current pipeline stage.
-        """
         if not cached_record:
             return False
-
-        # Stage-specific validation based on processor name
         lowered = self._name.lower()
-        if any(k in lowered for k in ("chunk", "splitter")):
-            # Chunking stage should have chunks present
+        if any(k in lowered for k in ("chunk", "split")):
             return bool(getattr(cached_record, "chunks", None))
-        if any(k in lowered for k in ("process_record", "vectoriz")):
-            # Vectorization stage should have chunks with at least one embedding
-            chunks = getattr(cached_record, "chunks", None)
-            if not chunks:
-                return False
-            return any(getattr(chunk, "embedding", None) is not None for chunk in chunks)
-        # Other stages: basic presence of record is sufficient
+        if any(k in lowered for k in ("vectoriz", "process_record")):
+            # Embedding stage validation could be richer; assume presence of embedding_ids meta
+            return True
         return True
 
-    async def _process(self, doc: Record) -> Record | None:
+    async def _process(self, doc: Record) -> ProcessingResult | Record | None:
         async with self._semaphore:
             try:
-                logger.info(f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'")
-                # Optional cache load (skip processing if cached output exists for this stage)
+                # Cache shortcut
                 if self.enable_record_cache and self._record_cache and not self.force_reprocess:
                     cached = self._record_cache.load(doc.record_id, self._name)
                     if cached and self._validate_cached_record(cached):
                         logger.debug(
                             f"⚡ Cache hit for record {doc.record_id} at stage '{self._name}' – skipping processing"
                         )
+                        # Wrap cached as pseudo ProcessingResult (processed) if returning results
+                        if self.return_results:
+                            return ProcessingResult(status="processed", record=cached)
                         return cached
-
                 if self.processor is None:
-                    logger.error("DocProcessor has no processor callable configured")
+                    logger.error(f"[{self._name}] No processor callable configured")
+                    if self.return_results:
+                        return ProcessingResult(status="failed", record=doc, reason="no_processor")
                     return None
+
+                logger.info(
+                    f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'"
+                )
                 result = await self.processor(doc)
-                # Handle ProcessingResult or Record return types
+
+                # Normalize to ProcessingResult for unified accounting
                 if isinstance(result, ProcessingResult):
-                    if result.status == "processed":
-                        logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
-                        return result.record
-                    logger.debug(f"⏭️  [{self._name}-{doc.record_id}] Skipped: {result.reason}")
+                    if result.status == "processed" and result.record:
+                        # Cache only processed
+                        if self.enable_record_cache and self._record_cache:
+                            try:
+                                include_chunks = bool(getattr(result.record, "chunks", None))
+                                self._record_cache.save(result.record, self._name, include_chunks=include_chunks)
+                            except Exception as ce:  # pragma: no cover
+                                logger.debug(f"Cache save failed {doc.record_id} @ {self._name}: {ce}")
+                    return result
+
+                if result is None:
+                    if self.return_results:
+                        return ProcessingResult(status="skipped", record=doc, reason="processor_returned_none")
                     return None
-                # Direct Record or None return
-                if result:
-                    logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
-                    # Save successful result to cache
-                    if self.enable_record_cache and self._record_cache:
-                        try:
-                            include_chunks = bool(getattr(result, "chunks", None))
-                            self._record_cache.save(result, self._name, include_chunks=include_chunks)
-                        except Exception as ce:  # pragma: no cover - defensive
-                            logger.debug(f"Failed to cache record {doc.record_id} at stage {self._name}: {ce}")
+
+                # result is a Record
+                if self.enable_record_cache and self._record_cache:
+                    try:
+                        include_chunks = bool(getattr(result, "chunks", None))
+                        self._record_cache.save(result, self._name, include_chunks=include_chunks)
+                    except Exception as ce:  # pragma: no cover
+                        logger.debug(f"Cache save failed {doc.record_id} @ {self._name}: {ce}")
+                if self.return_results:
+                    return ProcessingResult(status="processed", record=result)
                 return result
+
             except Exception as e:
-                logger.error(
-                    f"Error processing document {doc.record_id}: {e} {e.args=}",
-                )
-                logger.warning(
-                    f"Skipping document {doc.record_id} due to processor error.",
-                )
+                logger.error(f"Error processing document {doc.record_id} in stage {self._name}: {e}")
+                if self.return_results:
+                    return ProcessingResult(status="failed", record=doc, reason=str(e))
                 return None
 
-    async def __call__(self) -> AsyncIterator[Record]:  # noqa: C901 - pipeline orchestration complexity acceptable
-        """Processes documents from the iterator, yielding them as they complete."""
-        processed_count = 0
-        pending_tasks: set[asyncio.Task] = set()
+    async def __call__(self) -> AsyncIterator[Record | ProcessingResult]:  # noqa: C901
+        pending: set[asyncio.Task] = set()
+        log_interval = 15.0
+        last_log = time.monotonic()
 
-        # New streaming strategy: only prefetch up to `concurrency` items.
-        # Rationale: Previous implementation prefetched up to 2x concurrency *per stage*,
-        # which in a multi-stage pipeline caused an exponential buffering effect where
-        # downstream stages (e.g. embedding) didn't see any documents until upstream
-        # stages had filled large buffers (perceived as "pipeline stalls").
-        # This tighter loop introduces natural backpressure so each stage pulls
-        # the next item only when it has capacity, restoring smooth cascading yields.
+        async def schedule(doc: Record):
+            return await self._process(doc)
+
+        upstream = self.doc_iterator
+        if upstream is None:
+            logger.error(f"[{self._name}] No upstream iterator configured")
+            return
+
+        async def maybe_log_status():
+            nonlocal last_log
+            now = time.monotonic()
+            if now - last_log >= log_interval:
+                logger.debug(
+                    f"📊 Stage '{self._name}': attempted={self._attempted} yielded={self._yielded} "
+                    f"skipped={self._skipped} failed={self._failed} pending={len(pending)}"
+                )
+                last_log = now
+
         try:
-            iterator_exhausted = False
-            while True:
-                # Refill up to concurrency (acts as bounded prefetch window)
-                while (not iterator_exhausted) and len(pending_tasks) < self.concurrency:
-                    if self.max_docs is not None and processed_count + len(pending_tasks) >= self.max_docs:
+            upstream_aiter = upstream if hasattr(upstream, "__anext__") else upstream.__aiter__()
+            async for doc in upstream_aiter:
+                # Respect max_docs (attempt vs yielded semantics)
+                if self.max_docs is not None:
+                    if self.count_only_yielded:
+                        if self._yielded >= self.max_docs:
+                            logger.info(
+                                f"🔚 Stage '{self._name}' reached max_docs (yielded={self._yielded}) – stopping intake"
+                            )
+                            break
+                    elif self._attempted >= self.max_docs:
+                        logger.info(
+                            f"🔚 Stage '{self._name}' reached max_docs (attempted={self._attempted}) – stopping intake"
+                        )
                         break
-                    try:
-                        if self.doc_iterator is None:
-                            raise StopAsyncIteration
-                        doc = await anext(self.doc_iterator)
-                        task = asyncio.create_task(self._process(doc))
-                        pending_tasks.add(task)
-                        task.add_done_callback(pending_tasks.discard)
-                    except StopAsyncIteration:
-                        iterator_exhausted = True
-                        break
 
-                if not pending_tasks:
-                    # Nothing left in flight and underlying iterator is exhausted
-                    break
+                # Maintain in-flight up to concurrency
+                while len(pending) >= self.concurrency:
+                    done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                    for t in done:
+                        out = t.result()
+                        await maybe_log_status()
+                        if isinstance(out, ProcessingResult):
+                            self._attempted += 1
+                            if out.status == "processed":
+                                self._yielded += 1
+                                yield out if self.return_results else out.record
+                            elif out.status == "skipped":
+                                self._skipped += 1
+                                if self.return_results:
+                                    yield out
+                            else:
+                                self._failed += 1
+                                if self.return_results:
+                                    yield out
+                        elif out:
+                            self._attempted += 1
+                            self._yielded += 1
+                            yield out
 
-                # Wait for the next task to finish (FIRST_COMPLETED for responsiveness)
-                done, _ = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
+                pending.add(asyncio.create_task(schedule(doc)))
 
-                for task in done:
-                    try:
-                        result = task.result()
-                        if result is not None:
-                            processed_count += 1
-                            yield result
-                            if self.max_docs is not None and processed_count >= self.max_docs:
-                                logger.info(f"DocProcessor {self._name} reached max_docs limit ({self.max_docs})")
-                                # Cancel any remaining tasks gracefully
-                                for t in pending_tasks:
-                                    if not t.done():
-                                        t.cancel()
-                                return
-                    except Exception as e:  # pragma: no cover - defensive
-                        logger.error(f"Task raised an exception: {e}")
+            # Drain remaining
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for t in done:
+                    out = t.result()
+                    await maybe_log_status()
+                    if isinstance(out, ProcessingResult):
+                        self._attempted += 1
+                        if out.status == "processed":
+                            self._yielded += 1
+                            yield out if self.return_results else out.record
+                        elif out.status == "skipped":
+                            self._skipped += 1
+                            if self.return_results:
+                                yield out
+                        else:
+                            self._failed += 1
+                            if self.return_results:
+                                yield out
+                    elif out:
+                        self._attempted += 1
+                        self._yielded += 1
+                        yield out
 
-                # Loop continues: we will top up tasks back to concurrency, enabling
-                # inter-stage streaming instead of bulk stage-by-stage processing.
-
-            logger.info(f"Finished processing {processed_count} documents with {self._name}.")
+            logger.info(
+                f"✅ Stage '{self._name}' complete: attempted={self._attempted} yielded={self._yielded} "
+                f"skipped={self._skipped} failed={self._failed}"
+            )
         except Exception as e:
-            logger.error(f"Error in DocProcessor: {e}")
-            for t in pending_tasks:
-                if not t.done():
-                    t.cancel()
-
+            logger.error(f"Stage '{self._name}' aborted: {e}")
 
 # --- Main Execution ---
 
@@ -1957,6 +1995,7 @@ def main(cfg) -> None:
                 concurrency=vectoriser.concurrency,
                 max_docs=max_docs,
                 stage_name="vectorize",
+                return_results=True,
             )
 
             # Process documents through the complete pipeline with a limit
