@@ -337,29 +337,52 @@ class ZotDownloader(BaseModel):
                     f"Failed to read cached item JSON for {key}: {e} {e.args=}",
                 )
 
-        logger.info(f"⬇️ Starting full-text download for #{key} '{title[:50]}'...")
-
         if not key:
             logger.warning(f"Item missing key: {item}")
             return None
-
+        fulltext = None
         # Find the PDF attachment link
         attachment = item["links"].get("attachment", {})
         if (attachment.get("attachmentType") == "application/pdf") and (pdf_attachment := attachment.get("href")):
             attachment_key = pdf_attachment.split("/")[-1]
             try:
                 # --- Download full text from Zotero ---
+                logger.info(
+                    f"⬇️ Starting full-text download for #{key} attachment #{attachment_key} for '{title[:50]}'..."
+                )
                 fulltext = self._zot.fulltext_item(attachment_key)
 
                 # Here we check that the zotero index contains at least 90% of the PDF pages,
                 # otherwise we'll download the PDF instead.
                 # (By default Zotero indexes the first 100 pages.)
-                if fulltext and fulltext["indexedPages"] > 0 and fulltext["indexedPages"] >= (fulltext["totalPages"] * .9):
+                if (
+                    fulltext
+                    and fulltext["indexedPages"] > 0
+                    and fulltext["indexedPages"] >= (fulltext["totalPages"] * 0.9)
+                ):
                     item["content"] = fulltext["content"]
-                    logger.debug(f"Full text downloaded for item {key}; {fulltext['indexedPages']} pages indexed by zotero out of {fulltext['totalPages']} total.")
+                    logger.debug(
+                        f"Full text downloaded for item {key}; {fulltext['indexedPages']} pages indexed by zotero out of {fulltext['totalPages']} total."
+                    )
+                else:
+                    fulltext = None
+                    logger.debug(
+                        f"Full text not sufficient for item {key}; indexed pages: {fulltext['indexedPages'] if fulltext else 'N/A'}, total pages: {fulltext['totalPages'] if fulltext else 'N/A'}"
+                    )
 
+            except zotero_errors.ResourceNotFoundError as e:
+                logger.debug(
+                    f"Parsed full-text not found for item {key}: {e} {e.args=}",
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error during download/convert for {key}: {e} {e.args=}",
+                )
+                return None
+
+            if not fulltext:
                 # --- Download PDF ---
-                elif not pdf_file.exists():
+                if not pdf_file.exists():
                     logger.debug(
                         f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
                     )
@@ -371,38 +394,32 @@ class ZotDownloader(BaseModel):
 
                     # TODO: Extract content from the PDF
 
-                # --- Save Item JSON ---
-                try:
-                    with json_file.open("w", encoding="utf-8") as f:
-                        json.dump(item, f, ensure_ascii=False, indent=4)
-                    logger.debug(f"Saved item data to {json_file}")
-                except Exception as json_e:
-                    logger.error(
-                        f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
-                    )
-
-                # --- Prepare Record ---
-                metadata = {"title": title, "doi_or_url": doi_or_url, "uri": json_file.as_posix(), "zotero_data": zotero_data}
-                record = Record(
-                    record_id=key,
-                    content=item.get("content", ""),
-                    file_path=pdf_file.as_posix(),
-                    metadata=metadata,
-
-                )
-
-                logger.debug(f"✅ Download complete for #{key} '{title[:50]}'")
-                return record
-            except zotero_errors.ResourceNotFoundError as e:
+            # --- Save Item JSON ---
+            try:
+                with json_file.open("w", encoding="utf-8") as f:
+                    json.dump(item, f, ensure_ascii=False, indent=4)
+                logger.debug(f"Saved item data to {json_file}")
+            except Exception as json_e:
                 logger.error(
-                    f"Resource not found for item {key}: {e} {e.args=}",
+                    f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
                 )
-                return None
-            except Exception as e:
-                logger.error(
-                    f"Error during download/convert for {key}: {e} {e.args=}",
-                )
-                return None
+
+            # --- Prepare Record ---
+            metadata = {
+                "title": title,
+                "doi_or_url": doi_or_url,
+                "uri": json_file.as_posix(),
+                "zotero_data": zotero_data,
+            }
+            record = Record(
+                record_id=key,
+                content=item.get("content", ""),
+                file_path=pdf_file.as_posix(),
+                metadata=metadata,
+            )
+
+            logger.debug(f"✅ Download complete for #{key} '{title[:50]}'")
+            return record
         else:
             logger.debug(f"Skipping item {key}: No PDF attachment found.")
             # --- Save Item JSON even if no PDF ---

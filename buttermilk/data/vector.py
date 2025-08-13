@@ -1770,71 +1770,65 @@ class DocProcessor(BaseModel):
     async def __call__(self) -> AsyncIterator[Record]:  # noqa: C901 - pipeline orchestration complexity acceptable
         """Processes documents from the iterator, yielding them as they complete."""
         processed_count = 0
-        pending_tasks = set()
-        max_pending = self.concurrency * 2  # Ensure we don't accumulate too many tasks
+        pending_tasks: set[asyncio.Task] = set()
 
+        # New streaming strategy: only prefetch up to `concurrency` items.
+        # Rationale: Previous implementation prefetched up to 2x concurrency *per stage*,
+        # which in a multi-stage pipeline caused an exponential buffering effect where
+        # downstream stages (e.g. embedding) didn't see any documents until upstream
+        # stages had filled large buffers (perceived as "pipeline stalls").
+        # This tighter loop introduces natural backpressure so each stage pulls
+        # the next item only when it has capacity, restoring smooth cascading yields.
         try:
-            # Start initial tasks up to our limit
             iterator_exhausted = False
-            while not iterator_exhausted:
-                # Check if we should stop creating new tasks due to max_docs
-                if self.max_docs is not None and (processed_count + len(pending_tasks)) >= self.max_docs:
-                    # Just process remaining pending tasks
-                    if not pending_tasks:
+            while True:
+                # Refill up to concurrency (acts as bounded prefetch window)
+                while (not iterator_exhausted) and len(pending_tasks) < self.concurrency:
+                    if self.max_docs is not None and processed_count + len(pending_tasks) >= self.max_docs:
                         break
-                else:
-                    # Add new tasks up to our max_pending limit
-                    while len(pending_tasks) < max_pending and not iterator_exhausted:
-                        try:
-                            if self.doc_iterator is None:
-                                raise StopAsyncIteration
-                            doc = await anext(self.doc_iterator)
-                            task = asyncio.create_task(self._process(doc))
-                            pending_tasks.add(task)
-                            # Set up task completion callback to remove it from pending set
-                            task.add_done_callback(pending_tasks.discard)
-                        except StopAsyncIteration:
-                            iterator_exhausted = True
-                            break
+                    try:
+                        if self.doc_iterator is None:
+                            raise StopAsyncIteration
+                        doc = await anext(self.doc_iterator)
+                        task = asyncio.create_task(self._process(doc))
+                        pending_tasks.add(task)
+                        task.add_done_callback(pending_tasks.discard)
+                    except StopAsyncIteration:
+                        iterator_exhausted = True
+                        break
 
                 if not pending_tasks:
+                    # Nothing left in flight and underlying iterator is exhausted
                     break
 
-                # Wait for at least one task to complete
-                done, _ = await asyncio.wait(
-                    pending_tasks,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+                # Wait for the next task to finish (FIRST_COMPLETED for responsiveness)
+                done, _ = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
 
-                # Process completed tasks
                 for task in done:
                     try:
                         result = task.result()
                         if result is not None:
                             processed_count += 1
                             yield result
-
-                            # Check if we've reached max_docs limit
                             if self.max_docs is not None and processed_count >= self.max_docs:
                                 logger.info(f"DocProcessor {self._name} reached max_docs limit ({self.max_docs})")
-                                # Cancel remaining tasks
-                                for pending_task in pending_tasks:
-                                    if not pending_task.done():
-                                        pending_task.cancel()
+                                # Cancel any remaining tasks gracefully
+                                for t in pending_tasks:
+                                    if not t.done():
+                                        t.cancel()
                                 return
-                    except Exception as e:
+                    except Exception as e:  # pragma: no cover - defensive
                         logger.error(f"Task raised an exception: {e}")
 
-            logger.info(
-                f"Finished processing {processed_count} documents with {self._name}.",
-            )
+                # Loop continues: we will top up tasks back to concurrency, enabling
+                # inter-stage streaming instead of bulk stage-by-stage processing.
 
+            logger.info(f"Finished processing {processed_count} documents with {self._name}.")
         except Exception as e:
             logger.error(f"Error in DocProcessor: {e}")
-            # Cancel any pending tasks
-            for task in pending_tasks:
-                if not task.done():
-                    task.cancel()
+            for t in pending_tasks:
+                if not t.done():
+                    t.cancel()
 
 
 # --- Main Execution ---

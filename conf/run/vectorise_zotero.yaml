@@ -6,6 +6,9 @@
 
 defaults:
   - _self_
+  - /storage/zot
+
+max_docs: 10
 
 # Optional: start from a specific offset (for resuming)
 # start_from: 0
@@ -22,10 +25,11 @@ vectoriser:
   embedding_model: ${storage.embedding_model}
   dimensionality: ${storage.dimensionality}
   arrow_save_dir: ${oc.env:HOME}/.cache/zotero/embeddings
-  concurrency: 20
-  sync_batch_size: 50
+  concurrency: 2
+  sync_batch_size: 20
   sync_interval_minutes: 10
   deduplication_strategy: both
+  
 
 # Text chunking configuration
 chunker:
@@ -39,6 +43,7 @@ input_docs:
   library: ${oc.env:ZOTERO_LIBRARY_ID}
   save_dir: ${oc.env:HOME}/.cache/zotero/items
   local: ${oc.env:ZOTERO_LOCAL}
+  download_concurrency: 2
 
 # PDF text extraction
 preprocessor:
