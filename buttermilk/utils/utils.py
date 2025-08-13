@@ -27,6 +27,8 @@ from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
+from buttermilk._core.agent import ProcessingError
+
 # Optional PDF imports - fail gracefully if not available
 try:
     from pdfminer.high_level import extract_text
@@ -523,10 +525,9 @@ def get_pdf_text(file: str | IOBase) -> str | None:
     try:
         return extract_text(file, laparams=LAParams())
     except Exception as e:
-        logger.error(
-            f"Error extracting text from PDF {file}: {e} {e.args=}",
-        )
-        return None
+        msg = f"Error extracting text from PDF {file}: {e} {e.args=}"
+
+        raise ProcessingError(msg) from e
 
 
 def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dict[Any, Any...:#
