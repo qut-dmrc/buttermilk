@@ -1674,6 +1674,7 @@ class DocProcessor(BaseModel):
     processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] | None = Field(
         default=None, exclude=True
     )
+    stage_name: str | None = Field(default=None, description="Explicit stage name to disambiguate caching/logging")
     _name: str = PrivateAttr(default="")
     enable_record_cache: bool = Field(default=True, description="Enable generic per-stage Record caching")
     force_reprocess: bool = Field(default=False, description="Ignore existing cache and re-run processor")
@@ -1686,7 +1687,9 @@ class DocProcessor(BaseModel):
     def _init(self) -> Self:
         self._semaphore = asyncio.Semaphore(self.concurrency)
         # Access the processor from the regular field
-        if self.processor is not None:
+        if self.stage_name:
+            self._name = self.stage_name
+        elif self.processor is not None:
             if hasattr(self.processor, "__name__"):
                 self._name = self.processor.__name__
             else:
@@ -1709,19 +1712,18 @@ class DocProcessor(BaseModel):
             return False
 
         # Stage-specific validation based on processor name
-        if "chunk" in self._name.lower() or "splitter" in self._name.lower():
-            # Chunking stage should have chunks
+        lowered = self._name.lower()
+        if any(k in lowered for k in ("chunk", "splitter")):
+            # Chunking stage should have chunks present
             return bool(getattr(cached_record, "chunks", None))
-        elif "process_record" in self._name.lower() or "vectoriz" in self._name.lower():
-            # Vectorization stage should have chunks with embeddings
+        if any(k in lowered for k in ("process_record", "vectoriz")):
+            # Vectorization stage should have chunks with at least one embedding
             chunks = getattr(cached_record, "chunks", None)
             if not chunks:
                 return False
-            # At least some chunks should have embeddings
             return any(getattr(chunk, "embedding", None) is not None for chunk in chunks)
-        else:
-            # For other stages (preprocessing, processing), just check basic validity
-            return True
+        # Other stages: basic presence of record is sufficient
+        return True
 
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
@@ -1910,6 +1912,7 @@ def main(cfg) -> None:
                 doc_iterator=doc_iterator,
                 processor=preprocessor_instance.process,
                 max_docs=max_docs,
+                stage_name="preprocess",
             )
 
             # 3. Process Documents (e.g., add citations)
@@ -1917,6 +1920,7 @@ def main(cfg) -> None:
                 doc_iterator=pre_processed_iterator(),
                 processor=processor_instance.process,
                 max_docs=max_docs,
+                stage_name="enrich",
             )
 
             # 4. Chunk Documents (Adds chunks to Record)
@@ -1924,6 +1928,7 @@ def main(cfg) -> None:
                 doc_iterator=processed_doc_iterator(),
                 processor=text_splitter_instance.process,
                 max_docs=max_docs,
+                stage_name="chunk",
             )
 
             # 5. Vectorize and Upsert
@@ -1932,6 +1937,7 @@ def main(cfg) -> None:
                 processor=vectoriser.process_record,
                 concurrency=vectoriser.concurrency,
                 max_docs=max_docs,
+                stage_name="vectorize",
             )
 
             # Process documents through the complete pipeline with a limit
