@@ -1869,7 +1869,7 @@ def main(cfg) -> None:
                 max_docs=max_docs,
             )
 
-            # 5. Vectorize and Upsert - now using the same DocProcessor pattern
+            # 5. Vectorize and Upsert
             vectorizer_processor = DocProcessor(
                 doc_iterator=chunked_doc_iterator(),
                 processor=vectoriser.process_record,

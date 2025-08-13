@@ -309,7 +309,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             None: If the agent does not run.
 
         Raises:
-            ProcessingError: If `_add_state_to_input` fails. (Errors from `__call__`
+            ProcessingError: If `_add_state_to_input` fails. (Errors from the actual call
                 are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
 
         """

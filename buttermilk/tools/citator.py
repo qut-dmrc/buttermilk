@@ -1,43 +1,47 @@
-from typing import Self, Any
-
 import pydantic
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel
 
-import weave
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.agents.llm import LLMAgent
 
 CITATION_TEXT_CHAR_LIMIT = 4000  # characters
 
+
 class FormattedCitation(BaseModel):
     """Model for formatted citation."""
-    text: str = pydantic.Field(..., description="Formatted citation text")
+
+    title: str = pydantic.Field(..., description="Title of the work being cited")
+    citation: str = pydantic.Field(..., description="Formatted citation text")
     style: str = pydantic.Field(..., description="Citation style used (e.g., APA, MLA)")
     error: str | None = pydantic.Field(None, description="Error message if citation generation failed")
 
+
 class Citator(LLMAgent):
     """Generates a citation for a given text using an LLM."""
+
     def __init__(self, **kwargs):
         # Set defaults for agent configuration
         kwargs["agent_id"] = kwargs.get("agent_id", "citator")
         kwargs["description"] = kwargs.get("description", "Generates a citation for a given text using an LLM.")
-        
+
         # Ensure we have the required inputs
         if "inputs" not in kwargs:
             kwargs["inputs"] = {}
         kwargs["inputs"]["text_extract"] = "text_extract"
-        
+
         # Ensure we have the required parameters with defaults
         if "parameters" not in kwargs:
             kwargs["parameters"] = {}
         kwargs["parameters"]["template"] = kwargs["parameters"].get("template", "citator")
-        kwargs["parameters"]["fail_on_unfilled_parameters"] = kwargs["parameters"].get("fail_on_unfilled_parameters", True)
-        
+        kwargs["parameters"]["fail_on_unfilled_parameters"] = kwargs["parameters"].get(
+            "fail_on_unfilled_parameters", True
+        )
+
         # Initialize parent class with all kwargs
         super().__init__(**kwargs)
-        
+
         # Set the expected output model for the LLM's response
         self._output_model = FormattedCitation
 
@@ -52,22 +56,21 @@ class Citator(LLMAgent):
 
         # Take the first N characters for citation generation
         citation_text = item.content[:CITATION_TEXT_CHAR_LIMIT]
-        
+
         input_data = AgentInput(
             inputs={"text_extract": citation_text}
         )
         try:
             result = await self.invoke(input_data)
-            
-            # Extract the formatted citation from the result
-            if isinstance(result.outputs, FormattedCitation):
-                citation = result.outputs
-            else:
-                # Handle case where outputs might be a dict
-                citation = FormattedCitation(**result.outputs)
-            
+            if not result or not result.outputs:
+                logger.error(f"No outputs from LLM for item {item.record_id}")
+                return None
+
             # Store it in the metadata (overwrites if 'citation' key already exists)
-            item.metadata["citation"] = citation.text
+            if result.outputs.citation:
+                item.metadata["citation"] = citation.text
+            if result.outputs.title:
+                item.metadata["title"] = citation.title
             logger.debug(
                 f"Generated citation for doc {item.record_id}: '{citation.text[:100]}...'",
             )
