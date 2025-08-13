@@ -1699,6 +1699,30 @@ class DocProcessor(BaseModel):
                 self._record_cache = None
         return self
 
+    def _validate_cached_record(self, cached_record: Record) -> bool:
+        """Validate that a cached record has the expected output for this processing stage.
+
+        This prevents cache poisoning where incomplete records from previous stages
+        are returned without proper processing through the current pipeline stage.
+        """
+        if not cached_record:
+            return False
+
+        # Stage-specific validation based on processor name
+        if "chunk" in self._name.lower() or "splitter" in self._name.lower():
+            # Chunking stage should have chunks
+            return bool(getattr(cached_record, "chunks", None))
+        elif "process_record" in self._name.lower() or "vectoriz" in self._name.lower():
+            # Vectorization stage should have chunks with embeddings
+            chunks = getattr(cached_record, "chunks", None)
+            if not chunks:
+                return False
+            # At least some chunks should have embeddings
+            return any(getattr(chunk, "embedding", None) is not None for chunk in chunks)
+        else:
+            # For other stages (preprocessing, processing), just check basic validity
+            return True
+
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
@@ -1706,7 +1730,7 @@ class DocProcessor(BaseModel):
                 # Optional cache load (skip processing if cached output exists for this stage)
                 if self.enable_record_cache and self._record_cache and not self.force_reprocess:
                     cached = self._record_cache.load(doc.record_id, self._name)
-                    if cached:
+                    if cached and self._validate_cached_record(cached):
                         logger.debug(
                             f"⚡ Cache hit for record {doc.record_id} at stage '{self._name}' – skipping processing"
                         )
