@@ -43,7 +43,7 @@ input_docs:
   library: ${oc.env:ZOTERO_LIBRARY_ID}
   save_dir: ${oc.env:HOME}/.cache/zotero/items
   local: ${oc.env:ZOTERO_LOCAL}
-  download_concurrency: 2
+  download_concurrency: 20
 
 # PDF text extraction
 preprocessor:
