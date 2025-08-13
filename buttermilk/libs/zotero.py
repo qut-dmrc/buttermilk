@@ -187,75 +187,53 @@ class ZotDownloader(BaseModel):
         # Use a set to track pending tasks across all batches
         pending_tasks = set()
         max_concurrent = self.download_concurrency  # Limit concurrent downloads
+        items_exhausted = False  # Track when we've fetched all items
 
-        while items or _next or pending_tasks:
-            # Stop creating new tasks if we're close to max_docs limit
-            if max_docs is not None and (processed_count + len(pending_tasks)) >= max_docs:
-                # Just process remaining pending tasks
-                if not pending_tasks:
+        while not items_exhausted or pending_tasks:
+            # Stop creating new tasks if we're at max_docs limit
+            if max_docs is not None and processed_count >= max_docs:
+                # Cancel any remaining pending tasks
+                for pending_task in pending_tasks:
+                    pending_task.cancel()
+                break
+
+            # Create new download tasks while we have items and capacity
+            while items and len(pending_tasks) < max_concurrent:
+                # Check if we would exceed max_docs with new tasks
+                if max_docs is not None and (processed_count + len(pending_tasks)) >= max_docs:
                     break
-            else:
-                # Process items from current batch and create tasks
-                while items and len(pending_tasks) < max_concurrent:
-                    item = items.pop(0)  # Process in order
-                    key = item.get("key")
 
-                    if not key:
-                        logger.warning(
-                            f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
-                        )
-                        continue
+                item = items.pop(0)  # Process in order
+                key = item.get("key")
 
-                    # --- Check for existence using the stored vector_store ---
-                    if self._vector_store and self._vector_store.check_document_exists(key):
-                        logger.info(
-                            f"Document {key} already exists in vector store, skipping.",
-                        )
-                        skipped_count += 1
-                        continue
-                    # --- End existence check ---
+                if not key:
+                    logger.warning(
+                        f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
+                    )
+                    continue
 
-                    # Create task for this item
-                    try:
-                        title = item.get("data", {}).get("title", "Unknown")[:50]
-                        logger.debug(f"🔵 Creating download task for #{key} '{title}' (pending: {len(pending_tasks)})")
-                        task = asyncio.create_task(self.download_record(item))
-                        pending_tasks.add(task)
-                    except Exception as e:
-                        logger.error(
-                            f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
-                        )
+                # --- Check for existence using the stored vector_store ---
+                if self._vector_store and self._vector_store.check_document_exists(key):
+                    logger.info(
+                        f"Document {key} already exists in vector store, skipping.",
+                    )
+                    skipped_count += 1
+                    continue
+                # --- End existence check ---
 
-            # If we have pending tasks, wait for at least one to complete
-            if pending_tasks:
-                done, pending_tasks = await asyncio.wait(
-                    pending_tasks,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+                # Create task for this item
+                try:
+                    title = item.get("data", {}).get("title", "Unknown")[:50]
+                    logger.debug(f"🔵 Creating download task for #{key} '{title}' (pending: {len(pending_tasks)})")
+                    task = asyncio.create_task(self.download_record(item))
+                    pending_tasks.add(task)
+                except Exception as e:
+                    logger.error(
+                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
+                    )
 
-                # Process completed tasks immediately
-                for task in done:
-                    try:
-                        result = await task
-                        if result:
-                            processed_count += 1
-                            logger.debug(f"🟢 [ZOTERO-{result.record_id}] Yielding record '{result.title[:50] if result.title else 'Unknown'}' to pipeline")
-                            yield result
-
-                            # Check if we've reached max_docs limit
-                            if max_docs is not None and processed_count >= max_docs:
-                                logger.info(f"Reached max_docs limit ({max_docs}), stopping Zotero sync")
-                                # Cancel any remaining pending tasks
-                                for pending_task in pending_tasks:
-                                    pending_task.cancel()
-                                return
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing download/convert result: {e} {e.args=}",
-                        )
-
-            # Fetch next page if needed and we have capacity
-            if _next and not items and len(pending_tasks) < max_concurrent:
+            # Fetch next page if we need more items and have capacity
+            if _next and not items:
                 try:
                     logger.debug(f"Following 'next' link for more Zotero items: {_next}")
                     response = self._zot._retrieve_data(_next)
@@ -273,12 +251,30 @@ class ZotDownloader(BaseModel):
                     logger.error(
                         f"Error fetching next page from Zotero: {e} {e.args=}",
                     )
-                    break  # Stop if pagination fails
-            elif not items:  # Break if no next link AND no items left from previous fetch
-                logger.debug(
-                    "No 'next' link and no more items, finishing Zotero item retrieval.",
+                    items_exhausted = True  # Mark as exhausted on error
+            elif not _next and not items:
+                items_exhausted = True  # No more items to fetch
+                logger.debug("No more items to fetch from Zotero API")
+
+            # If we have pending tasks, wait for at least one to complete
+            if pending_tasks:
+                done, pending_tasks = await asyncio.wait(
+                    pending_tasks,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
-                break
+
+                # Process completed tasks immediately and yield results
+                for task in done:
+                    try:
+                        result = await task
+                        if result:
+                            processed_count += 1
+                            logger.debug(f"🟢 [ZOTERO-{result.record_id}] Yielding record '{result.title[:50] if result.title else 'Unknown'}' to pipeline")
+                            yield result
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing download/convert result: {e} {e.args=}",
+                        )
 
         logger.info(
             f"Finished Zotero processing. Processed: {processed_count}, Skipped (already exist): {skipped_count}",
@@ -293,7 +289,7 @@ class ZotDownloader(BaseModel):
 
     async def download_record(self, item) -> Record | None:
         """Downloads PDF/full text, saves item JSON, and creates a Record.
-        
+
         Tries first to download the full text if available, otherwise downloads the PDF.
         Returns a Record if successful, None if not.
         """
