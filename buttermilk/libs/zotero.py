@@ -144,7 +144,7 @@ class ZotDownloader(BaseModel):
 
         # Prepare API parameters
         api_params = {
-            "itemType": "-attachment",
+            "itemType": "-attachment&-note&-annotation",  # Exclude attachments and notes
             "limit": 100,
             **kwargs,  # Allow override of any parameters
         }
@@ -218,7 +218,7 @@ class ZotDownloader(BaseModel):
                     # Create task for this item
                     try:
                         title = item.get("data", {}).get("title", "Unknown")[:50]
-                        logger.debug(f"🔵 [ZOTERO-{key}] Creating download task for '{title}' (pending: {len(pending_tasks)})")
+                        logger.debug(f"🔵 Creating download task for #{key} '{title}' (pending: {len(pending_tasks)})")
                         task = asyncio.create_task(self.download_record(item))
                         pending_tasks.add(task)
                     except Exception as e:
@@ -299,6 +299,7 @@ class ZotDownloader(BaseModel):
         """
         key = item.get("key")
         title = item.get("data", {}).get("title", "Unknown Title")
+        # Try to populate title with first hit from item["data"] fields: title, shortTitle, nameOfAct, caseName,
         doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
         zotero_data = item.get("data", {})
 
@@ -313,7 +314,7 @@ class ZotDownloader(BaseModel):
                 with json_file.open("r", encoding="utf-8") as f:
                     item = json.load(f)
                 if item.get("content"):
-                    logger.debug(f"✅ [ZOTERO-{key}] Read fulltext from cache for '{title[:50]}'")
+                    logger.debug(f"✅ Read fulltext from cache for #{key}  '{title[:50]}'")
 
                     metadata = {"title": title, "doi_or_url": doi_or_url, "uri": json_file.as_posix(), "zotero_data": zotero_data}
 
@@ -331,7 +332,7 @@ class ZotDownloader(BaseModel):
                     f"Failed to read cached item JSON for {key}: {e} {e.args=}",
                 )
 
-        logger.info(f"⬇️  [ZOTERO-{key}] Starting full-text download for '{title[:50]}'...")
+        logger.info(f"⬇️ Starting full-text download for #{key} '{title[:50]}'...")
 
         if not key:
             logger.warning(f"Item missing key: {item}")
@@ -385,7 +386,7 @@ class ZotDownloader(BaseModel):
 
                 )
 
-                logger.debug(f"✅ [ZOTERO-{key}] Download complete for '{title[:50]}'")
+                logger.debug(f"✅ Download complete for #{key} '{title[:50]}'")
                 return record
             except zotero_errors.ResourceNotFoundError as e:
                 logger.error(

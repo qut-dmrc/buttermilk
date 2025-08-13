@@ -5,7 +5,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
 
@@ -27,14 +27,16 @@ from vertexai.language_models import (
 
 from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
+)
+from buttermilk import (
     logger,
 )
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
+from buttermilk._core.record_cache import RecordCache  # Import here (safe; lazy chunk import inside module)
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import Record
-from datetime import UTC
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
@@ -816,16 +818,18 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             # --- Try to load embeddings from cache first ---
             cache_loaded = await self._load_embeddings_from_cache(record)
-            
+
             if cache_loaded:
                 # Embeddings loaded from cache, skip API call
                 embedding_ok = True
                 logger.info(f"📋 [VECTORIZER-{record.record_id}] Using cached embeddings, skipping API call")
             else:
                 # --- Embeddings (now with robust retry) ---
-                logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
+                logger.debug(
+                    f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks..."
+                )
                 embedding_ok = await self._embed_chunks(record.chunks)
-                
+
                 # Save embeddings to cache if successful
                 if embedding_ok:
                     await self._save_embeddings_to_cache(record)
@@ -1183,7 +1187,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         Returns True if successfully saved, False otherwise.
         """
         cache_path = self._get_embeddings_cache_path(record)
-        
+
         try:
             # Prepare embeddings data
             embeddings_data = {
@@ -1191,9 +1195,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 "embedding_model": self._embedding_model,
                 "dimensionality": self.dimensionality,
                 "timestamp": datetime.now(UTC).isoformat(),
-                "chunks": []
+                "chunks": [],
             }
-            
+
             for chunk in record.chunks:
                 if chunk.embedding is not None:
                     chunk_data = {
@@ -1202,53 +1206,55 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "embedding": convert_numpy_to_list(chunk.embedding)  # Ensure it's regular Python list
                     }
                     embeddings_data["chunks"].append(chunk_data)
-            
+
             # Save to file
             with cache_path.open("w", encoding="utf-8") as f:
                 json.dump(embeddings_data, f, ensure_ascii=False, indent=2)
-            
+
             logger.info(f"💾 Saved embeddings to cache: {cache_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to save embeddings cache for {record.record_id}: {e}")
             return False
 
     async def _load_embeddings_from_cache(self, record: Record) -> bool:
         """Load embeddings from cache file if available and valid.
-        
+
         Returns True if embeddings were loaded from cache, False otherwise.
         """
         cache_path = self._get_embeddings_cache_path(record)
         if not cache_path.exists():
             return False
-        
+
         try:
             with cache_path.open("r", encoding="utf-8") as f:
                 embeddings_data = json.load(f)
-            
+
             # Validate cache is for correct model and record
-            if (embeddings_data.get("record_id") != record.record_id or
-                embeddings_data.get("embedding_model") != self._embedding_model):
+            if (
+                embeddings_data.get("record_id") != record.record_id
+                or embeddings_data.get("embedding_model") != self._embedding_model
+            ):
                 logger.debug(f"Cache mismatch for {record.record_id}")
                 return False
-            
+
             # Check if we have the right number of chunks
             cached_chunks = embeddings_data.get("chunks", [])
             if len(cached_chunks) != len(record.chunks):
                 logger.debug(f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}")
                 return False
-            
+
             # Load embeddings into chunks
             chunk_map = {chunk.chunk_id: chunk for chunk in record.chunks}
             loaded_count = 0
-            
+
             for cached_chunk in cached_chunks:
                 chunk_id = cached_chunk.get("chunk_id")
                 if chunk_id in chunk_map:
                     chunk_map[chunk_id].embedding = cached_chunk.get("embedding")
                     loaded_count += 1
-            
+
             if loaded_count == len(record.chunks):
                 logger.info(f"✅ Loaded {loaded_count} embeddings from cache for record {record.record_id}")
                 return True
@@ -1258,7 +1264,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 for chunk in record.chunks:
                     chunk.embedding = None
                 return False
-                
+
         except Exception as e:
             logger.error(f"Failed to load embeddings cache for {record.record_id}: {e}")
             return False
@@ -1663,9 +1669,14 @@ class DocProcessor(BaseModel):
     concurrency: int = Field(default=20)
     max_docs: int | None = Field(default=None, description="Maximum documents to process")
     _semaphore: asyncio.Semaphore = PrivateAttr()
-    doc_iterator: AsyncIterator[Record] = Field(default=None, exclude=True)
-    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] = Field(default=None, exclude=True)
+    _record_cache: Any = PrivateAttr(default=None)
+    doc_iterator: AsyncIterator[Record] | None = Field(default=None, exclude=True)
+    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] | None = Field(
+        default=None, exclude=True
+    )
     _name: str = PrivateAttr(default="")
+    enable_record_cache: bool = Field(default=True, description="Enable generic per-stage Record caching")
+    force_reprocess: bool = Field(default=False, description="Ignore existing cache and re-run processor")
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
@@ -1675,16 +1686,35 @@ class DocProcessor(BaseModel):
     def _init(self) -> Self:
         self._semaphore = asyncio.Semaphore(self.concurrency)
         # Access the processor from the regular field
-        if hasattr(self.processor, "__name__"):
-            self._name = self.processor.__name__
-        else:
-            self._name = self.processor.__class__.__name__
+        if self.processor is not None:
+            if hasattr(self.processor, "__name__"):
+                self._name = self.processor.__name__
+            else:
+                self._name = self.processor.__class__.__name__
+        if self.enable_record_cache:
+            try:
+                self._record_cache = RecordCache()
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"RecordCache unavailable: {e}")
+                self._record_cache = None
         return self
 
     async def _process(self, doc: Record) -> Record | None:
         async with self._semaphore:
             try:
                 logger.info(f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'")
+                # Optional cache load (skip processing if cached output exists for this stage)
+                if self.enable_record_cache and self._record_cache and not self.force_reprocess:
+                    cached = self._record_cache.load(doc.record_id, self._name)
+                    if cached:
+                        logger.debug(
+                            f"⚡ Cache hit for record {doc.record_id} at stage '{self._name}' – skipping processing"
+                        )
+                        return cached
+
+                if self.processor is None:
+                    logger.error("DocProcessor has no processor callable configured")
+                    return None
                 result = await self.processor(doc)
                 # Handle ProcessingResult or Record return types
                 if isinstance(result, ProcessingResult):
@@ -1696,6 +1726,13 @@ class DocProcessor(BaseModel):
                 # Direct Record or None return
                 if result:
                     logger.debug(f"🔶 [{self._name}-{doc.record_id}] Completed processing")
+                    # Save successful result to cache
+                    if self.enable_record_cache and self._record_cache:
+                        try:
+                            include_chunks = bool(getattr(result, "chunks", None))
+                            self._record_cache.save(result, self._name, include_chunks=include_chunks)
+                        except Exception as ce:  # pragma: no cover - defensive
+                            logger.debug(f"Failed to cache record {doc.record_id} at stage {self._name}: {ce}")
                 return result
             except Exception as e:
                 logger.error(
@@ -1706,7 +1743,7 @@ class DocProcessor(BaseModel):
                 )
                 return None
 
-    async def __call__(self) -> AsyncIterator[Record]:
+    async def __call__(self) -> AsyncIterator[Record]:  # noqa: C901 - pipeline orchestration complexity acceptable
         """Processes documents from the iterator, yielding them as they complete."""
         processed_count = 0
         pending_tasks = set()
@@ -1725,6 +1762,8 @@ class DocProcessor(BaseModel):
                     # Add new tasks up to our max_pending limit
                     while len(pending_tasks) < max_pending and not iterator_exhausted:
                         try:
+                            if self.doc_iterator is None:
+                                raise StopAsyncIteration
                             doc = await anext(self.doc_iterator)
                             task = asyncio.create_task(self._process(doc))
                             pending_tasks.add(task)
@@ -1833,7 +1872,7 @@ def main(cfg) -> None:
             "max_docs": getattr(cfg, "max_docs", MAX_TOTAL_TASKS_PER_RUN),
         }
 
-        async with create_standalone_trace("vector_pipeline", **trace_attributes) as trace:
+        async with create_standalone_trace("vector_pipeline", **trace_attributes):
             logger.info("Starting data processing pipeline...")
 
             # Initialize cache for remote storage
