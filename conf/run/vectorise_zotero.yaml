@@ -8,7 +8,7 @@ defaults:
   - _self_
   - /storage/zot
 
-max_docs: 10
+max_docs: 1000
 
 # Optional: start from a specific offset (for resuming)
 # start_from: 0

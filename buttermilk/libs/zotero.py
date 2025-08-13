@@ -14,6 +14,7 @@ from pyzotero import zotero, zotero_errors
 from buttermilk._core.dmrc import get_bm
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk.utils.utils import get_pdf_text
 
 # Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
 # and causes circular import issues. If they are in the same module or structure prevents
@@ -391,8 +392,12 @@ class ZotDownloader(BaseModel):
                     self._zot.dump(attachment_key, str(pdf_file))
                 else:
                     logger.debug(f"PDF file already exists: {pdf_file}")
-
-                    # TODO: Extract content from the PDF
+                try:
+                    fulltext = get_pdf_text(pdf_file)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to extract fulltext for {key} #{attachment_key} from pdf {pdf_file}: {e} {e.args=}",
+                    )
 
             # --- Save Item JSON ---
             try:
