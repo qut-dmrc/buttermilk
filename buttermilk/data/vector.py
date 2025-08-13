@@ -1676,6 +1676,10 @@ class DocProcessor(BaseModel):
     )
     stage_name: str | None = Field(default=None, description="Explicit stage name to disambiguate caching/logging")
     _name: str = PrivateAttr(default="")
+    _original_name: str = PrivateAttr(default="")
+
+    # Track used stage names within a single run to avoid accidental reuse
+    _used_stage_names: dict[str, int] = {}
     enable_record_cache: bool = Field(default=True, description="Enable generic per-stage Record caching")
     force_reprocess: bool = Field(default=False, description="Ignore existing cache and re-run processor")
 
@@ -1688,12 +1692,27 @@ class DocProcessor(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         # Access the processor from the regular field
         if self.stage_name:
-            self._name = self.stage_name
+            candidate = self.stage_name
         elif self.processor is not None:
             if hasattr(self.processor, "__name__"):
-                self._name = self.processor.__name__
+                candidate = self.processor.__name__  # type: ignore[assignment]
             else:
-                self._name = self.processor.__class__.__name__
+                candidate = self.processor.__class__.__name__  # type: ignore[assignment]
+        else:
+            candidate = "stage"
+
+        # Normalize candidate (lowercase, replace spaces)
+        norm = candidate.replace(" ", "_").lower()
+        base = norm
+        # Ensure uniqueness; append numeric suffix if already used
+        if norm in self._used_stage_names:
+            self._used_stage_names[norm] += 1
+            norm = f"{base}_{self._used_stage_names[base]}"
+        else:
+            self._used_stage_names[norm] = 1
+
+        self._original_name = candidate
+        self._name = norm
         if self.enable_record_cache:
             try:
                 self._record_cache = RecordCache()

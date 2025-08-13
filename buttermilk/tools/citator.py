@@ -68,11 +68,11 @@ class Citator(LLMAgent):
 
             # Store it in the metadata (overwrites if 'citation' key already exists)
             if result.outputs.citation:
-                item.metadata["citation"] = citation.text
+                item.metadata["citation"] = result.outputs.citation
             if result.outputs.title:
-                item.metadata["title"] = citation.title
+                item.metadata["title"] = result.outputs.title
             logger.debug(
-                f"Generated citation for doc {item.record_id}: '{citation.text[:100]}...'",
+                f"Generated citation for doc {item.record_id}: '{result.outputs.citation[:100]}.'",
             )
             return item
         except Exception as e:
