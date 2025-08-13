@@ -4,7 +4,7 @@ import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Self  # Import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import pydantic
 from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter
@@ -144,13 +144,14 @@ class ZotDownloader(BaseModel):
 
         # Prepare API parameters
         api_params = {
-            "itemType": "-attachment&-note&-annotation",  # Exclude attachments and notes
+            # Exclude attachments, notes, annotations
+            "itemType": "-attachment",
             "limit": 100,
             **kwargs,  # Allow override of any parameters
         }
 
         # Add incremental sync parameters if not forcing full sync
-        if not force_full_sync and last_version is not None:
+        if False and not force_full_sync and last_version is not None:
             api_params.update({
                 "since": last_version,
                 "sort": "dateModified",
@@ -165,7 +166,10 @@ class ZotDownloader(BaseModel):
 
         try:
             # Fetch only parent items (books, articles, ...), not attachments directly
-            items.extend(self._zot.items(**api_params))
+            results = self._zot.items(**api_params)
+
+            items.extend(results)
+
             _next = self._zot.links.get("next")
 
             # Try to get library version from response headers
@@ -212,6 +216,9 @@ class ZotDownloader(BaseModel):
                     )
                     continue
 
+                if item.get("data", {}).get("itemType") in {"attachment", "note", "annotation"}:
+                    logger.debug(f"Skipping item {key} of type {item.get('data', {}).get('itemType')}.")
+                    continue
                 # --- Check for existence using the stored vector_store ---
                 if self._vector_store and self._vector_store.check_document_exists(key):
                     logger.info(
@@ -269,7 +276,9 @@ class ZotDownloader(BaseModel):
                         result = await task
                         if result:
                             processed_count += 1
-                            logger.debug(f"🟢 [ZOTERO-{result.record_id}] Yielding record '{result.title[:50] if result.title else 'Unknown'}' to pipeline")
+                            logger.debug(
+                                f"🟢 Yielding record {result.record_id} '{result.title[:50] if result.title else 'Unknown'}' to pipeline"
+                            )
                             yield result
                     except Exception as e:
                         logger.error(
