@@ -27,7 +27,7 @@ from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
-from buttermilk._core.agent import ProcessingError
+from buttermilk._core.exceptions import ProcessingError
 
 # Optional PDF imports - fail gracefully if not available
 try:
@@ -517,16 +517,102 @@ def extract_url_regex(text):
     return match.group(0) if match else None
 
 
-def get_pdf_text(file: str | IOBase) -> str | None:
+def _clean_pdfminer_text(raw: str) -> str:
+    """Heuristic cleanup of PDFMiner text for academic articles."""
+    import re
+    import unicodedata
+    from collections import Counter
+
+    if not raw:
+        return raw
+
+    # Split pages on form feed
+    pages = [p for p in raw.split("\x0c") if p.strip()]
+
+    # Collect first/last non-empty lines as header/footer candidates
+    header_candidates = []
+    footer_candidates = []
+    for p in pages:
+        lines = [l for l in p.splitlines() if l.strip()]
+        if not lines:
+            continue
+        header_candidates.append(lines[0].strip())
+        footer_candidates.append(lines[-1].strip())
+    header_common = {t for t, c in Counter(header_candidates).items() if c >= max(2, int(0.5 * len(pages)))}
+    footer_common = {t for t, c in Counter(footer_candidates).items() if c >= max(2, int(0.5 * len(pages)))}
+
+    cleaned_pages = []
+    for p in pages:
+        lines = p.splitlines()
+        # Remove common header/footer
+        if lines and lines[0].strip() in header_common:
+            lines = lines[1:]
+        if lines and lines[-1].strip() in footer_common:
+            lines = lines[:-1]
+        cleaned_pages.append("\n".join(lines))
+
+    text = "\n".join(cleaned_pages)
+
+    # Unicode normalize
+    text = unicodedata.normalize("NFKC", text)
+
+    # Replace ligatures & dashes
+    repl = {
+        "ﬁ": "fi",
+        "ﬂ": "fl",
+        "ﬀ": "ff",
+        "ﬃ": "ffi",
+        "ﬄ": "ffl",
+        "–": "-",
+        "—": "-",
+        "−": "-",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "\u00ad": "",  # soft hyphen
+    }
+    for k, v in repl.items():
+        if k in text:
+            text = text.replace(k, v)
+
+    # De-hyphenate line-break hyphenations
+    text = re.sub(r"(?<=\w)-\n(?=\w)", "", text)
+
+    # Merge intra-paragraph line breaks:
+    # Convert double newlines to placeholder, then single newlines -> space, restore paragraphs
+    text = text.replace("\r", "")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.replace("\n\n", "<<<PARA>>>")
+    text = re.sub(r"\n+", " ", text)
+    text = text.replace("<<<PARA>>>", "\n\n")
+
+    # Collapse whitespace
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" ?(\n)\s*", r"\1", text)
+
+    # Strip trailing spaces
+    text = "\n".join(l.rstrip() for l in text.splitlines())
+
+    return text.strip()
+
+
+def get_pdf_text(file: str | IOBase, clean: bool = True, laparams: LAParams | None = None) -> str | None:
     if not PDFMINER_AVAILABLE:
         logger.error("PDFMiner not available. Cannot extract text from PDF.")
         return None
-
     try:
-        return extract_text(file, laparams=LAParams())
+        if laparams is None:
+            # Tuned defaults for academic PDFs
+            laparams = LAParams(
+                char_margin=2.0,
+                word_margin=0.1,
+                line_margin=0.2,
+                boxes_flow=0.5,  # adjust or set to None if order issues
+            )
+        raw = extract_text(file, laparams=laparams)
+        return _clean_pdfminer_text(raw) if clean else raw
     except Exception as e:
         msg = f"Error extracting text from PDF {file}: {e} {e.args=}"
-
         raise ProcessingError(msg) from e
 
 

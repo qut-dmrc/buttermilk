@@ -393,7 +393,8 @@ class ZotDownloader(BaseModel):
                 else:
                     logger.debug(f"PDF file already exists: {pdf_file}")
                 try:
-                    fulltext = get_pdf_text(pdf_file)
+                    fulltext = get_pdf_text(pdf_file.as_posix())
+                    item["content"] = fulltext
                 except Exception as e:
                     logger.error(
                         f"Failed to extract fulltext for {key} #{attachment_key} from pdf {pdf_file}: {e} {e.args=}",
