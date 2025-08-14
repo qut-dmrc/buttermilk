@@ -1404,10 +1404,32 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         include: list[str] | None = None,
     ) -> dict[str, Any]:
         """Synchronous helper to query collection safely."""
+
+        def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:
+            if not w:
+                return w
+            # If already has a single top-level operator, pass through
+            if len(w) == 1 and next(iter(w)).startswith("$"):
+                return w
+            clauses: list[dict[str, Any]] = []
+            for k, v in w.items():
+                if isinstance(v, dict) and any(str(op).startswith("$") for op in v.keys()):
+                    # Already operator-based for this field
+                    clauses.append({k: v})
+                else:
+                    clauses.append({k: {"$eq": v}})
+            # Always wrap in $and to satisfy the "exactly one operator" requirement
+            return {"$and": clauses}
+
+        normalized_where = _normalize_where(where)
         try:
-            return self.collection.get(where=where, limit=limit, include=include or ["metadatas", "ids"])
+            return self.collection.get(
+                where=normalized_where,
+                limit=limit,
+                include=include or ["metadatas", "ids"],
+            )
         except Exception as e:
-            logger.warning(f"Collection query failed (where={where}): {e}")
+            logger.warning(f"Collection query failed (where={normalized_where}): {e}")
             return {"ids": [], "metadatas": []}
 
     async def _should_skip_record(
@@ -1551,7 +1573,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         if not document_id:
             return False
         try:
-            results = self.collection.get(
+            results = self._query_collection_single(
                 where={"document_id": document_id},
                 limit=1,
                 include=[],
