@@ -4,6 +4,9 @@ defaults:
   - run: api
   - llms: lite
 
+# reduce path-induced surprises
+hydra.job.chdir: false
+
 verbose: false
 flows: {}
 

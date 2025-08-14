@@ -8,6 +8,7 @@ different components of Buttermilk.
 
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
+from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
@@ -514,3 +515,29 @@ class RunRequest(BaseModel):
         # Join non-empty, non-None stringified parts
         display_name = " ".join(str(part) for part in parts if part is not None and str(part).strip())
         return display_name.strip() if display_name else "UnnamedRunRequest"
+
+
+class ProcessingResult(BaseModel):
+    """Comprehensive result from record processing."""
+
+    record: Record | None
+    status: Literal["processed", "skipped", "failed"]
+    reason: str = Field(default="", description="Reason for skipping or failure")
+    chunks_created: int = Field(default=0, description="Number of chunks created during processing")
+    embedding_model: str = Field(default="n/a", description="Embedding model used for processing")
+    processing_time_ms: float = Field(default=-1, description="Time taken to process the record in milliseconds")
+    metadata: dict[str, Any] = Field(default={}, description="Additional metadata about the processing result")
+
+
+@dataclass
+class BatchProcessingResult:
+    """Result from batch processing operations."""
+
+    total_records: int
+    successful_count: int
+    skipped_count: int
+    failed_count: int
+    processing_time_ms: float
+    validation_result: dict[str, Any] | None
+    failed_records: list[tuple[str, str]]  # (record_id, error_message)
+    metadata: dict[str, Any]

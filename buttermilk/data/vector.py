@@ -4,7 +4,6 @@ import signal
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
@@ -35,7 +34,7 @@ from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk._core.types import Record
+from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
@@ -51,43 +50,6 @@ T = TypeVar("T")
 _db_registry = {}
 
 # --- New Result Types and Configuration (Breaking Changes) ---
-
-
-@dataclass
-class ExistenceCheck:
-    """Detailed result from checking if a record+model combination exists."""
-
-    exists: bool
-    embedding_model: str
-    chunk_count: int
-    last_processed: datetime | None
-    metadata_hash: str | None
-
-
-class ProcessingResult(BaseModel):
-    """Comprehensive result from record processing."""
-
-    record: Record | None
-    status: Literal["processed", "skipped", "failed"]
-    reason: str = Field(default="", description="Reason for skipping or failure")
-    chunks_created: int = Field(default=0, description="Number of chunks created during processing")
-    embedding_model: str = Field(default="n/a", description="Embedding model used for processing")
-    processing_time_ms: float = Field(default=-1, description="Time taken to process the record in milliseconds")
-    metadata: dict[str, Any] = Field(default={}, description="Additional metadata about the processing result")
-
-
-@dataclass
-class BatchProcessingResult:
-    """Result from batch processing operations."""
-
-    total_records: int
-    successful_count: int
-    skipped_count: int
-    failed_count: int
-    processing_time_ms: float
-    validation_result: dict[str, Any] | None
-    failed_records: list[tuple[str, str]]  # (record_id, error_message)
-    metadata: dict[str, Any]
 
 
 class ChromaDBConfig(BaseModel):
