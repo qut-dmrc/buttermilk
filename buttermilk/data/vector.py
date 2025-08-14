@@ -1448,11 +1448,18 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return {"$and": clauses}
 
         normalized_where = _normalize_where(where)
+        # Normalize include: default to ["metadatas"] only when include is None; never inject "ids"
+        valid_include = {"documents", "embeddings", "metadatas", "distances", "uris", "data"}
+        if include is None:
+            include_to_use = ["metadatas"]
+        else:
+            # Respect empty list ([]), and filter out any invalid entries like "ids"
+            include_to_use = [i for i in include if i in valid_include]
         try:
             return self.collection.get(
                 where=normalized_where,
                 limit=limit,
-                include=include or ["metadatas", "ids"],
+                include=include_to_use,
             )
         except Exception as e:
             logger.warning(f"Collection query failed (where={normalized_where}): {e}")
