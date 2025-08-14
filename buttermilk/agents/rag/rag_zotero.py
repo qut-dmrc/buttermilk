@@ -6,8 +6,7 @@ simplified RagAgent base class and adds only Zotero-specific output formatting.
 
 from pydantic import BaseModel, Field
 
-from buttermilk.agents.rag.iterative_rag_agent import IterativeRagAgent
-from buttermilk.agents.rag.simple_rag_agent import Reference, ResearchResult
+from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
 class ZoteroReference(Reference):
@@ -32,7 +31,7 @@ class ZoteroResearchResult(ResearchResult):
     )
 
 
-class RagZotero(IterativeRagAgent):
+class RagZotero(RagAgent):
     """RAG agent specialized for Zotero academic literature.
 
     This agent inherits all functionality from RagAgent but uses
@@ -51,4 +50,4 @@ class RagZotero(IterativeRagAgent):
         super().__init__(**kwargs)
 
         # Override output model for Zotero-specific formatting - moved from class attribute
-        self._output_model: type[BaseModel] = ZoteroResearchResult
+        self.output_model: type[BaseModel] = ZoteroResearchResult

@@ -1,10 +1,8 @@
 """Test the simplified RagAgent with structured outputs."""
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
 
-from buttermilk.agents.rag.simple_rag_agent import RagAgent, ResearchResult, Reference
-from buttermilk.agents.rag.rag_zotero import RagZotero, ZoteroResearchResult, ZoteroReference
+from buttermilk.agents.rag.rag_zotero import RagZotero, ZoteroReference, ZoteroResearchResult
+from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
 class TestSimpleRagAgent:
@@ -18,18 +16,14 @@ class TestSimpleRagAgent:
             parameters={}
         )
 
-        assert agent._output_model == ResearchResult
+        assert agent.output_model == ResearchResult
         assert agent.parameters.get("template") == "rag"
 
     def test_rag_agent_custom_template(self):
         """Test that RagAgent respects custom template parameter."""
-        agent = RagAgent(
-            agent_name="test_rag", 
-            role="RESEARCHER",
-            parameters={'template': 'custom_template'}
-        )
+        agent = RagAgent(agent_name="test_rag", role="RESEARCHER", parameters={"template": "custom_template"})
 
-        assert agent.parameters.get('template') == 'custom_template'
+        assert agent.parameters.get("template") == "custom_template"
 
     def test_research_result_structure(self):
         """Test ResearchResult model structure."""
@@ -53,13 +47,9 @@ class TestRagZotero:
 
     def test_rag_zotero_forces_zotero_output(self):
         """Test that RagZotero uses ZoteroResearchResult."""
-        agent = RagZotero(
-            agent_name="test_zotero",
-            role="ZOTERO_RESEARCHER", 
-            parameters={}
-        )
+        agent = RagZotero(agent_name="test_zotero", role="ZOTERO_RESEARCHER", parameters={})
 
-        assert agent._output_model == ZoteroResearchResult
+        assert agent.output_model == ZoteroResearchResult
         assert agent.parameters.get("template") == "rag"
 
     def test_zotero_result_structure(self):

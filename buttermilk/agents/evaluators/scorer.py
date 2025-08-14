@@ -179,7 +179,7 @@ class LLMScorer(LLMAgent):
           The output of this template should be parsable into `QualScore`.
 
     Attributes:
-        _output_model (Type[BaseModel] | None): Specifies `QualScore` as the
+        output_model (Type[BaseModel] | None): Specifies `QualScore` as the
             expected Pydantic model for the LLM's structured output.
 
     """
@@ -188,7 +188,7 @@ class LLMScorer(LLMAgent):
         """Initializes the Judge agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response
-        self._output_model = QualScore  # Expected Pydantic model for LLM output
+        self.output_model = QualScore  # Expected Pydantic model for LLM output
 
     @message_handler
     async def _score_judge(
@@ -294,7 +294,7 @@ class LLMScorer(LLMAgent):
 
         This method overrides the base `LLMAgent._process`. It first calls
         `super()._process()` to get the raw scoring output from the LLM (which
-        should conform to `QualScore` due to `_output_model` setting).
+        should conform to `QualScore` due to `output_model` setting).
         It then transforms this `QualScore` into a richer `QualResults` object
         by adding metadata about the assessed agent and call ID, extracted from
         the input `message` (which should contain details from the `Judge` agent's

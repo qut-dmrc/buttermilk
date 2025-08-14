@@ -112,7 +112,9 @@ class JudgeReasons(Reasons):
 
         """
         # Choose an emoji based on the prediction (True often means violation/negative)
-        outcome_emoji = random.choice(["☢️", "☣️", "💀", "⛔", "🚫"]) if self.prediction else random.choice(["🧹", "✨", "💯", "✔️"])
+        outcome_emoji = (
+            random.choice(["☢️", "☣️", "💀", "⛔", "🚫"]) if self.prediction else random.choice(["🧹", "✨", "💯", "✔️"])
+        )
         return f"∴ {self.conclusion[:50]}... | {outcome_emoji} | Uncertainty: {self.uncertainty[0].upper()}"
 
     def __str__(self) -> str:
@@ -160,7 +162,7 @@ class Judge(LLMAgent):
           that guides the LLM to perform the evaluation and output `JudgeReasons`.
 
     Attributes:
-        _output_model (Type[BaseModel] | None): Specifies `JudgeReasons` as the
+        output_model (Type[BaseModel] | None): Specifies `JudgeReasons` as the
             expected Pydantic model for the LLM's structured output. This is
             used by the base `LLMAgent`'s `_process` method to automatically
             attempt parsing of the LLM's JSON output.
@@ -171,63 +173,4 @@ class Judge(LLMAgent):
         """Initializes the Judge agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response
-        self._output_model = JudgeReasons
-
-    async def evaluate_content(
-        self,
-        message: AgentInput,
-    ) -> AgentTrace:
-        """Handles an `AgentInput` request to evaluate content using the Judge agent's LLM.
-
-        This method is intended to be the primary entry point when the `Judge`
-        agent is invoked to perform an evaluation, particularly within systems
-        that use the `@buttermilk_handler` for message routing (e.g., when
-        integrated with Autogen via an adapter).
-
-        It delegates the core LLM interaction and structured output parsing to
-        the `_process` method inherited from `LLMAgent`.
-
-        Note:
-            The `NotImplementedError` currently in the method body indicates that
-            this specific handler implementation might be a placeholder or part of a
-            feature that's not fully active in all execution paths. In typical
-            Buttermilk flows without such a routing handler, the agent's evaluation
-            logic would be invoked via `agent.invoke(message)`, which internally
-            calls `agent._process()`. If this handler is indeed the intended
-            entry point, the `NotImplementedError` should be removed.
-
-        Args:
-            message (AgentInput): The `AgentInput` message containing the content
-                to be evaluated. The `message.inputs` should align with what the
-                Judge's prompt template expects (e.g., text to judge, criteria).
-            cancellation_token: An optional token for cancelling the operation
-                (implicitly passed via `**kwargs` if `_process` handles it).
-
-        Returns:
-            AgentTrace: An `AgentTrace` object. If successful, `outputs` will
-            contain an instance of `JudgeReasons` (the structured evaluation).
-            If processing or the LLM call fails, the `error` field within the
-            `AgentTrace` will be populated.
-
-        Raises:
-            NotImplementedError: Currently raised as a placeholder, indicating this
-                handler's direct usage path might be conceptual or for specific integrations.
-
-        """
-        raise NotImplementedError("@buttermilk_handler is only an idea at this stage.")
-        logger.debug(f"Judge agent '{self.agent_name}' received evaluation request.")
-        # Note that we don't do error handling here. If the call fails, the Autogen Adapter
-        # or whatever else called us has to deal with it.
-
-        # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
-        # This method handles template rendering, API calls, retries, and parsing into _output_model.
-        await self._process(message=message)
-
-        return trace
-
-    # Note: The primary logic for the Judge agent is handled by the LLMAgent._process method,
-    # which will use the `_output_model = JudgeReasons` to parse the LLM's response.
-    # No specific override of `_process` is needed here unless additional pre/post
-    # processing unique to the Judge (beyond what LLMAgent provides) is required.
-    # For example, if specific input validation or output transformation beyond
-    # Pydantic model parsing were necessary for the Judge's role.
+        self.output_model = JudgeReasons

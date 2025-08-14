@@ -48,8 +48,8 @@ class IterativeRagAgent(RagAgent):
         logger.debug(f"IterativeRagAgent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
         # Extract cancellation_token from kwargs if provided
-        cancellation_token = kwargs.get('cancellation_token')
-        
+        cancellation_token = kwargs.get("cancellation_token")
+
         max_iterations = self.parameters.get("max_iterations", 5)  # Configurable max iterations
         current_iteration = 0
         chat_history = list(message.context) if message.context else []  # Start with initial context
@@ -91,7 +91,7 @@ class IterativeRagAgent(RagAgent):
                     messages=llm_messages_to_send,
                     tools_list=self._tools,
                     cancellation_token=cancellation_token,
-                    schema=self._output_model,  # Pass expected Pydantic schema for structured output
+                    schema=self.output_model,  # Pass expected Pydantic schema for structured output
                 )
             except Exception as llm_error:
                 msg = f"Agent {self.agent_id}: Error during LLM call: {llm_error}"
@@ -183,12 +183,12 @@ class IterativeRagAgent(RagAgent):
                 logger.info(f"IterativeRagAgent: LLM decided to synthesize final answer. Iterations: {current_iteration}")
 
                 # Parse the final result using the agent's output model
-                if self._output_model:
+                if self.output_model:
                     try:
-                        parsed_output = self._output_model.model_validate_json(chat_result.content)
+                        parsed_output = self.output_model.model_validate_json(chat_result.content)
                         return AgentOutput(agent_id=self.agent_id, outputs=parsed_output, metadata=chat_result.model_dump())
                     except Exception as parse_error:
-                        msg = f"Failed to parse final LLM response into {self._output_model.__name__}: {parse_error}"
+                        msg = f"Failed to parse final LLM response into {self.output_model.__name__}: {parse_error}"
                         logger.error(msg, exc_info=True)
                         raise ProcessingError(msg) from parse_error
                 else:
@@ -207,12 +207,12 @@ class IterativeRagAgent(RagAgent):
                 messages=chat_history,
                 tools_list=[],  # No tools for final synthesis
                 cancellation_token=cancellation_token,
-                schema=self._output_model,
+                schema=self.output_model,
             )
 
-            if self._output_model:
+            if self.output_model:
                 try:
-                    parsed_output = self._output_model.model_validate_json(final_result.content)
+                    parsed_output = self.output_model.model_validate_json(final_result.content)
                     return AgentOutput(agent_id=self.agent_id, outputs=parsed_output, metadata=final_result.model_dump())
                 except Exception as parse_error:
                     logger.error(f"Failed to parse final synthesis: {parse_error}")

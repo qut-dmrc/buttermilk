@@ -10,19 +10,13 @@ Following test-driven development approach:
 3. Validate integration with existing components
 """
 
-import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from hydra import compose, initialize
 from omegaconf import OmegaConf
 
-from buttermilk._core.agent import AgentInput, AgentTrace
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import FlowMessage, UIMessage
-from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.rag import RagAgent
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 from buttermilk.runner.flowrunner import FlowRunContext, SessionStatus
 
 
@@ -57,14 +51,14 @@ class TestOSBFlowInitialization:
         # This test should pass once osb.yaml is properly configured
         assert "osb" in osb_flow_config
         osb_config = osb_flow_config.osb
-        
+
         # Verify core configuration elements
         assert "orchestrator" in osb_config
         assert osb_config.orchestrator == "buttermilk.orchestrators.groupchat.AutogenOrchestrator"
         assert "agents" in osb_config
         assert "observers" in osb_config
         assert "storage" in osb_config
-        
+
         # Verify parameters for interactive flow support
         assert "parameters" in osb_config
         parameters = osb_config.parameters
@@ -82,33 +76,33 @@ class TestOSBFlowInitialization:
         3. Agent data configuration not accessible to EnhancedRagAgent
         """
         osb_config = osb_flow_config.osb
-        
+
         # Mock the global BM instance
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
             # Extract agent configurations (this will currently fail)
             agents_config = osb_config.agents
-            
+
             # Test that each OSB agent type can access vector store
             expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
-            
+
             for agent_name in expected_agents:
                 # This should work but currently fails due to missing data configuration
                 assert agent_name in agents_config, f"Missing {agent_name} in OSB agent configuration"
                 agent_cfg = agents_config[agent_name]
-                
+
                 # Verify agent has data configuration with vector store
                 assert "data" in agent_cfg, f"Agent {agent_name} missing data configuration"
                 assert "osb_vector" in agent_cfg.data, f"Agent {agent_name} missing osb_vector data source"
-                
+
                 # Test agent initialization with vector store access
                 if agent_cfg.get("agent_obj") == "buttermilk.agents.rag.RagAgent":
                     # RagAgent uses external tools, not embedded vector store
                     config_dict = OmegaConf.to_container(agent_cfg, resolve=True)
                     agent = RagAgent(**config_dict)
-                    
+
                     # Verify agent has structured output configured
-                    assert agent._output_model is not None
-                    assert agent._output_model.__name__ == "ResearchResult"
+                    assert agent.output_model is not None
+                    assert agent.output_model.__name__ == "ResearchResult"
 
     @pytest.mark.anyio
     async def test_osb_flow_supports_websocket_sessions(self, osb_flow_config):
@@ -121,11 +115,11 @@ class TestOSBFlowInitialization:
         3. Missing session isolation configuration
         """
         osb_config = osb_flow_config.osb
-        
+
         # Test for WebSocket session support parameters
         assert "session_management" in osb_config.parameters, "Missing session_management configuration"
         session_params = osb_config.parameters.session_management
-        
+
         # Required for WebSocket compatibility
         assert "enable_websocket_sessions" in session_params
         assert session_params.enable_websocket_sessions is True
@@ -133,7 +127,7 @@ class TestOSBFlowInitialization:
         assert session_params.session_timeout >= 3600  # At least 1 hour
         assert "max_concurrent_sessions" in session_params
         assert session_params.max_concurrent_sessions >= 10  # Support multiple users
-        
+
         # Required for session isolation
         assert "enable_session_isolation" in session_params
         assert session_params.enable_session_isolation is True
@@ -142,29 +136,30 @@ class TestOSBFlowInitialization:
     async def test_osb_orchestrator_initialization(self, osb_flow_config, mock_bm_instance):
         """
         FAILING TEST: OSB orchestrator should initialize with proper agent registration.
-        
+
         This test currently fails because:
         1. Agent configurations not properly loaded
         2. Vector store integration not working
         3. Orchestrator initialization incomplete
         """
         osb_config = osb_flow_config.osb
-        
+
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
             # Test orchestrator initialization
             orchestrator_class_path = osb_config.orchestrator
             module_path, class_name = orchestrator_class_path.rsplit(".", 1)
-            
+
             # This should work but may fail due to configuration issues
             import importlib
+
             module = importlib.import_module(module_path)
             orchestrator_cls = getattr(module, class_name)
-            
+
             # Create orchestrator with OSB configuration
             # This will fail due to incomplete agent configuration
             config_dict = OmegaConf.to_container(osb_config, resolve=True)
             orchestrator = orchestrator_cls(**config_dict)
-            
+
             # Test that orchestrator has all expected OSB agents
             expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
             for agent_name in expected_agents:
@@ -174,7 +169,7 @@ class TestOSBFlowInitialization:
     async def test_osb_session_context_creation(self):
         """
         FAILING TEST: OSB should support session context creation for WebSocket sessions.
-        
+
         This test currently fails because:
         1. No OSB-specific session context implementation
         2. Missing session isolation features
@@ -182,26 +177,21 @@ class TestOSBFlowInitialization:
         """
         # Test session context creation for OSB flows
         session_id = "test-osb-session-12345"
-        
+
         # This should create an OSB-specific session context
         # Currently fails because OSBFlowContext doesn't exist
-        from buttermilk.runner.flowrunner import FlowRunContext
-        
-        session_context = FlowRunContext(
-            session_id=session_id,
-            flow_name="osb",
-            status=SessionStatus.INITIALIZING
-        )
-        
+
+        session_context = FlowRunContext(session_id=session_id, flow_name="osb", status=SessionStatus.INITIALIZING)
+
         # Test OSB-specific session features
         assert session_context.flow_name == "osb"
         assert session_context.session_id == session_id
-        
+
         # Test session isolation for OSB queries
         base_topic = "osb_query"
         isolated_topic = session_context.get_isolated_topic(base_topic)
         assert isolated_topic == f"{session_id}:{base_topic}"
-        
+
         # Test that session can track OSB-specific resources
         # This should work but may need enhancements for OSB
         mock_websocket = MagicMock()
@@ -232,15 +222,15 @@ class TestOSBWebSocketIntegration:
                 "priority": "high"
             }
         }
-        
+
         # This should route to OSB flow but currently fails
         # Missing: OSB-specific message handler in WebSocket API
         from buttermilk.api.flow import handle_websocket_message  # This function needs to exist
-        
+
         # Mock WebSocket connection
         mock_websocket = MagicMock()
         mock_websocket.send_json = AsyncMock()
-        
+
         # This call should work but currently fails due to missing OSB handler
         with pytest.raises(NotImplementedError, match="OSB WebSocket handler not implemented"):
             await handle_websocket_message(mock_websocket, osb_query_message)
@@ -249,7 +239,7 @@ class TestOSBWebSocketIntegration:
     async def test_osb_query_processing_flow(self):
         """
         FAILING TEST: OSB query should flow through all agents and return synthesized response.
-        
+
         This test currently fails because:
         1. No end-to-end OSB query processing pipeline
         2. Missing agent coordination logic
@@ -258,10 +248,10 @@ class TestOSBWebSocketIntegration:
         # Mock OSB query
         query = "Analyze this content for policy violations and provide recommendations"
         session_id = "test-osb-session"
-        
+
         # Expected flow: Query → Researcher → Policy Analyst → Fact Checker → Explorer → Synthesis
         # This entire pipeline needs to be implemented
-        
+
         expected_agents_order = ["researcher", "policy_analyst", "fact_checker", "explorer"]
         expected_response_structure = {
             "session_id": session_id,
@@ -270,14 +260,14 @@ class TestOSBWebSocketIntegration:
             "synthesis": "",
             "confidence_score": 0.0,
             "recommendations": [],
-            "case_metadata": {}
+            "case_metadata": {},
         }
-        
+
         # This test documents the expected behavior but currently fails
         # Implementation needed in Phase 1
         with pytest.raises(NotImplementedError, match="OSB query processing pipeline not implemented"):
             result = await process_osb_query(query, session_id)
-            
+
             # Validate response structure
             assert result["session_id"] == session_id
             assert result["query"] == query

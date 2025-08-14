@@ -39,7 +39,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         self._user_feedback: list[str] = []
 
         # Override the output model - we don't need CallOnAgent anymore
-        self._output_model = None  # Let the LLM use tool calling directly
+        self.output_model = None  # Let the LLM use tool calling directly
 
     def _clear_pending_steps(self) -> None:
         """Clear all pending steps from the queue."""
@@ -180,11 +180,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Call LLM with intercept flag
         # Extract cancellation_token from kwargs if provided
-        cancellation_token = kwargs.get('cancellation_token')
+        cancellation_token = kwargs.get("cancellation_token")
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,
-            schema=self._output_model,
+            schema=self.output_model,
             cancellation_token=cancellation_token,
         )
 

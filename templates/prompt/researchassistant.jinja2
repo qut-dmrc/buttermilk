@@ -29,8 +29,11 @@ Recent MANAGER feedback/guidance:
 {% endfor %}
 {% endif %}
 
-placeholder:
-{{ context }}
+{% if context %}
+# Placeholder:
+{{context}}
+{% endif %}
+
 
 {% if prompt %}
 user:

@@ -12,7 +12,7 @@ LLM interaction, handling the core template rendering and LLM communication
 workflow.
 """
 
-from typing import Any, Self
+from typing import Any
 
 import hydra
 import pydantic
@@ -20,7 +20,8 @@ from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import buttermilk as bm, logger
+from buttermilk import buttermilk as bm
+from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
@@ -41,7 +42,7 @@ class LLMAgent(Agent):
         3. Parsing and validating LLM responses
 
         The agent can work with both unstructured text responses and structured
-        outputs (when `_output_model` is specified as a Pydantic model).
+        outputs (when `output_model` is specified as a Pydantic model).
 
         Configuration (from `AgentConfig`):
             template: Name of the prompt template to use (required in parameters)
@@ -49,13 +50,13 @@ class LLMAgent(Agent):
             temperature: LLM temperature parameter for response variability
             fail_on_unfilled_parameters: Whether to fail if template variables are missing
             tools: List of tools (functions) the agent can use
+            output_model (type[pydantic.BaseModel] | None): Pydantic model
+                for structured output parsing.
 
     Attributes:
             _model (str): The name/identifier of the LLM model this agent uses.
-            _output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
-                for structured output parsing.
             _tools_list (list[Tool]): List of Autogen-compatible tool objects.
-    _       _fail_on_unfilled_parameters (bool): If True, raises an error when
+            _fail_on_unfilled_parameters (bool): If True, raises an error when
                 template variables are missing from inputs.
 
     Example:
@@ -95,14 +96,12 @@ class LLMAgent(Agent):
 
         # Initialize private attributes
         self._model: str = self.parameters.get("model", "")
-        self._output_model: type[pydantic.BaseModel] | None = None
-        self._tools: list[Tool] = []
+        self._tools: list[Tool] = self._load_tools()
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
 
-    @pydantic.model_validator(mode="after")
-    def _load_tools(self) -> Self:
+    def _load_tools(self) -> list[Tool]:
         """Loads tool configurations and converts them to Autogen-compatible tools.
 
         This Pydantic validator runs after the agent model is created.
@@ -123,11 +122,11 @@ class LLMAgent(Agent):
             _tool_objects = hydra.utils.instantiate(self._config.tools)
 
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            self._tools = create_tool_functions(_tool_objects)
+            _tools = create_tool_functions(_tool_objects)
         else:
             logger.debug(f"Agent '{self.agent_name}': No tools configured.")
-            self._tools = []
-        return self
+            _tools = []
+        return _tools
 
     def get_available_tools(self) -> list["Tool"]:
         """Get list of tools this agent can respond to.
@@ -289,7 +288,7 @@ class LLMAgent(Agent):
         Returns:
             AgentOutput: An `AgentOutput` message. The `outputs` attribute will
             contain the processed LLM response (either a string, a parsed Pydantic
-            model if `_output_model` was used, or a generic JSON structure).
+            model if `output_model` was used, or a generic JSON structure).
             The `metadata` attribute will include information from the LLM call
             (e.g., token usage) and details about the agent.
 
@@ -332,7 +331,7 @@ class LLMAgent(Agent):
         chat_result = await self._call_llm(
             messages=llm_messages_to_send,
             tools=self._tools,
-            schema=self._output_model,
+            schema=self.output_model,
             cancellation_token=cancellation_token,
         )
 
@@ -344,7 +343,7 @@ class LLMAgent(Agent):
         )
 
         # Extract the final output based on whether we have structured output
-        if self._output_model and isinstance(chat_result, ModelOutput):
+        if self.output_model and isinstance(chat_result, ModelOutput):
             final_output = chat_result.parsed_object
         else:
             final_output = chat_result.content

@@ -6,11 +6,9 @@ frame elements at the statement level, including speakers, problem definitions,
 causal attributions, moral evaluations, and treatment recommendations.
 """
 
-import random  # For random emoji selection in preview
-from typing import Optional, List  # For type hinting
-from datetime import datetime
+from typing import Optional  # For type hinting
 
-from pydantic import BaseModel, Field, computed_field  # Pydantic components
+from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
 from buttermilk._core.agent import AgentInput, AgentTrace  # Base types
@@ -82,7 +80,7 @@ class FramedStatement(BaseModel):
     def __str__(self) -> str:
         """Returns a formatted string representation of the framed statement."""
         return (
-            f"**Statement:** \"{self.statement}\"\n"
+            f'**Statement:** "{self.statement}"\n'
             f"**Speaker:** {self.speaker_name} ({self.speaker_affiliation})\n"
             f"**Problem:** {self.problem_definition}\n"
             f"**Blame:** {self.blame_attribution or 'Not specified'}\n"
@@ -91,6 +89,7 @@ class FramedStatement(BaseModel):
             f"**Solution Addressee:** {self.solution_addressee or 'Not specified'}\n"
             f"**Confidence:** {self.confidence_score:.2f}"
         )
+
 
 # --- Frame Agent ---
 class Frame(LLMAgent):
@@ -115,7 +114,7 @@ class Frame(LLMAgent):
           that guides the LLM to perform frame analysis and output `FrameAnalysisResults`.
 
     Attributes:
-        _output_model (Type[BaseModel] | None): Specifies `FrameAnalysisResults` as the
+        output_model (Type[BaseModel] | None): Specifies `FrameAnalysisResults` as the
             expected Pydantic model for the LLM's structured output.
 
     """
@@ -124,7 +123,7 @@ class Frame(LLMAgent):
         """Initializes the Frame agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response
-        self._output_model = FrameAnalysisResults
+        self.output_model = FrameAnalysisResults
 
     async def analyze_article(
         self,
@@ -157,9 +156,9 @@ class Frame(LLMAgent):
         """
         raise NotImplementedError("@buttermilk_handler is only an idea at this stage.")
         logger.debug(f"Frame agent '{self.agent_name}' received analysis request.")
-        
+
         # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
-        # This method handles template rendering, API calls, retries, and parsing into _output_model.
+        # This method handles template rendering, API calls, retries, and parsing into output_model.
         trace = await self._process(message=message)
 
         if trace.outputs:
@@ -184,14 +183,14 @@ class Frame(LLMAgent):
 
         """
         # Ensure the analysis focus is set appropriately
-        if hasattr(message, 'inputs') and isinstance(message.inputs, dict):
-            message.inputs['analysis_focus'] = 'climate_activism'
-        
+        if hasattr(message, "inputs") and isinstance(message.inputs, dict):
+            message.inputs["analysis_focus"] = "climate_activism"
+
         logger.debug(f"Frame agent '{self.agent_name}' performing climate activism analysis.")
-        
+
         return await self.analyze_article(message)
 
     # Note: The primary logic for the Frame agent is handled by the LLMAgent._process method,
-    # which will use the `_output_model = FrameAnalysisResults` to parse the LLM's response.
+    # which will use the `output_model = FrameAnalysisResults` to parse the LLM's response.
     # The prompt template should instruct the LLM to follow Entman's (1993) framing theory
     # and output the analysis in the expected FrameAnalysisResults structure.

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
-from buttermilk._core.contract import AgentOutput, ErrorEvent  # Buttermilk contract types
+from buttermilk._core.contract import AgentOutput  # Buttermilk contract types
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
 
@@ -55,7 +55,7 @@ class Describer(LLMAgent):
           `max_tokens`).
 
     Attributes:
-        _output_model: Set to MediaDescription for structured outputs
+        output_model: Set to MediaDescription for structured outputs
 
     """
 
@@ -63,7 +63,7 @@ class Describer(LLMAgent):
         """Initializes the Judge agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response
-        self._output_model = MediaDescription
+        self.output_model = MediaDescription
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process the input to generate a media description.
@@ -173,5 +173,5 @@ class Describer(LLMAgent):
         result = await super()._process(message=message, **kwargs)
 
         # The parent's process should return structured MediaDescription
-        # due to _output_model setting
+        # due to output_model setting
         return result

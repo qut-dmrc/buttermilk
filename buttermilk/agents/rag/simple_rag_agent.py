@@ -51,9 +51,9 @@ class RagAgent(LLMAgent):
     def __init__(self, **kwargs):
         """Initialize RagAgent with template configuration."""
         super().__init__(**kwargs)
-        
+
         # Force structured output - can be overridden by subclasses
-        self._output_model: type[BaseModel] | None = ResearchResult
-        
+        self.output_model: type[BaseModel] | None = ResearchResult
+
         # Template configuration - moved from Field declaration
         self.template: str = kwargs.get("template", "rag")

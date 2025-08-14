@@ -43,7 +43,7 @@ class Citator(LLMAgent):
         super().__init__(**kwargs)
 
         # Set the expected output model for the LLM's response
-        self._output_model = FormattedCitation
+        self.output_model = FormattedCitation
 
     async def process(self, item: Record) -> Record | None:
         """

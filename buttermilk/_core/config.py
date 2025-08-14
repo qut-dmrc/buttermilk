@@ -605,6 +605,8 @@ class AgentConfig(BaseModel):
             'DATA_EXTRACTOR', 'SUMMARIZER'). Automatically converted to uppercase.
         description (str): A human-readable explanation of the agent's purpose
             and capabilities.
+        output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
+                for structured output parsing.
         tools (dict[str, Any]): A dictionary of tool configurations, defining the
             tools (functions) available to this agent, keyed by tool name.
             Can be ToolConfig objects or direct tool instances.
@@ -654,6 +656,9 @@ class AgentConfig(BaseModel):
     )
 
     # Behavior & Connections
+    output_model: type[BaseModel] | None = Field(
+        default=None, description="Pydantic model for structured output parsing."
+    )
     tools: dict[str, Any] = Field(
         default_factory=dict,
         description="Configuration for tools (functions) that the agent can potentially use, keyed by tool name. Can be ToolConfig objects or direct tool instances.",
@@ -800,6 +805,7 @@ class AgentConfig(BaseModel):
                 name_parts.append(comp_path)
 
         name = " ".join(filter(None, name_parts)).strip()  # Filter None before join
+
         # Use object.__setattr__ for private attributes to avoid triggering validators if not desired
         object.__setattr__(self, "_agent_name", name or self.agent_id)  # Fallback to the canonical agent_id
 

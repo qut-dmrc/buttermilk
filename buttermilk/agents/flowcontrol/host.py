@@ -416,7 +416,7 @@ class HostAgent(Agent):
                 calculated_timeout = self._max_wait_time + additional_time
                 # Ensure timeout is between 5 and 20 minutes
                 dynamic_timeout = max(300, min(calculated_timeout, 1200))
-                
+
                 logger.info(f"Using dynamic timeout of {dynamic_timeout:.0f}s for {total_pending_tasks} pending tasks")
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
@@ -424,7 +424,9 @@ class HostAgent(Agent):
                 # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
-                    self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
+                    self._tasks_condition.wait_for(
+                        lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent
+                    ),
                     timeout=dynamic_timeout,
                 )
                 return True
@@ -519,7 +521,9 @@ class HostAgent(Agent):
                 logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
 
                 # Don't seek confirmation from the manager to send a request to the manager
-                logger.debug(f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}")
+                logger.debug(
+                    f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}"
+                )
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
                     logger.info(f"Host {self.agent_name}: User rejected step or timed out, stopping flow")
@@ -548,7 +552,7 @@ class HostAgent(Agent):
             logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
             await self._publish(final_progress_message)
 
-        except (KeyboardInterrupt):
+        except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
         except (FatalError, Exception) as e:
             logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
@@ -586,7 +590,7 @@ class HostAgent(Agent):
         """Wait for tasks from the current step to complete and check for errors."""
         # Wait for pending tasks to complete
         last_step_successful = await self._wait_for_all_tasks_complete()
-        
+
         # If timeout occurred, treat timed-out tasks as errors
         if not last_step_successful:
             # Record timed-out tasks as failures
@@ -696,8 +700,7 @@ class HostAgent(Agent):
         import json
 
         for call in tool_calls:
-
-            # First check if it's a participant "ask_" tool
+            # First check if it's a participant tool
             if call.name.endswith("_call"):
                 # Extract role from tool name (e.g., "zotero_researcher_call" -> "ZOTERO_RESEARCHER")
                 role_part = call.name[:-5].upper()  # Remove "_call" suffix and uppercase

@@ -4,11 +4,12 @@ This module provides the base classes and utilities for defining structured tool
 definitions that can be used for LLM tool invocation.
 """
 
+import re
 from typing import Any
 
 from autogen_core import CancellationToken
 from autogen_core.tools import ToolSchema
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AgentToolDefinition(BaseModel):
@@ -45,7 +46,14 @@ class AgentToolDefinition(BaseModel):
         description="Required permissions for accessing this tool",
     )
 
-    # Implement Tool protocol properties and methods
+    @field_validator("name", mode="before")
+    def validate_agent_name(cls, value: str) -> str:
+        """Ensure tool name only has alphanumeric, underscore, or hyphen chars."""
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", value):
+            raise ValueError("Tool name must contain only letters, digits, underscores, or hyphens")
+        return value
+
+    # Implement Tool protocol properties and methodss
 
     @property
     def schema(self) -> ToolSchema:

@@ -13,4 +13,4 @@ run:
   name: bm_api
   job: flows
 
-  flows: {}
+  flows: ${flows}

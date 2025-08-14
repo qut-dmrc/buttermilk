@@ -158,7 +158,7 @@ class Differentiator(LLMAgent):
         of the analysis.
 
     Attributes:
-        _output_model (Type[BaseModel] | None): Specifies that this agent expects
+        output_model (Type[BaseModel] | None): Specifies that this agent expects
             its LLM output to be parsable into the `Differences` model.
             This is used by the `LLMAgent` base class to automatically attempt
             parsing the LLM's JSON output into this Pydantic model.
@@ -169,4 +169,4 @@ class Differentiator(LLMAgent):
         """Initializes the Judge agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response
-        self._output_model = Differences
+        self.output_model = Differences

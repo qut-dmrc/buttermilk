@@ -26,7 +26,7 @@ def scorer_agent(request) -> LLMScorer:
             "template": "score",  # Assumes 'score.jinja2' exists and is appropriate
             "model": request.param,  # Use parametrized model
             "criteria": "criteria_ordinary",  # Example criteria context for the template
-            # "formatting": "json_rules", # LLMAgent usually handles JSON output if _output_model is set
+            # "formatting": "json_rules", # LLMAgent usually handles JSON output if output_model is set
         },
         # Inputs mapping might be needed depending on the 'score' template
         inputs={
