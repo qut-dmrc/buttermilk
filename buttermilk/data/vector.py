@@ -1408,9 +1408,25 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:
             if not w:
                 return w
-            # If already has a single top-level operator, pass through
+            # If already operator-based at top level, ensure it is valid
             if len(w) == 1 and next(iter(w)).startswith("$"):
+                op = next(iter(w))
+                val = w[op]
+                # If $and/$or with a single clause, unwrap to that clause
+                if op in ("$and", "$or"):
+                    if isinstance(val, list):
+                        if len(val) == 1 and isinstance(val[0], dict):
+                            return _normalize_where(val[0])
+                        elif len(val) >= 2:
+                            return w  # already valid
+                        else:
+                            return {}  # invalid empty, return match-all or empty
+                    # Non-list value; attempt to recover by returning empty
+                    return {}
+                # Other top-level operator: assume valid and pass through
                 return w
+
+            # Build per-field clauses
             clauses: list[dict[str, Any]] = []
             for k, v in w.items():
                 if isinstance(v, dict) and any(str(op).startswith("$") for op in v.keys()):
@@ -1418,7 +1434,17 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     clauses.append({k: v})
                 else:
                     clauses.append({k: {"$eq": v}})
-            # Always wrap in $and to satisfy the "exactly one operator" requirement
+
+            # If only a single clause, return it directly (no $and wrapper).
+            # Additionally, unwrap a simple $eq into plain equality for compatibility.
+            if len(clauses) == 1:
+                single = clauses[0]
+                if len(single) == 1:
+                    _k, _v = next(iter(single.items()))
+                    if isinstance(_v, dict) and set(_v.keys()) == {"$eq"}:
+                        return {_k: _v["$eq"]}
+                return single
+            # For multiple clauses, wrap in $and
             return {"$and": clauses}
 
         normalized_where = _normalize_where(where)
