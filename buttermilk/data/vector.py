@@ -64,17 +64,16 @@ class ExistenceCheck:
     metadata_hash: str | None
 
 
-@dataclass
-class ProcessingResult:
+class ProcessingResult(BaseModel):
     """Comprehensive result from record processing."""
 
     record: Record | None
     status: Literal["processed", "skipped", "failed"]
-    reason: str
-    chunks_created: int
-    embedding_model: str
-    processing_time_ms: float
-    metadata: dict[str, Any]
+    reason: str = Field(default="", description="Reason for skipping or failure")
+    chunks_created: int = Field(default=0, description="Number of chunks created during processing")
+    embedding_model: str = Field(default="n/a", description="Embedding model used for processing")
+    processing_time_ms: float = Field(default=-1, description="Time taken to process the record in milliseconds")
+    metadata: dict[str, Any] = Field(default={}, description="Additional metadata about the processing result")
 
 
 @dataclass
@@ -1746,12 +1745,28 @@ class DocProcessor(BaseModel):
                         )
                         # Wrap cached as pseudo ProcessingResult (processed) if returning results
                         if self.return_results:
-                            return ProcessingResult(status="processed", record=cached)
+                            return ProcessingResult(
+                                status="processed",
+                                record=cached,
+                                reason="cache hit",
+                                chunks_created=len(cached.chunks) if hasattr(cached, "chunks") else 0,
+                                embedding_model="unknown",
+                                processing_time_ms=0,
+                                metadata={"skip_validation": False, "cache_hit": True, "stage": self._name},
+                            )
                         return cached
                 if self.processor is None:
                     logger.error(f"[{self._name}] No processor callable configured")
                     if self.return_results:
-                        return ProcessingResult(status="failed", record=doc, reason="no_processor")
+                        return ProcessingResult(
+                            status="failed",
+                            record=doc,
+                            reason="no_processor",
+                            chunks_created=0,
+                            embedding_model="unknown",
+                            processing_time_ms=0,
+                            metadata={"skip_validation": False, "cache_hit": False, "stage": self._name},
+                        )
                     return None
 
                 logger.info(
