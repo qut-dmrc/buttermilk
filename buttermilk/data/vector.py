@@ -739,7 +739,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
-        logger.info(f"🟣 [VECTORIZER-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
+        logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
             if skip_existing and not force_reprocess:

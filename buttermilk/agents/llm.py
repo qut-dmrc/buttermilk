@@ -98,6 +98,8 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._tools: list[Tool] = self._load_tools()
 
+        self.output_model: type[pydantic.BaseModel] = kwargs.get("output_model", None)
+
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
 

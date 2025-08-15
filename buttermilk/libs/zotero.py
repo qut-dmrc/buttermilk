@@ -232,7 +232,7 @@ class ZotDownloader(BaseModel):
                 # Create task for this item
                 try:
                     title = item.get("data", {}).get("title", "Unknown")[:50]
-                    logger.debug(f"🔵 Creating download task for #{key} '{title}' (pending: {len(pending_tasks)})")
+                    logger.debug(f"🔵 Creating download task for {key} '{title}' (pending: {len(pending_tasks)})")
                     task = asyncio.create_task(self.download_record(item))
                     pending_tasks.add(task)
                 except Exception as e:
@@ -320,7 +320,7 @@ class ZotDownloader(BaseModel):
                 with json_file.open("r", encoding="utf-8") as f:
                     item = json.load(f)
                 if item.get("content"):
-                    logger.debug(f"✅ Read fulltext from cache for #{key}  '{title[:50]}'")
+                    logger.debug(f"✅ Read fulltext from cache for {key}  '{title[:50]}'")
 
                     metadata = {"title": title, "doi_or_url": doi_or_url, "uri": json_file.as_posix(), "zotero_data": zotero_data}
 
@@ -349,7 +349,7 @@ class ZotDownloader(BaseModel):
             try:
                 # --- Download full text from Zotero ---
                 logger.info(
-                    f"⬇️ Starting full-text download for #{key} attachment #{attachment_key} for '{title[:50]}'..."
+                    f"⬇️ Starting full-text download for {key} attachment {attachment_key} for '{title[:50]}'..."
                 )
                 fulltext = self._zot.fulltext_item(attachment_key)
 
@@ -397,7 +397,7 @@ class ZotDownloader(BaseModel):
                     item["content"] = fulltext
                 except Exception as e:
                     logger.error(
-                        f"Failed to extract fulltext for {key} #{attachment_key} from pdf {pdf_file}: {e} {e.args=}",
+                        f"Failed to extract fulltext for {key} {attachment_key} from pdf {pdf_file}: {e} {e.args=}",
                     )
 
             # --- Save Item JSON ---
@@ -424,7 +424,7 @@ class ZotDownloader(BaseModel):
                 metadata=metadata,
             )
 
-            logger.debug(f"✅ Download complete for #{key} '{title[:50]}'")
+            logger.debug(f"✅ Download complete for {key} '{title[:50]}'")
             return record
         else:
             logger.debug(f"Skipping item {key}: No PDF attachment found.")
