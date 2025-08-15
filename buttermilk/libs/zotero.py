@@ -124,7 +124,9 @@ class ZotDownloader(BaseModel):
             state_file.unlink()
             logger.info("Sync state reset. Next sync will fetch all items.")
 
-    async def get_all_records(self, force_full_sync: bool = False, max_docs: int | None = None, **kwargs) -> AsyncIterator[Record]:
+    async def get_all_records(
+        self, force_full_sync: bool = False, max_docs: int | None = None, start: int | None = None, **kwargs
+    ) -> AsyncIterator[Record]:
         """Fetches Zotero items, checks existence, downloads, extracts, and yields Records.
         
         This method implements incremental sync by default, only fetching items that have
@@ -132,6 +134,7 @@ class ZotDownloader(BaseModel):
         
         Args:
             force_full_sync: If True, bypasses incremental sync and fetches all items
+            start: Starting index for pagination (default: None, fetches all)
             max_docs: Maximum number of records to yield before stopping (None = no limit)
             **kwargs: Additional parameters to pass to the Zotero API
             
@@ -148,8 +151,11 @@ class ZotDownloader(BaseModel):
             # Exclude attachments, notes, annotations
             "itemType": "-attachment",
             "limit": 100,
+            "sort": "dateModified",
             **kwargs,  # Allow override of any parameters
         }
+        if start is not None:
+            api_params["start"] = start
 
         # Add incremental sync parameters if not forcing full sync
         if False and not force_full_sync and last_version is not None:
@@ -222,7 +228,7 @@ class ZotDownloader(BaseModel):
                     continue
                 # --- Check for existence using the stored vector_store ---
                 if self._vector_store and self._vector_store.check_document_exists(key):
-                    logger.info(
+                    logger.debug(
                         f"Document {key} already exists in vector store, skipping.",
                     )
                     skipped_count += 1

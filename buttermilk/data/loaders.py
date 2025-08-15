@@ -40,6 +40,8 @@ class DataLoaderWrapper:
     def get_all_records(self):
         """Get all records (compatibility method)."""
         return list(self.storage)
+
+
 from buttermilk._core.types import Record
 
 

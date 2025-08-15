@@ -8,10 +8,10 @@ defaults:
   - _self_
   - /storage/zot
 
-max_docs: 2000
+max_docs: 50000
 
 # Optional: start from a specific offset (for resuming)
-start_from: 5000
+start_from: 0
 
 run:
   name: zotero_vectorizer
@@ -34,8 +34,8 @@ vectoriser:
 # Text chunking configuration
 chunker:
   _target_: buttermilk.data.vector.SemanticSplitter
-  chunk_size: 2000
-  chunk_overlap: 500
+  chunk_size: 1700
+  chunk_overlap: 400
 
 # Zotero data source
 input_docs:
