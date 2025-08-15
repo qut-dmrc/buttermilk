@@ -10,7 +10,6 @@ from buttermilk import logger
 from buttermilk.data.vector import (
     ChromaDBEmbeddings,
     ChunkedDocument,
-    InputDocument,
     list_to_async_iterator,
 )
 

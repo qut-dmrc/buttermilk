@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from pdfminer.high_level import extract_text
@@ -36,6 +37,18 @@ class PdfTextExtractor(BaseModel):
             )
         return item
 
+    @staticmethod
+    def _is_garbage_pdf_text(text: str) -> bool:
+        # Check for high proportion of (cid:...) patterns
+        cid_matches = re.findall(r"\(cid:\d+\)", text)
+        cid_ratio = len(cid_matches) / max(len(text.split()), 1)
+
+        # Check for low proportion of alphabetic characters
+        alpha_ratio = sum(c.isalpha() for c in text) / max(len(text), 1)
+
+        # Heuristic thresholds (tune as needed)
+        return cid_ratio > 0.2 or alpha_ratio < 0.2
+
     def extract(self, file_path: str | Path) -> str | None:
         """Extracts text from the given PDF file path.
 
@@ -49,6 +62,12 @@ class PdfTextExtractor(BaseModel):
         try:
             logger.debug(f"Extracting text from PDF: {file_path}")
             full_text = extract_text(file_path, laparams=self._laparams)
+            if _is_garbage_pdf_text(full_text):
+                logger.warning(
+                    f"Extracted text from {file_path} appears to be garbage. "
+                    "Consider using a different extraction method or preprocessing.",
+                )
+                return None
             logger.debug(f"Successfully extracted text from {file_path} (length: {len(full_text)}).")
             return full_text
         except Exception as e:

@@ -8,10 +8,10 @@ defaults:
   - _self_
   - /storage/zot
 
-max_docs: 5000
+max_docs: 2000
 
 # Optional: start from a specific offset (for resuming)
-# start_from: 0
+start_from: 5000
 
 run:
   name: zotero_vectorizer

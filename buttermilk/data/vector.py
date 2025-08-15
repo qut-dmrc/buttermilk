@@ -252,7 +252,9 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             contents=input,
             config={
                 "output_dimensionality": self.dimensionality,
-            })
+                "auto_truncate": False,
+            },
+        )
 
         # Extract embeddings from response
         embeddings = []
@@ -276,7 +278,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     persist_directory: str = Field(default=...)
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
-    embedding_batch_size: int = Field(default=1)
+    embedding_batch_size: int = Field(default=100)
     arrow_save_dir: str = Field(default="")
     embeddings_cache_dir: str = Field(default=".cache/embeddings", description="Directory to cache embeddings")
 
@@ -382,7 +384,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Step 2: Initialize ChromaDB client
         if not hasattr(self, "_client") or not self._client:
-            self._client = chromadb.PersistentClient(path=self.persist_directory)
+            self._client = chromadb.PersistentClient(
+                path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False)
+            )
             logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
 
         # Step 3: Ensure collection is ready (create or validate)
@@ -808,9 +812,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "created_at": datetime.utcnow().isoformat(),
                     }
                     failed_path.write_text(json.dumps(failed_payload, ensure_ascii=False, indent=2))
-                    logger.warning(f"💾 Saved failed embedding record for retry: {failed_path}")
+                    logger.warning(f"💾 Saved failed embedding record {record.record_id}: {failed_path}")
                 except Exception as save_e:
-                    logger.error(f"Could not persist failed embedding record {record.record_id}: {save_e}")
+                    logger.error(f"Could not save failed embedding record {record.record_id}: {save_e}")
 
                 processing_time_ms = (time.time() - start_time) * 1000
                 return ProcessingResult(
@@ -1307,26 +1311,41 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.warning(f"Failed to init embedding retry wrapper, falling back to single attempt: {e}")
                 self._retry_wrapper = None
 
-        async def _run_embed() -> list[Any]:
-            return await asyncio.to_thread(self._embedding_function, texts)
-
-        try:
-            if self._retry_wrapper:
-                embeddings = await self._retry_wrapper._execute_with_retry(_run_embed)
-            else:
-                embeddings = await _run_embed()
-        except Exception as e:  # All retries exhausted or non-retryable error surfaced
-            logger.error(f"Embedding failed after retries: {e}")
-            self._convert_embedding_errors(e)
-            return [(idx, None) for idx in indices]
-
-        # Successful path
+        batch_size = max(1, int(getattr(self, "embedding_batch_size", 100)))
         results: list[tuple[int, list[float] | None]] = []
-        for i, idx in enumerate(indices):
-            if i < len(embeddings):
-                results.append((idx, embeddings[i]))
-            else:
-                results.append((idx, None))
+
+        async def _run_embed_batch(batch_docs: list[Any]) -> list[Any]:
+            return await asyncio.to_thread(self._embedding_function, batch_docs)
+
+        # Process in batches to respect embedding_batch_size and improve error recovery
+        for start in range(0, len(texts), batch_size):
+            batch_texts = texts[start:start + batch_size]
+            batch_indices = indices[start:start + batch_size]
+
+            try:
+                if self._retry_wrapper:
+                    batch_embeddings = await self._retry_wrapper._execute_with_retry(lambda: _run_embed_batch(batch_texts))
+                else:
+                    batch_embeddings = await _run_embed_batch(batch_texts)
+            except Exception as e:  # All retries exhausted or non-retryable error surfaced
+                logger.error(f"Embedding batch failed after retries (indices {batch_indices[0]}..{batch_indices[-1]}): {e}")
+                # Convert embedding-specific errors; may raise RateLimit to be handled upstream
+                try:
+                    self._convert_embedding_errors(e)
+                except RateLimit:
+                    # Re-raise to allow upstream to mark the record for retry
+                    raise
+                # Non-rate limit error: mark this batch as failed but continue with next batches
+                results.extend((idx, None) for idx in batch_indices)
+                continue
+
+            # Successful batch path: align outputs with inputs
+            for i, idx in enumerate(batch_indices):
+                if i < len(batch_embeddings):
+                    results.append((idx, batch_embeddings[i]))
+                else:
+                    results.append((idx, None))
+
         return results
 
     # ------------------------------------------------------------------
@@ -1940,7 +1959,7 @@ def main(cfg) -> None:
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     objs = hydra.utils.instantiate(cfg)
-    vectoriser: ChromaDBEmbeddings = objs.vectoriser
+       vectoriser: ChromaDBEmbeddings = objs.vectoriser
     input_docs_source = objs.input_docs
     preprocessor_instance = objs.preprocessor
     processor_instance = objs.processor
