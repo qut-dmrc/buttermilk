@@ -1959,7 +1959,7 @@ def main(cfg) -> None:
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
     objs = hydra.utils.instantiate(cfg)
-       vectoriser: ChromaDBEmbeddings = objs.vectoriser
+    vectoriser: ChromaDBEmbeddings = objs.vectoriser
     input_docs_source = objs.input_docs
     preprocessor_instance = objs.preprocessor
     processor_instance = objs.processor
