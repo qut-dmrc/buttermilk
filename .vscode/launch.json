@@ -7,7 +7,7 @@
     {
       "name": "Buttermilk API daemon",
       "type": "debugpy",
-      "request": "launch", 
+      "request": "launch",
       "consoleName": "Buttermilk Daemon",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
@@ -104,7 +104,10 @@
       "request": "launch",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
       "justMyCode": false,
       "args": [
         "+run=batch",
@@ -164,9 +167,16 @@
       "request": "launch",
       "module": "examples.automod.pfmod",
       "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
       "justMyCode": false,
-      "args": ["+experiments=ots", "+data=drag_noalt", "+save=bq"],
+      "args": [
+        "+experiments=ots",
+        "+data=drag_noalt",
+        "+save=bq"
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
@@ -239,5 +249,4 @@
       ]
     }
   ]
-  
 }

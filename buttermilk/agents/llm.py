@@ -14,7 +14,6 @@ workflow.
 
 from typing import Any
 
-import hydra
 import pydantic
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
@@ -26,7 +25,6 @@ from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
-from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values
 
@@ -97,50 +95,11 @@ class LLMAgent(Agent):
 
         # Initialize private attributes
         self._model: str = self.parameters.get("model", "")
-        self._tools: list[Tool] = self._load_tools()
 
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
-
-    def _load_tools(self) -> list[Tool]:
-        """Loads tool configurations and converts them to Autogen-compatible tools.
-
-        This Pydantic validator runs after the agent model is created.
-        It checks `self.tools` (an `AgentConfig` field, typically populated from
-        Hydra configuration) and uses `create_tool_functions` to convert these
-        tool definitions into a list of Autogen-compatible tool objects
-        (`_tools`).
-
-        Returns:
-            Self: The agent instance with `_tools` populated.
-
-        """
-        # `self._config.tools` is populated by AgentConfig based on Hydra config.
-        if self._config.tools:
-            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
-
-            # Instantiate tools here if they are OmegaConf objects
-            _tool_objects = hydra.utils.instantiate(self._config.tools)
-
-            # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            _tools = create_tool_functions(_tool_objects)
-        else:
-            logger.debug(f"Agent '{self.agent_name}': No tools configured.")
-            _tools = []
-        return _tools
-
-    def get_available_tools(self) -> list["Tool"]:
-        """Get list of tools this agent can respond to.
-
-        Returns the configured tools from self._tools.
-
-        Returns:
-            list[Tool]: List of configured tools.
-
-        """
-        return self._tools
 
     def get_display_name(self) -> str:
         """Get the display name for this LLM agent, including model information.

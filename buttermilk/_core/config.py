@@ -13,7 +13,8 @@ from typing import (
     Literal,
     Self,
 )
-
+import copy
+import cloudpathlib  # For handling cloud storage paths
 import jmespath  # For JSON query language processing
 
 # BigQuery import - now a core dependency
@@ -259,9 +260,8 @@ class AgentConfig(BaseModel):
             and capabilities.
         output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
                 for structured output parsing.
-        tools (dict[str, Any]): A dictionary of tool configurations, defining the
+        tools (dict[str, ToolConfig]): A dictionary of tool configurations, defining the
             tools (functions) available to this agent, keyed by tool name.
-            Can be ToolConfig objects or direct tool instances.
         data (Mapping[str, StorageConfig]): Configuration for data sources the
             agent might need to access, keyed by a descriptive name.
             Serialized as `mapping_data`.
@@ -476,9 +476,8 @@ class AgentConfig(BaseModel):
 class AgentVariants(AgentConfig):
     """A factory for creating multiple `AgentConfig` instances (variants).
 
-    based on
-    parameter combinations. This is useful for running experiments with different
-    agent settings or for creating ensembles of agents.
+    Creates variants based on parameter combinations. Allows flows to produce
+    results with multiple different agent settings or to create ensembles of agents.
 
     It extends `AgentConfig` to inherit base configuration fields and adds
     specific fields for defining variant parameters.
@@ -622,7 +621,7 @@ class AgentVariants(AgentConfig):
             for parallel_params in parallel_variant_combinations:
                 for task_params in sequential_task_sets:
                     # Start with the static parts of AgentVariants config
-                    current_config_dict = static_config_dict.copy()
+                    current_config_dict = copy.deepcopy(static_config_dict)
 
                     # Combine parameters: flow defaults, then base (agent + RunRequest), then parallel, then task-specific.
                     # This order defines precedence - later values override earlier ones.

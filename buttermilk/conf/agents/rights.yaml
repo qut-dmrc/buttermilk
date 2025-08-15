@@ -1,0 +1,12 @@
+rights:
+  role: RIGHTS
+  name: "📝 Rights Extraction"
+  description: Expert analysts
+  agent_obj: LLMAgent
+  num_runs: 1
+  parameters:
+    template: rights
+  variants:
+    model: ${llms.general}
+  inputs:
+    records: "[FETCH.outputs]||*.records[]"

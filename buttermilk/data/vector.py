@@ -1,10 +1,10 @@
 import asyncio
+import datetime
 import json
 import signal
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
 
@@ -818,7 +818,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "chunk_count": len(record.chunks),
                         "metadata": record.metadata,
                         "content_hash": self._get_content_hash(record),
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
                     }
                     failed_path.write_text(json.dumps(failed_payload, ensure_ascii=False, indent=2))
                     logger.warning(f"💾 Saved failed embedding record {record.record_id}: {failed_path}")
@@ -1180,7 +1180,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 "record_id": record.record_id,
                 "embedding_model": self._embedding_model,
                 "dimensionality": self.dimensionality,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
                 "chunks": [],
             }
 

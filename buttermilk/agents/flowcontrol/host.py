@@ -706,6 +706,9 @@ class HostAgent(Agent):
                 # Parse the arguments
                 try:
                     arguments = json.loads(call.arguments)
+                    if "inputs" in arguments:
+                        # If inputs are present, use them directly
+                        arguments = arguments["inputs"]
                 except json.JSONDecodeError:
                     logger.error(f"Failed to parse tool arguments: {call.arguments}")
                     continue

@@ -345,6 +345,37 @@ class Record(BaseModel):
 
         return UserMessage(content=message_content, source=self.record_id)  # type: ignore
 
+    @classmethod
+    async def from_uri(cls, uri: str) -> Self:
+        """Fetches a record based on `record_id`, `uri`, or a `prompt` containing a URI/ID.
+
+        Args:
+            uri (str | None): The URI (URL, file path) to fetch and convert.
+
+        Returns:
+            The uri content converted to a `Record` object.
+
+        If the URI is a web page, it will be stripped of extraneous text.
+
+        Raises:
+            ProcessingError: If no record could be found or fetched.
+
+        """
+        from buttermilk._core.exceptions import ProcessingError
+        from buttermilk.utils.media import download_and_convert  # Media utilities
+
+        record: Record | None = None  # uri case
+        record = await download_and_convert(uri)
+        if record:  # Check if download_and_convert succeeded
+            # Ensure metadata exists and add provenance
+            if not record.metadata:
+                record.metadata = {}
+            record.metadata["fetch_source_uri"] = uri
+            record.metadata["fetch_timestamp_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
+            return record
+
+        raise ProcessingError(f"Record not found for URI: {uri}")
+
 
 # --- Flow Protocol Start signal ---
 class RunRequest(BaseModel):

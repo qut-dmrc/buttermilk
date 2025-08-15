@@ -53,7 +53,7 @@ class AgentToolDefinition(BaseModel):
             raise ValueError("Tool name must contain only letters, digits, underscores, or hyphens")
         return value
 
-    # Implement Tool protocol properties and methodss
+    # Implement Tool protocol properties and methods
 
     @property
     def schema(self) -> ToolSchema:

@@ -13,7 +13,7 @@ systems like Autogen.
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing - core dependency
@@ -34,7 +34,7 @@ from autogen_core import (
     TopicId,
     message_handler,
 )
-from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
+from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
@@ -68,7 +68,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
 
     This class serves as the foundation for all specialized agents within the
-    Buttermilk framework. It inherits its configuration structure from `AgentConfig`
+    Buttermilk framework. It uses the configuration structure from `AgentConfig`
     and defines a common interface for agent execution, state management, and
     lifecycle hooks.
 
@@ -149,6 +149,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
+        self._tools = self._get_available_tools()
 
     @property
     def metadata(self) -> AgentMetadata:
@@ -193,14 +194,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Called when the runtime is closed"""
         await self.cleanup()
 
-    # --- Internal State ---
-    _records: list[Record]
-    _model_context: ChatCompletionContext
-    _data: KeyValueCollector
-    _heartbeat: asyncio.Queue[bool | None] | asyncio.Queue
-    _announcement_callback: Callable[[Any], Awaitable[None]] | None
-    _announced: bool = False  # Track if agent has announced itself
-
     @property
     def _cfg(self) -> AgentConfig:
         """Provides the agent's configuration.
@@ -210,6 +203,37 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         """
         return self._config
+
+    def _get_available_tools(self) -> list[Tool]:
+        """Get list of tools this agent can respond to.
+
+        This method checks `self.tools` (an `AgentConfig` field, typically populated
+        from Hydra configuration) and uses `create_tool_functions` to convert these
+        tool definitions into a list of Autogen-compatible tool objects (`_tools`).
+
+        Returns:
+            list[Tool]: List of tools.
+
+        """
+
+        import hydra
+        from omegaconf import OmegaConf
+
+        from buttermilk.utils._tools import create_tool_functions
+
+        logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
+
+        tools = {}
+        for tool_name, tool in self._config.tools.items():
+            if OmegaConf.is_config(tool):
+                # If the tool configuration is an OmegaConf object, instantiate it
+                tool_cfg = hydra.utils.instantiate(tool)
+                tools[tool_name] = tool_cfg
+            else:
+                tools[tool_name] = tool
+
+        # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
+        return create_tool_functions(tools)
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
@@ -263,16 +287,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.debug(
                 f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
             )
-
-    def get_available_tools(self) -> list[Tool]:
-        """Get list of tools this agent can respond to.
-        This is overridden in the LLMAgent class to load tools from the config.
-
-        Returns:
-            list[Tool]: List of tools.
-
-        """
-        return []
 
     # --- Core Execution Logic ---
 
@@ -507,7 +521,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         announcement = AgentAnnouncement(
             content=f"Agent {self.agent_name} active and available",
             agent_config=self._cfg,
-            available_tools=[tool.name for tool in self.get_available_tools()],
+            available_tools=list(self._tools.keys()),
             tool_definitions=tool_definitions,
             status="active",
             announcement_type="initial",
