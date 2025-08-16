@@ -611,7 +611,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     logger.info("📊 Processing session complete:")
                     logger.info(f"   📦 Records processed: {self._processed_records_count}")
                     logger.info(f"   🔢 Total embeddings: {self.collection.count()}")
-                    logger.info(f"   📑 Unique records: {self.collection.count_documents()}")
+                    logger.info(f"   📑 Unique records: {self.count_unique_records()}")
                     logger.info(f"   🔍 Deduplication strategy: {self.deduplication_strategy}")
                     logger.info(f"   📦 Cache size: {len(self._processed_combinations_cache)} combinations")
 
@@ -1733,9 +1733,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         return successful_docs_upserted, failed_docs_upserted
 
-    def count_unique_original_documents(self, identifier_metadata_key: str = "document_id") -> int:
+    def count_unique_records(self, identifier_metadata_key: str = "document_id") -> int:
         """
-        Returns the number of unique original documents in a ChromaDB collection,
+        Returns the number of unique records in a ChromaDB collection,
         assuming chunks are linked via a specified metadata key.
 
         Args:
@@ -2072,7 +2072,9 @@ def main(cfg) -> None:
 
             # Get existing stats
             existing_count = vectoriser.collection.count()
-            logger.info(f"📊 Existing embeddings in collection: {existing_count}")
+            logger.info(f"🔢 Existing embeddings in collection: {existing_count}")
+            final_docs = vectoriser.count_unique_records()
+            logger.info(f"📑 Unique records in collection: {final_docs}")
 
             # 1. Source Documents
             start_from = getattr(cfg, "start_from", 0)
@@ -2159,7 +2161,7 @@ def main(cfg) -> None:
             # Print summary statistics
             duration = time.time() - start_time
             final_count = vectoriser.collection.count()
-            final_docs = vectoriser.collection.count_documents()
+            final_docs = vectoriser.count_unique_records()
 
             logger.info("\n" + "=" * 50)
             logger.info("📊 PROCESSING SUMMARY")
