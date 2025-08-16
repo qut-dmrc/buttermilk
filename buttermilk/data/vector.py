@@ -337,7 +337,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             cooldown_seconds=self.embedding_cooldown_seconds,
             jitter_seconds=2.0,  # Add some jitter for quota management
         )
-        logger.info(f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff")
+        logger.info(
+            f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff"
+        )
 
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
@@ -351,7 +353,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Log sync configuration
         if not self.disable_auto_sync:
-            logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
+            logger.info(
+                f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes"
+            )
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
 
@@ -366,7 +370,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def ensure_cache_initialized(self) -> None:
         """Ensure ChromaDB cache and collection are ready for use.
-        
+
         This method handles both creation and reading scenarios:
         - Downloads remote ChromaDB to local cache if needed (with smart caching)
         - Initializes ChromaDB client
@@ -405,7 +409,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         import time
 
         # Get local cache path
-        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
+        cache_path = (
+            Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
+        )
 
         # Check if local cache exists and has recent modifications
         local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()
@@ -461,7 +467,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             # Only sync if modified within last 6 hours (indicates recent embedding work)
             if time_since_modified > 21600:  # 6 hours
-                logger.debug(f"Local cache not recently modified ({time_since_modified / 3600:.1f}h ago), skipping sync")
+                logger.debug(
+                    f"Local cache not recently modified ({time_since_modified / 3600:.1f}h ago), skipping sync"
+                )
                 return
 
             logger.info(f"🔄 Syncing local changes back to remote: {cache_path} → {remote_path}")
@@ -499,7 +507,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         # Check batch threshold
         batch_threshold_met = self._processed_records_count >= self._sync_batch_size
 
-        # Check time threshold (sync every 10 minutes)
+        # Check time threshold (sync every n minutes)
         time_threshold_met = (current_time - self._last_sync_time) >= self._sync_interval_seconds
 
         return batch_threshold_met or time_threshold_met
@@ -568,6 +576,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     logger.info(f"🔄 Force syncing: {cache_path} → {remote_path}")
 
                     from buttermilk.utils.utils import upload_chromadb_cache
+
                     await upload_chromadb_cache(str(cache_path), remote_path)
                     logger.info("✅ Force sync completed successfully")
                     return True
@@ -602,6 +611,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     logger.info("📊 Processing session complete:")
                     logger.info(f"   📦 Records processed: {self._processed_records_count}")
                     logger.info(f"   🔢 Total embeddings: {self.collection.count()}")
+                    logger.info(f"   📑 Unique records: {self.collection.count_documents()}")
                     logger.info(f"   🔍 Deduplication strategy: {self.deduplication_strategy}")
                     logger.info(f"   📦 Cache size: {len(self._processed_combinations_cache)} combinations")
 
@@ -617,7 +627,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def _ensure_collection_ready(self) -> None:
         """Ensure the collection exists and is compatible with current configuration.
-        
+
         Handles both creation (if missing) and validation (if exists) scenarios.
         """
         if not self._client:
@@ -691,7 +701,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     @property
     def collection(self) -> Collection:
         """Provides access to the ChromaDB collection.
-        
+
         Note: Call ensure_cache_initialized() first for proper setup.
         """
         if not hasattr(self, "_client") or not self._client:
@@ -743,7 +753,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
-        logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
+        logger.info(
+            f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'"
+        )
 
         try:
             if skip_existing and not force_reprocess:
@@ -801,7 +813,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             if not embedding_ok:
                 # Persist failed record for later retry BEFORE returning
                 try:
-                    failed_path = Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
+                    failed_path = (
+                        Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
+                    )
                     failed_payload = {
                         "record_id": record.record_id,
                         "title": record.title,
@@ -832,6 +846,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             current_timestamp = datetime.now().isoformat()
             try:
                 from buttermilk._core.dmrc import get_bm
+
                 bm = get_bm()
                 run_id = bm.run_info.run_id if bm and bm.run_info else None
             except:
@@ -862,7 +877,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 chunk_type = chunk.metadata.get("chunk_type", "content")
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
 
-            logger.info(f"✅ [VECTORIZER-{record.record_id}] Successfully processed: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms")
+            logger.info(
+                f"✅ [VECTORIZER-{record.record_id}] Successfully processed: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms"
+            )
 
             return ProcessingResult(
                 record=record,
@@ -1010,7 +1027,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         if validation_results["conflicts"]:
             validation_results["safe_to_add"] = False
 
-        logger.info(f"📋 Validation complete: {validation_results['stats']['would_process']} new, {validation_results['stats']['would_skip']} existing, {len(validation_results['conflicts'])} conflicts")
+        logger.info(
+            f"📋 Validation complete: {validation_results['stats']['would_process']} new, {validation_results['stats']['would_skip']} existing, {len(validation_results['conflicts'])} conflicts"
+        )
 
         return validation_results
 
@@ -1074,7 +1093,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         failed_count = 0
         failed_records = []
 
-        force_reprocess = (mode == "force")
+        force_reprocess = mode == "force"
 
         logger.info(f"🏭 Processing batch of {len(records)} records (mode: {mode})")
 
@@ -1097,14 +1116,18 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
                     # Check failure threshold
                     if failed_count > max_failures:
-                        logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
+                        logger.error(
+                            f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}"
+                        )
                         # Mark remaining records as failed
                         remaining = len(records) - (i + 1)
                         failed_count += remaining
-                        failed_records.extend([
-                            (records[j].record_id, "batch stopped due to failures")
-                            for j in range(i + 1, len(records))
-                        ])
+                        failed_records.extend(
+                            [
+                                (records[j].record_id, "batch stopped due to failures")
+                                for j in range(i + 1, len(records))
+                            ]
+                        )
                         break
 
             except Exception as e:
@@ -1114,12 +1137,16 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
                 # Check failure threshold
                 if failed_count > max_failures:
-                    logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
+                    logger.error(
+                        f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}"
+                    )
                     break
 
         processing_time_ms = (time.time() - start_time) * 1000
 
-        logger.info(f"✅ Batch processing complete: {successful_count} processed, {skipped_count} skipped, {failed_count} failed in {processing_time_ms:.1f}ms")
+        logger.info(
+            f"✅ Batch processing complete: {successful_count} processed, {skipped_count} skipped, {failed_count} failed in {processing_time_ms:.1f}ms"
+        )
 
         return BatchProcessingResult(
             total_records=len(records),
@@ -1138,7 +1165,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     def _get_embeddings_cache_path(self, record: Record) -> Path:
         """Get the path to the embeddings cache file for a record.
-        
+
         Returns the cache file path using the configured embeddings cache directory.
         """
         cache_dir = Path(self.embeddings_cache_dir)
@@ -1147,7 +1174,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def _save_embeddings_to_cache(self, record: Record) -> bool:
         """Save embeddings to cache file.
-        
+
         Returns True if successfully saved, False otherwise.
         """
         cache_path = self._get_embeddings_cache_path(record)
@@ -1167,7 +1194,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     chunk_data = {
                         "chunk_id": chunk.chunk_id,
                         "chunk_index": chunk.chunk_index,
-                        "embedding": convert_numpy_to_list(chunk.embedding)  # Ensure it's regular Python list
+                        "embedding": convert_numpy_to_list(chunk.embedding),  # Ensure it's regular Python list
                     }
                     embeddings_data["chunks"].append(chunk_data)
 
@@ -1206,7 +1233,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # Check if we have the right number of chunks
             cached_chunks = embeddings_data.get("chunks", [])
             if len(cached_chunks) != len(record.chunks):
-                logger.debug(f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}")
+                logger.debug(
+                    f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}"
+                )
                 return False
 
             # Load embeddings into chunks
@@ -1235,7 +1264,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
         """Generate embeddings for a list of chunks in place.
-        
+
         Returns:
             bool: True if at least one embedding succeeded AND no hard failure.
 
@@ -1319,16 +1348,20 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Process in batches to respect embedding_batch_size and improve error recovery
         for start in range(0, len(texts), batch_size):
-            batch_texts = texts[start:start + batch_size]
-            batch_indices = indices[start:start + batch_size]
+            batch_texts = texts[start : start + batch_size]
+            batch_indices = indices[start : start + batch_size]
 
             try:
                 if self._retry_wrapper:
-                    batch_embeddings = await self._retry_wrapper._execute_with_retry(lambda: _run_embed_batch(batch_texts))
+                    batch_embeddings = await self._retry_wrapper._execute_with_retry(
+                        lambda: _run_embed_batch(batch_texts)
+                    )
                 else:
                     batch_embeddings = await _run_embed_batch(batch_texts)
             except Exception as e:  # All retries exhausted or non-retryable error surfaced
-                logger.error(f"Embedding batch failed after retries (indices {batch_indices[0]}..{batch_indices[-1]}): {e}")
+                logger.error(
+                    f"Embedding batch failed after retries (indices {batch_indices[0]}..{batch_indices[-1]}): {e}"
+                )
                 # Convert embedding-specific errors; may raise RateLimit to be handled upstream
                 try:
                     self._convert_embedding_errors(e)
@@ -1367,6 +1400,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """Compute a stable content hash for deduplication (content + minimal metadata)."""
         import hashlib
         import json
+
         raw_text = self._extract_raw_text(record)
         # Include a shallow, deterministic subset of metadata that might affect semantics
         meta = {}
@@ -1673,7 +1707,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
                 )
                 try:
-                    failed_doc_filename = Path(bm.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                    failed_doc_filename = (
+                        Path(bm.save_dir)
+                        / Path(FAILED_BATCH_DIR)
+                        / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                    )
                     logger.info(
                         f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                     )
@@ -1694,6 +1732,31 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.info(f"🔄 Performed batch sync after processing {successful_docs_upserted} documents")
 
         return successful_docs_upserted, failed_docs_upserted
+
+    def count_unique_original_documents(self, identifier_metadata_key: str = "document_id") -> int:
+        """
+        Returns the number of unique original documents in a ChromaDB collection,
+        assuming chunks are linked via a specified metadata key.
+
+        Args:
+            identifier_metadata_key: The key in the document's metadata that
+                                    uniquely identifies the original document
+                                    (e.g., 'original_document_id', 'source').
+
+        Returns:
+            The number of unique original documents.
+        """
+        # We only need the metadata to count unique documents.
+        results = self.collection.get(include=["metadatas"])
+
+        # Extract the unique document identifiers from the metadata
+        unique_doc_identifiers = set()
+        for metadata in results["metadatas"]:
+            if metadata and identifier_metadata_key in metadata:
+                unique_doc_identifiers.add(metadata[identifier_metadata_key])
+
+        # Return the count of unique identifiers
+        return len(unique_doc_identifiers)
 
 
 # --- Async Pipeline Stages ---
@@ -1941,6 +2004,7 @@ class DocProcessor(BaseModel):
         except Exception as e:
             logger.error(f"Stage '{self._name}' aborted: {e}")
 
+
 # --- Main Execution ---
 
 
@@ -2074,10 +2138,12 @@ def main(cfg) -> None:
                     stats["failed"] += 1
 
                 pbar.update(1)
-                pbar.set_postfix({
-                    "processed": stats["embedded"],
-                    "failed": stats["failed"],
-                })
+                pbar.set_postfix(
+                    {
+                        "processed": stats["embedded"],
+                        "failed": stats["failed"],
+                    }
+                )
 
                 if stats["embedded"] >= max_docs:
                     logger.info(f"Reached document limit: {max_docs}")
@@ -2093,6 +2159,7 @@ def main(cfg) -> None:
             # Print summary statistics
             duration = time.time() - start_time
             final_count = vectoriser.collection.count()
+            final_docs = vectoriser.collection.count_documents()
 
             logger.info("\n" + "=" * 50)
             logger.info("📊 PROCESSING SUMMARY")
@@ -2103,6 +2170,7 @@ def main(cfg) -> None:
             logger.info(f"Time elapsed: {duration:.1f} seconds")
             logger.info(f"Processing rate: {stats['total'] / duration:.1f} docs/second")
             logger.info(f"Total embeddings in collection: {final_count} (added {final_count - existing_count})")
+            logger.info(f"Unique original documents in collection: {final_docs}")
             logger.info("=" * 50)
 
             if interrupted:
