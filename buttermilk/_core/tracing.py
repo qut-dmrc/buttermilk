@@ -1,11 +1,12 @@
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
+from buttermilk import get_bm, logger
+
 # Buttermilk core imports
 from buttermilk._core.contract import (
     AgentInput,
 )
-from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.retry import RetryWrapper
 
 
@@ -31,6 +32,7 @@ async def get_parent_call_weave(
 
     async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
         """Retry getting weave call to handle async upload timing."""
+        bm = get_bm()
         return bm.weave.get_call(call_id)
 
     # Use RetryWrapper with shorter delays for weave call retrieval

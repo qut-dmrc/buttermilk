@@ -17,7 +17,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "+flows=[trans,zot,osb,frame]",
+        "+flows=[trans,zot,osb]",
         "+run=api",
         "verbose=true",
         "llms=${input:llms}",
