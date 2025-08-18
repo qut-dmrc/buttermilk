@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 ARG APP_PATH="/src/buttermilk" 
 ARG VENV_PATH="${APP_PATH}/.venv"
 
@@ -43,7 +44,11 @@ COPY ./deploy/requirements.txt /tmp/requirements.txt
 
 # Download packages to /wheels directory to be used in the next stage
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip download -r /tmp/requirements.txt -o /wheels
+    mkdir -p /wheels && \
+    # Exclude the local editable package (-e .) from the download set, since the source
+    # isn't present in this stage. We'll install it later in the final stage.
+    sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt && \
+    uv pip download -r /tmp/requirements.noe.txt -o /wheels
 
 
 #############################################################
