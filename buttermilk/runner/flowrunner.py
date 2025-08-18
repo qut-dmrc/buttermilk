@@ -336,7 +336,9 @@ class FlowRunContext(BaseModel):
                     pass
 
             websocket_state = self.websocket.client_state if self.websocket else "None"
-            logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected (state: {websocket_state}). {e}")
+            logger.debug(
+                f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected (state: {websocket_state}). {e}"
+            )
 
 
 class OrchestratorFactory:

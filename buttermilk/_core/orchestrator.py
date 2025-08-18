@@ -18,7 +18,6 @@ orchestration strategy (e.g., a linear sequence, a graph-based execution, or
 an Autogen-based multi-agent conversation).
 """
 
-import os
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
@@ -338,37 +337,53 @@ class Orchestrator(OrchestratorProtocol, ABC):
         display_name = request.name
         logger.info(f"Starting run for orchestrator flow {display_name}.")
 
-        if bm.weave:
-            # Define attributes for logging and tracing.
-            weave.init(
-                project_name=f"{os.environ['WANDB_ENTITY']}/{self.name}",
-                autopatch_settings={"autogen": {"enabled": False}},
-            )
-            op = weave.op(self.run, call_display_name=display_name)
-            logger.debug(f"Creating Weave call for orchestrator '{self.name}' with display name '{display_name}'.")
+        # Precompute inputs for potential tracing and safe logging later
+        try:
             inputs = clean_empty_values(request.model_dump(mode="json", exclude={"tracing_attributes"}))
-            orchestrator_trace = weave.get_client().create_call(
-                op,
-                inputs=inputs,
-                display_name=display_name,
-                attributes=request.tracing_attributes,
-            )
+        except Exception:
+            inputs = {}
+
+        orchestrator_trace = None
+        op = None
+        _weave_mod = None  # Holds the lazily imported weave module if available
+
+        if bm.weave:
+            try:
+                op = weave.op(self.run, call_display_name=display_name)
+                logger.debug(f"Creating Weave call for orchestrator '{self.name}' with display name '{display_name}'.")
+                orchestrator_trace = bm.weave.create_call(
+                    op,
+                    inputs=inputs,
+                    display_name=display_name,
+                    attributes=request.tracing_attributes,
+                )
+            except Exception as e:
+                # Disable Weave for this run if anything goes wrong
+                logger.warning(f"Weave initialization disabled for this run due to error: {e!s}")
+                _weave_mod = None
+                orchestrator_trace = None
+                op = None
 
         try:
-            # Execute the core run logic.
             logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
             await self._run(request=request)
-            logger.highlight(
-                f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}"
-            )
+            # Log success, attach trace URL if present
+            msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
+            if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
+                msg += f" Tracing link: {orchestrator_trace.ui_url}"
+            logger.highlight(msg)
         except Exception as e:
             logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
-            # Optionally re-raise or handle the error further.
-            # For now, it's logged, and the trace will be finalized.
         finally:
-            # Ensure the Weave call is marked as finished, regardless of success or failure.
-            if bm.weave:
-                bm.weave.finish_call(orchestrator_trace, op=op)
+            # Finish trace if it was created and a finisher is available
+            if orchestrator_trace is not None:
+                try:
+                    if hasattr(bm, "weave") and hasattr(getattr(bm, "weave"), "finish_call"):
+                        bm.weave.finish_call(orchestrator_trace, op=op)
+                    elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
+                        _weave_mod.finish_call(orchestrator_trace, op=op)
+                except Exception as e:
+                    logger.debug(f"Weave finish_call failed or is unavailable: {e!s}")
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:

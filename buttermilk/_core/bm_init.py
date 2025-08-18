@@ -792,6 +792,7 @@ class BM(BaseModel):
 
         logger.debug(f"WANDB credentials configured: API_KEY=*****, ENTITY={wandb_entity}")
 
+    @property
     def weave(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client for tracing."""
         return None  # weave.get_client()

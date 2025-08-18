@@ -384,51 +384,58 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         result: AgentOutput | None = None  # Ensure result is defined for finally block
         tracing_link: str | None = None
+        # Initialize parent_call for tracing with just an ID; enrich later if we are using Weave
+        parent_call = None
+        child_call = None  # Initialize child_call for tracing
 
         # --- Tracing ---
         trace_params = {
             "name": self.agent_name,
-            "model": self._cfg.parameters.get("model"),
-            **message.parameters,
-            **message.metadata,
-            **self.parameters,
+            "model": (self._cfg.parameters or {}).get("model"),
+            **(message.parameters or {}),
+            **(message.metadata or {}),
+            **(self.parameters or {}),
         }
-
-        process_op = weave.op(self._process, call_display_name=self.agent_name)
-        parent_call = await get_parent_call_weave(message)
-
-        child_call = bm.weave.create_call(
-            process_op,
-            inputs=message.model_dump(mode="json"),
-            parent=parent_call,
-            display_name=self.agent_name,
-            attributes=trace_params,
-        )
-
-        if parent_call is not None:
-            parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")
-            result, _call = await process_op.call(message=message)
-            # result = await self._process(message=message)
+
+            if bm.weave:
+                process_op = weave.op(self._process, call_display_name=self.agent_name)
+                parent_call = await get_parent_call_weave(message)
+
+                child_call = bm.weave.create_call(
+                    process_op,
+                    inputs=message.model_dump(mode="json"),
+                    parent=parent_call,
+                    display_name=self.agent_name,
+                    attributes=trace_params,
+                )
+
+                if parent_call is not None:
+                    parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
+
+                # If the agent is running in a Weave context, we can use the process_op
+                result, _call = await process_op.call(message=message)
+            else:
+                # Run without weave tracing
+                result = await self._process(message=message)
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
             # Create an ErrorEvent to capture the error
             err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-            result = AgentOutput(agent_id=self.agent_id, outputs=None, call_id=child_call.id, error=[err_result])
+            result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
         finally:
             # Mark the child call as complete, regardless of success or failure.
             # Output is passed to bm.weave.finish_call if result is not None
-            bm.weave.finish_call(child_call, output=result or None, op=process_op)
-
+            if bm.weave and child_call:
+                bm.weave.finish_call(child_call, output=result or None, op=process_op)
+                tracing_link = child_call.ui_url
             # TODO: try to force and wait for upload to weave here, so that we can get the trace link
 
         # --- Turn the result into AgentTrace for long-term storage ---
-        if hasattr(child_call, "ui_url"):
-            tracing_link = child_call.ui_url
-
         # Handle case where _process returns None (e.g., UI agents that don't produce output)
+        # This doesn't include errors or null results since they are captured in the AgentOutput
         if result is None:
             return None
 
@@ -436,8 +443,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # values directly from Weave.
         trace = AgentTrace.from_output(
             result,
-            parent_call_id=parent_call.id if parent_call else None,
-            call_id=child_call.id,
+            parent_call_id=parent_call.id if parent_call else message.parent_call_id,
+            call_id=child_call.id if child_call else result.call_id,
             inputs=message,
             agent_info=self._cfg,
             tracing_link=tracing_link,

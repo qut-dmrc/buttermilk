@@ -13,6 +13,9 @@ from buttermilk._core.retry import RetryWrapper
 async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
+    if get_bm().weave is None:
+        logger.warning("Weave client is not initialized, cannot retrieve parent call.")
+        return None
     current_call = weave.get_current_call()
 
     if message is None or message.parent_call_id is None:
