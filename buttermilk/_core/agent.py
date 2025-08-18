@@ -398,7 +398,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         }
 
         try:
-            logger.debug(f"Invoking Agent {self.agent_id} with call ID {child_call.id} and args: {message}")
+            logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
 
             if bm.weave:
                 process_op = weave.op(self._process, call_display_name=self.agent_name)
