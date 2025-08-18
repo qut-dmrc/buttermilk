@@ -4,16 +4,12 @@ ARG VENV_PATH="${APP_PATH}/.venv"
 
 ################################
 # PYTHON-BASE
-# Sets up all our shared environment variables
 ################################
 FROM python:3.11-slim-bookworm AS python-base
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1 \
-    # prevents python creating .pyc files
     PYTHONDONTWRITEBYTECODE=1 \
-    \
-    # pip
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
     PIP_CACHE_DIR=/tmp/pip_cache
@@ -21,46 +17,44 @@ ENV PYTHONUNBUFFERED=1 \
 # Set the timezone to Australia/Brisbane
 RUN ln -sf /usr/share/zoneinfo/Australia/Brisbane /etc/localtime && \
     echo "Australia/Brisbane" | tee /etc/timezone
-    
-RUN apt update && apt install -y --no-install-recommends --upgrade curl less wget gnupg apt-transport-https ca-certificates ssh git build-essential python3-dev 
+
+# Base runtime deps only  
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl less wget gnupg apt-transport-https ca-certificates ssh git \
+    && rm -rf /var/lib/apt/lists/*
 
 ##### INSTALL NODE.JS AND NPM #######
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
-    apt-get install -y nodejs
+    apt-get update && apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 ##### INSTALL UV #######
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ################################
 # BUILDER-BASE
-# Used to build deps + create our virtual environment
 ################################
 FROM python-base AS builder-base
 WORKDIR /src
 
-##### COPY REQUIREMENTS FOR LATER USE #####
-# Copy only the files required to install dependencies, so we separate out the layers for docker
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements to leverage layer caching
 COPY ./deploy/requirements.txt /tmp/requirements.txt
 
-# Exclude the local editable package (-e .) from the download set, since the source
-# isn't present in this stage. We'll install it later in the final stage.
+# Exclude editable -e . (source not present in this stage)
 RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt
 
-# Dependencies don't change very often, so we try to cache 
-# packages to speed up build time when the source changes.
-# Download packages to /wheels directory to be used in the next stage
-RUN mkdir -p /wheels && \
+# Prefetch/build wheels to speed up final install
+RUN --mount=type=cache,target=/root/.cache/pip \
+    mkdir -p /wheels && \
     python -m pip wheel -r /tmp/requirements.noe.txt -w /wheels
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    mkdir -p /wheels && \
-    sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt && \
-    uv pip install --download /wheels -r /tmp/requirements.noe.txt --only-binary=:all:
-
-
-#############################################################
-##### CREATE BASE IMAGE WITH USER, SOURCE, DEPENDENCIES #####
-#############################################################
+################################
+# FINAL
+################################
 FROM python-base AS buttermilk
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -69,28 +63,24 @@ ARG APP_PATH
 ARG VENV_PATH
 
 RUN mkdir -p ${APP_PATH}
-
 WORKDIR ${APP_PATH}
 
-##### COPY VENV AND SOURCE REPOSITORIES IN FULL #######
-# Copy source from build context (repository root)
+# Copy source
 COPY . ${APP_PATH}
-WORKDIR ${APP_PATH}
 
-# Copy wheels from builder-base
+# Copy wheelhouse
 COPY --link --from=builder-base /wheels /wheels
 
-# Create venv and install from wheels
+# Create venv and install; prefer wheels, allow network fallback
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv ${VENV_PATH} --seed && \
     . ${VENV_PATH}/bin/activate && \
     uv pip sync ./deploy/requirements.txt --find-links /wheels
 
-# Clean up wheels
+# Clean up wheelhouse
 RUN rm -rf /wheels
 
-# prepend venv to path
+# Prepend venv to PATH
 ENV PATH="$VENV_PATH/bin:$PATH"
-
 
 CMD ["bash", "-c", "${APP_PATH}/deploy/startapi.sh", "${FLOW_PARAMS}"]
