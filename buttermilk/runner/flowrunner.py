@@ -300,6 +300,10 @@ class FlowRunContext(BaseModel):
             logger.debug(f"Unhandled message type: {type(message)}, not forwarding to UI.")
             return
 
+        if self.websocket is None:
+            logger.debug(f"WebSocket not connected for session {self.session_id}, cannot send message.")
+            return
+
         try:
             message_type = formatted_message.type
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
@@ -335,10 +339,8 @@ class FlowRunContext(BaseModel):
                 except Exception:
                     pass
 
-            websocket_state = self.websocket.client_state if self.websocket else "None"
-            logger.debug(
-                f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected (state: {websocket_state}). {e}"
-            )
+            websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
+            logger.warning(f"Cannot send error notification to UI for session {self.session_id} (websocket state: {websocket_state}). {e}")
 
 
 class OrchestratorFactory:

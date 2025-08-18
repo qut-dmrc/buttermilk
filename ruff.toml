@@ -1,14 +1,28 @@
 
+line-length = 150
+target-version = "py311"
+extend-include = ["*.ipynb"]
+
 [lint]
 select = ["E", "F", "W", "Q", "I", "PL"]
-extend-ignore = [
-    "RET504",
-    "RET503",
-    "E501",
-    "TRY003",
-    "D401",
-    "EM101",
-    "RET505",
-    "PLR0904",
-    "PLR1702",
+ignore = [
+    "RET504",  # Unnecessary variable assignment before return
+    "RET503",  # Multiple returns 
+    "E501",    # Line too long 
+    "TRY003", 
+    "D401",     # First line of docstring must be in imperative mood
+    "EM101",   # No f-strings or string literals in exceptions
+    "RET505",  # Unnecessary else after return
+    "PLR0904",  # Too many public methods
+    "PLR0915",  # Too many public methods
+    "W293", # ?
 ]
+
+[lint.isort]
+combine-as-imports = true
+known-first-party = ["buttermilk"]
+ 
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

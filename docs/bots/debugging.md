@@ -64,7 +64,7 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 
 *   **Send a Message to a Flow:**
     ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli send "what is digital constitutionalism?" --session <session_id>
+    uv run python -m buttermilk.debug.ws_debug_cli send "what is digital constitutionalism?" --session <session_id> [--wait <seconds>]
     ```
 
 *   **Wait for/Monitor Messages:**
