@@ -5,11 +5,17 @@ on:
     branches:
       - stable
       - dev
+  pull_request:
+    branches: [dev, stable]
   workflow_dispatch: # Allows manual triggering of the workflow
 
 permissions:
   id-token: write
   contents: read
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-push:
@@ -36,14 +42,6 @@ jobs:
       - name: Register gcloud as a Docker credential helper
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
         
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-docker-${{ hashFiles('deploy/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-docker-
-
       - name: Set Docker tag
         id: docker_tag
         run: |
@@ -56,13 +54,19 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          push: true
+          # (no push on PRs)
+          push: ${{ github.event_name == 'push' }}
+          # Attestations/SBOM can slow builds and require push; disable by default
+          provenance: false
+          sbom: false
+          platforms: linux/amd64
           file: ./deploy/Dockerfile
           tags: |
             us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:${{ steps.docker_tag.outputs.branch_tag }}
             us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:${{ steps.docker_tag.outputs.branch_tag }}-${{ github.sha }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
 
 
 

@@ -22,7 +22,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN ln -sf /usr/share/zoneinfo/Australia/Brisbane /etc/localtime && \
     echo "Australia/Brisbane" | tee /etc/timezone
     
-RUN apt update && apt install -y --no-install-recommends --upgrade curl less wget gnupg apt-transport-https ca-certificates ssh git
+RUN apt update && apt install -y --no-install-recommends --upgrade curl less wget gnupg apt-transport-https ca-certificates ssh git build-essential python3-dev 
 
 ##### INSTALL NODE.JS AND NPM #######
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
@@ -42,13 +42,20 @@ WORKDIR /src
 # Copy only the files required to install dependencies, so we separate out the layers for docker
 COPY ./deploy/requirements.txt /tmp/requirements.txt
 
+# Exclude the local editable package (-e .) from the download set, since the source
+# isn't present in this stage. We'll install it later in the final stage.
+RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt
+
+# Dependencies don't change very often, so we try to cache 
+# packages to speed up build time when the source changes.
 # Download packages to /wheels directory to be used in the next stage
+RUN mkdir -p /wheels && \
+    python -m pip wheel -r /tmp/requirements.noe.txt -w /wheels
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     mkdir -p /wheels && \
-    # Exclude the local editable package (-e .) from the download set, since the source
-    # isn't present in this stage. We'll install it later in the final stage.
     sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt && \
-    uv pip download -r /tmp/requirements.noe.txt -o /wheels
+    uv pip install --download /wheels -r /tmp/requirements.noe.txt --only-binary=:all:
 
 
 #############################################################
@@ -74,9 +81,10 @@ WORKDIR ${APP_PATH}
 COPY --link --from=builder-base /wheels /wheels
 
 # Create venv and install from wheels
-RUN uv venv ${VENV_PATH} --seed && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv ${VENV_PATH} --seed && \
     . ${VENV_PATH}/bin/activate && \
-    uv pip sync ./deploy/requirements.txt --find-links /wheels --no-index
+    uv pip sync ./deploy/requirements.txt --find-links /wheels
 
 # Clean up wheels
 RUN rm -rf /wheels
