@@ -241,8 +241,9 @@ class BM(BaseModel):
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
-    _initialization_complete: asyncio.Event = PrivateAttr(default=None)
+    _initialization_complete: asyncio.Event = PrivateAttr(default=asyncio.Event())
     _initialization_error: Exception | None = PrivateAttr(default=None)
+    _tracing_istrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -302,7 +303,6 @@ class BM(BaseModel):
         """
         super().__init__(**data)
 
-        self._initialization_complete = asyncio.Event()
         self._initialization_error: Exception | None = None
 
         self._post_init_setup()
@@ -316,6 +316,7 @@ class BM(BaseModel):
         - Saving the initial configuration to a JSON file in `save_dir`.
         - Starting an asynchronous task to fetch the machine's IP address.
         - Logging into configured cloud providers.
+        - Set up tracing (Otel, Weave, etc.) if configured.
 
         Note: Logger configuration validation is now handled by Pydantic model validators
         in CloudProviderCfg, providing early validation with better error messages.
@@ -342,7 +343,6 @@ class BM(BaseModel):
         This extracts the environment variable setup from CloudManager
         to ensure they're available before any cloud operations.
         """
-        import os
 
         if not self.clouds:
             return
@@ -493,9 +493,45 @@ class BM(BaseModel):
         """
         if self._cloud_manager is None:
             self._cloud_manager = CloudManager(clouds=self.clouds)
-            # Perform cloud login and tracing setup on first access
+            # Perform cloud login setup on first access
             self._ensure_cloud_authentication()
+
         return self._cloud_manager
+
+    async def _setup_tracing(self) -> None:
+        """Set up tracing based on the configured tracing settings.
+
+        This method is called during initialization to set up tracing
+        systems like OpenTelemetry or Weave, depending on the configuration.
+        """
+        return
+        if self.tracing and self.tracing.enabled and not self._tracing_istrumented.is_set():
+            # We disable weave autopatching for Autogen because it's too noisy and slow
+            # We will instead trace manually.
+
+            collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
+            # Retrieve necessary credentials before initializing Weave.
+            # This is necessary because otherwise Weave will interactive authentication.
+            self._setup_weave_credentials()
+            autopatch = {"autogen": {"enabled": False}}
+            logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
+            # Weave project HAS to be in the format "entity/collection_name"
+            # weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
+            # logger.info("Weave initialized successfully")
+
+            logger.debug("Attempting to start Traceloop client with app_name 'buttermilk'")
+
+            from traceloop.sdk import Traceloop
+
+            Traceloop.init(app_name="buttermilk")
+            logger.info("Traceloop initialized.")
+
+            # Setup other Otel tracing if configured
+            from buttermilk.utils.otel import setup_tracing_otel
+
+            setup_tracing_otel(self.tracing)
+            self._tracing_istrumented.set()  # Mark tracing as set up
+            logger.debug("Tracing has been set up successfully")
 
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
@@ -568,6 +604,7 @@ class BM(BaseModel):
                 raise RuntimeError("BM.secret_provider configuration is missing, cannot initialize SecretsManager.")
             # Pass the model directly, SecretsManager will handle unpacking if needed
             self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
+            logger.debug("SecretsManager initialized successfully")
         return self._secret_manager
 
     @cached_property
@@ -731,72 +768,33 @@ class BM(BaseModel):
         Environment variables are set so that weave.init() can authenticate without
         requiring interactive login.
         """
-        import os
 
         # Check if credentials are already set in environment
         wandb_api_key = os.getenv("WANDB_API_KEY")
-        wandb_project = os.getenv("WANDB_PROJECT")
         wandb_entity = os.getenv("WANDB_ENTITY")
 
         # If not found in environment, try to load from secrets
-        if not wandb_api_key or not wandb_project:
+        if not wandb_api_key or not wandb_entity:
             try:
-                # Try to get WANDB credentials from the existing credential system
                 creds = self.credentials
-                if creds:
-                    if not wandb_api_key and "WANDB_API_KEY" in creds:
-                        wandb_api_key = creds["WANDB_API_KEY"]
-                        os.environ["WANDB_API_KEY"] = wandb_api_key
-                        logger.debug("Loaded WANDB_API_KEY from secret manager")
+                if not wandb_api_key:
+                    wandb_api_key = creds["WANDB_API_KEY"]
+                    os.environ["WANDB_API_KEY"] = wandb_api_key
+                    logger.debug("Loaded WANDB_API_KEY from secret manager")
 
-                    if not wandb_project and "WANDB_PROJECT" in creds:
-                        wandb_project = creds["WANDB_PROJECT"]
-                        os.environ["WANDB_PROJECT"] = wandb_project
-                        logger.debug("Loaded WANDB_PROJECT from secret manager")
-
-                    if not wandb_entity and "WANDB_ENTITY" in creds:
-                        wandb_entity = creds["WANDB_ENTITY"]
-                        os.environ["WANDB_ENTITY"] = wandb_entity
-                        logger.debug("Loaded WANDB_ENTITY from secret manager")
+                if not wandb_entity:
+                    wandb_entity = creds["WANDB_ENTITY"]
+                    os.environ["WANDB_ENTITY"] = wandb_entity
+                    logger.debug("Loaded WANDB_ENTITY from secret manager")
 
             except Exception as e:
                 logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
 
-        # Log credential status (without exposing the actual API key)
-        if wandb_api_key:
-            logger.debug(f"WANDB credentials configured: API_KEY=*****, PROJECT={wandb_project}, ENTITY={wandb_entity}")
-        else:
-            logger.debug("No WANDB credentials found - weave will try default authentication or fail gracefully")
+        logger.debug(f"WANDB credentials configured: API_KEY=*****, ENTITY={wandb_entity}")
 
-    @cached_property
     def weave(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client for tracing.
-
-        Initializes Weave with a collection name derived from `self.name` (flow name)
-        and `self.job` (job name). Sets up credentials from environment variables or
-        secret manager before initialization to avoid interactive login flows.
-        Handles connection failures gracefully by falling back to a mock client.
-
-        Returns:
-            Any: The initialized Weave client instance, or a mock client if initialization fails.
-
-        """
-        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
-
-        # Retrieve necessary credentials from the global Buttermilk instance.
-        # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
-        creds = self.credentials
-
-        if not os.getenv("WANDB_API_KEY"):
-            os.environ["WANDB_API_KEY"] = creds["WANDB_API_KEY"]
-            os.environ["WANDB_PROJECT"] = creds["WANDB_PROJECT"]
-
-        # client = weave.init(collection_name)
-        # We disable weave autopatching for Autogen because it's too noisy and slow
-        # We will instead trace manually.
-        client = weave.init(collection_name, autopatch_settings={"autogen": {"enabled": False}})
-        logger.debug("Weave initialized successfully")
-        return client
+        """Provide access to the Weights & Biases Weave client for tracing."""
+        return None  # weave.get_client()
 
     @property
     def credentials(self) -> dict[str, str]:
@@ -813,6 +811,7 @@ class BM(BaseModel):
 
         """
         if self._credentials_cached is None:
+            logger.debug("Fetching shared credentials from secret manager...")
             creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
             if not isinstance(creds, dict):
                 raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")

@@ -11,7 +11,10 @@
       "consoleName": "Buttermilk Daemon",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
+      "python": "uv",
       "pythonArgs": [
+        "run",
+        "python",
         "-Xfrozen_modules=off",
         "-Xdev"
       ],

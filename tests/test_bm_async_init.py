@@ -7,9 +7,8 @@ This test verifies that:
 4. GCS save_dir is properly set from config
 """
 
-import asyncio
-import tempfile
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch
+
 import pytest
 
 from buttermilk._core.bm_init import BM
@@ -37,7 +36,7 @@ def mock_logger_config():
     }
 
 
-@pytest.fixture 
+@pytest.fixture
 def mock_secret_config():
     """Create mock secret provider configuration."""
     return CloudProviderCfg(
@@ -54,9 +53,11 @@ class TestBMAsyncInitialization:
     @pytest.mark.anyio
     async def test_initialization_completes_before_use(self, mock_cloud_config, mock_logger_config, mock_secret_config):
         """Test that ensure_initialized waits for background tasks."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init.SecretsManager'), \
-             patch('buttermilk._core.bm_init.logger') as mock_logger:
+        with (
+            patch("buttermilk._core.bm_init.CloudManager"),
+            patch("buttermilk._core.bm_init.SecretsManager"),
+            patch("buttermilk._core.bm_init.logger") as mock_logger,
+        ):
 
             # Create BM instance with GCS save_dir
             bm = BM(
@@ -70,8 +71,8 @@ class TestBMAsyncInitialization:
             )
 
             # Verify initialization event is created
-            assert hasattr(bm, '_initialization_complete')
-            assert hasattr(bm, '_initialization_error')
+            assert hasattr(bm, "_initialization_complete")
+            assert hasattr(bm, "_initialization_error")
 
             # Wait for initialization
             await bm.ensure_initialized()
@@ -81,19 +82,19 @@ class TestBMAsyncInitialization:
             assert mock_logger.info.called
 
             # Verify save_dir includes GCS path
-            assert bm.save_dir.startswith("gs://test-bucket/runs")
-            assert "test/test-job" in bm.save_dir
+            assert bm.run_info.save_dir.startswith("gs://test-bucket/runs")
+            assert "test/test-job" in bm.run_info.save_dir
 
     @pytest.mark.anyio
     async def test_initialization_error_handling(self, mock_cloud_config):
         """Test that initialization errors are properly propagated."""
-        with patch('buttermilk._core.bm_init.CloudManager') as mock_cloud_manager:
+        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud_manager:
             # Make cloud manager raise an error
             mock_cloud_manager.side_effect = Exception("Cloud auth failed")
 
             bm = BM(
                 platform="test",
-                name="test", 
+                name="test",
                 job="test-job",
                 clouds=[mock_cloud_config],
             )
@@ -104,16 +105,18 @@ class TestBMAsyncInitialization:
 
     def test_sync_initialization_fallback(self, mock_cloud_config, mock_secret_config):
         """Test synchronous initialization when no event loop is running."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init.SecretsManager'), \
-             patch('buttermilk._core.bm_init.logger') as mock_logger, \
-             patch('asyncio.get_event_loop', side_effect=RuntimeError("No event loop")):
+        with (
+            patch("buttermilk._core.bm_init.CloudManager"),
+            patch("buttermilk._core.bm_init.SecretsManager"),
+            patch("buttermilk._core.bm_init.logger") as mock_logger,
+            patch("asyncio.get_event_loop", side_effect=RuntimeError("No event loop")),
+        ):
 
             # Create BM instance - should fall back to sync init
             bm = BM(
                 platform="test",
                 name="test",
-                job="test-job", 
+                job="test-job",
                 save_dir_base="gs://test-bucket/runs",
                 clouds=[mock_cloud_config],
                 secret_provider=mock_secret_config,
@@ -128,7 +131,7 @@ class TestBMAsyncInitialization:
     @pytest.mark.anyio
     async def test_cloud_manager_lazy_initialization(self, mock_cloud_config):
         """Test that cloud manager is initialized on first access."""
-        with patch('buttermilk._core.bm_init.CloudManager') as mock_cloud_manager_class:
+        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud_manager_class:
             mock_instance = Mock()
             mock_cloud_manager_class.return_value = mock_instance
 
@@ -152,8 +155,10 @@ class TestBMAsyncInitialization:
     @pytest.mark.anyio
     async def test_secret_manager_early_initialization(self, mock_secret_config):
         """Test that secret manager is initialized during background init."""
-        with patch('buttermilk._core.bm_init.SecretsManager') as mock_secret_manager_class, \
-             patch('buttermilk._core.bm_init.CloudManager'):
+        with (
+            patch("buttermilk._core.bm_init.SecretsManager") as mock_secret_manager_class,
+            patch("buttermilk._core.bm_init.CloudManager"),
+        ):
 
             mock_instance = Mock()
             mock_secret_manager_class.return_value = mock_instance
@@ -198,15 +203,14 @@ class TestBMAsyncInitialization:
                 os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
 
             if original_quota:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = original_quota  
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = original_quota
             else:
                 os.environ.pop("GOOGLE_CLOUD_QUOTA_PROJECT", None)
 
     @pytest.mark.anyio
     async def test_multiple_ensure_initialized_calls(self):
         """Test that ensure_initialized can be called multiple times safely."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init.SecretsManager'):
+        with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk._core.bm_init.SecretsManager"):
 
             bm = BM(platform="test", name="test", job="test-job")
 

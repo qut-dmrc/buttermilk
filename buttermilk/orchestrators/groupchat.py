@@ -30,6 +30,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import (
     buttermilk as bm,  # Global Buttermilk instance
+)
+from buttermilk import (
     logger,
 )
 from buttermilk._core import (
@@ -145,10 +147,6 @@ class AutogenOrchestrator(Orchestrator):
 
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
-
-        # Set up tracing if configured and enabled
-        from buttermilk.utils.otel import setup_tracing
-        setup_tracing(bm.tracing)
 
         # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
         # From the autogen docs:

@@ -1708,7 +1708,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
                 try:
                     failed_doc_filename = (
-                        Path(bm.save_dir)
+                        Path(bm.run_info.save_dir)
                         / Path(FAILED_BATCH_DIR)
                         / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     )

@@ -18,17 +18,13 @@ orchestration strategy (e.g., a linear sequence, a graph-based execution, or
 an Autogen-based multi-agent conversation).
 """
 
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Self
 
-import shortuuid
-
-try:
-    import weave  # For tracing capabilities
-except ImportError:
-    weave = None
+import weave
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -169,6 +165,7 @@ class OrchestratorProtocol(BaseModel):
                     if isinstance(config, dict):
                         # Use StorageFactory to create proper storage config
                         from buttermilk._core.storage_config import StorageFactory
+
                         try:
                             validated_storage[name] = StorageFactory.create_config(config)
                         except Exception as e:
@@ -270,7 +267,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     logger.error(f"Invalid AgentVariants configuration for role '{role_upper}': {defn}. Error: {e}")
                     raise ValueError(f"Invalid AgentVariants config for role '{role_upper}'") from e
             else:
-                raise TypeError(f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants.")
+                raise TypeError(
+                    f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants."
+                )
         self.agents = validated_agents
         logger.debug(f"Agent roles validated: {list(self.agents.keys())}")
 
@@ -305,6 +304,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
                         # Use StorageFactory to create the proper subclass
                         from buttermilk._core.storage_config import StorageFactory
+
                         try:
                             storage_config = StorageFactory.create_config(config_dict)
                         except Exception as e:
@@ -338,27 +338,37 @@ class Orchestrator(OrchestratorProtocol, ABC):
         display_name = request.name
         logger.info(f"Starting run for orchestrator flow {display_name}.")
 
-        # Get the singleton instance using our new module-level function
-        # Define attributes for logging and tracing.
-        op = weave.op(self._run, call_display_name=display_name)
-        orchestrator_trace = bm.weave.create_call(
-            op,
-            inputs=clean_empty_values(request.model_dump(mode="json", exclude={"tracing_attributes"})),
-            display_name=display_name,
-            attributes=request.tracing_attributes,
-        )
-        
+        if bm.weave:
+            # Define attributes for logging and tracing.
+            weave.init(
+                project_name=f"{os.environ['WANDB_ENTITY']}/{self.name}",
+                autopatch_settings={"autogen": {"enabled": False}},
+            )
+            op = weave.op(self.run, call_display_name=display_name)
+            logger.debug(f"Creating Weave call for orchestrator '{self.name}' with display name '{display_name}'.")
+            inputs = clean_empty_values(request.model_dump(mode="json", exclude={"tracing_attributes"}))
+            orchestrator_trace = weave.get_client().create_call(
+                op,
+                inputs=inputs,
+                display_name=display_name,
+                attributes=request.tracing_attributes,
+            )
+
         try:
             # Execute the core run logic.
+            logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
             await self._run(request=request)
-            logger.highlight(f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}")
+            logger.highlight(
+                f"Orchestrator '{self.name}' run '{request.name}' finished successfully. Tracing link: {orchestrator_trace.ui_url}"
+            )
         except Exception as e:
             logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
             # Optionally re-raise or handle the error further.
             # For now, it's logged, and the trace will be finalized.
         finally:
             # Ensure the Weave call is marked as finished, regardless of success or failure.
-            bm.weave.finish_call(orchestrator_trace, op=op)
+            if bm.weave:
+                bm.weave.finish_call(orchestrator_trace, op=op)
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:
@@ -476,7 +486,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 logger.error(msg)
                 raise FatalError(msg) from e
         else:
-            logger.info("No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list.")
+            logger.info(
+                "No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list."
+            )
 
     async def get_record_dataset(self, record_id: str) -> Record:
         """Retrieves a specific record by its ID from the configured data loaders.
@@ -570,7 +582,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         async def publish_callback(message: FlowMessage) -> None:
             """Default no-op publish callback. Subclasses should implement actual publishing logic."""
-            logger.debug(f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}")
+            logger.debug(
+                f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}"
+            )
             # In a real implementation, this would involve:
             # - Sending the message to connected UI clients (e.g., via WebSockets).
             # - Placing the message on a queue for other services.

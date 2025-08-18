@@ -58,7 +58,7 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 *   **Start a Flow:**
     ```bash
     # Usage: uv run python -m buttermilk.debug.ws_debug_cli start <flow_name> --record <record_id> --criteria <criteria>
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte"
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte" --wait
     ```
     This will return a `session_id` for use in other commands.
 

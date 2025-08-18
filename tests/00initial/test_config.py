@@ -10,8 +10,8 @@ from buttermilk._core import BM
 def test_has_test_info(bm: BM):
     assert bm.run_info.name == "buttermilk"
     assert bm.run_info.job == "testing"
-    assert bm.save_dir is not None
-    assert bm.save_dir != ""
+    assert bm.run_info.save_dir is not None
+    assert bm.run_info.save_dir != ""
 
 
 def test_config_llms(bm: BM):
@@ -20,8 +20,8 @@ def test_config_llms(bm: BM):
 
 
 def test_save_dir(bm: BM):
-    assert "runs/buttermilk/testing/" in bm.save_dir
-    assert AnyPath(bm.save_dir)
+    assert "runs/buttermilk/testing/" in bm.run_info.save_dir
+    assert AnyPath(bm.run_info.save_dir)
 
 
 def test_singleton(bm: BM):
@@ -67,7 +67,7 @@ async def test_get_ip_updates_ip(bm):
 
         # Call the method to start IP fetching task
         bm.start_fetch_ip_task()
-        
+
         # Wait for the task to complete
         if bm._get_ip_task:
             await bm._get_ip_task

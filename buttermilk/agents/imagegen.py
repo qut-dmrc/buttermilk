@@ -61,7 +61,7 @@ class TextToImageClient(RetryWrapper):
     """
     client: object = Field(default=None, description="The underlying API client object for the image generation service.")
     model: str = Field(
-        ..., # Ellipsis indicates a required field
+        ...,  # Ellipsis indicates a required field
         description="The specific model identifier to use for text-to-image generation.",
     )
     prefix: str = Field(description="A short prefix for naming generated image files (e.g., 'dalle3_', 'sdxl_').")
@@ -71,7 +71,7 @@ class TextToImageClient(RetryWrapper):
         text: str,
         save_path: str = "",
         negative_prompt: str = "",
-        filetype: Literal["png"] = "png", # Currently only supports PNG
+        filetype: Literal["png"] = "png",  # Currently only supports PNG
         **kwargs: Any,
     ) -> ImageRecord:
         """Generates an image based on a text prompt using the configured model and client.
@@ -87,7 +87,7 @@ class TextToImageClient(RetryWrapper):
             text: The textual prompt to generate the image from.
             save_path: Optional. The full path (local or cloud) where the generated
                 image should be saved. If empty, a default path is constructed
-                using `bm.save_dir`, the client's `prefix`, a UUID, and `filetype`.
+                using `bm.run_info.save_dir`, the client's `prefix`, a UUID, and `filetype`.
             negative_prompt: Optional. A textual prompt describing elements to avoid
                 in the generated image.
             filetype: The desired filetype for the saved image. Currently defaults
@@ -102,15 +102,17 @@ class TextToImageClient(RetryWrapper):
         """
         final_save_path = save_path
         if not final_save_path:
-            # Ensure bm.save_dir is available and valid
-            if not bm.save_dir or not Path(bm.save_dir).is_dir(): # Check if local dir, cloud paths need different check
-                 # Fallback if bm.save_dir is not set or invalid, consider a temporary directory
+            # Ensure bm.run_info.save_dir is available and valid
+            if (
+                not bm.run_info.save_dir or not Path(bm.run_info.save_dir).is_dir()
+            ):  # Check if local dir, cloud paths need different check
+                # Fallback if bm.run_info.save_dir is not set or invalid, consider a temporary directory
                 import tempfile
                 temp_dir = tempfile.mkdtemp()
-                logger.warning(f"bm.save_dir not available or invalid, using temporary directory: {temp_dir}")
+                logger.warning(f"bm.run_info.save_dir not available or invalid, using temporary directory: {temp_dir}")
                 final_save_path = f"{temp_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
             else:
-                final_save_path = f"{bm.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
+                final_save_path = f"{bm.run_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
 
         log_msg_parts = [
             f"Generating image with {self.model} using prompt: ```{text}```"
@@ -123,14 +125,14 @@ class TextToImageClient(RetryWrapper):
         parameters_for_generation = {
             "text": text,
             "negative_prompt": negative_prompt,
-            **kwargs, # Include any additional model-specific parameters
+            **kwargs,  # Include any additional model-specific parameters
         }
 
         try:
             # _execute_with_retry calls self.generate_image (the subclass implementation)
             generated_image_record = await self._execute_with_retry(
-                self.generate_image, # The method to call with retry
-                **parameters_for_generation, # Arguments for generate_image
+                self.generate_image,  # The method to call with retry
+                **parameters_for_generation,  # Arguments for generate_image
             )
 
             # Ensure generated_image_record is an ImageRecord and has an image
@@ -152,20 +154,20 @@ class TextToImageClient(RetryWrapper):
 
         except Exception as e:
             error_message = f"Error generating image for prompt '{text[:100]}...' using {self.model}: {type(e).__name__} - {e!s}"
-            logger.error(error_message, exc_info=True) # Log with stack trace
+            logger.error(error_message, exc_info=True)  # Log with stack trace
 
             error_details = {
                 "prompt": text,
                 "model": self.model,
                 "message": str(e),
-                "args": [str(arg) for arg in e.args], # Convert args to string
+                "args": [str(arg) for arg in e.args],  # Convert args to string
                 "type": type(e).__name__,
             }
             # Return an ImageRecord indicating failure
             return ImageRecord(
-                image=None, # No image generated
+                image=None,  # No image generated
                 model=self.model,
-                parameters=parameters_for_generation, # Parameters that were attempted
+                parameters=parameters_for_generation,  # Parameters that were attempted
                 error=error_details,
                 prompt=text,
                 negative_prompt=negative_prompt,
@@ -216,9 +218,9 @@ class Imagegen3(TextToImageClient):
     """
     model: str = "imagen-3.0-generate-002"
     prefix: str = "imagen3_"
-    client: genai.GenerativeModel = Field( # Corrected type to GenerativeModel
+    client: genai.GenerativeModel = Field(  # Corrected type to GenerativeModel
         default_factory=lambda: genai.GenerativeModel(
-            model_name=Imagegen3.model, # Use the class's model attribute
+            model_name=Imagegen3.model,  # Use the class's model attribute
             # Assumes genai client is configured globally or bm.credentials provide necessary setup
             # For Vertex, client initialization might need project/location.
             # genai.configure(credentials=bm.gcp_credentials) might be needed elsewhere.
@@ -226,7 +228,7 @@ class Imagegen3(TextToImageClient):
             # The original had genai.Client(vertexai=True, project=..., location=...)
             # but genai.GenerativeModel is the typical interface for specific models.
         ),
-        description="Google Generative AI client for Imagen 3."
+        description="Google Generative AI client for Imagen 3.",
     )
     fast: bool = Field(default=False, description="If True, use a faster model variant (currently illustrative).")
     # TODO: The 'fast' attribute currently doesn't change the model string.
@@ -237,7 +239,7 @@ class Imagegen3(TextToImageClient):
         self,
         text: str,
         negative_prompt: str | None = "",
-        aspect_ratio: str ="3:4", # Default aspect ratio
+        aspect_ratio: str = "3:4",  # Default aspect ratio
         **kwargs: Any,
     ) -> ImageRecord:
         """Generates an image using Google's Imagen 3 model.
@@ -257,27 +259,26 @@ class Imagegen3(TextToImageClient):
         # Consolidate parameters for GenerateImagesConfig
         # Parameters passed in kwargs will override defaults here if names match
         generation_params = {
-            "number_of_images": 1, # Default to 1 image
+            "number_of_images": 1,  # Default to 1 image
             "aspect_ratio": aspect_ratio,
-            "safety_filter_level": "BLOCK_ONLY_HIGH", # Example safety setting
-            "person_generation": "ALLOW_ADULT", # Example setting for person generation
-            "negative_prompt": negative_prompt or "", # Ensure empty string if None
-            **kwargs, # Allow overrides and additional params
+            "safety_filter_level": "BLOCK_ONLY_HIGH",  # Example safety setting
+            "person_generation": "ALLOW_ADULT",  # Example setting for person generation
+            "negative_prompt": negative_prompt or "",  # Ensure empty string if None
+            **kwargs,  # Allow overrides and additional params
         }
 
         # Ensure client is initialized with correct project and location for Vertex AI
         # This might be better handled in a root_validator or __init__ if bm is always available
         # For now, assuming bm.credentials are accessible as in original.
-        if self.client._client is None: # type: ignore # Accessing private member for check
-             # This re-initialization logic might be problematic if client is shared.
+        if self.client._client is None:  # type: ignore # Accessing private member for check
+            # This re-initialization logic might be problematic if client is shared.
              # Ideally, client configuration is finalized at instantiation.
             genai.configure(
-                credentials=bm.gcp_credentials, # Assumes bm.gcp_credentials is set
+                credentials=bm.gcp_credentials,  # Assumes bm.gcp_credentials is set
                 project=bm.credentials["GOOGLE_CLOUD_PROJECT"],
-                location=bm.credentials["GOOGLE_CLOUD_LOCATION"]
+                location=bm.credentials["GOOGLE_CLOUD_LOCATION"],
             )
             self.client = genai.GenerativeModel(self.model)
-
 
         # Actual API call to generate images
         # Note: The google.genai library's async capabilities might differ.
@@ -289,25 +290,25 @@ class Imagegen3(TextToImageClient):
         # Simulating async call if client.generate_images is sync
         loop = asyncio.get_event_loop()
         api_response = await loop.run_in_executor(
-            None, # Uses default ThreadPoolExecutor
+            None,  # Uses default ThreadPoolExecutor
             self.client.generate_images,
-            text, # prompt argument for generate_images
-            google_genai_types.GenerateImagesConfig(**generation_params) # config argument
+            text,  # prompt argument for generate_images
+            google_genai_types.GenerateImagesConfig(**generation_params),  # config argument
         )
 
         if not api_response.generated_images:
-            raise ValueError(f"No image generated by Imagen 3. Response: {api_response}") # Or handle differently
+            raise ValueError(f"No image generated by Imagen 3. Response: {api_response}")  # Or handle differently
 
         first_generated_image = api_response.generated_images[0]
-        pil_image = first_generated_image.image._pil_image # Accessing private member, might be fragile
+        pil_image = first_generated_image.image._pil_image  # Accessing private member, might be fragile
         enhanced_prompt = first_generated_image.enhanced_prompt
 
         return ImageRecord(
             image=pil_image,
             model=self.model,
-            parameters=generation_params, # Log the actual parameters used
-            prompt=text, # Original prompt
-            enhanced_prompt=enhanced_prompt, # Prompt as understood/enhanced by model
+            parameters=generation_params,  # Log the actual parameters used
+            prompt=text,  # Original prompt
+            enhanced_prompt=enhanced_prompt,  # Prompt as understood/enhanced by model
             negative_prompt=negative_prompt,
         )
 
@@ -321,6 +322,7 @@ class SD35Large(TextToImageClient):
         model (str): Defaults to "stabilityai/stable-diffusion-3.5-large".
         prefix (str): File prefix defaults to "sd35_".
     """
+
     model: str = "stabilityai/stable-diffusion-3.5-large"
     prefix: str = "sd35_"
 
@@ -328,9 +330,9 @@ class SD35Large(TextToImageClient):
         self,
         text: str,
         negative_prompt: str | None = "",
-        size: str = "1024x1024", # Default size
-        output_format: str = "png", # Default output format
-        seed: int = 0, # Default seed
+        size: str = "1024x1024",  # Default size
+        output_format: str = "png",  # Default output format
+        seed: int = 0,  # Default seed
         **kwargs: Any,
     ) -> ImageRecord:
         """Generates an image using Stable Diffusion 3.5 Large via Azure.
@@ -349,11 +351,11 @@ class SD35Large(TextToImageClient):
         """
         request_data = {
             "prompt": text,
-            "negative_prompt": negative_prompt or "", # Ensure empty string if None
+            "negative_prompt": negative_prompt or "",  # Ensure empty string if None
             "size": size,
             "output_format": output_format,
             "seed": seed,
-            **kwargs, # Allow overrides and additional params
+            **kwargs,  # Allow overrides and additional params
         }
 
         azure_url = bm.credentials.get("AZURE_STABILITY35_URL")
@@ -364,18 +366,18 @@ class SD35Large(TextToImageClient):
 
         headers = {
             "Content-Type": "application/json",
-            "Accept": "application/json", # Or "image/png" etc. if API supports direct image response
+            "Accept": "application/json",  # Or "image/png" etc. if API supports direct image response
             "Authorization": f"Bearer {azure_api_key}",
         }
 
-        async with httpx.AsyncClient() as http_client: # Renamed to avoid conflict
+        async with httpx.AsyncClient() as http_client:  # Renamed to avoid conflict
             response = await http_client.post(
                 azure_url,
                 headers=headers,
                 json=request_data,
-                timeout=600.0, # Increased timeout
+                timeout=600.0,  # Increased timeout
             )
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
         # Assuming API returns JSON with base64 image data under "image" key
         response_json = response.json()
@@ -386,7 +388,7 @@ class SD35Large(TextToImageClient):
         # read_image utility is expected to handle base64 string and return ImageRecord
         image_record = read_image(image_b64=image_b64)
         image_record.model = self.model
-        image_record.parameters = request_data # Log parameters used
+        image_record.parameters = request_data  # Log parameters used
         image_record.prompt = text
         image_record.negative_prompt = negative_prompt
 
@@ -402,7 +404,8 @@ class Imagegen3Fast(Imagegen3):
         model (str): Overridden to "imagen-3.0-fast-generate-001".
                      (Note: The original had 'mode', changed to 'model' for consistency).
     """
-    model: str = "imagen-3.0-fast-generate-001" # Corrected from 'mode' to 'model'
+
+    model: str = "imagen-3.0-fast-generate-001"  # Corrected from 'mode' to 'model'
 
 
 class SD3(TextToImageClient):
@@ -414,6 +417,7 @@ class SD3(TextToImageClient):
         model (str): Defaults to "stabilityai/stable-diffusion-3".
         prefix (str): File prefix defaults to "sd3_".
     """
+
     model: str = "stabilityai/stable-diffusion-3"
     prefix: str = "sd3_"
 
@@ -421,7 +425,7 @@ class SD3(TextToImageClient):
         self,
         text: str,
         negative_prompt: str | None = "",
-        output_format: str = "png", # Default output format
+        output_format: str = "png",  # Default output format
         **kwargs: Any,
     ) -> ImageRecord:
         """Generates an image using Stable Diffusion 3 via Stability AI's API.
@@ -445,27 +449,27 @@ class SD3(TextToImageClient):
         parameters = {
             "prompt": text,
             "output_format": output_format,
-            **kwargs, # Allow overrides and additional params
+            **kwargs,  # Allow overrides and additional params
         }
-        if negative_prompt: # Add negative_prompt only if provided
+        if negative_prompt:  # Add negative_prompt only if provided
             parameters["negative_prompt"] = negative_prompt
 
         form = aiohttp.FormData()
         for key, value in parameters.items():
-            if value is not None: # Only add fields if they have a value
-                form.add_field(key, str(value)) # Ensure value is string for form data
+            if value is not None:  # Only add fields if they have a value
+                form.add_field(key, str(value))  # Ensure value is string for form data
 
-        timeout = aiohttp.ClientTimeout(total=600.0) # Increased timeout
+        timeout = aiohttp.ClientTimeout(total=600.0)  # Increased timeout
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 "https://api.stability.ai/v2beta/stable-image/generate/sd3",
                 headers={
                     "authorization": f"Bearer {stability_api_key}",
-                    "accept": "image/*", # Accepts any image format
+                    "accept": "image/*",  # Accepts any image format
                 },
                 data=form,
             ) as response:
-                response.raise_for_status() # Raise HTTPError for bad responses
+                response.raise_for_status()  # Raise HTTPError for bad responses
                 image_data = await response.read()
 
         pil_image = Image.open(BytesIO(image_data))
@@ -473,7 +477,7 @@ class SD3(TextToImageClient):
         return ImageRecord(
             image=pil_image,
             model=self.model,
-            parameters=parameters, # Log actual parameters sent
+            parameters=parameters,  # Log actual parameters sent
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -498,44 +502,45 @@ class SDXL(TextToImageClient):
         _sync_refiner_client (InferenceClient | None): Synchronous client for the SDXL refiner model,
             used in the original refinement step.
     """
-    model: str = "stabilityai/stable-diffusion-xl-base-1.0" # Changed to base model
+
+    model: str = "stabilityai/stable-diffusion-xl-base-1.0"  # Changed to base model
     prefix: str = "sdxl_"
     image_params: dict[str, Any] = Field(default_factory=lambda: {"num_inference_steps": 50})
 
     # client is inherited from TextToImageClient for the base model
     # refiner client needs to be initialized
-    _refiner_client: AsyncInferenceClient | None = PrivateAttr(default=None) # For async refiner
-    _sync_refiner_client: Any | None = PrivateAttr(default=None) # For sync refiner used in original
+    _refiner_client: AsyncInferenceClient | None = PrivateAttr(default=None)  # For async refiner
+    _sync_refiner_client: Any | None = PrivateAttr(default=None)  # For sync refiner used in original
 
     async def _initialize_clients_if_needed(self) -> None:
         """Initializes HuggingFace clients if not already done."""
-        if self.client is None: # client for base model
+        if self.client is None:  # client for base model
             hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN")
             if not hf_token:
                 raise KeyError("HUGGINGFACEHUB_API_TOKEN environment variable not set for SDXL client.")
             try:
-                login(token=hf_token, new_session=False) # Login to HuggingFace Hub
+                login(token=hf_token, new_session=False)  # Login to HuggingFace Hub
             except Exception as e:
                 logger.warning(f"HuggingFace Hub login failed (token might be invalid or already logged in): {e!s}")
 
             self.client = AsyncInferenceClient(
-                "stabilityai/stable-diffusion-xl-base-1.0", # Base model
-                token=hf_token, # Pass token explicitly
+                "stabilityai/stable-diffusion-xl-base-1.0",  # Base model
+                token=hf_token,  # Pass token explicitly
                 timeout=600.0,
             )
 
         # Initialize refiner client (example uses sync, should ideally be async)
         # The original code mixed sync and async refiner client initialization.
         # Sticking to async for consistency if possible, or noting the sync usage.
-        if self._sync_refiner_client is None: # Using the sync client as per original code's refine step
+        if self._sync_refiner_client is None:  # Using the sync client as per original code's refine step
             from huggingface_hub import InferenceClient as SyncInferenceClient  # Local import for clarity
-            hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN") # Get token again just in case
-            self._sync_refiner_client = SyncInferenceClient(
-                 "stabilityai/stable-diffusion-xl-refiner-1.0",
-                 token=hf_token,
-                 timeout=600.0,
-            )
 
+            hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN")  # Get token again just in case
+            self._sync_refiner_client = SyncInferenceClient(
+                "stabilityai/stable-diffusion-xl-refiner-1.0",
+                token=hf_token,
+                timeout=600.0,
+            )
 
     async def generate_image(
         self,
@@ -557,15 +562,15 @@ class SDXL(TextToImageClient):
             KeyError: If `HUGGINGFACEHUB_API_TOKEN` is not set.
             RuntimeError: If client initialization fails or image generation/refinement fails.
         """
-        await self._initialize_clients_if_needed() # Ensure clients are ready
-        if self.client is None or self._sync_refiner_client is None: # Check after init
-             raise RuntimeError("SDXL clients (base or refiner) not properly initialized.")
+        await self._initialize_clients_if_needed()  # Ensure clients are ready
+        if self.client is None or self._sync_refiner_client is None:  # Check after init
+            raise RuntimeError("SDXL clients (base or refiner) not properly initialized.")
 
         # Combine default image_params with any runtime kwargs
         final_parameters = {**self.image_params, "prompt": text, "negative_prompt": negative_prompt or "", **kwargs}
 
         # Generate base image
-        base_image_pil = await self.client.text_to_image(**final_parameters) # type: ignore # client is AsyncInferenceClient
+        base_image_pil = await self.client.text_to_image(**final_parameters)  # type: ignore # client is AsyncInferenceClient
         if not isinstance(base_image_pil, Image.Image):
             raise RuntimeError(f"SDXL base model did not return a PIL Image. Got: {type(base_image_pil)}")
 
@@ -573,7 +578,7 @@ class SDXL(TextToImageClient):
         # For a fully async pipeline, the refiner should also be async and awaited.
         # This requires converting PIL image to bytes for the sync client.
         img_bytes_io = BytesIO()
-        base_image_pil.save(img_bytes_io, format="PNG") # Save to BytesIO in a common format
+        base_image_pil.save(img_bytes_io, format="PNG")  # Save to BytesIO in a common format
         img_to_refine_bytes = img_bytes_io.getvalue()
 
         try:
@@ -581,10 +586,10 @@ class SDXL(TextToImageClient):
             # To run it in an async context without blocking the event loop:
             loop = asyncio.get_event_loop()
             refined_image_pil = await loop.run_in_executor(
-                None, # Default ThreadPoolExecutor
-                self._sync_refiner_client.image_to_image, # type: ignore
+                None,  # Default ThreadPoolExecutor
+                self._sync_refiner_client.image_to_image,  # type: ignore
                 img_to_refine_bytes,
-                prompt=text # Refiner also takes a prompt
+                prompt=text,  # Refiner also takes a prompt
                 # Add other refiner-specific parameters if needed, e.g., denoising_strength
             )
         except Exception as e:
@@ -596,8 +601,8 @@ class SDXL(TextToImageClient):
 
         return ImageRecord(
             image=refined_image_pil,
-            model=self.model, # Should ideally be specific, e.g., "stabilityai/sdxl-base-1.0 + refiner"
-            parameters=final_parameters, # Log parameters used for base generation
+            model=self.model,  # Should ideally be specific, e.g., "stabilityai/sdxl-base-1.0 + refiner"
+            parameters=final_parameters,  # Log parameters used for base generation
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -616,13 +621,15 @@ class SDXLReplicate(TextToImageClient):
     """
     model: str = "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc"
     prefix: str = "sdxl_replicate_"
-    image_params: dict[str, Any] = Field(default_factory=lambda: { # Use factory for mutable default
-        "width": 768,
-        "height": 768,
-        "refine": "expert_ensemble_refiner",
-        "apply_watermark": True, # Replicate API default might differ, this is explicit
-        "num_inference_steps": 50,
-    })
+    image_params: dict[str, Any] = Field(
+        default_factory=lambda: {  # Use factory for mutable default
+            "width": 768,
+            "height": 768,
+            "refine": "expert_ensemble_refiner",
+            "apply_watermark": True,  # Replicate API default might differ, this is explicit
+            "num_inference_steps": 50,
+        }
+    )
     # refiner attribute was present but not used; removed for clarity unless it has a purpose.
 
     async def generate_image(
@@ -649,7 +656,7 @@ class SDXLReplicate(TextToImageClient):
         final_parameters = {
             **self.image_params,
             "prompt": text,
-            "negative_prompt": negative_prompt or "", # Ensure empty string if None
+            "negative_prompt": negative_prompt or "",  # Ensure empty string if None
             **kwargs,
         }
 
@@ -663,24 +670,24 @@ class SDXLReplicate(TextToImageClient):
         if not replicate_response or not isinstance(replicate_response, list) or not replicate_response[0]:
             raise RuntimeError(f"Replicate API for SDXL returned an unexpected response: {replicate_response}")
 
-        output_image_url = replicate_response[0] # Assuming the first item is the image URL
+        output_image_url = replicate_response[0]  # Assuming the first item is the image URL
 
         # Fetch the image from the URL
-        timeout = aiohttp.ClientTimeout(total=300.0) # Timeout for fetching image
+        timeout = aiohttp.ClientTimeout(total=300.0)  # Timeout for fetching image
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(output_image_url) as image_response:
-                image_response.raise_for_status() # Ensure download was successful
+                image_response.raise_for_status()  # Ensure download was successful
                 image_data = await image_response.read()
 
         pil_image = Image.open(BytesIO(image_data))
 
         return ImageRecord(
             image=pil_image,
-            model=self.model, # Replicate model identifier
-            parameters=final_parameters, # Log parameters sent to Replicate
+            model=self.model,  # Replicate model identifier
+            parameters=final_parameters,  # Log parameters sent to Replicate
             prompt=text,
             negative_prompt=negative_prompt,
-            uri=output_image_url, # Store the Replicate output URL as URI
+            uri=output_image_url,  # Store the Replicate output URL as URI
         )
 
 
@@ -696,14 +703,16 @@ class SD(TextToImageClient):
     """
     model: str = "stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4"
     prefix: str = "sd21_"
-    image_params: dict[str, Any] = Field(default_factory=lambda: { # Use factory
-        "width": 1024, # Default SD 2.1 dimensions
-        "height": 1024,
-        "scheduler": "DPMSolverMultistep", # Common scheduler
-        "num_outputs": 1,
-        "guidance_scale": 7.5,
-        "num_inference_steps": 50,
-    })
+    image_params: dict[str, Any] = Field(
+        default_factory=lambda: {  # Use factory
+            "width": 1024,  # Default SD 2.1 dimensions
+            "height": 1024,
+            "scheduler": "DPMSolverMultistep",  # Common scheduler
+            "num_outputs": 1,
+            "guidance_scale": 7.5,
+            "num_inference_steps": 50,
+        }
+    )
 
     async def generate_image(
         self,
@@ -776,10 +785,10 @@ class DALLE(TextToImageClient):
     async def generate_image(
         self,
         text: str,
-        negative_prompt: str | None = "", # Note: DALL-E 3 doesn't directly support negative_prompt via API
-        size: str = "1024x1024", # Supported DALL-E 3 sizes
-        style: str = "natural", # "natural" or "vivid"
-        quality: str = "standard", # "standard" or "hd"
+        negative_prompt: str | None = "",  # Note: DALL-E 3 doesn't directly support negative_prompt via API
+        size: str = "1024x1024",  # Supported DALL-E 3 sizes
+        style: str = "natural",  # "natural" or "vivid"
+        quality: str = "standard",  # "standard" or "hd"
         **kwargs: Any,
     ) -> ImageRecord:
         """Generates an image using OpenAI's DALL-E 3 model.
@@ -809,11 +818,11 @@ class DALLE(TextToImageClient):
                 raise KeyError("OPENAI_API_KEY not found in bm.credentials for DALL-E client.")
             self.client = AsyncOpenAI(
                 api_key=openai_api_key,
-                timeout=600.0, # httpx.Timeout
+                timeout=600.0,  # httpx.Timeout
             )
 
         prompt_for_api = text
-        if negative_prompt: # Simulate negative prompt by instruction
+        if negative_prompt:  # Simulate negative prompt by instruction
             prompt_for_api = f"{text} \n\nIMPORTANT: DO NOT INCLUDE the following elements: {negative_prompt}"
 
         # Consolidate all parameters for the API call
@@ -823,13 +832,13 @@ class DALLE(TextToImageClient):
             "size": size,
             "style": style,
             "quality": quality,
-            "n": 1, # DALL-E 3 currently supports n=1
-            "response_format": "url", # Get a URL to download the image
-            **kwargs, # Allow other valid DALL-E parameters
+            "n": 1,  # DALL-E 3 currently supports n=1
+            "response_format": "url",  # Get a URL to download the image
+            **kwargs,  # Allow other valid DALL-E parameters
         }
 
         try:
-            response = await self.client.images.generate(**api_parameters) # type: ignore # client is AsyncOpenAI
+            response = await self.client.images.generate(**api_parameters)  # type: ignore # client is AsyncOpenAI
         except Exception as e:
             logger.error(f"Error calling OpenAI DALL-E 3 API: {e!s}")
             raise RuntimeError(f"OpenAI DALL-E 3 API call failed: {e!s}") from e
@@ -841,25 +850,25 @@ class DALLE(TextToImageClient):
         revised_prompt_from_api = response.data[0].revised_prompt
 
         # Store the actual prompt sent and any revised prompt
-        api_parameters["prompt_sent_to_api"] = prompt_for_api # Store the exact prompt sent
+        api_parameters["prompt_sent_to_api"] = prompt_for_api  # Store the exact prompt sent
         if revised_prompt_from_api:
             api_parameters["revised_prompt_by_api"] = revised_prompt_from_api
 
         # Fetch the image from the URL provided by OpenAI
-        async with httpx.AsyncClient() as http_client: # Renamed to avoid conflict
+        async with httpx.AsyncClient() as http_client:  # Renamed to avoid conflict
             image_http_response = await http_client.get(output_image_url, timeout=300.0)
-        image_http_response.raise_for_status() # Ensure download was successful
+        image_http_response.raise_for_status()  # Ensure download was successful
 
         pil_image = Image.open(BytesIO(image_http_response.content))
 
         return ImageRecord(
             image=pil_image,
             model=self.model,
-            parameters=api_parameters, # Log all parameters used, including revisions
-            prompt=text, # Original user prompt
-            negative_prompt=negative_prompt, # Original user negative prompt
-            enhanced_prompt=revised_prompt_from_api, # DALL-E often revises prompts
-            uri=output_image_url, # Store the temporary OpenAI URL
+            parameters=api_parameters,  # Log all parameters used, including revisions
+            prompt=text,  # Original user prompt
+            negative_prompt=negative_prompt,  # Original user negative prompt
+            enhanced_prompt=revised_prompt_from_api,  # DALL-E often revises prompts
+            uri=output_image_url,  # Store the temporary OpenAI URL
         )
 
 
@@ -884,31 +893,31 @@ class BatchImageGenerator(BaseModel):
         save_path (CloudPath | Path): The base directory path (local or cloud)
             where generated images and the summary JSON file will be saved.
             A unique subdirectory will be created under this path for each batch run.
-            Defaults to `bm.save_dir` if not provided.
+            Defaults to `bm.run_info.save_dir` if not provided.
         _clients (dict[str, TextToImageClient]): Private dictionary to store
             instantiated client objects, keyed by client class name.
         _tasks (list[asyncio.Task[ImageRecord]]): Private list to hold asyncio tasks for
             concurrent image generation. Corrected type hint for task list.
     """
 
-    generators: Sequence[Type[TextToImageClient]] = Field( # Type hint for list of classes
-        default_factory=lambda: ImageClients, # Use factory for mutable default
+    generators: Sequence[Type[TextToImageClient]] = Field(  # Type hint for list of classes
+        default_factory=lambda: ImageClients,  # Use factory for mutable default
         description="A sequence of TextToImageClient classes to use for generation.",
     )
-    save_path: CloudPath | Path | None = Field( # Allow None initially, will default in validator
+    save_path: CloudPath | Path | None = Field(  # Allow None initially, will default in validator
         default=None,
         description="Base path to save generated images. Defaults to current Buttermilk run's save directory.",
     )
     _clients: dict[str, TextToImageClient] = PrivateAttr(default_factory=dict)
-    _tasks: list[asyncio.Task[ImageRecord]] = PrivateAttr(default_factory=list) # More specific task type
+    _tasks: list[asyncio.Task[ImageRecord]] = PrivateAttr(default_factory=list)  # More specific task type
 
     @field_validator("save_path", mode="before")
     @classmethod
-    def _validate_and_default_save_path( # Renamed for clarity
+    def _validate_and_default_save_path(  # Renamed for clarity
         cls,
-        v: str | CloudPath | Path | None, # Allow None as input
+        v: str | CloudPath | Path | None,  # Allow None as input
     ) -> CloudPath | Path:
-        """Validates `save_path` and defaults to `bm.save_dir` if not provided.
+        """Validates `save_path` and defaults to `bm.run_info.save_dir` if not provided.
 
         Args:
             v: The input value for `save_path`.
@@ -918,16 +927,23 @@ class BatchImageGenerator(BaseModel):
 
         Raises:
             ValueError: If `v` is not a string, Path, or CloudPath.
-            RuntimeError: If `bm.save_dir` is not available when `v` is None.
+            RuntimeError: If `bm.run_info.save_dir` is not available when `v` is None.
         """
         if v is None:
-            if bm.save_dir:
-                return CloudPath(bm.save_dir) if isinstance(bm.save_dir, str) and bm.save_dir.startswith(("gs://", "s3://", "az://")) else Path(bm.save_dir) # type: ignore
+            if bm.run_info.save_dir:
+                return (
+                    CloudPath(bm.run_info.save_dir)
+                    if isinstance(bm.run_info.save_dir, str)
+                    and bm.run_info.save_dir.startswith(("gs://", "s3://", "az://"))
+                    else Path(bm.run_info.save_dir)
+                )  # type: ignore
             else:
-                # Fallback to a temporary directory if bm.save_dir is also None
+                # Fallback to a temporary directory if bm.run_info.save_dir is also None
                 # This ensures save_path is always set.
                 temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
-                logger.warning(f"No save_path provided and bm.save_dir not set. Defaulting to temporary directory: {temp_dir}")
+                logger.warning(
+                    f"No save_path provided and bm.run_info.save_dir not set. Defaulting to temporary directory: {temp_dir}"
+                )
                 return temp_dir
         if isinstance(v, str):
             return CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)
@@ -947,8 +963,8 @@ class BatchImageGenerator(BaseModel):
 
     async def abatch(
         self,
-        inputs: Sequence[str | dict[str, str]], # Changed 'input' to 'inputs' to avoid builtin clash
-        n: int = 1
+        inputs: Sequence[str | dict[str, str]],  # Changed 'input' to 'inputs' to avoid builtin clash
+        n: int = 1,
     ) -> AsyncGenerator[ImageRecord, None]:
         """Generates images asynchronously from a sequence of prompts using multiple models.
 
@@ -970,7 +986,7 @@ class BatchImageGenerator(BaseModel):
         Raises:
             ValueError: If a prompt in `inputs` has an invalid type.
         """
-        if not self._clients: # Ensure clients are initialized
+        if not self._clients:  # Ensure clients are initialized
             self.init_clients()
         if not self._clients:
             logger.error("No image generator clients initialized for batch generation. Aborting.")
@@ -978,12 +994,12 @@ class BatchImageGenerator(BaseModel):
 
         # Create a unique subdirectory for this batch run
         # Ensure self.save_path is not None (handled by validator now)
-        batch_save_path = self.save_path / f"batch_{ShortUUID().uuid()[:8]}" # type: ignore
+        batch_save_path = self.save_path / f"batch_{ShortUUID().uuid()[:8]}"  # type: ignore
         batch_save_path.mkdir(parents=True, exist_ok=True)
         info_json_path = batch_save_path / "info.json"
 
         generated_records_summary: list[dict[str, Any]] = []
-        self._tasks = [] # Reset tasks for this batch
+        self._tasks = []  # Reset tasks for this batch
 
         # Prepare prompts list with IDs
         prompts_to_process: list[dict[str, Any]] = []
@@ -994,11 +1010,13 @@ class BatchImageGenerator(BaseModel):
                 if "text" not in prompt_item:
                     logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
                     continue
-                prompts_to_process.append({
-                    "text": prompt_item["text"],
-                    "id": str(prompt_item.get("id", idx)), # Ensure ID is string
-                    "negative_prompt": prompt_item.get("negative_prompt", ""), # Default to empty
-                })
+                prompts_to_process.append(
+                    {
+                        "text": prompt_item["text"],
+                        "id": str(prompt_item.get("id", idx)),  # Ensure ID is string
+                        "negative_prompt": prompt_item.get("negative_prompt", ""),  # Default to empty
+                    }
+                )
             else:
                 raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
 
@@ -1006,17 +1024,17 @@ class BatchImageGenerator(BaseModel):
             logger.warning("No valid prompts to process in abatch.")
             return
 
-        random.shuffle(prompts_to_process) # Shuffle to distribute load potentially
+        random.shuffle(prompts_to_process)  # Shuffle to distribute load potentially
 
         # Schedule all generation tasks
         for current_prompt_info in prompts_to_process:
             prompt_id = current_prompt_info["id"]
-            for i_run in range(n): # Number of generations per prompt
+            for i_run in range(n):  # Number of generations per prompt
                 for client_name, client_instance in self._clients.items():
                     try:
                         # Construct a unique save path for each image
                         img_filename = f"{prompt_id}_{client_instance.prefix}{i_run}_{ShortUUID().uuid()[:6]}.png"
-                        img_full_save_path = (batch_save_path / img_filename).as_posix() # Use as_posix for string path
+                        img_full_save_path = (batch_save_path / img_filename).as_posix()  # Use as_posix for string path
 
                         task_params = {
                             "text": current_prompt_info["text"],
@@ -1028,40 +1046,46 @@ class BatchImageGenerator(BaseModel):
                     except Exception as e:
                         logger.error(
                             f"Error adding task: generate image from {client_name}, run {i_run}, prompt ID {prompt_id}. Error: {e!s}",
-                            exc_info=True
+                            exc_info=True,
                         )
-                        continue # Skip this specific task
+                        continue  # Skip this specific task
 
         # Yield results as they complete
         for task in asyncio.as_completed(self._tasks):
             try:
                 # await asyncio.sleep(0.01) # Small sleep to allow other tasks, might not be necessary
                 image_result: ImageRecord = await task
-                yield image_result # Yield the successful ImageRecord
+                yield image_result  # Yield the successful ImageRecord
 
                 # Collect summary information for info.json
-                if image_result and image_result.image and image_result.uri: # Successfully generated and saved
-                    generated_records_summary.append({
-                        "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"), # Try to get ID from params if set
-                        "original_prompt": image_result.prompt,
-                        "negative_prompt": image_result.negative_prompt,
-                        "model_used": image_result.model,
-                        "image_uri": image_result.uri,
-                        "generation_parameters": image_result.parameters,
-                        "error": image_result.error, # Will be None if successful
-                    })
-                elif image_result and image_result.error: # Generation failed, record error
-                     generated_records_summary.append({
-                        "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
-                        "original_prompt": image_result.prompt,
-                        "negative_prompt": image_result.negative_prompt,
-                        "model_used": image_result.model,
-                        "image_uri": None,
-                        "generation_parameters": image_result.parameters,
-                        "error": image_result.error,
-                    })
+                if image_result and image_result.image and image_result.uri:  # Successfully generated and saved
+                    generated_records_summary.append(
+                        {
+                            "prompt_id": image_result.parameters.get(
+                                "id", "unknown_id_in_params"
+                            ),  # Try to get ID from params if set
+                            "original_prompt": image_result.prompt,
+                            "negative_prompt": image_result.negative_prompt,
+                            "model_used": image_result.model,
+                            "image_uri": image_result.uri,
+                            "generation_parameters": image_result.parameters,
+                            "error": image_result.error,  # Will be None if successful
+                        }
+                    )
+                elif image_result and image_result.error:  # Generation failed, record error
+                    generated_records_summary.append(
+                        {
+                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
+                            "original_prompt": image_result.prompt,
+                            "negative_prompt": image_result.negative_prompt,
+                            "model_used": image_result.model,
+                            "image_uri": None,
+                            "generation_parameters": image_result.parameters,
+                            "error": image_result.error,
+                        }
+                    )
 
-            except Exception as e: # Catch errors from await task itself
+            except Exception as e:  # Catch errors from await task itself
                 logger.error(f"Error collecting result from an image generation task: {e!s}", exc_info=True)
                 # Optionally add an error entry to summary here if task details can be inferred
                 continue
@@ -1078,4 +1102,4 @@ class BatchImageGenerator(BaseModel):
         except Exception as e:
             logger.error(f"Failed to save batch image generation summary to {info_json_path}: {e!s}")
 
-        self._tasks.clear() # Clear tasks for next batch run
+        self._tasks.clear()  # Clear tasks for next batch run

@@ -163,7 +163,7 @@ def silence_task_logs():
     # Weave logging with selective filtering
     # Instead of suppressing all weave errors, use custom filter to distinguish
     # between application errors (that weave is just reporting) and weave infrastructure errors
-    weave_filter = WeaveApplicationErrorFilter()
+    # weave_filter = WeaveApplicationErrorFilter()
 
     # Apply selective filtering to main weave loggers
     weave_loggers = [
@@ -172,13 +172,13 @@ def silence_task_logs():
         "weave.client",
         "weave.weave_client",
         "weave.trace.weave_client",
-        "wandb",
+        # "wandb",
     ]
 
     for logger_name in weave_loggers:
         logger = logging.getLogger(logger_name)
         logger.setLevel(logging.WARNING)  # Allow warnings and errors, but filter selectively
-        logger.addFilter(weave_filter)
+        # logger.addFilter(weave_filter)
 
     # For weave API loggers, still suppress completely since they're mainly connection noise
     logging.getLogger("weave.wandb_api").setLevel(logging.ERROR)
@@ -186,8 +186,8 @@ def silence_task_logs():
     # logging.getLogger("wandb").setLevel(logging.ERROR)
 
     # I think the correct way to do this is:
-    import wandb
-    wandb.Settings(quiet=True)
+    # import wandb
+    # wandb.Settings(quiet=True)
 
     # Additional weave-related loggers that might output connection errors
     logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -203,7 +203,7 @@ def silence_task_logs():
 
 
 # Automatically silence logs when module is imported
-silence_task_logs()
+# silence_task_logs()
 
 if __name__ == "__main__":
     print("Silenced noisy task execution logs.")

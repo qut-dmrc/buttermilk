@@ -65,6 +65,8 @@ def main(conf: DictConfig) -> None:
 
     # Ensure BM is fully initialized before proceeding
     asyncio.run(bm.ensure_initialized())
+    # Ensure tracing has been set up.
+    asyncio.run(bm._setup_tracing())
     logger.info("BM initialization complete")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)

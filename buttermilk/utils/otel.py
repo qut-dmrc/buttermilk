@@ -27,7 +27,6 @@ import base64
 import os
 import urllib  # Added for os.environ usage
 
-import weave
 from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -38,7 +37,6 @@ from opentelemetry.instrumentation.openai import OpenAIInstrumentor
 # Import trace_sdk at the top level for clarity, though original was inline
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from traceloop.sdk import Traceloop
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 # Buttermilk core imports
@@ -49,7 +47,7 @@ from buttermilk._core.log import logger
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
-def setup_tracing(tracing_cfg: Tracing) -> None:
+def setup_tracing_otel(tracing_cfg: Tracing) -> None:
     if not tracing_cfg.enabled:
         return
 
@@ -83,22 +81,10 @@ def setup_tracing(tracing_cfg: Tracing) -> None:
     #     provider.add_span_processor(traceloop_processor)
     #     logger.info("Traceloop OTLP exporter configured successfully")
 
-    # Instead we'll rely on the traceloop and weave sdks.
+    # Instead we'll rely on the traceloop and weave sdks (set up in bm_init.py)
     #
     # The disadvantage of using this approach is that it relies on Traceloop's
     # and/or Weave's magic to instrument everything, and that's often TOO MUCH.
-
-    from buttermilk._core.dmrc import get_bm
-
-    bm = get_bm()
-    collection_name = f"{bm.run_info.name}-{bm.run_info.job}"  # Construct collection name
-
-    Traceloop.init(app_name="buttermilk")
-    logger.info("Traceloop initialized.")
-    weave.init(collection_name, autopatch_settings={"autogen": {"enabled": True}})
-    logger.info("Weave initialized successfully")
-
-    logger.info("OpenTelemetry tracing setup complete")
 
 
 def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
