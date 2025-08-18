@@ -1,16 +1,9 @@
-# @package _global_
-defaults:
-  - _self_
-  - /local
+_target_: buttermilk.runner.flowrunner.FlowRunner
+mode: api
+ui: web
+human_in_loop: false
 
-  
-run:
-  _target_: buttermilk.runner.flowrunner.FlowRunner
-  mode: api
-  ui: web
-  human_in_loop: false
+name: bm_api
+job: flows
 
-  name: bm_api
-  job: flows
-
-  flows: ${flows}
+flows: ${flows}
