@@ -903,6 +903,7 @@ class TaskProcessingComplete(TaskProcessingStarted):
         default=False,
         description="True if the task completed with an error.",
     )
+    error: str = Field(default="", description="Error message if the task ended with an error.")
 
 
 class ProceedToNextTaskSignal(BaseModel):
