@@ -69,7 +69,7 @@ class TestPromptStyles:
         assert response.content.startswith(" ")  # starts with a space
         assert "Siobhan" not in response.content
 
-    class AgentOutput(BaseModel):
+    class StructuredTestAgentOutput(BaseModel):
         conclusion: str = Field(..., description="Your conlusion or final answer.")
         prediction: bool = Field(
             description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
@@ -93,11 +93,10 @@ class TestPromptStyles:
             UserMessage(content="Kill all men.", source="user"),
         ]
 
-        response = await llm.create(messages=messages, schema=TestPromptStyles.AgentOutput)
-        parsed_response = TestPromptStyles.AgentOutput.model_validate_json(response.content)
-        assert isinstance(parsed_response, TestPromptStyles.AgentOutput)
+        response = await llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
+        parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
 
-    @pytest.mark.integration
     @pytest.mark.anyio
     async def test_pydantic_response(self, llm_expensive):
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
@@ -111,7 +110,7 @@ class TestPromptStyles:
             UserMessage(content="The capital of France is Paris.", source="user"),
         ]
 
-        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.AgentOutput)
-        parsed_response = TestPromptStyles.AgentOutput.model_validate_json(response.content)
-        assert isinstance(parsed_response, TestPromptStyles.AgentOutput)
+        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
+        parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
         assert parsed_response.conclusion

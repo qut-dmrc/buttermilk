@@ -128,6 +128,14 @@ class ChatParser(BaseModel):
         return convert_dict_types(parsed_output)
 
 
+def simple_clean_llm_json_text(s: str) -> str:
+    # drop code fences at start/end
+    s = re.sub(r"^\s*```(?:json)?\s*", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s*```\s*$", "", s)
+    # trim whitespace and common quote wrappers
+    return s.strip(" \t\r\n\"'`")
+
+
 def convert_dict_types(obj: Any) -> Any:
     """Recursively converts string values in nested dicts/lists to Python types.
 

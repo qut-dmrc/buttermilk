@@ -547,33 +547,62 @@ class AutoGenWrapper(RetryWrapper):
         """
         parsed_object = None
 
+        from buttermilk.utils.json_parser import ChatParser, simple_clean_llm_json_text  # local import to avoid cycles
+
         # Check if the result already contains a parsed object of the correct type
         if isinstance(create_result, ModelOutput) and isinstance(create_result.parsed_object, schema):
             parsed_object = create_result.parsed_object
-        elif isinstance(create_result.content, str):
-            # Try to parse the string response
-            logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
-            try:
-                # Import locally to avoid circular dependencies
-                from buttermilk.utils.json_parser import ChatParser
+        elif hasattr(create_result.content, "model_dump"):
+            # Already a Pydantic object, but might be wrong type
+            if not isinstance(create_result.content, schema):
+                raise ProcessingError(
+                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
+                )
+            else:
+                parsed_object = create_result.content
+        elif not isinstance(create_result.content, str):
+            raise ProcessingError(
+                f"AutoGenWrapper requires structured output of type {schema.__name__} but received {type(create_result.content).__name__}",
+            )
 
+        # Try to parse as strict JSON first to preserve types (avoid coercion)
+        logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
+        text = simple_clean_llm_json_text(create_result.content)
+
+        if parsed_object is None:
+            try:
+                # Try to load directly with pydantic's model_validate_json
+                parsed_object = schema.model_validate_json(create_result.content)
+            except Exception as e:  # noqa
+                parsed_object = None
+
+        try:
+            # Try json.loads as a fallback
+            if parsed_object is None and (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    parsed_object = parsed
+        except Exception:
+            parsed_object = None
+
+        if parsed_object is None:
+            # Fallback to tolerant parser for messy outputs
+            try:
                 parser = ChatParser()
-                parsed_dict = parser.parse(create_result.content)
-                parsed_object = schema(**parsed_dict) if isinstance(parsed_dict, dict) else None
-                if parsed_object:
-                    logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
+                parsed_object = parser.parse(text)
             except Exception as parse_error:
                 raise ProcessingError(
                     f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
-        elif hasattr(create_result.content, "model_dump"):
-            # Already a Pydantic object, but might be wrong type
-            if isinstance(create_result.content, schema):
-                parsed_object = create_result.content
-            else:
-                logger.warning(
-                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
-                )
+
+        try:
+            parsed_object = schema(**parsed_object) if isinstance(parsed_object, dict) else None
+            if parsed_object:
+                logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
+        except Exception as parse_error:
+            raise ProcessingError(
+                f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+            ) from parse_error
 
         # Create ModelOutput with the parsed object
         if parsed_object is None:
