@@ -189,7 +189,7 @@ async def test_no_tool_needed(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_structured_output_with_tools(llm):
+async def test_structured_output_with_tools(llm_expensive):
     """Test that models handle the interaction between structured output and tools correctly."""
 
     class Answer(BaseModel):
@@ -206,8 +206,8 @@ async def test_structured_output_with_tools(llm):
         UserMessage(content="What is the capital of Japan?", source="user"),
     ]
 
-    # Test with structured output (tools should not be passed for certain models)
-    response = await llm.call_chat(
+    # Test with structured output (tools should not be passed with structured output for certain models)
+    response = await llm_expensive.call_chat(
         messages=messages,
         tools_list=[calc_tool],
         schema=Answer,

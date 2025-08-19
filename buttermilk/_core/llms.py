@@ -10,6 +10,7 @@ and provide a consistent interface for agents within the Buttermilk framework.
 """
 
 import asyncio
+import importlib
 import inspect
 import json
 from collections.abc import Sequence
@@ -31,7 +32,6 @@ from autogen_core.models import (
     FunctionExecutionResult,
     FunctionExecutionResultMessage,
     LLMMessage,
-    ModelFamily,
     ModelInfo,
 )
 from autogen_core.tools import Tool  # Autogen tool handling
@@ -40,23 +40,20 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
-from google import genai  # Google Generative AI library
+# from google import genai  # Google Generative AI library (unused in current implementation)
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
+
+# ToolOutput import removed - using autogen's FunctionExecutionResult directly
+from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
+from buttermilk._core.log import logger  # Buttermilk logger
+from .retry import RetryWrapper  # Retry logic wrapper
 
 
 # Use a function for deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk._core.dmrc import get_bm as _get_bm  # Actual import of get_bm
-
+    _get_bm = importlib.import_module("buttermilk._core.dmrc").get_bm
     return _get_bm()
-
-
-# ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.log import logger  # Buttermilk logger
-
-from .retry import RetryWrapper  # Retry logic wrapper
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
 
@@ -164,9 +161,9 @@ class LLMConfig(BaseModel):
 CHAT_MODELS = [
     "gemini25flash",
     "gemini25pro",
+    "gpt5chat",
     "gpt5mini",
     "gpt5nano",
-    "gpt5chat",
     "llama4maverick",
     "opus",
     "sonnet",
@@ -175,8 +172,8 @@ CHAT_MODELS = [
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
     "gemini25flash",
-    "o4mini",
-    "gpt41mini",
+    "gpt5nano",
+    "haiku",
 ]
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
@@ -260,9 +257,10 @@ class AutoGenWrapper(RetryWrapper):
         """Creates a chat completion using the wrapped client, with retry and structured output handling.
 
         This method attempts to make a chat completion call. It determines if
-        JSON mode or structured output via a Pydantic schema should be requested
-        based on the `schema` argument and `model_info`. It then uses the
-        retry logic from `RetryWrapper` to execute the call.
+    structured output via a Pydantic schema should be requested based on the
+    `schema` argument and `model_info`. It then uses the retry logic from
+    `RetryWrapper` to execute the call. We intentionally do not request
+    structured output when tools are provided to avoid API conflicts.
 
         Args:
             messages: A sequence of `LLMMessage` objects representing the
@@ -293,78 +291,22 @@ class AutoGenWrapper(RetryWrapper):
             and schema is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
         )
 
-        json_output_requested: bool | type[BaseModel] = False  # Default to no JSON mode
-        fake_schema_tool = None  # Will hold our fake tool if needed
-
-        if is_valid_schema_type and self.model_info.get("structured_output"):
-            json_output_requested = schema  # type: ignore # Pass the schema for structured output
-        elif (
-            is_valid_schema_type
-            and not self.model_info.get("structured_output")
-            and not tools
-            and self.model_info.get("function_calling", True)
-        ):
-            # Create a fake tool for models that support function calling but not structured output
-            # This allows us to get structured output via tool calling
-            from autogen_core.tools import BaseTool
-
-            class PydanticModelTool(BaseTool[BaseModel, BaseModel]):
-                """A tool that creates instances of a Pydantic model."""
-
-                def __init__(self, model: type[BaseModel]):
-                    super().__init__(
-                        args_type=model,
-                        return_type=model,
-                        name=f"create_{model.__name__.lower()}",
-                        description=f"Create a {model.__name__} object with the specified fields",
-                    )
-                    self._model = model
-
-                async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
-                    # args is already validated as our model type by BaseTool
-                    return args
-
-            # Create the fake tool
-            fake_schema_tool = PydanticModelTool(schema)
-
-            # Add the fake tool to the tools list
-            tools = [fake_schema_tool]
-
-        # Some models don't support simultaneous tool calling and structured output
-        # Check model family to determine capabilities
-        model_family = self.model_info.get("family", ModelFamily.UNKNOWN)
-
-        # Gemini models can't use tools with structured output (json_output with Pydantic model)
-        # This is a known limitation documented in Gemini's API
-        gemini_families = {
-            ModelFamily.GEMINI_1_5_FLASH,
-            ModelFamily.GEMINI_1_5_PRO,
-            ModelFamily.GEMINI_2_0_FLASH,
-            ModelFamily.GEMINI_2_5_PRO,
-            ModelFamily.GEMINI_2_5_FLASH,
-            "gemini",
+        # Build call kwargs, omitting json_output when tools are provided
+        create_call_kwargs: dict[str, Any] = {
+            "tools": tools,
+            "cancellation_token": cancellation_token,
+            "extra_create_args": kwargs,
         }
 
-        # Some other models also have this limitation (discovered through testing)
-        models_with_tool_schema_conflict = gemini_families | {"llama-4-maverick"}
-
-        if (
-            tools
-            and model_family in models_with_tool_schema_conflict
-            and json_output_requested
-            and isinstance(json_output_requested, type)
-        ):
-            # For models that can't handle tools + structured output together, we don't ask for a structured output
-            json_output_requested = False
+        # Prefer structured output when a schema is provided and tools are not used
+        if is_valid_schema_type and not tools and self.model_info.get("structured_output", False):
+            create_call_kwargs["json_output"] = schema  # type: ignore[arg-type]
 
         try:
             create_result = await self._execute_with_retry(
                 self.client.create,  # The method to call
                 messages,  # Positional arguments for self.client.create
-                tools=tools,
-                json_output=json_output_requested,
-                cancellation_token=cancellation_token,
-                extra_create_args=kwargs,  # Keyword arguments for self.client.create
+                **create_call_kwargs,  # Keyword arguments for self.client.create
             )
 
         except Exception as e:  # Wrap other exceptions
@@ -383,38 +325,10 @@ class AutoGenWrapper(RetryWrapper):
                 "Unexpected response type from LLM when expecting tool calls or text.", create_result.content
             )
 
-        # Handle structured output parsing if schema was provided
-        if schema and is_valid_schema_type and not (tools and not fake_schema_tool):
-            # Only parse if: we have a schema AND (we created a fake tool OR no tools were provided)
-            # Check if we used a fake tool and got a tool call response
-            if (
-                fake_schema_tool
-                and isinstance(create_result.content, list)
-                and all(isinstance(c, FunctionCall) for c in create_result.content)
-            ):
-                # Extract the tool call and execute it to get the structured object
-                tool_calls = create_result.content
-                if len(tool_calls) == 1 and tool_calls[0].name == fake_schema_tool.name:
-                    # Execute the fake tool to get the structured object
-                    arguments = json.loads(tool_calls[0].arguments)
-
-                    # Call the schema constructor directly with the arguments
-                    try:
-                        parsed_object = schema(**arguments)
-                    except Exception as e:
-                        raise ProcessingError(f"Failed to create {schema.__name__} from tool arguments: {e}")
-
-                    # Return ModelOutput with the parsed object
-                    return ModelOutput(
-                        content=json.dumps(parsed_object.model_dump()),
-                        finish_reason=create_result.finish_reason,
-                        usage=create_result.usage,
-                        thought=getattr(create_result, "thought", None),
-                        parsed_object=parsed_object,
-                        cached=create_result.cached,
-                    )
-            else:
-                # Regular structured output parsing
+        # Handle structured output parsing if schema was provided and we didn't use tools in this call
+        if schema and is_valid_schema_type and not tools:
+            # If the model didn't return tool calls, parse into the schema
+            if not (isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content)):
                 return await self._parse_structured_output(create_result, schema)
 
         return create_result  # type: ignore # Expect CreateResult or compatible
@@ -476,7 +390,7 @@ class AutoGenWrapper(RetryWrapper):
 
             # Add the assistant message with tool calls to the history
             assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
-            messages = messages + [assistant_msg]
+            messages += [assistant_msg]
 
             try:
                 tool_outputs = await self._execute_tools(
@@ -489,7 +403,7 @@ class AutoGenWrapper(RetryWrapper):
 
             # Tool results are already FunctionExecutionResult objects
             tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
-            messages = messages + [tool_result_messages]  # Append tool results to the message history
+            messages += [tool_result_messages]  # Append tool results to the message history
 
             try:
                 # Call the LLM again with the tool results included in the history
@@ -526,7 +440,8 @@ class AutoGenWrapper(RetryWrapper):
         arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
 
         # Execute the tool
-        result = await tool.run_json(arguments, cancellation_token)
+        ct: CancellationToken = cancellation_token or CancellationToken()
+        result = await tool.run_json(arguments, ct)
 
         # Return autogen's native type directly
         return FunctionExecutionResult(
@@ -761,7 +676,7 @@ class LLMs(BaseModel):
                 vertex_client_params.pop("api_key", None)
 
                 client = AnthropicChatCompletionClient(**vertex_client_params)
-                client._client = vertex_client
+                client._client = vertex_client  # type: ignore[attr-defined]
             except Exception as e:
                 logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                 raise
@@ -779,20 +694,6 @@ class LLMs(BaseModel):
             raise NotImplementedError(
                 "Gemini native client for Vertex is not yet implemented. "
                 "Please use the Gemini API or OpenAIChatCompletionClient with Vertex parameters.",
-            )
-
-            bm_instance = get_bm()
-            if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available for Vertex AI.")
-            vertex_params = {
-                "region": config.configs.get("region"),
-                "project_id": config.configs.get("project_id"),
-                "credentials": bm_instance.gcp_credentials,
-            }
-            vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
-            gemini_client = genai.Client(  # not used yet, not compatible with autogen
-                vertexai=True,
-                **vertex_params,
             )
 
         elif config.client_type == ClientType.VERTEX_OPENAI:
