@@ -345,10 +345,7 @@ class LLMAgent(Agent):
         )
 
         # Extract the final output based on whether we have structured output
-        if self.output_model and isinstance(chat_result, ModelOutput):
-            final_output = chat_result.parsed_object
-        else:
-            final_output = chat_result.content
+        final_output = chat_result.content
 
         # Prepare metadata for AgentOutput
         output_metadata = {

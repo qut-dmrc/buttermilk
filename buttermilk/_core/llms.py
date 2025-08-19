@@ -209,20 +209,11 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
 class ModelOutput(CreateResult):
-    """Extends Autogen's `CreateResult` with structured output parsing.
+    """Extends Autogen's `CreateResult` with structured output parsing."""
 
-    Adds a parsed_object field to hold a Pydantic model instance when
-    the LLM returns structured JSON output that can be parsed.
-
-    Attributes:
-        parsed_object (BaseModel | None): The Pydantic model instance hydrated from
-            the LLM's JSON content. None if no structured output or parsing failed.
-
-    """
-
-    parsed_object: BaseModel | None = Field(
-        default=None,
-        description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
+    content: str | BaseModel | list[FunctionCall] = Field(
+        default=...,
+        description="Output of the model call. If structured output is used, this should contain the hydrated pydantic model instance.",
     )
 
 
@@ -259,32 +250,32 @@ class AutoGenWrapper(RetryWrapper):
     ) -> CreateResult | ModelOutput:
         """Creates a chat completion using the wrapped client, with retry and structured output handling.
 
-        This method attempts to make a chat completion call. It determines if
-    structured output via a Pydantic schema should be requested based on the
-    `schema` argument and `model_info`. It then uses the retry logic from
-    `RetryWrapper` to execute the call. We intentionally do not request
-    structured output when tools are provided to avoid API conflicts.
+            This method attempts to make a chat completion call. It determines if
+        structured output via a Pydantic schema should be requested based on the
+        `schema` argument and `model_info`. It then uses the retry logic from
+        `RetryWrapper` to execute the call. We intentionally do not request
+        structured output when tools are provided to avoid API conflicts.
 
-        Args:
-            messages: A sequence of `LLMMessage` objects representing the
-                conversation history.
-            tools: An optional sequence of `Tool` objects that
-                the LLM can call.
-            schema: An optional Pydantic `BaseModel` subclass. If provided and
-                the model supports structured output (`model_info.structured_output`),
-                the LLM will be instructed to generate output matching this schema.
-            cancellation_token: An optional `CancellationToken` for aborting the request.
-            **kwargs: Additional keyword arguments to pass to the underlying
-                client's `create` method.
+            Args:
+                messages: A sequence of `LLMMessage` objects representing the
+                    conversation history.
+                tools: An optional sequence of `Tool` objects that
+                    the LLM can call.
+                schema: An optional Pydantic `BaseModel` subclass. If provided and
+                    the model supports structured output (`model_info.structured_output`),
+                    the LLM will be instructed to generate output matching this schema.
+                cancellation_token: An optional `CancellationToken` for aborting the request.
+                **kwargs: Additional keyword arguments to pass to the underlying
+                    client's `create` method.
 
-        Returns:
-            CreateResult | ModelOutput: The result from the LLM. If a schema was provided,
-                returns ModelOutput with parsed_object field containing the Pydantic instance.
+            Returns:
+                CreateResult | ModelOutput: The result from the LLM. If a schema was provided,
+                    returns ModelOutput with content field containing the Pydantic instance.
 
-        Raises:
-            ProcessingError: If the LLM returns an empty response or an unexpected
-                tool response, or if any other error occurs during the LLM call
-                after retries are exhausted. Also raised if schema parsing fails.
+            Raises:
+                ProcessingError: If the LLM returns an empty response or an unexpected
+                    tool response, or if any other error occurs during the LLM call
+                    after retries are exhausted. Also raised if schema parsing fails.
 
         """
         is_valid_schema_type = (
@@ -366,11 +357,10 @@ class AutoGenWrapper(RetryWrapper):
                             f"Failed to create {schema.__name__} from tool arguments: {e}",
                         )
                     return ModelOutput(
-                        content=json.dumps(parsed_object.model_dump()),
+                        content=parsed_object,
                         finish_reason=create_result.finish_reason,
                         usage=create_result.usage,
                         thought=getattr(create_result, "thought", None),
-                        parsed_object=parsed_object,
                         cached=create_result.cached,
                     )
             elif not tools:
@@ -550,8 +540,8 @@ class AutoGenWrapper(RetryWrapper):
         from buttermilk.utils.json_parser import ChatParser, simple_clean_llm_json_text  # local import to avoid cycles
 
         # Check if the result already contains a parsed object of the correct type
-        if isinstance(create_result, ModelOutput) and isinstance(create_result.parsed_object, schema):
-            parsed_object = create_result.parsed_object
+        if isinstance(create_result.content, schema):
+            parsed_object = create_result.content
         elif hasattr(create_result.content, "model_dump"):
             # Already a Pydantic object, but might be wrong type
             if not isinstance(create_result.content, schema):
@@ -576,14 +566,15 @@ class AutoGenWrapper(RetryWrapper):
             except Exception as e:  # noqa
                 parsed_object = None
 
-        try:
-            # Try json.loads as a fallback
-            if parsed_object is None and (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
-                parsed = json.loads(text)
-                if isinstance(parsed, dict):
-                    parsed_object = parsed
-        except Exception:
-            parsed_object = None
+        if parsed_object is None:
+            try:
+                # Try json.loads as a fallback
+                if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        parsed_object = parsed
+            except Exception:
+                parsed_object = None
 
         if parsed_object is None:
             # Fallback to tolerant parser for messy outputs
@@ -595,14 +586,13 @@ class AutoGenWrapper(RetryWrapper):
                     f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
 
-        try:
-            parsed_object = schema(**parsed_object) if isinstance(parsed_object, dict) else None
-            if parsed_object:
-                logger.debug(f"AutoGenWrapper: Successfully parsed response into {schema.__name__}")
-        except Exception as parse_error:
-            raise ProcessingError(
-                f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
-            ) from parse_error
+        if isinstance(parsed_object, dict):
+            try:
+                parsed_object = schema.model_validate(**parsed_object)
+            except Exception as parse_error:
+                raise ProcessingError(
+                    f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+                ) from parse_error
 
         # Create ModelOutput with the parsed object
         if parsed_object is None:
@@ -611,11 +601,10 @@ class AutoGenWrapper(RetryWrapper):
             )
 
         return ModelOutput(
-            content=create_result.content,
+            content=parsed_object,
             finish_reason=create_result.finish_reason,
             usage=create_result.usage,
             thought=getattr(create_result, "thought", None),
-            parsed_object=parsed_object,
             cached=create_result.cached,
         )
 

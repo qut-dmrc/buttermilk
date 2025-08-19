@@ -86,11 +86,11 @@ async def test_structured_output_fake_tool_workaround():
     
     # Verify the result
     assert isinstance(result, ModelOutput)
-    assert result.parsed_object is not None
-    assert isinstance(result.parsed_object, PersonInfo)
-    assert result.parsed_object.name == "John Doe"
-    assert result.parsed_object.age == 30
-    assert result.parsed_object.city == "New York"
+    assert result.content is not None
+    assert isinstance(result.content, PersonInfo)
+    assert result.content.name == "John Doe"
+    assert result.content.age == 30
+    assert result.content.city == "New York"
 
 
 @pytest.mark.anyio
@@ -145,9 +145,9 @@ async def test_structured_output_native_support():
     
     # Verify the result is parsed correctly
     assert isinstance(result, ModelOutput)
-    assert result.parsed_object is not None
-    assert isinstance(result.parsed_object, BookRecommendation)
-    assert result.parsed_object.title == "Nineteen Eighty-Four"
+    assert result.content is not None
+    assert isinstance(result.content, BookRecommendation)
+    assert result.content.title == "Nineteen Eighty-Four"
 
 
 @pytest.mark.anyio

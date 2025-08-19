@@ -302,20 +302,8 @@ async def test_structured_output_with_tools(llm_expensive):
 
     # Verify structured response
     assert response.content
-    if hasattr(response, "parsed_object") and response.parsed_object:
-        # If the model returned a parsed object
-        assert isinstance(response.parsed_object, Answer)
-        assert "tokyo" in response.parsed_object.result.lower()
-    else:
-        # If not, try to parse the JSON response
-        try:
-            parsed = Answer.model_validate_json(response.content)
-            assert "tokyo" in parsed.result.lower()
-            assert 0 <= parsed.confidence <= 1
-        except Exception:
-            # Some models might not support structured output well
-            # Just verify it mentions Tokyo
-            assert "tokyo" in response.content.lower()
+    assert isinstance(response.content, Answer)
+    assert "tokyo" in response.content.result.lower()
 
 
 @pytest.mark.anyio
@@ -373,5 +361,5 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
 
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
-    assert response.content == [8, 14], f"Expected [8, 14] in result, got: {response.content}"
+    assert set(response.content.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.content}"
     assert 0.0 <= response.content.confidence <= 1.0
