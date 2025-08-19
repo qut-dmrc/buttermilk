@@ -334,7 +334,9 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
             source="system",
         ),
         UserMessage(
-            content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool. Return the final answer using the schema."),
+            content=(
+                "Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool. Return both answers as a list using the schema provided."
+            ),
             source="user",
         ),
     ]
