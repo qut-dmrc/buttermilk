@@ -276,7 +276,7 @@ class AutoGenWrapper(RetryWrapper):
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> CreateResult | ModelOutput | ErrorResult:
+    ) -> CreateResult | ModelOutput:
         """Creates a chat completion using the wrapped client, with retry and structured output handling.
 
             This method attempts to make a chat completion call. It determines if
@@ -302,9 +302,8 @@ class AutoGenWrapper(RetryWrapper):
                     returns ModelOutput with parsed_object field containing the Pydantic instance.
 
             Raises:
-                ProcessingError: If the LLM returns an empty response or an unexpected
-                    tool response, or if any other error occurs during the LLM call
-                    after retries are exhausted. Also raised if schema parsing fails.
+                ProcessingError: If the LLM returns an empty/invalid response, unexpected
+                    tool response types are received, or any post-call normalization/parsing fails.
 
         """
         is_valid_schema_type = (
@@ -361,8 +360,8 @@ class AutoGenWrapper(RetryWrapper):
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
 
-        # Now that we've made the LLM call and received a response, from
-        # this point on, any errors we encounter will be returned as an ErrorResult
+    # Now that we've made the LLM call and received a response, from
+    # this point on, any errors we encounter will raise ProcessingError (fail-fast)
         try:
             # Normalize provider returns that are BaseModel/dict when json_output was used
             # so that .content is always a string (or tool calls), while preserving parsed_object.
@@ -429,16 +428,8 @@ class AutoGenWrapper(RetryWrapper):
 
             return create_result  # type: ignore # Expect CreateResult or compatible
         except Exception as e:
-            # If we encountered an error while processing the result, return it as an ErrorResult
-            return ErrorResult(
-                content="",
-                finish_reason=create_result.finish_reason,
-                usage=create_result.usage,
-                thought=getattr(create_result, "thought", None),
-                error_message=str(e),
-                error_code=getattr(e, "error_code", None),  # Custom error code if available
-                raw_response=create_result.content,  # Include the raw response for context
-            )
+            # Fail-fast: propagate as ProcessingError for the caller to handle
+            raise ProcessingError(f"LLM result normalization/parsing failed: {e!s}") from e
 
     @weave.op
     async def call_chat(
@@ -448,7 +439,7 @@ class AutoGenWrapper(RetryWrapper):
         tools_list: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
         intercept_tools: bool = False,
-    ) -> CreateResult | ModelOutput | ErrorResult:
+    ) -> CreateResult | ModelOutput:
         """Manages a chat interaction, including potential tool calls and responses.
 
         This method sends an initial set of messages to the LLM. If the LLM
@@ -488,10 +479,6 @@ class AutoGenWrapper(RetryWrapper):
             # The first call failed -- before we have executed any tools
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
-        # If the LLM returned an error, return it directly
-        if isinstance(create_result, ErrorResult):
-            return create_result
-
         # If the LLM responded with a request to call tools
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
@@ -515,17 +502,8 @@ class AutoGenWrapper(RetryWrapper):
                 tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
                 messages += [tool_result_messages]  # Append tool results to the message history
             except Exception as e:
-                return ErrorResult(
-                    content="",
-                    finish_reason=create_result.finish_reason,
-                    usage=create_result.usage,
-                    thought=getattr(create_result, "thought", None),
-                    error_message=f"Failed to execute tools: {e!s}",
-                    error_code=getattr(e, "error_code", None),  # Custom error code if available
-                    raw_response=create_result.content,  # Include the raw response for context
-                    tool_calls=tool_calls,
-                    tool_outputs=tool_outputs,
-                )
+                # Fail-fast: surface tool execution failures immediately
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
             try:
                 # Call the LLM again with the tool results included in the history
@@ -536,18 +514,8 @@ class AutoGenWrapper(RetryWrapper):
                 )
                 return synth_result
             except Exception as e:
-                # If we encountered an error while processing the synthesis, return an ErrorResult
-                return ErrorResult(
-                    content="",
-                    finish_reason=create_result.finish_reason,
-                    usage=create_result.usage,
-                    thought=getattr(create_result, "thought", None),
-                    error_message=f"Failed to create synthesis after tool calls: {e!s}",
-                    error_code=getattr(e, "error_code", None),  # Custom error code if available
-                    raw_response=create_result.content,  # Include the raw response for context
-                    tool_calls=tool_calls,
-                    tool_outputs=tool_outputs,
-                )
+                # Fail-fast on synthesis errors
+                raise ProcessingError(f"Failed to create synthesis after tool calls: {e!s}") from e
 
         return create_result  # type: ignore # Expect CreateResult or ModelOutput
 
