@@ -188,50 +188,6 @@ async def test_no_tool_needed(llm_expensive):
         raise
 
 
-@pytest.mark.anyio
-async def test_structured_output_with_tools(llm_expensive):
-    """Test that models handle the interaction between structured output and tools correctly."""
-
-    class Answer(BaseModel):
-        """Structured answer format."""
-
-        result: str = Field(description="The answer to the question")
-        confidence: float = Field(description="Confidence level from 0 to 1")
-
-    # Create a simple tool
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
-
-    messages = [
-        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema.", source="system"),
-        UserMessage(content="What is the capital of Japan?", source="user"),
-    ]
-
-    # Test with structured output (tools should not be passed with structured output for certain models)
-    response = await llm_expensive.call_chat(
-        messages=messages,
-        tools_list=[calc_tool],
-        schema=Answer,
-        cancellation_token=CancellationToken(),  # This might be ignored for some models
-    )
-
-    # Verify structured response
-    assert response.content
-    if hasattr(response, "parsed_object") and response.parsed_object:
-        # If the model returned a parsed object
-        assert isinstance(response.parsed_object, Answer)
-        assert "tokyo" in response.parsed_object.result.lower()
-    else:
-        # If not, try to parse the JSON response
-        try:
-            parsed = Answer.model_validate_json(response.content)
-            assert "tokyo" in parsed.result.lower()
-            assert 0 <= parsed.confidence <= 1
-        except Exception:
-            # Some models might not support structured output well
-            # Just verify it mentions Tokyo
-            assert "tokyo" in response.content.lower()
-
-
 @pytest.mark.parametrize("model_name", CHAT_MODELS)
 @pytest.mark.anyio
 async def test_all_models_basic_tool_call(model_name, bm):
@@ -319,6 +275,50 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
 
 
 @pytest.mark.anyio
+async def test_structured_output_with_tools(llm_expensive):
+    """Test that models handle the interaction between structured output and tools correctly."""
+
+    class Answer(BaseModel):
+        """Structured answer format."""
+
+        result: str = Field(description="The answer to the question")
+        confidence: float = Field(description="Confidence level from 0 to 1")
+
+    # Create a simple tool
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+
+    messages = [
+        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema.", source="system"),
+        UserMessage(content="What is the capital of Japan?", source="user"),
+    ]
+
+    # Test with structured output (tools should not be passed with structured output for certain models)
+    response = await llm_expensive.call_chat(
+        messages=messages,
+        tools_list=[calc_tool],
+        schema=Answer,
+        cancellation_token=CancellationToken(),  # This might be ignored for some models
+    )
+
+    # Verify structured response
+    assert response.content
+    if hasattr(response, "parsed_object") and response.parsed_object:
+        # If the model returned a parsed object
+        assert isinstance(response.parsed_object, Answer)
+        assert "tokyo" in response.parsed_object.result.lower()
+    else:
+        # If not, try to parse the JSON response
+        try:
+            parsed = Answer.model_validate_json(response.content)
+            assert "tokyo" in parsed.result.lower()
+            assert 0 <= parsed.confidence <= 1
+        except Exception:
+            # Some models might not support structured output well
+            # Just verify it mentions Tokyo
+            assert "tokyo" in response.content.lower()
+
+
+@pytest.mark.anyio
 async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     """Cover the full flow: initial tool call -> tool execution -> synthesis call with schema.
 
@@ -327,8 +327,7 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     """
 
     class Answer(BaseModel):
-        result: str = Field(description="The final answer text")
-        confidence: float = Field(description="Confidence level from 0 to 1")
+        result: list[int] = Field(description="The final answer")
 
     # Skip if model doesn't support tools
     model_name = getattr(llm_expensive, "_model_name", None)
@@ -340,13 +339,14 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     messages = [
         SystemMessage(
             content=(
-                "You are a helpful assistant. You must call tools when requested. "
-                "After using the tool, present the final answer using the provided schema."
+                "You are a helpful assistant. When a task involves addition, you must use the calculate_sum tool "
+                "for every addition operation. Do not perform any arithmetic yourself. After finishing the tool "
+                "calls, present the final answers using the provided schema."
             ),
             source="system",
         ),
         UserMessage(
-            content="Compute 5 + 3 using the calculate_sum tool, then return the answer using the schema.",
+            content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool. Return the final answer using the schema."),
             source="user",
         ),
     ]
@@ -373,19 +373,5 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
 
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
-
-    # Prefer parsed object when available
-    if hasattr(response, "parsed_object") and response.parsed_object:
-        parsed = response.parsed_object
-        assert isinstance(parsed, Answer), f"Expected Answer, got {type(parsed)}"
-        assert any(t in parsed.result.lower() for t in ["8", "eight"]), f"Expected sum in result, got: {parsed.result}"
-        assert 0.0 <= parsed.confidence <= 1.0
-    else:
-        # Fallback: try parsing as JSON, else just check content mentions the sum
-        try:
-            parsed = Answer.model_validate_json(response.content)
-            assert any(t in parsed.result.lower() for t in ["8", "eight"]), f"Expected sum in result, got: {parsed.result}"
-            assert 0.0 <= parsed.confidence <= 1.0
-        except Exception:
-            # Be lenient for quirky models; just ensure it looks like the correct answer
-            assert any(t in response.content.lower() for t in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"
+    assert response.content == [8, 14], f"Expected [8, 14] in result, got: {response.content}"
+    assert 0.0 <= response.content.confidence <= 1.0
