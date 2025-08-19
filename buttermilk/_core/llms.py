@@ -364,6 +364,28 @@ class AutoGenWrapper(RetryWrapper):
         # Now that we've made the LLM call and received a response, from
         # this point on, any errors we encounter will be returned as an ErrorResult
         try:
+            # Normalize provider returns that are BaseModel/dict when json_output was used
+            # so that .content is always a string (or tool calls), while preserving parsed_object.
+            if is_valid_schema_type and not tools:
+                if hasattr(create_result.content, "model_dump"):  # Pydantic BaseModel
+                    obj = create_result.content
+                    return ModelOutput(
+                        content=obj.model_dump_json(),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=obj,
+                        cached=create_result.cached,
+                    )
+                if isinstance(create_result.content, dict):
+                    return ModelOutput(
+                        content=json.dumps(create_result.content),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=None,  # you can parse later in _parse_structured_output if needed
+                        cached=create_result.cached,
+                    )
             if not create_result.content:
                 raise ProcessingError("Empty response content from LLM.")
             if isinstance(create_result.content, str) and not create_result.content.strip():
