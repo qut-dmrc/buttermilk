@@ -1,11 +1,10 @@
+import importlib
 
 import pytest
-try:  # Weave is optional in some environments
-    import weave  # type: ignore
-except Exception:  # pragma: no cover - optional dependency path
-    weave = None  # type: ignore
 
-from buttermilk._core.bm_init import BM  # Modified import
+from buttermilk._core.bm_init import BM
+
+weave = importlib.import_module("weave")
 
 
 @pytest.mark.anyio
@@ -45,10 +44,5 @@ async def test_weave_tracing_initialised_and_creates_calls(bm: BM):
     # Finish the call (simulate successful output)
     client.finish_call(call, output={"result": 42}, op=op)
 
-    # Optionally, try to fetch the call back by ID (best-effort; may depend on backend timing)
-    try:
-        fetched = client.get_call(call.id)
-        assert fetched is not None, "Weave get_call should return the created call"
-    except Exception:
-        # Some environments/backends may not support immediate retrieval; creation was the primary check
-        pass
+    fetched = client.get_call(call.id)
+    assert fetched is not None, "Weave get_call should return the created call"
