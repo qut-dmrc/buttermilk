@@ -7,11 +7,11 @@ from cloudpathlib import CloudPath
 from PIL import Image, ImageStat
 
 from buttermilk._core.image import ImageRecord
-from buttermilk.agents.imagegen import DALLE, SDXL, Imagegen3, Imagegen4
+from buttermilk.agents.imagegen import ImageClients
 
 pytestmark = pytest.mark.anyio
 
-CLIENTS = [Imagegen3, DALLE, SDXL, Imagegen4]
+CLIENTS = [x for x in ImageClients]
 
 TEST_PROMPT = "Two Bangladeshi women working at a coffee shop in Dhaka, Bangladesh."
 TEST_NEGATIVE_PROMPT = "TRADITIONAL ATTIRE"

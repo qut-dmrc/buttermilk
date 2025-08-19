@@ -1,11 +1,10 @@
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Google GenAI API import issues - GenerativeModel not available")
-
-# from buttermilk.agents.imagegen import (
-#     BatchImageGenerator,
-#     ImageClients,
-# )
+from buttermilk import logger
+from buttermilk.agents.imagegen import (
+    BatchImageGenerator,
+    ImageClients,
+)
 
 prompts = [
     (
@@ -19,10 +18,9 @@ prompts = [
 ]
 
 
-@pytest.mark.integration
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
-# @pytest.mark.parametrize("client", ImageClients)
+@pytest.mark.parametrize("client", ImageClients)
 async def test_model(client, prompt):
     negative_prompt = "dog"
     imagegenerator = client()
@@ -37,10 +35,9 @@ async def test_model(client, prompt):
     assert image
 
 
-@pytest.mark.integration
 @pytest.mark.anyio
 async def test_batch(bm):
-    prompt = "an adorable black long-haired cat with black whiskers and two thick white whiskers, on her back, belly exposed, looking at the camera upside down, sunning herself on a hardwood floor"
+    prompt = prompts[0][1]
     runner = BatchImageGenerator(generators=ImageClients)
     images = []
     async for result in runner.abatch(input=[prompt], n=1):
