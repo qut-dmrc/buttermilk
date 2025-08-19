@@ -1,19 +1,17 @@
 """Integration tests for osb, trans, and tox flows with the new tool definition system."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from typing import Any
-import os
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from buttermilk._core import AgentInput, StepRequest
-from buttermilk._core.agent import Agent, ManagerMessage
-from buttermilk._core.contract import AgentOutput, AgentTrace, ConductorRequest
-from buttermilk._core.constants import END, MANAGER
-from buttermilk._core.tool_definition import AgentToolDefinition
-from buttermilk._core.mcp_decorators import tool, MCPRoute
-from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
+from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentOutput, ConductorRequest
+from buttermilk._core.mcp_decorators import MCPRoute, tool
 from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 
 # Use anyio for async tests
@@ -31,11 +29,10 @@ def mock_bm():
     mock_bm.storage = {}
     
     # Mock weave
-    mock_bm.weave = Mock()
-    mock_bm.weave.init_trace = Mock()
+    mock_bm.get_weave_client = Mock()
     
     # Use MagicMock to prevent AttributeError
-    with patch('buttermilk.buttermilk', mock_bm):
+    with patch("buttermilk.buttermilk", mock_bm):
         yield mock_bm
 
 
@@ -164,20 +161,13 @@ class TestTransFlowIntegration:
             
             @tool
             @MCPRoute("/assess_content")
-            def assess_journalism_quality(
-                self, 
-                content: str, 
-                criteria: list[str]
-            ) -> dict[str, Any]:
+            def assess_journalism_quality(self, content: str, criteria: list[str]) -> dict[str, Any]:
                 """Assess journalism quality against criteria."""
                 return {
                     "content_snippet": content[:100],
                     "criteria_applied": criteria,
-                    "scores": {
-                        criterion: 0.8 + (i * 0.05) 
-                        for i, criterion in enumerate(criteria)
-                    },
-                    "overall_quality": "high"
+                    "scores": {criterion: 0.8 + (i * 0.05) for i, criterion in enumerate(criteria)},
+                    "overall_quality": "high",
                 }
         
         class MockSynthAgent(Agent):
@@ -364,4 +354,3 @@ class TestFlowMigration:
         structured_host.callback_to_groupchat = AsyncMock()
         structured_host._participants = {"AGENT1": Mock()}
         structured_host.tools = []
-    

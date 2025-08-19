@@ -399,12 +399,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-
-            if bm.weave:
+            weave_client = await bm.get_weave_client()
+            if weave_client is not None:
                 process_op = weave.op(self._process, call_display_name=self.agent_name)
                 parent_call = await get_parent_call_weave(message)
 
-                child_call = bm.weave.create_call(
+                child_call = weave_client.create_call(
                     process_op,
                     inputs=message.model_dump(mode="json"),
                     parent=parent_call,
@@ -428,8 +428,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         finally:
             # Mark the child call as complete, regardless of success or failure.
             # Output is passed to bm.weave.finish_call if result is not None
-            if bm.weave and child_call:
-                bm.weave.finish_call(child_call, output=result or None, op=process_op)
+
+            if weave_client and child_call:
+                weave_client.finish_call(child_call, output=result or None, op=process_op)
                 tracing_link = child_call.ui_url
             # TODO: try to force and wait for upload to weave here, so that we can get the trace link
 
