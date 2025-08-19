@@ -20,12 +20,11 @@ from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import buttermilk as bm
-from buttermilk import logger
+from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.llms import CreateResult, ErrorResult, ModelOutput
 from buttermilk._core.types import Record
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
@@ -336,16 +335,9 @@ class LLMAgent(Agent):
             schema=self.output_model,
             cancellation_token=cancellation_token,
         )
-
-        llm_messages_to_send.append(
-            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
-        )
         logger.debug(
-            f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
+            f"Agent {self.agent_name}: Received {type(chat_result)} from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
-
-        # Extract the final output based on whether we have structured output
-        final_output = chat_result.content
 
         # Prepare metadata for AgentOutput
         output_metadata = {
@@ -353,14 +345,28 @@ class LLMAgent(Agent):
             "agent_id": self.agent_id,
             "agent_model": self.parameters["model"],
             "finish_reason": chat_result.finish_reason,
+            "usage": chat_result.usage,
         }
+        any_error = None
+        if isinstance(chat_result, ErrorResult):
+            llm_messages_to_send.append(
+                AssistantMessage(content=chat_result.error_message, thought=getattr(chat_result, "thought", None), source=self.agent_id),
+            )
+            final_output = chat_result
+            any_error = chat_result.error_message
+        else:
+            llm_messages_to_send.append(
+                AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
+            )
 
-        # Only add usage if present
-        if chat_result.usage:
-            output_metadata["usage"] = chat_result.usage
+            # Extract the final output based on whether we have structured output
+            if self.output_model and isinstance(chat_result.parsed_object, self.output_model):
+                final_output = chat_result.parsed_object
+            else:
+                final_output = chat_result.content
 
         logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
-        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
+        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata, error=any_error)
 
     async def _call_llm(
         self,
