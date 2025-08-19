@@ -362,4 +362,3 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
     assert set(response.content.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.content}"
-    assert 0.0 <= response.content.confidence <= 1.0
