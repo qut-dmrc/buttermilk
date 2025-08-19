@@ -34,18 +34,20 @@ from autogen_core.models import (
     LLMMessage,
     ModelInfo,
 )
-from autogen_core.tools import Tool  # Autogen tool handling
+from autogen_core.tools import BaseTool, Tool  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
+
 # from google import genai  # Google Generative AI library (unused in current implementation)
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
+
 from .retry import RetryWrapper  # Retry logic wrapper
 
 
@@ -54,6 +56,7 @@ def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
     _get_bm = importlib.import_module("buttermilk._core.dmrc").get_bm
     return _get_bm()
+
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
 
@@ -298,9 +301,34 @@ class AutoGenWrapper(RetryWrapper):
             "extra_create_args": kwargs,
         }
 
-        # Prefer structured output when a schema is provided and tools are not used
-        if is_valid_schema_type and not tools and self.model_info.get("structured_output", False):
-            create_call_kwargs["json_output"] = schema  # type: ignore[arg-type]
+        # If caller requested a schema and didn't provide tools, choose best path per model capability
+        used_fake_schema_tool = False
+        fake_schema_tool = None
+        if is_valid_schema_type and not tools:
+            if self.model_info.get("structured_output", False):
+                # Native structured output supported
+                create_call_kwargs["json_output"] = schema  # type: ignore[arg-type]
+            elif self.model_info.get("function_calling", True):
+                # No native structured output, but tool calling available: use a fake tool
+
+                class PydanticModelTool(BaseTool[BaseModel, BaseModel]):
+                    """A tool that creates instances of a Pydantic model."""
+
+                    def __init__(self, model: type[BaseModel]):
+                        super().__init__(
+                            args_type=model,
+                            return_type=model,
+                            name=f"create_{model.__name__.lower()}",
+                            description=f"Create a {model.__name__} object with the specified fields",
+                        )
+                        self._model = model
+
+                    async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
+                        return args
+
+                fake_schema_tool = PydanticModelTool(schema)
+                create_call_kwargs["tools"] = [fake_schema_tool]
+                used_fake_schema_tool = True
 
         try:
             create_result = await self._execute_with_retry(
@@ -325,11 +353,30 @@ class AutoGenWrapper(RetryWrapper):
                 "Unexpected response type from LLM when expecting tool calls or text.", create_result.content
             )
 
-        # Handle structured output parsing if schema was provided and we didn't use tools in this call
-        if schema and is_valid_schema_type and not tools:
-            # If the model didn't return tool calls, parse into the schema
-            if not (isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content)):
-                return await self._parse_structured_output(create_result, schema)
+        # Handle structured output parsing
+        if schema and is_valid_schema_type:
+            if used_fake_schema_tool and isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+                tool_calls = create_result.content
+                if len(tool_calls) == 1 and fake_schema_tool and tool_calls[0].name == fake_schema_tool.name:
+                    arguments = json.loads(tool_calls[0].arguments)
+                    try:
+                        parsed_object = schema(**arguments)
+                    except Exception as e:
+                        raise ProcessingError(
+                            f"Failed to create {schema.__name__} from tool arguments: {e}",
+                        )
+                    return ModelOutput(
+                        content=json.dumps(parsed_object.model_dump()),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=parsed_object,
+                        cached=create_result.cached,
+                    )
+            elif not tools:
+                # If we didn't use tools in the request, parse the response into the schema
+                if not (isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content)):
+                    return await self._parse_structured_output(create_result, schema)
 
         return create_result  # type: ignore # Expect CreateResult or compatible
 
@@ -407,11 +454,12 @@ class AutoGenWrapper(RetryWrapper):
 
             try:
                 # Call the LLM again with the tool results included in the history
-                create_result = await self.create(
+                synth_result = await self.create(
                     messages=messages,
                     cancellation_token=cancellation_token,
                     schema=schema,
                 )
+                return synth_result
             except Exception as e:
                 # If tool execution fails, we can log the error and return the original result
                 raise ProcessingError(f"Failed to synthesise tool results: {e!s}") from e

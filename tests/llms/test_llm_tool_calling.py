@@ -2,7 +2,7 @@
 
 
 import pytest
-from autogen_core import CancellationToken
+from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field
@@ -277,3 +277,115 @@ async def test_all_models_basic_tool_call(model_name, bm):
 
         # For other models, this is unexpected
         raise AssertionError(f"{model_name} unexpectedly failed tool calling: {e}")
+
+
+@pytest.mark.anyio
+async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
+    """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
+    # Skip if model doesn't support tools
+    model_name = getattr(llm_expensive, "_model_name", None)
+    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
+        pytest.skip(f"{model_name} doesn't support tool calling")
+
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+
+    messages = [
+        SystemMessage(
+            content=(
+                "You are a helpful assistant with access to the calculate_sum tool. "
+                "Do not answer directly. You must call the calculate_sum tool to compute 5 + 7."
+            ),
+            source="system",
+        ),
+        UserMessage(content="What's 5 + 7? Use the tool.", source="user"),
+    ]
+
+    try:
+        result = await llm_expensive.call_chat(
+            messages=messages,
+            tools_list=[calc_tool],
+            cancellation_token=CancellationToken(),
+            intercept_tools=True,
+        )
+    except Exception as e:
+        if "does not support function calling" in str(e):
+            pytest.skip(f"Model doesn't support tool calling: {e}")
+        raise
+
+    assert result.content, "Expected tool call(s) in result content"
+    assert isinstance(result.content, list), f"Expected a list of FunctionCall, got: {type(result.content)}"
+    assert all(isinstance(c, FunctionCall) for c in result.content), "Expected FunctionCall objects"
+    assert any(c.name == "calculate_sum" for c in result.content), "Expected a calculate_sum tool call"
+
+
+@pytest.mark.anyio
+async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
+    """Cover the full flow: initial tool call -> tool execution -> synthesis call with schema.
+
+    This test helps surface issues where the synthesis call incorrectly sets a structured
+    response_format that some models don't support.
+    """
+
+    class Answer(BaseModel):
+        result: str = Field(description="The final answer text")
+        confidence: float = Field(description="Confidence level from 0 to 1")
+
+    # Skip if model doesn't support tools
+    model_name = getattr(llm_expensive, "_model_name", None)
+    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
+        pytest.skip(f"{model_name} doesn't support tool calling")
+
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+
+    messages = [
+        SystemMessage(
+            content=(
+                "You are a helpful assistant. You must call tools when requested. "
+                "After using the tool, present the final answer using the provided schema."
+            ),
+            source="system",
+        ),
+        UserMessage(
+            content="Compute 5 + 3 using the calculate_sum tool, then return the answer using the schema.",
+            source="user",
+        ),
+    ]
+
+    try:
+        response = await llm_expensive.call_chat(
+            messages=messages,
+            tools_list=[calc_tool],
+            schema=Answer,
+            cancellation_token=CancellationToken(),
+        )
+    except Exception as e:
+        # Surface the specific error the user saw to make the failure actionable
+        err = str(e).lower()
+        if "response_format" in err and "json_schema" in err and "not supported" in err:
+            pytest.fail(
+                "Synthesis call attempted to use a structured response_format (json_schema) "
+                "on a model that doesn't support it. Ensure call_chat() avoids structured "
+                "response formats for unsupported models after tool execution."
+            )
+        if "does not support function calling" in err:
+            pytest.skip(f"Model doesn't support tool calling: {e}")
+        raise
+
+    # Validate the synthesized result
+    assert response.content, "Expected non-empty synthesized response"
+
+    # Prefer parsed object when available
+    if hasattr(response, "parsed_object") and response.parsed_object:
+        parsed = response.parsed_object
+        assert isinstance(parsed, Answer), f"Expected Answer, got {type(parsed)}"
+        assert any(t in parsed.result.lower() for t in ["8", "eight"]), f"Expected sum in result, got: {parsed.result}"
+        assert 0.0 <= parsed.confidence <= 1.0
+    else:
+        # Fallback: try parsing as JSON, else just check content mentions the sum
+        try:
+            parsed = Answer.model_validate_json(response.content)
+            assert any(t in parsed.result.lower() for t in ["8", "eight"]), f"Expected sum in result, got: {parsed.result}"
+            assert 0.0 <= parsed.confidence <= 1.0
+        except Exception:
+            # Be lenient for quirky models; just ensure it looks like the correct answer
+            assert any(t in response.content.lower() for t in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"

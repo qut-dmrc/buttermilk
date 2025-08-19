@@ -16,9 +16,8 @@
     "/src/buttermilk/.venv/bin/python"
   ],
   "editor.defaultFormatter": "charliermarsh.ruff",
-  "ruff.lineLength": 120,
   "python.analysis.languageServerMode": "full",
-  "python.analysis.typeCheckingMode": "standard",
+  // "python.analysis.typeCheckingMode": "standard",
   "python.analysis.include": [
     "buttermilk"
   ],
@@ -37,7 +36,7 @@
   "python.analysis.useLibraryCodeForTypes": false,
   "python.analysis.indexing": true,
   "python.analysis.autoImportCompletions": true,
-  "python.analysis.enablePytestSupport": false,
+  "python.analysis.enablePytestSupport": true,
   "python.analysis.packageIndexDepths": [
     {
       "name": "sklearn",
@@ -72,5 +71,4 @@
   },
   "explorer.excludeGitIgnore": true,
   "python-envs.pythonProjects": [],
-  "terminal.integrated.env.linux": {}
 }
