@@ -91,7 +91,6 @@ Each search result includes:
 1. **Use natural language queries**: "what are transaction costs" works better than just "transaction costs"
 2. **Filter by content type**: Use `where={"content_type": "abstract"}` to search only abstracts
 3. **Adjust result count**: Use `n_results` parameter (default is 10)
-4. **Enable no-duplicates**: Set `no_duplicates=True` to get chunks from different documents
 
 ## Troubleshooting
 

@@ -3,4 +3,3 @@
 chromadb_search:
   _target_: buttermilk.tools.chromadb_search.ChromaDBSearchTool
   n_results: 10
-  no_duplicates: true
