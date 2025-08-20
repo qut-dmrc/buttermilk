@@ -164,7 +164,6 @@ class LLMConfig(BaseModel):
 CHAT_MODELS = [
     "gemini25flash",
     "gemini25pro",
-    "gpt5chat",
     "gpt5mini",
     "gpt5nano",
     "llama4maverick",
@@ -176,7 +175,7 @@ CHAT_MODELS = [
 CHEAP_CHAT_MODELS = [
     "gemini25flash",
     "gpt5nano",
-    "haiku",
+    "sonnet",
 ]
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
@@ -460,13 +459,12 @@ class AutoGenWrapper(RetryWrapper):
         intercept_tools: bool = False,
         max_tool_iterations: int = 3,
     ) -> CreateResult | ModelOutput:
-        """Manages a chat interaction, including potential tool calls and responses.
+        """Manages a chat interaction with a single tool execution pass followed by optional synthesis.
 
-        This method sends an initial set of messages to the LLM. If the LLM
-        responds with tool call requests, this method executes those tools
-        (unless intercept_tools is True), appends their results back to the
-        message history, and sends the updated history back to the LLM to get
-        a final response.
+        This method sends an initial set of messages to the LLM with tools (no schema).
+        If the LLM responds with tool calls, executes them and makes a synthesis call
+        with schema only (no tools). This avoids model limitations where tools and
+        schemas cannot be used simultaneously.
 
         Args:
             messages: A list of `LLMMessage` objects forming the conversation.
@@ -474,67 +472,83 @@ class AutoGenWrapper(RetryWrapper):
             cancellation_token: A `CancellationToken` for the operation.
             tools_list: An optional sequence of `Tool` objects
                 available for the LLM to call.
-            schema: An optional Pydantic `BaseModel` subclass for structured output
-                requests (if no tools are called).
+            schema: An optional Pydantic `BaseModel` subclass for structured output.
             intercept_tools: If True, return FunctionCall objects without executing them.
                 This is useful for agents that need to handle tool calls specially.
-            max_tool_iterations: Maximum number of tool call iterations allowed.
+            max_tool_iterations: Kept for compatibility but only single iteration is performed.
 
         Returns:
-            CreateResult | ModelOutput: The final result from the LLM after
-                any tool call cycles. Returns ModelOutput if schema was provided.
+            CreateResult | ModelOutput: The final result from the LLM.
+                Returns ModelOutput if schema was provided or if synthesis was performed.
 
         """
-        # Pass tools as-is - the create() method will handle conflicts between tools and schema
-        effective_tools = tools_list
-        iterations = 0
-        while True:
+        # Step 1: Initial call with tools only (no schema to avoid conflicts)
+        try:
+            create_result = await self.create(
+                messages=messages,
+                tools=tools_list,
+                cancellation_token=cancellation_token,
+                schema=None,  # No schema on first call to avoid conflicts
+            )
+        except Exception as e:
+            # The call failed
+            raise ProcessingError(f"Failed to query LLM: {e!s}") from e
+
+        # Step 2: Handle tool calls if present
+        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+            tool_calls: list[FunctionCall] = create_result.content
+
+            if intercept_tools:
+                logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
+                return create_result
+
+            # Add the assistant message with tool calls to the history
+            assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
+            messages += [assistant_msg]
+
             try:
-                create_result = await self.create(
-                    messages=messages,
-                    tools=effective_tools,
+                tool_outputs = await self._execute_tools(
+                    calls=tool_calls,
+                    tools_list=tools_list,
                     cancellation_token=cancellation_token,
-                    schema=schema,
                 )
+                # Tool results are already FunctionExecutionResult objects
+                tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
+                messages += [tool_result_messages]
             except Exception as e:
-                # The call failed
-                raise ProcessingError(f"Failed to query LLM: {e!s}") from e
+                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
-            # If the LLM responded with a request to call tools
-            if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
-                tool_calls: list[FunctionCall] = create_result.content
+            # Step 3: Synthesis call with schema only (no tools)
+            try:
+                synthesis_result = await self.create(
+                    messages=messages,
+                    tools=[],  # No tools on synthesis call
+                    cancellation_token=cancellation_token,
+                    schema=schema,  # Apply schema for structured output
+                )
+                return synthesis_result
+            except Exception as e:
+                raise ProcessingError(f"Failed to synthesize after tool execution: {e!s}") from e
 
-                if intercept_tools:
-                    logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
-                    return create_result
-
-                if iterations >= max_tool_iterations:
-                    raise ProcessingError(
-                        f"Max tool iterations exceeded ({max_tool_iterations}); refusing further tool loops.",
+        # Step 4: No tool calls - apply schema to original result if provided
+        if schema:
+            try:
+                # Parse the original result with schema
+                if isinstance(create_result.content, str):
+                    parsed_object = await self._parse_structured_output(create_result.content, schema)
+                    return ModelOutput(
+                        content=create_result.content,
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=parsed_object,
+                        cached=create_result.cached,
                     )
+            except Exception as e:
+                raise ProcessingError(f"Failed to parse response with schema: {e!s}") from e
 
-                # Add the assistant message with tool calls to the history
-                assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
-                messages += [assistant_msg]
-
-                try:
-                    tool_outputs = await self._execute_tools(
-                        calls=tool_calls,
-                        tools_list=tools_list,
-                        cancellation_token=cancellation_token,
-                    )
-                    # Tool results are already FunctionExecutionResult objects
-                    tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
-                    messages += [tool_result_messages]
-                except Exception as e:
-                    raise ProcessingError(f"Failed to execute tools: {e!s}") from e
-
-                iterations += 1
-                # Continue loop to call LLM again with new context
-                continue
-
-            # No tool calls -> finalize
-            return create_result  # type: ignore # Expect CreateResult or ModelOutput
+        # Return the original result
+        return create_result
 
     @weave.op
     async def _call_tool(  # noqa: D401
@@ -624,7 +638,7 @@ class AutoGenWrapper(RetryWrapper):
 
             # Try to parse as strict JSON first to preserve types (avoid coercion)
             logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
-            text = simple_clean_llm_json_text(text)
+            text = simple_clean_llm_json_text(content)
 
             if parsed_object is None:
                 try:
