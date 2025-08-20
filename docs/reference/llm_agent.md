@@ -6,7 +6,7 @@ Here is a high-level overview of the call stack, from the initial agent invocati
     2     participant User
     3     participant Agent.invoke()
     4     participant LLMAgent._process()
-  5     participant AutoGenWrapper.call_chat(max_tool_iterations=1)
+    5     participant AutoGenWrapper.call_chat(max_tool_iterations=1)
     6     participant AutoGenWrapper.create()
     7     participant LLM_API
     8     participant AutoGenWrapper._execute_tools()
