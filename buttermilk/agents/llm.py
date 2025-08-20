@@ -162,28 +162,24 @@ class LLMAgent(Agent):
             str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
 
         """
-        if not self.parameters["model"]:
+        model = self.parameters.get("model") or ""
+        model_lower = model.lower()
+        if not model_lower:
             return ""
 
-        model_lower = self.parameters["model"].lower()
-
-        # Common model patterns
-        if "gpt-4" in model_lower:
-            return "GPT4"
-        if "gpt-3.5" in model_lower:
-            return "GPT3"
-        if "sonnet" in model_lower:
-            return "SONN"
-        if "opus" in model_lower:
-            return "OPUS"
-        if "haiku" in model_lower:
-            return "HAIK"
-        if "claude" in model_lower:
-            return "CLDE"
-        if "gemini" in model_lower:
-            return "GEMN"
-        if "llama" in model_lower:
-            return "LLMA"
+        patterns = {
+            "gpt-4": "GPT4",
+            "gpt-3.5": "GPT3",
+            "sonnet": "SONN",
+            "opus": "OPUS",
+            "haiku": "HAIK",
+            "claude": "CLDE",
+            "gemini": "GEMN",
+            "llama": "LLMA",
+        }
+        for key, tag in patterns.items():
+            if key in model_lower:
+                return tag
         return ""
 
     async def _fill_template(

@@ -47,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
+from buttermilk.utils.model_registry import resolve_litellm_model_name
 
 from .retry import RetryWrapper  # Retry logic wrapper
 
@@ -269,7 +270,7 @@ class AutoGenWrapper(RetryWrapper):
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
 
     @weave.op
-    async def create(
+    async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
         self,
         messages: Sequence[LLMMessage],
         tools: Sequence[Tool] = [],
@@ -343,6 +344,11 @@ class AutoGenWrapper(RetryWrapper):
                         self._model = model
 
                     async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
+                        # Ensure the provided args match the expected model type
+                        if not isinstance(args, self._model):
+                            raise ProcessingError(
+                                f"PydanticModelTool expected {self._model.__name__}, got {type(args).__name__}",
+                            )
                         return args
 
                 fake_schema_tool = PydanticModelTool(schema)
@@ -520,8 +526,8 @@ class AutoGenWrapper(RetryWrapper):
         return create_result  # type: ignore # Expect CreateResult or ModelOutput
 
     @weave.op
-    async def _call_tool(
-        self,
+    @staticmethod
+    async def _call_tool(  # noqa: D401
         call: FunctionCall,
         tool: Tool,
         cancellation_token: CancellationToken | None,
@@ -580,8 +586,8 @@ class AutoGenWrapper(RetryWrapper):
         # Execute all tool calls concurrently
         return await asyncio.gather(*tasks)
 
-    async def _parse_structured_output(
-        self,
+    @staticmethod
+    async def _parse_structured_output(  # noqa: PLR0912
         create_result: CreateResult,
         schema: type[BaseModel],
     ) -> ModelOutput:
@@ -600,19 +606,21 @@ class AutoGenWrapper(RetryWrapper):
         """
         parsed_object = None
 
-        from buttermilk.utils.json_parser import ChatParser, simple_clean_llm_json_text  # local import to avoid cycles
+        # Local dynamic import to avoid cycles and linter complaints about import location
+        _mod = importlib.import_module("buttermilk.utils.json_parser")
+        ChatParser = getattr(_mod, "ChatParser")
+        simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
 
-        # Check if the result already contains a parsed object of the correct type
+        # If already parsed upstream and of correct type
         if isinstance(create_result, ModelOutput) and isinstance(create_result.parsed_object, schema):
             parsed_object = create_result.parsed_object
         elif hasattr(create_result.content, "model_dump"):
-            # Already a Pydantic object, but might be wrong type
+            # Provider returned a Pydantic object directly
             if not isinstance(create_result.content, schema):
                 raise ProcessingError(
                     f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
                 )
-            else:
-                parsed_object = create_result.content
+            parsed_object = create_result.content
         elif not isinstance(create_result.content, str):
             raise ProcessingError(
                 f"AutoGenWrapper requires structured output of type {schema.__name__} but received {type(create_result.content).__name__}",
@@ -624,14 +632,12 @@ class AutoGenWrapper(RetryWrapper):
 
         if parsed_object is None:
             try:
-                # Try to load directly with pydantic's model_validate_json
                 parsed_object = schema.model_validate_json(create_result.content)
-            except Exception as e:  # noqa
+            except Exception:
                 parsed_object = None
 
         if parsed_object is None:
             try:
-                # Try json.loads as a fallback
                 if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
                     parsed = json.loads(text)
                     if isinstance(parsed, dict):
@@ -657,7 +663,6 @@ class AutoGenWrapper(RetryWrapper):
                     f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
                 ) from parse_error
 
-        # Create ModelOutput with the parsed object
         if parsed_object is None:
             raise ProcessingError(
                 f"AutoGenWrapper requires structured output of type {schema.__name__} but parsing failed",
@@ -718,7 +723,7 @@ class LLMs(BaseModel):
         """
         return Enum("AllModelNames", {name: name for name in self.connections.keys()})
 
-    def get_autogen_chat_client(self, name: str) -> AutoGenWrapper:
+    def get_autogen_chat_client(self, name: str) -> AutoGenWrapper:  # noqa: PLR0912 - branching per client type
         """Gets or creates an `AutoGenWrapper` for the LLM configuration specified by `name`.
 
         If a client for the given name already exists in the `autogen_models` cache,
@@ -749,10 +754,6 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-
-        # Optionally annotate resolved litellm identifier for downstream cost/accounting
-        # Import here to avoid circular import issues
-        from buttermilk.utils.model_registry import resolve_litellm_model_name
 
         resolved_litellm = resolve_litellm_model_name(name)
         # Expose for inspection (non-destructive; do not overwrite 'model')
