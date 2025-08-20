@@ -32,7 +32,7 @@ class TestChromaDBSearchToolIntegration:
 
         # No cleanup needed as we're just reading
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_search_transaction_costs(self, search_tool):
         """Test searching for 'transaction costs' in the Zotero collection."""
         # Perform the search
@@ -61,7 +61,7 @@ class TestChromaDBSearchToolIntegration:
             if result.metadata:
                 logger.info(f"  Metadata keys: {list(result.metadata.keys())}")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_search_with_filter(self, search_tool):
         """Test searching with metadata filters."""
         # Search for transaction costs but filter by content type if available
@@ -80,7 +80,7 @@ class TestChromaDBSearchToolIntegration:
             if "content_type" in result.metadata:
                 assert result.metadata["content_type"] == "abstract"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_search_no_duplicates(self, search_tool):
         """Test search with no_duplicates option."""
         # Configure tool to filter duplicates
@@ -97,13 +97,13 @@ class TestChromaDBSearchToolIntegration:
             assert result.document_id not in seen_docs, f"Found duplicate document: {result.document_id}"
             seen_docs.add(result.document_id)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_empty_query(self, search_tool):
         """Test behavior with empty query."""
         with pytest.raises(ValueError, match="Query cannot be empty"):
             await search_tool.search(query="", n_results=5)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_collection_info(self, search_tool):
         """Test getting collection information."""
         # Get collection stats
@@ -119,7 +119,7 @@ class TestChromaDBSearchToolIntegration:
             for i, metadata in enumerate(peek_results["metadatas"][:3]):
                 logger.info(f"  Document {i + 1} metadata keys: {list(metadata.keys())}")
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_tool_function_interface(self, search_tool):
         """Test the tool's function interface for agent integration."""
         # Get the autogen FunctionTool

@@ -73,7 +73,7 @@ class LLMAgent(Agent):
 
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -97,7 +97,7 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._tools: list[Tool] = self._load_tools()
 
-        self.output_model: type[pydantic.BaseModel] = kwargs.get("output_model", None)
+        self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)

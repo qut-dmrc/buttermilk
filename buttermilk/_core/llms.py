@@ -47,7 +47,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
-from buttermilk.utils.model_registry import resolve_litellm_model_name
 
 from .retry import RetryWrapper  # Retry logic wrapper
 
@@ -438,13 +437,15 @@ class AutoGenWrapper(RetryWrapper):
             raise ProcessingError(f"LLM result normalization/parsing failed: {e!s}") from e
 
     @weave.op
-    async def call_chat(
+    async def call_chat(  # noqa: PLR0913
         self,
         messages: list[LLMMessage],  # Made mutable for extending with tool results
         cancellation_token: CancellationToken | None,
+        *,
         tools_list: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
         intercept_tools: bool = False,
+        max_tool_iterations: int = 3,
     ) -> CreateResult | ModelOutput:
         """Manages a chat interaction, including potential tool calls and responses.
 
@@ -464,6 +465,7 @@ class AutoGenWrapper(RetryWrapper):
                 requests (if no tools are called).
             intercept_tools: If True, return FunctionCall objects without executing them.
                 This is useful for agents that need to handle tool calls specially.
+            max_tool_iterations: Maximum number of tool call iterations allowed.
 
         Returns:
             CreateResult | ModelOutput | ErrorResult: The final result from the LLM after
@@ -472,62 +474,58 @@ class AutoGenWrapper(RetryWrapper):
         """
         # Pass tools as-is - the create() method will handle conflicts between tools and schema
         effective_tools = tools_list
-        tool_calls = None
-        tool_outputs = None
-        try:
-            create_result = await self.create(
-                messages=messages,
-                tools=effective_tools,
-                cancellation_token=cancellation_token,
-                schema=schema,
-            )
-        except Exception as e:
-            # The first call failed -- before we have executed any tools
-            raise ProcessingError(f"Failed to query LLM: {e!s}") from e
-
-        # If the LLM responded with a request to call tools
-        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
-            tool_calls: list[FunctionCall] = create_result.content
-
-            # If intercepting tools, return the result with tool calls without executing
-            if intercept_tools:
-                logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
-                return create_result
-
-            # Add the assistant message with tool calls to the history
-            assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
-            messages += [assistant_msg]
-
+        iterations = 0
+        while True:
             try:
-                tool_outputs = await self._execute_tools(
-                    calls=tool_calls,
-                    tools_list=tools_list,
-                    cancellation_token=cancellation_token,
-                )
-                # Tool results are already FunctionExecutionResult objects
-                tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
-                messages += [tool_result_messages]  # Append tool results to the message history
-            except Exception as e:
-                # Fail-fast: surface tool execution failures immediately
-                raise ProcessingError(f"Failed to execute tools: {e!s}") from e
-
-            try:
-                # Call the LLM again with the tool results included in the history
-                synth_result = await self.create(
+                create_result = await self.create(
                     messages=messages,
+                    tools=effective_tools,
                     cancellation_token=cancellation_token,
                     schema=schema,
                 )
-                return synth_result
             except Exception as e:
-                # Fail-fast on synthesis errors
-                raise ProcessingError(f"Failed to create synthesis after tool calls: {e!s}") from e
+                # The call failed
+                raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
-        return create_result  # type: ignore # Expect CreateResult or ModelOutput
+            # If the LLM responded with a request to call tools
+            if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+                tool_calls: list[FunctionCall] = create_result.content
+
+                if intercept_tools:
+                    logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
+                    return create_result
+
+                if iterations >= max_tool_iterations:
+                    raise ProcessingError(
+                        f"Max tool iterations exceeded ({max_tool_iterations}); refusing further tool loops.",
+                    )
+
+                # Add the assistant message with tool calls to the history
+                assistant_msg = AssistantMessage(content=tool_calls, source="assistant")
+                messages += [assistant_msg]
+
+                try:
+                    tool_outputs = await self._execute_tools(
+                        calls=tool_calls,
+                        tools_list=tools_list,
+                        cancellation_token=cancellation_token,
+                    )
+                    # Tool results are already FunctionExecutionResult objects
+                    tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
+                    messages += [tool_result_messages]
+                except Exception as e:
+                    raise ProcessingError(f"Failed to execute tools: {e!s}") from e
+
+                iterations += 1
+                # Continue loop to call LLM again with new context
+                continue
+
+            # No tool calls -> finalize
+            return create_result  # type: ignore # Expect CreateResult or ModelOutput
 
     @weave.op
-    @staticmethod
     async def _call_tool(  # noqa: D401
+        self,
         call: FunctionCall,
         tool: Tool,
         cancellation_token: CancellationToken | None,
@@ -754,8 +752,9 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-
-        resolved_litellm = resolve_litellm_model_name(name)
+        # Local dynamic import to avoid circular dependency during package import
+        _mod2 = importlib.import_module("buttermilk.utils.model_registry")
+        resolved_litellm = getattr(_mod2, "resolve_litellm_model_name")(name)
         # Expose for inspection (non-destructive; do not overwrite 'model')
         config.configs.setdefault("_resolved_litellm_model", resolved_litellm)
 

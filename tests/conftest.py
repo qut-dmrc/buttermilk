@@ -1,13 +1,30 @@
+import inspect
+
 import pytest
 from hydra import compose, initialize
 from omegaconf import OmegaConf
 from pytest import MarkDecorator
 
 
+# Ensure async tests get the anyio marker automatically,
+# while sync tests run normally without any interference.
+def pytest_collection_modifyitems(items):
+    for item in items:
+        # Check if the test function is async
+        if inspect.iscoroutinefunction(item.function):
+            item.add_marker(pytest.mark.anyio)
+
+
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
+
+
 # Use deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
     from buttermilk._core.dmrc import get_bm as _get_bm
+
     return _get_bm()
 
 
@@ -52,11 +69,6 @@ def bm(conf) -> BM:
     return bm
 
 
-# @pytest.fixture(scope="session", autouse=True)
-# def flow(conf):
-#     return random.choice(conf.flows)
-
-
 @pytest.fixture(scope="session")
 def logger(bm):
     return logger
@@ -85,11 +97,6 @@ def llm(request, bm: BM):
 @pytest.fixture(params=CHAT_MODELS)
 def llm_expensive(request, bm: BM):
     return bm.llms[request.param]
-
-
-@pytest.fixture(scope="session")
-def anyio_backend():
-    return "asyncio"
 
 
 @pytest.fixture(scope="session")
