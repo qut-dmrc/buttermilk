@@ -9,7 +9,7 @@ from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field
 
-from buttermilk._core.llms import CHAT_MODELS, ModelOutput
+from buttermilk._core.llms import ModelOutput
 
 # Models known to not support tool calling
 MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
@@ -80,7 +80,7 @@ async def calculate_sum(a: float, b: float) -> float:
 
 
 @pytest.mark.anyio
-async def test_pydantic_response(self, llm):
+async def test_structured_output_without_tools(llm):
     system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
     <CRITERIA>
     Is this output illegal, unethical or harmful to any person?
@@ -96,11 +96,8 @@ async def test_pydantic_response(self, llm):
 
     assert isinstance(response, ModelOutput)
     assert isinstance(response.parsed_object, StructuredTestAgentOutput)
-
-    # Also check that the string content is a valid representation of the output object
-    parsed_response = StructuredTestAgentOutput.model_validate_json(response.content)
-    assert isinstance(parsed_response, StructuredTestAgentOutput)
-    assert parsed_response.conclusion
+    assert response.parsed_object.conclusion
+    assert not response.parsed_object.prediction
 
 
 @pytest.mark.anyio
@@ -227,7 +224,6 @@ async def test_no_tool_needed(llm):
         raise
 
 
-
 @pytest.mark.anyio
 async def test_call_chat_intercept_tools_returns_function_calls(llm):
     """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
@@ -268,8 +264,8 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm):
 
 
 @pytest.mark.anyio
-async def test_structured_output_with_tools(llm):
-    """Test that models handle the interaction between structured output and tools correctly."""
+async def test_structured_output_with_incorrect_tools(llm_expensive):
+    """Test that models handle requests for structured output with irrelevant tools passed."""
 
     class Answer(BaseModel):
         """Structured answer format."""
@@ -286,7 +282,7 @@ async def test_structured_output_with_tools(llm):
     ]
 
     # Test with structured output (tools should not be passed with structured output for certain models)
-    response = await llm.call_chat(
+    response = await llm_expensive.call_chat(
         messages=messages,
         tools_list=[calc_tool],
         schema=Answer,
@@ -304,7 +300,7 @@ async def test_structured_output_with_tools(llm):
 
 
 @pytest.mark.anyio
-async def test_call_chat_tool_exec_then_synthesis_with_schema(llm):
+async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     """Cover the full flow: initial tool call -> tool execution -> synthesis call with schema.
 
     This test helps surface issues where the synthesis call incorrectly sets a structured
@@ -314,55 +310,30 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm):
     class Answer(BaseModel):
         result: list[int] = Field(description="The final answer")
 
-    # Skip if model doesn't support tools
-    model_name = getattr(llm, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
-
     calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
             content=(
                 "You are a helpful assistant. When a task involves addition, you must use the calculate_sum tool "
-                "for every addition operation. Do not perform any arithmetic yourself. After finishing the tool "
-                "calls, present the final answers using the provided schema."
+                "for every addition operation. Do not perform any arithmetic yourself. Return both answers as a list using the schema provided."
             ),
             source="system",
         ),
         UserMessage(
-            content=(
-                "Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool. Return both answers as a list using the schema provided."
-            ),
+            content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."),
             source="user",
         ),
     ]
 
-    try:
-        response = await llm.call_chat(
-            messages=messages,
-            tools_list=[calc_tool],
-            schema=Answer,
-            cancellation_token=CancellationToken(),
-        )
-    except Exception as e:
-        # Surface the specific error the user saw to make the failure actionable
-        err = str(e).lower()
-        if "response_format" in err and "json_schema" in err and "not supported" in err:
-            pytest.fail(
-                "Synthesis call attempted to use a structured response_format (json_schema) "
-                "on a model that doesn't support it. Ensure call_chat() avoids structured "
-                "response formats for unsupported models after tool execution."
-            )
-        if "does not support function calling" in err:
-            pytest.skip(f"Model doesn't support tool calling: {e}")
-        raise
+    response = await llm_expensive.call_chat(
+        messages=messages,
+        tools_list=[calc_tool],
+        schema=Answer,
+        cancellation_token=CancellationToken(),
+    )
 
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
-    if hasattr(response, "parsed_object") and response.parsed_object:
-        assert isinstance(response.parsed_object, Answer)
-        assert set(response.parsed_object.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.parsed_object.result}"
-    else:
-        # Fallback for models that don't support structured output - check for the numbers in text
-        assert "8" in response.content and "14" in response.content, f"Expected both 8 and 14 in response, got: {response.content}"
+    assert isinstance(response.parsed_object, Answer)
+    assert set(response.parsed_object.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.parsed_object.result}"
