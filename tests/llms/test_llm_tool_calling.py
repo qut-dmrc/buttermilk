@@ -277,7 +277,7 @@ async def test_structured_output_with_incorrect_tools(llm_expensive):
     calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
-        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema.", source="system"),
+        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema. Answer questions using your general knowledge even if tools are available but not relevant.", source="system"),
         UserMessage(content="What is the capital of Japan?", source="user"),
     ]
 

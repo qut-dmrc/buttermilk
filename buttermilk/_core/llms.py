@@ -399,29 +399,23 @@ class AutoGenWrapper(RetryWrapper):
                 parsed_object = create_result.content
                 create_result.content = json.dumps(create_result.content)
 
-            if parsed_object and schema and is_valid_schema_type:
+            # Handle schema parsing if requested
+            if schema and is_valid_schema_type:
                 try:
-                    parsed_object = await self._parse_structured_output(parsed_object, schema)
+                    # Parse the content (which is now always a string) with the schema
+                    schema_parsed_object = await self._parse_structured_output(create_result.content, schema)
                     return ModelOutput(
-                        content=json.dumps(parsed_object.model_dump()),
+                        content=create_result.content,
                         finish_reason=create_result.finish_reason,
                         usage=create_result.usage,
                         thought=getattr(create_result, "thought", None),
-                        parsed_object=parsed_object,
+                        parsed_object=schema_parsed_object,
                         cached=create_result.cached,
                     )
                 except ProcessingError as e:
                     raise ProcessingError(
                         f"Failed to parse structured output into {schema.__name__}: {e}",
                     ) from e
-                if parsed_object is not None:
-                    # Validate it
-                    try:
-                        parsed_object = schema.model_validate(parsed_object)
-                    except Exception as e:
-                        raise ProcessingError(
-                            f"Failed to create {schema.__name__} from LLM response: {e}",
-                        )
 
             result = ModelOutput(
                 content=create_result.content,
@@ -533,7 +527,7 @@ class AutoGenWrapper(RetryWrapper):
         # Step 4: No tool calls - apply schema to original result if provided
         if schema:
             try:
-                # Parse the original result with schema
+                # Try to parse the original result with schema
                 if isinstance(create_result.content, str):
                     parsed_object = await self._parse_structured_output(create_result.content, schema)
                     return ModelOutput(
@@ -544,8 +538,20 @@ class AutoGenWrapper(RetryWrapper):
                         parsed_object=parsed_object,
                         cached=create_result.cached,
                     )
-            except Exception as e:
-                raise ProcessingError(f"Failed to parse response with schema: {e!s}") from e
+            except ProcessingError:
+                # If parsing failed, the LLM didn't follow schema instructions
+                # Make a synthesis call with schema only (no tools) to force structured output
+                logger.debug("Initial response couldn't be parsed with schema, making synthesis call")
+                try:
+                    synthesis_result = await self.create(
+                        messages=messages + [AssistantMessage(content=create_result.content, source="assistant")],
+                        tools=[],  # No tools on synthesis call
+                        cancellation_token=cancellation_token,
+                        schema=schema,  # Apply schema for structured output
+                    )
+                    return synthesis_result
+                except Exception as e:
+                    raise ProcessingError(f"Failed to synthesize structured response: {e!s}") from e
 
         # Return the original result
         return create_result
