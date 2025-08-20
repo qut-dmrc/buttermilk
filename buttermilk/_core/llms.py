@@ -208,35 +208,22 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 """Type variable for generic Autogen ChatCompletionClient."""
 
 
-class ErrorResult(CreateResult):
-    """Extends Autogen's `CreateResult` to represent an error response from the LLM.
-
-    This class is used to encapsulate error responses from LLM calls, providing
-    additional context about the error that occurred.
-
-    Attributes:
-        error_message (str): A descriptive message about the error that occurred.
-        error_code (int | None): An optional error code associated with the error.
-            Can be None if no specific code is provided.
-        raw_response (Any | None): The raw response from the LLM, if available.
-    """
-
-    error_message: str = Field(..., description="Descriptive message about the error")
-    error_code: int | None = Field(default=None, description="Optional error code associated with the error")
-    raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
-    tool_outputs: list[FunctionExecutionResult] | None = Field(..., description="Tool outputs if any were executed")
-    tool_calls: list[FunctionCall] | None = Field(..., description="Tool calls made by the LLM, if any")
-
-
 class ModelOutput(CreateResult):
     """Extends Autogen's `CreateResult` with structured output parsing.
 
     Adds a parsed_object field to hold a Pydantic model instance when
     the LLM returns structured JSON output that can be parsed.
 
+    This class is also used to encapsulate error responses from LLM calls,
+    providing additional context about the error that occurred.
+
     Attributes:
         parsed_object (BaseModel | None): The Pydantic model instance hydrated from
             the LLM's JSON content. None if no structured output or parsing failed.
+        error_message (str): A descriptive message about the error that occurred.
+        error_code (int | None): An optional error code associated with the error.
+            Can be None if no specific code is provided.
+        raw_response (Any | None): The raw response from the LLM, if available.
 
     """
 
@@ -244,6 +231,11 @@ class ModelOutput(CreateResult):
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
+    error_message: str = Field(..., description="Descriptive message about the error")
+    error_code: int | None = Field(default=None, description="Optional error code associated with the error")
+    raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
+    tool_outputs: list[FunctionExecutionResult] | None = Field(..., description="Tool outputs if any were executed")
+    tool_calls: list[FunctionCall] | None = Field(..., description="Tool calls made by the LLM, if any")
 
 
 class AutoGenWrapper(RetryWrapper):
@@ -282,8 +274,7 @@ class AutoGenWrapper(RetryWrapper):
             This method attempts to make a chat completion call. It determines if
         structured output via a Pydantic schema should be requested based on the
         `schema` argument and `model_info`. It then uses the retry logic from
-        `RetryWrapper` to execute the call. We intentionally do not request
-        structured output when tools are provided to avoid API conflicts.
+        `RetryWrapper` to execute the call.
 
             Args:
                 messages: A sequence of `LLMMessage` objects representing the
@@ -306,6 +297,10 @@ class AutoGenWrapper(RetryWrapper):
                     tool response types are received, or any post-call normalization/parsing fails.
 
         """
+        parsed_object = None
+        tool_outputs = None
+        tool_calls = []
+
         is_valid_schema_type = (
             schema is not None
             and inspect.isclass(schema)
@@ -323,12 +318,12 @@ class AutoGenWrapper(RetryWrapper):
         # If caller requested a schema and didn't provide tools, choose best path per model capability
         used_fake_schema_tool = False
         fake_schema_tool = None
-        if is_valid_schema_type and not tools:
+        if is_valid_schema_type:
             if self.model_info.get("structured_output", False):
                 # Native structured output supported
                 create_call_kwargs["json_output"] = schema  # type: ignore[arg-type]
-            elif self.model_info.get("function_calling", True):
-                # No native structured output, but tool calling available: use a fake tool
+            elif self.model_info.get("function_calling", True) and not tools:
+                # No native structured output, but tool calling available and not used: use a fake tool
 
                 class PydanticModelTool(BaseTool[BaseModel, BaseModel]):
                     """A tool that creates instances of a Pydantic model."""
@@ -365,76 +360,94 @@ class AutoGenWrapper(RetryWrapper):
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
 
-    # Now that we've made the LLM call and received a response, from
-    # this point on, any errors we encounter will raise ProcessingError (fail-fast)
+        # Now that we've made the LLM call and received a response, from
+        # this point on, any errors we encounter will return a CreateResult or ModelOutput object
+        # so that we can still finish tracing properly and log the received output.
         try:
-            # Normalize provider returns that are BaseModel/dict when json_output was used
-            # so that .content is always a string (or tool calls), while preserving parsed_object.
-            if is_valid_schema_type and not tools:
-                if hasattr(create_result.content, "model_dump"):  # Pydantic BaseModel
-                    obj = create_result.content
-                    return ModelOutput(
-                        content=obj.model_dump_json(),
-                        finish_reason=create_result.finish_reason,
-                        usage=create_result.usage,
-                        thought=getattr(create_result, "thought", None),
-                        parsed_object=obj,
-                        cached=create_result.cached,
-                    )
-                if isinstance(create_result.content, dict):
-                    return ModelOutput(
-                        content=json.dumps(create_result.content),
-                        finish_reason=create_result.finish_reason,
-                        usage=create_result.usage,
-                        thought=getattr(create_result, "thought", None),
-                        parsed_object=None,  # you can parse later in _parse_structured_output if needed
-                        cached=create_result.cached,
-                    )
+            # First, check if the response content is empty
             if not create_result.content:
                 raise ProcessingError("Empty response content from LLM.")
             if isinstance(create_result.content, str) and not create_result.content.strip():
                 raise ProcessingError("Empty string response from LLM.")
-            # Check if content is a list and if all items are FunctionCall (valid tool call scenario)
-            if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
-                raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
 
-            # Handle structured output parsing
+            # Next, check if content is a list and if all items are FunctionCall (valid tool call scenario)
+            if isinstance(create_result.content, list):
+                if all(isinstance(item, FunctionCall) for item in create_result.content):
+                    if tools and not used_fake_schema_tool:
+                        # If we have tools and didn't use a fake schema tool, return the tool calls directly
+                        return create_result
+                    elif used_fake_schema_tool:
+                        # If we used a fake schema tool, parse the tool call
+                        tool_calls = create_result.content
+                        if len(tool_calls) == 1 and fake_schema_tool and tool_calls[0].name == fake_schema_tool.name:
+                            parsed_object = json.loads(tool_calls[0].arguments)
+                            create_result.content = json.dumps(parsed_object)
+                        else:
+                            raise ProcessingError("Malformed tool call response from LLM (expected fake schema tool call).", create_result.content)
+                    else:
+                        raise ProcessingError("Malformed tool call response from LLM.", create_result.content)
+                else:
+                    # If we have a list but not all items are FunctionCall, or the fake tool didn't fit, raise an error
+                    raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
+
+            # If we get back a pydantic model or dict, we have to normalize so
+            # that .content is always a string (or tool calls).
+            if hasattr(create_result.content, "model_dump"):  # Pydantic BaseModel
+                parsed_object = create_result.content
+                create_result.content = parsed_object.model_dump_json()
+            elif isinstance(create_result.content, dict):
+                # If the content is a dict, convert it to a JSON string
+                parsed_object = create_result.content
+                create_result.content = json.dumps(create_result.content)
+
             if schema and is_valid_schema_type:
-                if (
-                    used_fake_schema_tool
-                    and isinstance(create_result.content, list)
-                    and all(isinstance(c, FunctionCall) for c in create_result.content)
-                ):
-                    tool_calls = create_result.content
-                    if len(tool_calls) == 1 and fake_schema_tool and tool_calls[0].name == fake_schema_tool.name:
-                        arguments = json.loads(tool_calls[0].arguments)
-                        try:
-                            parsed_object = schema(**arguments)
-                        except Exception as e:
-                            raise ProcessingError(
-                                f"Failed to create {schema.__name__} from tool arguments: {e}",
-                            )
-                        return ModelOutput(
-                            content=json.dumps(parsed_object.model_dump()),
-                            finish_reason=create_result.finish_reason,
-                            usage=create_result.usage,
-                            thought=getattr(create_result, "thought", None),
-                            parsed_object=parsed_object,
-                            cached=create_result.cached,
-                        )
-                elif isinstance(create_result.content, str):
-                    # If the response is a string, parse it into the schema
+                try:
+                    parsed_object = await self._parse_structured_output(create_result, schema)
+                    return ModelOutput(
+                        content=json.dumps(parsed_object.model_dump()),
+                        finish_reason=create_result.finish_reason,
+                        usage=create_result.usage,
+                        thought=getattr(create_result, "thought", None),
+                        parsed_object=parsed_object,
+                        cached=create_result.cached,
+                    )
+                except ProcessingError as e:
+                    raise ProcessingError(
+                        f"Failed to parse structured output into {schema.__name__}: {e}",
+                    ) from e
+                if parsed_object is not None:
+                    # Validate it
                     try:
-                        return await self._parse_structured_output(create_result, schema)
-                    except ProcessingError as e:
+                        parsed_object = schema.model_validate(parsed_object)
+                    except Exception as e:
                         raise ProcessingError(
-                            f"Failed to parse structured output into {schema.__name__}: {e}",
-                        ) from e
+                            f"Failed to create {schema.__name__} from LLM response: {e}",
+                        )
 
-            return create_result  # type: ignore # Expect CreateResult or compatible
+            result = ModelOutput(
+                content=create_result.content,
+                finish_reason=create_result.finish_reason,
+                usage=create_result.usage,
+                thought=getattr(create_result, "thought", None),
+                cached=create_result.cached,
+                parsed_object=parsed_object,
+                tool_calls=tool_calls,
+            )
         except Exception as e:
-            # Fail-fast: propagate as ProcessingError for the caller to handle
-            raise ProcessingError(f"LLM result normalization/parsing failed: {e!s}") from e
+            result = ModelOutput(
+                content=create_result.content,
+                finish_reason=create_result.finish_reason,
+                usage=create_result.usage,
+                thought=getattr(create_result, "thought", None),
+                cached=create_result.cached,
+                parsed_object=parsed_object,
+                tool_calls=tool_calls,
+            )
+            result.error_message = f"LLM call failed: {e!s}"
+            result.error_code = getattr(e, "code", None)  # Use code if available
+            result.raw_response = create_result.content  # Store the raw response for debugging
+
+        return result
 
     @weave.op
     async def call_chat(  # noqa: PLR0913
@@ -468,7 +481,7 @@ class AutoGenWrapper(RetryWrapper):
             max_tool_iterations: Maximum number of tool call iterations allowed.
 
         Returns:
-            CreateResult | ModelOutput | ErrorResult: The final result from the LLM after
+            CreateResult | ModelOutput: The final result from the LLM after
                 any tool call cycles. Returns ModelOutput if schema was provided.
 
         """
@@ -586,94 +599,73 @@ class AutoGenWrapper(RetryWrapper):
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912
-        create_result: CreateResult,
+        content: str | dict | BaseModel,
         schema: type[BaseModel],
-    ) -> ModelOutput:
+    ) -> type[BaseModel]:
         """Parse LLM response into structured output using the provided schema.
 
         Args:
-            create_result: The raw result from the LLM
-            schema: The Pydantic model to parse into
+            content: text or object to parse and/or validate into the schema
+            schema: The Pydantic model to validate against
 
         Returns:
-            ModelOutput with parsed_object field containing the Pydantic instance
+            Validated Pydantic model instance of the specified schema type.
 
         Raises:
-            ProcessingError: If parsing fails
+            ProcessingError: If parsing or validation fails
 
         """
         parsed_object = None
+        if isinstance(content, str):
+            # Local dynamic import to avoid cycles and linter complaints about import location
+            _mod = importlib.import_module("buttermilk.utils.json_parser")
+            ChatParser = getattr(_mod, "ChatParser")
+            simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
 
-        # Local dynamic import to avoid cycles and linter complaints about import location
-        _mod = importlib.import_module("buttermilk.utils.json_parser")
-        ChatParser = getattr(_mod, "ChatParser")
-        simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
+            # Try to parse as strict JSON first to preserve types (avoid coercion)
+            logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
+            text = simple_clean_llm_json_text(text)
 
-        # If already parsed upstream and of correct type
-        if isinstance(create_result, ModelOutput) and isinstance(create_result.parsed_object, schema):
-            parsed_object = create_result.parsed_object
-        elif hasattr(create_result.content, "model_dump"):
-            # Provider returned a Pydantic object directly
-            if not isinstance(create_result.content, schema):
-                raise ProcessingError(
-                    f"AutoGenWrapper: Response is {type(create_result.content).__name__}, expected {schema.__name__}",
-                )
-            parsed_object = create_result.content
-        elif not isinstance(create_result.content, str):
-            raise ProcessingError(
-                f"AutoGenWrapper requires structured output of type {schema.__name__} but received {type(create_result.content).__name__}",
-            )
+            if parsed_object is None:
+                try:
+                    parsed_object = schema.model_validate_json(text)
+                except Exception:
+                    parsed_object = None
 
-        # Try to parse as strict JSON first to preserve types (avoid coercion)
-        logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
-        text = simple_clean_llm_json_text(create_result.content)
-
-        if parsed_object is None:
-            try:
-                parsed_object = schema.model_validate_json(create_result.content)
-            except Exception:
-                parsed_object = None
-
-        if parsed_object is None:
-            try:
-                if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
+            if parsed_object is None:
+                try:
                     parsed = json.loads(text)
                     if isinstance(parsed, dict):
                         parsed_object = parsed
-            except Exception:
-                parsed_object = None
+                except Exception:
+                    parsed_object = None
 
-        if parsed_object is None:
-            # Fallback to tolerant parser for messy outputs
-            try:
-                parser = ChatParser()
-                parsed_object = parser.parse(text)
-            except Exception as parse_error:
-                raise ProcessingError(
-                    f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
-                ) from parse_error
+            if parsed_object is None:
+                # Fallback to tolerant parser for messy outputs
+                try:
+                    parser = ChatParser()
+                    parsed_object = parser.parse(text)
+                except Exception as parse_error:
+                    raise ProcessingError(
+                        f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+                    ) from parse_error
+        else:
+            parsed_object = content
 
-        if isinstance(parsed_object, dict):
-            try:
-                parsed_object = schema.model_validate(**parsed_object)
-            except Exception as parse_error:
-                raise ProcessingError(
-                    f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
-                ) from parse_error
+        # Validate the parsed object against the schema
+        try:
+            parsed_object = schema.model_validate(parsed_object)
+        except Exception as parse_error:
+            raise ProcessingError(
+                f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
+            ) from parse_error
 
         if parsed_object is None:
             raise ProcessingError(
                 f"AutoGenWrapper requires structured output of type {schema.__name__} but parsing failed",
             )
 
-        return ModelOutput(
-            content=create_result.content,
-            finish_reason=create_result.finish_reason,
-            usage=create_result.usage,
-            thought=getattr(create_result, "thought", None),
-            parsed_object=parsed_object,
-            cached=create_result.cached,
-        )
+        return parsed_object
 
 
 class LLMs(BaseModel):

@@ -83,6 +83,7 @@ Here is a high-level overview of the call stack, from the initial agent invocati
            * call_chat() then calls _execute_tools() to run the functions.
            * The tool results are added to the message history.
            * call_chat() calls self.create() a second time with the updated history to get a final, synthesized response from the LLM.
+           * If a schema was provided, the final response is parsed against it to ensure structured output.
   3. Scenario B: The LLM returns text or JSON directly.
            * create() returns a CreateResult or ModelOutput. call_chat() simply passes this result back up to LLMAgent.
      4. Scenario C: An error occurs.
@@ -90,16 +91,19 @@ Here is a high-level overview of the call stack, from the initial agent invocati
 
   4. AutoGenWrapper.create() - The Atomic LLM Call (normalized outputs)
    * File: buttermilk/_core/llms.py
-   * Purpose: This method handles a single API call to the LLM, including structured output and error handling.
+   * Purpose: This method handles a single API call to the LLM, including structured output and error handling. It supports both tools and schema simultaneously.
    * Flow:
-       1. Argument Preparation: It prepares the arguments for the underlying client. If you provide a Pydantic schema, it will either
-          configure the json_output parameter (for models that support it) or create a "fake tool" to force the model to return the desired
-          structure.
+       1. Argument Preparation: It prepares the arguments for the underlying client. If you provide a Pydantic schema:
+          - For models with native structured output: Uses json_output parameter regardless of tools
+          - For models without native structured output and no real tools: Creates a "fake tool" to force structured output
+          - For models without native structured output but with real tools: Allows tools to execute, then parses final response against schema
        2. API Call: It executes the call using _execute_with_retry(). API-level errors (like connection issues) are handled here.
      3. Result Processing: After a successful API call, it processes the response.
-       * If the response is invalid (e.g., empty), it raises ProcessingError.
-       * If a schema was requested, it normalizes content to a JSON string and, on success, returns a ModelOutput with parsed_object set. If parsing fails, it raises ProcessingError.
-       * Otherwise, it returns the standard CreateResult. content is guaranteed to be str for text/JSON, or list[FunctionCall] for tool proposals.
+       * If the response is invalid (e.g., empty), it returns ModelOutput with error details instead of raising ProcessingError
+       * Tool calls are handled intelligently - real tools are returned for execution, fake schema tools are parsed immediately
+       * If a schema was requested, the response is always parsed against it, returning ModelOutput with parsed_object set
+       * Content is normalized to string format while preserving parsed objects
+       * Errors are captured in ModelOutput rather than raised, allowing tracing to complete
 
   5. AutoGenWrapper._call_tool() & _execute_tools() - Function Execution
    * File: buttermilk/_core/llms.py
