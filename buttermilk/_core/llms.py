@@ -175,7 +175,7 @@ CHAT_MODELS = [
 CHEAP_CHAT_MODELS = [
     "gemini25flash",
     "gpt5nano",
-    "sonnet",
+    "haiku",
 ]
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
@@ -451,7 +451,6 @@ class AutoGenWrapper(RetryWrapper):
         tools_list: Sequence[Tool] = [],
         schema: type[BaseModel] | None = None,
         intercept_tools: bool = False,
-        max_tool_iterations: int = 3,
     ) -> CreateResult | ModelOutput:
         """Manages a chat interaction with a single tool execution pass followed by optional synthesis.
 
@@ -469,7 +468,6 @@ class AutoGenWrapper(RetryWrapper):
             schema: An optional Pydantic `BaseModel` subclass for structured output.
             intercept_tools: If True, return FunctionCall objects without executing them.
                 This is useful for agents that need to handle tool calls specially.
-            max_tool_iterations: Kept for compatibility but only single iteration is performed.
 
         Returns:
             CreateResult | ModelOutput: The final result from the LLM.

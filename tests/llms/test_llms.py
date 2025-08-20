@@ -6,11 +6,6 @@ from buttermilk._core.types import Record
 """Test tool calling functionality across all LLM models."""
 
 
-from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool
-
-from buttermilk._core.llms import CHAT_MODELS
-
 # Models known to not support tool calling
 MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
 
@@ -96,50 +91,3 @@ class TestPromptStyles:
         response = await llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
         parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
-
-
-@pytest.mark.parametrize("model_name", CHAT_MODELS)
-@pytest.mark.anyio
-async def test_all_models_basic_tool_call(model_name, bm):
-    """Test that all configured models can make basic tool calls."""
-    # Skip if model not available
-    if model_name not in bm.llms.connections:
-        pytest.skip(f"Model {model_name} not configured")
-
-    # Get the model client
-    try:
-        model_client = bm.llms.get_autogen_chat_client(model_name)
-    except Exception as e:
-        pytest.skip(f"Could not initialize {model_name}: {e}")
-
-    # Create a simple tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
-
-    messages = [
-        UserMessage(content="What's the weather in Paris? Please use the weather tool.", source="user"),
-    ]
-
-    try:
-        # Test basic tool calling
-        response = await model_client.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
-
-        # Verify we got a response
-        assert response.content
-        assert isinstance(response.content, str)
-
-        # Should mention Paris in the response
-        assert "paris" in response.content.lower(), f"{model_name} should mention Paris in response, got: {response.content}"
-
-    except Exception as e:
-        # Check if this is a known model without tool support
-        if model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-            # Expected failure, just verify basic functionality
-            print(f"Info: {model_name} doesn't support tool calling (expected): {e}")
-
-            # Try without tools as a fallback
-            response = await model_client.create(messages=messages)
-            assert response.content
-            return
-
-        # For other models, this is unexpected
-        raise AssertionError(f"{model_name} unexpectedly failed tool calling: {e}")

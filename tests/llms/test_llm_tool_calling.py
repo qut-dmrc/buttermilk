@@ -101,12 +101,13 @@ async def test_structured_output_without_tools(llm):
 
 
 @pytest.mark.anyio
-async def test_single_tool_call(llm):
+async def test_single_tool_call(llm_expensive):
     """Test that each LLM can make a single tool call."""
-    # Skip if model doesn't support tools
+    llm = llm_expensive
+
     model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
+        pytest.xfail(f"{model_name} doesn't support tool calling")
 
     # Create a simple weather tool
     weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
@@ -116,25 +117,20 @@ async def test_single_tool_call(llm):
         UserMessage(content="What's the weather like in London?", source="user"),
     ]
 
-    try:
-        # Test with tool calling
-        response = await llm.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
+    # Test with tool calling
+    response = await llm.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
 
-        # Verify response mentions London and weather details
-        assert response.content
-        assert isinstance(response.content, str)
-        content_lower = response.content.lower()
+    # Verify response mentions London and weather details
+    assert response.content
+    assert isinstance(response.content, str)
+    content_lower = response.content.lower()
 
-        # Should mention London
-        assert "london" in content_lower
+    # Should mention London
+    assert "london" in content_lower
 
-        # Should mention weather details (at least one of these)
-        weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
-        assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
-    except Exception as e:
-        if "does not support function calling" in str(e):
-            pytest.skip(f"Model doesn't support tool calling: {e}")
-        raise
+    # Should mention weather details (at least one of these)
+    weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
+    assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
 
 
 @pytest.mark.anyio

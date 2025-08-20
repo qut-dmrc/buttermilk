@@ -45,10 +45,10 @@ class FakeChatClient(ChatCompletionClient):
     async def close(self) -> None:  # type: ignore[override]
         return None
 
-    async def count_tokens(self, messages, *, tools: list = []):  # type: ignore[override]
+    async def count_tokens(self, messages, *, tools: list = None):  # type: ignore[override]
         return 0
 
-    async def remaining_tokens(self, messages, *, tools: list = []):  # type: ignore[override]
+    async def remaining_tokens(self, messages, *, tools: list = None):  # type: ignore[override]
         return 8_000
 
     async def total_usage(self):  # type: ignore[override]
@@ -61,7 +61,11 @@ class FakeChatClient(ChatCompletionClient):
 
         return RequestUsage()
 
-    async def create(self, messages, *, tools=[], tool_choice="auto", json_output=None, extra_create_args={}, cancellation_token=None):  # type: ignore[override]
+    async def create(self, messages, *, tools=None, tool_choice="auto", json_output=None, extra_create_args=None, cancellation_token=None):  # type: ignore[override]
+        if extra_create_args is None:
+            extra_create_args = {}
+        if tools is None:
+            tools = []
         self._count += 1
         usage = RequestUsage(prompt_tokens=1, completion_tokens=1)
         if self.mode == "text":
