@@ -87,6 +87,8 @@ class LLMAgent(Agent):
             ValueError: If 'model' and 'template' is not specified in parameters.
 
         """
+        if "name_components" not in kwargs:
+            kwargs["name_components"] = ["role", "model", "unique_identifier"]
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
