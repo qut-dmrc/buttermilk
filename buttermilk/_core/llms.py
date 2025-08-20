@@ -231,11 +231,11 @@ class ModelOutput(CreateResult):
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
-    error_message: str = Field(..., description="Descriptive message about the error")
+    error_message: str | None = Field(default=None, description="Descriptive message about the error")
     error_code: int | None = Field(default=None, description="Optional error code associated with the error")
     raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
-    tool_outputs: list[FunctionExecutionResult] | None = Field(..., description="Tool outputs if any were executed")
-    tool_calls: list[FunctionCall] | None = Field(..., description="Tool calls made by the LLM, if any")
+    tool_outputs: list[FunctionExecutionResult] | None = Field(default=None, description="Tool outputs if any were executed")
+    tool_calls: list[FunctionCall] | None = Field(default=None, description="Tool calls made by the LLM, if any")
 
 
 class AutoGenWrapper(RetryWrapper):
@@ -400,9 +400,9 @@ class AutoGenWrapper(RetryWrapper):
                 parsed_object = create_result.content
                 create_result.content = json.dumps(create_result.content)
 
-            if schema and is_valid_schema_type:
+            if parsed_object and schema and is_valid_schema_type:
                 try:
-                    parsed_object = await self._parse_structured_output(create_result, schema)
+                    parsed_object = await self._parse_structured_output(parsed_object, schema)
                     return ModelOutput(
                         content=json.dumps(parsed_object.model_dump()),
                         finish_reason=create_result.finish_reason,

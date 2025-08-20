@@ -73,7 +73,7 @@ async def test_single_tool_call(llm_expensive):
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create a simple weather tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
     messages = [
         SystemMessage(content="You are a helpful weather assistant. Use the get_weather tool to answer questions about weather.", source="system"),
@@ -110,9 +110,9 @@ async def test_multiple_tool_calls(llm_expensive):
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create multiple tools
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers",strict=True)
 
     messages = [
         SystemMessage(
@@ -155,9 +155,9 @@ async def test_no_tool_needed(llm_expensive):
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create tools that shouldn't be used
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(content="You are a helpful assistant. Answer questions directly when you can without using any tools.", source="system"),
@@ -203,7 +203,7 @@ async def test_all_models_basic_tool_call(model_name, bm):
         pytest.skip(f"Could not initialize {model_name}: {e}")
 
     # Create a simple tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
     messages = [
         UserMessage(content="What's the weather in Paris? Please use the weather tool.", source="user"),
@@ -243,7 +243,7 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
@@ -285,7 +285,7 @@ async def test_structured_output_with_tools(llm_expensive):
         confidence: float = Field(description="Confidence level from 0 to 1")
 
     # Create a simple tool
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema.", source="system"),
@@ -322,7 +322,7 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
