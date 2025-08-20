@@ -1,49 +1,49 @@
 # LLM Agent Call Stack Overview
 
 Here is a high-level overview of the call stack, from the initial agent invocation to the final response processing:
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent.invoke()
+    participant LLMAgent._process()
+    participant AutoGenWrapper.call_chat(max_tool_iterations=1)
+    participant AutoGenWrapper.create()
+    participant LLM_API
+    participant AutoGenWrapper._execute_tools()
 
-    1 sequenceDiagram
-    2     participant User
-    3     participant Agent.invoke()
-    4     participant LLMAgent._process()
-    5     participant AutoGenWrapper.call_chat(max_tool_iterations=1)
-    6     participant AutoGenWrapper.create()
-    7     participant LLM_API
-    8     participant AutoGenWrapper._execute_tools()
-    9 
-   10     User->>Agent.invoke(): Start with AgentInput
-   11     Agent.invoke()->>LLMAgent._process(): Calls subclass logic
-   12     LLMAgent._process()->>AutoGenWrapper.call_chat(): Hands off to LLM wrapper
-   13     
-   14     Note over AutoGenWrapper.call_chat(): Manages the conversation turn
-   15     AutoGenWrapper.call_chat()->>AutoGenWrapper.create(): Makes the first LLM call
-   16     AutoGenWrapper.create()->>LLM_API: Sends messages
-   17     LLM_API-->>AutoGenWrapper.create(): Returns raw response
-   18     
-   19     alt LLM requests tool calls
-   20         AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns FunctionCall(s)
-   21         AutoGenWrapper.call_chat()->>AutoGenWrapper._execute_tools(): Executes tools
-   22         AutoGenWrapper._execute_tools()-->>AutoGenWrapper.call_chat(): Returns tool results
-   23         
-   24         Note over AutoGenWrapper.call_chat(): Sends tool results back to LLM
-   25         AutoGenWrapper.call_chat()->>AutoGenWrapper.create(): Makes second LLM call
-   26         AutoGenWrapper.create()->>LLM_API: Sends messages + tool results
-   27         LLM_API-->>AutoGenWrapper.create(): Returns final text response
-   28         AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns CreateResult/ModelOutput
-   29     else LLM returns text/JSON directly
-   30         AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns CreateResult/ModelOutput
-   31     end
-   32 
-  33     alt Error during processing (fail-fast)
-  34          AutoGenWrapper.create()--x AutoGenWrapper.call_chat(): raises ProcessingError
-  35          AutoGenWrapper.call_chat()--x LLMAgent._process(): raises ProcessingError
-  36          LLMAgent._process()--x Agent.invoke(): raises ProcessingError
-  37     end
-   36 
-   37     AutoGenWrapper.call_chat()-->>LLMAgent._process(): Returns final result
-   38     LLMAgent._process()-->>Agent.invoke(): Returns AgentOutput
-   39     Agent.invoke()-->>User: Returns AgentTrace
+    User->>Agent.invoke(): Start with AgentInput
+    Agent.invoke()->>LLMAgent._process(): Calls subclass logic
+    LLMAgent._process()->>AutoGenWrapper.call_chat(): Hands off to LLM wrapper
+    
+    Note over AutoGenWrapper.call_chat(): Manages the conversation turn
+    AutoGenWrapper.call_chat()->>AutoGenWrapper.create(): Makes the first LLM call
+    AutoGenWrapper.create()->>LLM_API: Sends messages
+    LLM_API-->>AutoGenWrapper.create(): Returns raw response
+    
+    alt LLM requests tool calls
+        AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns FunctionCall(s)
+        AutoGenWrapper.call_chat()->>AutoGenWrapper._execute_tools(): Executes tools
+        AutoGenWrapper._execute_tools()-->>AutoGenWrapper.call_chat(): Returns tool results
+        
+        Note over AutoGenWrapper.call_chat(): Sends tool results back to LLM
+        AutoGenWrapper.call_chat()->>AutoGenWrapper.create(): Makes second LLM call
+        AutoGenWrapper.create()->>LLM_API: Sends messages + tool results
+        LLM_API-->>AutoGenWrapper.create(): Returns final text response
+        AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns CreateResult/ModelOutput
+    else LLM returns text/JSON directly
+        AutoGenWrapper.create()-->>AutoGenWrapper.call_chat(): Returns CreateResult/ModelOutput
+    end
 
+    alt Error during processing (fail-fast)
+         AutoGenWrapper.create()--x AutoGenWrapper.call_chat(): raises ProcessingError
+         AutoGenWrapper.call_chat()--x LLMAgent._process(): raises ProcessingError
+         LLMAgent._process()--x Agent.invoke(): raises ProcessingError
+    end
+
+    AutoGenWrapper.call_chat()-->>LLMAgent._process(): Returns final result
+    LLMAgent._process()-->>Agent.invoke(): Returns AgentOutput
+    Agent.invoke()-->>User: Returns AgentTrace
+```
 
    Detailed Execution Flow
 
