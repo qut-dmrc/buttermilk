@@ -1,21 +1,23 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-const backendApiUrl = process.env.BACKEND_API_URL;
-
-export default defineConfig({
-	plugins: [sveltekit()],
-	server: {
-		// Add proper CORS handling
-		cors: true,
-		allowedHosts: ['localhost', 'nichome.stoat-musical.ts.net', 'services.stoat-musical.ts.net', 'nichome', 'wsl','services', 'nicdev', 'nicdev.stoat-musical.ts.net', "127.0.0.1"],
-		// Configure proxy for backend websocket connections
-		proxy: {
-			'/ws': {
-				target: backendApiUrl.replace('http', 'ws'),
-				ws: true,
-				changeOrigin: true
-			},
+export default defineConfig(({ mode }) => {
+	const env = loadEnv(mode, process.cwd(), '');
+	const backendApiUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+	
+	return {
+		plugins: [sveltekit()],
+		server: {
+			// Add proper CORS handling
+			cors: true,
+			allowedHosts: ['localhost', 'nichome.stoat-musical.ts.net', 'services.stoat-musical.ts.net', 'nichome', 'wsl','services', 'nicdev', 'nicdev.stoat-musical.ts.net', "127.0.0.1"],
+			// Configure proxy for backend websocket connections
+			proxy: {
+				'/ws': {
+					target: backendApiUrl.replace('http', 'ws'),
+					ws: true,
+					changeOrigin: true
+				},
 			// Proxy API requests that should go to backend
 			'/api/backend': {
 				target: backendApiUrl,
@@ -47,4 +49,5 @@ export default defineConfig({
 		dedupe: ['svelte', '@sveltejs/kit'],
 		preserveSymlinks: true
 	}
+	};
 });
