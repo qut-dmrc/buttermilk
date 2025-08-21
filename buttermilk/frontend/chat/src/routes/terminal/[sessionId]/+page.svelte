@@ -26,6 +26,9 @@
   // Get session ID from URL params
   $: urlSessionId = $page.params.sessionId;
   
+  // Store pending restoration messages if terminal isn't ready yet
+  let pendingMessages: any[] = [];
+  
   // Function to restore session messages
   async function restoreSessionMessages(sessionId: string) {
     isRestoringSession = true;
@@ -33,14 +36,20 @@
       const response = await fetch(`/api/session/${sessionId}/messages`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`Restoring ${data.messages.length} messages for session ${sessionId}`);
+        // The API returns the messages array directly, not wrapped in a messages property
+        const messages = Array.isArray(data) ? data : (data.messages || []);
+        console.log(`Restoring ${messages.length} messages for session ${sessionId}`);
         
-        // Messages will be restored via WebSocket after connection
-        // Store them temporarily for restoration after WebSocket connects
-        if (websocketTerminal && data.messages.length > 0) {
-          // Send each message to the terminal for display
-          for (const message of data.messages) {
-            websocketTerminal.handleMessage(message);
+        if (messages.length > 0) {
+          if (websocketTerminal) {
+            // Terminal is ready, restore messages immediately
+            for (const message of messages) {
+              websocketTerminal.handleMessage(message);
+            }
+          } else {
+            // Terminal not ready yet, store for later
+            pendingMessages = messages;
+            console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
           }
         }
         restorationComplete = true;
@@ -108,12 +117,22 @@
   
   // Handle terminal ready event
   function handleTerminalReady(event: CustomEvent) {
-    websocketTerminal = event.detail;
+    const terminal = event.detail;
+    websocketTerminal = { handleMessage: terminal.handleMessage };
     console.log('Terminal ready, session:', urlSessionId);
     
-    // If we have pending restoration messages and terminal is now ready
-    if (isRestoringSession || !restorationComplete) {
-      // Terminal will handle restoration after connection
+    // Process any pending messages that were fetched before terminal was ready
+    if (pendingMessages.length > 0) {
+      console.log(`Processing ${pendingMessages.length} pending messages`);
+      for (const message of pendingMessages) {
+        terminal.handleMessage(message);
+      }
+      pendingMessages = []; // Clear pending messages
+    }
+    
+    // If restoration is still in progress or not complete, trigger it again
+    if (isRestoringSession || (!restorationComplete && pendingMessages.length === 0)) {
+      console.log('Terminal ready but restoration not complete, re-triggering restoration');
       restoreSessionMessages(urlSessionId);
     }
   }

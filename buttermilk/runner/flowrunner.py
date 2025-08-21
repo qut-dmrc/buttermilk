@@ -249,13 +249,11 @@ class FlowRunContext(BaseModel):
 
             # Check if the WebSocket is connected
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
-                logger.debug(f"[MONITOR_UI] WebSocket not connected for session {self.session_id}, state: {self.websocket.client_state if self.websocket else 'None'}")
                 continue
 
             try:
-                logger.debug(f"[MONITOR_UI] Waiting for WebSocket message for session {self.session_id}")
                 data = await self.websocket.receive_json()
-                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket")
+                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket  for session {self.session_id}")
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)

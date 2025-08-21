@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onDestroy, onMount } from 'svelte';
+import { onDestroy, onMount, createEventDispatcher } from 'svelte';
 import { get } from 'svelte/store';
 import MessageDisplay from './components/MessageDisplay.svelte';
 import { flowRunning, selectedFlow as flowStore, selectedRecord as recordStore, selectedCriteria, selectedModel } from './stores/apiStore';
@@ -18,6 +18,8 @@ import {
 	normalizeWebSocketMessage
 } from './utils/messageUtils';
 
+  // Event dispatcher for communicating with parent
+  const dispatch = createEventDispatcher();
 
   // WebSocket connection parameters
   export let wsUrl: string;
@@ -111,8 +113,13 @@ import {
       await getNewSessionId(); // Fetches and stores a clean session ID
     }
     if (get(sessionId)) {
-      // Load stored messages for this session
-      loadStoredMessages(get(sessionId));
+      // Only load localStorage messages if this isn't a session-based URL
+      // (session pages handle restoration via backend API)
+      const currentUrl = window.location.pathname;
+      if (!currentUrl.includes('/terminal/')) {
+        // Load stored messages for this session from localStorage
+        loadStoredMessages(get(sessionId));
+      }
       
       // wsUrl prop should be the base like "ws://localhost:5173/ws"
       console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
@@ -339,6 +346,9 @@ import {
         isReconnecting = false; // Reset reconnection state
         reconnectAttempts = 0; // Reset reconnection counter
         // Connection status now appears in UI header instead of as system message
+        
+        // Emit ready event so parent can process pending messages
+        dispatch('ready', { handleMessage });
       };
       
       socket.onmessage = (event) => {
@@ -518,6 +528,14 @@ import {
   export function handleMessage(message: Message) {
     // Add the message directly without WebSocket processing
     addMessage(message);
+    
+    // Also add to message stores for consistency
+    addToMessageStore(message);
+    
+    // Update message history for persistence
+    if (get(sessionId)) {
+      messageHistory.addMessage(message);
+    }
   }
   
   // Function to send a run_flow request
