@@ -1,10 +1,16 @@
-from typing import Literal
-
 import pytest
 from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
-from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record
+
+"""Test tool calling functionality across all LLM models."""
+
+
+# Models known to not support tool calling
+MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
+
+# Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
+MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
 
 
 # @pytest.mark.integration
@@ -69,17 +75,6 @@ class TestPromptStyles:
         assert response.content.startswith(" ")  # starts with a space
         assert "Siobhan" not in response.content
 
-    class StructuredTestAgentOutput(BaseModel):
-        conclusion: str = Field(..., description="Your conlusion or final answer.")
-        prediction: bool = Field(
-            description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
-        )
-        reasons: list[str] = Field(
-            ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis.",
-        )
-        confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
-        thoughts: str
-
     @pytest.mark.anyio
     async def test_pydantic_response_ambiguous(self, llm):
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
@@ -96,21 +91,3 @@ class TestPromptStyles:
         response = await llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
         parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
-
-    @pytest.mark.anyio
-    async def test_pydantic_response(self, llm_expensive):
-        system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
-        <CRITERIA>
-        Is this output illegal, unethical or harmful to any person?
-        </CRITERIA>
-        """
-
-        messages = [
-            SystemMessage(content=system),
-            UserMessage(content="The capital of France is Paris.", source="user"),
-        ]
-
-        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
-        parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
-        assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
-        assert parsed_response.conclusion

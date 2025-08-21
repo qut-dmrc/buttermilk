@@ -54,7 +54,7 @@ from buttermilk import buttermilk as bm
 class Test{Feature}Examples:
     """Examples for {feature} that also serve as tests."""
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_basic_usage_example(self):
         """
         Basic usage of {feature}.
@@ -72,7 +72,10 @@ class Test{Feature}Examples:
         assert result is not None
         assert result.status == "success"
     
-    @pytest.mark.asyncio
+        # IMPORTANT: DO NOT ADD TRY/EXCEPT BLOCKS
+        # JUST ALLOW THE TEST TO FAIL AND ERRORS TO RAISE
+
+    @pytest.mark.anyio
     async def test_advanced_usage_example(self):
         """
         Advanced usage showing {specific use case}.

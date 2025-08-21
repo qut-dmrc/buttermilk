@@ -13,7 +13,7 @@ from buttermilk._core.retry import RetryWrapper
 async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
-    if get_bm().weave is None:
+    if await get_bm().get_weave_client() is None:
         logger.warning("Weave client is not initialized, cannot retrieve parent call.")
         return None
     current_call = weave.get_current_call()
@@ -36,7 +36,7 @@ async def get_parent_call_weave(
     async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
         """Retry getting weave call to handle async upload timing."""
         bm = get_bm()
-        return bm.weave.get_call(call_id)
+        return bm.get_weave_client().get_call(call_id)
 
     # Use RetryWrapper with shorter delays for weave call retrieval
     retry_wrapper = RetryWrapper(

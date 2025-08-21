@@ -109,6 +109,7 @@ dependencies = [
     "opentelemetry-resourcedetector-gcp>=1.8",
     "azure-monitor-opentelemetry-exporter==1.0.0b41",
     "opentelemetry-instrumentation-logging>=0.56",
+    "gql<4.0.0",
 ]
 
 [dependency-groups]
@@ -201,7 +202,7 @@ addopts = [
     "--capture=fd", 
     "--continue-on-collection-errors",
     "--durations=10", 
-    "-n 24", 
+    "-n 8", 
     "-v", # show name of tests 
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",

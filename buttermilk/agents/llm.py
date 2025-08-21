@@ -20,8 +20,7 @@ from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import buttermilk as bm
-from buttermilk import logger
+from buttermilk import buttermilk as bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
@@ -74,7 +73,7 @@ class LLMAgent(Agent):
 
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -88,6 +87,8 @@ class LLMAgent(Agent):
             ValueError: If 'model' and 'template' is not specified in parameters.
 
         """
+        if "name_components" not in kwargs:
+            kwargs["name_components"] = ["role", "model", "unique_identifier"]
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
@@ -98,7 +99,7 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._tools: list[Tool] = self._load_tools()
 
-        self.output_model: type[pydantic.BaseModel] = kwargs.get("output_model", None)
+        self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
@@ -163,28 +164,24 @@ class LLMAgent(Agent):
             str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
 
         """
-        if not self.parameters["model"]:
+        model = self.parameters.get("model") or ""
+        model_lower = model.lower()
+        if not model_lower:
             return ""
 
-        model_lower = self.parameters["model"].lower()
-
-        # Common model patterns
-        if "gpt-4" in model_lower:
-            return "GPT4"
-        if "gpt-3.5" in model_lower:
-            return "GPT3"
-        if "sonnet" in model_lower:
-            return "SONN"
-        if "opus" in model_lower:
-            return "OPUS"
-        if "haiku" in model_lower:
-            return "HAIK"
-        if "claude" in model_lower:
-            return "CLDE"
-        if "gemini" in model_lower:
-            return "GEMN"
-        if "llama" in model_lower:
-            return "LLMA"
+        patterns = {
+            "gpt-4": "GPT4",
+            "gpt-3.5": "GPT3",
+            "sonnet": "SONN",
+            "opus": "OPUS",
+            "haiku": "HAIK",
+            "claude": "CLDE",
+            "gemini": "GEMN",
+            "llama": "LLMA",
+        }
+        for key, tag in patterns.items():
+            if key in model_lower:
+                return tag
         return ""
 
     async def _fill_template(
@@ -336,16 +333,9 @@ class LLMAgent(Agent):
             schema=self.output_model,
             cancellation_token=cancellation_token,
         )
-
-        llm_messages_to_send.append(
-            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
-        )
         logger.debug(
-            f"Agent {self.agent_name}: Received response from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
+            f"Agent {self.agent_name}: Received {type(chat_result)} from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
         )
-
-        # Extract the final output based on whether we have structured output
-        final_output = chat_result.content
 
         # Prepare metadata for AgentOutput
         output_metadata = {
@@ -353,14 +343,22 @@ class LLMAgent(Agent):
             "agent_id": self.agent_id,
             "agent_model": self.parameters["model"],
             "finish_reason": chat_result.finish_reason,
+            "usage": chat_result.usage,
         }
+        # Fail-fast: at this point, chat_result is a successful CreateResult/ModelOutput
+        llm_messages_to_send.append(
+            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
+        )
 
-        # Only add usage if present
-        if chat_result.usage:
-            output_metadata["usage"] = chat_result.usage
+        # Extract the final output based on whether we have structured output
+        if self.output_model and isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, self.output_model):
+            final_output = chat_result.parsed_object
+        else:
+            # Use raw content (string)
+            final_output = chat_result.content
 
         logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
-        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata)
+        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata, error=None)
 
     async def _call_llm(
         self,

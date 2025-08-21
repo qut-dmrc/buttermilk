@@ -396,15 +396,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             **(message.metadata or {}),
             **(self.parameters or {}),
         }
-
+        exception_obj = None  # Used to capture exceptions for tracing
         try:
             logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-
-            if bm.weave:
+            weave_client = await bm.get_weave_client()
+            if weave_client is not None:
                 process_op = weave.op(self._process, call_display_name=self.agent_name)
                 parent_call = await get_parent_call_weave(message)
 
-                child_call = bm.weave.create_call(
+                child_call = weave_client.create_call(
                     process_op,
                     inputs=message.model_dump(mode="json"),
                     parent=parent_call,
@@ -415,23 +415,21 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 if parent_call is not None:
                     parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
-                # If the agent is running in a Weave context, we can use the process_op
-                result, _call = await process_op.call(message=message)
-            else:
-                # Run without weave tracing
-                result = await self._process(message=message)
+            # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
+            result = await self._process(message=message)
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
             # Create an ErrorEvent to capture the error
             err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
+            exception_obj = e  # Capture the exception for tracing
         finally:
             # Mark the child call as complete, regardless of success or failure.
             # Output is passed to bm.weave.finish_call if result is not None
-            if bm.weave and child_call:
-                bm.weave.finish_call(child_call, output=result or None, op=process_op)
+            # Error is also passed if exception_obj is not None
+            if weave_client and child_call:
+                weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
                 tracing_link = child_call.ui_url
-            # TODO: try to force and wait for upload to weave here, so that we can get the trace link
 
         # --- Turn the result into AgentTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)

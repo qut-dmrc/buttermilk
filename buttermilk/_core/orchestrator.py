@@ -346,12 +346,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
-
-        if bm.weave:
+        weave_client = await bm.get_weave_client()
+        if weave_client is not None:
             try:
                 op = weave.op(self.run, call_display_name=display_name)
                 logger.debug(f"Creating Weave call for orchestrator '{self.name}' with display name '{display_name}'.")
-                orchestrator_trace = bm.weave.create_call(
+                orchestrator_trace = weave_client.create_call(
                     op,
                     inputs=inputs,
                     display_name=display_name,
@@ -378,8 +378,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
             # Finish trace if it was created and a finisher is available
             if orchestrator_trace is not None:
                 try:
-                    if hasattr(bm, "weave") and hasattr(getattr(bm, "weave"), "finish_call"):
-                        bm.weave.finish_call(orchestrator_trace, op=op)
+                    weave_client = await bm.get_weave_client()
+                    if weave_client is not None and orchestrator_trace is not None:
+                        weave_client.finish_call(orchestrator_trace, op=op)
                     elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
                         _weave_mod.finish_call(orchestrator_trace, op=op)
                 except Exception as e:
