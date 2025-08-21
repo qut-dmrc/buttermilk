@@ -36,7 +36,7 @@ async def get_parent_call_weave(
     async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
         """Retry getting weave call to handle async upload timing."""
         bm = get_bm()
-        return bm.get_weave_client().get_call(call_id)
+        return await bm.get_weave_client().get_call(call_id)
 
     # Use RetryWrapper with shorter delays for weave call retrieval
     retry_wrapper = RetryWrapper(
