@@ -521,7 +521,7 @@ class BM(BaseModel):
 
         from traceloop.sdk import Traceloop
 
-        Traceloop.init(app_name="buttermilk")
+        Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
         logger.info("Traceloop initialized.")
 
         # Setup other Otel tracing if configured
