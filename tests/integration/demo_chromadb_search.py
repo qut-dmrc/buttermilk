@@ -110,18 +110,6 @@ async def main():
         except Exception as e:
             logger.error(f"Filtered search failed: {e}")
 
-        # Demo no duplicates
-        logger.info(f"\n{'=' * 60}")
-        logger.info("NO DUPLICATES SEARCH: 'economics' (max 10 results)")
-        logger.info(f"{'=' * 60}")
-
-        search_tool.no_duplicates = True
-        unique_results = await search_tool.search(query="economics", n_results=10)
-
-        doc_ids = [r.document_id for r in unique_results]
-        unique_doc_ids = set(doc_ids)
-        logger.info(f"Retrieved {len(unique_results)} chunks from {len(unique_doc_ids)} unique documents")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

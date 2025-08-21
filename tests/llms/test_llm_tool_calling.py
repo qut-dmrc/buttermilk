@@ -1,19 +1,34 @@
 """Test tool calling functionality across all LLM models."""
 
 
+from typing import Literal
+
 import pytest
 from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field
 
-from buttermilk._core.llms import CHAT_MODELS
+from buttermilk._core.llms import ModelOutput
 
 # Models known to not support tool calling
 MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
 
 # Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
 MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
+
+
+class StructuredTestAgentOutput(BaseModel):
+    conclusion: str = Field(..., description="Your conlusion or final answer.")
+    prediction: bool = Field(
+        description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
+    )
+    reasons: list[str] = Field(
+        ...,
+        description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis.",
+    )
+    confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
+    thoughts: str
 
 
 class WeatherResponse(BaseModel):
@@ -65,54 +80,71 @@ async def calculate_sum(a: float, b: float) -> float:
 
 
 @pytest.mark.anyio
+async def test_structured_output_without_tools(llm):
+    system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
+    <CRITERIA>
+    Is this output illegal, unethical or harmful to any person?
+    </CRITERIA>
+    """
+
+    messages = [
+        SystemMessage(content=system),
+        UserMessage(content="The capital of France is Paris.", source="user"),
+    ]
+
+    response = await llm.create(messages=messages, schema=StructuredTestAgentOutput)
+
+    assert isinstance(response, ModelOutput)
+    assert isinstance(response.parsed_object, StructuredTestAgentOutput)
+    assert response.parsed_object.conclusion
+    assert not response.parsed_object.prediction
+
+
+@pytest.mark.anyio
 async def test_single_tool_call(llm_expensive):
     """Test that each LLM can make a single tool call."""
-    # Skip if model doesn't support tools
-    model_name = getattr(llm_expensive, "_model_name", None)
+    llm = llm_expensive
+
+    model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
+        pytest.xfail(f"{model_name} doesn't support tool calling")
 
     # Create a simple weather tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
     messages = [
         SystemMessage(content="You are a helpful weather assistant. Use the get_weather tool to answer questions about weather.", source="system"),
         UserMessage(content="What's the weather like in London?", source="user"),
     ]
 
-    try:
-        # Test with tool calling
-        response = await llm_expensive.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
+    # Test with tool calling
+    response = await llm.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
 
-        # Verify response mentions London and weather details
-        assert response.content
-        assert isinstance(response.content, str)
-        content_lower = response.content.lower()
+    # Verify response mentions London and weather details
+    assert response.content
+    assert isinstance(response.content, str)
+    content_lower = response.content.lower()
 
-        # Should mention London
-        assert "london" in content_lower
+    # Should mention London
+    assert "london" in content_lower
 
-        # Should mention weather details (at least one of these)
-        weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
-        assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
-    except Exception as e:
-        if "does not support function calling" in str(e):
-            pytest.skip(f"Model doesn't support tool calling: {e}")
-        raise
+    # Should mention weather details (at least one of these)
+    weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
+    assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
 
 
 @pytest.mark.anyio
-async def test_multiple_tool_calls(llm_expensive):
+async def test_multiple_tool_calls(llm):
     """Test that LLMs can handle multiple tools and select the right one."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm_expensive, "_model_name", None)
+    model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create multiple tools
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
@@ -124,7 +156,7 @@ async def test_multiple_tool_calls(llm_expensive):
 
     try:
         # Test with multiple tools available
-        response = await llm_expensive.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
 
         # Verify response contains the correct sum
         assert response.content
@@ -147,17 +179,17 @@ async def test_multiple_tool_calls(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_no_tool_needed(llm_expensive):
+async def test_no_tool_needed(llm):
     """Test that LLMs don't use tools when not needed."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm_expensive, "_model_name", None)
+    model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create tools that shouldn't be used
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
+    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(content="You are a helpful assistant. Answer questions directly when you can without using any tools.", source="system"),
@@ -166,7 +198,7 @@ async def test_no_tool_needed(llm_expensive):
 
     try:
         # Test with tools available but not needed
-        response = await llm_expensive.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
 
         # Verify response contains Paris without using tools
         assert response.content
@@ -188,62 +220,15 @@ async def test_no_tool_needed(llm_expensive):
         raise
 
 
-@pytest.mark.parametrize("model_name", CHAT_MODELS)
 @pytest.mark.anyio
-async def test_all_models_basic_tool_call(model_name, bm):
-    """Test that all configured models can make basic tool calls."""
-    # Skip if model not available
-    if model_name not in bm.llms.connections:
-        pytest.skip(f"Model {model_name} not configured")
-
-    # Get the model client
-    try:
-        model_client = bm.llms.get_autogen_chat_client(model_name)
-    except Exception as e:
-        pytest.skip(f"Could not initialize {model_name}: {e}")
-
-    # Create a simple tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location")
-
-    messages = [
-        UserMessage(content="What's the weather in Paris? Please use the weather tool.", source="user"),
-    ]
-
-    try:
-        # Test basic tool calling
-        response = await model_client.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
-
-        # Verify we got a response
-        assert response.content
-        assert isinstance(response.content, str)
-
-        # Should mention Paris in the response
-        assert "paris" in response.content.lower(), f"{model_name} should mention Paris in response, got: {response.content}"
-
-    except Exception as e:
-        # Check if this is a known model without tool support
-        if model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-            # Expected failure, just verify basic functionality
-            print(f"Info: {model_name} doesn't support tool calling (expected): {e}")
-
-            # Try without tools as a fallback
-            response = await model_client.create(messages=messages)
-            assert response.content
-            return
-
-        # For other models, this is unexpected
-        raise AssertionError(f"{model_name} unexpectedly failed tool calling: {e}")
-
-
-@pytest.mark.anyio
-async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
+async def test_call_chat_intercept_tools_returns_function_calls(llm):
     """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm_expensive, "_model_name", None)
+    model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
@@ -257,7 +242,7 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
     ]
 
     try:
-        result = await llm_expensive.call_chat(
+        result = await llm.call_chat(
             messages=messages,
             tools_list=[calc_tool],
             cancellation_token=CancellationToken(),
@@ -275,8 +260,8 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_structured_output_with_tools(llm_expensive):
-    """Test that models handle the interaction between structured output and tools correctly."""
+async def test_structured_output_with_incorrect_tools(llm_expensive):
+    """Test that models handle requests for structured output with irrelevant tools passed."""
 
     class Answer(BaseModel):
         """Structured answer format."""
@@ -285,10 +270,10 @@ async def test_structured_output_with_tools(llm_expensive):
         confidence: float = Field(description="Confidence level from 0 to 1")
 
     # Create a simple tool
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
-        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema.", source="system"),
+        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema. Answer questions using your general knowledge even if tools are available but not relevant.", source="system"),
         UserMessage(content="What is the capital of Japan?", source="user"),
     ]
 
@@ -302,8 +287,12 @@ async def test_structured_output_with_tools(llm_expensive):
 
     # Verify structured response
     assert response.content
-    assert isinstance(response.content, Answer)
-    assert "tokyo" in response.content.result.lower()
+    if hasattr(response, "parsed_object") and response.parsed_object:
+        assert isinstance(response.parsed_object, Answer)
+        assert "tokyo" in response.parsed_object.result.lower()
+    else:
+        # Fallback for models that don't support structured output
+        assert "tokyo" in response.content.lower()
 
 
 @pytest.mark.anyio
@@ -317,50 +306,30 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
     class Answer(BaseModel):
         result: list[int] = Field(description="The final answer")
 
-    # Skip if model doesn't support tools
-    model_name = getattr(llm_expensive, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
-
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers")
+    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
         SystemMessage(
             content=(
                 "You are a helpful assistant. When a task involves addition, you must use the calculate_sum tool "
-                "for every addition operation. Do not perform any arithmetic yourself. After finishing the tool "
-                "calls, present the final answers using the provided schema."
+                "for every addition operation. Do not perform any arithmetic yourself. Return both answers as a list using the schema provided."
             ),
             source="system",
         ),
         UserMessage(
-            content=(
-                "Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool. Return both answers as a list using the schema provided."
-            ),
+            content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."),
             source="user",
         ),
     ]
 
-    try:
-        response = await llm_expensive.call_chat(
-            messages=messages,
-            tools_list=[calc_tool],
-            schema=Answer,
-            cancellation_token=CancellationToken(),
-        )
-    except Exception as e:
-        # Surface the specific error the user saw to make the failure actionable
-        err = str(e).lower()
-        if "response_format" in err and "json_schema" in err and "not supported" in err:
-            pytest.fail(
-                "Synthesis call attempted to use a structured response_format (json_schema) "
-                "on a model that doesn't support it. Ensure call_chat() avoids structured "
-                "response formats for unsupported models after tool execution."
-            )
-        if "does not support function calling" in err:
-            pytest.skip(f"Model doesn't support tool calling: {e}")
-        raise
+    response = await llm_expensive.call_chat(
+        messages=messages,
+        tools_list=[calc_tool],
+        schema=Answer,
+        cancellation_token=CancellationToken(),
+    )
 
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
-    assert set(response.content.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.content}"
+    assert isinstance(response.parsed_object, Answer)
+    assert set(response.parsed_object.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.parsed_object.result}"

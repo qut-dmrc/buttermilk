@@ -7,6 +7,8 @@ This module provides a clean RAG agent that:
 """
 
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from buttermilk.agents.llm import LLMAgent
@@ -34,26 +36,21 @@ class ResearchResult(BaseModel):
 
 class RagAgent(LLMAgent):
     """Base RAG agent ensuring structured outputs with citations.
-    
+
     This simplified agent:
     - Extends LLMAgent to inherit all tool usage capabilities
     - Forces ResearchResult as the output format
     - Uses external search tools configured in YAML
     - Relies on Jinja2 templates for search orchestration
-    
+
     The template is responsible for:
     1. Calling search tools
     2. Extracting citations from results
-    3. Synthesizing the response
-    4. Returning in ResearchResult format
+    3. Iterating up to max_tool_iterations
+    4. Synthesizing the response
+    5. Returning in ResearchResult format
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, output_model: type[BaseModel] = None, **kwargs: Any) -> None:
         """Initialize RagAgent with template configuration."""
-        super().__init__(**kwargs)
-
-        # Force structured output - can be overridden by subclasses
-        self.output_model: type[BaseModel] | None = ResearchResult
-
-        # Template configuration - moved from Field declaration
-        self.template: str = kwargs.get("template", "rag")
+        super().__init__(output_model=ResearchResult, **kwargs)

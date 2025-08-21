@@ -73,7 +73,7 @@ class LLMAgent(Agent):
 
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -87,6 +87,8 @@ class LLMAgent(Agent):
             ValueError: If 'model' and 'template' is not specified in parameters.
 
         """
+        if "name_components" not in kwargs:
+            kwargs["name_components"] = ["role", "model", "unique_identifier"]
         super().__init__(**kwargs)
         if "model" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
@@ -97,7 +99,7 @@ class LLMAgent(Agent):
         self._model: str = self.parameters.get("model", "")
         self._tools: list[Tool] = self._load_tools()
 
-        self.output_model: type[pydantic.BaseModel] = kwargs.get("output_model", None)
+        self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
@@ -162,28 +164,24 @@ class LLMAgent(Agent):
             str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
 
         """
-        if not self.parameters["model"]:
+        model = self.parameters.get("model") or ""
+        model_lower = model.lower()
+        if not model_lower:
             return ""
 
-        model_lower = self.parameters["model"].lower()
-
-        # Common model patterns
-        if "gpt-4" in model_lower:
-            return "GPT4"
-        if "gpt-3.5" in model_lower:
-            return "GPT3"
-        if "sonnet" in model_lower:
-            return "SONN"
-        if "opus" in model_lower:
-            return "OPUS"
-        if "haiku" in model_lower:
-            return "HAIK"
-        if "claude" in model_lower:
-            return "CLDE"
-        if "gemini" in model_lower:
-            return "GEMN"
-        if "llama" in model_lower:
-            return "LLMA"
+        patterns = {
+            "gpt-4": "GPT4",
+            "gpt-3.5": "GPT3",
+            "sonnet": "SONN",
+            "opus": "OPUS",
+            "haiku": "HAIK",
+            "claude": "CLDE",
+            "gemini": "GEMN",
+            "llama": "LLMA",
+        }
+        for key, tag in patterns.items():
+            if key in model_lower:
+                return tag
         return ""
 
     async def _fill_template(

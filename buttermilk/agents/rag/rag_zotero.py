@@ -4,7 +4,10 @@ This module provides a Zotero-focused RAG agent that inherits from the
 simplified RagAgent base class and adds only Zotero-specific output formatting.
 """
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+import pydantic
+from pydantic import Field
 
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
@@ -17,6 +20,7 @@ class ZoteroReference(Reference):
 
     citation: str = Field(..., description="Full academic citation for the reference.")
     doi: str | None = Field(default=None, description="DOI of the reference if available.")
+    uri: str | None = Field(default=None, description="URI of the reference if available.")
 
 
 class ZoteroResearchResult(ResearchResult):
@@ -29,7 +33,10 @@ class ZoteroResearchResult(ResearchResult):
         ...,
         description="List of Zotero literature references with full citations.",
     )
-
+    response: str = Field(
+        ...,
+        description="The synthesized textual response.",
+    )
 
 class RagZotero(RagAgent):
     """RAG agent specialized for Zotero academic literature.
@@ -45,9 +52,6 @@ class RagZotero(RagAgent):
     All search functionality is handled by configured tools.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize RagZotero with Zotero-specific output model."""
-        super().__init__(**kwargs)
-
-        # Override output model for Zotero-specific formatting - moved from class attribute
-        self.output_model: type[BaseModel] = ZoteroResearchResult
+        super().__init__(output_model=ZoteroResearchResult, **kwargs)

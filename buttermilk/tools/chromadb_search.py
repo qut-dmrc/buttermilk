@@ -38,7 +38,6 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
 
     # Search-specific parameters (in addition to those inherited from ChromaDBEmbeddings)
     n_results: int = Field(default=10, description="Number of results per search")
-    no_duplicates: bool = Field(default=False, description="Filter for unique documents")
 
     # Override these as we're not creating a storage config
     description: str = Field(default="ChromaDB vector search tool", description="Tool description")
@@ -77,11 +76,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         num_results = n_results if n_results > 0 else self.n_results
 
         # Query ChromaDB
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=num_results * 3 if self.no_duplicates else num_results,
-            include=["documents", "metadatas", "distances"]
-        )
+        results = self.collection.query(query_texts=[query], n_results=num_results, include=["documents", "metadatas", "distances"])
 
         # Parse results
         search_results = []
@@ -96,8 +91,6 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             )):
                 # Filter duplicates if requested
                 parent_doc_id = metadata.get("document_id", doc_id)
-                if self.no_duplicates and parent_doc_id in seen_docs:
-                    continue
 
                 seen_docs.add(parent_doc_id)
 
@@ -130,10 +123,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         # Format results for display
         formatted_parts = []
         for i, result in enumerate(results):
-            formatted_parts.append(
-                f"**Result {i+1}** (Doc: {result.document_title or result.document_id})\n"
-                f"{result.content}"
-            )
+            formatted_parts.append(f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}")
 
         return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
 
