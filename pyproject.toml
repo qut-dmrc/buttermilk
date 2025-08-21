@@ -109,6 +109,7 @@ dependencies = [
     "opentelemetry-resourcedetector-gcp>=1.8",
     "azure-monitor-opentelemetry-exporter==1.0.0b41",
     "opentelemetry-instrumentation-logging>=0.56",
+    "gql<4.0.0",
 ]
 
 [dependency-groups]
