@@ -82,7 +82,7 @@
     }
     
     // Initialize the application
-    await initializeApp();
+    await initializeApp(urlSessionId);
     
     // Build WebSocket URL with session ID from URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

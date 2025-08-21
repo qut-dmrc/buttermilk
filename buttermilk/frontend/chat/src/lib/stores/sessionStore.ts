@@ -22,13 +22,13 @@ function createSessionStore() {
                 // Save to localStorage as fallback
                 window.localStorage.setItem('sessionId', value);
                 
-                // Update URL if we're on a session page and ID changed
+                // Update URL if we're on a terminal session page and ID changed
                 const currentPath = window.location.pathname;
-                if (currentPath.startsWith('/session/')) {
+                if (currentPath.startsWith('/terminal/')) {
                     const currentSessionId = currentPath.split('/')[2];
                     if (currentSessionId !== value) {
                         // Update URL to reflect new session ID
-                        goto(`/session/${value}`, { replaceState: true });
+                        goto(`/terminal/${value}`, { replaceState: true });
                     }
                 }
             } else {

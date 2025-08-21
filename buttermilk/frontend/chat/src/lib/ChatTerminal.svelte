@@ -310,11 +310,9 @@ import {
       isReconnecting = false; // Stop reconnection attempts if no session ID
       return;
     }
-    let wsUrlWithSession;
     try {
-        
-      wsUrlWithSession = `${wsUrl}/${currentSessionId}`;
-      console.debug('Attempting to connect to WebSocket with URL:', wsUrlWithSession);
+      // wsUrl already includes the session ID from the parent page
+      console.debug('Attempting to connect to WebSocket with URL:', wsUrl);
       
       // Set connection timeout
       const connectionTimeout = setTimeout(() => {
@@ -331,7 +329,7 @@ import {
         }
       }, 5000);
 
-      socket = new WebSocket(wsUrlWithSession);
+      socket = new WebSocket(wsUrl);
       
       socket.onopen = () => {
         console.log('Direct WebSocket connection established');
@@ -473,7 +471,8 @@ import {
         // Attempt to reconnect after a delay
         setTimeout(() => {
           if (!isConnected) {
-            console.debug(`Attempting to reconnect... (Attempt ${reconnectAttempts})`);            connectWebSocket();
+            console.debug(`Attempting to reconnect... (Attempt ${reconnectAttempts})`);
+            connectWebSocket();
           }
         }, 5000);
       };

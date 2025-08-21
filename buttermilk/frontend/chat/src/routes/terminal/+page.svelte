@@ -11,7 +11,7 @@
       console.log('Redirecting to new session:', newSessionId);
       
       // Redirect to the session-specific route
-      await goto(`/session/${newSessionId}`, { replaceState: true });
+      await goto(`/terminal/${newSessionId}`, { replaceState: true });
     }
   });
 </script>

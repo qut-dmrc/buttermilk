@@ -287,9 +287,21 @@ export const datasetsStore = derived(
 // --- Logic ---
 
 // Fetch initial flow list when app loads
-export function initializeApp() {
-    console.log(">>> initializeApp called");
+// Track initialization per session to prevent redundant calls
+let lastInitializedSession = '';
+
+export function initializeApp(sessionId?: string) {
+    const currentSession = sessionId || 'default';
+    
+    if (lastInitializedSession === currentSession) {
+        console.log(`>>> initializeApp called but already initialized for session ${currentSession}, using cache`);
+        initialFlowConfigStore.fetchWithCache();
+        return;
+    }
+    
+    console.log(">>> initializeApp called for session:", currentSession);
     console.log("Initializing app data: fetching flow choices...");
+    lastInitializedSession = currentSession;
     initialFlowConfigStore.fetchWithCache();
 }
 
