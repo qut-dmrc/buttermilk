@@ -18,7 +18,7 @@ class Reference(BaseModel):
     """Represents a single cited reference within a research result."""
 
     summary: str = Field(..., description="Summary of the key information from this reference.")
-    source: str = Field(..., description="Source identifier or title for the reference.")
+    citation: str = Field(..., description="Source identifier for the reference.")
 
 
 class ResearchResult(BaseModel):
@@ -30,7 +30,11 @@ class ResearchResult(BaseModel):
     )
     response: str = Field(
         ...,
-        description="The synthesized textual response.",
+        description="The synthesized textual response (markdown permitted).",
+    )
+    summary: str = Field(
+        ...,
+        description="A brief summary (plain text)",
     )
 
 
@@ -53,4 +57,6 @@ class RagAgent(LLMAgent):
 
     def __init__(self, *, output_model: type[BaseModel] = None, **kwargs: Any) -> None:
         """Initialize RagAgent with template configuration."""
-        super().__init__(output_model=ResearchResult, **kwargs)
+        if output_model is None:
+            output_model = ResearchResult
+        super().__init__(output_model=output_model, **kwargs)

@@ -9,6 +9,6 @@
  * not needed as the bundler handles this automatically
  */
 export function initPreloader() {
-  console.log('SvelteKit modules preloaded successfully');
-  return true;
+	console.log('SvelteKit modules preloaded successfully');
+	return true;
 }

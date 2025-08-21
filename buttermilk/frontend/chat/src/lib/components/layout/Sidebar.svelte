@@ -19,7 +19,7 @@
 	
 	$: isTerminalPage = $page.route.id === '/terminal' || $page.route.id === '/terminal/[sessionId]';
 
-    import { flowRunning } from '$lib/stores/apiStore';
+	import { flowRunning } from '$lib/stores/apiStore';
 	// Initialize app data when we're on the terminal page and the sidebar mounts
 	onMount(() => {
 		if (isTerminalPage) {
@@ -27,10 +27,10 @@
 		}
 	});
 
-  function runFlow() {
-    flowRunning.set(true); // Update the store
-    $runFlowAction && $runFlowAction();
-  }
+	function runFlow() {
+		flowRunning.set(true); // Update the store
+		$runFlowAction && $runFlowAction();
+	}
 </script>
 
 <!-- Sidebar component -->
@@ -38,70 +38,68 @@
 	<!-- Terminal API Selector Section -->
 	<div class="terminal-selector p-3 mb-4">
 		<h2 class="mb-3">API Selector</h2>
-			<div>
-				<!-- Flows Dropdown -->
-				<ApiDropdown
-					store={flowChoices}
-					label="Select Flow"
-					placeholder="Choose a flow..."
-					bind:value={$selectedFlow}
-					isPlainArray={true}
-				/>
+		<div>
+			<!-- Flows Dropdown -->
+			<ApiDropdown
+				store={flowChoices}
+				label="Select Flow"
+				placeholder="Choose a flow..."
+				bind:value={$selectedFlow}
+				isPlainArray={true}
+			/>
 
-				<!-- Datasets Dropdown - only enabled if a flow is selected -->
-				<ApiDropdown
-					store={datasetsStore}
-					label="Select Dataset"
-					placeholder="Choose a dataset..."
-					bind:value={$selectedDataset}
-					disabled={!$selectedFlow}
-					isPlainArray={true}
-				/>
+			<!-- Datasets Dropdown - only enabled if a flow is selected -->
+			<ApiDropdown
+				store={datasetsStore}
+				label="Select Dataset"
+				placeholder="Choose a dataset..."
+				bind:value={$selectedDataset}
+				disabled={!$selectedFlow}
+				isPlainArray={true}
+			/>
 
-				<!-- Records Dropdown - only enabled if a flow and dataset are selected -->
-				<ApiDropdown
-					store={recordsStore}
-					label="Select Record"
-					placeholder="Choose a record..."
-					bind:value={$selectedRecord}
-					disabled={!$selectedFlow || !$selectedDataset}
-					valueProperty="record_id"
-					labelProperty="name"
-					on:change={(e) => {
-						console.log("Record dropdown changed detail:", e.detail);
-						console.log("Record dropdown changed target value:", e.target ? (e.target as HTMLSelectElement).value : "No target");
-						console.log("Bound selectedRecord after change:", $selectedRecord);
-					}}
-				/>
-				<!-- Criteria Dropdown - only enabled if a flow is selected -->
-				<ApiDropdown
-					store={criteriaStore}
-					label="Select Criteria"
-					placeholder="Choose criteria..."
-					bind:value={$selectedCriteria}
-					disabled={!$selectedFlow}
-					isPlainArray={true}
-				/>
-				<!-- Models Dropdown - only enabled if a flow is selected -->
-				<ApiDropdown
-					store={modelStore}
-					label="Select Model(s)"
-					placeholder="Choose model(s)..."
-					bind:value={$selectedModel}
-					disabled={!$selectedFlow}
-					isPlainArray={true}
-				/>
-				<!-- Add standard Bootstrap button classes -->
-						<!-- disabled={!$selectedFlow || !$selectedRecord} -->
-				<div class="mt-3">
-					<button
-						class="btn btn-primary w-100"
-						onclick={runFlow}
-					>
-						Run flow
-					</button>
-				</div>
+			<!-- Records Dropdown - only enabled if a flow and dataset are selected -->
+			<ApiDropdown
+				store={recordsStore}
+				label="Select Record"
+				placeholder="Choose a record..."
+				bind:value={$selectedRecord}
+				disabled={!$selectedFlow || !$selectedDataset}
+				valueProperty="record_id"
+				labelProperty="name"
+				on:change={(e) => {
+					console.log('Record dropdown changed detail:', e.detail);
+					console.log(
+						'Record dropdown changed target value:',
+						e.target ? (e.target as HTMLSelectElement).value : 'No target'
+					);
+					console.log('Bound selectedRecord after change:', $selectedRecord);
+				}}
+			/>
+			<!-- Criteria Dropdown - only enabled if a flow is selected -->
+			<ApiDropdown
+				store={criteriaStore}
+				label="Select Criteria"
+				placeholder="Choose criteria..."
+				bind:value={$selectedCriteria}
+				disabled={!$selectedFlow}
+				isPlainArray={true}
+			/>
+			<!-- Models Dropdown - only enabled if a flow is selected -->
+			<ApiDropdown
+				store={modelStore}
+				label="Select Model(s)"
+				placeholder="Choose model(s)..."
+				bind:value={$selectedModel}
+				disabled={!$selectedFlow}
+				isPlainArray={true}
+			/>
+			<!-- Add standard Bootstrap button classes -->
+			<!-- disabled={!$selectedFlow || !$selectedRecord} -->
+			<div class="mt-3">
+				<button class="btn btn-primary w-100" onclick={runFlow}> Run flow </button>
 			</div>
+		</div>
 	</div>
 {:else}
 	<!-- Default Sidebar Content -->

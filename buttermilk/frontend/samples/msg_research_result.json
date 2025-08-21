@@ -1,0 +1,78 @@
+{
+    "type": "research_result",
+    "message_id": "0198cb90-e372-7b28-8715-98d5e1f17b95",
+    "preview": "",
+    "timestamp": "2025-08-21T07:38:58",
+    "outputs": {
+        "literature": [
+            {
+                "summary": "'Staydown' is a process favored by rightsholder groups that requires Online Service Providers (OSPs) to not only remove a targeted infringing file in response to a notice but also to use technologies like hash matching and fingerprinting to prevent any future reappearance of new copies of that identified content on their platform. For search engines, this means preventing re-indexing of content already taken down from a pirate site.",
+                "citation": "NOTICE AND TAKEDOWN IN EVERYDAY PRACTICE"
+            },
+            {
+                "summary": "OSPs generally view 'staydown' as the most problematic form of filtering systems, as they believe it risks mistaken, automated suppression of legitimate user expression. Some rightsholder respondents, while generally favoring staydown, acknowledge that technology is not a substitute for human review in fair use cases and suggest pairing technological systems with policies allowing users to object and content to be easily reinstated. However, they still prefer systems that create barriers to reposting identical content.",
+                "citation": "NOTICE AND TAKEDOWN IN EVERYDAY PRACTICE"
+            },
+            {
+                "summary": "Filtering and 'staydown' measures, which move beyond the simple removal of specific identified infringements, have been a point of contention. While rightsholders approve of these measures, OSPs strongly oppose them, fearing potential legal or normative changes that would make such voluntary measures mandatory, especially due to the high costs and risks to user expression.",
+                "citation": "NOTICE AND TAKEDOWN IN EVERYDAY PRACTICE"
+            },
+            {
+                "summary": "The traditional 'notice and takedown' system places the burden of identifying illegal activity on affected parties, not on intermediaries, who are not required to actively monitor their services for unlawful activity. This approach aims to avoid significant privacy issues, prevent chilling effects on free expression, and alleviate the high costs of monitoring for intermediaries.",
+                "citation": "SHIELDING THE MESSENGERS: PROTECTING PLATFORMS FOR EXPRESSION AND INNOVATION"
+            },
+            {
+                "summary": "The concept of 'staydown' orders arose from the interest of damaged parties to prevent content, once removed via a notice-and-takedown request, from reappearing permanently. These orders aim to ensure that removed content is subsequently blocked from reappearing by the intermediary. However, intermediaries argue that such preventive injunctions could impose de facto general monitoring obligations, conflicting with existing regulations like Article 15 of the E-Commerce Directive.",
+                "citation": "Unlawful Content Online: Towards a New Regulatory Framework for Online Platforms"
+            },
+            {
+                "summary": "In some countries, like Germany, the 'whack-a-mole' problem (where content is repeatedly re-uploaded after takedown) has led courts to impose 'notice and staydown' measures on intermediaries. However, within the European Union, some national courts have considered such an obligation for hosting providers to prevent the reappearance of content as a general monitoring obligation, which is prohibited by Article 15 of the E-Commerce Directive.",
+                "citation": "A Comparative Analysis of the Secondary Liability of Online Service Providers"
+            }
+        ],
+        "response": "Notice and staydown refers to an enforcement approach in online copyright where, in addition to removing infringing content upon notification (the 'notice and takedown' aspect), Online Service Providers (OSPs) are also required to implement measures, such as hash matching or fingerprinting technologies, to prevent that specific content from ever reappearing on their platforms in the future. This aims to stop the 'whack-a-mole' problem, where content is repeatedly re-uploaded after being taken down.\n\nWhile rightsholder groups largely support 'staydown' as a means to ensure effective removal and prevent re-indexing of infringing material, OSPs view it with significant concern. They argue that 'staydown' requirements could lead to automated suppression of legitimate user expression, pose substantial implementation costs, and potentially impose de facto general monitoring obligations on their services, which some regulations (like Article 15 of the E-Commerce Directive in the EU) aim to prohibit. This contrasts with the traditional 'notice and takedown' system, which places the burden of identifying illegal activity on affected parties and does not mandate active monitoring by intermediaries.",
+        "summary": "Notice and staydown requires Online Service Providers (OSPs) to not only remove infringing content but also to prevent it from reappearing."
+    },
+    "agent_info": {
+        "agent_id": "ZOTERO_RESEARCHER-Pvwgpm",
+        "role": "ZOTERO_RESEARCHER",
+        "description": "Academic research agent that searches Zotero library and provides properly formatted academic responses with full citations",
+        "tools": {
+            "chromadb_search": {
+                "_target_": "buttermilk.tools.chromadb_search.ChromaDBSearchTool",
+                "n_results": 10,
+                "type": "chromadb",
+                "persist_directory": "gs://prosocial-dev/data/zotero-prosocial-fulltext/files",
+                "collection_name": "prosocial_zot",
+                "embedding_model": "gemini-embedding-001",
+                "dimensionality": 3072
+            }
+        },
+        "data": {},
+        "parameters": {
+            "save": {
+                "type": "bigquery",
+                "project_id": "prosocial-443205",
+                "dataset_id": "testing",
+                "table_id": "flow",
+                "dataset_name": "flow",
+                "schema_path": "./schemas/flow.json"
+            },
+            "template": "rag",
+            "description": "Academic research agent that searches Zotero library and provides\nproperly formatted academic responses with full citations.\n",
+            "model": "gemini25flash"
+        },
+        "inputs": {},
+        "outputs": {},
+        "name_components": [
+            "role",
+            "model",
+            "unique_identifier"
+        ],
+        "agent_name": "ZOTERO_RESEARCHER gemini25flash Pvwgpm",
+        "session_id": "46f30ecd-4e66-4460-a11b-cfee83889f5c"
+    },
+    "prompt_tokens": 19266,
+    "completion_tokens": 912,
+    "cost_usd": 0.0080598
+}

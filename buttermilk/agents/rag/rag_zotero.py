@@ -18,7 +18,7 @@ class ZoteroReference(Reference):
     Extends the base Reference class to include proper academic citations.
     """
 
-    citation: str = Field(..., description="Full academic citation for the reference.")
+    citation: str = Field(..., description="Brief, complete academic citation for the reference.")
     doi: str | None = Field(default=None, description="DOI of the reference if available.")
     uri: str | None = Field(default=None, description="URI of the reference if available.")
 
@@ -33,10 +33,7 @@ class ZoteroResearchResult(ResearchResult):
         ...,
         description="List of Zotero literature references with full citations.",
     )
-    response: str = Field(
-        ...,
-        description="The synthesized textual response.",
-    )
+
 
 class RagZotero(RagAgent):
     """RAG agent specialized for Zotero academic literature.
@@ -54,4 +51,6 @@ class RagZotero(RagAgent):
 
     def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize RagZotero with Zotero-specific output model."""
+        if output_model is None:
+            output_model = ZoteroResearchResult
         super().__init__(output_model=ZoteroResearchResult, **kwargs)

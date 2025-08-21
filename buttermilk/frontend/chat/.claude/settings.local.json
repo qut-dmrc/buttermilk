@@ -1,10 +1,6 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(grep:*)",
-      "WebFetch(domain:automod.cc)",
-      "Bash(npm run build:*)"
-    ],
-    "deny": []
-  }
+	"permissions": {
+		"allow": ["Bash(grep:*)", "WebFetch(domain:automod.cc)", "Bash(npm run build:*)"],
+		"deny": []
+	}
 }

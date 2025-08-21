@@ -15,7 +15,7 @@ Update this URL to point to your actual backend server. For production deploymen
 
 ## How It Works
 
-### API Proxy 
+### API Proxy
 
 The frontend uses a proxy approach for API requests. Here's how it works:
 
@@ -24,6 +24,7 @@ The frontend uses a proxy approach for API requests. Here's how it works:
 3. The backend response is returned to the frontend
 
 This approach offers several benefits:
+
 - Avoids CORS issues
 - Provides fallback data when the backend is unavailable
 - Allows for centralized error handling
@@ -33,12 +34,12 @@ This approach offers several benefits:
 
 The following endpoints are used:
 
-| Frontend Endpoint | Backend Endpoint | Description |
-|-------------------|------------------|-------------|
-| `/api/flows` | `${BACKEND_API_URL}/api/flows` | Gets list of available flows |
-| `/api/records?flow=X` | `${BACKEND_API_URL}/api/records?flow=X` | Gets records for a specific flow |
-| `/api/session` | `${BACKEND_API_URL}/api/session` | Gets a session ID for WebSocket connection |
-| `/ws/${sessionId}` | `${BACKEND_API_URL}/ws/${sessionId}` | WebSocket connection |
+| Frontend Endpoint     | Backend Endpoint                        | Description                                |
+| --------------------- | --------------------------------------- | ------------------------------------------ |
+| `/api/flows`          | `${BACKEND_API_URL}/api/flows`          | Gets list of available flows               |
+| `/api/records?flow=X` | `${BACKEND_API_URL}/api/records?flow=X` | Gets records for a specific flow           |
+| `/api/session`        | `${BACKEND_API_URL}/api/session`        | Gets a session ID for WebSocket connection |
+| `/ws/${sessionId}`    | `${BACKEND_API_URL}/ws/${sessionId}`    | WebSocket connection                       |
 
 ### Data Flow
 
@@ -69,7 +70,7 @@ To add a new API endpoint:
 The ApiDropdown component can be used with any API store. To create a new dropdown:
 
 ```svelte
-<ApiDropdown 
+<ApiDropdown
   store={yourStore}
   label="Your Label"
   placeholder="Choose an option..."

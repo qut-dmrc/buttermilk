@@ -6,17 +6,18 @@
 	import Header from '$lib/components/layout/Header.svelte'; // Placeholder
 	import UnifiedSidebar from '$lib/components/layout/UnifiedSidebar.svelte';
 	import '$lib/styles/app.scss'; // Import the main SCSS file
-    import { flowRunning } from '$lib/stores/apiStore';
+	import { flowRunning } from '$lib/stores/apiStore';
 	onMount(() => {
 		// Initialize module preloading
 		initPreloader();
 		// Bootstrap JS needed for components like navbar toggler
-		if (browser) { // Ensure this only runs on the client
+		if (browser) {
+			// Ensure this only runs on the client
 			import('bootstrap/dist/js/bootstrap.bundle.min.js');
 		}
 	});
-	
 </script>
+
 <div class="container-lg">
 	<Nav />
 	<Header />

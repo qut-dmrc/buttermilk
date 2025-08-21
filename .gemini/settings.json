@@ -3,5 +3,15 @@
   "telemetry": {
     "enabled": "false",
     "target": "gcp"
+  },
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--headless",
+        "--save-trace"
+      ]
+    }
   }
 }

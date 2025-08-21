@@ -247,8 +247,8 @@
 			if (socket && socket.readyState === WebSocket.OPEN) {
 				socket.send(JSON.stringify(message));
 			}
-		} catch (e) {
-			console.error('Error sending interrupt start message:', e);
+		} catch {
+			console.error('Error sending interrupt start message:');
 		}
 	}
 
@@ -542,9 +542,9 @@
 					isReconnecting = false;
 				}
 			};
-		} catch (error) {
-			console.error('Error creating WebSocket:', error);
-			connectionError = `Error creating WebSocket: ${error}`;
+		} catch {
+			console.error('Error creating WebSocket:');
+			connectionError = `Error creating WebSocket`;
 			isConnected = false;
 			isReconnecting = false; // Ensure isReconnecting is false on error
 		}
@@ -574,9 +574,9 @@
 
 			addMessage(userMessageFormatted); // Display user message immediately
 			inputMessage = ''; // Clear input field
-		} catch (e) {
-			console.error('Error sending message:', e);
-			addSystemMessage(`Error sending message: ${e}`);
+		} catch {
+			console.error('Error sending message:');
+			addSystemMessage(`Error sending message:`);
 		}
 	}
 
@@ -771,7 +771,7 @@
 
 	<!-- Message Display Area -->
 	<div class="console" id="console-messages" bind:this={messageListElement}>
-		{#each messages as msg}
+		{#each messages as msg (msg.message_id)}
 			<MessageDisplay message={msg} />
 		{/each}
 	</div>

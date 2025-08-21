@@ -134,6 +134,14 @@ export function getScoreColor(score: string | number | null | undefined) {
 	return '#dc3545'; // Red
 }
 
+// Helper function to format time as HH:MM:SS
+function formatTime(date: Date): string {
+	const hours = String(date.getHours()).padStart(2, '0');
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	const seconds = String(date.getSeconds()).padStart(2, '0');
+	return `${hours}:${minutes}:${seconds}`;
+}
+
 export function createManagerResponse(
 	confirm: boolean | null | undefined,
 	selection: string | null = null,
@@ -201,7 +209,6 @@ export interface Message {
 	completion_tokens?: number;
 	cost_usd?: number;
 }
-
 // Assessment message types
 export interface QualScoreCRA {
 	correct: boolean;
@@ -342,9 +349,11 @@ export interface SystemMessage {
 // Union type for all message types
 // Adding a generic message type for fallback cases
 export interface GenericMessage {
-	type: string;
+	message_id: string;
+	type: MessageType;
 	content?: string;
-	timestamp?: string;
+	timestamp: string;
+	agent_info: AgentInfo;
 	[key: string]: any; // Allow for additional properties
 }
 

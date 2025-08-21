@@ -7,13 +7,13 @@ export const messageStore = writable<Message[]>([]);
 
 // Helper functions
 export function addMessage(message: Message) {
-  messageStore.update(messages => [...messages, message]);
-  // Update token usage tracking
-  updateTokenUsage(message);
+	messageStore.update((messages) => [...messages, message]);
+	// Update token usage tracking
+	updateTokenUsage(message);
 }
 
 export function clearMessages() {
-  messageStore.set([]);
-  // Reset token usage when clearing messages
-  resetTokenUsage();
+	messageStore.set([]);
+	// Reset token usage when clearing messages
+	resetTokenUsage();
 }

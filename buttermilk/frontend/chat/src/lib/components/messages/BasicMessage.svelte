@@ -39,7 +39,7 @@
 				>{/if}
 		</span>
 	</div>
-	<div class="message-text col-sm-11">
+	<div class="message-text col-sm-10">
 		<span class="message-body">
 			{#if error}<span class="error-message">Error: {error}</span>{/if}
 			<slot name="messageContent">
@@ -53,3 +53,10 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	.error-message {
+		color: red;
+		font-weight: bold;
+	}
+</style>
