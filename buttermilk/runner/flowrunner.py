@@ -300,6 +300,17 @@ class FlowRunContext(BaseModel):
             logger.debug(f"Unhandled message type: {type(message)}, not forwarding to UI.")
             return
 
+        # Persist message to session storage
+        try:
+            from buttermilk.api.services.session_storage import SessionStorageService
+            storage_service = SessionStorageService()
+            if storage_service.should_persist_message(formatted_message):
+                storage_service.save_message(self.session_id, formatted_message)
+                logger.debug(f"Persisted message {formatted_message.message_id} for session {self.session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to persist message for session {self.session_id}: {e}")
+            # Continue even if persistence fails
+
         if self.websocket is None:
             logger.debug(f"WebSocket not connected for session {self.session_id}, cannot send message.")
             return

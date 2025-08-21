@@ -515,6 +515,12 @@ import {
     }
   }
     
+  // Function to handle restored messages
+  export function handleMessage(message: Message) {
+    // Add the message directly without WebSocket processing
+    addMessage(message);
+  }
+  
   // Function to send a run_flow request
   export function sendRunFlowRequest(flow: string, record: string, criteria: string) {
     if (!socket || socket.readyState !== WebSocket.OPEN) {

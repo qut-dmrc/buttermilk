@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.log import logger
 from buttermilk.api.services.data_service import DataService
+from buttermilk.api.services.session_storage import SessionStorageService
 
 FlowRunner = Any
 
@@ -117,6 +118,41 @@ async def get_session_endpoint(
     except Exception as e:
         logger.error(f"Error in session endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create session")
+
+
+@flow_data_router.get("/api/session/{session_id}/messages")
+async def get_session_messages_endpoint(
+    session_id: str = Path(..., description="The session ID"),
+):
+    """Get all messages for a session for restoration.
+    
+    Returns stored messages for the session to allow clients to restore
+    previous conversation state when loading a session URL.
+    
+    Args:
+        session_id: The session identifier
+        
+    Returns:
+        JSON response with messages array or 404 if session not found
+    """
+    storage_service = SessionStorageService()
+    
+    if not storage_service.session_exists(session_id):
+        logger.debug(f"Session {session_id} not found for restoration")
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        messages = storage_service.get_session_messages(session_id)
+        
+        # Convert ChatMessage objects to dicts for JSON response
+        message_dicts = [msg.model_dump(mode="json") for msg in messages]
+        
+        logger.info(f"Returning {len(message_dicts)} messages for session {session_id}")
+        return JSONResponse({"messages": message_dicts})
+        
+    except Exception as e:
+        logger.error(f"Error retrieving session messages for {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve session messages")
 
 
 @flow_data_router.get("/api/flows")
