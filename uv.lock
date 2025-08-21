@@ -317,19 +317,19 @@ wheels = [
 
 [[package]]
 name = "autogen-agentchat"
-version = "0.7.3"
+version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "autogen-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a0/93/ae01c9c6a35f5ca9689c82a25327230ab89df25851edac1b7addce86e94d/autogen_agentchat-0.7.3.tar.gz", hash = "sha256:be3f53faa447ea920915e6410ef11abd65640216612403d8d70ef73e6401ec8f", size = 147034, upload-time = "2025-08-19T08:06:11.044Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/dc/9490b4ab8d3984a40daa9bbd5dc50b240dba149053917351ff18935901fe/autogen_agentchat-0.7.2.tar.gz", hash = "sha256:5c7eb62d6fb32dd05a162318dc707af9ee7f3d3c33b2bb20f6e2557782271c80", size = 147023, upload-time = "2025-08-07T00:27:31.997Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/3f/9f20130b5c55ad673677e586d37a984a4f61f1f8db435f9d9b21d6b5d80b/autogen_agentchat-0.7.3-py3-none-any.whl", hash = "sha256:556a74ffc33eb7546853255b9b2e7ca5b9a673f79003daff0f5b8fd32977e01e", size = 119096, upload-time = "2025-08-19T08:06:09.862Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/39/9df1f22b437ee8fe64c49857a79e686d3310c1cce0125c124e10c3563ce7/autogen_agentchat-0.7.2-py3-none-any.whl", hash = "sha256:d77c78e78aab02fb0088380a97195f2495850b61884ec1a32a7e1ec53a981896", size = 119090, upload-time = "2025-08-07T00:27:30.609Z" },
 ]
 
 [[package]]
 name = "autogen-core"
-version = "0.7.3"
+version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonref" },
@@ -339,21 +339,21 @@ dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/f5/c7fc78f4a8ddbae3c3f07b00ed5fd592b1a72f31e5f2eb4350387c55be45/autogen_core-0.7.3.tar.gz", hash = "sha256:5395355852655feec2e756ea205b3a1a24ea65f8b23ae9c0dbdc9b90ab890249", size = 100332, upload-time = "2025-08-19T08:06:24.838Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/cc/c249904c164a0be1d67b486a36e27aa7d9c877ff0300bd086d6656a5b171/autogen_core-0.7.2.tar.gz", hash = "sha256:66fe2f46d5d188a88ada90863371b341a8572778d22fe481bf63fb699a3940c8", size = 99834, upload-time = "2025-08-07T00:27:24.903Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/72/5e7eac781a2391873c1493c6d7b2daf7c451ba3250c3c82effc105e77349/autogen_core-0.7.3-py3-none-any.whl", hash = "sha256:50bc8a973d470e178ef1743fc62055767fd64fd3a832b78829fbde8e7f8283b2", size = 101572, upload-time = "2025-08-19T08:06:23.224Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/c1/bcf9d6fc0f2cf9f75093b48e0859ec31a7be69cc2118655bfaf1dbc8ecda/autogen_core-0.7.2-py3-none-any.whl", hash = "sha256:a4096c2e3cd889cf16bbdecae0d2b5cbd67d896349be2d33dbdeca56b924b400", size = 101405, upload-time = "2025-08-07T00:27:23.464Z" },
 ]
 
 [[package]]
 name = "autogen-ext"
-version = "0.7.3"
+version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "autogen-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/35/f8106a4e44baad33247c120a6b4457ba1fd439cf8d48480e0ba045c0a2f3/autogen_ext-0.7.3.tar.gz", hash = "sha256:95d2e4c7e2825a17838cf8ce2f7cb4ef779995f80c87f168872ba4e20ec3dd1b", size = 403915, upload-time = "2025-08-19T08:06:23.448Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/b0/67b80ecb0abd65daad204581029d644b8e13b9b32bc3daa5fa0355e452e9/autogen_ext-0.7.2.tar.gz", hash = "sha256:46800a8052b19d47e09fd5052eceecfca8719662baba87717563d9ac6187d9ca", size = 408047, upload-time = "2025-08-07T00:27:33.739Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/96/4c2b2b4cb8990272eb5783cf2da6428120574e267246df45b07a091adac5/autogen_ext-0.7.3-py3-none-any.whl", hash = "sha256:0faa602762695228d655009fd5dfb4ba505b24424793d07de8f4eddef68fb9c2", size = 328041, upload-time = "2025-08-19T08:06:21.758Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/65/905e9bef275f2f376644f70926dd898c1fff12697fdb3d8918c2b34ccd49/autogen_ext-0.7.2-py3-none-any.whl", hash = "sha256:d039ce220eda87b4aa8a7c83b263dfba1dd8f7067ed958fa872d54e54fb3f782", size = 330921, upload-time = "2025-08-07T00:27:31.867Z" },
 ]
 
 [package.optional-dependencies]
