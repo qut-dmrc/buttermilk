@@ -19,7 +19,7 @@ Key functionalities:
 -   Execution of SQL queries (`bm.query_runner`).
 -   Setup and management of logging, including optional cloud logging.
 -   Handling of session information (`bm.run_info`) and standardized saving of artifacts.
--   Integration with Weave for tracing (`bm.weave`).
+-   Integration with Weave for tracing (`bm.get_weave_client()`).
 """
 
 from __future__ import annotations  # Enable postponed annotations for type hinting
@@ -504,34 +504,32 @@ class BM(BaseModel):
         This method is called during initialization to set up tracing
         systems like OpenTelemetry or Weave, depending on the configuration.
         """
-        return
-        if self.tracing and self.tracing.enabled and not self._tracing_istrumented.is_set():
-            # We disable weave autopatching for Autogen because it's too noisy and slow
-            # We will instead trace manually.
+        # We disable weave autopatching for Autogen because it's too noisy and slow
+        # We will instead trace manually.
 
-            collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
-            # Retrieve necessary credentials before initializing Weave.
-            # This is necessary because otherwise Weave will interactive authentication.
-            self._setup_weave_credentials()
-            autopatch = {"autogen": {"enabled": False}}
-            logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
-            # Weave project HAS to be in the format "entity/collection_name"
-            # weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
-            # logger.info("Weave initialized successfully")
+        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
+        # Retrieve necessary credentials before initializing Weave.
+        # This is necessary because otherwise Weave will interactive authentication.
+        self._setup_weave_credentials()
+        autopatch = {"autogen": {"enabled": False}}
+        logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
+        # Weave project HAS to be in the format "entity/collection_name"
+        client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
+        # logger.info("Weave initialized successfully")
 
-            logger.debug("Attempting to start Traceloop client with app_name 'buttermilk'")
+        logger.debug("Attempting to start Traceloop client with app_name 'buttermilk'")
 
-            from traceloop.sdk import Traceloop
+        from traceloop.sdk import Traceloop
 
-            Traceloop.init(app_name="buttermilk")
-            logger.info("Traceloop initialized.")
+        Traceloop.init(app_name="buttermilk")
+        logger.info("Traceloop initialized.")
 
-            # Setup other Otel tracing if configured
-            from buttermilk.utils.otel import setup_tracing_otel
+        # Setup other Otel tracing if configured
+        from buttermilk.utils.otel import setup_tracing_otel
 
-            setup_tracing_otel(self.tracing)
-            self._tracing_istrumented.set()  # Mark tracing as set up
-            logger.debug("Tracing has been set up successfully")
+        setup_tracing_otel(self.tracing)
+        self._tracing_istrumented.set()  # Mark tracing as set up
+        logger.debug("Tracing has been set up successfully")
 
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
@@ -792,10 +790,13 @@ class BM(BaseModel):
 
         logger.debug(f"WANDB credentials configured: API_KEY=*****, ENTITY={wandb_entity}")
 
-    @property
-    def weave(self) -> weave.trace.weave_client.WeaveClient:
+    async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client for tracing."""
-        return None  # weave.get_client()
+        if self.tracing and self.tracing.enabled and not self._tracing_istrumented.is_set():
+            # If tracing is enabled but not yet instrumented, set it up
+            asyncio.create_task(self._setup_tracing())
+            await self._tracing_istrumented.wait()
+        return weave.get_client()
 
     @property
     def credentials(self) -> dict[str, str]:
