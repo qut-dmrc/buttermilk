@@ -1,7 +1,7 @@
 {
-  "maxSessionTurns": 50,
+  "contextFileName": "CLAUDE.md", // Save us having multiple context files
   "telemetry": {
-    "enabled": false,
+    "enabled": "false",
     "target": "gcp"
   }
 }

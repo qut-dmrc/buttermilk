@@ -508,6 +508,7 @@ class AutoGenWrapper(RetryWrapper):
                 tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
                 messages += [tool_result_messages]
             except Exception as e:
+                # Fail-fast: surface tool execution failures immediately
                 raise ProcessingError(f"Failed to execute tools: {e!s}") from e
 
             # Step 3: Synthesis call with schema only (no tools)
