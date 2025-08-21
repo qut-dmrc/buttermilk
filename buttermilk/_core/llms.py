@@ -207,26 +207,6 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 """Type variable for generic Autogen ChatCompletionClient."""
 
 
-class ErrorResult(CreateResult):
-    """Extends Autogen's `CreateResult` to represent an error response from the LLM.
-
-    This class is used to encapsulate error responses from LLM calls, providing
-    additional context about the error that occurred.
-
-    Attributes:
-        error_message (str): A descriptive message about the error that occurred.
-        error_code (int | None): An optional error code associated with the error.
-            Can be None if no specific code is provided.
-        raw_response (Any | None): The raw response from the LLM, if available.
-    """
-
-    error_message: str = Field(..., description="Descriptive message about the error")
-    error_code: int | None = Field(default=None, description="Optional error code associated with the error")
-    raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
-    tool_outputs: list[FunctionExecutionResult] | None = Field(..., description="Tool outputs if any were executed")
-    tool_calls: list[FunctionCall] | None = Field(..., description="Tool calls made by the LLM, if any")
-
-
 class ModelOutput(CreateResult):
     """Extends Autogen's `CreateResult` with structured output parsing.
 
