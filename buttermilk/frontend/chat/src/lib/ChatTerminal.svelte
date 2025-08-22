@@ -348,7 +348,7 @@ import {
         // Connection status now appears in UI header instead of as system message
         
         // Emit ready event so parent can process pending messages
-        dispatch('ready', { handleMessage });
+        dispatch('ready', { handleMessage, sendRunFlowRequest });
       };
       
       socket.onmessage = (event) => {

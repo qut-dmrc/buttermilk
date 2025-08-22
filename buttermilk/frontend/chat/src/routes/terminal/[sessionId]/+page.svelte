@@ -118,7 +118,8 @@
   // Handle terminal ready event
   function handleTerminalReady(event: CustomEvent) {
     const terminal = event.detail;
-    websocketTerminal = { handleMessage: terminal.handleMessage };
+    // Store the full terminal reference, not just handleMessage
+    websocketTerminal = terminal;
     console.log('Terminal ready, session:', urlSessionId);
     
     // Process any pending messages that were fetched before terminal was ready
