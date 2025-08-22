@@ -87,6 +87,7 @@ export function getAgentStyle(agentName: string) {
 	}
 	return AGENT_STYLES.default;
 }
+
 // Get agent emoji based on name
 export function getAgentEmoji(agentName: string) {
 	return '🤖'; // Default to robot emoji if not found
@@ -131,14 +132,6 @@ export function getScoreColor(score: string | number | null | undefined) {
 	if (numScore > 0.4) return '#ffc107'; // Yellow
 	if (numScore > 0.2) return '#ff9800'; // Orange
 	return '#dc3545'; // Red
-}
-
-// Helper function to format time as HH:MM:SS
-function formatTime(date: Date): string {
-	const hours = String(date.getHours()).padStart(2, '0');
-	const minutes = String(date.getMinutes()).padStart(2, '0');
-	const seconds = String(date.getSeconds()).padStart(2, '0');
-	return `${hours}:${minutes}:${seconds}`;
 }
 
 export function createManagerResponse(

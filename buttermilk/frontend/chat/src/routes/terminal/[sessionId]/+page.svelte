@@ -160,36 +160,6 @@
 	<title>Buttermilk Terminal - Session {urlSessionId}</title>
 </svelte:head>
 
-<!-- Session Status Indicator -->
-{#if sessionMetadata && !isLoading}
-	<div class="session-status-bar">
-		<div class="session-info">
-			<span class="session-id">Session: {urlSessionId.slice(0, 8)}...</span>
-			<span class="status-badge status-{sessionMetadata.flow_status}">
-				{#if sessionMetadata.flow_status === 'running'}
-					Active
-				{:else if sessionMetadata.flow_status === 'completed'}
-					Completed
-				{:else if sessionMetadata.flow_status === 'failed'}
-					Failed
-				{:else if sessionMetadata.flow_status === 'idle'}
-					idle
-				{:else}
-					{sessionMetadata.flow_status}
-				{/if}
-			</span>
-			{#if !sessionMetadata.is_resumable}
-				<span class="readonly-badge">Read-only</span>
-			{/if}
-		</div>
-		{#if !sessionMetadata.is_resumable}
-			<button class="new-session-btn" on:click={() => (window.location.href = '/terminal')}>
-				Start New Session
-			</button>
-		{/if}
-	</div>
-{/if}
-
 {#if isLoading}
 	<div class="flex items-center justify-center h-full">
 		<div class="text-center">
@@ -221,89 +191,10 @@
 		selectedFlow={$selectedFlow || ''}
 		selectedRecord={$selectedRecord || ''}
 		readonly={sessionMetadata && !sessionMetadata.is_resumable}
+		currentSessionId={urlSessionId}
+		sessionStatus={sessionMetadata?.flow_status || 'unknown'}
+		isResumable={sessionMetadata?.is_resumable !== false}
 		bind:this={websocketTerminal}
 		on:ready={handleTerminalReady}
 	/>
 {/if}
-
-<style>
-	.session-status-bar {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.5rem 1rem;
-		background: rgba(0, 0, 0, 0.8);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-		font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-		font-size: 0.85rem;
-	}
-
-	.session-info {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.session-id {
-		color: #888;
-		font-size: 0.8rem;
-	}
-
-	.status-badge {
-		background: rgba(128, 128, 128, 0.2);
-		color: #888;
-		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		border: 1px solid rgba(128, 128, 128, 0.3);
-	}
-
-	.status-running {
-		background: rgba(0, 255, 0, 0.2);
-		color: #00ff00;
-		border: 1px solid rgba(0, 255, 0, 0.3);
-	}
-
-	.status-completed {
-		background: rgba(0, 255, 255, 0.2);
-		color: #00ffff;
-		border: 1px solid rgba(0, 255, 255, 0.3);
-	}
-
-	.status-failed {
-		background: rgba(255, 68, 68, 0.2);
-		color: #ff4444;
-		border: 1px solid rgba(255, 68, 68, 0.3);
-	}
-
-	.status-idle {
-		background: rgba(255, 170, 0, 0.2);
-		color: #ffaa00;
-		border: 1px solid rgba(255, 170, 0, 0.3);
-	}
-
-	.readonly-badge {
-		background: rgba(255, 170, 0, 0.2);
-		color: #ffaa00;
-		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		border: 1px solid rgba(255, 170, 0, 0.3);
-	}
-
-	.new-session-btn {
-		background: rgba(0, 255, 0, 0.1);
-		border: 1px solid #00ff00;
-		color: #00ff00;
-		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.new-session-btn:hover {
-		background: rgba(0, 255, 0, 0.2);
-		box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
-	}
-</style>
