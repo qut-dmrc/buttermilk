@@ -167,6 +167,7 @@ class FlowRunContext(BaseModel):
     resources: SessionResources = Field(default_factory=SessionResources)  # Resource tracking
 
     websocket: Any = None
+    monitor_ui_task: asyncio.Task | None = None  # Track active monitor_ui task
 
     def update_activity(self) -> None:
         """Update the last activity timestamp."""
@@ -201,6 +202,13 @@ class FlowRunContext(BaseModel):
         self.resources.add_custom_resource(name, resource)
         self.update_activity()
 
+    def cancel_monitor_ui_task(self) -> None:
+        """Cancel the active monitor_ui task if it exists."""
+        if self.monitor_ui_task and not self.monitor_ui_task.done():
+            logger.debug(f"Cancelling monitor_ui task for session {self.session_id}")
+            self.monitor_ui_task.cancel()
+            self.monitor_ui_task = None
+
     async def cleanup(self) -> None:
         """Clean up session resources with timeout and verification."""
         logger.debug(f"Starting cleanup for session {self.session_id}")
@@ -208,6 +216,9 @@ class FlowRunContext(BaseModel):
         try:
             # Set status to terminating (Phase 2 enhancement)
             self.status = SessionStatus.TERMINATING
+
+            # Cancel monitor_ui task first to prevent new WebSocket operations
+            self.cancel_monitor_ui_task()
 
             # Add flow task to resource tracker if it exists
             if self.flow_task and not self.flow_task.done():
@@ -858,6 +869,9 @@ class FlowRunner(BaseModel):
             elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
                 # Session is already active, replace the websocket connection
                 if websocket:
+                    # Cancel existing monitor_ui task to prevent WebSocket conflicts
+                    existing_session.cancel_monitor_ui_task()
+                    
                     # Close existing websocket if any
                     if existing_session.websocket and existing_session.websocket != websocket:
                         try:

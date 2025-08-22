@@ -209,58 +209,73 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         # Listen for messages from the client
         token = session_id_var.set(session_id)
         logger.debug(f"[WEBSOCKET] Monitoring UI for session {session_id}")
-        async for run_request in session.monitor_ui():
-            try:
-                logger.info(f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
-                await asyncio.sleep(0.1)
-                # Track session activity
-                metrics_collector.update_session_activity(session_id)
+        
+        # Store the current task reference in the session for cancellation
+        current_task = asyncio.current_task()
+        session.monitor_ui_task = current_task
+        logger.debug(f"[WEBSOCKET] Assigned monitor_ui task {id(current_task)} to session {session_id}")
+        
+        try:
+            async for run_request in session.monitor_ui():
+                try:
+                    logger.info(f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
+                    await asyncio.sleep(0.1)
+                    # Track session activity
+                    metrics_collector.update_session_activity(session_id)
 
-                # This loop internally feeds the groupchat with messages from the client.
-                # The only message we receive is a run_request -- which we then
-                # use to create a new flow.
-                logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
-                logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
-                task = asyncio.create_task(flow_runner.run_flow(
-                    run_request=run_request,
-                    wait_for_completion=False,
-                ))
-                
-                # Add callback to handle unhandled task exceptions
-                def handle_task_exception(task_future):
-                    if task_future.exception() is not None:
-                        exc = task_future.exception()
-                        # Log the exception with full traceback
-                        logger.error(f"🚨 FATAL: Unhandled exception in flow task for session {session_id}: {exc}", exc_info=exc)
-                        fatal_msg = f"Flow execution failed for '{run_request.flow}' in session {session_id}: {exc}"
-                        logger.critical(f"💥 FATAL ERROR: {fatal_msg}")
-                        
-                        # Send error message to UI if session is still active
-                        try:
-                            session = flow_runner.session_manager.get_session_sync(session_id)
-                            if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
-                                # Send error to UI asynchronously
-                                asyncio.create_task(session.websocket.send_json({
-                                    "type": "error",
-                                    "message": f"Flow execution failed: {str(exc)}",
-                                    "fatal": True
-                                }))
-                        except Exception as notify_exc:
-                            logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
-                
-                task.add_done_callback(handle_task_exception)
-                logger.info(f"[WEBSOCKET] Task created: {task}")
+                    # This loop internally feeds the groupchat with messages from the client.
+                    # The only message we receive is a run_request -- which we then
+                    # use to create a new flow.
+                    logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
+                    logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
+                    task = asyncio.create_task(flow_runner.run_flow(
+                        run_request=run_request,
+                        wait_for_completion=False,
+                    ))
+                    
+                    # Add callback to handle unhandled task exceptions
+                    def handle_task_exception(task_future):
+                        if task_future.exception() is not None:
+                            exc = task_future.exception()
+                            # Log the exception with full traceback
+                            logger.error(f"🚨 FATAL: Unhandled exception in flow task for session {session_id}: {exc}", exc_info=exc)
+                            fatal_msg = f"Flow execution failed for '{run_request.flow}' in session {session_id}: {exc}"
+                            logger.critical(f"💥 FATAL ERROR: {fatal_msg}")
+                            
+                            # Send error message to UI if session is still active
+                            try:
+                                session = flow_runner.session_manager.get_session_sync(session_id)
+                                if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
+                                    # Send error to UI asynchronously
+                                    asyncio.create_task(session.websocket.send_json({
+                                        "type": "error",
+                                        "message": f"Flow execution failed: {str(exc)}",
+                                        "fatal": True
+                                    }))
+                            except Exception as notify_exc:
+                                logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
+                    
+                    task.add_done_callback(handle_task_exception)
+                    logger.info(f"[WEBSOCKET] Task created: {task}")
 
-            except WebSocketDisconnect:
-                logger.info(f"Client {session_id} disconnected.")
-                break
-            except Exception as e:
-                # Track error in session metrics
-                metrics_collector.update_session_activity(session_id, error_occurred=True)
-                msg = f"Error receiving/processing client message for {session_id}: {e}"
-                raise FatalError(msg) from e
-            finally:
-                session_id_var.reset(token)
+                except WebSocketDisconnect:
+                    logger.info(f"Client {session_id} disconnected.")
+                    break
+                except Exception as e:
+                    # Track error in session metrics
+                    metrics_collector.update_session_activity(session_id, error_occurred=True)
+                    msg = f"Error receiving/processing client message for {session_id}: {e}"
+                    raise FatalError(msg) from e
+                finally:
+                    session_id_var.reset(token)
+        except asyncio.CancelledError:
+            logger.debug(f"[WEBSOCKET] Monitor UI task cancelled for session {session_id} (WebSocket replacement)")
+            # Don't treat this as an error - this is expected when WebSocket connections are replaced
+
+        # Clear the monitor_ui task reference from session
+        if session and session.monitor_ui_task == current_task:
+            session.monitor_ui_task = None
+            logger.debug(f"[WEBSOCKET] Cleared monitor_ui task reference for session {session_id}")
 
         # End session tracking
         metrics_collector.end_session_tracking(session_id)
