@@ -856,9 +856,20 @@ class FlowRunner(BaseModel):
                 # Reconnection failed, fall through to create new session
                 logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
             elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
-                # Session is already active, just add the websocket
+                # Session is already active, replace the websocket connection
                 if websocket:
+                    # Close existing websocket if any
+                    if existing_session.websocket and existing_session.websocket != websocket:
+                        try:
+                            logger.debug(f"Closing previous WebSocket connection for session {session_id}")
+                            await existing_session.websocket.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing previous WebSocket for session {session_id}: {e}")
+                    
+                    # Replace with new websocket
+                    existing_session.websocket = websocket
                     existing_session.add_websocket(websocket)
+                    logger.debug(f"Replaced WebSocket connection for active session {session_id}")
                 return existing_session
 
         # Create new session if no websocket provided or reconnection failed

@@ -221,7 +221,7 @@ async def _get_records_impl(
 ):
     """Enhanced records list with optional score summaries"""
     accept_header = request.headers.get("accept", "")
-    logger.info(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
+    logger.debug(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
 
     if not flow:
         logger.warning("Request to /api/flows/{flow}/records missing 'flow' path parameter.")

@@ -44,6 +44,8 @@ import {
   export let selectedTheme = 'theme-term'; // Default theme
   let isReconnecting = false; // Track reconnection attempts
   let reconnectAttempts = 0; // Count reconnection attempts
+  let reconnectTimeout: number | null = null; // Track reconnection timeout
+  const MAX_RECONNECT_ATTEMPTS = 10; // Maximum reconnection attempts
   
   // System update state
   let systemUpdateStatus: SystemUpdate | null = null;
@@ -146,6 +148,12 @@ import {
   
   // Handle component destruction
   onDestroy(() => {
+    // Clear any pending reconnection timeout
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    
     if (socket) {
       console.log('Closing WebSocket connection');
       socket.close();
@@ -309,6 +317,20 @@ import {
 
   // Connect to WebSocket with retry mechanism and fallback
   async function connectWebSocket() {
+    // Clear any existing reconnection timeout
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    
+    // Check max attempts
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.error(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) exceeded`);
+      connectionError = `Failed to connect after ${MAX_RECONNECT_ATTEMPTS} attempts`;
+      isReconnecting = false;
+      return;
+    }
+    
     // Close any existing socket first
     if (socket) {
       try {
@@ -488,13 +510,22 @@ import {
           connectionError = `Connection closed. Code: ${event.code}${event.reason ? ', Reason: ' + event.reason : ''}`;
         }
         
-        // Attempt to reconnect after a delay
-        setTimeout(() => {
-          if (!isConnected) {
-            console.debug(`Attempting to reconnect... (Attempt ${reconnectAttempts})`);
-            connectWebSocket();
-          }
-        }, 5000);
+        // Attempt to reconnect after a delay with exponential backoff
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
+          console.debug(`Will attempt reconnection ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS} in ${backoffDelay}ms`);
+          
+          reconnectTimeout = setTimeout(() => {
+            if (!isConnected && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              console.debug(`Attempting to reconnect... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+              connectWebSocket();
+            }
+          }, backoffDelay) as unknown as number;
+        } else {
+          console.error(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`);
+          connectionError = `Connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts`;
+          isReconnecting = false;
+        }
       };
     } catch (error) {
       console.error('Error creating WebSocket:', error);
