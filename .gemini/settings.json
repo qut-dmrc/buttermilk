@@ -1,8 +1,7 @@
 {
   "contextFileName": "CLAUDE.md",
   "telemetry": {
-    "enabled": "false",
-    "target": "gcp"
+    "enabled": "false"
   },
   "mcpServers": {
     "playwright": {

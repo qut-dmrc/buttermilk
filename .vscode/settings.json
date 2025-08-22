@@ -1,6 +1,5 @@
 {
   "[python]": {
-    // "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
@@ -17,7 +16,6 @@
   ],
   "editor.defaultFormatter": "charliermarsh.ruff",
   "python.analysis.languageServerMode": "full",
-  // "python.analysis.typeCheckingMode": "standard",
   "python.analysis.include": [
     "buttermilk"
   ],
