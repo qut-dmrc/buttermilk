@@ -48,7 +48,12 @@ class SessionStorageService:
         """Save a message to the session file.
         
         Messages are appended to the existing session file if it exists,
-        or a new file is created.
+        or a new file is created. Duplicate messages are automatically 
+        detected and skipped to prevent session log corruption.
+        
+        Deduplication logic:
+        - For record messages: Skip if same record_id already exists
+        - For all messages: Skip if same message_id already exists
         
         Args:
             session_id: The session identifier
@@ -72,8 +77,28 @@ class SessionStorageService:
             else:
                 session_data = self._create_new_session_data(session_id)
             
-            # Add the new message
+            # Check for duplicate messages to prevent corruption
             message_dict = message.model_dump(mode="json")
+            
+            # For record messages, check if the same record_id already exists
+            if message.type == "record" and message.outputs:
+                existing_record_id = message.outputs.get("record_id")
+                if existing_record_id:
+                    # Check if this record already exists in the session
+                    for existing_msg in session_data["messages"]:
+                        if (existing_msg.get("type") == "record" and 
+                            existing_msg.get("outputs", {}).get("record_id") == existing_record_id):
+                            logger.warning(f"Found duplicate record {existing_record_id} for session {session_id}!")
+                            return
+            
+            # General deduplication: check if message_id already exists
+            if message.message_id:
+                for existing_msg in session_data["messages"]:
+                    if existing_msg.get("message_id") == message.message_id:
+                        logger.debug(f"Skipping duplicate message {message.message_id} for session {session_id}")
+                        return
+            
+            # Add the new message
             session_data["messages"].append(message_dict)
             session_data["last_updated"] = datetime.now().isoformat()
             session_data["last_activity"] = datetime.now().isoformat()

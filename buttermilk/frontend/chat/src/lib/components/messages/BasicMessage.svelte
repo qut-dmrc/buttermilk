@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getAgentStyle, type Message } from '$lib/utils/messageUtils';
+	import { getAgentStyle, getModelColor, type Message } from '$lib/utils/messageUtils';
 
 	// Props
 	export let message: Message;
@@ -10,6 +10,7 @@
 		? new Date(message.timestamp).toISOString().replace(/\.\d{3}Z$/, '')
 		: '';
 	$: agentStyle = getAgentStyle(message.agent_info?.agent_name || '');
+	$: modelBasedColor = getModelColor(message.agent_info?.parameters?.model);
 	$: messageType = message.type || 'unknown';
 	$: agentName = message.agent_info?.agent_id || messageType.toUpperCase() || 'SYSTEM';
 	$: error = message.outputs?.error;
@@ -17,8 +18,8 @@
 
 <div class="container message-line row" style="color: {agentStyle.color}">
 	<!-- <span class="timestamp">[{timestamp}]</span> -->
-	<div class="nick-container col-sm-1">
-		<span class="agent-nick" style="color: {agentStyle.color}">
+	<div class="nick-container col-sm-1" style="color: {modelBasedColor}">
+		<span class="agent-nick">
 			<slot name="agentNick">[{agentName} ]</slot>
 		</span>
 		<span class="agent-metadata">
