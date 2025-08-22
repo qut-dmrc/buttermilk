@@ -405,13 +405,13 @@ class BM(BaseModel):
                 logger.debug("Initializing secret manager...")
                 _ = self.secret_manager  # Trigger lazy initialization
 
-            # 3. Save initial config (non-critical, but do it anyway)
+            # 3. Save initial config for tracing and recovery
             await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
 
             # 4. Start IP fetching task (non-critical)
             self.start_fetch_ip_task()
-
-            logger.info("Background initialization completed successfully")
+            
+            logger.debug("Background initialization tasks scheduled")
             self._initialization_complete.set()
         except Exception as e:
             logger.error(f"Error during background initialization: {e}")
@@ -1010,7 +1010,7 @@ class BM(BaseModel):
                 extension=effective_extension,
                 **kwargs,
             )
-            logger.info(  # Log as a dictionary for structured logging if supported
+            logger.debug(  # Log as a dictionary for structured logging if supported
                 {
                     "message": f"Successfully saved data to: {saved_file_path}",
                     "uri": str(saved_file_path),  # Ensure URI is a string

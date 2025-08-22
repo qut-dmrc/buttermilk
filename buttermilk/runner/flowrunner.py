@@ -12,6 +12,8 @@ from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
+from buttermilk.api.services.session_storage import SessionStorageService
+
 
 class SessionStatus(str, Enum):
     """Session status enumeration for robust lifecycle management."""
@@ -165,6 +167,7 @@ class FlowRunContext(BaseModel):
     resources: SessionResources = Field(default_factory=SessionResources)  # Resource tracking
 
     websocket: Any = None
+    monitor_ui_task: asyncio.Task | None = None  # Track active monitor_ui task
 
     def update_activity(self) -> None:
         """Update the last activity timestamp."""
@@ -199,6 +202,13 @@ class FlowRunContext(BaseModel):
         self.resources.add_custom_resource(name, resource)
         self.update_activity()
 
+    def cancel_monitor_ui_task(self) -> None:
+        """Cancel the active monitor_ui task if it exists."""
+        if self.monitor_ui_task and not self.monitor_ui_task.done():
+            logger.debug(f"Cancelling monitor_ui task for session {self.session_id}")
+            self.monitor_ui_task.cancel()
+            self.monitor_ui_task = None
+
     async def cleanup(self) -> None:
         """Clean up session resources with timeout and verification."""
         logger.debug(f"Starting cleanup for session {self.session_id}")
@@ -206,6 +216,9 @@ class FlowRunContext(BaseModel):
         try:
             # Set status to terminating (Phase 2 enhancement)
             self.status = SessionStatus.TERMINATING
+
+            # Cancel monitor_ui task first to prevent new WebSocket operations
+            self.cancel_monitor_ui_task()
 
             # Add flow task to resource tracker if it exists
             if self.flow_task and not self.flow_task.done():
@@ -243,19 +256,17 @@ class FlowRunContext(BaseModel):
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
-        logger.info(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
+        logger.debug(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
         while True:
             await asyncio.sleep(0.1)
 
             # Check if the WebSocket is connected
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
-                logger.debug(f"[MONITOR_UI] WebSocket not connected for session {self.session_id}, state: {self.websocket.client_state if self.websocket else 'None'}")
                 continue
 
             try:
-                logger.debug(f"[MONITOR_UI] Waiting for WebSocket message for session {self.session_id}")
                 data = await self.websocket.receive_json()
-                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket")
+                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket  for session {self.session_id}")
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
@@ -278,7 +289,7 @@ class FlowRunContext(BaseModel):
                     await self.callback_to_groupchat(message)
 
             except WebSocketDisconnect:
-                logger.info(f"Client {self.session_id} disconnected.")
+                logger.debug(f"Client {self.session_id} disconnected.")
                 self.websocket = None
                 # Don't break immediately - let the session manager handle reconnection
                 break
@@ -299,6 +310,16 @@ class FlowRunContext(BaseModel):
         if not formatted_message:
             logger.debug(f"Unhandled message type: {type(message)}, not forwarding to UI.")
             return
+
+        # Persist message to session storage
+        try:
+            storage_service = SessionStorageService()
+            if storage_service.should_persist_message(formatted_message):
+                storage_service.save_message(self.session_id, formatted_message)
+                logger.debug(f"Persisted message {formatted_message.message_id} for session {self.session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to persist message for session {self.session_id}: {e}")
+            # Continue even if persistence fails
 
         if self.websocket is None:
             logger.debug(f"WebSocket not connected for session {self.session_id}, cannot send message.")
@@ -531,6 +552,28 @@ class SessionManager:
 
         session.status = new_status
         logger.debug(f"Session {session_id} status: {old_status} -> {new_status}")
+        
+        # Update session storage flow status
+        try:
+            storage_service = SessionStorageService()
+            
+            # Map session status to flow status
+            flow_status_map = {
+                SessionStatus.COMPLETED: "completed",
+                SessionStatus.ERROR: "failed",
+                SessionStatus.FAILED: "failed",  # Legacy support
+                SessionStatus.TERMINATED: "completed",
+                SessionStatus.EXPIRED: "failed",
+            }
+            
+            if new_status in flow_status_map:
+                flow_status = flow_status_map[new_status]
+                storage_service.update_flow_status(session_id, flow_status)
+                logger.debug(f"Updated flow status to '{flow_status}' for session {session_id}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to update session storage flow status for {session_id}: {e}")
+        
         return True
 
     async def cleanup_session(self, session_id: str) -> bool:
@@ -663,7 +706,7 @@ class SessionManager:
 
         # Only allow reconnection for ACTIVE sessions
         if session.status != SessionStatus.ACTIVE:
-            logger.info(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
+            logger.debug(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
             await self.cleanup_session(session_id)
             return False
 
@@ -676,7 +719,7 @@ class SessionManager:
             if session_id in self.active_connections:
                 self.active_connections[session_id].clear()
 
-            logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
+            logger.debug(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
             return True
         # Transition failed, clean up the session
         await self.cleanup_session(session_id)
@@ -824,9 +867,23 @@ class FlowRunner(BaseModel):
                 # Reconnection failed, fall through to create new session
                 logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
             elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
-                # Session is already active, just add the websocket
+                # Session is already active, replace the websocket connection
                 if websocket:
+                    # Cancel existing monitor_ui task to prevent WebSocket conflicts
+                    existing_session.cancel_monitor_ui_task()
+                    
+                    # Close existing websocket if any
+                    if existing_session.websocket and existing_session.websocket != websocket:
+                        try:
+                            logger.debug(f"Closing previous WebSocket connection for session {session_id}")
+                            await existing_session.websocket.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing previous WebSocket for session {session_id}: {e}")
+                    
+                    # Replace with new websocket
+                    existing_session.websocket = websocket
                     existing_session.add_websocket(websocket)
+                    logger.debug(f"Replaced WebSocket connection for active session {session_id}")
                 return existing_session
 
         # Create new session if no websocket provided or reconnection failed
@@ -963,6 +1020,14 @@ class FlowRunner(BaseModel):
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
             f"New flow instance created",
         )
+        
+        # Update session storage to mark flow as running
+        try:
+            storage_service = SessionStorageService()
+            storage_service.update_flow_status(run_request.session_id, "running")
+            logger.debug(f"Updated flow status to 'running' for session {run_request.session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to update session storage flow status for {run_request.session_id}: {e}")
 
         try:
             if wait_for_completion:

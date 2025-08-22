@@ -89,7 +89,7 @@ class NonInteractiveDebugClient:
         if self.client:
             await self.client.disconnect()
 
-    async def start_flow(self, flow_name: str, query: str, wait_time: int = 5, record: str = "", criteria: str = "") -> dict:
+    async def start_flow(self, flow_name: str, query: str, wait_time: int = 60, record: str = "", criteria: str = "") -> dict:
         """Start a flow and wait for initial responses."""
         if not await self.connect():
             return {"error": "Failed to connect to server"}
@@ -128,7 +128,7 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def send_message(self, message_type: str, content: str, wait_time: int = 5, session_id: str | None = None) -> dict:
+    async def send_message(self, message_type: str, content: str, wait_time: int = 60, session_id: str | None = None) -> dict:
         """Send a message to an existing session."""
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
@@ -184,7 +184,7 @@ class NonInteractiveDebugClient:
     async def wait_for_messages(
         self,
         session_id: str | None = None,
-        wait_time: int = 5,
+        wait_time: int = 60,
         pattern: str | None = None,
         message_type: str | None = None,
     ) -> dict:
@@ -317,7 +317,7 @@ def cli(ctx, host: str, port: int, json_output: bool):
 @cli.command()
 @click.argument("flow_name")
 @click.argument("query", default="")
-@click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--wait", default=60, help="Seconds to wait for responses")
 @click.option("--record", default="", help="Record ID to process")
 @click.option("--criteria", default="", help="Criteria to use")
 @click.pass_context
@@ -352,7 +352,7 @@ def start(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str
 @cli.command()
 @click.argument("flow_name")
 @click.argument("query", default="")
-@click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--wait", default=60, help="Seconds to wait for responses")
 @click.option("--record", default="", help="Record ID to process")
 @click.option("--criteria", default="hrc", help="Single criteria to use for debugging (default: hrc)")
 @click.pass_context
@@ -457,7 +457,7 @@ def start_server(flow_name: str, criteria: str, host: str, port: int):
 @cli.command()
 @click.argument("content")
 @click.option("--type", "msg_type", default="response", help="Message type (default: response)")
-@click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--wait", default=60, help="Seconds to wait for responses")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
 def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
@@ -484,7 +484,7 @@ def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
 
 
 @cli.command()
-@click.option("--wait", default=5, help="Seconds to wait for messages")
+@click.option("--wait", default=60, help="Seconds to wait for messages")
 @click.option("--pattern", help="Regex pattern to filter messages")
 @click.option("--type", "msg_type", help="Filter by message type")
 @click.option("--session", help="Session ID (uses saved session if not provided)")

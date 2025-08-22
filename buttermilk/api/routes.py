@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.log import logger
 from buttermilk.api.services.data_service import DataService
+from buttermilk.api.services.session_storage import SessionStorageService
 
 FlowRunner = Any
 
@@ -119,6 +120,56 @@ async def get_session_endpoint(
         raise HTTPException(status_code=500, detail="Failed to create session")
 
 
+@flow_data_router.get("/api/session/{session_id}/messages")
+async def get_session_messages_endpoint(
+    session_id: str = Path(..., description="The session ID"),
+):
+    """Get all messages for a session for restoration.
+    
+    Returns stored messages for the session to allow clients to restore
+    previous conversation state when loading a session URL.
+    
+    Args:
+        session_id: The session identifier
+        
+    Returns:
+        JSON response with messages array and session metadata or 404 if session not found
+    """
+    storage_service = SessionStorageService()
+    
+    if not storage_service.session_exists(session_id):
+        logger.debug(f"Session {session_id} not found for restoration")
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        messages = storage_service.get_session_messages(session_id)
+        flow_status = storage_service.get_flow_status(session_id)
+        is_stale = storage_service.is_session_stale(session_id)
+        
+        # Determine if session is resumable
+        is_resumable = flow_status == "running" and not is_stale
+        
+        # Convert ChatMessage objects to dicts for JSON response
+        message_dicts = [msg.model_dump(mode="json") for msg in messages]
+        
+        response_data = {
+            "messages": message_dicts,
+            "session_metadata": {
+                "flow_status": flow_status,
+                "is_stale": is_stale,
+                "is_resumable": is_resumable,
+                "message_count": len(message_dicts)
+            }
+        }
+        
+        logger.info(f"Returning {len(message_dicts)} messages for session {session_id} (status: {flow_status}, resumable: {is_resumable})")
+        return JSONResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error retrieving session messages for {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve session messages")
+
+
 @flow_data_router.get("/api/flows")
 async def get_flows_endpoint(
     request: Request,
@@ -170,7 +221,7 @@ async def _get_records_impl(
 ):
     """Enhanced records list with optional score summaries"""
     accept_header = request.headers.get("accept", "")
-    logger.info(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
+    logger.debug(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
 
     if not flow:
         logger.warning("Request to /api/flows/{flow}/records missing 'flow' path parameter.")

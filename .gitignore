@@ -210,3 +210,5 @@ package.json
 tja_train.parquet
 failed_upsert_batches
 *.bak
+data/sessions
+.playwright-mcp/*png

@@ -23,12 +23,9 @@
 
 	<div class="row align-items-top">
 
-		{#if !$flowRunning}
-		<div class="col-sm-3 col-md-3 col-xxl-2 col-xl-2 col-lg-3">
+		<div class="col-sm-3 col-md-3 col-xxl-2 col-xl-2 col-lg-3" class:d-none={$flowRunning}>
 			<UnifiedSidebar />
 		</div>
-
-		{/if}
 		<div class={!$flowRunning ? 'col-sm-9 col-xl-10' : 'col-12'}>
 			<slot />
 		</div>

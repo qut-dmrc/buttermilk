@@ -18,7 +18,7 @@
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
   import { onMount } from 'svelte';
   
-  $: isTerminalPage = $page.route.id === '/terminal';
+  $: isTerminalPage = $page.route.id === '/terminal' || $page.route.id === '/terminal/[sessionId]';
   $: isScorePage = $page.route.id?.startsWith('/score');
   
   // For score pages, we need different logic for records

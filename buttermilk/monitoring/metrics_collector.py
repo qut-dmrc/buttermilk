@@ -160,7 +160,7 @@ class MetricsCollector:
             self.system_metrics["total_sessions_created"] += 1
             self._update_active_session_count()
 
-            logger.info(f"Started session tracking: {session_id} for flow: {flow_name}")
+            logger.debug(f"Started session tracking: {session_id} for flow: {flow_name}")
 
     def update_session_activity(self, session_id: str, error_occurred: bool = False):
         """Update session activity metrics."""
@@ -173,7 +173,7 @@ class MetricsCollector:
             self.session_metrics[session_id].mark_inactive()
             self._update_active_session_count()
 
-            logger.info(f"Ended session tracking: {session_id}")
+            logger.debug(f"Ended session tracking: {session_id}")
 
     def update_system_metrics(self, memory_mb: float, cpu_percent: Optional[float] = None, websocket_connections: Optional[int] = None):
         """Update basic system-level metrics. Extra parameters ignored for compatibility."""
