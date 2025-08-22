@@ -12,6 +12,8 @@ from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
+from buttermilk.api.services.session_storage import SessionStorageService
+
 
 class SessionStatus(str, Enum):
     """Session status enumeration for robust lifecycle management."""
@@ -243,7 +245,7 @@ class FlowRunContext(BaseModel):
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
-        logger.info(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
+        logger.debug(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
         while True:
             await asyncio.sleep(0.1)
 
@@ -276,7 +278,7 @@ class FlowRunContext(BaseModel):
                     await self.callback_to_groupchat(message)
 
             except WebSocketDisconnect:
-                logger.info(f"Client {self.session_id} disconnected.")
+                logger.debug(f"Client {self.session_id} disconnected.")
                 self.websocket = None
                 # Don't break immediately - let the session manager handle reconnection
                 break
@@ -300,7 +302,6 @@ class FlowRunContext(BaseModel):
 
         # Persist message to session storage
         try:
-            from buttermilk.api.services.session_storage import SessionStorageService
             storage_service = SessionStorageService()
             if storage_service.should_persist_message(formatted_message):
                 storage_service.save_message(self.session_id, formatted_message)
@@ -540,6 +541,28 @@ class SessionManager:
 
         session.status = new_status
         logger.debug(f"Session {session_id} status: {old_status} -> {new_status}")
+        
+        # Update session storage flow status
+        try:
+            storage_service = SessionStorageService()
+            
+            # Map session status to flow status
+            flow_status_map = {
+                SessionStatus.COMPLETED: "completed",
+                SessionStatus.ERROR: "failed",
+                SessionStatus.FAILED: "failed",  # Legacy support
+                SessionStatus.TERMINATED: "completed",
+                SessionStatus.EXPIRED: "failed",
+            }
+            
+            if new_status in flow_status_map:
+                flow_status = flow_status_map[new_status]
+                storage_service.update_flow_status(session_id, flow_status)
+                logger.debug(f"Updated flow status to '{flow_status}' for session {session_id}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to update session storage flow status for {session_id}: {e}")
+        
         return True
 
     async def cleanup_session(self, session_id: str) -> bool:
@@ -672,7 +695,7 @@ class SessionManager:
 
         # Only allow reconnection for ACTIVE sessions
         if session.status != SessionStatus.ACTIVE:
-            logger.info(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
+            logger.debug(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
             await self.cleanup_session(session_id)
             return False
 
@@ -685,7 +708,7 @@ class SessionManager:
             if session_id in self.active_connections:
                 self.active_connections[session_id].clear()
 
-            logger.info(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
+            logger.debug(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
             return True
         # Transition failed, clean up the session
         await self.cleanup_session(session_id)
@@ -972,6 +995,14 @@ class FlowRunner(BaseModel):
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
             f"New flow instance created",
         )
+        
+        # Update session storage to mark flow as running
+        try:
+            storage_service = SessionStorageService()
+            storage_service.update_flow_status(run_request.session_id, "running")
+            logger.debug(f"Updated flow status to 'running' for session {run_request.session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to update session storage flow status for {run_request.session_id}: {e}")
 
         try:
             if wait_for_completion:

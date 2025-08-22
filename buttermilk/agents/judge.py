@@ -99,24 +99,6 @@ class JudgeReasons(Reasons):
         description="Assesses the scope for reasonable minds to differ on this conclusion (high, medium, or low uncertainty).",
     )
 
-    @computed_field
-    @property
-    def preview(self) -> str:
-        """Returns a short, emoji-enhanced preview string of the evaluation.
-
-        Example: "∴ Content is compliant. | ✨ | Uncertainty: L"
-                 (L for Low uncertainty)
-
-        Returns:
-            str: A concise summary string of the judgment.
-
-        """
-        # Choose an emoji based on the prediction (True often means violation/negative)
-        outcome_emoji = (
-            random.choice(["☢️", "☣️", "💀", "⛔", "🚫"]) if self.prediction else random.choice(["🧹", "✨", "💯", "✔️"])
-        )
-        return f"∴ {self.conclusion[:50]}... | {outcome_emoji} | Uncertainty: {self.uncertainty[0].upper()}"
-
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation of the full judgment.
 

@@ -1,7 +1,7 @@
 """Session storage service for persisting chat flow messages to disk."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -76,6 +76,7 @@ class SessionStorageService:
             message_dict = message.model_dump(mode="json")
             session_data["messages"].append(message_dict)
             session_data["last_updated"] = datetime.now().isoformat()
+            session_data["last_activity"] = datetime.now().isoformat()
             
             # Write back to file
             with open(session_file, 'w') as f:
@@ -85,6 +86,97 @@ class SessionStorageService:
             
         except Exception as e:
             logger.error(f"Failed to save message to session {session_id}: {e}")
+
+    def update_flow_status(self, session_id: str, status: str) -> None:
+        """Update the flow status for a session.
+        
+        Args:
+            session_id: The session identifier
+            status: New flow status (idle, running, completed, failed)
+        """
+        session_file = self._get_session_file(session_id)
+        
+        try:
+            # Load existing session data or create new
+            if session_file.exists():
+                try:
+                    with open(session_file, 'r') as f:
+                        session_data = json.load(f)
+                except json.JSONDecodeError:
+                    logger.warning(f"Corrupted session file {session_file}, creating new")
+                    session_data = self._create_new_session_data(session_id)
+            else:
+                session_data = self._create_new_session_data(session_id)
+            
+            # Update flow status and activity
+            session_data["flow_status"] = status
+            session_data["last_updated"] = datetime.now().isoformat()
+            session_data["last_activity"] = datetime.now().isoformat()
+            
+            # Write back to file
+            with open(session_file, 'w') as f:
+                json.dump(session_data, f, indent=2)
+            
+            logger.debug(f"Updated flow status to '{status}' for session {session_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to update flow status for session {session_id}: {e}")
+
+    def get_flow_status(self, session_id: str) -> str:
+        """Get the current flow status for a session.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            Current flow status or 'idle' if session doesn't exist
+        """
+        session_file = self._get_session_file(session_id)
+        
+        if not session_file.exists():
+            return "idle"
+        
+        try:
+            with open(session_file, 'r') as f:
+                session_data = json.load(f)
+            
+            return session_data.get("flow_status", "idle")
+            
+        except Exception as e:
+            logger.error(f"Failed to read flow status for session {session_id}: {e}")
+            return "idle"
+
+    def is_session_stale(self, session_id: str, stale_minutes: int = 30) -> bool:
+        """Check if a session is stale based on last activity.
+        
+        Args:
+            session_id: The session identifier
+            stale_minutes: Minutes of inactivity to consider stale (default: 30)
+            
+        Returns:
+            True if session is stale or doesn't exist, False otherwise
+        """
+        session_file = self._get_session_file(session_id)
+        
+        if not session_file.exists():
+            return True
+        
+        try:
+            with open(session_file, 'r') as f:
+                session_data = json.load(f)
+            
+            last_activity_str = session_data.get("last_activity")
+            if not last_activity_str:
+                return True
+            
+            last_activity = datetime.fromisoformat(last_activity_str)
+            stale_threshold = datetime.now() - timedelta(minutes=stale_minutes)
+            
+            return last_activity < stale_threshold
+            
+        except Exception as e:
+            logger.error(f"Failed to check staleness for session {session_id}: {e}")
+            return True
 
     def get_session_messages(self, session_id: str) -> List[ChatMessage]:
         """Retrieve all messages for a session.
@@ -166,6 +258,8 @@ class SessionStorageService:
             "session_id": session_id,
             "created_at": datetime.now().isoformat(),
             "last_updated": datetime.now().isoformat(),
+            "flow_status": "idle",  # idle, running, completed, failed
+            "last_activity": datetime.now().isoformat(),
             "messages": []
         }
 
@@ -215,6 +309,8 @@ class SessionStorageService:
                 "session_id": session_data.get("session_id"),
                 "created_at": session_data.get("created_at"),
                 "last_updated": session_data.get("last_updated"),
+                "flow_status": session_data.get("flow_status", "idle"),
+                "last_activity": session_data.get("last_activity"),
                 "message_count": len(session_data.get("messages", []))
             }
         except Exception as e:

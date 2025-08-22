@@ -25,6 +25,7 @@ import {
   export let wsUrl: string;
   export let selectedFlow: string; // Prop for selected flow
   export let selectedRecord: string; // Prop for selected record
+  export let readonly: boolean = false; // Readonly mode for completed sessions
   
   // Monitor props for debugging
   $: {
@@ -121,9 +122,18 @@ import {
         loadStoredMessages(get(sessionId));
       }
       
-      // wsUrl prop should be the base like "ws://localhost:5173/ws"
-      console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
-      connectWebSocket();
+      // Only connect WebSocket if not in readonly mode
+      if (!readonly) {
+        // wsUrl prop should be the base like "ws://localhost:5173/ws"
+        console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
+        connectWebSocket();
+      } else {
+        console.debug('Terminal in readonly mode, skipping WebSocket connection');
+        // Emit ready event even in readonly mode so parent can process messages
+        setTimeout(() => {
+          dispatch('ready', { handleMessage, sendRunFlowRequest });
+        }, 100);
+      }
     } else {
       const errorMsg = "Failed to obtain session ID on mount. WebSocket connection not established.";
       connectionError = errorMsg;

@@ -19,6 +19,7 @@
   let wsUrl = ''; // Direct WebSocket URL
   let isRestoringSession = false;
   let restorationComplete = false;
+  let sessionMetadata = null;
   
   // WebSocket terminal instance
   let websocketTerminal: ChatTerminal | null = null;
@@ -36,8 +37,15 @@
       const response = await fetch(`/api/session/${sessionId}/messages`);
       if (response.ok) {
         const data = await response.json();
-        // The API returns the messages array directly, not wrapped in a messages property
-        const messages = Array.isArray(data) ? data : (data.messages || []);
+        
+        // Extract messages and metadata from the new API response format
+        const messages = data.messages || [];
+        sessionMetadata = data.session_metadata || {};
+        
+        console.log(`Session ${sessionId} status: ${sessionMetadata.flow_status}, resumable: ${sessionMetadata.is_resumable}`);
+        
+        // Always load messages for viewing, but store metadata for UI decisions
+        
         console.log(`Restoring ${messages.length} messages for session ${sessionId}`);
         
         if (messages.length > 0) {
@@ -106,8 +114,15 @@
     
     isLoading = false;
     
-    // Set up the action for running flows
-    runFlowAction.set(runFlow);
+    // Set up the action for running flows (only if session is resumable)
+    if (!sessionMetadata || sessionMetadata.is_resumable) {
+      runFlowAction.set(runFlow);
+    } else {
+      // Disable run flow action for completed sessions
+      runFlowAction.set(() => {
+        console.log('Cannot run flow: Session is completed');
+      });
+    }
   });
   
   onDestroy(() => {
@@ -143,6 +158,37 @@
   <title>Buttermilk Terminal - Session {urlSessionId}</title>
 </svelte:head>
 
+<!-- Session Status Indicator -->
+{#if sessionMetadata && !isLoading}
+  <div class="session-status-bar">
+    <div class="session-info">
+      <span class="session-id">Session: {urlSessionId.slice(0, 8)}...</span>
+      <div class="status-indicator status-{sessionMetadata.flow_status}">
+        {#if sessionMetadata.flow_status === 'running'}
+          🟢 Active
+        {:else if sessionMetadata.flow_status === 'completed'}
+          ✓ Completed
+        {:else if sessionMetadata.flow_status === 'failed'}
+          ❌ Failed
+        {:else}
+          ⚫ {sessionMetadata.flow_status}
+        {/if}
+      </div>
+      {#if !sessionMetadata.is_resumable}
+        <span class="readonly-badge">Read-only</span>
+      {/if}
+    </div>
+    {#if !sessionMetadata.is_resumable}
+      <button 
+        class="new-session-btn"
+        on:click={() => window.location.href = '/terminal'}
+      >
+        Start New Session
+      </button>
+    {/if}
+  </div>
+{/if}
+
 {#if isLoading}
   <div class="flex items-center justify-center h-full">
     <div class="text-center">
@@ -169,7 +215,78 @@
 {:else}
   <ChatTerminal 
     {wsUrl}
+    selectedFlow={$selectedFlow || ''}
+    selectedRecord={$selectedRecord || ''}
+    readonly={sessionMetadata && !sessionMetadata.is_resumable}
     bind:this={websocketTerminal}
     on:ready={handleTerminalReady}
   />
 {/if}
+
+<style>
+  .session-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+  }
+
+  .session-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .session-id {
+    color: #888;
+    font-size: 0.8rem;
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+  }
+
+  .status-running {
+    color: #00ff00;
+  }
+
+  .status-completed {
+    color: #00ffff;
+  }
+
+  .status-failed {
+    color: #ff4444;
+  }
+
+  .readonly-badge {
+    background: rgba(255, 170, 0, 0.2);
+    color: #ffaa00;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    border: 1px solid rgba(255, 170, 0, 0.3);
+  }
+
+  .new-session-btn {
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid #00ff00;
+    color: #00ff00;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .new-session-btn:hover {
+    background: rgba(0, 255, 0, 0.2);
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+  }
+</style>

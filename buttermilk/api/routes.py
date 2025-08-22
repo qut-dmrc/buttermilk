@@ -133,7 +133,7 @@ async def get_session_messages_endpoint(
         session_id: The session identifier
         
     Returns:
-        JSON response with messages array or 404 if session not found
+        JSON response with messages array and session metadata or 404 if session not found
     """
     storage_service = SessionStorageService()
     
@@ -143,12 +143,27 @@ async def get_session_messages_endpoint(
     
     try:
         messages = storage_service.get_session_messages(session_id)
+        flow_status = storage_service.get_flow_status(session_id)
+        is_stale = storage_service.is_session_stale(session_id)
+        
+        # Determine if session is resumable
+        is_resumable = flow_status == "running" and not is_stale
         
         # Convert ChatMessage objects to dicts for JSON response
         message_dicts = [msg.model_dump(mode="json") for msg in messages]
         
-        logger.info(f"Returning {len(message_dicts)} messages for session {session_id}")
-        return JSONResponse({"messages": message_dicts})
+        response_data = {
+            "messages": message_dicts,
+            "session_metadata": {
+                "flow_status": flow_status,
+                "is_stale": is_stale,
+                "is_resumable": is_resumable,
+                "message_count": len(message_dicts)
+            }
+        }
+        
+        logger.info(f"Returning {len(message_dicts)} messages for session {session_id} (status: {flow_status}, resumable: {is_resumable})")
+        return JSONResponse(response_data)
         
     except Exception as e:
         logger.error(f"Error retrieving session messages for {session_id}: {e}", exc_info=True)
