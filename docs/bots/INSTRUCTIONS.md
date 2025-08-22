@@ -145,7 +145,7 @@ Specific rules:
 - Success = user's definition, not yours. If asked to SHOW something, you must visually demonstrate it, not just prove it exists.
 - When you can't complete a task as specified, STOP immediately and say so. Don't waste time on workarounds.
 - **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md`. You MUST use the "golden path" tools documented there (e.g. `ws_debug_cli.py`, `buttermilk_logs.py`, Playwright MCP) BEFORE reading source code. Going straight to source code is a workflow violation.
-- **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 50 lines, summarize key findings instead.
+- **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 15 lines, summarize key findings instead. For debugging specifically: extract key findings, limit excerpts to 10-15 lines maximum, summarize patterns rather than listing entries, highlight specific errors only.
 - **NO IMPLICIT DEFAULTS**: NEVER use implicit defaults or fallback behaviors. All configuration must be explicit. If something is missing, FAIL FAST with clear error messages. Do not infer, assume, or provide defaults.
 - **DATA CONTRACTS**: Schema changes require updating ALL components atomically. See `docs/bots/data-architecture.md` for data contract principles. No defensive programming - trust schemas and let errors propagate.
 - **NO SINGLE-USE SCRIPTS**: NEVER create standalone test scripts or dummy examples. Always write proper tests in the existing test suite using pytest conventions. Test files must be reusable, follow project structure, and integrate with the CI/CD pipeline. 
@@ -154,6 +154,30 @@ Specific rules:
 1. **For Debugging Tasks**: ALWAYS read `docs/bots/debugging.md` FIRST
 2. **For Development Tasks**: Follow the 9-step workflow below
 3. **For Research Tasks**: Use documented tools, not source code exploration
+
+## DEBUGGING WORKFLOW ENFORCEMENT
+
+**BEFORE using ANY debugging tool, you MUST:**
+
+### ✅ CHECKPOINT: Tool Usage Verification
+- **Verify command syntax**: Check documentation examples match tool's actual interface
+- **Test basic connectivity**: Use `test-connection` commands before complex operations
+- **Validate environment**: Ensure required processes are running before debugging
+- **Follow troubleshooting**: If tools fail, consult the troubleshooting section FIRST
+
+### ❌ COMMON DEBUGGING VIOLATIONS TO AVOID:
+- Using tools without reading troubleshooting guidance first
+- Proceeding when basic connectivity tests fail
+- Ignoring tool-specific syntax requirements (e.g., `--wait` needs values)
+- Dumping full outputs instead of extracting key findings
+- Creating custom debugging scripts instead of using documented tools
+
+### 🚨 DEBUGGING OUTPUT ENFORCEMENT:
+When you find yourself about to paste:
+- More than 15 lines of tool output
+- Full JSON responses or log dumps
+- Repetitive log entries or status messages
+- **STOP and summarize instead**: Extract 3-5 key findings in bullet points
 
 ## TESTING WORKFLOW REMINDER
 **When implementing tests (covered in detail above):**

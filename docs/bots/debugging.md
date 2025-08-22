@@ -58,9 +58,11 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 *   **Start a Flow:**
     ```bash
     # Usage: uv run python -m buttermilk.debug.ws_debug_cli start <flow_name> --record <record_id> --criteria <criteria>
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte" --wait
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte" --wait 60
     ```
     This will return a `session_id` for use in other commands.
+    
+    **Note**: The `--wait` option requires a numeric value (seconds). Default is 60 seconds if omitted.
 
 *   **Send a Message to a Flow:**
     ```bash
@@ -105,3 +107,52 @@ make kill_api
 ```
 
 This ensures no orphaned processes are left running.
+
+---
+
+## Troubleshooting Common Issues
+
+### Make Target Issues
+
+**Problem**: `make kill_api` fails with "command not found" or process errors.
+**Solution**: 
+1. Verify you're in the project root directory
+2. Check if processes are actually running: `ps aux | grep buttermilk`
+3. If the make command fails, manually kill processes: `pkill -f "python.*buttermilk.runner.cli"`
+
+### WebSocket Debug CLI Issues
+
+**Problem**: `--wait` option fails with "requires argument" error.
+**Solution**: Always provide a numeric value: `--wait 5` instead of just `--wait`
+
+**Problem**: Commands hang or timeout.
+**Solution**: 
+1. Verify the API server is running: `ps aux | grep buttermilk`
+2. Test connection first: `uv run python -m buttermilk.debug.ws_debug_cli test-connection`
+3. Check the latest log file for errors: `./scripts/mcp_debug/getlog.sh`
+
+### Playwright Browser Issues
+
+**Problem**: Browser installation warnings or "browser not found" errors.
+**Solution**: 
+- Warnings about browser downloads are usually non-critical - the MCP tool often works despite warnings
+- If screenshots fail, verify the server is accessible at `http://localhost:5173`
+- The Playwright MCP handles browser installation automatically
+
+### Log Analysis Tips
+
+**Problem**: Log outputs are too verbose for analysis.
+**Solution**: 
+- Use focused searches: `scripts/view-logs.sh | grep "ERROR\|WebSocket"`
+- Limit output to recent entries: `scripts/view-logs.sh | tail -50`
+- Focus on specific timeframes when the issue occurred
+- **Follow OUTPUT RULE**: Summarize findings instead of dumping raw logs
+
+### Output Conciseness Guidelines
+
+When using debugging tools, agents must:
+- **Extract key findings** instead of showing full command output
+- **Limit excerpts** to 10-15 lines maximum per tool invocation
+- **Summarize patterns** rather than listing individual log entries
+- **Highlight specific errors** or success indicators only
+- **Use bullet points** for key findings rather than prose explanations
