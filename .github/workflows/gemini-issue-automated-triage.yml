@@ -47,7 +47,6 @@ jobs:
       - name: 'Checkout repository'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
-
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
@@ -86,12 +85,13 @@ jobs:
               "coreTools": [
                 "run_shell_command(gh label list)",
                 "run_shell_command(gh issue edit)",
-                "run_shell_command(echo)","read_file",
+                "run_shell_command(echo)",
+                "read_file"
               ],
               "telemetry": {
                 "enabled": true,
                 "target": "gcp"
-              },    
+              }
             }
           prompt: |-
             ## Role

@@ -101,7 +101,7 @@ jobs:
               "telemetry": {
                 "enabled": true,
                 "target": "gcp"
-              },    
+              }   
             }
           prompt: |-
             ## Role
