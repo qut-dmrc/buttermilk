@@ -1,5 +1,5 @@
 {
-  "maxSessionTurns": 50,
+  "contextFileName": "CLAUDE.md",
   "telemetry": {
     "enabled": false,
     "target": "gcp"
