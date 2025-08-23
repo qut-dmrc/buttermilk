@@ -1,5 +1,4 @@
 {
-  "contextFileName": "CLAUDE.md",
   "maxSessionTurns": 50,
   "telemetry": {
     "enabled": false,
