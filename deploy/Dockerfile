@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 ARG APP_PATH="/src/buttermilk" 
-ARG VENV_PATH="${APP_PATH}/.venv"
+ARG VENV_PATH="/opt/venv"
 
 ################################
 # PYTHON-BASE
@@ -58,6 +58,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 FROM python-base AS buttermilk
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+ENV UV_LINK_MODE=copy
 ARG DEBIAN_FRONTEND=noninteractive
 ARG APP_PATH
 ARG VENV_PATH
