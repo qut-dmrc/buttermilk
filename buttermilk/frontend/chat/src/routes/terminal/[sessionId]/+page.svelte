@@ -7,8 +7,10 @@
 	import {
 		initializeApp,
 		selectedCriteria,
+		selectedDataset,
 		selectedFlow,
-		selectedRecord
+		selectedRecord,
+		isDemoMode
 	} from '$lib/stores/apiStore';
 	import { sessionId as sessionIdStore } from '$lib/stores/sessionStore';
 	import { runFlowAction } from '$lib/stores/terminalActionsStore';
@@ -19,13 +21,38 @@
 	let wsUrl = ''; // Direct WebSocket URL
 	let isRestoringSession = false;
 	let restorationComplete = false;
-	let sessionMetadata = null;
+	let sessionMetadata: any = null;
 
 	// WebSocket terminal instance
 	let websocketTerminal: ChatTerminal | null = null;
 
 	// Get session ID from URL params
 	$: urlSessionId = $page.params.sessionId;
+
+	// React to session ID changes and reset state
+	$: if (urlSessionId && browser) {
+		console.log('Session ID changed to:', urlSessionId);
+		// Reset error state when session changes
+		error = '';
+		// Reset session metadata to force reload
+		sessionMetadata = null;
+		// Update session store
+		sessionIdStore.set(urlSessionId);
+	}
+
+	// Demo mode: Log parameter selection status (manual reload via button now)
+	$: {
+		if ($isDemoMode && browser) {
+			console.log('Demo mode parameter selection:', {
+				flow: $selectedFlow || 'not selected',
+				dataset: $selectedDataset || 'not selected', 
+				record: $selectedRecord || 'not selected',
+				criteria: $selectedCriteria || 'not selected',
+				allSelected: !!(($selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria))
+			});
+		}
+	}
+
 
 	// Store pending restoration messages if terminal isn't ready yet
 	let pendingMessages: any[] = [];
@@ -78,9 +105,16 @@
 
 	// Function to run flow - uses global stores
 	function runFlow() {
+		// Disable running flows in demo mode
+		if ($isDemoMode) {
+			console.log('Cannot run flow: Demo mode active - backend not available');
+			return;
+		}
+
 		// Read values directly from stores when function is called
 		console.log('Running flow with:', {
 			flow: $selectedFlow,
+			dataset: $selectedDataset,
 			record: $selectedRecord,
 			criteria: $selectedCriteria
 		});
@@ -91,7 +125,7 @@
 			return;
 		}
 
-		websocketTerminal?.sendRunFlowRequest($selectedFlow, $selectedRecord, $selectedCriteria);
+		websocketTerminal?.sendRunFlowRequest($selectedFlow, $selectedDataset, $selectedRecord, $selectedCriteria);
 	}
 
 	onMount(async () => {
@@ -190,10 +224,10 @@
 		{wsUrl}
 		selectedFlow={$selectedFlow || ''}
 		selectedRecord={$selectedRecord || ''}
-		readonly={sessionMetadata && !sessionMetadata.is_resumable}
+		readonly={$isDemoMode || (sessionMetadata && !sessionMetadata.is_resumable)}
 		currentSessionId={urlSessionId}
-		sessionStatus={sessionMetadata?.flow_status || 'unknown'}
-		isResumable={sessionMetadata?.is_resumable !== false}
+		sessionStatus={$isDemoMode ? 'demo' : (sessionMetadata?.flow_status || 'unknown')}
+		isResumable={!$isDemoMode && sessionMetadata?.is_resumable !== false}
 		bind:this={websocketTerminal}
 		on:ready={handleTerminalReady}
 	/>

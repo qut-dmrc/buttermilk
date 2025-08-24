@@ -3,9 +3,11 @@
   import {
   	criteriaStore,
   	datasetsStore,
+  	findMatchingSession,
   	flowChoices,
   	flowRunning,
   	initializeApp,
+  	isDemoMode,
   	modelStore,
   	recordsStore,
   	refetchRecords,
@@ -120,8 +122,8 @@
     
     if (isScorePage) {
       loadRecordsForFlow(newFlow);
-    } else if (isTerminalPage) {
-      // Reset dataset and record when flow changes
+    } else if (isTerminalPage && !$isDemoMode) {
+      // Reset dataset and record when flow changes (but not in demo mode)
       selectedDataset.set('');
       selectedRecord.set('');
     }
@@ -136,9 +138,9 @@
     
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
-    } else if (isTerminalPage) {
+    } else if (isTerminalPage && !$isDemoMode) {
       console.debug('Terminal page - resetting record');
-      // Reset record when dataset changes
+      // Reset record when dataset changes (but not in demo mode)
       selectedRecord.set('');
       // refetchRecords() is now handled by the store subscriber
     }
@@ -147,6 +149,32 @@
   function runFlow() {
     flowRunning.set(true);
     $runFlowAction && $runFlowAction();
+  }
+
+  // Handle demo mode reload - find matching session and force page reload
+  async function handleDemoReload() {
+    try {
+      console.log('Demo reload: Finding matching session for:', {
+        flow: $selectedFlow,
+        dataset: $selectedDataset,
+        record: $selectedRecord,
+        criteria: $selectedCriteria
+      });
+
+      const matchingSessionId = await findMatchingSession($selectedFlow, $selectedDataset, $selectedRecord, $selectedCriteria);
+      
+      if (matchingSessionId) {
+        console.log(`Demo reload: Found session ${matchingSessionId}, reloading page...`);
+        // Force complete page reload to the correct session
+        window.location.href = `/terminal/${matchingSessionId}`;
+      } else {
+        console.log('Demo reload: No matching session found');
+        alert('No session found with the selected parameters');
+      }
+    } catch (error) {
+      console.error('Demo reload error:', error);
+      alert('Failed to find matching session');
+    }
   }
 </script>
 
@@ -268,10 +296,19 @@
 			{/if}
 		</div>
 
-		<!-- Run Flow Button -->
-		<div class="run-button-container">
-			<button class="btn terminal-button" onclick={runFlow}> Run Flow </button>
-		</div>
+		<!-- Run Flow Button / Demo Mode Reload -->
+		{#if $selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria}
+			<div class="run-button-container">
+					<div class="demo-mode-indicator">
+						<button class="btn demo-reload-button" onclick={handleDemoReload}>
+							LOAD SESSION
+						</button>
+					</div>
+				{#if !$isDemoMode}
+					<button class="btn terminal-button" onclick={runFlow}> Run Flow </button>
+				{/if}
+			</div>
+		{/if}
 	</div>
 {:else if isScorePage}
 	<!-- Score Page Sidebar -->
@@ -596,5 +633,54 @@
 		color: #00ffff;
 		margin-top: 1.5rem;
 		margin-bottom: 0.5rem;
+	}
+
+	/* Demo mode indicator styles */
+	.demo-mode-indicator {
+		text-align: center;
+		padding: 1rem;
+		background-color: rgba(255, 165, 0, 0.1);
+		border: 1px solid rgba(255, 165, 0, 0.3);
+		border-radius: 4px;
+		margin-top: 1rem;
+	}
+
+	.demo-badge {
+		display: inline-block;
+		background-color: #ff6b35;
+		color: white;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: bold;
+		border-radius: 3px;
+		margin-bottom: 0.5rem;
+	}
+
+	.demo-text {
+		color: #ffa500;
+		font-size: 0.875rem;
+		margin: 0;
+		font-style: italic;
+	}
+
+	.demo-reload-button {
+		background-color: #28a745;
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		margin-top: 0.75rem;
+		font-size: 0.875rem;
+		font-weight: bold;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.demo-reload-button:hover {
+		background-color: #218838;
+	}
+
+	.demo-reload-button:active {
+		background-color: #1e7e34;
 	}
 </style>

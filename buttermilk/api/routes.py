@@ -145,6 +145,7 @@ async def get_session_messages_endpoint(
         messages = storage_service.get_session_messages(session_id)
         flow_status = storage_service.get_flow_status(session_id)
         is_stale = storage_service.is_session_stale(session_id)
+        parameters = storage_service.get_session_parameters(session_id)
         
         # Determine if session is resumable
         is_resumable = flow_status == "running" and not is_stale
@@ -158,7 +159,8 @@ async def get_session_messages_endpoint(
                 "flow_status": flow_status,
                 "is_stale": is_stale,
                 "is_resumable": is_resumable,
-                "message_count": len(message_dicts)
+                "message_count": len(message_dicts),
+                "parameters": parameters
             }
         }
         

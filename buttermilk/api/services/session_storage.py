@@ -101,6 +101,41 @@ class SessionStorageService:
         except Exception as e:
             logger.error(f"Failed to save message to session {session_id}: {e}")
 
+    def save_parameters(self, session_id: str, parameters: dict) -> None:
+        """Save flow parameters to the session file.
+
+        Args:
+            session_id: The session identifier
+            parameters: Dictionary containing flow parameters (flow, record_id, criteria, etc.)
+        """
+        session_file = self._get_session_file(session_id)
+
+        try:
+            # Load existing session data or create new
+            if session_file.exists():
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        session_data = json.load(f)
+                except json.JSONDecodeError:
+                    logger.warning(f"Corrupted session file {session_file}, creating new")
+                    session_data = self._create_new_session_data(session_id)
+            else:
+                session_data = self._create_new_session_data(session_id)
+
+            # Update parameters and activity
+            session_data["parameters"] = parameters
+            session_data["last_updated"] = datetime.now().isoformat()
+            session_data["last_activity"] = datetime.now().isoformat()
+
+            # Write back to file
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, indent=2)
+
+            logger.debug(f"Saved parameters {parameters} for session {session_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save parameters for session {session_id}: {e}")
+
     def update_flow_status(self, session_id: str, status: str) -> None:
         """Update the flow status for a session.
 
@@ -159,6 +194,30 @@ class SessionStorageService:
         except Exception as e:
             logger.error(f"Failed to read flow status for session {session_id}: {e}")
             return "idle"
+
+    def get_session_parameters(self, session_id: str) -> dict:
+        """Get the flow parameters for a session.
+
+        Args:
+            session_id: The session identifier
+
+        Returns:
+            Dictionary containing flow parameters or empty dict if session doesn't exist
+        """
+        session_file = self._get_session_file(session_id)
+
+        if not session_file.exists():
+            return {}
+
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                session_data = json.load(f)
+
+            return session_data.get("parameters", {})
+
+        except Exception as e:
+            logger.error(f"Failed to read parameters for session {session_id}: {e}")
+            return {}
 
     def is_session_stale(self, session_id: str, stale_minutes: int = 30) -> bool:
         """Check if a session is stale based on last activity.
@@ -274,6 +333,7 @@ class SessionStorageService:
             "last_updated": datetime.now().isoformat(),
             "flow_status": "idle",  # idle, running, completed, failed
             "last_activity": datetime.now().isoformat(),
+            "parameters": {},  # flow parameters (flow, record_id, criteria, etc.)
             "messages": [],
         }
 
