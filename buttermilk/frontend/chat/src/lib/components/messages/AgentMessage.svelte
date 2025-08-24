@@ -19,10 +19,6 @@
 <div class="message-terminal agent-message">
 	<BasicMessage {message}>
 		<svelte:fragment slot="agentNick">[{agentName}]</svelte:fragment>
-		<svelte:fragment slot="messagePrefix">
-			{#if model}<i class="bi bi-cpu"></i>{model}{/if}
-			{#if template}<i class="bi bi-file-earmark-text"></i>{template}{/if}
-		</svelte:fragment>
 		<div class="message-text col-sm-10">
 			<span class="message-body agent-text">
 				<slot name="messageContent">

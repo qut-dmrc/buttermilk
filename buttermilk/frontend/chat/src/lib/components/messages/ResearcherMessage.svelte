@@ -61,7 +61,6 @@
 
 		<svelte:fragment slot="messageContent">
 			<!-- Main response section -->
-			<div class="content-inline">
 				{@html sanitize(parseMarkdown(summary))}
 				<button class="content-toggle-inline" on:click={() => (showModal = true)}
 					>[full response]</button
@@ -75,7 +74,6 @@
 				>
 					{isLiteratureExpanded ? '[-]' : '[+]'} references
 				</button>
-			</div>
 		</svelte:fragment>
 
 		<svelte:fragment slot="messageExpanded">

@@ -6,8 +6,9 @@ This test verifies that:
 3. Error handling works correctly
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config import CloudProviderCfg
@@ -35,6 +36,17 @@ def bm_config(mock_cloud_config):
     }
 
 
+def test_bm_genai_adc(bm):
+    """Integration test to check BM.genai with ADC."""
+    genai_client = bm.genai
+    assert genai_client is not None
+
+    # Now you can use the client for various GenAI operations
+    # For example, listing models available in your project:
+    models = genai_client.models.list()
+    assert "gemini-2.5-pro" in [model.name for model in models]
+
+
 @patch("buttermilk._core.cloud.genai")
 @patch("buttermilk._core.cloud.default")
 def test_genai_client_initialization(mock_default, mock_genai, bm_config):
@@ -44,24 +56,24 @@ def test_genai_client_initialization(mock_default, mock_genai, bm_config):
     mock_creds.valid = True
     mock_creds.token = "test-token"
     mock_default.return_value = (mock_creds, "test-project")
-    
+
     # Mock GenAI client
     mock_genai_client = Mock()
     mock_genai.Client.return_value = mock_genai_client
-    
+
     # Create BM instance
     bm = BM(**bm_config)
-    
+
     # Access genai property
     genai_client = bm.genai
-    
+
     # Verify GenAI client was created with correct parameters
     mock_genai.Client.assert_called_once_with(
         vertex=True,
         project="test-project",
         location="us-central1",
     )
-    
+
     # Verify we got the mock client back
     assert genai_client == mock_genai_client
 
@@ -75,22 +87,22 @@ def test_genai_client_cached_property(mock_default, mock_genai, bm_config):
     mock_creds.valid = True
     mock_creds.token = "test-token"
     mock_default.return_value = (mock_creds, "test-project")
-    
+
     # Mock GenAI client
     mock_genai_client = Mock()
     mock_genai.Client.return_value = mock_genai_client
-    
+
     # Create BM instance
     bm = BM(**bm_config)
-    
+
     # Access genai property multiple times
     client1 = bm.genai
     client2 = bm.genai
     client3 = bm.genai
-    
+
     # Verify GenAI client was created only once
     mock_genai.Client.assert_called_once()
-    
+
     # Verify same instance returned
     assert client1 is client2
     assert client2 is client3
@@ -104,7 +116,7 @@ def test_genai_client_missing_location():
         project_id="test-project",
         # location missing
     )
-    
+
     bm_config = {
         "run_info": {
             "name": "test",
@@ -112,15 +124,15 @@ def test_genai_client_missing_location():
         },
         "clouds": [cloud_config],
     }
-    
+
     with patch("buttermilk._core.cloud.default") as mock_default:
         mock_creds = Mock()
         mock_creds.valid = True
         mock_creds.token = "test-token"
         mock_default.return_value = (mock_creds, "test-project")
-        
+
         bm = BM(**bm_config)
-        
+
         # Accessing genai should raise error about missing location
         with pytest.raises(RuntimeError, match="GCP location not specified"):
             _ = bm.genai
@@ -135,9 +147,9 @@ def test_genai_client_no_gcp_config():
         },
         "clouds": [],  # No cloud configs
     }
-    
+
     bm = BM(**bm_config)
-    
+
     # Accessing genai should raise error about missing config
     with pytest.raises(RuntimeError, match="No GCP cloud configuration found"):
         _ = bm.genai

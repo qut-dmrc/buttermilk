@@ -139,21 +139,15 @@
 <div class="message-terminal" style="color: {modelBasedColor}">
 	<BasicMessage {message}>
 		<svelte:fragment slot="messagePrefix">
-			<i class="bi bi-cpu"></i>{modelName}
-			{message.agent_info?.parameters?.criteria}
 			{#if prediction !== undefined}<i class="bi {prediction ? 'bi-x-circle' : 'bi-check-circle'}"
 				></i>{/if}
-			{#if uncertainty}<!-- <i class="bi {uncertainty.icon}">{uncertainty.text}</i>-->{/if}
 			<span class="avg-score" style="color: {getScoreColor(averageScore)}">
 				Average: {averageScore !== null ? (averageScore * 100).toFixed(0) + '%' : 'N/A'}
 				{generateMultiScoreBar(assessments)}
 			</span>
 		</svelte:fragment>
 
-		<svelte:fragment slot="messageContent">
-			<div class="content-inline">
-				{message.outputs?.conclusion}
-				<!-- Content Toggle (Inline button) -->
+		<svelte:fragment slot="messageContent">{message.outputs.conclusion}
 				<button
 					class="content-toggle-inline"
 					on:click={toggleDetails}
@@ -164,7 +158,6 @@
 				<button class="content-toggle-inline" on:click={toggleAssessments} title="assessments">
 					{showAssessments ? '[-]' : '[+]'} assessments ({assessments.length})
 				</button>
-			</div>
 		</svelte:fragment>
 
 		<svelte:fragment slot="messageExpanded">
@@ -183,23 +176,20 @@
 			{#if showAssessments}
 				<div class="assessment-list assessment-content tiny-text" transition:slide>
 					{#each assessments as assessment}
+				
 						<div class="assessment-item">
-							<div class="assessment-agent">
-								{assessment.agent_info?.agent_name}
-								<span
+							<div class="assessment-agent" style="color: {getModelColor(assessment.agent_info?.parameters?.model)}">
+								{assessment.agent_info?.agent_name}	<span
 									class="assessment-score"
 									style="color: {getScoreColor(assessment.outputs?.correctness)}"
-								>
-									{assessment.outputs?.correctness !== null &&
+								>{assessment.outputs?.correctness !== null &&
 									assessment.outputs?.correctness !== undefined
 										? (assessment.outputs.correctness * 100).toFixed(0) + '%'
-										: 'N/A'}
-									{scoreToBraille(assessment.outputs?.correctness)}
-								</span>
+										: 'N/A'}	{scoreToBraille(assessment.outputs?.correctness)}</span>
 							</div>
 							<ul class="assessment-reasons">
 								{#each assessment.outputs?.assessments || [] as reason}
-									<li style="color: {reason.correct ? '#e0fbfc' : '#dc3545'}">{reason.feedback}</li>
+									<li class={reason.correct ? "correct" : "incorrect"} >{reason.feedback}</li>
 								{/each}
 							</ul>
 						</div>

@@ -6,8 +6,7 @@
 		flowRunning,
 		selectedFlow as flowStore,
 		selectedRecord as recordStore,
-		selectedCriteria,
-		selectedModel
+		selectedCriteria
 	} from './stores/apiStore';
 	import { messageHistory } from './stores/messageHistoryStore';
 	import { addMessage as addToMessageStore } from './stores/messageStore';
@@ -128,8 +127,13 @@
 	onMount(async () => {
 		// Make the callback async
 		console.debug('Attempting direct WebSocket connection to:', wsUrl);
-		// Ensure we have a session ID before attempting to connect
-		if (!get(sessionId)) {
+		
+		// If a session ID was provided via props (from URL), use that
+		if (currentSessionId) {
+			console.debug('Using session ID from URL prop:', currentSessionId);
+			sessionId.set(currentSessionId);
+		} else if (!get(sessionId)) {
+			// Only create a new session if no session ID exists at all
 			addSystemMessage('Initializing session...');
 			await getNewSessionId(); // Fetches and stores a clean session ID
 		}
@@ -142,13 +146,13 @@
 				loadStoredMessages(get(sessionId));
 			}
 
-			// Only connect WebSocket if not in readonly mode
-			if (!readonly) {
+			// Only connect WebSocket if not in readonly mode and not demo mode
+			if (!readonly && sessionStatus !== 'demo') {
 				// wsUrl prop should be the base like "ws://localhost:5173/ws"
 				console.debug('Attempting direct WebSocket connection. Base wsUrl prop:', wsUrl);
 				connectWebSocket();
 			} else {
-				console.debug('Terminal in readonly mode, skipping WebSocket connection');
+				console.debug('Terminal in readonly mode or demo mode, skipping WebSocket connection');
 				// Emit ready event even in readonly mode so parent can process messages
 				setTimeout(() => {
 					dispatch('ready', { handleMessage, sendRunFlowRequest });
@@ -199,7 +203,6 @@
 		flowStore.set('');
 		recordStore.set('');
 		selectedCriteria.set('');
-		selectedModel.set('');
 
 		// Clear messages
 		messages = [];
@@ -521,8 +524,8 @@
 					connectionError = `Connection closed. Code: ${event.code}${event.reason ? ', Reason: ' + event.reason : ''}`;
 				}
 
-				// Attempt to reconnect after a delay with exponential backoff
-				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+				// Attempt to reconnect after a delay with exponential backoff (but not in readonly/demo mode)
+				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && !readonly && sessionStatus !== 'demo') {
 					const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
 					console.debug(
 						`Will attempt reconnection ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS} in ${backoffDelay}ms`
@@ -595,7 +598,7 @@
 	}
 
 	// Function to send a run_flow request
-	export function sendRunFlowRequest(flow: string, record: string, criteria: string) {
+	export function sendRunFlowRequest(flow: string, dataset: string, record: string, criteria: string) {
 		if (!socket || socket.readyState !== WebSocket.OPEN) {
 			console.warn('WebSocket not open. Cannot send run flow request.');
 			addSystemMessage('Error: Connection not open.');
@@ -615,6 +618,7 @@
 			type: 'run_flow',
 			flow: flow,
 			record_id: record,
+			dataset: dataset || '', // Include dataset parameter
 			criteria: criteria || '' // Default to empty string if criteria is not provided
 		};
 

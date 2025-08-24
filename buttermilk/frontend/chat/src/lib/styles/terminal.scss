@@ -257,17 +257,23 @@
 	flex-direction: column;
 	min-width: 150px;
 	max-width: 150px;
-	flex: 0 0 auto;
-	margin-right: 10px;
 
+	flex: 0 0 auto;
+	// margin-right: 10px;
+	padding-right: 2px;
+	padding-left: 0;
 	line-height: 1.2;
 	padding-top: 0;
 	margin-top: 0;
 }
 
+.row {
+	margin-top: 0.5em;
+}
 /* Nickname styling */
 .agent-nick {
 	color: inherit;
+	font-size: 1.2em;
 	text-align: right;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -356,15 +362,6 @@
 	margin-right: 2px;
 	vertical-align: middle;
 	color: #00ffff;
-}
-
-// inline text
-.content-inline {
-	margin-left: 0; // Remove left margin to align with top
-	margin-top: 0; // Ensure no top margin
-	padding-top: 0; // Ensure no top padding
-	font-size: 0.7rem;
-	line-height: 1.2; // Match the message line height
 }
 
 // Toggle button styling

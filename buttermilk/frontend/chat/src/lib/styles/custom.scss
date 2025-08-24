@@ -41,10 +41,12 @@ h6 a {
 
 .incorrect {
 	color: rgba(214, 51, 132, 0.921);
+	color: #CD5C5C;
 }
 
 .correct {
 	color: rgba(243, 229, 0, 1);
+	color: #228B22;
 }
 
 .navbar.navbar-light {
@@ -70,13 +72,6 @@ h6 a {
 	}
 }
 
-.incorrect {
-	color: rgba(214, 51, 132, 0.921);
-}
-
-.correct {
-	color: rgba(243, 229, 0, 1);
-}
 
 /* Make icons align properly */
 :global(.bi) {

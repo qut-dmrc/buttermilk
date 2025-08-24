@@ -23,8 +23,7 @@ export function getModelColor(modelName: string | undefined): string {
 	if (!modelName) return '#aaaaaa';
 
 	const modelLower = modelName.toLowerCase();
-	if (modelLower.includes('gpt-4') || modelLower.includes('gpt4')) return '#10a37f'; // OpenAI green
-	if (modelLower.includes('gpt-3.5')) return '#1f85de'; // OpenAI blue
+	if (modelLower.includes('gpt') || modelLower.includes('gpt4')) return '#10a37f'; // OpenAI green
 	if (modelLower.includes('o3')) return '#00d4aa'; // OpenAI teal for o3 series
 	if (modelLower.includes('o4')) return '#00d4aa'; // OpenAI teal for o4 series
 	if (

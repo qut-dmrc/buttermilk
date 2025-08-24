@@ -1026,6 +1026,27 @@ class FlowRunner(BaseModel):
             storage_service = SessionStorageService()
             storage_service.update_flow_status(run_request.session_id, "running")
             logger.debug(f"Updated flow status to 'running' for session {run_request.session_id}")
+            
+            # Save flow parameters for demo mode functionality
+            parameters = {
+                "flow": run_request.flow,
+            }
+            
+            # Extract record_id and dataset from inputs if available
+            if hasattr(run_request, 'inputs') and run_request.inputs:
+                if 'record_id' in run_request.inputs:
+                    parameters["record_id"] = run_request.inputs['record_id']
+                if 'dataset' in run_request.inputs:
+                    parameters["dataset"] = run_request.inputs['dataset']
+            
+            # Extract criteria from parameters if available
+            if hasattr(run_request, 'parameters') and run_request.parameters:
+                if 'criteria' in run_request.parameters:
+                    parameters["criteria"] = run_request.parameters['criteria']
+            
+            storage_service.save_parameters(run_request.session_id, parameters)
+            logger.debug(f"Saved flow parameters {parameters} for session {run_request.session_id}")
+            
         except Exception as e:
             logger.warning(f"Failed to update session storage flow status for {run_request.session_id}: {e}")
 

@@ -131,6 +131,10 @@ function createApiStore<T, R>(
 // --- Stores ---
 
 export const flowRunning = writable(false);
+
+// Demo mode store - tracks if backend is unavailable
+export const isDemoMode = writable(false);
+
 // 1. Store for initial flow choices
 export const initialFlowConfigStore = createApiStore<InitialFlowConfig, InitialFlowConfig>(
 	'/api/flows',
@@ -164,7 +168,6 @@ const createSelectedRecordStore = () => {
 
 export const selectedRecord = createSelectedRecordStore();
 export const selectedCriteria = writable<string>('');
-export const selectedModel = writable<string>('');
 
 // 3. Single store for flow-dependent info - will be updated with flow parameter
 // Note: endpoint is not used since we manually fetch and update
@@ -207,6 +210,13 @@ export async function refetchRecords() {
 	const currentDataset = get(selectedDataset);
 
 	console.log('refetchRecords called with:', { currentFlow, currentDataset });
+
+	// Skip API calls if in demo mode - data is already loaded from sessions
+	const currentDemoMode = get(isDemoMode);
+	if (currentDemoMode) {
+		console.log('Demo mode: Skipping records API call, using cached data');
+		return;
+	}
 
 	if (currentFlow && currentDataset && currentDataset.trim() !== '') {
 		// Always require both flow and dataset - no fallback to flow-only
@@ -266,11 +276,6 @@ export const criteriaStore = derived(flowInfoStore, ($info) => ({
 	error: $info.error
 }));
 
-export const modelStore = derived(flowInfoStore, ($info) => ({
-	data: $info.data?.models ?? [], // Corrected 'model' to 'models'
-	loading: $info.loading,
-	error: $info.error
-}));
 
 export const datasetsStore = derived(flowInfoStore, ($info) => ({
 	data: $info.data?.datasets ?? [],
@@ -278,17 +283,144 @@ export const datasetsStore = derived(flowInfoStore, ($info) => ({
 	error: $info.error
 }));
 
+// --- Demo Mode Functions ---
+
+// Interface for session data from /api/sessions
+interface SessionInfo {
+    session_id: string;
+    created_at: string;
+    last_updated: string;
+    flow_status: string;
+    parameters: {
+        flow?: string;
+        dataset?: string;
+        record_id?: string;
+        criteria?: string;
+    };
+    message_count: number;
+}
+
+// Function to load parameters from available sessions when in demo mode
+export async function loadParametersFromSessions() {
+    try {
+        const response = await fetch('/api/sessions');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch sessions: ${response.statusText}`);
+        }
+        
+        const data = await response.json() as { sessions?: SessionInfo[] };
+        const sessions: SessionInfo[] = data.sessions || [];
+        
+        // Extract unique values for each parameter type
+        const flows = new Set<string>();
+        const datasets = new Set<string>();
+        const records = new Set<string>();
+        const criteriaSet = new Set<string>();
+        
+        sessions.forEach(session => {
+            if (session.parameters?.flow) flows.add(session.parameters.flow);
+            if (session.parameters?.dataset) datasets.add(session.parameters.dataset);
+            if (session.parameters?.record_id) records.add(session.parameters.record_id);
+            if (session.parameters?.criteria) criteriaSet.add(session.parameters.criteria);
+        });
+        
+        // Update the stores with demo data
+        initialFlowConfigStore._store.update(state => ({
+            ...state,
+            data: { flow_choices: Array.from(flows) },
+            loading: false,
+            error: null,
+            timestamp: Date.now()
+        }));
+        
+        // Create mock flow info with available criteria, datasets, and records
+        const mockFlowInfo = {
+            criteria: Array.from(criteriaSet),
+            models: [], // No models needed in demo mode
+            datasets: Array.from(datasets),
+            record_ids: Array.from(records).map(id => ({ id, name: id }))
+        };
+        
+        flowInfoStore._store.update(state => ({
+            ...state,
+            data: mockFlowInfo,
+            loading: false,
+            error: null,
+            timestamp: Date.now()
+        }));
+        
+        // Update records store with demo data
+        const recordItems = Array.from(records).map(record_id => ({
+            record_id,
+            name: record_id,
+            content: `Demo record: ${record_id}`,
+            metadata: {}
+        }));
+        
+        recordsStore._store.update(state => ({
+            ...state,
+            data: recordItems,
+            loading: false,
+            error: null,
+            timestamp: Date.now()
+        }));
+        
+        console.log('Demo mode: Loaded parameters from sessions', { flows: flows.size, datasets: datasets.size, records: records.size, criteria: criteriaSet.size });
+        
+    } catch (error) {
+        console.error('Failed to load parameters from sessions:', error);
+        // Set empty data if loading fails
+        initialFlowConfigStore._store.update(state => ({
+            ...state,
+            data: { flow_choices: [] },
+            loading: false,
+            error: 'Failed to load demo data',
+            timestamp: Date.now()
+        }));
+    }
+}
+
+// Function to find a session that matches the given parameters
+export async function findMatchingSession(flow: string, dataset: string, record_id: string, criteria: string): Promise<string | null> {
+    try {
+        const response = await fetch('/api/sessions');
+        if (!response.ok) return null;
+        
+        const data = await response.json() as { sessions?: SessionInfo[] };
+        const sessions: SessionInfo[] = data.sessions || [];
+        
+        // Find a session with matching parameters
+        const matchingSession = sessions.find(session => 
+            session.parameters?.flow === flow &&
+            session.parameters?.dataset === dataset &&
+            session.parameters?.record_id === record_id &&
+            session.parameters?.criteria === criteria
+        );
+        
+        return matchingSession?.session_id || null;
+    } catch (error) {
+        console.error('Failed to find matching session:', error);
+        return null;
+    }
+}
+
 // --- Logic ---
 
 // Fetch initial flow list when app loads
 // Track initialization per session to prevent redundant calls
 let lastInitializedSession = '';
 
-export function initializeApp(sessionId?: string) {
+export async function initializeApp(sessionId?: string) {
     const currentSession = sessionId || 'default';
     
     if (lastInitializedSession === currentSession) {
         console.log(`>>> initializeApp called but already initialized for session ${currentSession}, using cache`);
+        // Check if we're already in demo mode, if so don't try API again
+        const currentDemoMode = get(isDemoMode);
+        if (currentDemoMode) {
+            await loadParametersFromSessions();
+            return;
+        }
         initialFlowConfigStore.fetchWithCache();
         return;
     }
@@ -296,13 +428,37 @@ export function initializeApp(sessionId?: string) {
     console.log(">>> initializeApp called for session:", currentSession);
     console.log("Initializing app data: fetching flow choices...");
     lastInitializedSession = currentSession;
-    initialFlowConfigStore.fetchWithCache();
+    
+    // Try to fetch from backend first
+    try {
+        console.log("Attempting to connect to backend...");
+        const response = await fetch('/api/flows', { signal: AbortSignal.timeout(5000) });
+        
+        if (response.ok) {
+            console.log("Backend available - using live mode");
+            isDemoMode.set(false);
+            initialFlowConfigStore.fetchWithCache();
+        } else {
+            throw new Error(`Backend responded with status: ${response.status}`);
+        }
+    } catch (error) {
+        console.warn("Backend not available, switching to demo mode:", error);
+        isDemoMode.set(true);
+        await loadParametersFromSessions();
+    }
 }
 
 // Subscribe to selectedFlow changes to fetch dependent data
 selectedFlow.subscribe(async (flowValue) => {
 	if (flowValue) {
 		console.log(`Selected flow changed to: ${flowValue}. Fetching flow info...`);
+
+		// Skip API calls if in demo mode - data is already loaded from sessions
+		const currentDemoMode = get(isDemoMode);
+		if (currentDemoMode) {
+			console.log('Demo mode: Skipping flow info API call, using cached data');
+			return;
+		}
 
 		// Fetch flow info using path-based URL
 		const flowInfoEndpoint = `/api/flows/${encodeURIComponent(flowValue)}/info`;
@@ -341,22 +497,28 @@ selectedFlow.subscribe(async (flowValue) => {
 		console.log('Flow selection cleared. Resetting flow info store.');
 		flowInfoStore.reset();
 		recordsStore.reset();
-		// Also reset other selections when flow changes
-		selectedDataset.set('');
-		selectedRecord.set('');
-		selectedCriteria.set('');
-		selectedModel.set('');
+		// Also reset other selections when flow changes (but not in demo mode)
+		const currentDemoMode = get(isDemoMode);
+		if (!currentDemoMode) {
+			selectedDataset.set('');
+			selectedRecord.set('');
+			selectedCriteria.set('');
+		}
 	}
 });
 
 // Subscribe to selectedDataset changes to refetch records
 selectedDataset.subscribe((datasetValue) => {
 	const currentFlow = get(selectedFlow);
-	if (currentFlow) {
+	const currentDemoMode = get(isDemoMode);
+	
+	if (currentFlow && !currentDemoMode) {
 		console.log(
 			`Selected dataset changed to: ${datasetValue}. Refetching records with dataset filter...`
 		);
 		refetchRecords();
+	} else if (currentDemoMode) {
+		console.log('Demo mode: Skipping dataset change record refetch, using cached data');
 	}
 });
 
