@@ -25,9 +25,33 @@
 	let messagesProcessed = false; // Track if messages have been processed to prevent duplicates
 	let sessionMetadata: any = null;
 	let lastInitializedSessionId = ''; // Track last initialized session to avoid re-initialization
+	
+	// Message duplicate tracking
+	let processedMessageIds = new Set<string>();
 
 	// WebSocket terminal instance
 	let websocketTerminal: ChatTerminal | null = null;
+	
+	// Helper function to filter out duplicate messages
+	function filterDuplicateMessages(messages: any[]): any[] {
+		const uniqueMessages = [];
+		for (const message of messages) {
+			if (message.message_id && !processedMessageIds.has(message.message_id)) {
+				uniqueMessages.push(message);
+				processedMessageIds.add(message.message_id);
+			} else if (!message.message_id) {
+				// If message doesn't have an ID, add it but log a warning
+				console.warn('Message without ID detected:', message);
+				uniqueMessages.push(message);
+			}
+		}
+		
+		if (uniqueMessages.length !== messages.length) {
+			console.log(`Filtered out ${messages.length - uniqueMessages.length} duplicate messages`);
+		}
+		
+		return uniqueMessages;
+	}
 
 	// Get session ID from URL params
 	$: urlSessionId = $page.params.sessionId;
@@ -68,6 +92,10 @@
 		isDemoModeInitialized = false;
 		messagesProcessed = false;
 		restorationComplete = false;
+		
+		// Reset message duplicate tracking for new session
+		processedMessageIds.clear();
+		pendingMessages = [];
 		
 		// Update session store
 		sessionIdStore.set(sessionId);
@@ -123,17 +151,24 @@
 				console.log(`Restoring ${messages.length} messages for session ${sessionId}`);
 
 				if (messages.length > 0 && !messagesProcessed) {
-					if (websocketTerminal) {
-						// Terminal component exists, but in demo/readonly mode we need to wait for it to be fully ready
-						// Store as pending messages to ensure proper rendering pipeline
-						console.log('Terminal exists but storing as pending messages to ensure proper rendering');
-						pendingMessages = messages;
-						console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
+					// Filter out any duplicate messages before storing
+					const filteredMessages = filterDuplicateMessages(messages);
+					
+					if (filteredMessages.length > 0) {
+						if (websocketTerminal) {
+							// Terminal component exists, but in demo/readonly mode we need to wait for it to be fully ready
+							// Store as pending messages to ensure proper rendering pipeline
+							console.log('Terminal exists but storing as pending messages to ensure proper rendering');
+							pendingMessages = filteredMessages;
+							console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
+						} else {
+							// Terminal not ready yet, store for later (don't set messagesProcessed yet)
+							console.log('Terminal not ready, storing as pending messages');
+							pendingMessages = filteredMessages;
+							console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
+						}
 					} else {
-						// Terminal not ready yet, store for later (don't set messagesProcessed yet)
-						console.log('Terminal not ready, storing as pending messages');
-						pendingMessages = messages;
-						console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
+						console.log('All messages were duplicates, no new messages to process');
 					}
 				} else if (messagesProcessed) {
 					console.log('Messages already processed, skipping duplicate restoration');

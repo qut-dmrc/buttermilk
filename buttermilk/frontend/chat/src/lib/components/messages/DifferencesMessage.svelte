@@ -98,12 +98,12 @@
 	}
 
 	// Helper to display a truncated list of experts
-	function formatExpertsList(experts: Expert[], maxToShow: number = 3): string {
+	function formatExpertsList(experts: Expert[], maxToShow: number = 9): string {
 		if (experts.length <= maxToShow) {
-			return experts.map((e) => e.name).join(', ');
+			return experts.join(', ');
 		} else {
 			const shownExperts = experts.slice(0, maxToShow);
-			return `${shownExperts.map((e) => e.name).join(', ')} +${experts.length - maxToShow} more`;
+			return `${shownExperts.join(', ')} +${experts.length - maxToShow} more`;
 		}
 	}
 </script>

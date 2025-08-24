@@ -7,8 +7,15 @@ export const messageStore = writable<Message[]>([]);
 
 // Helper functions
 export function addMessage(message: Message) {
-	messageStore.update((messages) => [...messages, message]);
-	// Update token usage tracking
+	messageStore.update((messages) => {
+		// Check for duplicate message_id to prevent duplicates
+		if (message.message_id && messages.some(existing => existing.message_id === message.message_id)) {
+			console.debug(`Skipping duplicate message with ID: ${message.message_id}`);
+			return messages; // Return unchanged if duplicate found
+		}
+		return [...messages, message];
+	});
+	// Update token usage tracking (only for non-duplicates)
 	updateTokenUsage(message);
 }
 
