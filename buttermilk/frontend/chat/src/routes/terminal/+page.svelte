@@ -6,12 +6,16 @@
   // Generate a new session ID and redirect to session route
   onMount(async () => {
     if (browser) {
-      // Generate a new session ID using built-in crypto API
-      const newSessionId = crypto.randomUUID();
-      console.log('Redirecting to new session:', newSessionId);
-      
-      // Redirect to the session-specific route
-      await goto(`/terminal/${newSessionId}`, { replaceState: true });
+      // Check if we're actually at /terminal (not a sub-route)
+      // This prevents creating a new session if we're actually loading /terminal/{sessionId}
+      const path = window.location.pathname;
+      if (path === '/terminal' || path === '/terminal/') {
+        // Only create new session if we're at the base /terminal route
+        const newSessionId = crypto.randomUUID();
+        
+        // Redirect to the session-specific route
+        await goto(`/terminal/${newSessionId}`, { replaceState: true });
+      }
     }
   });
 </script>

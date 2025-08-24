@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import {
   	criteriaStore,
   	datasetsStore,
@@ -8,13 +9,10 @@
   	flowRunning,
   	initializeApp,
   	isDemoMode,
-  	modelStore,
   	recordsStore,
-  	refetchRecords,
   	selectedCriteria,
   	selectedDataset,
   	selectedFlow,
-  	selectedModel,
   	selectedRecord
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
@@ -23,6 +21,26 @@
   $: isTerminalPage = $page.route.id === '/terminal' || $page.route.id === '/terminal/[sessionId]';
   $: isScorePage = $page.route.id?.startsWith('/score');
   
+  // Track if a matching session is available for the current parameters
+  let hasMatchingSession = false;
+
+  // Check for matching session when parameters change
+  $: if ($selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria) {
+    checkForMatchingSession();
+  } else {
+    hasMatchingSession = false;
+  }
+
+  async function checkForMatchingSession() {
+    try {
+      const sessionId = await findMatchingSession($selectedFlow, $selectedDataset, $selectedRecord, $selectedCriteria);
+      hasMatchingSession = !!sessionId;
+    } catch (error) {
+      console.error('Error checking for matching session:', error);
+      hasMatchingSession = false;
+    }
+  }
+
   // For score pages, we need different logic for records
   let records: any[] = [];
   let loading = false;
@@ -76,9 +94,12 @@
     }
   }
   
-  // Initialize app data
+  // Initialize app data (but only if not on a session page where it's already handled)
   onMount(() => {
-    initializeApp();
+    // Don't initialize if on a session page - the session page handles initialization
+    if (!isTerminalPage || !$page.params.sessionId) {
+      initializeApp();
+    }
   });
   
   // For score pages: Don't auto-select flow, let user choose
@@ -164,9 +185,9 @@
       const matchingSessionId = await findMatchingSession($selectedFlow, $selectedDataset, $selectedRecord, $selectedCriteria);
       
       if (matchingSessionId) {
-        console.log(`Demo reload: Found session ${matchingSessionId}, reloading page...`);
-        // Force complete page reload to the correct session
-        window.location.href = `/terminal/${matchingSessionId}`;
+        console.log(`Demo reload: Found session ${matchingSessionId}, navigating...`);
+        // Navigate to the correct session using SvelteKit
+        await goto(`/terminal/${matchingSessionId}`);
       } else {
         console.log('Demo reload: No matching session found');
         alert('No session found with the selected parameters');
@@ -277,35 +298,24 @@
 			{/if}
 		</div>
 
-		<!-- Model Dropdown -->
-		<div class="selector-group">
-			<label for="model-select" class="form-label">Select Model:</label>
-			{#if !$selectedFlow}
-				<select class="form-select terminal-select" disabled>
-					<option>Choose a flow first...</option>
-				</select>
-			{:else if $modelStore.data.length > 0}
-				<select id="model-select" class="form-select terminal-select" bind:value={$selectedModel}>
-					<option value="">Choose model...</option>
-					{#each $modelStore.data as model}
-						<option value={model}>{model.toUpperCase()}</option>
-					{/each}
-				</select>
-			{:else}
-				<div class="terminal-warning">No models available</div>
-			{/if}
-		</div>
-
-		<!-- Run Flow Button / Demo Mode Reload -->
+		<!-- Action Buttons -->
 		{#if $selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria}
 			<div class="run-button-container">
-					<div class="demo-mode-indicator">
-						<button class="btn demo-reload-button" onclick={handleDemoReload}>
+				{#if $isDemoMode}
+					<!-- Demo mode: Only show Load Session -->
+					<button class="btn load-session-button" onclick={handleDemoReload}>
+						LOAD SESSION
+					</button>
+				{:else}
+					<!-- Live mode: Show Run Flow, and Load Session if available -->
+					<button class="btn terminal-button" onclick={runFlow}>
+						RUN FLOW
+					</button>
+					{#if hasMatchingSession}
+						<button class="btn load-session-button" onclick={handleDemoReload}>
 							LOAD SESSION
 						</button>
-					</div>
-				{#if !$isDemoMode}
-					<button class="btn terminal-button" onclick={runFlow}> Run Flow </button>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -635,52 +645,31 @@
 		margin-bottom: 0.5rem;
 	}
 
-	/* Demo mode indicator styles */
-	.demo-mode-indicator {
-		text-align: center;
-		padding: 1rem;
-		background-color: rgba(255, 165, 0, 0.1);
-		border: 1px solid rgba(255, 165, 0, 0.3);
-		border-radius: 4px;
-		margin-top: 1rem;
-	}
-
-	.demo-badge {
-		display: inline-block;
-		background-color: #ff6b35;
-		color: white;
-		padding: 0.25rem 0.5rem;
-		font-size: 0.75rem;
-		font-weight: bold;
-		border-radius: 3px;
-		margin-bottom: 0.5rem;
-	}
-
-	.demo-text {
-		color: #ffa500;
-		font-size: 0.875rem;
-		margin: 0;
-		font-style: italic;
-	}
-
-	.demo-reload-button {
-		background-color: #28a745;
+	/* Load Session Button (Orange styling) */
+	.load-session-button {
+		background-color: #fd7e14;
 		color: white;
 		border: none;
 		padding: 0.5rem 1rem;
-		margin-top: 0.75rem;
+		margin-top: 0.5rem;
 		font-size: 0.875rem;
 		font-weight: bold;
 		border-radius: 4px;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		width: 100%;
 	}
 
-	.demo-reload-button:hover {
-		background-color: #218838;
+	.load-session-button:hover {
+		background-color: #e85a00;
 	}
 
-	.demo-reload-button:active {
-		background-color: #1e7e34;
+	.load-session-button:active {
+		background-color: #d04701;
+	}
+
+	/* Ensure both buttons are properly spaced */
+	.run-button-container .btn + .btn {
+		margin-top: 0.5rem;
 	}
 </style>

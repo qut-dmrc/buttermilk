@@ -168,7 +168,6 @@ const createSelectedRecordStore = () => {
 
 export const selectedRecord = createSelectedRecordStore();
 export const selectedCriteria = writable<string>('');
-export const selectedModel = writable<string>('');
 
 // 3. Single store for flow-dependent info - will be updated with flow parameter
 // Note: endpoint is not used since we manually fetch and update
@@ -277,11 +276,6 @@ export const criteriaStore = derived(flowInfoStore, ($info) => ({
 	error: $info.error
 }));
 
-export const modelStore = derived(flowInfoStore, ($info) => ({
-	data: $info.data?.models ?? [], // Corrected 'model' to 'models'
-	loading: $info.loading,
-	error: $info.error
-}));
 
 export const datasetsStore = derived(flowInfoStore, ($info) => ({
 	data: $info.data?.datasets ?? [],
@@ -509,7 +503,6 @@ selectedFlow.subscribe(async (flowValue) => {
 			selectedDataset.set('');
 			selectedRecord.set('');
 			selectedCriteria.set('');
-			selectedModel.set('');
 		}
 	}
 });

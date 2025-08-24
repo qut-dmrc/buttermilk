@@ -6,8 +6,7 @@
 		flowRunning,
 		selectedFlow as flowStore,
 		selectedRecord as recordStore,
-		selectedCriteria,
-		selectedModel
+		selectedCriteria
 	} from './stores/apiStore';
 	import { messageHistory } from './stores/messageHistoryStore';
 	import { addMessage as addToMessageStore } from './stores/messageStore';
@@ -128,8 +127,13 @@
 	onMount(async () => {
 		// Make the callback async
 		console.debug('Attempting direct WebSocket connection to:', wsUrl);
-		// Ensure we have a session ID before attempting to connect
-		if (!get(sessionId)) {
+		
+		// If a session ID was provided via props (from URL), use that
+		if (currentSessionId) {
+			console.debug('Using session ID from URL prop:', currentSessionId);
+			sessionId.set(currentSessionId);
+		} else if (!get(sessionId)) {
+			// Only create a new session if no session ID exists at all
 			addSystemMessage('Initializing session...');
 			await getNewSessionId(); // Fetches and stores a clean session ID
 		}
@@ -199,7 +203,6 @@
 		flowStore.set('');
 		recordStore.set('');
 		selectedCriteria.set('');
-		selectedModel.set('');
 
 		// Clear messages
 		messages = [];
