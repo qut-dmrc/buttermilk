@@ -44,13 +44,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy only requirements to leverage layer caching
 COPY ./deploy/requirements.txt /tmp/requirements.txt
 
-# Exclude editable -e . (source not present in this stage)
-RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.noe.txt
+# Exclude editable -e . 
+RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.txt
 
 # Prefetch/build wheels to speed up final install
 RUN --mount=type=cache,target=/root/.cache/pip \
     mkdir -p /wheels && \
-    python -m pip wheel -r /tmp/requirements.noe.txt -w /wheels
+    python -m pip wheel -r /tmp/requirements.txt -w /wheels
 
 ################################
 # FINAL
@@ -72,11 +72,14 @@ COPY . ${APP_PATH}
 # Copy wheelhouse
 COPY --link --from=builder-base /wheels /wheels
 
+# Exclude editable -e . 
+RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.txt
+
 # Create venv and install; prefer wheels, allow network fallback
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv ${VENV_PATH} --seed && \
     . ${VENV_PATH}/bin/activate && \
-    uv pip sync ./deploy/requirements.txt --find-links /wheels
+    uv pip sync /tmp/requirements.txt --find-links /wheels
 
 # Clean up wheelhouse
 RUN rm -rf /wheels
