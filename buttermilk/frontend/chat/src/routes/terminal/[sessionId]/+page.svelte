@@ -124,12 +124,11 @@
 
 				if (messages.length > 0 && !messagesProcessed) {
 					if (websocketTerminal) {
-						// Terminal is ready, restore messages immediately
-						console.log('Terminal ready, processing messages immediately');
-						for (const message of messages) {
-							websocketTerminal.handleMessage(message);
-						}
-						messagesProcessed = true;
+						// Terminal component exists, but in demo/readonly mode we need to wait for it to be fully ready
+						// Store as pending messages to ensure proper rendering pipeline
+						console.log('Terminal exists but storing as pending messages to ensure proper rendering');
+						pendingMessages = messages;
+						console.log(`Stored ${pendingMessages.length} pending messages for restoration`);
 					} else {
 						// Terminal not ready yet, store for later (don't set messagesProcessed yet)
 						console.log('Terminal not ready, storing as pending messages');
