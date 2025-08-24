@@ -39,12 +39,10 @@
 		<svelte:fragment slot="agentNick">[ZOTERO]</svelte:fragment>
 
 		<svelte:fragment slot="messageContent">
-			<div class="content-inline">
 				{@html sanitize(parseMarkdown(summary))}
 				<button class="btn btn-sm btn-link" on:click={() => (showModal = true)}
 					>View full response</button
 				>
-			</div>
 			{#if citation}
 				<div class="citation">
 					{@html sanitize(parseMarkdown(citation))}

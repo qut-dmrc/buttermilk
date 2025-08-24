@@ -24,13 +24,11 @@
 		</span>
 		<span class="agent-metadata">
 			<!-- Default metadata display -->
-			<slot name="messagePrefix">
-				{#if message.agent_info?.parameters?.model}<i class="bi bi-cpu"></i>{message.agent_info
+			 {#if message.agent_info?.parameters?.model}<i class="bi bi-cpu"></i>{message.agent_info
 						.parameters.model}{/if}
-				{#if message.agent_info?.parameters?.template}<i class="bi bi-file-earmark-text"
-					></i>{message.agent_info.parameters.template}{/if}
-				{#if message.agent_info?.parameters?.criteria}<i class="bi bi-list-check"></i>{message
-						.agent_info.parameters.criteria}{/if}
+			<slot name="messagePrefix">
+				
+				
 			</slot>
 			{#if message.tracing_link}<a
 					href={message.tracing_link}
@@ -39,13 +37,17 @@
 				>{/if}
 		</span>
 	</div>
-	<div class="message-text col-sm-10">
-		<span class="message-body">
-			{#if error}<span class="error-message">Error: {error}</span>{/if}
-			<slot name="messageContent">
-				{message.preview || JSON.stringify(message.outputs?.content || message.outputs || {})}
+	<div class="message-text col-sm-10 ">{#if error}
+		<span class="message-body error-message">
+			<slot name="messageContent">{JSON.stringify(message.outputs?.content)}
 			</slot>
 		</span>
+		{:else}
+				<span class="message-body">
+			<slot name="messageContent">{message.preview || JSON.stringify(message.outputs?.content || message.outputs || {})}
+			</slot>
+		</span>
+		{/if}
 		<div class="message-expanded">
 			<slot name="messageExpanded">
 				<!-- Expandable content goes here -->

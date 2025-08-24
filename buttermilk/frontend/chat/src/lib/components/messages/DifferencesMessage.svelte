@@ -112,19 +112,7 @@
 	<BasicMessage {message}>
 		<svelte:fragment slot="agentNick">[{shortAgentId}]</svelte:fragment>
 
-		<svelte:fragment slot="messagePrefix">
-			<i class="bi bi-cpu"></i>|{modelName}|
-			<i class="bi bi-file-earmark-text"></i>{message.agent_info?.parameters?.template}
-			<i class="bi bi-list-check"></i>{message.agent_info?.parameters?.criteria}
-			<i class="bi bi-people"></i>
-			{differencesData.divergences?.reduce(
-				(total, div) => total + div.positions.reduce((sum, pos) => sum + pos.experts.length, 0),
-				0
-			) || 0} experts
-		</svelte:fragment>
-
 		<svelte:fragment slot="messageContent">
-			<div class="content-inline">
 				{differencesData.conclusion}
 				<button
 					class="content-toggle-inline"
@@ -133,7 +121,6 @@
 				>
 					{isContentVisible ? '[-]' : '[+]'} differences
 				</button>
-			</div>
 		</svelte:fragment>
 
 		<svelte:fragment slot="messageExpanded">
@@ -271,7 +258,9 @@
 	.experts-list {
 		color: #5fadaa;
 	}
-
+	.topic-text {
+		color:#5fadaa;
+	}
 	.position-text {
 		color: #e0e0e0;
 		line-height: 1.5;

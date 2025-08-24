@@ -2,8 +2,6 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import '$lib/styles/app.scss'; // Import main SCSS file
-	import MessageSidebar from '$lib/components/MessageSidebar.svelte';
-	import { messageStore } from '$lib/stores/messageStore';
 
 	onMount(() => {
 		if (browser) {
