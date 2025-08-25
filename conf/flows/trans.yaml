@@ -8,7 +8,7 @@ defaults:
     - fetch
     - judge
     - synth 
-    - differences
+    # - differences
   # Observer agents
   - /agents@trans.observers: 
     - spy
