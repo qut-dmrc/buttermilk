@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 ARG APP_PATH="/src/buttermilk" 
-ARG VENV_PATH="/opt/venv"
+ARG VENV_PATH="${APP_PATH}/.venv"
 
 ################################
 # PYTHON-BASE
@@ -87,4 +87,4 @@ RUN rm -rf /wheels
 # Prepend venv to PATH
 ENV PATH="$VENV_PATH/bin:$PATH"
 
-CMD ["bash", "-c", "${APP_PATH}/deploy/startapi.sh", "${FLOW_PARAMS}"]
+CMD ["bash", "-c", "echo 'container ready; sleeping...'; sleep infinity"]
