@@ -60,6 +60,11 @@
         "mode": "NULLABLE"
     },
     {
+        "name": "metadata",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
         "name": "tracing_link",
         "type": "STRING",
         "mode": "REQUIRED"
