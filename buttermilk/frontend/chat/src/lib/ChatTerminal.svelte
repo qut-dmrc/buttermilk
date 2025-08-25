@@ -23,6 +23,7 @@
 		isSystemUpdate,
 		normalizeWebSocketMessage
 	} from './utils/messageUtils';
+	import { checkBackendHealth, logBackendStatus } from './utils/backendUtils';
 
 	// Event dispatcher for communicating with parent
 	const dispatch = createEventDispatcher();
@@ -366,6 +367,27 @@
 			isReconnecting = false; // Stop reconnection attempts if no session ID
 			return;
 		}
+
+		// Check if backend is available before attempting WebSocket connection
+		const isBackendHealthy = await checkBackendHealth(false); // Don't use cache for WebSocket connections
+		logBackendStatus('WebSocket connection', isBackendHealthy);
+		
+		if (!isBackendHealthy) {
+			connectionError = 'Backend service unavailable';
+			isReconnecting = false; // Stop reconnection attempts when backend is down
+			
+			// Schedule a health check retry with exponential backoff instead of WebSocket retry
+			const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+			console.debug(`Will retry backend health check in ${backoffDelay}ms`);
+			reconnectTimeout = setTimeout(() => {
+				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+					reconnectAttempts++;
+					connectWebSocket();
+				}
+			}, backoffDelay) as unknown as number;
+			return;
+		}
+
 		try {
 			// wsUrl already includes the session ID from the parent page
 			console.debug('Attempting to connect to WebSocket with URL:', wsUrl);

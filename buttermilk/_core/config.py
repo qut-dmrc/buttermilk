@@ -643,7 +643,7 @@ class AgentConfig(BaseModel):
     # Core Identification
     agent_id: str = Field(
         default="",  # Will be generated if not provided
-        description="Unique identifier for the agent instance. Automatically generated from 'role' and 'unique_identifier' if empty.",
+        description="Unique identifier for the agent instance. Automatically generated as UUID if empty.",
         validate_default=True,  # Ensures _generate_id_and_name runs even if id is not explicitly set
     )
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
@@ -684,7 +684,7 @@ class AgentConfig(BaseModel):
     )
 
     name_components: list[str] = Field(
-        default=["role", "unique_identifier"],
+        default=["role", "agent_id"],
         description="List of attribute names or JMESPath expressions to construct the 'agent_name'.",
         exclude=False,  # Ensure it's included in model_dump etc.
     )
@@ -698,11 +698,6 @@ class AgentConfig(BaseModel):
     )
 
     # Private Attributes
-    unique_identifier: str = Field(
-        default_factory=lambda: uuid()[:6],  # Generates a short unique ID
-        description="A short unique ID component, auto-generated if not provided.",
-        exclude=True,  # Typically not set directly by user, internal detail
-    )
     _agent_name: str = PrivateAttr()
 
     # Field Validators
@@ -740,7 +735,7 @@ class AgentConfig(BaseModel):
         """A human-friendly name for the agent instance.
 
         This name is dynamically constructed based on the `name_components`
-        attribute, which can include the agent's `role`, `unique_identifier`,
+        attribute, which can include the agent's `role`, `agent_id`,
         or other values extracted via JMESPath from its configuration
         (`inputs` and `parameters`).
 
@@ -755,40 +750,36 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="after")
     def _generate_id_and_name(self) -> Self:
-        """Generates/updates `agent_id` and `_agent_name` for the agent instance.
+        """Generates `agent_id` and `_agent_name` for the agent instance.
 
         This validator runs after initial model creation and on subsequent
         assignments if `validate_assignment` is True. It ensures that:
-        - `agent_id` is consistently derived from `role` and `unique_identifier`.
-          If `agent_id` is provided but differs, it will be updated to the canonical derived ID.
+        - `agent_id` is generated as a UUID if not already provided.
         - `_agent_name` (accessed via `agent_name` property) is constructed based
           on `name_components`, allowing for dynamic naming using JMESPath
           expressions on the agent's configuration.
 
-        This method is designed to be idempotent.
+        This method is designed to be idempotent and conditional.
 
         Returns:
             Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated/updated.
 
         """
-        # Part 1: Generate/Update agent_id
-        current_role = self.role
-        current_unique_id = self.unique_identifier
-
-        intended_agent_id = f"{current_role}-{current_unique_id}" if current_role else current_unique_id
-
-        if self.agent_id != intended_agent_id:
+        # Part 1: Generate agent_id only if not already set (conditional)
+        if not self.agent_id or self.agent_id.strip() == "":
+            # Generate a simple UUID
+            generated_id = uuid()
             # Use object.__setattr__ to bypass Pydantic validation cycle here
-            object.__setattr__(self, "agent_id", intended_agent_id)  # noqa: PLC2801
+            object.__setattr__(self, "agent_id", generated_id)  # noqa: PLC2801
 
         # Part 2: Generate agent_name
         name_parts = []
 
         # Construct the context for JMESPath search manually to avoid recursion.
         # This context should contain fields that name_components might refer to,
-        # respecting aliases and excluding None values. Ensure 'unique_identifier'
-        # and the canonical 'agent_id' are in the context.
-        context_for_jmespath = {**self.model_dump(include={"agent_id", "role"}), **self.parameters, "unique_identifier": self.unique_identifier}
+        # respecting aliases and excluding None values. Ensure the current
+        # 'agent_id' is in the context.
+        context_for_jmespath = {**self.model_dump(include={"agent_id", "role"}), **self.parameters}
 
         for comp_path in self.name_components:
             part = None
@@ -921,7 +912,7 @@ class AgentVariants(AgentConfig):
                 "num_runs",
                 "extra_params",
                 # Also exclude fields that are part of AgentConfig's identity if they are recalculated
-                "agent_id", "unique_identifier", "_agent_name",
+                "agent_id", "_agent_name",
                 # Keep 'parameters' to use as base, but it will be overwritten/merged
             },
             exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
