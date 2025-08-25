@@ -699,6 +699,7 @@ class AgentConfig(BaseModel):
 
     # Private Attributes
     _agent_name: str = PrivateAttr()
+    _unique_identifier: str = PrivateAttr(default=None)  # Used in constructing `agent_id` and `agent_name`.
 
     # Field Validators
     _validate_parameters = field_validator(
@@ -766,9 +767,10 @@ class AgentConfig(BaseModel):
 
         """
         # Part 1: Generate agent_id only if not already set (conditional)
-        if not self.agent_id or self.agent_id.strip() == "":
+        if not self.agent_id or not self.agent_id.strip():
             # Generate a simple UUID
-            generated_id = uuid()
+            self._unique_identifier = str(uuid()[:6]).upper()
+            generated_id = f"{self.role}_{self._unique_identifier}"
             # Use object.__setattr__ to bypass Pydantic validation cycle here
             object.__setattr__(self, "agent_id", generated_id)  # noqa: PLC2801
 
@@ -780,6 +782,9 @@ class AgentConfig(BaseModel):
         # respecting aliases and excluding None values. Ensure the current
         # 'agent_id' is in the context.
         context_for_jmespath = {**self.model_dump(include={"agent_id", "role"}), **self.parameters}
+
+        # Manually add unique_identifier as a special case (it's not in parameters)
+        context_for_jmespath["unique_identifier"] = self._unique_identifier
 
         for comp_path in self.name_components:
             part = None
