@@ -770,7 +770,7 @@ class AgentConfig(BaseModel):
         if not self.agent_id or not self.agent_id.strip():
             # Generate a simple UUID
             self._unique_identifier = str(uuid()[:6]).upper()
-            generated_id = f"{self.role}_{self._unique_identifier}"
+            generated_id = f"{self.role}-{self._unique_identifier}"
             # Use object.__setattr__ to bypass Pydantic validation cycle here
             object.__setattr__(self, "agent_id", generated_id)  # noqa: PLC2801
 
