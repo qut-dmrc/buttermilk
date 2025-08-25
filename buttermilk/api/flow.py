@@ -190,7 +190,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         # Accept the WebSocket connection
         if websocket.client_state == WebSocketState.CONNECTING:
             await websocket.accept()
-            logger.info(f"[WEBSOCKET] Connection accepted for session {session_id}")
+            logger.debug(f"[WEBSOCKET] Connection accepted for session {session_id}")
         else:
             logger.warning(f"[WEBSOCKET] Unexpected WebSocket state {websocket.client_state} for session {session_id}")
         flow_runner: FlowRunner = websocket.app.state.flow_runner
@@ -286,9 +286,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 # Try to transition to RECONNECTING status instead of immediate cleanup
                 reconnect_enabled = await flow_runner.session_manager.handle_client_disconnect(session_id)
                 if reconnect_enabled:
-                    logger.info(f"Session {session_id} transitioned to RECONNECTING after WebSocket disconnect")
+                    logger.debug(f"Session {session_id} transitioned to RECONNECTING after WebSocket disconnect")
                 else:
-                    logger.info(f"Session {session_id} cleaned up after WebSocket disconnect (reconnection not applicable)")
+                    logger.debug(f"Session {session_id} cleaned up after WebSocket disconnect (reconnection not applicable)")
         except Exception as e:
             logger.warning(f"Error handling session {session_id} disconnect: {e}")
 

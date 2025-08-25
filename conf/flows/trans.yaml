@@ -8,12 +8,12 @@ defaults:
     - fetch
     - judge
     - synth 
-    # - differences
+    - differences
   # Observer agents
   - /agents@trans.observers: 
     - spy
     - owl
-    # - scorer
+    - scorer
     - host/sequence_host
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans

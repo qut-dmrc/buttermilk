@@ -761,7 +761,7 @@ class SessionManager:
         # Transition back to ACTIVE status
         success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
         if success:
-            logger.info(f"Successfully reconnected session {session_id}")
+            logger.debug(f"Successfully reconnected session {session_id}")
             return session
         logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
         return None
@@ -855,7 +855,7 @@ class FlowRunner(BaseModel):
 
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
-                logger.info(f"Attempting to reconnect to session {session_id}")
+                logger.debug(f"Attempting to reconnect to session {session_id}")
                 reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
                 if reconnected_session:
                     return reconnected_session
