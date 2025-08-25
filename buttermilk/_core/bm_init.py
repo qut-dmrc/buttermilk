@@ -311,30 +311,26 @@ class BM(BaseModel):
         """Performs setup tasks immediately after Pydantic model initialization.
 
         This includes:
-        - Constructing the full `save_dir` path based on `save_dir_base` and session info.
         - Setting up logging (console and potentially cloud logging).
-        - Saving the initial configuration to a JSON file in `save_dir`.
-        - Starting an asynchronous task to fetch the machine's IP address.
-        - Logging into configured cloud providers.
-        - Set up tracing (Otel, Weave, etc.) if configured.
+        - Setting GCP environment variables for early access.
+        - Deferring save_dir construction until after cloud authentication.
+        - Starting background initialization for cloud auth and other tasks.
 
-        Note: Logger configuration validation is now handled by Pydantic model validators
-        in CloudProviderCfg, providing early validation with better error messages.
+        Note: save_dir construction is now deferred to _finalize_save_dir() to ensure
+        GCS authentication happens before attempting to work with GCS paths.
         """
-        # Construct full save directory path
-        save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
-        self.run_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
-
-        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
-
         # Set GCP environment variables immediately (needed for GCS access)
         self._setup_gcp_environment()
+
+        # Set up logging early (but without cloud logging until auth is complete)
+        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
         # Print current config to console - immediate for user feedback
         print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
         print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
 
-        # Defer non-critical operations to background tasks for faster startup
+        # Defer save_dir construction and other operations to background tasks
+        # This ensures GCS authentication happens before working with GCS paths
         self._schedule_background_init()
 
     def _setup_gcp_environment(self) -> None:
@@ -405,10 +401,13 @@ class BM(BaseModel):
                 logger.debug("Initializing secret manager...")
                 _ = self.secret_manager  # Trigger lazy initialization
 
-            # 3. Save initial config for tracing and recovery
+            # 3. Finalize save_dir now that cloud auth is complete
+            self._finalize_save_dir()
+
+            # 4. Save initial config for tracing and recovery
             await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
 
-            # 4. Start IP fetching task (non-critical)
+            # 5. Start IP fetching task (non-critical)
             self.start_fetch_ip_task()
             
             logger.debug("Background initialization tasks scheduled")
@@ -430,6 +429,9 @@ class BM(BaseModel):
                 logger.debug("Initializing secret manager synchronously...")
                 _ = self.secret_manager  # Trigger initialization
 
+            # Finalize save_dir now that cloud auth is complete
+            self._finalize_save_dir()
+
             self._save_initial_config()
             logger.info("Synchronous background initialization completed")
             # For sync path, mark as complete immediately
@@ -438,6 +440,28 @@ class BM(BaseModel):
             logger.error(f"Error during synchronous background initialization: {e}")
             self._initialization_error = e
             self._initialization_complete.set()
+
+    def _finalize_save_dir(self) -> None:
+        """Construct the final save_dir path after cloud authentication is complete.
+        
+        This method is called after cloud authentication to ensure that GCS paths
+        can be properly handled. It constructs the full save directory path and
+        stores it in run_info.save_dir.
+        """
+        try:
+            # Construct full save directory path (now that cloud auth is complete)
+            save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
+            self.run_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
+            logger.debug(f"Finalized save_dir: {self.run_info.save_dir}")
+        except Exception as e:
+            # Fallback to temporary directory if save_dir construction fails
+            from tempfile import mkdtemp
+            fallback_dir = mkdtemp()
+            self.run_info.save_dir = fallback_dir
+            logger.warning(
+                f"Failed to construct save_dir from base '{self.save_dir_base}': {e}. "
+                f"Using temporary directory: {fallback_dir}"
+            )
 
     async def ensure_initialized(self) -> None:
         """Ensure that BM initialization is complete before proceeding.
@@ -461,21 +485,23 @@ class BM(BaseModel):
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
         try:
-            if self.run_info.save_dir:
-                # Data to save: BM config and run_info
-                config_data_to_save = [
-                    self.model_dump(exclude_none=True),  # Current BM instance config
-                    self.run_info.model_dump(exclude_none=True),  # Current run_info
-                ]
-                self.save(  # Use the instance's save method
-                    data=config_data_to_save,
-                    basename="initial_bm_config",  # More descriptive basename
-                    extension=".json",
-                    # save_dir is implicitly self.run_info.save_dir if not provided to self.save
-                )
-                logger.debug("Initial BM config saved successfully")
-            else:  # Should not happen if save_dir_base defaults to mkdtemp
-                logger.warning("BM.run_info.save_dir is not set. Skipping saving initial config.")
+            # Check if save_dir has been finalized yet
+            if not self.run_info.save_dir:
+                logger.debug("save_dir not yet finalized, skipping initial config save")
+                return
+                
+            # Data to save: BM config and run_info
+            config_data_to_save = [
+                self.model_dump(exclude_none=True),  # Current BM instance config
+                self.run_info.model_dump(exclude_none=True),  # Current run_info
+            ]
+            self.save(  # Use the instance's save method
+                data=config_data_to_save,
+                basename="initial_bm_config",  # More descriptive basename
+                extension=".json",
+                # save_dir is implicitly self.run_info.save_dir if not provided to self.save
+            )
+            logger.debug("Initial BM config saved successfully")
         except Exception as e:
             logger.error(f"Could not save initial BM config to default save directory: {e!s}")
 

@@ -258,3 +258,179 @@ class TestSessionRestoration:
         # Test non-existing session
         response = client.get("/api/session/non-existing/messages")
         assert response.status_code == 404
+
+
+class TestSessionStorageHelperMethods:
+    """Test the helper methods introduced to address GitHub issue #204."""
+
+    @pytest.fixture
+    def temp_storage_dir(self):
+        """Create a temporary directory for session storage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def storage_service(self, temp_storage_dir):
+        """Create a SessionStorageService instance with temp directory."""
+        with patch("buttermilk.api.services.session_storage.SESSIONS_DIR", temp_storage_dir):
+            return SessionStorageService()
+
+    def test_get_or_create_session_data_new_session(self, storage_service):
+        """Test _get_or_create_session_data creates new session data."""
+        session_id = "new-session-123"
+        
+        # Should create new session data
+        session_data = storage_service._get_or_create_session_data(session_id)
+        
+        assert session_data["session_id"] == session_id
+        assert session_data["flow_status"] == "idle"
+        assert "created_at" in session_data
+        assert "messages" in session_data
+        assert len(session_data["messages"]) == 0
+
+    def test_get_or_create_session_data_existing_session(self, storage_service, temp_storage_dir):
+        """Test _get_or_create_session_data loads existing session data."""
+        session_id = "existing-session-456"
+        
+        # Create existing session data
+        session_file = temp_storage_dir / f"{session_id}.json"
+        existing_data = {
+            "session_id": session_id,
+            "flow_status": "running",
+            "messages": [{"test": "message"}],
+            "created_at": "2023-01-01T00:00:00",
+        }
+        with open(session_file, "w") as f:
+            json.dump(existing_data, f)
+        
+        # Should load existing data
+        session_data = storage_service._get_or_create_session_data(session_id)
+        
+        assert session_data["session_id"] == session_id
+        assert session_data["flow_status"] == "running"
+        assert len(session_data["messages"]) == 1
+        assert session_data["messages"][0]["test"] == "message"
+
+    def test_get_or_create_session_data_corrupted_file(self, storage_service, temp_storage_dir):
+        """Test _get_or_create_session_data handles corrupted files."""
+        session_id = "corrupted-session-789"
+        
+        # Create corrupted file
+        session_file = temp_storage_dir / f"{session_id}.json"
+        session_file.write_text("{ invalid json ")
+        
+        # Should create new session data for corrupted file
+        session_data = storage_service._get_or_create_session_data(session_id)
+        
+        assert session_data["session_id"] == session_id
+        assert session_data["flow_status"] == "idle"
+        assert len(session_data["messages"]) == 0
+
+
+class TestSessionGCSArchival:
+    """Test GCS archival functionality for completed sessions."""
+
+    @pytest.fixture
+    def temp_storage_dir(self):
+        """Create a temporary directory for session storage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def storage_service(self, temp_storage_dir):
+        """Create a SessionStorageService instance with temp directory."""
+        with patch("buttermilk.api.services.session_storage.SESSIONS_DIR", temp_storage_dir):
+            return SessionStorageService()
+
+    def test_archive_to_gcs_no_bm_instance(self, storage_service):
+        """Test archive_to_gcs when no BM instance is available."""
+        session_id = "test-session"
+        
+        # Create a test session
+        storage_service.save_parameters(session_id, {"flow": "test"})
+        
+        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
+            mock_get_bm.side_effect = RuntimeError("BM singleton not initialized")
+            
+            result = storage_service.archive_to_gcs(session_id)
+            assert result is False
+
+    def test_archive_to_gcs_local_save_dir(self, storage_service):
+        """Test archive_to_gcs with local save_dir (should skip archival)."""
+        session_id = "test-session"
+        
+        # Create a test session
+        storage_service.save_parameters(session_id, {"flow": "test"})
+        
+        # Mock BM with local save_dir
+        mock_bm = MagicMock()
+        mock_bm.run_info.save_dir = "/tmp/local/path"
+        
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
+            result = storage_service.archive_to_gcs(session_id)
+            assert result is False
+
+    def test_archive_to_gcs_success(self, storage_service):
+        """Test successful GCS archival."""
+        session_id = "test-session"
+        
+        # Create a test session
+        storage_service.save_parameters(session_id, {"flow": "test"})
+        
+        # Mock BM with GCS save_dir
+        mock_bm = MagicMock()
+        mock_bm.run_info.save_dir = "gs://my-bucket/sessions"
+        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
+        
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
+            result = storage_service.archive_to_gcs(session_id)
+            assert result is True
+            
+            # Verify BM save was called with correct parameters
+            mock_bm.save.assert_called_once()
+            call_args = mock_bm.save.call_args
+            assert "sessions/session_test-session_archived.json" in call_args[1]["basename"]
+
+    def test_finalize_session(self, storage_service):
+        """Test session finalization with completion metadata."""
+        session_id = "test-session"
+        
+        # Create a test session
+        storage_service.save_parameters(session_id, {"flow": "test"})
+        
+        # Mock BM to test archival is attempted
+        mock_bm = MagicMock()
+        mock_bm.run_info.save_dir = "gs://my-bucket/sessions"
+        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
+        
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
+            storage_service.finalize_session(session_id, "completed")
+            
+            # Verify session data was updated
+            session_data = storage_service._get_or_create_session_data(session_id)
+            assert session_data["flow_status"] == "completed"
+            assert "completed_at" in session_data
+            
+            # Verify archival was attempted
+            mock_bm.save.assert_called_once()
+
+    def test_finalize_session_no_archival_for_non_terminal(self, storage_service):
+        """Test that non-terminal statuses don't trigger archival."""
+        session_id = "test-session"
+        
+        # Create a test session
+        storage_service.save_parameters(session_id, {"flow": "test"})
+        
+        # Mock BM
+        mock_bm = MagicMock()
+        mock_bm.run_info.save_dir = "gs://my-bucket/sessions"
+        
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
+            storage_service.finalize_session(session_id, "running")
+            
+            # Verify session data was updated but no archival attempted
+            session_data = storage_service._get_or_create_session_data(session_id)
+            assert session_data["flow_status"] == "running"
+            
+            # Verify no save was called (no archival)
+            mock_bm.save.assert_not_called()

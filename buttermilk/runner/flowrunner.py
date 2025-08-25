@@ -568,8 +568,14 @@ class SessionManager:
             
             if new_status in flow_status_map:
                 flow_status = flow_status_map[new_status]
-                storage_service.update_flow_status(session_id, flow_status)
-                logger.debug(f"Updated flow status to '{flow_status}' for session {session_id}")
+                
+                # For terminal states, use finalize_session instead of update_flow_status
+                if flow_status in ["completed", "failed"]:
+                    storage_service.finalize_session(session_id, flow_status)
+                    logger.debug(f"Finalized session {session_id} with status '{flow_status}'")
+                else:
+                    storage_service.update_flow_status(session_id, flow_status)
+                    logger.debug(f"Updated flow status to '{flow_status}' for session {session_id}")
                 
         except Exception as e:
             logger.warning(f"Failed to update session storage flow status for {session_id}: {e}")
@@ -1033,16 +1039,16 @@ class FlowRunner(BaseModel):
             }
             
             # Extract record_id and dataset from inputs if available
-            if hasattr(run_request, 'inputs') and run_request.inputs:
-                if 'record_id' in run_request.inputs:
-                    parameters["record_id"] = run_request.inputs['record_id']
-                if 'dataset' in run_request.inputs:
-                    parameters["dataset"] = run_request.inputs['dataset']
+            if hasattr(run_request, "inputs") and run_request.inputs:
+                if "record_id" in run_request.inputs:
+                    parameters["record_id"] = run_request.inputs["record_id"]
+                if "dataset" in run_request.inputs:
+                    parameters["dataset"] = run_request.inputs["dataset"]
             
             # Extract criteria from parameters if available
-            if hasattr(run_request, 'parameters') and run_request.parameters:
-                if 'criteria' in run_request.parameters:
-                    parameters["criteria"] = run_request.parameters['criteria']
+            if hasattr(run_request, "parameters") and run_request.parameters:
+                if "criteria" in run_request.parameters:
+                    parameters["criteria"] = run_request.parameters["criteria"]
             
             storage_service.save_parameters(run_request.session_id, parameters)
             logger.debug(f"Saved flow parameters {parameters} for session {run_request.session_id}")

@@ -44,6 +44,32 @@ class SessionStorageService:
         """
         return self.sessions_dir / f"{session_id}.json"
 
+    def _get_or_create_session_data(self, session_id: str) -> dict:
+        """Get existing session data or create new session data structure.
+        
+        This helper method consolidates the logic for loading session files,
+        handling potential JSON decode errors, and creating new session data
+        if the file doesn't exist or is corrupted.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            Dictionary containing session data
+        """
+        session_file = self._get_session_file(session_id)
+        
+        # Try to load existing session data
+        if session_file.exists():
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                logger.warning(f"Corrupted session file {session_file}, creating new")
+        
+        # Create new session data if file doesn't exist or is corrupted
+        return self._create_new_session_data(session_id)
+
     def save_message(self, session_id: str, message: ChatMessage) -> None:
         """Save a message to the session file.
         
@@ -66,16 +92,8 @@ class SessionStorageService:
         session_file = self._get_session_file(session_id)
         
         try:
-            # Load existing session data or create new
-            if session_file.exists():
-                try:
-                    with open(session_file, "r") as f:
-                        session_data = json.load(f)
-                except json.JSONDecodeError:
-                    logger.warning(f"Corrupted session file {session_file}, creating new")
-                    session_data = self._create_new_session_data(session_id)
-            else:
-                session_data = self._create_new_session_data(session_id)
+            # Use helper method to get/create session data
+            session_data = self._get_or_create_session_data(session_id)
             
             # Check for duplicate messages to prevent corruption
             message_dict = message.model_dump(mode="json")
@@ -111,16 +129,8 @@ class SessionStorageService:
         session_file = self._get_session_file(session_id)
 
         try:
-            # Load existing session data or create new
-            if session_file.exists():
-                try:
-                    with open(session_file, "r", encoding="utf-8") as f:
-                        session_data = json.load(f)
-                except json.JSONDecodeError:
-                    logger.warning(f"Corrupted session file {session_file}, creating new")
-                    session_data = self._create_new_session_data(session_id)
-            else:
-                session_data = self._create_new_session_data(session_id)
+            # Use helper method to get/create session data
+            session_data = self._get_or_create_session_data(session_id)
 
             # Update parameters and activity
             session_data["parameters"] = parameters
@@ -146,16 +156,8 @@ class SessionStorageService:
         session_file = self._get_session_file(session_id)
 
         try:
-            # Load existing session data or create new
-            if session_file.exists():
-                try:
-                    with open(session_file, "r", encoding="utf-8") as f:
-                        session_data = json.load(f)
-                except json.JSONDecodeError:
-                    logger.warning(f"Corrupted session file {session_file}, creating new")
-                    session_data = self._create_new_session_data(session_id)
-            else:
-                session_data = self._create_new_session_data(session_id)
+            # Use helper method to get/create session data
+            session_data = self._get_or_create_session_data(session_id)
 
             # Update flow status and activity
             session_data["flow_status"] = status
@@ -409,3 +411,99 @@ class SessionStorageService:
         sessions.sort(key=lambda x: x.get("last_updated", ""), reverse=True)
 
         return sessions
+
+    def archive_to_gcs(self, session_id: str) -> bool:
+        """Archive a session to GCS if BM is configured with a GCS save_dir.
+        
+        Args:
+            session_id: The session identifier to archive
+            
+        Returns:
+            bool: True if archival was successful, False otherwise
+        """
+        try:
+            # Check if session exists
+            if not self.session_exists(session_id):
+                logger.warning(f"Cannot archive non-existent session: {session_id}")
+                return False
+                
+            # Try to get BM instance to access save_dir
+            try:
+                from buttermilk._core.dmrc import get_bm
+                bm = get_bm()
+                
+                # Check if save_dir is configured and points to GCS
+                if not bm.run_info.save_dir:
+                    logger.debug(f"No save_dir configured, skipping GCS archival for session {session_id}")
+                    return False
+                    
+                if not bm.run_info.save_dir.startswith(("gs://", "gcs://")):
+                    logger.debug(f"save_dir is not GCS path, skipping archival for session {session_id}")
+                    return False
+                    
+            except Exception as e:
+                logger.warning(f"Could not access BM instance for session archival: {e}")
+                return False
+            
+            # Get session data
+            session_data = self._get_or_create_session_data(session_id)
+            
+            # Add archival metadata
+            session_data["archived_at"] = datetime.now().isoformat()
+            session_data["archived_from"] = str(self._get_session_file(session_id))
+            
+            # Use BM's save method to archive to GCS
+            archive_filename = f"session_{session_id}_archived.json"
+            saved_path = bm.save(
+                data=session_data,
+                basename=f"sessions/{archive_filename}",
+                extension="",  # Already included in basename
+            )
+            
+            if saved_path:
+                logger.info(f"Successfully archived session {session_id} to GCS: {saved_path}")
+                return True
+            else:
+                logger.error(f"Failed to archive session {session_id} to GCS")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error archiving session {session_id} to GCS: {e}")
+            return False
+
+    def finalize_session(self, session_id: str, final_status: str) -> None:
+        """Finalize a session and optionally archive it to GCS.
+        
+        This method should be called when a session reaches a terminal state
+        (completed, failed, etc.). It updates the final status and archives
+        the session to GCS if configured.
+        
+        Args:
+            session_id: The session identifier
+            final_status: Final session status (completed, failed, etc.)
+        """
+        try:
+            # Update the session with final status and completion time
+            session_data = self._get_or_create_session_data(session_id)
+            session_data["flow_status"] = final_status
+            session_data["completed_at"] = datetime.now().isoformat()
+            session_data["last_updated"] = datetime.now().isoformat()
+            session_data["last_activity"] = datetime.now().isoformat()
+            
+            # Write the finalized session data
+            session_file = self._get_session_file(session_id)
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, indent=2)
+            
+            logger.info(f"Finalized session {session_id} with status '{final_status}'")
+            
+            # Archive to GCS if configured
+            if final_status in ["completed", "failed"]:
+                archive_success = self.archive_to_gcs(session_id)
+                if archive_success:
+                    logger.info(f"Session {session_id} archived to GCS after finalization")
+                else:
+                    logger.debug(f"Session {session_id} not archived (GCS not configured or archival failed)")
+                    
+        except Exception as e:
+            logger.error(f"Error finalizing session {session_id}: {e}")
