@@ -111,5 +111,5 @@ export function logBackendStatus(context: string, available: boolean): void {
 	} else {
 		const error = getBackendError();
 		console.log(`${context}: Backend unavailable${error ? ` (${error})` : ''}`);
-	}
+		console.warn(`${context}: Backend unavailable${error ? ` (${error})` : ''}`);
 }
