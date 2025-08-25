@@ -448,20 +448,10 @@ class BM(BaseModel):
         can be properly handled. It constructs the full save directory path and
         stores it in run_info.save_dir.
         """
-        try:
-            # Construct full save directory path (now that cloud auth is complete)
-            save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
-            self.run_info.save_dir = str(save_dir_path)  # Store as string in SessionInfo
-            logger.debug(f"Finalized save_dir: {self.run_info.save_dir}")
-        except Exception as e:
-            # Fallback to temporary directory if save_dir construction fails
-            from tempfile import mkdtemp
-            fallback_dir = mkdtemp()
-            self.run_info.save_dir = fallback_dir
-            logger.warning(
-                f"Failed to construct save_dir from base '{self.save_dir_base}': {e}. "
-                f"Using temporary directory: {fallback_dir}"
-            )
+        # Construct full save directory path (now that cloud auth is complete)
+        save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
+        self.run_info.save_dir = str(save_dir_path)
+        logger.debug(f"Finalized save_dir: {self.run_info.save_dir}")
 
     async def ensure_initialized(self) -> None:
         """Ensure that BM initialization is complete before proceeding.
@@ -484,26 +474,17 @@ class BM(BaseModel):
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
-        try:
-            # Check if save_dir has been finalized yet
-            if not self.run_info.save_dir:
-                logger.debug("save_dir not yet finalized, skipping initial config save")
-                return
-                
-            # Data to save: BM config and run_info
-            config_data_to_save = [
-                self.model_dump(exclude_none=True),  # Current BM instance config
-                self.run_info.model_dump(exclude_none=True),  # Current run_info
-            ]
-            self.save(  # Use the instance's save method
-                data=config_data_to_save,
-                basename="initial_bm_config",  # More descriptive basename
-                extension=".json",
-                # save_dir is implicitly self.run_info.save_dir if not provided to self.save
-            )
-            logger.debug("Initial BM config saved successfully")
-        except Exception as e:
-            logger.error(f"Could not save initial BM config to default save directory: {e!s}")
+        # Data to save: BM config and run_info
+        config_data_to_save = [
+            self.model_dump(exclude_none=True),
+            self.run_info.model_dump(exclude_none=True),
+        ]
+        self.save(
+            data=config_data_to_save,
+            basename="initial_bm_config",
+            extension=".json",
+        )
+        logger.debug("Initial BM config saved successfully")
 
     @cached_property
     def cloud_manager(self) -> CloudManager:

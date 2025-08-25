@@ -472,15 +472,14 @@ class SessionStorageService:
             return False
 
     def finalize_session(self, session_id: str, final_status: str) -> None:
-        """Finalize a session and optionally archive it to GCS.
+        """Finalize a session and archive it to GCS.
         
-        This method should be called when a session reaches a terminal state
-        (completed, failed, etc.). It updates the final status and archives
-        the session to GCS if configured.
+        Called when a session reaches a terminal state (completed/failed).
+        Updates the session with completion metadata and archives to GCS if configured.
         
         Args:
             session_id: The session identifier
-            final_status: Final session status (completed, failed, etc.)
+            final_status: Final session status (completed or failed)
         """
         try:
             # Update the session with final status and completion time
@@ -497,13 +496,12 @@ class SessionStorageService:
             
             logger.info(f"Finalized session {session_id} with status '{final_status}'")
             
-            # Archive to GCS if configured
-            if final_status in ["completed", "failed"]:
-                archive_success = self.archive_to_gcs(session_id)
-                if archive_success:
-                    logger.info(f"Session {session_id} archived to GCS after finalization")
-                else:
-                    logger.debug(f"Session {session_id} not archived (GCS not configured or archival failed)")
+            # Always attempt archival for terminal states
+            archive_success = self.archive_to_gcs(session_id)
+            if archive_success:
+                logger.info(f"Session {session_id} archived to GCS after finalization")
+            else:
+                logger.debug(f"Session {session_id} not archived (GCS not configured or archival failed)")
                     
         except Exception as e:
             logger.error(f"Error finalizing session {session_id}: {e}")

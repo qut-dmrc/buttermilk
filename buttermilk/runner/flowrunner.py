@@ -557,28 +557,17 @@ class SessionManager:
         try:
             storage_service = SessionStorageService()
             
-            # Map session status to flow status
-            flow_status_map = {
-                SessionStatus.COMPLETED: "completed",
-                SessionStatus.ERROR: "failed",
-                SessionStatus.FAILED: "failed",  # Legacy support
-                SessionStatus.TERMINATED: "completed",
-                SessionStatus.EXPIRED: "failed",
-            }
-            
-            if new_status in flow_status_map:
-                flow_status = flow_status_map[new_status]
-                
-                # For terminal states, use finalize_session instead of update_flow_status
-                if flow_status in ["completed", "failed"]:
-                    storage_service.finalize_session(session_id, flow_status)
-                    logger.debug(f"Finalized session {session_id} with status '{flow_status}'")
-                else:
-                    storage_service.update_flow_status(session_id, flow_status)
-                    logger.debug(f"Updated flow status to '{flow_status}' for session {session_id}")
+            # Terminal states - finalize with archival
+            if new_status in {SessionStatus.COMPLETED, SessionStatus.TERMINATED}:
+                storage_service.finalize_session(session_id, "completed")
+            elif new_status in {SessionStatus.ERROR, SessionStatus.FAILED, SessionStatus.EXPIRED}:
+                storage_service.finalize_session(session_id, "failed")
+            else:
+                # Non-terminal states - just update status
+                storage_service.update_flow_status(session_id, "running")
                 
         except Exception as e:
-            logger.warning(f"Failed to update session storage flow status for {session_id}: {e}")
+            logger.warning(f"Failed to update session storage for {session_id}: {e}")
         
         return True
 

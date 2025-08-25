@@ -414,8 +414,8 @@ class TestSessionGCSArchival:
             # Verify archival was attempted
             mock_bm.save.assert_called_once()
 
-    def test_finalize_session_no_archival_for_non_terminal(self, storage_service):
-        """Test that non-terminal statuses don't trigger archival."""
+    def test_finalize_session_always_attempts_archival(self, storage_service):
+        """Test that finalize_session always attempts archival for terminal states."""
         session_id = "test-session"
         
         # Create a test session
@@ -424,13 +424,15 @@ class TestSessionGCSArchival:
         # Mock BM
         mock_bm = MagicMock()
         mock_bm.run_info.save_dir = "gs://my-bucket/sessions"
+        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
         
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
-            storage_service.finalize_session(session_id, "running")
+            storage_service.finalize_session(session_id, "failed")
             
-            # Verify session data was updated but no archival attempted
+            # Verify session data was updated
             session_data = storage_service._get_or_create_session_data(session_id)
-            assert session_data["flow_status"] == "running"
+            assert session_data["flow_status"] == "failed"
+            assert "completed_at" in session_data
             
-            # Verify no save was called (no archival)
-            mock_bm.save.assert_not_called()
+            # Verify archival was attempted even for failed status
+            mock_bm.save.assert_called_once()
