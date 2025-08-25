@@ -1,33 +1,46 @@
 import { json } from '@sveltejs/kit';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
+import { checkBackendHealth, logBackendStatus } from '$lib/utils/backendUtils';
 
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, fetch }) => {
   const { sessionId } = params;
   
   // Get backend URL from environment
-  const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+  const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
   
-  try {
-    // Try to forward request to backend first
-    const backendResponse = await fetch(`${backendUrl}/api/session/${sessionId}/messages`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(3000) // 3 second timeout
-    });
+  // Check if backend is available using centralized health check
+  const isBackendHealthy = await checkBackendHealth(true, fetch);
+  logBackendStatus('API messages endpoint', isBackendHealthy);
+  
+  if (isBackendHealthy) {
+    try {
+      // Backend is available, try to get the actual messages
+      const backendResponse = await fetch(`${backendUrl}/api/session/${sessionId}/messages`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(3000) // 3 second timeout
+      });
     
-    if (backendResponse.ok) {
-      const data = await backendResponse.json();
-      return json(data);
+      if (backendResponse.ok) {
+        const data = await backendResponse.json();
+        return json(data);
+      }
+    
+      console.log(`Backend unavailable (${backendResponse.status}), falling back to file system`);
+    
+    } catch (error) {
+      // Log backend connection errors concisely - these are expected in development
+      if (error instanceof Error && error.message.includes('fetch failed')) {
+        console.log('Backend unavailable, falling back to file system');
+      } else {
+        console.log('Backend unavailable, falling back to file system:', error);
+      }
     }
-    
-    console.log(`Backend unavailable (${backendResponse.status}), falling back to file system`);
-    
-  } catch (error) {
-    console.log('Backend unavailable, falling back to file system:', error);
   }
   
   // Fallback: Read directly from file system (demo mode)
@@ -53,7 +66,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
     return json(response);
     
   } catch (fileError) {
-    console.error('Error reading session file:', fileError);
+    // Log file errors concisely - ENOENT is expected for non-existent sessions
+    if (fileError instanceof Error && 'code' in fileError && fileError.code === 'ENOENT') {
+      console.log(`Session file not found: ${sessionId}.json`);
+    } else {
+      console.error('Error reading session file:', fileError);
+    }
     return json(
       { error: 'Session not found' }, 
       { status: 404 }
