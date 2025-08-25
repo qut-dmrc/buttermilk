@@ -787,11 +787,9 @@
 			{/if}
 		</div>
 		<div class="status-right">
-			{#if !isResumable}
-				<button class="text-button" onclick={() => (window.location.href = '/terminal')}>
-					[ new session ]
-				</button>
-			{/if}
+			<button class="text-button" onclick={() => (window.location.href = '/terminal')}>
+				[ new session ]
+			</button>
 		</div>
 	</div>
 
