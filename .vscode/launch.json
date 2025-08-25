@@ -187,6 +187,7 @@
       "options": [
         "debug",
         "lite",
+        "expensive",
         "full"
       ],
       "default": "debug"

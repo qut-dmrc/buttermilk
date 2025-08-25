@@ -79,9 +79,6 @@ class JudgeReasons(Reasons):
             uncertainty or confidence in the prediction and conclusion.
             "high" uncertainty means there's significant room for reasonable
             minds to differ.
-        preview (str): A computed property that returns a short, emoji-enhanced
-            preview string of the evaluation, summarizing the conclusion,
-            prediction (with an icon), and uncertainty level.
 
     """
 

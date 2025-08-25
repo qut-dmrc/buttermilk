@@ -1,0 +1,13 @@
+host: gemini25pro
+
+general:
+  - gemini25pro
+  - opus
+
+judgers:
+  - gemini25pro
+  - opus
+
+synthesisers:
+  - gemini25pro
+  - opus

@@ -13,7 +13,7 @@ defaults:
   - /agents@trans.observers: 
     - spy
     - owl
-    - scorer
+    # - scorer
     - host/sequence_host
   # Criteria for this specific flow
   - /flows/criteria@trans.parameters.criteria: trans
