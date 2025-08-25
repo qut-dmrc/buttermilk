@@ -439,17 +439,6 @@
 	background-color: #aa0000;
 }
 
-/* Token usage display */
-.token-usage {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	margin-left: 20px;
-	font-size: 12px;
-	color: #8a8a8a;
-	opacity: 0.8;
-}
-
 .token-count {
 	color: #7a9fbf;
 }
@@ -531,6 +520,20 @@
 	display: flex;
 	align-items: center;
 	gap: 1rem;
+}
+
+.status-right {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+/* Token usage display */
+.token-usage {
+	margin-left: 20px;
+	font-size: 12px;
+	color: #8a8a8a;
+	opacity: 0.8;
 }
 
 .session-info {

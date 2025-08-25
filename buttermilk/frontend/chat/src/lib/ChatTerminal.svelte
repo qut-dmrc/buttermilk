@@ -787,9 +787,18 @@
 			{/if}
 		</div>
 		<div class="status-right">
-			<button class="text-button" onclick={() => (window.location.href = '/terminal')}>
-				[ new session ]
-			</button>
+			<!-- Token usage display -->
+			{#if $tokenUsageDisplay.messageCount > 0}
+			<div class="token-usage">
+				<span class="token-count">{$tokenUsageDisplay.totalTokens} tokens</span>
+				<span class="token-cost">{$tokenUsageDisplay.cost}</span>
+			</div>
+			{/if}
+			<div>
+				<button class="text-button" onclick={() => (window.location.href = '/terminal')}>
+					[ new session ]
+				</button>
+			</div>
 		</div>
 	</div>
 

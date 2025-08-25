@@ -2,8 +2,8 @@
 // $h1-font-size: 3rem;
 
 $navbar-nav-link-padding-x: 3rem;
-$navbar-brand-font-size: 1.5rem;
-$nav-link-font-size: 1.7rem;
+$navbar-brand-font-size: 1.3rem;
+$nav-link-font-size: 1.3rem;
 
 body {
 	text-shadow: none;
@@ -56,19 +56,19 @@ h6 a {
 		font-size: $nav-link-font-size;
 		color: rgb(243, 229, 0);
 		text-shadow: 2px -2px 1px rgba(214, 51, 132, 0.921), -4px 4px 3rem rgba(214, 51, 132, 0.8);
-	
+		text-transform: lowercase;
 	}
 	.glitch {
-		text-decoration: line-through rgba(26, 11, 53, 0.709) solid 0.1rem;
+		text-decoration: line-through rgba(26, 11, 53, 0.709) solid 0.2rem;
 		text-decoration-color: rgba(26, 11, 53, 0.7);
 		text-decoration-line: line-through;
 		text-decoration-style: solid;
 		text-decoration-thickness: 3.2px;
 		text-shadow: rgba(214, 51, 132, 0.92) 2px -2px 1px, rgba(214, 51, 132, 0.8) -4px 4px 48px;
 		text-size-adjust: 100%;
-		&:hover {
-			//transform: translate(.4rem, -.2rem);
-		}
+		// &:hover {
+		// 	transform: translate(.4rem, -.2rem);
+		// }
 	}
 }
 
