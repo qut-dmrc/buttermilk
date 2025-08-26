@@ -1,6 +1,5 @@
-import buttermilk._core.dmrc as DMRC
-
 from .bm_init import BM as BM
+from .dmrc import get_bm, set_bm
 from .config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from .contract import (
     AgentInput as AgentInput,
@@ -22,7 +21,8 @@ from .log import logger as logger
 
 ALL = [
     "BM",
-    "DMRC",
+    "get_bm",
+    "set_bm",
     "logger",
     "AgentConfig",
     "AgentVariants",

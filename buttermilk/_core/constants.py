@@ -9,7 +9,7 @@ standardized agent roles, and special symbols or states recognized by the framew
 from pathlib import Path
 
 """The absolute directory of the package."""
-BASE_DIR = Path(__file__).parent.parent.parent.absolute()
+BASE_DIR = Path(__file__).parent.parent.absolute()
 
 """Configuration directory for Buttermilk.
 This directory contains configuration files and settings used by the Buttermilk framework."""

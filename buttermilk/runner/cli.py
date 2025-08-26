@@ -37,7 +37,7 @@ from buttermilk.api.flow import create_app as create_fastapi_app
 from buttermilk.runner.flowrunner import FlowRunner
 
 
-@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
+@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(conf: DictConfig) -> None:
     """Main application entry point, configured and launched by Hydra.
 

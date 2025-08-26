@@ -1,15 +1,14 @@
-# Import silence_logs early to suppress noisy log messages - conditional to avoid circular imports
-try:
-    from buttermilk.utils.silence_logs import silence_task_logs
-    # Suppress logs as early as possible during import
-    silence_task_logs()
-except ImportError:
-    # If we can't import silence_task_logs, create a no-op function
-    def silence_task_logs():
-        pass
+# # Import silence_logs early to suppress noisy log messages - conditional to avoid circular imports
+# try:
+#     from buttermilk.utils.silence_logs import silence_task_logs
+#     # Suppress logs as early as possible during import
+#     silence_task_logs()
+# except ImportError:
+#     # If we can't import silence_task_logs, create a no-op function
+#     def silence_task_logs():
+#         pass
 
-from buttermilk._core.dmrc import get_bm, set_bm
-
+from ._core.dmrc import get_bm, set_bm
 from ._core.bm_init import BM
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.log import logger
@@ -33,7 +32,7 @@ class BMAccessor:
 
 
 # Create a singleton accessor
-buttermilk = BMAccessor()
+bm = BMAccessor()
 
 __all__ = [
     "BASE_DIR",
@@ -41,7 +40,7 @@ __all__ = [
     "BQ_SCHEMA_DIR",
     "COL_PREDICTION",
     "TEMPLATES_PATH",
-    "buttermilk",         # Export the singleton accessor
+    "bm",         # Export the singleton accessor
     "get_bm",             # Export the getter function
     "get_buttermilk_instance",  # Export the alias for get_bm
     "logger",
