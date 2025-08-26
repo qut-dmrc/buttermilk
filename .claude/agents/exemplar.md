@@ -47,7 +47,7 @@ These tests demonstrate how to use {feature} and ensure
 the examples in our documentation remain accurate.
 """
 import pytest
-from buttermilk import buttermilk as bm
+from buttermilk import bm, get_bm
 # Import what you're demonstrating
 
 

@@ -55,7 +55,7 @@ from tenacity import (  # Retry library components
     wait_exponential_jitter,
 )
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance for saving
+from buttermilk import bm, logger  # Global Buttermilk instance for saving
 from buttermilk._core.agent import Agent  # Buttermilk base Agent class
 from buttermilk._core.exceptions import FatalError, RateLimit  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger

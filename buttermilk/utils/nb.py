@@ -14,9 +14,11 @@ import pydantic
 import seaborn as sns
 from cmap import Colormap
 from rich.console import Console
+from IPython.display import display
+from rich import print
 
 from buttermilk._core import (
-    dmrc as DMRC, BM, get_bm, set_bm, logger # noqa
+    dmrc as DMRC, BM, bm, get_bm, set_bm, logger # noqa
 )
 
 console = Console()

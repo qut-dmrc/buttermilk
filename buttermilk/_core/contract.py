@@ -255,8 +255,9 @@ def _get_run_info() -> Any:
 
     """
     try:
-        from buttermilk import buttermilk as bm
+        from buttermilk import get_bm
 
+        bm = get_bm()
         return bm.run_info
     except ImportError:
         logger.warning("Buttermilk global instance (bm) not available to get run_info.")

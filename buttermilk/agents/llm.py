@@ -20,7 +20,7 @@ from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import buttermilk as bm, logger
+from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError

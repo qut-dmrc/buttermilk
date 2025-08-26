@@ -19,7 +19,7 @@ import regex as re  # Regular expression operations
 from autogen_core import CancellationToken  # Buttermilk base agent and types
 from autogen_core.tools import FunctionTool  # Autogen's FunctionTool for LLM integration
 
-from buttermilk import buttermilk as bm
+from buttermilk import bm, logger, get_bm
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.config import ToolConfig  # Base class for tool configurations
 from buttermilk._core.contract import (  # Buttermilk message contracts

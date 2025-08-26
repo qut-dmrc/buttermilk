@@ -15,6 +15,7 @@ import pydantic
 from google.cloud.pubsub import PublisherClient, SubscriberClient
 from pydantic import BaseModel, PrivateAttr
 
+from buttermilk import bm, logger
 from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
@@ -44,17 +45,16 @@ class JobQueueClient(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
-        from buttermilk import buttermilk
         self._jobs_subscription_path = self._subscriber.subscription_path(
-            buttermilk.pubsub.project,
-            buttermilk.pubsub.jobs_subscription,
+            bm.pubsub.project,
+            bm.pubsub.jobs_subscription,
         )
         self._status_subscription_path = self._subscriber.subscription_path(
-            buttermilk.pubsub.project,
-            buttermilk.pubsub.status_subscription,
+            bm.pubsub.project,
+            bm.pubsub.status_subscription,
         )
-        self._status_topic_path = self._subscriber.topic_path(buttermilk.pubsub.project, buttermilk.pubsub.status_topic)
-        self._jobs_topic_path = self._publisher.topic_path(buttermilk.pubsub.project, buttermilk.pubsub.jobs_topic)
+        self._status_topic_path = self._subscriber.topic_path(bm.pubsub.project, bm.pubsub.status_topic)
+        self._jobs_topic_path = self._publisher.topic_path(bm.pubsub.project, bm.pubsub.jobs_topic)
 
         return self
 

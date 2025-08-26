@@ -38,7 +38,7 @@ from PIL import Image  # Pillow library for image manipulation
 from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance for accessing config/credentials
+from buttermilk import bm, logger, get_bm  # Global Buttermilk instance for accessing config/credentials
 from buttermilk._core.image import ImageRecord, google_genai_image_to_pil, read_image  # Buttermilk ImageRecord model
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
@@ -62,6 +62,7 @@ class TextToImageClient(RetryWrapper):
         prefix (str): A short prefix string used for naming generated image files,
             helping to identify which model created them.
     """
+
     client: object = Field(default=None, description="The underlying API client object for the image generation service.")
     model: str = Field(
         ...,  # Ellipsis indicates a required field
@@ -104,22 +105,20 @@ class TextToImageClient(RetryWrapper):
             information if generation failed.
         """
         final_save_path = save_path
+        bm = get_bm()
         if not final_save_path:
             # Ensure bm.run_info.save_dir is available and valid
-            if (
-                not bm.run_info.save_dir or not Path(bm.run_info.save_dir).is_dir()
-            ):  # Check if local dir, cloud paths need different check
+            if not bm.run_info.save_dir or not Path(bm.run_info.save_dir).is_dir():  # Check if local dir, cloud paths need different check
                 # Fallback if bm.run_info.save_dir is not set or invalid, consider a temporary directory
                 import tempfile
+
                 temp_dir = tempfile.mkdtemp()
                 logger.warning(f"bm.run_info.save_dir not available or invalid, using temporary directory: {temp_dir}")
                 final_save_path = f"{temp_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
             else:
                 final_save_path = f"{bm.run_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
 
-        log_msg_parts = [
-            f"Generating image with {self.model} using prompt: ```{text}```"
-        ]
+        log_msg_parts = [f"Generating image with {self.model} using prompt: ```{text}```"]
         if negative_prompt:
             log_msg_parts.append(f", negative prompt: ```{negative_prompt}```")
         log_msg_parts.append(f", saving to `{final_save_path}`")
@@ -271,6 +270,7 @@ class VertexImagegenModels(TextToImageClient):
 
         config = GenerateImagesConfig(**generation_params)
 
+        bm = get_bm()
         client = bm.genai  # Ensure that we have initialised the genai client
 
         api_response = await client.aio.models.generate_images(model=self.model, prompt=text, config=config)
@@ -336,6 +336,7 @@ class SD35Large(TextToImageClient):
             **kwargs,  # Allow overrides and additional params
         }
 
+        bm = get_bm()
         azure_url = bm.credentials.get("AZURE_STABILITY35_URL")
         azure_api_key = bm.credentials.get("AZURE_STABILITY35_API_KEY")
 
@@ -584,6 +585,7 @@ class SDXLReplicate(TextToImageClient):
         prefix (str): File prefix defaults to "sdxl_replicate_".
         image_params (dict[str, Any]): Default parameters for the Replicate SDXL API call.
     """
+
     model: str = "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc"
     prefix: str = "sdxl_replicate_"
     image_params: dict[str, Any] = Field(
@@ -666,6 +668,7 @@ class SD(TextToImageClient):
         prefix (str): File prefix defaults to "sd21_".
         image_params (dict[str, Any]): Default parameters for the Replicate API call.
     """
+
     model: str = "stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4"
     prefix: str = "sd21_"
     image_params: dict[str, Any] = Field(
@@ -743,6 +746,7 @@ class DALLE(TextToImageClient):
         model (str): Defaults to "dall-e-3".
         prefix (str): File prefix defaults to "dalle3_".
     """
+
     model: str = "dall-e-3"
     prefix: str = "dalle3_"
     # Client will be initialized in generate_image if None
@@ -777,6 +781,7 @@ class DALLE(TextToImageClient):
             KeyError: If `OPENAI_API_KEY` is not in `bm.credentials`.
             RuntimeError: If the OpenAI API call fails or returns unexpected data.
         """
+        bm = get_bm()
         if self.client is None or not isinstance(self.client, AsyncOpenAI):
             openai_api_key = bm.credentials.get("OPENAI_API_KEY")
             if not openai_api_key:
@@ -895,20 +900,18 @@ class BatchImageGenerator(BaseModel):
             RuntimeError: If `bm.run_info.save_dir` is not available when `v` is None.
         """
         if v is None:
+            bm = get_bm()
             if bm.run_info.save_dir:
                 return (
                     CloudPath(bm.run_info.save_dir)
-                    if isinstance(bm.run_info.save_dir, str)
-                    and bm.run_info.save_dir.startswith(("gs://", "s3://", "az://"))
+                    if isinstance(bm.run_info.save_dir, str) and bm.run_info.save_dir.startswith(("gs://", "s3://", "az://"))
                     else Path(bm.run_info.save_dir)
                 )  # type: ignore
             else:
                 # Fallback to a temporary directory if bm.run_info.save_dir is also None
                 # This ensures save_path is always set.
                 temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
-                logger.warning(
-                    f"No save_path provided and bm.run_info.save_dir not set. Defaulting to temporary directory: {temp_dir}"
-                )
+                logger.warning(f"No save_path provided and bm.run_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
                 return temp_dir
         if isinstance(v, str):
             return CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)
@@ -1026,9 +1029,7 @@ class BatchImageGenerator(BaseModel):
                 if image_result and image_result.image and image_result.uri:  # Successfully generated and saved
                     generated_records_summary.append(
                         {
-                            "prompt_id": image_result.parameters.get(
-                                "id", "unknown_id_in_params"
-                            ),  # Try to get ID from params if set
+                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),  # Try to get ID from params if set
                             "original_prompt": image_result.prompt,
                             "negative_prompt": image_result.negative_prompt,
                             "model_used": image_result.model,

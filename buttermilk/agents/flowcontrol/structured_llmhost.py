@@ -11,7 +11,7 @@ from autogen_core import CancellationToken, FunctionCall, MessageContext, messag
 from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 
-from buttermilk import buttermilk as bm
+from buttermilk import bm, logger, get_bm
 from buttermilk._core import AgentInput, StepRequest, logger
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER

@@ -96,7 +96,7 @@ class CloudProviderCfg(BaseModel):
 
 class LoggerConfig(CloudProviderCfg):
     """Specialized cloud provider configuration for logging with strict validation.
-    
+
     This extends CloudProviderCfg with specific validation requirements
     for logging configurations, which need both project and location for GCP.
     """
@@ -114,16 +114,14 @@ class LoggerConfig(CloudProviderCfg):
             if missing_fields:
                 fields_str = ", ".join(missing_fields)
                 raise ValueError(
-                    f"GCP logger configuration requires these fields: {fields_str}. "
-                    f"Please ensure your logger_cfg includes all required fields.",
+                    f"GCP logger configuration requires these fields: {fields_str}. Please ensure your logger_cfg includes all required fields.",
                 )
         elif self.type == "local":
             # Local logging has no requirements
             pass
         else:
             raise ValueError(
-                f"Unsupported logger type: '{self.type}'. "
-                f"Supported logger types are: 'gcp', 'local'",
+                f"Unsupported logger type: '{self.type}'. Supported logger types are: 'gcp', 'local'",
             )
 
         return self
@@ -151,12 +149,10 @@ class SaveInfo(CloudProviderCfg):
 
     destination: str | cloudpathlib.AnyPath | None = Field(
         default=None,
-        description="Full path or identifier for the save location (e.g., file path, "
-                    "BigQuery table ID `project.dataset.table`, GCS URI).",
+        description="Full path or identifier for the save location (e.g., file path, BigQuery table ID `project.dataset.table`, GCS URI).",
     )
     db_schema: str = Field(
-        description="Local name or path to a schema file (e.g., JSON for BigQuery schema). "
-                    "Resolved relative to BQ_SCHEMA_DIR if not absolute.",
+        description="Local name or path to a schema file (e.g., JSON for BigQuery schema). Resolved relative to BQ_SCHEMA_DIR if not absolute.",
     )
     dataset: str | None = Field(
         default=None,
@@ -228,8 +224,6 @@ class SaveInfo(CloudProviderCfg):
 
         """
         if not self._loaded_schema:
-            from buttermilk import buttermilk as bm  # Lazy import to avoid circular deps
-
             # Ensure bm.bq is available; it might not be if only core is used.
             if not hasattr(bm, "bq") or bm.bq is None:
                 logger.error("BigQuery client (bm.bq) not initialized. Cannot load schema.")
@@ -247,9 +241,9 @@ class SaveInfo(CloudProviderCfg):
 
 class DataSourceConfig(BaseModel):
     """Configuration for defining a data source for agents or other components.
-    
+
     **DEPRECATED**: This class is deprecated and will be removed in a future version.
-    Use BaseStorageConfig and its type-specific subclasses (VectorStorageConfig, 
+    Use BaseStorageConfig and its type-specific subclasses (VectorStorageConfig,
     BigQueryStorageConfig, etc.) from buttermilk._core.storage_config instead.
 
     Specifies the type of data source, path or query details, filtering,
@@ -324,10 +318,12 @@ class DataSourceConfig(BaseModel):
         description="Configuration for joining with other data sources.",
     )
     index: list[str] | None = Field(
-        default=None, description="Columns to use as an index.",
+        default=None,
+        description="Columns to use as an index.",
     )
     agg: bool | None = Field(
-        default=False, description="Whether to aggregate results.",
+        default=False,
+        description="Whether to aggregate results.",
     )
     group: Mapping[str, str] | None = Field(
         default_factory=dict,
@@ -385,10 +381,12 @@ class DataSourceConfig(BaseModel):
         description="Directory for persisting data (for 'chromadb' or file-based vector stores).",
     )
     collection_name: str = Field(
-        default="", description="Name of the collection for 'chromadb'.",
+        default="",
+        description="Name of the collection for 'chromadb'.",
     )
     name: str = Field(
-        default="", description="Name/subset for HuggingFace datasets.",
+        default="",
+        description="Name/subset for HuggingFace datasets.",
     )
     split: str = Field(
         default="train",
@@ -406,6 +404,7 @@ class DataSourceConfig(BaseModel):
     def __init__(self, **data):
         """Initialize DataSourceConfig with deprecation warning."""
         import warnings
+
         warnings.warn(
             "DataSourceConfig is deprecated and will be removed in a future version. "
             "Use BaseStorageConfig and its type-specific subclasses from "
@@ -585,7 +584,8 @@ class Tracing(BaseModel):
     provider: str = Field(default="", description="Name of the tracing provider (e.g., 'langfuse', 'weave').")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
     otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
-        default_factory=dict, description="Optional OTLP headers for providers supporting it.",
+        default_factory=dict,
+        description="Optional OTLP headers for providers supporting it.",
     )
 
 
@@ -656,9 +656,7 @@ class AgentConfig(BaseModel):
     )
 
     # Behavior & Connections
-    output_model: type[BaseModel] | None = Field(
-        default=None, description="Pydantic model for structured output parsing."
-    )
+    output_model: type[BaseModel] | None = Field(default=None, description="Pydantic model for structured output parsing.")
     tools: dict[str, Any] = Field(
         default_factory=dict,
         description="Configuration for tools (functions) that the agent can potentially use, keyed by tool name. Can be ToolConfig objects or direct tool instances.",
@@ -703,7 +701,10 @@ class AgentConfig(BaseModel):
 
     # Field Validators
     _validate_parameters = field_validator(
-        "parameters", "inputs", "outputs", "data",  # Added data
+        "parameters",
+        "inputs",
+        "outputs",
+        "data",  # Added data
         mode="before",
     )(convert_omegaconf_objects)
 
@@ -809,10 +810,10 @@ class AgentConfig(BaseModel):
 
     def get_display_name(self) -> str:
         """Get the display name for this agent.
-        
+
         Returns the agent_name which is consistently formatted across UIs.
         LLM agents may override this to include model information.
-        
+
         Returns:
             str: The display name for the agent
 
@@ -822,7 +823,7 @@ class AgentConfig(BaseModel):
 
 class AgentVariants(AgentConfig):
     """A factory for creating multiple `AgentConfig` instances (variants).
-     
+
     based on
     parameter combinations. This is useful for running experiments with different
     agent settings or for creating ensembles of agents.
@@ -917,7 +918,8 @@ class AgentVariants(AgentConfig):
                 "num_runs",
                 "extra_params",
                 # Also exclude fields that are part of AgentConfig's identity if they are recalculated
-                "agent_id", "_agent_name",
+                "agent_id",
+                "_agent_name",
                 # Keep 'parameters' to use as base, but it will be overwritten/merged
             },
             exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
@@ -934,7 +936,8 @@ class AgentVariants(AgentConfig):
             for key in self.extra_params:
                 if not hasattr(params, key) or getattr(params, key) is None:  # Check if param exists in RunRequest
                     raise ValueError(
-                        f"Required extra_param '{key}' not found or is None in RunRequest for agent variant '{self.agent_id or self.role}'.")
+                        f"Required extra_param '{key}' not found or is None in RunRequest for agent variant '{self.agent_id or self.role}'."
+                    )
                 base_parameters[key] = getattr(params, key)
 
         # Merge parameters from the RunRequest.parameters (user-provided overrides)
@@ -942,6 +945,7 @@ class AgentVariants(AgentConfig):
             base_parameters.update(clean_empty_values(params.parameters))
 
         from buttermilk._core.variants import AgentRegistry  # Lazy import
+
         try:
             agent_class = AgentRegistry.get(self.agent_obj)
             if agent_class is None:  # AgentRegistry.get might return None if not found and not raising
@@ -982,9 +986,7 @@ class AgentVariants(AgentConfig):
                     # This is safer than relying solely on AgentConfig.model_config['extra'] = 'ignore'
                     # if AgentConfig itself doesn't have 'extra':'allow' or if strictness is desired.
                     valid_agent_config_fields = AgentConfig.model_fields.keys()
-                    filtered_cfg_dict = {
-                        k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields
-                    }
+                    filtered_cfg_dict = {k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields}
 
                     # Ensure 'parameters' contains the final merged parameters
                     filtered_cfg_dict["parameters"] = final_params
@@ -993,15 +995,17 @@ class AgentVariants(AgentConfig):
                         agent_config_instance = AgentConfig(**filtered_cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(msg :=
-                            f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
+                        logger.error(
+                            msg := f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
                             f"with parameters {final_params}: {e}",
                         )
                         raise FatalError(msg) from e
 
         if not generated_configs:
-            logger.warning(f"No agent configurations were generated for AgentVariants: {self.agent_id or self.role}. "
-                           f"This might be due to empty 'variants' and 'tasks' with num_runs=0, or misconfiguration.")
+            logger.warning(
+                f"No agent configurations were generated for AgentVariants: {self.agent_id or self.role}. "
+                f"This might be due to empty 'variants' and 'tasks' with num_runs=0, or misconfiguration."
+            )
             # Depending on desired behavior, could raise FatalError or return empty list.
             # Current behavior: returns empty list, which might be handled by caller.
             # However, the original code raised FatalError, so let's keep that.

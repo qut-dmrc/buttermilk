@@ -33,7 +33,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance for framework access
+from buttermilk import bm, logger, get_bm  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
@@ -266,9 +266,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     logger.error(f"Invalid AgentVariants configuration for role '{role_upper}': {defn}. Error: {e}")
                     raise ValueError(f"Invalid AgentVariants config for role '{role_upper}'") from e
             else:
-                raise TypeError(
-                    f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants."
-                )
+                raise TypeError(f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants.")
         self.agents = validated_agents
         logger.debug(f"Agent roles validated: {list(self.agents.keys())}")
 
@@ -310,6 +308,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                             raise ValueError(f"Failed to create storage config for '{source_name}': {e}") from e
 
                     # Use unified storage system
+                    bm = get_bm()
                     storage = bm.get_storage(storage_config)
                     self._input_loaders[source_name] = storage
                     logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
@@ -343,6 +342,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         except Exception:
             inputs = {}
 
+        bm = get_bm()
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
@@ -378,6 +378,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             # Finish trace if it was created and a finisher is available
             if orchestrator_trace is not None:
                 try:
+                    bm = get_bm()
                     weave_client = await bm.get_weave_client()
                     if weave_client is not None and orchestrator_trace is not None:
                         weave_client.finish_call(orchestrator_trace, op=op)
@@ -436,8 +437,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             await self._setup(request=request)
             # --- Subclass implementation of the main execution loop goes here ---
             logger.warning(
-                f"Orchestrator subclass {self.__class__.__name__} did not fully override "
-                f"the _run method's execution loop. Only setup was called.",
+                f"Orchestrator subclass {self.__class__.__name__} did not fully override the _run method's execution loop. Only setup was called.",
             )
         except Exception as e:
             logger.exception(f"Error during orchestrator _run for '{self.name}': {e!s}")
@@ -502,9 +502,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 logger.error(msg)
                 raise FatalError(msg) from e
         else:
-            logger.info(
-                "No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list."
-            )
+            logger.info("No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list.")
 
     async def get_record_dataset(self, record_id: str) -> Record:
         """Retrieves a specific record by its ID from the configured data loaders.
@@ -598,9 +596,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         async def publish_callback(message: FlowMessage) -> None:
             """Default no-op publish callback. Subclasses should implement actual publishing logic."""
-            logger.debug(
-                f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}"
-            )
+            logger.debug(f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}")
             # In a real implementation, this would involve:
             # - Sending the message to connected UI clients (e.g., via WebSockets).
             # - Placing the message on a queue for other services.

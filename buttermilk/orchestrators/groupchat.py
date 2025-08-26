@@ -28,12 +28,7 @@ from autogen_core import (
 from opentelemetry.trace import NoOpTracerProvider
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from buttermilk import (
-    buttermilk as bm,  # Global Buttermilk instance
-)
-from buttermilk import (
-    logger,
-)
+from buttermilk import bm, logger, get_bm
 from buttermilk._core import (
     AllMessages,
     StepRequest,

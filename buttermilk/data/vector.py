@@ -24,12 +24,8 @@ from vertexai.language_models import (
     TextEmbeddingInput,
 )
 
-from buttermilk import (
-    buttermilk as bm,  # Global Buttermilk instance
-)
-from buttermilk import (
-    logger,
-)
+
+from buttermilk import bm, logger, get_bm
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
