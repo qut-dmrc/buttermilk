@@ -34,7 +34,7 @@ class Test00Setup:
 
     @pytest.mark.parametrize(
         ["table", "schema"],
-        [("prosocial-443205.testing.flow", "buttermilk/schemas/flow.json")],
+        [("prosocial-443205.testing.flow", "schemas/flow.json")],
     )
     def test_database(self, bm: BM, table, schema):
         """Delete and recreate the test table"""

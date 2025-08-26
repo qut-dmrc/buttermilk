@@ -112,7 +112,7 @@ dependencies = [
     "gql<4.0.0",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "fsspec<2025.0.0,>=2024.6.1",
     "gcsfs<2025.0.0,>=2024.6.1",
@@ -135,13 +135,11 @@ dev = [
     "anyio>=4.7.0",
     "pandas-stubs>=2.2.3.241126",
     "ipykernel>=6.29.5",
-    "buttermilk",
     "pytest-anyio>=0.0.0",
     "streamlit>=1.28.0",
     "plotly>=5.17.0",
     "altair>=5.0.0",
 ]
-pdf = []
 ml = [
     "torch>=2.5.1,<3.0.0",
     "evaluate<1.0.0,>=0.4.2",
@@ -154,11 +152,31 @@ ml = [
 ]
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["buttermilk"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["buttermilk*"]
+exclude = ["tests*", "*.tests*", "*.tests"]
+
+[tool.setuptools.package-data]
+buttermilk = [
+    "conf/**/*.yaml",
+    "conf/**/*.yml", 
+    "templates/**/*.jinja2",
+    "templates/**/*.json",
+    "templates/**/*.txt",
+    "templates/**/*.md",
+    "schemas/**/*.json",
+    "schemas/**/*.sql",
+    "toxicity/**/*.yaml",
+    "toxicity/**/*.txt",
+    "toxicity/**/*.jinja2"
+]
+
 
 [tool.mypy]
 python_version = "3.11"  # Specify your target Python version

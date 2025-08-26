@@ -5,7 +5,6 @@ from typing import Any
 
 # flake8: noqa
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from pathlib import Path
 import json
 import matplotlib.pyplot as plt
@@ -16,12 +15,10 @@ import seaborn as sns
 from cmap import Colormap
 from rich.console import Console
 
-from buttermilk import BM
 from buttermilk._core import (
-    dmrc as DMRC,  # noqa
+    dmrc as DMRC, BM, get_bm, set_bm, logger # noqa
 )
 
-from buttermilk._core.log import logger  # noqa
 console = Console()
 print = console.print
 
@@ -37,10 +34,13 @@ nest_asyncio.apply()
 # options can be passed in at initialization.
 def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     if not path:
-        # Must be absolute
-        path = os.getcwd() + "/conf"
+        # Must be absolute.Get the abs path of ../../conf from the current file
+        path = Path(__file__).parent.parent.resolve() / "conf"
+        path = path.as_posix()
 
-    overrides.append("run=notebook")
+        
+
+    overrides.append("+run=notebook")
     overrides.append(f"+run.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
