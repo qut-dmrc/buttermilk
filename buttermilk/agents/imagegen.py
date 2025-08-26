@@ -2,12 +2,12 @@
 
 This module provides a base client `TextToImageClient` with retry capabilities
 and several concrete implementations for different image generation models/services:
-- Google's Imagen 3 (via Vertex AI)
+- Google's Imagen 3 and 4 (via Vertex AI)
 - Stable Diffusion 3.5 Large (via Azure)
 - Stable Diffusion 3 (via Stability AI API)
 - Stable Diffusion XL (via HuggingFace Hub and Replicate)
 - Stable Diffusion 2.1 (via Replicate)
-- DALL-E 3 (via OpenAI API)
+- DALL-E 3 (via OpenAI API or Azure OpenAI)
 
 It also includes `BatchImageGenerator` for generating images from multiple prompts
 using a selection of these clients asynchronously.
@@ -18,17 +18,20 @@ import json
 import os  # For accessing environment variables (e.g., API keys)
 import random
 import uuid  # For generating unique IDs for save paths
-from collections.abc import Sequence  # For type hinting sequences
+from collections.abc import (
+    AsyncGenerator,
+    Sequence,  # For type hinting sequences
+)
 from io import BytesIO  # For handling image data in memory
 from pathlib import Path  # For local path manipulation
+from tempfile import mkdtemp
 from typing import Any, Literal, Type  # For type hinting
 
 import aiohttp  # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
 import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE)
 import replicate  # Client for Replicate API
 from cloudpathlib import CloudPath  # For handling cloud storage paths
-from google import genai  # Google Generative AI client
-from google.genai import types as google_genai_types  # Specific types from google.genai
+from google.genai.types import GenerateImagesConfig
 from huggingface_hub import AsyncInferenceClient, login  # HuggingFace Hub client
 from openai import AsyncOpenAI  # OpenAI client
 from PIL import Image  # Pillow library for image manipulation
@@ -36,7 +39,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic 
 from shortuuid import ShortUUID  # For generating short unique IDs
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance for accessing config/credentials
-from buttermilk._core.image import ImageRecord, read_image  # Buttermilk ImageRecord model
+from buttermilk._core.image import ImageRecord, google_genai_image_to_pil, read_image  # Buttermilk ImageRecord model
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
 
@@ -142,7 +145,7 @@ class TextToImageClient(RetryWrapper):
             # Save the image and update the URI in the record
             # The save method is part of ImageRecord
             saved_uri = generated_image_record.save(final_save_path)
-            generated_image_record.metadata["uri"] = saved_uri
+            generated_image_record.uri = saved_uri
 
             # Ensure prompt, negative_prompt, and other relevant params are in the final record
             generated_image_record.prompt = text
@@ -201,39 +204,35 @@ class TextToImageClient(RetryWrapper):
         raise NotImplementedError("Subclasses must implement the `generate_image` method.")
 
 
-class Imagegen3(TextToImageClient):
-    """Client for Google's Imagen 3 model via Vertex AI.
+ImageGenModels = Literal[
+    "imagen-4.0-generate-001",
+    "imagen-4.0-fast-generate-001",
+    "imagen-4.0-ultra-generate-001",
+    "imagen-3.0-generate-002",
+    "imagen-3.0-generate-001",
+    "imagen-3.0-fast-generate-001",
+    "imagen-3.0-capability-001",
+]
+
+
+class VertexImagegenModels(TextToImageClient):
+    """Client for Google's Imagen models via Vertex AI.
 
     Uses `google-cloud-aiplatform` (implicitly via `google.genai` configured for Vertex).
     Requires `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` to be available
     in `bm.credentials`.
 
     Attributes:
-        model (str): Defaults to "imagen-3.0-generate-002".
+        model (str): Defaults to "imagen-3.0-fast-generate-001".
         prefix (str): File prefix defaults to "imagen3_".
         client (genai.GenerativeModel): Initialized Google Generative AI client for Imagen 3.
         fast (bool): If True, uses a faster, potentially lower-quality variant of the model.
                      (Note: Current implementation always uses `self.model`, `fast` field
                       might be for future use or needs integration into model selection).
     """
-    model: str = "imagen-3.0-generate-002"
-    prefix: str = "imagen3_"
-    client: genai.GenerativeModel = Field(  # Corrected type to GenerativeModel
-        default_factory=lambda: genai.GenerativeModel(
-            model_name=Imagegen3.model,  # Use the class's model attribute
-            # Assumes genai client is configured globally or bm.credentials provide necessary setup
-            # For Vertex, client initialization might need project/location.
-            # genai.configure(credentials=bm.gcp_credentials) might be needed elsewhere.
-            # This factory might need adjustment if genai.Client requires explicit project/location.
-            # The original had genai.Client(vertexai=True, project=..., location=...)
-            # but genai.GenerativeModel is the typical interface for specific models.
-        ),
-        description="Google Generative AI client for Imagen 3.",
-    )
-    fast: bool = Field(default=False, description="If True, use a faster model variant (currently illustrative).")
-    # TODO: The 'fast' attribute currently doesn't change the model string.
-    # If 'fast' is intended to select a different model like "imagen-3.0-fast-generate-001",
-    # the model string should be dynamically chosen in __init__ or generate_image.
+
+    model: str = "imagen-3.0-fast-generate-001"
+    prefix: str = "imagen3fast001_"
 
     async def generate_image(
         self,
@@ -264,51 +263,30 @@ class Imagegen3(TextToImageClient):
             "safety_filter_level": "BLOCK_ONLY_HIGH",  # Example safety setting
             "person_generation": "ALLOW_ADULT",  # Example setting for person generation
             "negative_prompt": negative_prompt or "",  # Ensure empty string if None
+            "include_safety_attributes": True,  # include safety attributes in response
+            "include_rai_reason": True,  # include Responsible AI reason in response if the prompt is blocked,
+            "output_mime_type": "image/jpeg",
             **kwargs,  # Allow overrides and additional params
         }
 
-        # Ensure client is initialized with correct project and location for Vertex AI
-        # This might be better handled in a root_validator or __init__ if bm is always available
-        # For now, assuming bm.credentials are accessible as in original.
-        if self.client._client is None:  # type: ignore # Accessing private member for check
-            # This re-initialization logic might be problematic if client is shared.
-             # Ideally, client configuration is finalized at instantiation.
-            genai.configure(
-                credentials=bm.gcp_credentials,  # Assumes bm.gcp_credentials is set
-                project=bm.credentials["GOOGLE_CLOUD_PROJECT"],
-                location=bm.credentials["GOOGLE_CLOUD_LOCATION"],
-            )
-            self.client = genai.GenerativeModel(self.model)
+        config = GenerateImagesConfig(**generation_params)
 
-        # Actual API call to generate images
-        # Note: The google.genai library's async capabilities might differ.
-        # The original used a synchronous client.generate_images.
-        # If an async version is available, it should be used.
-        # For now, assuming a blocking call or that the client handles async internally.
-        # If client.generate_images is not async, it should be wrapped with asyncio.to_thread
+        client = bm.genai  # Ensure that we have initialised the genai client
 
-        # Simulating async call if client.generate_images is sync
-        loop = asyncio.get_event_loop()
-        api_response = await loop.run_in_executor(
-            None,  # Uses default ThreadPoolExecutor
-            self.client.generate_images,
-            text,  # prompt argument for generate_images
-            google_genai_types.GenerateImagesConfig(**generation_params),  # config argument
-        )
+        api_response = await client.aio.models.generate_images(model=self.model, prompt=text, config=config)
 
-        if not api_response.generated_images:
-            raise ValueError(f"No image generated by Imagen 3. Response: {api_response}")  # Or handle differently
+        if not api_response.generated_images[0].image:
+            raise ValueError(f"No image generated by {self.model}. Response: {api_response}")
 
-        first_generated_image = api_response.generated_images[0]
-        pil_image = first_generated_image.image._pil_image  # Accessing private member, might be fragile
-        enhanced_prompt = first_generated_image.enhanced_prompt
+        pil_image = google_genai_image_to_pil(api_response.generated_images[0].image)
+        # enhanced_prompt = first_generated_image.enhanced_prompt
 
         return ImageRecord(
             image=pil_image,
             model=self.model,
             parameters=generation_params,  # Log the actual parameters used
             prompt=text,  # Original prompt
-            enhanced_prompt=enhanced_prompt,  # Prompt as understood/enhanced by model
+            # enhanced_prompt=enhanced_prompt,  # Prompt as understood/enhanced by model
             negative_prompt=negative_prompt,
         )
 
@@ -393,19 +371,6 @@ class SD35Large(TextToImageClient):
         image_record.negative_prompt = negative_prompt
 
         return image_record
-
-
-class Imagegen3Fast(Imagegen3):
-    """Client for the faster variant of Google's Imagen 3 model.
-
-    Inherits from `Imagegen3` but overrides the model identifier.
-
-    Attributes:
-        model (str): Overridden to "imagen-3.0-fast-generate-001".
-                     (Note: The original had 'mode', changed to 'model' for consistency).
-    """
-
-    model: str = "imagen-3.0-fast-generate-001"  # Corrected from 'mode' to 'model'
 
 
 class SD3(TextToImageClient):
@@ -872,7 +837,7 @@ class DALLE(TextToImageClient):
         )
 
 
-ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, Imagegen3, Imagegen3Fast, SD3, SDXL, SDXLReplicate]
+ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, VertexImagegenModels, SD3, SDXL, SDXLReplicate]
 """A list of available `TextToImageClient` classes that can be used by `BatchImageGenerator`.
 This list allows for easy iteration or selection of different image generation models.
 """
