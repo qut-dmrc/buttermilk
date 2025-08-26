@@ -62,14 +62,16 @@ class TestBigQueryExplicitSchema:
         mock_client.return_value = mock_client_instance
 
         # Setup config with valid schema
-        config = StorageFactory.create_config({
-            "type": "bigquery",
-            "project_id": "test-project",
-            "dataset_id": "test-dataset",
-            "table_id": "test-table",
-            "dataset_name": "test",
-            "schema_path": "./schemas/flow.json"
-        })
+        config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test-dataset",
+                "table_id": "test-table",
+                "dataset_name": "test",
+                "schema_path": "flow.json",
+            }
+        )
 
         # Mock schema loading
         with patch.object(BigQueryStorage, "get_schema") as mock_get_schema:
@@ -98,15 +100,17 @@ class TestBigQueryExplicitSchema:
         ]
         mock_client_instance.get_table.return_value = mock_table
 
-        config = StorageFactory.create_config({
-            "type": "bigquery",
-            "project_id": "test-project",
-            "dataset_id": "test-dataset",
-            "table_id": "test-table",
-            "dataset_name": "test",
-            "schema_path": "./schemas/flow.json",
-            "auto_create": True
-        })
+        config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test-dataset",
+                "table_id": "test-table",
+                "dataset_name": "test",
+                "schema_path": "flow.json",
+                "auto_create": True,
+            }
+        )
 
         # Mock schema with different fields
         new_schema = [
@@ -133,14 +137,16 @@ class TestBigQueryExplicitSchema:
             id: str
             data: dict
 
-        config = StorageFactory.create_config({
-            "type": "bigquery",
-            "project_id": "test-project",
-            "dataset_id": "test-dataset",
-            "table_id": "test-table",
-            "dataset_name": "test",
-            "schema_path": "./schemas/custom.json"
-        })
+        config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test-dataset",
+                "table_id": "test-table",
+                "dataset_name": "test",
+                "schema_path": "custom.json",
+            }
+        )
 
         with patch("buttermilk.storage.bigquery.bigquery.Client"):
             with patch.object(BigQueryStorage, "get_schema") as mock_get_schema:

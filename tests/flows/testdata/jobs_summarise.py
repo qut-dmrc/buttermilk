@@ -23,7 +23,7 @@ job1 = dict(
         "save": {
             "type": "bq",
             "destination": None,
-            "db_schema": "./schemas/flow.json",
+            "db_schema": "flow.json",
             "dataset": "dmrc-analysis.toxicity.flow",
         },
         "parameters": {
@@ -130,7 +130,7 @@ job2 = dict(
         "save": {
             "type": "bq",
             "destination": None,
-            "db_schema": "./schemas/flow.json",
+            "db_schema": "flow.json",
             "dataset": "dmrc-analysis.toxicity.flow",
         },
         "parameters": {
@@ -261,7 +261,7 @@ job3 = dict(
         "save": {
             "type": "bq",
             "destination": None,
-            "db_schema": "./schemas/flow.json",
+            "db_schema": "flow.json",
             "dataset": "dmrc-analysis.toxicity.flow",
         },
         "parameters": {

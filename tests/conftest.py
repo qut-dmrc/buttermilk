@@ -40,7 +40,7 @@ from buttermilk.utils.utils import read_file
 @pytest.fixture(scope="session", autouse=True)
 def conf():
     """Hydra config fixture."""
-    with initialize(version_base=None, config_path="../conf"):
+    with initialize(version_base=None, config_path="../buttermilk/conf"):
         cfg = compose(config_name="testing")
 
     try:

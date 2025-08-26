@@ -23,7 +23,7 @@ BQ_SCHEMA_DIR = BASE_DIR / "schemas"
 """Path to the local cache file for storing LLM (Language Model) configurations.
 This cache helps in faster startup by avoiding repeated fetching of configurations.
 """
-CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
+CONFIG_CACHE_PATH = ".cache/models.json"
 
 """Key used to retrieve LLM (Language Model) configurations from a secret manager.
 This allows sensitive or complex model configurations to be stored securely.

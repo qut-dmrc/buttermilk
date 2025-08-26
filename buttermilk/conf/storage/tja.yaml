@@ -5,5 +5,5 @@ tja:
   # path: gs://prosocial-dev/data/tja_train-20250728T0202Z.parquet
   full_table_id: prosocial-443205.testing.records_tja
   dataset_name: tja_train
-  schema_path: ./schemas/record.schema.json
+  schema_path: record.schema.json
   

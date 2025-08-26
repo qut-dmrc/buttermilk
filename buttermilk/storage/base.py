@@ -3,8 +3,10 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Iterator, TypeVar
 
+from pathlib import Path
 from pydantic import BaseModel
 
+from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
 
 if TYPE_CHECKING:
@@ -119,6 +121,11 @@ class StorageClient:
         if self._schema_cache is None and self.config.schema_path:
             try:
                 bq_client = self.get_bq_client()
+                if not Path(self.config.schema_path).exists():
+                    if (BQ_SCHEMA_DIR / self.config.schema_path).exists():
+                        self.config.schema_path = str(BQ_SCHEMA_DIR / self.config.schema_path)
+                    else:
+                        raise FatalError(f"Schema file not found: {self.config.schema_path}")
                 self._schema_cache = bq_client.schema_from_json(self.config.schema_path)
             except Exception as e:
                 self._schema_cache = None

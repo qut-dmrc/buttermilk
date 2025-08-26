@@ -56,7 +56,7 @@
                 "dataset_id": "testing",
                 "table_id": "flow",
                 "dataset_name": "flow",
-                "schema_path": "./schemas/flow.json"
+                "schema_path": "flow.json"
             },
             "template": "rag",
             "description": "Academic research agent that searches Zotero library and provides\nproperly formatted academic responses with full citations.\n",
