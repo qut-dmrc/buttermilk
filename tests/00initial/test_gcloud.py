@@ -87,6 +87,11 @@ def test_genai_sync_client(bm):
     assert "publishers/google/models/imagen-4.0-ultra-generate-001" in model_names
 
 
+def test_genai_location(bm):
+    # Ensure the GenAI client is set up correctly
+    client = bm.genai
+    
+
 @pytest.mark.anyio
 async def test_genai_async_client(bm):
     # Ensure the GenAI client is set up correctly

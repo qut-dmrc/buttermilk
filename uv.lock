@@ -3790,7 +3790,7 @@ wheels = [
 
 [[package]]
 name = "langsmith"
-version = "0.4.16"
+version = "0.4.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -3801,9 +3801,9 @@ dependencies = [
     { name = "requests-toolbelt" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/fb/a0fab0ce0bb46aaae9703c1fb814b4ac7cbc2d75adc51e8689f1b34ac08d/langsmith-0.4.16.tar.gz", hash = "sha256:a94f374c7fa0f406757f95f311e84873258563961e1af0ba8996411822cd7241", size = 930411, upload-time = "2025-08-22T15:45:16.56Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/6e/6a76eed14cbf43db79030f8e348de2fdad904334967df34d1c162641679c/langsmith-0.4.17.tar.gz", hash = "sha256:c91e218cd96ee9a310f4685ea7f2b958a54aec919f0f368e694f42431e32c422", size = 931257, upload-time = "2025-08-26T01:42:47.394Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/ed/7a48189bdad850cfd47df671204c31779dd190de6bc681f169d4535f852e/langsmith-0.4.16-py3-none-any.whl", hash = "sha256:9ba95ed09b057dfe227e882f5446e1824bfc9f2c89de542ee6f0f8d90ab953a7", size = 375761, upload-time = "2025-08-22T15:45:14.82Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/4c/6f9106237cbeb193e3138393f7134310a38e0db9e6acfc1f43567dfa0559/langsmith-0.4.17-py3-none-any.whl", hash = "sha256:b824ef6a3a0669faf2bc61799e22af0b05a3a53d12cb9a448f611f861a69e991", size = 376351, upload-time = "2025-08-26T01:42:45.101Z" },
 ]
 
 [[package]]

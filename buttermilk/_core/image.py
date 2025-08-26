@@ -1,8 +1,10 @@
 import base64
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from cloudpathlib import AnyPath, CloudPath
+from google import genai
 from PIL import Image
 from pydantic import BaseModel, model_validator
 
@@ -41,7 +43,9 @@ class ImageRecord(BaseModel):
                 raise ValueError(
                     "Image is required, unless an error has occured and the 'error' field is set.",
                 )
-
+        if isinstance(obj.image, genai.types.Image):
+            # convert to PIL Image
+            obj.image = google_genai_image_to_pil(obj.image)
         if isinstance(obj.error, str):
             obj.error = {"message": obj.error}
 
@@ -149,3 +153,17 @@ def image_to_byte_array(image: Image.Image) -> bytes:
     # Turn the BytesIO object back into a bytes object
     imgByteArr = imgByteArr.getvalue()
     return imgByteArr
+
+
+def google_genai_image_to_pil(gimg: Any) -> Image.Image:
+    """
+    Convert google.genai.types.Image to a PIL Image.
+    """
+
+    data = BytesIO(gimg.image_bytes)
+    try:
+        img = Image.open(data)
+        img.load()  # force read before closing buffer
+        return img
+    finally:
+        data.close()
