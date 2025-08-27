@@ -77,25 +77,25 @@ class JobQueueClient(BaseModel):
         request = RunRequest(flow=flow, **data)
         return request
 
-    async def pull_single_task(self) -> tuple[RunRequest, str] | None:
+    async def pull_single_task(self) -> tuple[RunRequest, str] | tuple[None, None]:
         """Pull a single task from Pub/Sub and return (request, ack_id)."""
         try:
             response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1)
 
             if not response.received_messages:
-                logger.debug("No messages available on subscription; will retry later.")
-                return None
+                logger.debug("No messages available on subscription {self._jobs_subscription_path}.")
+                return None, None
 
             message = response.received_messages[0]
             request = await self._make_run_request(message)
             if request is None:
                 # Malformed messages are acked in _make_run_request
-                return None
+                return None, None
             return request, message.ack_id
 
         except Exception as e:
-            logger.error(f"Error pulling pub/sub message: {e}", exc_info=True)
-            return None
+            logger.error(f"Error pulling pub/sub message from {self._jobs_subscription_path}: {e}", exc_info=True)
+            return None, None
 
     async def fetch_and_run_task(self) -> None:
         if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
