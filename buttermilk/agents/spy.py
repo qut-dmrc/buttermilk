@@ -21,12 +21,13 @@ from buttermilk._core.storage_config import StorageConfig, StorageFactory
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-from buttermilk import logger  # Buttermilk's centralized logger
+# Import the global Buttermilk instance getter
+from buttermilk import (
+    get_bm,
+    logger,  # Buttermilk's centralized logger
+)
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
-
-# Import the global Buttermilk instance getter
-from buttermilk._core.dmrc import get_bm
 from buttermilk.utils.uploader import AsyncDataUploader  # Utility for asynchronous data upload
 
 BATCH_SIZE = 10

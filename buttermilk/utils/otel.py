@@ -89,7 +89,7 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
 
 def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
     """Initialize Traceloop for OpenTelemetry tracing."""
-    from buttermilk._core.dmrc import get_bm
+    from buttermilk import get_bm
 
     try:
         bm = get_bm()
@@ -117,7 +117,7 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
     try:
         # Retrieve necessary credentials from the global Buttermilk instance.
         # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
 
         bm = get_bm()
         creds = bm.credentials

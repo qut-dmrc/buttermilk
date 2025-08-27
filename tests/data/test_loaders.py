@@ -1,23 +1,20 @@
 """Tests for the new data loading system."""
 
-import json
-import tempfile
 import csv
-from pathlib import Path
-from typing import List
+import json
 
 import pytest
 
 from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
 from buttermilk.data.loaders import (
-    DataLoader,
-    JSONLDataLoader,
     CSVDataLoader,
-    PlaintextDataLoader,
+    DataLoader,
     HuggingFaceDataLoader,
+    JSONLDataLoader,
+    PlaintextDataLoader,
 )
-from buttermilk._core.storage_config import StorageConfig
 
 
 class TestDataLoader:
@@ -46,9 +43,9 @@ class TestJSONLDataLoader:
     def jsonl_file(self, sample_jsonl_data, tmp_path):
         """Create a temporary JSONL file for testing."""
         jsonl_path = tmp_path / "test_data.jsonl"
-        with open(jsonl_path, 'w') as f:
+        with open(jsonl_path, "w") as f:
             for item in sample_jsonl_data:
-                f.write(json.dumps(item) + '\n')
+                f.write(json.dumps(item) + "\n")
         return str(jsonl_path)
 
     def test_jsonl_loader_basic(self, jsonl_file):
@@ -94,9 +91,9 @@ class TestJSONLDataLoader:
     def test_jsonl_loader_invalid_json(self, tmp_path):
         """Test JSONL loader handling of invalid JSON lines."""
         jsonl_path = tmp_path / "invalid.jsonl"
-        with open(jsonl_path, 'w') as f:
+        with open(jsonl_path, "w") as f:
             f.write('{"valid": "json"}\n')
-            f.write('invalid json line\n')
+            f.write("invalid json line\n")
             f.write('{"another": "valid"}\n')
         
         config = DataSourceConfig(type="file", path=str(jsonl_path))
@@ -112,10 +109,10 @@ class TestJSONLDataLoader:
     def test_jsonl_loader_empty_lines(self, tmp_path):
         """Test JSONL loader handling of empty lines."""
         jsonl_path = tmp_path / "empty_lines.jsonl"
-        with open(jsonl_path, 'w') as f:
+        with open(jsonl_path, "w") as f:
             f.write('{"test": "data"}\n')
-            f.write('\n')  # Empty line
-            f.write('   \n')  # Whitespace line
+            f.write("\n")  # Empty line
+            f.write("   \n")  # Whitespace line
             f.write('{"more": "data"}\n')
         
         config = DataSourceConfig(type="file", path=str(jsonl_path))
@@ -143,7 +140,7 @@ class TestCSVDataLoader:
     def csv_file(self, sample_csv_data, tmp_path):
         """Create a temporary CSV file for testing."""
         csv_path = tmp_path / "test_data.csv"
-        with open(csv_path, 'w', newline='') as f:
+        with open(csv_path, "w", newline="") as f:
             if sample_csv_data:
                 writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
                 writer.writeheader()
@@ -270,8 +267,8 @@ class TestHuggingFaceDataLoader:
         config = DataSourceConfig(
             type="huggingface",
             path="squad",
-            name="plain_text", 
-            split="train"  # Use full split, will limit in iteration
+            name="plain_text",
+            split="train",  # Use full split, will limit in iteration
         )
         
         try:
@@ -298,7 +295,7 @@ class TestUnifiedStorageSystem:
 
     def test_unified_storage_jsonl_detection(self, tmp_path):
         """Test unified storage correctly handles JSONL files."""
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         
         jsonl_path = tmp_path / "test.jsonl"
         jsonl_path.write_text('{"test": "data"}\n')
@@ -313,7 +310,7 @@ class TestUnifiedStorageSystem:
 
     def test_unified_storage_csv_detection(self, tmp_path):
         """Test unified storage correctly handles CSV files."""
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         
         csv_path = tmp_path / "test.csv"
         csv_path.write_text("content\ntest data\n")
@@ -328,16 +325,12 @@ class TestUnifiedStorageSystem:
 
     def test_unified_storage_with_column_mapping(self, tmp_path):
         """Test unified storage with column mapping."""
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         
         jsonl_path = tmp_path / "test.jsonl"
         jsonl_path.write_text('{"description": "test content", "category": "test"}\n')
         
-        config = StorageConfig(
-            type="file", 
-            path=str(jsonl_path),
-            columns={"content": "description", "metadata": {"type": "category"}}
-        )
+        config = StorageConfig(type="file", path=str(jsonl_path), columns={"content": "description", "metadata": {"type": "category"}})
         bm = get_bm()
         storage = bm.get_storage(config)
         
@@ -352,7 +345,7 @@ class TestDataLoaderIntegration:
 
     async def test_storage_with_orchestrator_pattern(self, tmp_path):
         """Test unified storage integration pattern similar to orchestrator usage."""
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         
         # Create test data
         jsonl_path = tmp_path / "test.jsonl"
@@ -360,10 +353,10 @@ class TestDataLoaderIntegration:
             {"record_id": "rec1", "content": "Test content 1"},
             {"record_id": "rec2", "content": "Test content 2"}
         ]
-        
-        with open(jsonl_path, 'w') as f:
+
+        with open(jsonl_path, "w") as f:
             for record in test_records:
-                f.write(json.dumps(record) + '\n')
+                f.write(json.dumps(record) + "\n")
         
         # Test the pattern used in orchestrator with unified storage
         config = StorageConfig(type="file", path=str(jsonl_path))
@@ -385,16 +378,16 @@ class TestDataLoaderIntegration:
 
     async def test_storage_get_all_records_pattern(self, tmp_path):
         """Test pattern for getting all records from unified storage."""
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         
         # Create test data
         csv_path = tmp_path / "test.csv"
-        with open(csv_path, 'w', newline='') as f:
+        with open(csv_path, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(['record_id', 'content', 'category'])
-            writer.writerow(['r1', 'Content 1', 'A'])
-            writer.writerow(['r2', 'Content 2', 'B'])
-            writer.writerow(['r3', 'Content 3', 'A'])
+            writer.writerow(["record_id", "content", "category"])
+            writer.writerow(["r1", "Content 1", "A"])
+            writer.writerow(["r2", "Content 2", "B"])
+            writer.writerow(["r3", "Content 3", "A"])
         
         config = StorageConfig(type="file", path=str(csv_path))
         bm = get_bm()
@@ -406,9 +399,6 @@ class TestDataLoaderIntegration:
         assert len(all_records) == 3
         
         # Test filtering by metadata (simulating category filtering)
-        category_a_records = [
-            record for record in all_records 
-            if record.metadata.get("category") == "A"
-        ]
+        category_a_records = [record for record in all_records if record.metadata.get("category") == "A"]
         
         assert len(category_a_records) == 2

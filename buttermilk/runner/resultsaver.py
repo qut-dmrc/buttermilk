@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # Use deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk._core.dmrc import get_bm as _get_bm
+    from buttermilk import get_bm as _get_bm
     return _get_bm()
 
 

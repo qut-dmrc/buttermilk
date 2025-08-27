@@ -17,9 +17,7 @@ from rich.console import Console
 from IPython.display import display
 from rich import print
 
-from buttermilk import (
-    dmrc as DMRC, BM, bm, get_bm, set_bm, logger # noqa
-)
+from buttermilk import BM, bm, get_bm, set_bm, logger  # noqa
 
 console = Console()
 print = console.print
@@ -40,21 +38,17 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
         path = Path(__file__).parent.parent.resolve() / "conf"
         path = path.as_posix()
 
-        
-
-    overrides.append("+run=notebook")
-    overrides.append(f"+run.job={job}")
+    overrides.append(f"bm.run_info.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
         conf = compose(config_name="config", overrides=overrides)
 
     objs = hydra.utils.instantiate(conf)
 
-    # Get the Buttermilk instance
-    bm = objs.bm
+    bm = BM.model_validate(objs.bm)
 
     # Set the singleton BM instance
-    from buttermilk._core.dmrc import set_bm
+    from buttermilk import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 

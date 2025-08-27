@@ -6,7 +6,7 @@ from hydra import compose, initialize
 from omegaconf import OmegaConf
 
 from buttermilk import BM
-from buttermilk.api.flow import RunRequest, create_app
+from buttermilk.api.flow import create_app
 from buttermilk.runner.flowrunner import FlowRunner
 
 
@@ -19,12 +19,12 @@ def client():
         # Create BM instance
         resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         bm = BM(**resolved_cfg_dict["bm"])
-        
-        # Create FlowRunner instance  
+
+        # Create FlowRunner instance
         flows = FlowRunner.model_validate(cfg.run)
         
         # Set BM singleton
-        from buttermilk._core.dmrc import set_bm
+        from buttermilk import set_bm
         set_bm(bm)
         
         app = create_app(bm=bm, flows=flows)
@@ -37,7 +37,7 @@ def flow_request_data():
     return {
         "flow": "test_minimal",
         "model": "haiku",
-        "template": "judge", 
+        "template": "judge",
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
         "text": "Sample text",
         "uri": None,

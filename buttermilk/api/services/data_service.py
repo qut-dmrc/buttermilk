@@ -100,7 +100,7 @@ class DataService:
                 raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk._core.dmrc import get_bm
+            from buttermilk import get_bm
             bm = get_bm()
             storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_key])
 
@@ -199,7 +199,7 @@ class DataService:
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk._core.dmrc import get_bm
+            from buttermilk import get_bm
             bm = get_bm()
             storage = bm.get_storage(storage_config_raw)
 
@@ -294,7 +294,7 @@ class DataService:
         """
         try:
             # Get BigQuery client from BM instance
-            from buttermilk._core.dmrc import get_bm
+            from buttermilk import get_bm
             bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)
@@ -383,7 +383,7 @@ class DataService:
         """
         try:
             # Get BigQuery client from BM instance
-            from buttermilk._core.dmrc import get_bm
+            from buttermilk import get_bm
             bm_instance = get_bm()
             bq_client = bm_instance.bq
             query_runner = QueryRunner(bq_client=bq_client)

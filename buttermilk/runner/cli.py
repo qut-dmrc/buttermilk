@@ -59,7 +59,7 @@ def main(conf: DictConfig) -> None:
 
     # bm = BM.model_validate(objs.bm)  # type: ignore # Assuming dict matches BM fields
     # Set the singleton BM instance
-    from buttermilk._core.dmrc import set_bm
+    from buttermilk import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 

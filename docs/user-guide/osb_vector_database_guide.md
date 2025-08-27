@@ -39,7 +39,7 @@ The OSB (Online Safety Bureau) dataset contains legal case summaries and decisio
 
 ```python
 from buttermilk.utils.nb import init
-from buttermilk._core.dmrc import get_bm, set_bm
+from buttermilk import get_bm, set_bm
 
 # Initialize with OSB configuration
 cfg = init(job="osb_example", overrides=["flows=[osb]"])

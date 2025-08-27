@@ -262,8 +262,8 @@ if __name__ == "__main__":
     # Allow running specific tests manually
     import asyncio
 
+    from buttermilk import set_bm
     from buttermilk._core.bm_init import BM
-    from buttermilk._core.dmrc import set_bm
 
     async def main():
         # Initialize BM singleton

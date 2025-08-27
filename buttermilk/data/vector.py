@@ -24,8 +24,7 @@ from vertexai.language_models import (
     TextEmbeddingInput,
 )
 
-
-from buttermilk import bm, logger, get_bm
+from buttermilk import bm, logger
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
@@ -841,7 +840,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.now().isoformat()
             try:
-                from buttermilk._core.dmrc import get_bm
+                from buttermilk import get_bm
 
                 bm = get_bm()
                 run_id = bm.run_info.run_id if bm and bm.run_info else None
@@ -2014,7 +2013,7 @@ def main(cfg) -> None:
 
     bm = hydra.utils.instantiate(cfg.bm)
 
-    from buttermilk._core.dmrc import set_bm
+    from buttermilk import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 

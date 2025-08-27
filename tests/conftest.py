@@ -23,7 +23,7 @@ def anyio_backend():
 # Use deferred import to avoid circular references
 def get_bm():
     """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk._core.dmrc import get_bm as _get_bm
+    from buttermilk import get_bm as _get_bm
 
     return _get_bm()
 
@@ -51,7 +51,7 @@ def conf():
             raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
         bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
         # Set the singleton BM instance
-        from buttermilk._core.dmrc import set_bm
+        from buttermilk import set_bm
 
         set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 

@@ -1,7 +1,7 @@
 """Test the fixed BM singleton pattern."""
 
+from buttermilk import get_bm, set_bm
 from buttermilk._core.bm_init import BM
-from buttermilk._core.dmrc import get_bm, set_bm
 
 
 def test_get_bm_after_set():
@@ -32,7 +32,7 @@ def test_import_singleton_from_different_modules():
     # Define a function that simulates importing from another module
     def import_from_another_module():
         # This imports get_bm fresh in this scope
-        from buttermilk._core.dmrc import get_bm as another_get_bm
+        from buttermilk import get_bm as another_get_bm
         return another_get_bm()
 
     # Get the instance through the simulated import
@@ -53,7 +53,7 @@ def test_deferred_import_function():
 
     # Define a function that simulates the deferred import pattern
     def get_bm_deferred():
-        from buttermilk._core.dmrc import get_bm as _get_bm
+        from buttermilk import get_bm as _get_bm
         return _get_bm()
 
     # Get the instance through the deferred import

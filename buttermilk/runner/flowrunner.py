@@ -964,7 +964,7 @@ class FlowRunner(BaseModel):
 
         """
         # Ensure BM is fully initialized before running flow
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         bm = get_bm()
         if hasattr(bm, "ensure_initialized"):
             await bm.ensure_initialized()

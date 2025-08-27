@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter
 from pyzotero import zotero, zotero_errors
 
 # Import bm for credentials access
-from buttermilk._core.dmrc import get_bm
+from buttermilk import get_bm
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.utils.utils import get_pdf_text

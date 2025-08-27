@@ -9,7 +9,7 @@ Buttermilk provides a unified storage framework that handles both reading and wr
 ### ✅ Use BM Factory Methods (Recommended)
 
 ```python
-from buttermilk._core.dmrc import get_bm
+from buttermilk import get_bm
 
 bm = get_bm()
 

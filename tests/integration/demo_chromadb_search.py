@@ -33,7 +33,7 @@ async def main():
         resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
         # Set the singleton BM instance
-        from buttermilk._core.dmrc import set_bm
+        from buttermilk import set_bm
 
         set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
         # Extract storage config

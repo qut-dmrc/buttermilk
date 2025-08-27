@@ -111,7 +111,7 @@ class AsyncDataUploader:
                 self.storage.save(self.buffer)
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
-                from buttermilk._core.dmrc import get_bm
+                from buttermilk import get_bm
                 bm = get_bm()
                 bm.save(self.buffer, extension=".json")
 

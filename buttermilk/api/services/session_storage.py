@@ -429,7 +429,7 @@ class SessionStorageService:
                 
             # Try to get BM instance to access save_dir
             try:
-                from buttermilk._core.dmrc import get_bm
+                from buttermilk import get_bm
                 bm = get_bm()
                 
                 # Check if save_dir is configured and points to GCS

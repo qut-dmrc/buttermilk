@@ -47,10 +47,9 @@ from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
 from buttermilk._core.query import QueryRunner  # For running SQL queries
-from buttermilk._core.storage_config import BaseStorageConfig
+from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig, StorageFactory  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
-from buttermilk._core.storage_config import StorageConfig, StorageFactory  # Unified storage config
 
 # Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -157,7 +156,7 @@ class BM(BaseModel):
 
     Typical Usage:
     ```python
-    from buttermilk._core.dmrc import get_bm # Function to get/create the BM instance
+    from buttermilk import get_bm # Function to get/create the BM instance
 
     bm = get_bm() # Get the initialized BM instance
 
@@ -348,8 +347,6 @@ class BM(BaseModel):
             logger.debug(
                 f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
             )
-
-    
 
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""

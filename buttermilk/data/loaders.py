@@ -394,7 +394,7 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
 
     # Try to use new storage system first
     try:
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
@@ -451,7 +451,7 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         return PlaintextDataLoader(config)
     elif config.type in ["bigquery", "bq"]:
         # Use new unified storage system
-        from buttermilk._core.dmrc import get_bm
+        from buttermilk import get_bm
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
