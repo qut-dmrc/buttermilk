@@ -502,7 +502,6 @@ class HostAgent(Agent):
             # Announce, and trigger agents to announce themselves
             hello_message = f"Starting a new flow with parameters: {message.parameters} and participants: {', '.join(self._participants.keys())}"
 
-            await self._publish(hello_message)
             msg = AgentAnnouncement(
                 content=hello_message,
                 agent_config=self._config,
