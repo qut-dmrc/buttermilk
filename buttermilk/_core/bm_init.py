@@ -304,30 +304,19 @@ class BM(BaseModel):
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
-        """Performs setup tasks immediately after Pydantic model initialization.
-
-        This includes:
-        - Setting up logging (console and potentially cloud logging).
-        - Setting GCP environment variables for early access.
-        - Deferring save_dir construction until after cloud authentication.
-        - Starting background initialization for cloud auth and other tasks.
-
-        Note: save_dir construction is now deferred to _finalize_save_dir() to ensure
-        GCS authentication happens before attempting to work with GCS paths.
-        """
+        """Performs setup tasks immediately after Pydantic model initialization."""
         # Set GCP environment variables immediately (needed for GCS access)
         self._setup_gcp_environment()
 
-        # Set up logging early (but without cloud logging until auth is complete)
+        # Run initialization synchronously
+        self._sync_background_init()
+
+        # Set up logging now that initialization is complete
         self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
 
-        # Print current config to console - immediate for user feedback
-        print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
-        print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
-
-        # Defer save_dir construction and other operations to background tasks
-        # This ensures GCS authentication happens before working with GCS paths
-        self._schedule_background_init()
+        # Print current config to console
+        print("Initialized Buttermilk (bm) with configuration:")
+        print(self.model_dump(exclude_none=True))
 
     def _setup_gcp_environment(self) -> None:
         """Set up GCP environment variables immediately for early GCS access.
@@ -360,58 +349,7 @@ class BM(BaseModel):
                 f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
             )
 
-    def _schedule_background_init(self) -> None:
-        """Schedule non-critical initialization tasks in the background.
-
-        This method defers operations that aren't immediately needed for core functionality:
-        - Config file saving
-        - IP address fetching
-        - Cloud provider authentication
-
-        These operations happen asynchronously to improve startup performance.
-        """
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(self._background_init())
-            else:
-                # Event loop exists but not running, run synchronously
-                logger.debug("Event loop not running, performing synchronous initialization")
-                self._sync_background_init()
-        except RuntimeError:
-            # No current event loop, run synchronously
-            logger.debug("No event loop available, performing synchronous initialization")
-            self._sync_background_init()
-
-    async def _background_init(self) -> None:
-        """Perform non-critical initialization operations in the background."""
-        try:
-            # Critical tasks that must complete before work begins
-            # 1. Ensure cloud authentication happens early
-            if hasattr(self, "_cloud_manager") or self.clouds:
-                logger.debug("Performing early cloud authentication...")
-                _ = self.cloud_manager  # Trigger lazy initialization and authentication
-
-            # 2. Initialize secret manager to start caching secrets
-            if self.secret_provider:
-                logger.debug("Initializing secret manager...")
-                _ = self.secret_manager  # Trigger lazy initialization
-
-            # 3. Finalize save_dir now that cloud auth is complete
-            self._finalize_save_dir()
-
-            # 4. Save initial config for tracing and recovery
-            await asyncio.get_event_loop().run_in_executor(None, self._save_initial_config)
-
-            # 5. Start IP fetching task (non-critical)
-            self.start_fetch_ip_task()
-            
-            logger.debug("Background initialization tasks scheduled")
-            self._initialization_complete.set()
-        except Exception as e:
-            logger.error(f"Error during background initialization: {e}")
-            self._initialization_error = e
-            self._initialization_complete.set()  # Set even on error so waiters don't hang
+    
 
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""
