@@ -10,7 +10,7 @@ defaults:
   - /agents@tox.observers.spy: spy
   - /agents@tox.observers.host_sequencer: host/sequence_host
   - /storage@tox.storage: tox_train
-  - /storage@tox.parameters.save: flows
+  - /storage@tox.save: flows
 
 tox:
   orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
@@ -22,4 +22,4 @@ tox:
       - criteria_ordinary
       - criteria_gelber
       - criteria_hatefb_factorised
-    save: {}
+  save: {}

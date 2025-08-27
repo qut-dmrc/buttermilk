@@ -1074,7 +1074,7 @@ class FlowRunner(BaseModel):
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
 
-    async def create_batch(self, flow_name, max_records: int | None) -> list[RunRequest]:
+    async def create_batch(self, flow_name, dataset_key: str, max_records: int | None) -> list[RunRequest]:
         """Create a new batch job from the given request.
 
         Args:
@@ -1088,16 +1088,18 @@ class FlowRunner(BaseModel):
 
         """
         # Extract record IDs from the flow's data source
-        record_ids = await DataService.get_records_for_flow(flow_name=flow_name, flow_runner=self)
-        logger.info(f"Extracted {len(record_ids)} record IDs for flow '{flow_name}'")
+        records = await DataService.get_records_for_flow(flow_name=flow_name, flow_runner=self, dataset_key=dataset_key)
+        logger.info(f"Extracted {len(records)} records for flow '{flow_name}'")
+
+        flow = self.flows[flow_name]
 
         # Create multiple iterations by multiplying the parameters
-        iteration_values = expand_dict(self.flows[flow_name].parameters) or [{}]
-        logger.debug(f"Expanded {len(self.flows[flow_name].parameters)} parameters for batch into {len(iteration_values)} variants")
+        iteration_values = expand_dict(flow.parameters) or [{}]
+        logger.debug(f"Expanded {len(flow.parameters)} parameters for batch into {len(iteration_values)} variants")
 
+        #
         # Shuffle records
-        random.shuffle(record_ids)
-        logger.debug(f"Shuffled {len(record_ids)} record IDs")
+        random.shuffle(records)
 
         batch_id = str(shortuuid.uuid())
 
@@ -1106,13 +1108,14 @@ class FlowRunner(BaseModel):
 
         # Apply iteration values
         for iteration_params in iteration_values:
-            for i, record in enumerate(record_ids):
-                inputs = {**record, **iteration_params}  # Combine record data with iteration parameters
+            for i, record in enumerate(records):
+                data = {"records": [record]}
                 job = RunRequest(
                     ui_type="batch",
                     batch_id=batch_id,
                     flow=flow_name,
-                    inputs=inputs,
+                    parameters=iteration_params,
+                    inputs=data,
                     callback_to_ui=None,
                 )
                 job_definitions.append(job)
@@ -1162,7 +1165,7 @@ class FlowRunner(BaseModel):
 
             while jobs_processed < max_jobs:
                 # Pull a job from the queue
-                run_request = await worker.pull_single_task()
+                run_request, ack_id = await worker.pull_single_task()
                 if not run_request:
                     if jobs_processed == 0:
                         # Only raise an error if we didn't process any jobs
@@ -1178,6 +1181,7 @@ class FlowRunner(BaseModel):
                         logger.info(f"Successfully completed job {run_request.job_id}")
                     else:
                         logger.info(f"Job {run_request.job_id} started in the background")
+                    worker.ack_message(ack_id)  # Acknowledge the job after successful processing
                 except Exception as job_error:
                     logger.error(f"Error running job {run_request.job_id}: {job_error}")
                     # Continue processing other jobs even if one fails

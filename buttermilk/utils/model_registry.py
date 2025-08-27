@@ -89,7 +89,7 @@ def is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | No
     if "/" not in model_name:
         return False
     first = model_name.split("/", 1)[0]
-    keys = set(registry.keys()) if registry is not None else get_model_registry_keys()
+    keys = set(registry.keys())
     return first in _KNOWN_LITELLM_PROVIDERS and model_name not in keys
 
 
@@ -99,7 +99,7 @@ def resolve_litellm_model_name(internal_name: str) -> str:
     Order:
       1. If already a provider-qualified litellm id -> return unchanged.
       2. Lookup internal_name in registry; if missing -> return as-is.
-      3. If configs.litellm_model present -> return it (assumed fully-qualified or accepted by litellm).
+      3. If litellm_model present -> return it (assumed fully-qualified or accepted by litellm).
       4. Base id = configs.model or model_info.family
       5. Prefix with normalized provider prefix derived from client_type.
       6. Fallback: original internal_name.
@@ -120,7 +120,7 @@ def resolve_litellm_model_name(internal_name: str) -> str:
     model_info: dict[str, Any] = entry.get("model_info", {}) or {}
 
     # Explicit override key (optional)
-    explicit = configs.get("litellm_model")
+    explicit: dict[str, Any] = entry.get("litellm_model", {}) or {}
     if explicit:
         return explicit
 

@@ -1,16 +1,7 @@
-# @package _global_
-# Batch execution configuration
-defaults:
-  - /local
-  - _self_
-  
-
+_target_: buttermilk.runner.flowrunner.FlowRunner
 name: bm_batch
 job: flows
-
-run:
-  _target_: buttermilk.runner.flowrunner.FlowRunner
-  mode: batch
-  ui: console
-  human_in_loop: false
-  flows: {}
+mode: batch
+ui: console
+human_in_loop: false
+flows: ${flows}

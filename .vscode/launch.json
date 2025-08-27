@@ -108,8 +108,33 @@
       "justMyCode": false,
       "args": [
         "+run=batch",
-        "flows=[trans]",
-        "+flow=trans"
+        "+max_records=2",
+        "+flows=[trans,zot,osb]",
+        "+flow=trans",
+        "+dataset_key=tja",
+        "verbose=true",
+        "llms=${input:llms}",
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "batch run",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": false,
+      "args": [
+        "+run=batch_run",
+        "+max_jobs=2",
+        "+flows=[trans,zot,osb]",
+        "verbose=true",
+        "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

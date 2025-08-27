@@ -49,11 +49,7 @@ from buttermilk._core.log import ContextFilter, logger  # Centralized logger ins
 from buttermilk._core.query import QueryRunner  # For running SQL queries
 from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
-
-try:
-    from buttermilk.utils import save  # Utility for saving data
-except ImportError:
-    save = None
+from buttermilk.utils import save  # Utility for saving data
 from buttermilk._core.storage_config import StorageConfig, StorageFactory  # Unified storage config
 
 # Constants for configuration keys

@@ -13,8 +13,8 @@ defaults:
   - /tools@agents.rag.tools: 
     - chromadb_search
   # Data source configuration for search tool
-  - /storage@agents.rag.tools.chromadb_search: osb_vector
-  - /storage@parameters.save: flows
+  # - /storage@storage: osb_vector
+  # - /storage@save: flows
     
 
 # Core flow configuration

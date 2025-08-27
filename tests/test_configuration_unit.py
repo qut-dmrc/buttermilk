@@ -142,66 +142,6 @@ class TestStorageConfigValidation:
         assert new_config.columns == config.columns
 
 
-class TestDataSourceConfigValidation:
-    """Test DataSourceConfig validation and conversion."""
-
-    def test_data_source_config_creation(self):
-        """Test DataSourceConfig creation with various source types."""
-        from buttermilk._core.config import DataSourceConfig
-        
-        # File source
-        file_config = DataSourceConfig(
-            type="file",
-            path="/data/file.json",
-            columns={"content": "text"}
-        )
-        assert file_config.type == "file"
-        assert file_config.path == "/data/file.json"
-        
-        # BigQuery source  
-        bq_config = DataSourceConfig(
-            type="bigquery",
-            project_id="test-project",
-            dataset_id="test_dataset",
-            table_id="test_table"
-        )
-        assert bq_config.type == "bigquery"
-        assert bq_config.project_id == "test-project"
-
-    def test_data_source_config_column_mapping(self):
-        """Test DataSourceConfig column mapping functionality."""
-        from buttermilk._core.config import DataSourceConfig
-        
-        columns = {
-            "content": "source_text",
-            "metadata": "source_meta",
-            "record_id": "source_id"
-        }
-        
-        config = DataSourceConfig(
-            type="file",
-            path="/data/test.json",
-            columns=columns
-        )
-        
-        assert config.columns == columns
-
-    def test_data_source_config_with_aggregation(self):
-        """Test DataSourceConfig with aggregation settings."""
-        from buttermilk._core.config import DataSourceConfig
-        
-        config = DataSourceConfig(
-            type="bigquery",
-            project_id="test-project",
-            dataset_id="test_dataset", 
-            table_id="test_table",
-            agg="sum",
-            group=["category", "date"]
-        )
-        
-        assert config.agg == "sum"
-        assert config.group == ["category", "date"]
-
 
 class TestCloudProviderConfigValidation:
     """Test CloudProviderCfg validation."""

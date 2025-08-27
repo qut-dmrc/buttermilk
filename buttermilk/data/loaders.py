@@ -10,11 +10,10 @@ import csv
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterator, Protocol, runtime_checkable
+from typing import Any, Iterator, Protocol, runtime_checkable
 
 import cloudpathlib
 
-from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.log import logger
 
 
@@ -49,7 +48,7 @@ from buttermilk._core.types import Record
 class DataLoaderProtocol(Protocol):
     """Protocol defining the interface for data loaders."""
 
-    config: DataSourceConfig | None
+    config: Any | None
 
     def __iter__(self) -> Iterator[Record]:
         """Yield Record objects from the data source."""
@@ -78,7 +77,7 @@ class DataLoader(ABC):
     The columns mapping can be empty ({}) if no field renaming is needed.
     """
 
-    def __init__(self, config: DataSourceConfig):
+    def __init__(self, config):
         """Initialize loader with configuration.
 
         Args:
@@ -99,7 +98,7 @@ class DataLoader(ABC):
 class HuggingFaceDataLoader(DataLoader):
     """Loader for HuggingFace datasets with streaming support."""
 
-    def __init__(self, config: DataSourceConfig):
+    def __init__(self, config: "DataSourceConfig"):
         super().__init__(config)
         try:
             from datasets import load_dataset
@@ -370,7 +369,7 @@ class PlaintextDataLoader(DataLoader):
                     logger.warning(f"Failed to read file {file_path}: {e}")
 
 
-def create_data_loader(config: DataSourceConfig) -> DataLoader:
+def create_data_loader(config: "DataSourceConfig") -> DataLoader:
     """Factory function to create appropriate DataLoader for given config.
     
     DEPRECATED: Use bm.get_storage() with StorageConfig instead for unified data access.

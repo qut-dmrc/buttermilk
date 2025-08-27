@@ -48,8 +48,6 @@ def get_bm() -> Any:  # Return type should be 'BM' from bm_init.py if type hint 
     return _get_bm()
 
 
-from buttermilk._core.config import SaveInfo  # Configuration model for save operations
-
 from .._core.log import logger  # Centralized logger
 from .utils import (  # Other utility functions from the same package
     chunks,
@@ -378,7 +376,7 @@ async def upload_rows_async(
     *,
     schema: list[bigquery.SchemaField] | str | None = None,
     dataset: str | None = None,
-    save_dest: SaveInfo | None = None,
+    save_dest: Any | None = None,
 ) -> str | None:
     """Uploads rows to a Google BigQuery table asynchronously.
 
@@ -473,7 +471,7 @@ def upload_rows(
     *,
     schema: list[bigquery.SchemaField] | str | None = None,
     dataset: str | None = None,
-    save_dest: SaveInfo | None = None,
+    save_dest: Any | None = None,
     create_if_not_exists: bool = False,  # Parameter not used in current implementation
     **parameters: Any,  # Catch-all for other params, not used directly here
 ) -> str | None:

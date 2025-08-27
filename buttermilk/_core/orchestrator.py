@@ -33,12 +33,11 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import bm, logger, get_bm  # Global Buttermilk instance for framework access
+from buttermilk import get_bm, logger  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
-    AgentVariants,
-    SaveInfo,  # Added SaveInfo
+    AgentVariants,  # Added SaveInfo
 )
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
@@ -114,11 +113,11 @@ class OrchestratorProtocol(BaseModel):
         default="",
         description="Short description explaining the purpose and goals of this flow.",
     )
-    save: SaveInfo | None = Field(
+    save: StorageConfig | None = Field(
         default=None,
         description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
-    storage: Mapping[str, BaseStorageConfig | StorageConfig] = Field(
+    storage: Mapping[str, StorageConfig] = Field(
         default_factory=dict,
         description="Configuration for input storage backends to be loaded for the flow, keyed by a descriptive name.",
     )

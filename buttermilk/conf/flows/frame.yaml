@@ -1,3 +1,4 @@
+# @package flows.frame
 # frame Flow - Clean version with hierarchical composition
 # This flow uses Hydra's composition to pull in reusable components
 
@@ -13,22 +14,22 @@ defaults:
     - host/sequence_host
 
   # Data source configuration
-  - /storage@frame.storage: 
+  - /storage@storage: 
     - tja
   # Storage configuration for saving outputs
-  - /storage@frame.parameters.save: flows
+  - /storage@save: flows
 
-frame:
-  # Core flow configuration
-  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-  name: "frame"
-  description: "Journalism quality assessment for frame issues reporting"
+# Core flow configuration
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "frame"
+description: "Journalism quality assessment for frame issues reporting"
 
-  parameters:
-    human_in_loop: ${run.human_in_loop}
-   
-    save: {}
+parameters:
+  human_in_loop: ${run.human_in_loop}
+  
 
-  # These will be populated by the defaults
-  agents: {}
-  observers: {}
+# These will be populated by the defaults
+agents: {}
+observers: {}
+storage: {}
+save: {}

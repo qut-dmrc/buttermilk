@@ -99,7 +99,9 @@ def main(conf: DictConfig) -> None:
 
         case "batch":
             logger.info("Creating batch jobs...")
-            asyncio.run(flow_runner.create_batch(flow_name=conf.get("flow"), max_records=conf.get("max_records", None)))
+            asyncio.run(
+                flow_runner.create_batch(flow_name=conf.get("flow"), dataset_key=conf.get("dataset_key"), max_records=conf.get("max_records", None))
+            )
 
         case "batch_run":
             # Run batch jobs from the queue
@@ -111,7 +113,7 @@ def main(conf: DictConfig) -> None:
             ui = CLIUserAgent()
 
             logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
-            asyncio.run(flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback()))
+            asyncio.run(flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback(), wait_for_completion=True))
 
         case "streamlit":
             # Starts the Streamlit web interface.
