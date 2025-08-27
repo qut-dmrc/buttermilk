@@ -11,7 +11,7 @@ from buttermilk._core import (
     TaskProcessingComplete,
     UIMessage,
 )
-from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
+from buttermilk.utils.pricing import extract_usage_from_metadata
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
     AgentOutput,
@@ -103,23 +103,28 @@ class MessageService:
             if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
                 # Extract token/cost data from metadata
                 if hasattr(message, 'metadata') and message.metadata:
-                    usage_data = extract_usage_from_metadata(message.metadata)
-                    if usage_data:
-                        # Get model name from agent_info or metadata
-                        model_name = None
-                        if agent_info and hasattr(agent_info, 'parameters'):
-                            model_name = agent_info.parameters.get('model')
-                        elif 'agent_model' in message.metadata:
-                            model_name = message.metadata['agent_model']
-                        
-                        if model_name:
-                            prompt_tokens, completion_tokens, cost_usd = calculate_token_cost(
-                                model=model_name,
-                                usage_dict=usage_data
-                            )
+                    # First check for pricing info directly in metadata
+                    if 'pricing' in message.metadata:
+                        pricing_data = message.metadata['pricing']
+                        prompt_tokens = pricing_data.get('prompt_tokens', 0)
+                        completion_tokens = pricing_data.get('completion_tokens', 0)
+                        cost_usd = pricing_data.get('total_cost', 0.0)
+                        logger.debug(
+                            f"[MessageService] Extracted pricing from metadata: "
+                            f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
+                        )
+                    else:
+                        # Fallback to extracting usage data for backwards compatibility
+                        usage_data = extract_usage_from_metadata(message.metadata)
+                        if usage_data:
+                            # Extract tokens directly from usage data
+                            prompt_tokens = usage_data.get('prompt_tokens', usage_data.get('input_tokens', 0))
+                            completion_tokens = usage_data.get('completion_tokens', usage_data.get('output_tokens', 0))
+                            # No cost calculation here - that's done in llms.py
+                            cost_usd = 0.0
                             logger.debug(
-                                f"[MessageService] Extracted usage for {model_name}: "
-                                f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
+                                f"[MessageService] Extracted usage (legacy): "
+                                f"{prompt_tokens} prompt, {completion_tokens} completion"
                             )
                 
                 if message.outputs:

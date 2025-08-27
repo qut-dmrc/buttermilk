@@ -47,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
+from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
 from .retry import RetryWrapper  # Retry logic wrapper
 
@@ -208,7 +209,7 @@ T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
 class ModelOutput(CreateResult):
-    """Extends Autogen's `CreateResult` with structured output parsing.
+    """Extends Autogen's `CreateResult` with structured output parsing and pricing.
 
     Adds a parsed_object field to hold a Pydantic model instance when
     the LLM returns structured JSON output that can be parsed.
@@ -223,6 +224,7 @@ class ModelOutput(CreateResult):
         error_code (int | None): An optional error code associated with the error.
             Can be None if no specific code is provided.
         raw_response (Any | None): The raw response from the LLM, if available.
+        metadata (dict[str, Any]): Metadata including pricing information.
 
     """
 
@@ -235,6 +237,7 @@ class ModelOutput(CreateResult):
     raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
     tool_outputs: list[FunctionExecutionResult] | None = Field(default=None, description="Tool outputs if any were executed")
     tool_calls: list[FunctionCall] | None = Field(default=None, description="Tool calls made by the LLM, if any")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata including pricing information")
 
 
 class AutoGenWrapper(RetryWrapper):
@@ -359,6 +362,9 @@ class AutoGenWrapper(RetryWrapper):
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
 
+        # Calculate pricing from usage data
+        pricing_metadata = self._calculate_pricing(create_result.usage)
+
         # Now that we've made the LLM call and received a response, from
         # this point on, any errors we encounter will return a CreateResult or ModelOutput object
         # so that we can still finish tracing properly and log the received output.
@@ -373,8 +379,16 @@ class AutoGenWrapper(RetryWrapper):
             if isinstance(create_result.content, list):
                 if all(isinstance(item, FunctionCall) for item in create_result.content):
                     if tools and not used_fake_schema_tool:
-                        # If we have tools and didn't use a fake schema tool, return the tool calls directly
-                        return create_result
+                        # If we have tools and didn't use a fake schema tool, return the tool calls with pricing
+                        return ModelOutput(
+                            content=create_result.content,
+                            finish_reason=create_result.finish_reason,
+                            usage=create_result.usage,
+                            thought=getattr(create_result, "thought", None),
+                            cached=create_result.cached,
+                            tool_calls=create_result.content,
+                            metadata={"pricing": pricing_metadata},
+                        )
                     elif used_fake_schema_tool:
                         # If we used a fake schema tool, parse the tool call
                         tool_calls = create_result.content
@@ -411,6 +425,7 @@ class AutoGenWrapper(RetryWrapper):
                         thought=getattr(create_result, "thought", None),
                         parsed_object=schema_parsed_object,
                         cached=create_result.cached,
+                        metadata={"pricing": pricing_metadata},
                     )
                 except ProcessingError as e:
                     raise ProcessingError(
@@ -425,6 +440,7 @@ class AutoGenWrapper(RetryWrapper):
                 cached=create_result.cached,
                 parsed_object=parsed_object,
                 tool_calls=tool_calls,
+                metadata={"pricing": pricing_metadata},
             )
         except Exception as e:
             result = ModelOutput(
@@ -435,6 +451,7 @@ class AutoGenWrapper(RetryWrapper):
                 cached=create_result.cached,
                 parsed_object=parsed_object,
                 tool_calls=tool_calls,
+                metadata={"pricing": pricing_metadata},
             )
             result.error_message = f"LLM call failed: {e!s}"
             result.error_code = getattr(e, "code", None)  # Use code if available
@@ -486,6 +503,14 @@ class AutoGenWrapper(RetryWrapper):
             # The call failed
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
+        # Extract pricing from initial call
+        initial_pricing = create_result.metadata.get("pricing", {}) if hasattr(create_result, "metadata") else {}
+        aggregated_pricing = {
+            "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
+            "completion_tokens": initial_pricing.get("completion_tokens", 0),
+            "total_cost": initial_pricing.get("total_cost", 0.0)
+        }
+
         # Step 2: Handle tool calls if present
         if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
@@ -519,6 +544,15 @@ class AutoGenWrapper(RetryWrapper):
                     cancellation_token=cancellation_token,
                     schema=schema,  # Apply schema for structured output
                 )
+                
+                # Aggregate pricing from synthesis call
+                if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
+                    synthesis_pricing = synthesis_result.metadata["pricing"]
+                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens", 0)
+                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
+                    aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
+                    synthesis_result.metadata["pricing"] = aggregated_pricing
+                
                 return synthesis_result
             except Exception as e:
                 raise ProcessingError(f"Failed to synthesize after tool execution: {e!s}") from e
@@ -536,6 +570,7 @@ class AutoGenWrapper(RetryWrapper):
                         thought=getattr(create_result, "thought", None),
                         parsed_object=parsed_object,
                         cached=create_result.cached,
+                        metadata={"pricing": aggregated_pricing},
                     )
             except ProcessingError:
                 # If parsing failed, the LLM didn't follow schema instructions
@@ -548,6 +583,15 @@ class AutoGenWrapper(RetryWrapper):
                         cancellation_token=cancellation_token,
                         schema=schema,  # Apply schema for structured output
                     )
+                    
+                    # Aggregate pricing from synthesis call
+                    if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
+                        synthesis_pricing = synthesis_result.metadata["pricing"]
+                        aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens", 0)
+                        aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
+                        aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
+                        synthesis_result.metadata["pricing"] = aggregated_pricing
+                    
                     return synthesis_result
                 except Exception as e:
                     raise ProcessingError(f"Failed to synthesize structured response: {e!s}") from e
@@ -615,6 +659,42 @@ class AutoGenWrapper(RetryWrapper):
 
         # Execute all tool calls concurrently
         return await asyncio.gather(*tasks)
+
+    def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
+        """Calculate pricing information from usage data.
+        
+        Args:
+            usage: RequestUsage object or None
+            
+        Returns:
+            Dictionary with pricing information
+        """
+        if usage is None:
+            return {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_cost": 0.0
+            }
+        
+        # Get model name from model_info
+        model_name = self.model_info.get("model", "unknown")
+        
+        # Extract tokens from usage object
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        
+        # Calculate cost using the utility function
+        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+            model=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens
+        )
+        
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_cost": total_cost
+        }
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912

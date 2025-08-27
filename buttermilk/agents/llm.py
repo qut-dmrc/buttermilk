@@ -345,6 +345,11 @@ class LLMAgent(Agent):
             "finish_reason": chat_result.finish_reason,
             "usage": chat_result.usage,
         }
+        
+        # Include pricing metadata if available
+        if isinstance(chat_result, ModelOutput) and hasattr(chat_result, 'metadata') and 'pricing' in chat_result.metadata:
+            output_metadata['pricing'] = chat_result.metadata['pricing']
+        
         # Fail-fast: at this point, chat_result is a successful CreateResult/ModelOutput
         llm_messages_to_send.append(
             AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
