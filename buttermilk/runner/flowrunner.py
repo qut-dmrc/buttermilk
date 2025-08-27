@@ -1109,7 +1109,7 @@ class FlowRunner(BaseModel):
         # Apply iteration values
         for iteration_params in iteration_values:
             for i, record in enumerate(records):
-                data = {"records": [record]}
+                data = {"record_id": record.record_id, "dataset_key": dataset_key}
                 job = RunRequest(
                     ui_type="batch",
                     batch_id=batch_id,
