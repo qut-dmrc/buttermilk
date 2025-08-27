@@ -268,7 +268,7 @@ class AutoGenWrapper(RetryWrapper):
 
     client: ChatCompletionClient = Field(..., description="The underlying Autogen client instance.")
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
-    litellm_model_name: str | None = Field(default=None, description="Resolved litellm model name for pricing")
+    litellm_model_name: str = Field(default=None, description="Resolved litellm model name for pricing")
 
     @weave.op
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
@@ -875,7 +875,8 @@ class LLMs(BaseModel):
             case _:
                 return client_type  # fallback / extension
 
-    def _is_already_litellm_identifier(self, model_name: str, registry: dict[str, Any] | None = None) -> bool:
+    @staticmethod
+    def _is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | None = None) -> bool:
         """Heuristic: treat as already-qualified if first segment is a known provider and not an internal key."""
         # Known litellm provider prefixes
         known_litellm_providers = {
@@ -893,7 +894,8 @@ class LLMs(BaseModel):
         keys = set(registry.keys()) if registry else set()
         return first in known_litellm_providers and model_name not in keys
 
-    def resolve_litellm_model_name(self, internal_name: str) -> str:
+    @staticmethod
+    def lookup_litellm_model_name(model_name: str, client_type: str = "") -> str | None:
         """Resolve an internal model key to a litellm-compatible identifier.
 
         Order:
@@ -906,30 +908,11 @@ class LLMs(BaseModel):
 
         Safe for absent / partial entries.
         """
-        registry = self._load_model_registry()
+        if LLMs._is_already_litellm_identifier(model_name):
+            return model_name
 
-        if self._is_already_litellm_identifier(internal_name, registry):
-            return internal_name
-
-        entry = registry.get(internal_name)
-        if not entry:
-            return internal_name
-
-        client_type = entry.get("client_type")
-        configs: dict[str, Any] = entry.get("configs", {}) or {}
-        model_info: dict[str, Any] = entry.get("model_info", {}) or {}
-
-        # Explicit override key (optional)
-        explicit = entry.get("litellm_model")
-        if explicit:
-            return explicit
-
-        raw_model = configs.get("model") or model_info.get("family")
-        if not raw_model or not client_type:
-            return internal_name
-
-        prefix = self._provider_prefix_for_client_type(client_type)
-        return f"{prefix}/{raw_model}"
+        prefix = LLMs._provider_prefix_for_client_type(client_type)
+        return f"{prefix}/{model_name}"
 
     def get_autogen_chat_client(self, name: str) -> AutoGenWrapper:  # noqa: PLR0912 - branching per client type
         """Gets or creates an `AutoGenWrapper` for the LLM configuration specified by `name`.
@@ -962,20 +945,16 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-
         model_name = config.configs.get("model")
-
-        # Resolve litellm model name using internal method
-        resolved_litellm = self.resolve_litellm_model_name(model_name)
-        # Expose for inspection (non-destructive; do not overwrite 'model')
-        config.configs.setdefault("_resolved_litellm_model", resolved_litellm)
-
         # Prepare client parameters from configs
         client_params: dict[str, Any] = {
             "model": model_name,
             "api_key": config.api_key,
             **config.configs,
         }
+
+        # Resolve litellm model name using internal method
+        resolved_litellm = self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
 
         # Create client based on config.client_type - clean single branch per type
         if config.client_type == ClientType.OPENAI:
