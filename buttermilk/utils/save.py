@@ -374,13 +374,11 @@ def data_to_export_rows(
 async def upload_rows_async(
     rows: Any,
     *,
-    schema: list[bigquery.SchemaField] | str | None = None,
-    dataset: str | None = None,
-    save_dest: Any | None = None,
+    schema: list[bigquery.SchemaField] | str,
+    dataset: str,
 ) -> str | None:
     """Uploads rows to a Google BigQuery table asynchronously.
 
-    The target table and schema can be specified directly or via a `SaveInfo` object.
     Data is prepared using `data_to_export_rows` and uploaded in chunks.
     This function uses `asyncio.get_running_loop().run_in_executor` to run
     blocking BigQuery client operations in a separate thread pool, making the
@@ -389,29 +387,21 @@ async def upload_rows_async(
     Args:
         rows (Any): The data to upload. Can be a Pandas DataFrame, Pydantic model,
             dict, or list of dicts compatible with `data_to_export_rows`.
-        schema (list[bigquery.SchemaField] | str | None): BigQuery table schema.
+        schema (list[bigquery.SchemaField] | str): BigQuery table schema.
             Can be a list of `SchemaField` objects or a path to a JSON schema file.
-            If None, attempts to get from `save_dest.bq_schema`.
-        dataset (str | None): The BigQuery table ID (format: "project.dataset.table").
-            If None, attempts to get from `save_dest.dataset`.
-        save_dest (SaveInfo | None): A `SaveInfo` object containing schema and
-            dataset information. Used if `schema` or `dataset` are not directly provided.
+        dataset (str): The BigQuery table ID (format: "project.dataset.table").
 
     Returns:
         str | None: The BigQuery table ID if upload was successful, `None` otherwise.
 
     Raises:
-        AssertionError: If both `schema` (or `save_dest.bq_schema`) and `dataset`
-            (or `save_dest.dataset`) are not resolved.
         OSError: If there are errors during BigQuery table operations (getting table,
             inserting rows).
         TypeError: If schema format is incorrect.
 
     """
-    final_schema = schema or (save_dest.bq_schema if save_dest else None)
-    final_dataset = dataset or (save_dest.dataset if save_dest else None)
-    assert final_schema is not None, "Schema must be provided either directly or via save_dest."
-    assert final_dataset is not None, "Dataset (table ID) must be provided either directly or via save_dest."
+    final_schema = schema
+    final_dataset = dataset
 
     loop = asyncio.get_running_loop()
     # Instantiate BigQuery client in executor as it might do I/O or be blocking
@@ -469,9 +459,8 @@ async def upload_rows_async(
 def upload_rows(
     rows: Any,
     *,
-    schema: list[bigquery.SchemaField] | str | None = None,
-    dataset: str | None = None,
-    save_dest: Any | None = None,
+    schema: list[bigquery.SchemaField] | str,
+    dataset: str,
     create_if_not_exists: bool = False,  # Parameter not used in current implementation
     **parameters: Any,  # Catch-all for other params, not used directly here
 ) -> str | None:
@@ -484,11 +473,8 @@ def upload_rows(
 
     Args:
         rows (Any): Data to upload (Pandas DataFrame, Pydantic model, dict, list of dicts).
-        schema (list[bigquery.SchemaField] | str | None): BigQuery table schema or path to schema JSON.
-            Uses `save_dest.bq_schema` if None.
-        dataset (str | None): BigQuery table ID ("project.dataset.table").
-            Uses `save_dest.dataset` if None.
-        save_dest (SaveInfo | None): `SaveInfo` object with schema and dataset.
+        schema (list[bigquery.SchemaField] | str): BigQuery table schema or path to schema JSON.
+        dataset (str): BigQuery table ID ("project.dataset.table").
         create_if_not_exists (bool): If True, would attempt to create the table
             if it doesn't exist. **Currently not implemented.** Defaults to False.
         **parameters: Additional parameters (currently ignored by this function).
@@ -497,16 +483,12 @@ def upload_rows(
         str | None: The BigQuery table ID if upload successful, `None` otherwise.
 
     Raises:
-        AssertionError: If schema or dataset cannot be resolved.
         OSError: If BigQuery operations fail (e.g., table not found, insertion errors).
         TypeError: If schema format is incorrect.
 
     """
-    # Resolve schema and dataset, preferring direct args, then from save_dest
-    final_schema = schema or (save_dest.bq_schema if save_dest else None)
-    final_dataset = dataset or (save_dest.dataset if save_dest else None)
-    assert final_schema is not None, "Schema must be provided either directly or via save_dest."
-    assert final_dataset is not None, "Dataset (table ID) must be provided either directly or via save_dest."
+    final_schema = schema
+    final_dataset = dataset
 
     bq_client = bigquery.Client()  # Uses application default credentials
 

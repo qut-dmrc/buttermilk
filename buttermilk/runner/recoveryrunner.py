@@ -10,7 +10,6 @@ from cloudpathlib import AnyPath
 from pydantic import BaseModel, Field
 
 from buttermilk._core.bm_init import get_bm
-from buttermilk._core.config import SaveInfo
 from buttermilk._core.log import logger
 from buttermilk.utils.save import upload_rows
 
@@ -21,7 +20,8 @@ class RecoveryRunner(BaseModel):
     mode: str = Field(default="recovery", description="Runner mode")
     ui: str = Field(default="console", description="UI type")
     backup_dir: str | None = Field(default=None, description="Directory to scan for failed uploads")
-    save: SaveInfo | None = Field(default=None, description="Save destination for retry uploads")
+    schema: str | None = Field(default=None, description="Path to BigQuery schema file")
+    dataset: str | None = Field(default=None, description="BigQuery dataset ID (project.dataset.table)")
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -34,8 +34,8 @@ class RecoveryRunner(BaseModel):
         """Main recovery process."""
         logger.info(f"Starting recovery process, scanning: {self.backup_dir}")
 
-        if not self.save:
-            logger.error("No save destination configured for recovery")
+        if not self.schema or not self.dataset:
+            logger.error("Schema and dataset must be configured for recovery")
             return
 
         backup_path = AnyPath(self.backup_dir)
@@ -71,7 +71,7 @@ class RecoveryRunner(BaseModel):
                     data = json.load(f)
 
                 # Attempt BigQuery upload
-                result = upload_rows(data, save_dest=self.save)
+                result = upload_rows(data, schema=self.schema, dataset=self.dataset)
 
                 if result:
                     logger.info(f"Successfully recovered {file_path} to {result}")

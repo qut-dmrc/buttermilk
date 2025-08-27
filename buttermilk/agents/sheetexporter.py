@@ -26,13 +26,13 @@ class GSheetExporter(Agent):
     and then upload this DataFrame to a Google Sheet.
 
     The destination Google Sheet (ID, sheet name, etc.) is configured via the
-    `save` attribute (an instance of `SaveInfo`, typically populated from
+    `save` attribute (a configuration object, typically populated from
     `AgentConfig.save` in the Hydra configuration).
 
     Key Configuration:
-        - `save` (SaveInfo): **Required**. In `AgentConfig`, this should specify
+        - `save`: **Required**. In `AgentConfig`, this should specify
           the `type: "gsheets"` and details like `spreadsheet_id`, `sheet_name`, etc.
-          See `buttermilk._core.config.SaveInfo` and `buttermilk.utils.gsheet.GSheet`.
+          See `buttermilk.utils.gsheet.GSheet`.
         - `convert_json_columns` (list[str]): Optional. A list of column names
           in the input data that should be explicitly converted to JSON strings
           before uploading to the sheet. This is useful for columns containing
@@ -84,7 +84,7 @@ class GSheetExporter(Agent):
         This method takes data from `message.inputs`, converts it to a Pandas
         DataFrame, formats specified columns as JSON strings, and then uses
         the `_gsheet` utility to save the DataFrame to the configured Google Sheet.
-        Details of the target sheet are taken from `self.save` (a `SaveInfo` object).
+        Details of the target sheet are taken from `self.save` configuration object.
 
         Args:
             message: The `AgentInput` message containing the data to export in
@@ -138,7 +138,7 @@ class GSheetExporter(Agent):
         )
 
         save_config_params = {}
-        if self.save: # self.save is an instance of SaveInfo from AgentConfig
+        if self.save: # self.save is a configuration object from AgentConfig
             save_config_params = self.save.model_dump(exclude_none=True)
         else:
             logger.warning(f"GSheetExporter '{self.agent_id}': No 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.")
