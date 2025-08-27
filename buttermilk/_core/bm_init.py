@@ -857,9 +857,6 @@ class BM(BaseModel):
 
         # Log initialization message
         log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.run_info.save_dir}"
-        # Note: cloud_logging_resource is only available if cloud logging is active
-        # It's set up in _setup_cloud_logging() which is called lazily
-
         logger.info(log_init_message, extra={"run_details": self.run_info.model_dump(exclude_none=True)})
 
         # Log Buttermilk version if available

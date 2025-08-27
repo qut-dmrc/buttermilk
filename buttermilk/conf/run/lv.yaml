@@ -49,7 +49,7 @@ flows:
         agent_obj: StructuredLLMHostAgent
         human_in_loop: ${run.human_in_loop}
         parameters:
-          template: researchassistant
+          template: lead_ra
           model: ${llms.host}
           task: Assign an agent to the task. Repeat.
         inputs: {}

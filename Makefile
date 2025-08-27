@@ -7,7 +7,7 @@ all: test
 
 # Print default configurations
 config:
-	uv run python -m buttermilk.runner.cli -c job +flows=[trans,zot,osb] +run=api verbose=true llms=full
+	uv run python -m buttermilk.runner.cli -c job +flows=[trans,transllm,zot,osb] +run=api verbose=true llms=full
 
 kill_chat:
 	@echo "Killing chat (frontend) process..."

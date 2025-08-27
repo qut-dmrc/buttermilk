@@ -1,6 +1,6 @@
 # Simple sequence-based host that executes steps in order
 # This is the consolidated version of the sequencer host
-sequence_host:
+host:
   role: HOST
   name: "Sequence Coordinator"
   agent_obj: HostAgent

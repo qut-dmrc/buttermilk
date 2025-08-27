@@ -20,7 +20,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "+flows=[trans,zot,osb]",
+        "+flows=[trans,transllm,zot,osb]",
         "+run=api",
         "verbose=true",
         "llms=${input:llms}",
@@ -108,7 +108,7 @@
       "justMyCode": false,
       "args": [
         "+run=batch",
-        "+max_records=2",
+        // "+max_records=2",Z
         "+flows=[trans,zot,osb]",
         "+flow=trans",
         "+dataset_key=tja",
@@ -131,7 +131,7 @@
       "justMyCode": false,
       "args": [
         "+run=batch_run",
-        "+max_jobs=2",
+        "+max_jobs=30",
         "+flows=[trans,zot,osb]",
         "verbose=true",
         "llms=${input:llms}",

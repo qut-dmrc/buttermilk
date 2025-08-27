@@ -1,0 +1,16 @@
+defaults:
+  - /flows@transllm: trans
+  - /agents@observers: host/llm_host
+  - /storage@save: flows
+
+transllm:
+  observers:
+    host:
+      task: |
+        Receive a URL from the MANAGER and call on participants in this order unless directed by the MANAGER to do otherwise: FETCH the URL, JUDGE the content based on the criteria, and SYNTHESIZE a summary of your findings.
+
+  save: {}
+  storage: {}
+
+  # These will be populated by the defaults
+  agents: {}
