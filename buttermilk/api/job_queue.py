@@ -16,7 +16,6 @@ from google.cloud.pubsub import PublisherClient, SubscriberClient
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import bm, logger
-from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
 

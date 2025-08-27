@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI
 
-from buttermilk._core import logger
+from buttermilk import logger
 
 
 class LazyRouteManager:

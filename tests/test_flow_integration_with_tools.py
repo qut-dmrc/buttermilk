@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from buttermilk._core import AgentInput, StepRequest
+from buttermilk import AgentInput, StepRequest
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput, ConductorRequest
 from buttermilk._core.mcp_decorators import MCPRoute, tool

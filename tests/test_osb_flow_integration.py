@@ -1,38 +1,32 @@
 """Integration tests for OSB flow with new tool definition system."""
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
-import asyncio
 from typing import Any
+from unittest.mock import AsyncMock
 
-from buttermilk._core import AgentInput
+import pytest
+
+from buttermilk import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
-from buttermilk._core.mcp_decorators import tool, MCPRoute
+from buttermilk._core.mcp_decorators import MCPRoute, tool
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 
 class MockRAGAgent(Agent):
     """Mock RAG agent for OSB testing."""
-    
+
     def __init__(self, agent_name: str, **kwargs):
         super().__init__(agent_name=agent_name, **kwargs)
         self.search_called = False
         self.analyze_called = False
-    
+
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
         """Process RAG requests."""
         query = message.inputs.get("query", "")
         return AgentOutput(
-            source=self.agent_name,
-            role=self.role,
-            outputs={
-                "query": query,
-                "results": [f"Result from {self.agent_name}"],
-                "agent": self.agent_name
-            }
+            source=self.agent_name, role=self.role, outputs={"query": query, "results": [f"Result from {self.agent_name}"], "agent": self.agent_name}
         )
-    
+
     @tool
     @MCPRoute("/search", permissions=["read:osb"])
     async def search_osb(self, query: str, limit: int = 10) -> dict[str, Any]:
@@ -40,26 +34,15 @@ class MockRAGAgent(Agent):
         self.search_called = True
         return {
             "query": query,
-            "results": [
-                {
-                    "id": f"osb_{i}",
-                    "content": f"OSB result {i} for {query}",
-                    "score": 0.9 - (i * 0.1)
-                }
-                for i in range(min(limit, 3))
-            ],
-            "total": min(limit, 3)
+            "results": [{"id": f"osb_{i}", "content": f"OSB result {i} for {query}", "score": 0.9 - (i * 0.1)} for i in range(min(limit, 3))],
+            "total": min(limit, 3),
         }
-    
+
     @tool
     async def analyze_findings(self, findings: list[dict]) -> dict[str, Any]:
         """Analyze OSB search findings."""
         self.analyze_called = True
-        return {
-            "summary": f"Analyzed {len(findings)} findings",
-            "key_insights": ["Insight 1", "Insight 2"],
-            "confidence": 0.85
-        }
+        return {"summary": f"Analyzed {len(findings)} findings", "key_insights": ["Insight 1", "Insight 2"], "confidence": 0.85}
 
 
 class TestOSBFlowIntegration:
@@ -69,44 +52,21 @@ class TestOSBFlowIntegration:
     def mock_osb_agents(self):
         """Create mock OSB agents."""
         return {
-            "RESEARCHER": MockRAGAgent(
-                agent_name="researcher",
-                model_name="test",
-                role="RESEARCHER"
-            ),
-            "POLICY_ANALYST": MockRAGAgent(
-                agent_name="policy_analyst",
-                model_name="test",
-                role="POLICY_ANALYST"
-            ),
-            "FACT_CHECKER": MockRAGAgent(
-                agent_name="fact_checker",
-                model_name="test",
-                role="FACT_CHECKER"
-            ),
-            "EXPLORER": MockRAGAgent(
-                agent_name="explorer",
-                model_name="test",
-                role="EXPLORER"
-            )
+            "RESEARCHER": MockRAGAgent(agent_name="researcher", model_name="test", role="RESEARCHER"),
+            "POLICY_ANALYST": MockRAGAgent(agent_name="policy_analyst", model_name="test", role="POLICY_ANALYST"),
+            "FACT_CHECKER": MockRAGAgent(agent_name="fact_checker", model_name="test", role="FACT_CHECKER"),
+            "EXPLORER": MockRAGAgent(agent_name="explorer", model_name="test", role="EXPLORER"),
         }
 
     @pytest.mark.anyio
     async def test_osb_host_initialization(self, mock_osb_agents):
         """Test OSB host initializes with agent tools."""
-        host = StructuredLLMHostAgent(
-            agent_name="assistant",
-            model_name="test-model",
-            role="ASSISTANT"
-        )
+        host = StructuredLLMHostAgent(agent_name="assistant", model_name="test-model", role="ASSISTANT")
 
         # Setup host
         host._participants = mock_osb_agents
         host.tools = {}
-        host.parameters = {
-            "model": "test-model",
-            "template": "host_structured_tools"
-        }
+        host.parameters = {"model": "test-model", "template": "host_structured_tools"}
         host.callback_to_groupchat = AsyncMock()
 
         # Initialize
@@ -129,11 +89,7 @@ class TestOSBFlowIntegration:
     @pytest.mark.anyio
     async def test_osb_tool_invocation(self, mock_osb_agents):
         """Test invoking OSB agent tools through host."""
-        host = StructuredLLMHostAgent(
-            agent_name="assistant",
-            model_name="test-model",
-            role="ASSISTANT"
-        )
+        host = StructuredLLMHostAgent(agent_name="assistant", model_name="test-model", role="ASSISTANT")
 
         # Setup
         host._participants = mock_osb_agents
@@ -144,10 +100,7 @@ class TestOSBFlowIntegration:
         await host._initialize(callback_to_groupchat=host.callback_to_groupchat)
 
         # Find the researcher.search_osb tool
-        search_tool = next(
-            tool for tool in host._tools_list 
-            if tool.name == "researcher.search_osb"
-        )
+        search_tool = next(tool for tool in host._tools_list if tool.name == "researcher.search_osb")
 
         # Invoke the tool
         await search_tool._func(query="test query", limit=5)
@@ -164,11 +117,7 @@ class TestOSBFlowIntegration:
     @pytest.mark.anyio
     async def test_osb_multi_agent_coordination(self, mock_osb_agents):
         """Test coordinating multiple OSB agents."""
-        host = StructuredLLMHostAgent(
-            agent_name="assistant",
-            model_name="test-model",
-            role="ASSISTANT"
-        )
+        host = StructuredLLMHostAgent(agent_name="assistant", model_name="test-model", role="ASSISTANT")
 
         # Setup
         host._participants = mock_osb_agents
@@ -182,7 +131,7 @@ class TestOSBFlowIntegration:
         tools_to_call = [
             ("researcher.search_osb", {"query": "OSB case 123"}),
             ("policy_analyst.search_osb", {"query": "policy implications"}),
-            ("fact_checker.analyze_findings", {"findings": [{"id": "1"}]})
+            ("fact_checker.analyze_findings", {"findings": [{"id": "1"}]}),
         ]
 
         for tool_name, inputs in tools_to_call:
@@ -206,8 +155,6 @@ class TestOSBFlowIntegration:
         # Fact checker call
         assert calls[2][0][0].role == "FACT_CHECKER"
         assert calls[2][0][0].inputs["tool"] == "analyze_findings"
-
-
 
     @pytest.mark.anyio
     async def test_osb_backward_compatibility(self, mock_osb_agents):

@@ -10,17 +10,17 @@ This module provides essential metrics collection focused on:
 Complex analytics, time-series data, and P95/P99 calculations are handled externally.
 """
 
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from buttermilk._core import logger
+from buttermilk import logger
 
 
 @dataclass
 class FlowMetrics:
     """Basic metrics for flow execution performance."""
+
     flow_name: str
     total_executions: int = 0
     successful_executions: int = 0
@@ -32,12 +32,9 @@ class FlowMetrics:
     def update_execution(self, execution_time: float, success: bool):
         """Update metrics with new execution data."""
         self.total_executions += 1
-        
+
         # Simple moving average for execution time
-        self.avg_execution_time = (
-            (self.avg_execution_time * (self.total_executions - 1) + execution_time) 
-            / self.total_executions
-        )
+        self.avg_execution_time = (self.avg_execution_time * (self.total_executions - 1) + execution_time) / self.total_executions
 
         if success:
             self.successful_executions += 1
@@ -45,15 +42,16 @@ class FlowMetrics:
             self.failed_executions += 1
 
         self.last_execution = datetime.now()
-        
+
         # Update error rate
         if self.total_executions > 0:
             self.error_rate = self.failed_executions / self.total_executions
 
 
-@dataclass 
+@dataclass
 class AgentMetrics:
     """Basic metrics for individual agent performance."""
+
     agent_name: str
     flow_name: str
     total_invocations: int = 0
@@ -65,13 +63,10 @@ class AgentMetrics:
     def update_invocation(self, response_time: float, success: bool):
         """Update agent metrics with new invocation data."""
         self.total_invocations += 1
-        
+
         # Simple moving average for response time
-        self.avg_response_time = (
-            (self.avg_response_time * (self.total_invocations - 1) + response_time) 
-            / self.total_invocations
-        )
-        
+        self.avg_response_time = (self.avg_response_time * (self.total_invocations - 1) + response_time) / self.total_invocations
+
         self.last_invocation = datetime.now()
 
         if success:
@@ -83,6 +78,7 @@ class AgentMetrics:
 @dataclass
 class SessionMetrics:
     """Basic metrics for session lifecycle."""
+
     session_id: str
     flow_name: str
     created_at: datetime
@@ -112,19 +108,14 @@ class MetricsCollector:
         # Flow-level metrics
         self.flow_metrics: Dict[str, FlowMetrics] = {}
 
-        # Agent-level metrics 
+        # Agent-level metrics
         self.agent_metrics: Dict[str, AgentMetrics] = {}
 
         # Session-level metrics
         self.session_metrics: Dict[str, SessionMetrics] = {}
 
         # Basic system-level metrics
-        self.system_metrics = {
-            "start_time": datetime.now(),
-            "total_memory_mb": 0.0,
-            "active_sessions": 0,
-            "total_sessions_created": 0
-        }
+        self.system_metrics = {"start_time": datetime.now(), "total_memory_mb": 0.0, "active_sessions": 0, "total_sessions_created": 0}
 
     def record_flow_execution(self, flow_name: str, execution_time: float, success: bool):
         """Record flow execution metrics."""
@@ -134,15 +125,11 @@ class MetricsCollector:
         self.flow_metrics[flow_name].update_execution(execution_time, success)
         logger.debug(f"Recorded flow execution: {flow_name}, time: {execution_time:.2f}s, success: {success}")
 
-    def record_agent_invocation(self, agent_name: str, flow_name: str,
-                               response_time: float, success: bool):
+    def record_agent_invocation(self, agent_name: str, flow_name: str, response_time: float, success: bool):
         """Record agent invocation metrics."""
         agent_key = f"{flow_name}.{agent_name}"
         if agent_key not in self.agent_metrics:
-            self.agent_metrics[agent_key] = AgentMetrics(
-                agent_name=agent_name,
-                flow_name=flow_name
-            )
+            self.agent_metrics[agent_key] = AgentMetrics(agent_name=agent_name, flow_name=flow_name)
 
         self.agent_metrics[agent_key].update_invocation(response_time, success)
         logger.debug(f"Recorded agent invocation: {agent_key}, time: {response_time:.2f}s")
@@ -151,10 +138,7 @@ class MetricsCollector:
         """Start tracking a new session."""
         if session_id not in self.session_metrics:
             self.session_metrics[session_id] = SessionMetrics(
-                session_id=session_id,
-                flow_name=flow_name,
-                created_at=datetime.now(),
-                last_activity=datetime.now()
+                session_id=session_id, flow_name=flow_name, created_at=datetime.now(), last_activity=datetime.now()
             )
 
             self.system_metrics["total_sessions_created"] += 1
@@ -211,10 +195,9 @@ class MetricsCollector:
         for flow_name, metrics in self.flow_metrics.items():
             flow_summary[flow_name] = {
                 "total_executions": metrics.total_executions,
-                "success_rate": (metrics.successful_executions / metrics.total_executions
-                               if metrics.total_executions > 0 else 0.0),
+                "success_rate": (metrics.successful_executions / metrics.total_executions if metrics.total_executions > 0 else 0.0),
                 "avg_execution_time": metrics.avg_execution_time,
-                "error_rate": metrics.error_rate
+                "error_rate": metrics.error_rate,
             }
 
         # Agent summary
@@ -223,8 +206,7 @@ class MetricsCollector:
             agent_summary[agent_key] = {
                 "total_invocations": metrics.total_invocations,
                 "avg_response_time": metrics.avg_response_time,
-                "success_rate": (metrics.successful_invocations / metrics.total_invocations
-                               if metrics.total_invocations > 0 else 0.0)
+                "success_rate": (metrics.successful_invocations / metrics.total_invocations if metrics.total_invocations > 0 else 0.0),
             }
 
         # Session summary
@@ -234,15 +216,12 @@ class MetricsCollector:
             "system": {
                 "uptime_seconds": uptime.total_seconds(),
                 "total_memory_mb": self.system_metrics["total_memory_mb"],
-                "active_sessions": active_sessions
+                "active_sessions": active_sessions,
             },
             "flows": flow_summary,
             "agents": agent_summary,
-            "sessions": {
-                "active_sessions": active_sessions,
-                "total_sessions_created": self.system_metrics["total_sessions_created"]
-            },
-            "generated_at": datetime.now().isoformat()
+            "sessions": {"active_sessions": active_sessions, "total_sessions_created": self.system_metrics["total_sessions_created"]},
+            "generated_at": datetime.now().isoformat(),
         }
 
     def _update_active_session_count(self):
@@ -254,12 +233,14 @@ class MetricsCollector:
 # Global metrics collector instance
 _global_metrics_collector: Optional[MetricsCollector] = None
 
+
 def get_metrics_collector() -> MetricsCollector:
     """Get or create global metrics collector instance."""
     global _global_metrics_collector
     if _global_metrics_collector is None:
         _global_metrics_collector = MetricsCollector()
     return _global_metrics_collector
+
 
 def shutdown_metrics_collector():
     """Shutdown global metrics collector."""

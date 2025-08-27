@@ -15,6 +15,7 @@ import inspect
 import json
 from collections.abc import Sequence
 from enum import Enum
+from pathlib import Path
 from typing import Any, TypeVar
 
 # Core LLM library imports - these are required dependencies
@@ -45,6 +46,7 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
+from buttermilk._core.constants import CONFIG_CACHE_PATH  # Path to models.json cache
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.log import logger  # Buttermilk logger
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
@@ -108,6 +110,10 @@ class LLMConfig(BaseModel):
             support for structured output, etc.
         configs (dict): A dictionary for additional options or configurations
             to pass directly to the constructor of the LLM client.
+        litellm_model (str | None): An optional explicit litellm model identifier.
+            If provided, this will be used instead of automatic resolution from
+            client_type and model info. Useful for models that need specific naming
+            for litellm pricing calculations.
 
     """
 
@@ -122,6 +128,7 @@ class LLMConfig(BaseModel):
 
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
+    litellm_model: str | None = Field(default=None, description="Explicit litellm model identifier override")
 
     @field_validator("client_type", mode="before")
     @classmethod
@@ -261,6 +268,7 @@ class AutoGenWrapper(RetryWrapper):
 
     client: ChatCompletionClient = Field(..., description="The underlying Autogen client instance.")
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
+    litellm_model_name: str | None = Field(default=None, description="Resolved litellm model name for pricing")
 
     @weave.op
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
@@ -676,16 +684,13 @@ class AutoGenWrapper(RetryWrapper):
                 "total_cost": 0.0
             }
         
-        # Get model name from model_info
-        model_name = self.model_info.get("model", "unknown")
-        
         # Extract tokens from usage object
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
         
-        # Calculate cost using the utility function
+        # Calculate cost using the utility function with resolved litellm model name
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=model_name,
+            model=self.litellm_model_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens
         )
@@ -799,6 +804,11 @@ class LLMs(BaseModel):
         description="Cache for instantiated AutoGenWrapper clients. Populated on demand.",
         exclude=True,  # Exclude from model dump as it's runtime state
     )
+    model_registry_cache: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Cached model registry loaded from models.json",
+        exclude=True,  # Exclude from model dump as it's runtime state
+    )
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -811,6 +821,115 @@ class LLMs(BaseModel):
 
         """
         return Enum("AllModelNames", {name: name for name in self.connections.keys()})
+
+    def _load_model_registry(self, force: bool = False) -> dict[str, Any]:
+        """Load (and cache) the models.json registry. Tolerates // comment lines."""
+        if self.model_registry_cache and not force:
+            return self.model_registry_cache
+
+        models_json_path = Path(CONFIG_CACHE_PATH)
+        try:
+            text = models_json_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.debug(f"Model registry not found at {models_json_path}")
+            self.model_registry_cache = {}
+            return self.model_registry_cache
+        except Exception as e:
+            logger.warning(f"Failed reading model registry {models_json_path}: {e}")
+            self.model_registry_cache = {}
+            return self.model_registry_cache
+
+        cleaned_lines: list[str] = []
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("//"):
+                continue
+            cleaned_lines.append(line)
+        cleaned = "\n".join(cleaned_lines)
+
+        try:
+            self.model_registry_cache = json.loads(cleaned)
+        except Exception as e:
+            logger.warning(f"Failed parsing model registry {models_json_path}: {e}")
+            self.model_registry_cache = {}
+        return self.model_registry_cache
+
+    @staticmethod
+    def _provider_prefix_for_client_type(client_type: str) -> str:
+        """Normalize internal client_type to a litellm provider prefix."""
+        match client_type:
+            case "azure":
+                return "azure"
+            case "openai":
+                return "openai"
+            case "gemini" | "gemini_vertex":
+                # litellm uses 'gemini' for Gemini API; vertex-hosted Gemini still routes differently upstream
+                return "gemini"
+            case "huggingface":
+                return "huggingface"
+            case "vertex_openai" | "anthropic_vertex":
+                # Vertex OpenAI-compatible & Anthropic-on-Vertex
+                return "vertex_ai"
+            case "anthropic":
+                return "anthropic"
+            case _:
+                return client_type  # fallback / extension
+
+    def _is_already_litellm_identifier(self, model_name: str, registry: dict[str, Any] | None = None) -> bool:
+        """Heuristic: treat as already-qualified if first segment is a known provider and not an internal key."""
+        # Known litellm provider prefixes
+        known_litellm_providers = {
+            "azure",
+            "openai",
+            "gemini",
+            "huggingface",
+            "vertex_ai",
+            "anthropic",
+        }
+        
+        if "/" not in model_name:
+            return False
+        first = model_name.split("/", 1)[0]
+        keys = set(registry.keys()) if registry else set()
+        return first in known_litellm_providers and model_name not in keys
+
+    def resolve_litellm_model_name(self, internal_name: str) -> str:
+        """Resolve an internal model key to a litellm-compatible identifier.
+
+        Order:
+          1. If already a provider-qualified litellm id -> return unchanged.
+          2. Lookup internal_name in registry; if missing -> return as-is.
+          3. If litellm_model present -> return it (assumed fully-qualified or accepted by litellm).
+          4. Base id = configs.model or model_info.family
+          5. Prefix with normalized provider prefix derived from client_type.
+          6. Fallback: original internal_name.
+
+        Safe for absent / partial entries.
+        """
+        registry = self._load_model_registry()
+
+        if self._is_already_litellm_identifier(internal_name, registry):
+            return internal_name
+
+        entry = registry.get(internal_name)
+        if not entry:
+            return internal_name
+
+        client_type = entry.get("client_type")
+        configs: dict[str, Any] = entry.get("configs", {}) or {}
+        model_info: dict[str, Any] = entry.get("model_info", {}) or {}
+
+        # Explicit override key (optional)
+        explicit = entry.get("litellm_model")
+        if explicit:
+            return explicit
+
+        raw_model = configs.get("model") or model_info.get("family")
+        if not raw_model or not client_type:
+            return internal_name
+
+        prefix = self._provider_prefix_for_client_type(client_type)
+        return f"{prefix}/{raw_model}"
 
     def get_autogen_chat_client(self, name: str) -> AutoGenWrapper:  # noqa: PLR0912 - branching per client type
         """Gets or creates an `AutoGenWrapper` for the LLM configuration specified by `name`.
@@ -843,15 +962,17 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-        # Local dynamic import to avoid circular dependency during package import
-        _mod2 = importlib.import_module("buttermilk.utils.model_registry")
-        resolved_litellm = getattr(_mod2, "resolve_litellm_model_name")(name)
+
+        model_name = config.configs.get("model")
+
+        # Resolve litellm model name using internal method
+        resolved_litellm = self.resolve_litellm_model_name(model_name)
         # Expose for inspection (non-destructive; do not overwrite 'model')
         config.configs.setdefault("_resolved_litellm_model", resolved_litellm)
 
         # Prepare client parameters from configs
         client_params: dict[str, Any] = {
-            "model": config.configs.get("model"),
+            "model": model_name,
             "api_key": config.api_key,
             **config.configs,
         }
@@ -947,7 +1068,11 @@ class LLMs(BaseModel):
             raise ProcessingError(f"Unsupported client_type: {config.client_type}")
 
         # Wrap with AutoGenWrapper and cache
-        wrapped_client = AutoGenWrapper(client=client, model_info=config.model_info)
+        wrapped_client = AutoGenWrapper(
+            client=client,
+            model_info=config.model_info,
+            litellm_model_name=resolved_litellm
+        )
         self.autogen_models[name] = wrapped_client
         return wrapped_client
 

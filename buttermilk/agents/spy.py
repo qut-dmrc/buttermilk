@@ -21,7 +21,7 @@ from buttermilk._core.storage_config import StorageConfig, StorageFactory
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-from buttermilk._core import logger  # Buttermilk's centralized logger
+from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
 from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
 

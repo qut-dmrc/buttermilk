@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from buttermilk._core import logger
+from buttermilk import logger
 
 from .health_monitor import HealthMonitor
 from .metrics_collector import MetricsCollector, get_metrics_collector
@@ -171,6 +171,7 @@ class SimpleHealthMonitor:
 # Global health monitor instance
 _global_health_monitor: Optional[SimpleHealthMonitor] = None
 
+
 def get_observability_manager() -> SimpleHealthMonitor:
     """Get or create global health monitor instance."""
     global _global_health_monitor
@@ -178,9 +179,11 @@ def get_observability_manager() -> SimpleHealthMonitor:
         _global_health_monitor = SimpleHealthMonitor()
     return _global_health_monitor
 
+
 def get_simple_health_monitor() -> SimpleHealthMonitor:
     """Alias for get_observability_manager for consistency."""
     return get_observability_manager()
+
 
 async def shutdown_observability_manager():
     """Shutdown global health monitor."""

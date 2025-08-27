@@ -6,7 +6,7 @@ import hydra
 
 import pytest
 
-from buttermilk._core import BM  # Removed logger import here
+from buttermilk import BM  # Removed logger import here
 from buttermilk._core.dmrc import get_bm  # Import get_bm
 from buttermilk._core.exceptions import FatalError
 
@@ -42,7 +42,7 @@ def test_initialize_bm(conf):
 def test_singleton_instance(bm, conf):
     """Test that all ways of accessing BM return the same instance."""
     # Removed unnecessary logger import
-    bm_direct = get_bm() # Use get_bm() to access the singleton
+    bm_direct = get_bm()  # Use get_bm() to access the singleton
     bm_init = hydra.utils.instantiate(conf.bm)
     assert bm_init is not None, "BM instance should not be None"
     assert bm_init.job == "testing", "BM instance job should be 'testing'"
@@ -85,7 +85,8 @@ def test_singleton_between_modules(bm):
         """Function simulating another module accessing BM."""
         from buttermilk._core.dmrc import get_bm  # Correct import
         from buttermilk._core.log import logger  # noqa
-        return get_bm() # Use get_bm()
+
+        return get_bm()  # Use get_bm()
 
     bm2 = second_module_access()
 

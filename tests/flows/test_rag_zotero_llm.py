@@ -5,7 +5,7 @@ import pytest
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel
 
-from buttermilk._core import AgentInput
+from buttermilk import AgentInput
 from buttermilk._core.llms import CHAT_MODELS
 from buttermilk.agents.rag.rag_zotero import RagZotero, ZoteroReference, ZoteroResearchResult
 

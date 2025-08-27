@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
-from buttermilk._core import BM, logger
+from buttermilk import BM, logger
 from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk.runner.flowrunner import FlowRunner

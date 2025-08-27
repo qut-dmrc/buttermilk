@@ -30,9 +30,9 @@ class SessionStatus(str, Enum):
     FAILED = "failed"              # Legacy failed state
 
 
-from buttermilk import logger
-from buttermilk._core import (
+from buttermilk import (
     AgentTrace,
+    logger,
 )
 from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.context import set_logging_context

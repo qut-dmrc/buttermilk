@@ -17,7 +17,7 @@ from rich.console import Console
 from IPython.display import display
 from rich import print
 
-from buttermilk._core import (
+from buttermilk import (
     dmrc as DMRC, BM, bm, get_bm, set_bm, logger # noqa
 )
 

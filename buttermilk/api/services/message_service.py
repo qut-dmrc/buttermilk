@@ -4,14 +4,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
-from buttermilk import logger
-from buttermilk._core import (
+from buttermilk import (
     AgentConfig,
     StepRequest,
     TaskProcessingComplete,
     UIMessage,
+    logger,
 )
-from buttermilk.utils.pricing import extract_usage_from_metadata
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
     AgentOutput,
@@ -29,6 +28,7 @@ from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag import ResearchResult
+from buttermilk.utils.pricing import extract_usage_from_metadata
 
 PREVIEW_LENGTH = 200
 
@@ -59,7 +59,7 @@ class ChatMessage(BaseModel):
     agent_info: AgentConfig | None = Field(None, description="Agent information")
     tracing_link: str | None = Field(None, description="Link to the tracing information")
     prompt_tokens: int = Field(default=0, description="Number of prompt/input tokens used")
-    completion_tokens: int = Field(default=0, description="Number of completion/output tokens used") 
+    completion_tokens: int = Field(default=0, description="Number of completion/output tokens used")
     cost_usd: float = Field(default=0.0, description="Estimated cost in USD for this message")
 
 
@@ -102,13 +102,13 @@ class MessageService:
             
             if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
                 # Extract token/cost data from metadata
-                if hasattr(message, 'metadata') and message.metadata:
+                if hasattr(message, "metadata") and message.metadata:
                     # First check for pricing info directly in metadata
-                    if 'pricing' in message.metadata:
-                        pricing_data = message.metadata['pricing']
-                        prompt_tokens = pricing_data.get('prompt_tokens', 0)
-                        completion_tokens = pricing_data.get('completion_tokens', 0)
-                        cost_usd = pricing_data.get('total_cost', 0.0)
+                    if "pricing" in message.metadata:
+                        pricing_data = message.metadata["pricing"]
+                        prompt_tokens = pricing_data.get("prompt_tokens", 0)
+                        completion_tokens = pricing_data.get("completion_tokens", 0)
+                        cost_usd = pricing_data.get("total_cost", 0.0)
                         logger.debug(
                             f"[MessageService] Extracted pricing from metadata: "
                             f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
@@ -118,8 +118,8 @@ class MessageService:
                         usage_data = extract_usage_from_metadata(message.metadata)
                         if usage_data:
                             # Extract tokens directly from usage data
-                            prompt_tokens = usage_data.get('prompt_tokens', usage_data.get('input_tokens', 0))
-                            completion_tokens = usage_data.get('completion_tokens', usage_data.get('output_tokens', 0))
+                            prompt_tokens = usage_data.get("prompt_tokens", usage_data.get("input_tokens", 0))
+                            completion_tokens = usage_data.get("completion_tokens", usage_data.get("output_tokens", 0))
                             # No cost calculation here - that's done in llms.py
                             cost_usd = 0.0
                             logger.debug(

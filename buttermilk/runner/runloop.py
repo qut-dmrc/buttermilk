@@ -4,7 +4,7 @@ from asyncio import Semaphore
 
 from humanfriendly import format_timespan
 
-from buttermilk._core import logger
+from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 

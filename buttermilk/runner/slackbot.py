@@ -10,7 +10,7 @@ from autogen_core.models import AssistantMessage, UserMessage
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
-from buttermilk._core import BM, logger
+from buttermilk import BM, logger
 from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest

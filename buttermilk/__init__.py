@@ -8,10 +8,26 @@
 #     def silence_task_logs():
 #         pass
 
-from ._core.dmrc import get_bm, set_bm
-from ._core.bm_init import BM
+from ._core.bm_init import BM, logger
+from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
-from ._core.log import logger
+from ._core.contract import (
+    AgentInput as AgentInput,
+    AgentTrace as AgentTrace,
+    AllMessages as AllMessages,
+    ConductorRequest as ConductorRequest,
+    FlowMessage as FlowMessage,
+    GroupchatMessageTypes as GroupchatMessageTypes,
+    HeartBeat as HeartBeat,
+    ManagerMessage as ManagerMessage,
+    OOBMessages as OOBMessages,
+    ProceedToNextTaskSignal as ProceedToNextTaskSignal,
+    StepRequest as StepRequest,
+    TaskProcessingComplete as TaskProcessingComplete,
+    ToolOutput as ToolOutput,
+    UIMessage as UIMessage,
+)
+from ._core.dmrc import get_bm, set_bm
 
 get_buttermilk_instance = get_bm
 
@@ -19,7 +35,7 @@ get_buttermilk_instance = get_bm
 class BMAccessor:
     """Descriptor that provides access to the singleton BM instance."""
 
-    def __getattr__(self, name):# -> Any:
+    def __getattr__(self, name):  # -> Any:
         return getattr(get_bm(), name)
 
     def __get__(self, obj, objtype=None) -> BM:
@@ -40,10 +56,27 @@ __all__ = [
     "BQ_SCHEMA_DIR",
     "COL_PREDICTION",
     "TEMPLATES_PATH",
-    "bm",         # Export the singleton accessor
-    "get_bm",             # Export the getter function
+    "bm",  # Export the singleton accessor
+    "get_bm",  # Export the getter function
     "get_buttermilk_instance",  # Export the alias for get_bm
     "logger",
-    "set_bm",             # Export the setter function
-    "silence_task_logs",  # Export the utility for explicit use
+    "set_bm",  # Export the setter function
+    "AgentConfig",
+    "AgentVariants",
+    "StepRequest",
+    "FlowMessage",
+    "AgentInput",
+    "AgentTrace",
+    "ManagerMessage",
+    "UIMessage",
+    "ManagerMessage",
+    "TaskProcessingComplete",
+    "OOBMessages",
+    "ToolOutput",
+    "AllMessages",
+    "GroupchatMessageTypes",
+    "OOBMessages",
+    "ProceedToNextTaskSignal",
+    "ConductorRequest",
+    "HeartBeat",
 ]

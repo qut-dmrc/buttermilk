@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-from buttermilk._core import AgentInput, logger
+from buttermilk import AgentInput, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentOutput
 

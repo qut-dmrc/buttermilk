@@ -4,7 +4,7 @@ import pytest
 from cloudpathlib import AnyPath
 from omegaconf import DictConfig
 
-from buttermilk._core import BM
+from buttermilk import BM
 
 
 def test_has_test_info(bm: BM):

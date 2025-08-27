@@ -1,12 +1,12 @@
 """Unit tests for structured LLMHost agent."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, MagicMock
-from typing import Any
+from unittest.mock import AsyncMock, Mock
 
+import pytest
 from autogen_core.tools import ToolSchema
-from buttermilk._core import AgentInput, StepRequest
+
+from buttermilk import AgentInput, StepRequest
 from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import END, MANAGER
@@ -181,7 +181,8 @@ class TestStructuredLLMHostListen:
 
         # Use patch to mock the invoke method at the class level
         from unittest.mock import patch
-        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+
+        with patch.object(StructuredLLMHostAgent, "invoke", new_callable=AsyncMock) as mock_invoke:
             mock_invoke.return_value = mock_trace
 
             await mock_host._listen(
@@ -230,7 +231,8 @@ class TestStructuredLLMHostListen:
 
         # Use patch to mock the invoke method at the class level
         from unittest.mock import patch
-        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+
+        with patch.object(StructuredLLMHostAgent, "invoke", new_callable=AsyncMock) as mock_invoke:
             mock_invoke.return_value = Mock(outputs="Done")
 
             await mock_host._listen(
@@ -254,7 +256,8 @@ class TestStructuredLLMHostListen:
 
         # Use patch to mock the invoke method at the class level
         from unittest.mock import patch
-        with patch.object(StructuredLLMHostAgent, 'invoke', new_callable=AsyncMock) as mock_invoke:
+
+        with patch.object(StructuredLLMHostAgent, "invoke", new_callable=AsyncMock) as mock_invoke:
             mock_invoke.return_value = mock_trace
 
             await mock_host._listen(
@@ -316,10 +319,11 @@ class TestStructuredLLMHostListen:
 
         # Patch the necessary methods
         from unittest.mock import patch
-        with patch.object(mock_host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+
+        with patch.object(mock_host, "_fill_template", new_callable=AsyncMock) as mock_fill:
             mock_fill.return_value = [Mock()]  # Return mock messages
 
-            with patch('buttermilk.buttermilk.get_bm') as mock_get_bm:
+            with patch("buttermilk.buttermilk.get_bm") as mock_get_bm:
                 mock_bm = Mock()
                 mock_llms = Mock()
                 mock_bm.llms = mock_llms
@@ -367,10 +371,11 @@ class TestStructuredLLMHostListen:
         )
 
         from unittest.mock import patch
-        with patch.object(mock_host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+
+        with patch.object(mock_host, "_fill_template", new_callable=AsyncMock) as mock_fill:
             mock_fill.return_value = [Mock()]
 
-            with patch('buttermilk.buttermilk.get_bm') as mock_get_bm:
+            with patch("buttermilk.buttermilk.get_bm") as mock_get_bm:
                 mock_bm = Mock()
                 mock_llms = Mock()
                 mock_bm.llms = mock_llms

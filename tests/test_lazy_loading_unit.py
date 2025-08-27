@@ -1,9 +1,10 @@
 """Unit tests for lazy loading utilities and patterns."""
 
 import asyncio
-import pytest
-from unittest.mock import Mock, patch, call
 import time
+from unittest.mock import Mock, patch
+
+import pytest
 
 pytestmark = pytest.mark.anyio
 
@@ -100,7 +101,7 @@ class TestCloudManagerLazyLoading:
 
     def test_cloud_manager_gcp_credentials_lazy(self):
         """Test that GCP credentials are not fetched until needed."""
-        with patch('google.auth.default') as mock_auth:
+        with patch("google.auth.default") as mock_auth:
             from buttermilk._core.cloud import CloudManager
             
             # Create CloudManager
@@ -117,9 +118,7 @@ class TestCloudManagerLazyLoading:
 
     def test_cloud_manager_clients_are_lazy(self):
         """Test that cloud clients are not created until accessed."""
-        with patch('google.auth.default'), \
-             patch('google.cloud.storage.Client') as mock_storage, \
-             patch('google.cloud.bigquery.Client') as mock_bq:
+        with patch("google.auth.default"), patch("google.cloud.storage.Client") as mock_storage, patch("google.cloud.bigquery.Client") as mock_bq:
             
             from buttermilk._core.cloud import CloudManager
             
@@ -140,7 +139,7 @@ class TestCloudManagerLazyLoading:
 
     def test_cloud_manager_credentials_cached(self):
         """Test that credentials are cached after first access."""
-        with patch('google.auth.default') as mock_auth:
+        with patch("google.auth.default") as mock_auth:
             mock_auth.return_value = ("fake_creds", "fake_project")
             
             from buttermilk._core.cloud import CloudManager
@@ -181,8 +180,8 @@ class TestLLMManagerLazyLoading:
         test_connections = {
             "gemini": {"api_key": "test_key", "model": "gemini-pro"}
         }
-        
-        with patch('google.generativeai.configure') as mock_configure:
+
+        with patch("google.generativeai.configure") as mock_configure:
             llms = LLMs(connections=test_connections)
             
             # Configuration should not happen during LLMs creation
@@ -194,7 +193,7 @@ class TestQueryRunnerLazyLoading:
 
     def test_query_runner_client_dependency(self):
         """Test that QueryRunner depends on lazy-loaded BigQuery client."""
-        with patch('google.cloud.bigquery.Client') as mock_bq_client:
+        with patch("google.cloud.bigquery.Client") as mock_bq_client:
             from buttermilk._core.query import QueryRunner
             
             # Create mock BigQuery client
@@ -211,10 +210,9 @@ class TestAsyncBackgroundOperations:
 
     async def test_background_config_saving(self):
         """Test that config saving can happen in background."""
-        from buttermilk._core import BM
-        
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk.utils.save.save') as mock_save:
+        from buttermilk import BM
+
+        with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk.utils.save.save") as mock_save:
             
             # Make save async to simulate real behavior
             async def async_save(*args, **kwargs):
@@ -234,10 +232,9 @@ class TestAsyncBackgroundOperations:
 
     async def test_ip_fetching_is_background(self):
         """Test that IP address fetching happens in background."""
-        from buttermilk._core import BM
-        
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk.utils.get_ip') as mock_get_ip:
+        from buttermilk import BM
+
+        with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk.utils.get_ip") as mock_get_ip:
             
             # Make IP fetching slow to test it doesn't block
             async def slow_ip_fetch():
@@ -266,9 +263,9 @@ class TestMemoryEfficiency:
 
     def test_large_objects_not_created_unnecessarily(self):
         """Test that large objects are not created until needed."""
-        from buttermilk._core import BM
-        
-        with patch('buttermilk._core.bm_init.CloudManager'):
+        from buttermilk import BM
+
+        with patch("buttermilk._core.bm_init.CloudManager"):
             bm = BM(
                 name="test",
                 job="test",

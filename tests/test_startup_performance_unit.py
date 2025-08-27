@@ -2,9 +2,10 @@
 
 import asyncio
 import time
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 pytestmark = pytest.mark.anyio
 
@@ -15,9 +16,9 @@ class TestBMInitialization:
     def test_bm_creation_is_fast(self):
         """Test that BM instance creation doesn't do heavy work immediately."""
         start_time = time.time()
-        
-        with patch('buttermilk._core.bm_init.CloudManager') as mock_cloud:
-            from buttermilk._core import BM
+
+        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud:
+            from buttermilk import BM
             
             # Create BM instance with minimal config
             bm = BM(
@@ -36,16 +37,14 @@ class TestBMInitialization:
 
     def test_llm_property_is_lazy(self):
         """Test that LLMs are not loaded until first access."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init.SecretsManager') as mock_secrets:
-            
-            from buttermilk._core import BM
+        with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk._core.bm_init.SecretsManager") as mock_secrets:
+            from buttermilk import BM
             
             bm = BM(
                 name="test",
-                job="test", 
+                job="test",
                 secret_provider={"type": "gcp", "project": "test-project"},
-                clouds=[{"type": "gcp", "project": "test-project"}]
+                clouds=[{"type": "gcp", "project": "test-project"}],
             )
             
             # SecretsManager should not be called during BM creation
@@ -56,8 +55,8 @@ class TestBMInitialization:
 
     def test_secret_manager_is_lazy(self):
         """Test that secret manager client is not created until first access."""
-        with patch('buttermilk._core.bm_init.CloudManager'):
-            from buttermilk._core import BM
+        with patch("buttermilk._core.bm_init.CloudManager"):
+            from buttermilk import BM
             
             bm = BM(
                 name="test",
@@ -71,8 +70,8 @@ class TestBMInitialization:
 
     def test_cloud_manager_is_lazy(self):
         """Test that cloud manager doesn't immediately authenticate."""
-        with patch('google.auth.default') as mock_auth:
-            from buttermilk._core import BM
+        with patch("google.auth.default") as mock_auth:
+            from buttermilk import BM
             
             bm = BM(
                 name="test",
@@ -86,10 +85,8 @@ class TestBMInitialization:
 
     def test_weave_import_is_cached(self):
         """Test that weave import is cached after first access."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('weave.init') as mock_weave_init:
-            
-            from buttermilk._core import BM
+        with patch("buttermilk._core.bm_init.CloudManager"), patch("weave.init") as mock_weave_init:
+            from buttermilk import BM
             
             bm = BM(
                 name="test",
@@ -115,11 +112,12 @@ class TestLazyRouteManager:
     def test_lazy_route_manager_creation(self):
         """Test LazyRouteManager can be created."""
         from fastapi import FastAPI
+
         from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         app = FastAPI()
         lazy_manager = LazyRouteManager(app)
-        
+
         assert lazy_manager.app is app
         assert lazy_manager._deferred_routers == []
         assert not lazy_manager._core_routes_registered
@@ -128,6 +126,7 @@ class TestLazyRouteManager:
     def test_core_routes_registration(self):
         """Test that core routes can be registered immediately."""
         from fastapi import FastAPI
+
         from buttermilk.api.lazy_routes import LazyRouteManager
         
         app = FastAPI()
@@ -142,7 +141,8 @@ class TestLazyRouteManager:
 
     def test_router_deferral(self):
         """Test that routers can be deferred for lazy loading."""
-        from fastapi import FastAPI, APIRouter
+        from fastapi import APIRouter, FastAPI
+
         from buttermilk.api.lazy_routes import LazyRouteManager
         
         app = FastAPI()
@@ -159,7 +159,8 @@ class TestLazyRouteManager:
 
     async def test_heavy_routes_loaded_on_demand(self):
         """Test that heavy routes are loaded when needed."""
-        from fastapi import FastAPI, APIRouter
+        from fastapi import APIRouter, FastAPI
+
         from buttermilk.api.lazy_routes import LazyRouteManager
         
         app = FastAPI()
@@ -184,18 +185,19 @@ class TestLazyRouteManager:
     def test_needs_heavy_routes_detection(self):
         """Test detection of paths that need heavy routes."""
         from fastapi import FastAPI
+
         from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         app = FastAPI()
         lazy_manager = LazyRouteManager(app)
-        
+
         # These should trigger heavy route loading
         assert lazy_manager._needs_heavy_routes("/api/flows/trans")
         assert lazy_manager._needs_heavy_routes("/api/records/123")
         assert lazy_manager._needs_heavy_routes("/api/session/abc")
         assert lazy_manager._needs_heavy_routes("/tools/judge")
         assert lazy_manager._needs_heavy_routes("/ws/session123")
-        
+
         # These should not
         assert not lazy_manager._needs_heavy_routes("/health")
         assert not lazy_manager._needs_heavy_routes("/flow/trans")
@@ -207,32 +209,32 @@ class TestSecretsManagerOptimizations:
 
     def test_secrets_manager_client_is_lazy(self):
         """Test that SecretManager client is not created until first access."""
-        with patch('google.cloud.secretmanager.SecretManagerServiceClient') as mock_client:
+        with patch("google.cloud.secretmanager.SecretManagerServiceClient") as mock_client:
             from buttermilk._core.keys import SecretsManager
-            
+
             # Create SecretsManager
             sm = SecretsManager(type="gcp", project="test-project")
-            
+
             # Client should not be created yet
             mock_client.assert_not_called()
-            
+
             # Access client property to trigger lazy loading
             client = sm.client
-            
+
             # Now client should be created
             mock_client.assert_called_once()
 
     def test_secrets_manager_client_is_cached(self):
         """Test that SecretManager client is cached after first access."""
-        with patch('google.cloud.secretmanager.SecretManagerServiceClient') as mock_client:
+        with patch("google.cloud.secretmanager.SecretManagerServiceClient") as mock_client:
             from buttermilk._core.keys import SecretsManager
-            
+
             sm = SecretsManager(type="gcp", project="test-project")
-            
+
             # Access client multiple times
             client1 = sm.client
             client2 = sm.client
-            
+
             # Should only create client once
             assert mock_client.call_count == 1
             assert client1 is client2
@@ -243,39 +245,33 @@ class TestConfigurationValidation:
 
     def test_bm_requires_secret_provider(self):
         """Test that BM raises error without secret provider."""
-        from buttermilk._core import BM
-        
+        from buttermilk import BM
+
         with pytest.raises(Exception):  # Should raise validation error
             BM(
                 name="test",
                 job="test",
-                clouds=[{"type": "gcp", "project": "test-project"}]
+                clouds=[{"type": "gcp", "project": "test-project"}],
                 # Missing secret_provider
             )
 
     def test_storage_config_validation(self):
         """Test StorageConfig validation and computed properties."""
         from buttermilk._core.storage_config import StorageConfig
-        
+
         # Valid config
-        config = StorageConfig(
-            type="bigquery",
-            project_id="test-project",
-            dataset_id="test_dataset",
-            table_id="test_table"
-        )
-        
+        config = StorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table")
+
         assert config.full_table_id == "test-project.test_dataset.test_table"
-        
+
         # Incomplete config
         incomplete_config = StorageConfig(
             type="bigquery",
-            project_id="test-project"
+            project_id="test-project",
             # Missing dataset_id and table_id
         )
-        
-        assert incomplete_config.full_table_id is None
 
+        assert incomplete_config.full_table_id is None
 
 
 class TestAsyncCacheOperations:
@@ -283,11 +279,12 @@ class TestAsyncCacheOperations:
 
     async def test_llm_cache_writing_is_async(self):
         """Test that LLM cache writing happens asynchronously."""
-        with patch('buttermilk._core.bm_init.CloudManager'), \
-             patch('buttermilk._core.bm_init.SecretsManager'), \
-             patch.object(Path, 'write_text') as mock_write:
-            
-            from buttermilk._core import BM
+        with (
+            patch("buttermilk._core.bm_init.CloudManager"),
+            patch("buttermilk._core.bm_init.SecretsManager"),
+            patch.object(Path, "write_text") as mock_write,
+        ):
+            from buttermilk import BM
             
             bm = BM(
                 name="test",
@@ -314,11 +311,7 @@ class TestStartupTiming:
     def test_core_imports_are_fast(self):
         """Test that core imports don't take too long."""
         start_time = time.time()
-        
-        from buttermilk._core import BM
-        from buttermilk.api.flow import create_app
-        from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         import_time = time.time() - start_time
         
         # Core imports should be under 1 second

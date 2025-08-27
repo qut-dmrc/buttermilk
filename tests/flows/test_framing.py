@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core import BM, logger
+from buttermilk import BM, logger
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
 from buttermilk._core.types import Record, RunRequest  # Import RunRequest

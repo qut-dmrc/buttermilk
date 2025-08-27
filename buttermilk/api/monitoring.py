@@ -10,12 +10,12 @@ External monitoring tools handle detailed metrics and alerting.
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from buttermilk._core import logger
+from buttermilk import logger
 from buttermilk.monitoring import MetricsCollector, SimpleHealthMonitor, get_metrics_collector, get_simple_health_monitor
 
 # Create simplified monitoring router
@@ -48,7 +48,7 @@ def get_metrics() -> MetricsCollector:
 
 
 def get_health_monitor() -> SimpleHealthMonitor:
-    """Get simple health monitor dependency.""" 
+    """Get simple health monitor dependency."""
     return get_simple_health_monitor()
 
 

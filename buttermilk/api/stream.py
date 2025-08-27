@@ -5,14 +5,14 @@ This module handles streaming API requests to flows, using the unified RunReques
 
 from collections.abc import AsyncGenerator
 
-from buttermilk._core import logger
+from buttermilk import logger
 from buttermilk._core.log import logger
 from buttermilk._core.types import RunRequest  # Import RunRequest
 
 
 async def flow_stream(
     flow,
-    run_request: RunRequest, # Changed parameter name and type hint
+    run_request: RunRequest,  # Changed parameter name and type hint
     return_json=True,
 ) -> AsyncGenerator[str, None]:
     """Stream a flow execution.
@@ -29,7 +29,7 @@ async def flow_stream(
     # Removed legacy FlowRequest handling and local Job creation
 
     # Run the flow directly with RunRequest
-    async for result in flow.run_flows(run_request=run_request): # Pass run_request directly
+    async for result in flow.run_flows(run_request=run_request):  # Pass run_request directly
         if result:
             # Assuming result is AgentTrace or similar with outputs and agent_info
             agent_name = getattr(getattr(result, "agent_info", None), "name", "unknown")
@@ -47,5 +47,5 @@ async def flow_stream(
 
     # Assuming flow object has a source attribute
     flow_source = getattr(flow, "source", "unknown")
-    logger.info(f"Finished flow {flow_source}.") # Access source from flow object
+    logger.info(f"Finished flow {flow_source}.")  # Access source from flow object
     return

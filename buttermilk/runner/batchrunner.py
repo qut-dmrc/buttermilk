@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
-from buttermilk._core import logger
+from buttermilk import logger
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.runner.flowrunner import FlowRunner
