@@ -299,23 +299,18 @@
 		</div>
 
 		<!-- Action Buttons -->
-		{#if $selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria}
+		{#if $selectedFlow }
 			<div class="run-button-container">
-				{#if $isDemoMode}
-					<!-- Demo mode: Only show Load Session -->
+				{#if hasMatchingSession}
 					<button class="btn load-session-button" onclick={handleDemoReload}>
 						LOAD SESSION
 					</button>
-				{:else}
-					<!-- Live mode: Show Run Flow, and Load Session if available -->
+				{/if}
+				{#if !$isDemoMode}
+					<!-- Only show Run Flow in live mode -->
 					<button class="btn terminal-button" onclick={runFlow}>
 						RUN FLOW
 					</button>
-					{#if hasMatchingSession}
-						<button class="btn load-session-button" onclick={handleDemoReload}>
-							LOAD SESSION
-						</button>
-					{/if}
 				{/if}
 			</div>
 		{/if}

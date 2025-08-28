@@ -336,7 +336,7 @@ class AutogenOrchestrator(Orchestrator):
             )
 
             logger.debug(
-                f"Registered agent: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
+                f"Registered agent of type {agent_cls}: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
             )
 
             return agent_type, variant_config
