@@ -25,7 +25,6 @@
 	let messagesProcessed = false; // Track if messages have been processed to prevent duplicates
 	let sessionMetadata: any = null;
 	let lastInitializedSessionId = ''; // Track last initialized session to avoid re-initialization
-	let isWebSocketReady = false; // Track WebSocket connection status
 	
 	// Message duplicate tracking
 	let processedMessageIds = new Set<string>();
@@ -93,7 +92,6 @@
 		isDemoModeInitialized = false;
 		messagesProcessed = false;
 		restorationComplete = false;
-		isWebSocketReady = false;
 		
 		// Reset message duplicate tracking for new session
 		processedMessageIds.clear();
@@ -231,7 +229,6 @@
 		const terminal = event.detail;
 		// Store the full terminal reference, not just handleMessage
 		websocketTerminal = terminal;
-		isWebSocketReady = true; // Mark WebSocket as ready
 		console.log('Terminal ready, session:', urlSessionId);
 
 		// Process any pending messages that were fetched before terminal was ready
@@ -296,7 +293,7 @@
 		selectedRecord={$selectedRecord || ''}
 		readonly={$isDemoMode || (sessionMetadata && !sessionMetadata.is_resumable)}
 		currentSessionId={urlSessionId}
-		sessionStatus={$isDemoMode ? 'demo' : (isWebSocketReady ? 'ready' : (sessionMetadata?.flow_status || 'unknown'))}
+		sessionStatus={$isDemoMode ? 'demo' : (sessionMetadata?.flow_status || 'unknown')}
 		isResumable={!$isDemoMode && sessionMetadata?.is_resumable !== false}
 		bind:this={websocketTerminal}
 		on:ready={handleTerminalReady}

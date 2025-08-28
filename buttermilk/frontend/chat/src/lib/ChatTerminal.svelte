@@ -44,6 +44,11 @@
 		);
 	}
 
+	// Compute unified status that combines connection and flow status
+	$: displayStatus = !isConnected && !readonly && sessionStatus !== 'demo' 
+		? (isReconnecting ? 'reconnecting' : 'disconnected')
+		: (sessionStatus === 'unknown' ? 'idle' : sessionStatus);
+
 	// Component state
 	let socket: WebSocket | null = null;
 	let messages: Message[] = [];
@@ -430,7 +435,6 @@
 					if (typeof event.data === 'string') {
 						try {
 							messageData = JSON.parse(event.data);
-							console.debug('Message received:', messageData);
 						} catch (parseError) {
 							// Not valid JSON
 							console.error('Message is not valid JSON, ignoring:', event.data);
@@ -446,18 +450,13 @@
 					const outputs = normalizedMessage.outputs;
 					if (!isSystemUpdate(normalizedMessage)) {
 						console.log('Normalized message received from websocket:', normalizedMessage);
-					} else {
-						console.debug('Normalized message received from websocket:', normalizedMessage);
 					}
 
 					// Check for system updates and flow progress
 					if (isSystemUpdate(messageData)) {
 						// Assign a shallow copy to ensure reactivity if properties change within the object
 						systemUpdateStatus = outputs as SystemUpdate;
-						console.debug('Updated system status:', systemUpdateStatus);
-						// Add logs to check specific properties
-						console.debug('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
-						console.debug('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
+						console.debug('Updated system status:', systemUpdateStatus, ' step_name: ', systemUpdateStatus.step_name, ' waiting_on:', systemUpdateStatus.waiting_on);
 					} else if (normalizedMessage.type === 'flow_progress_update') {
 						// Handle flow progress updates - update system status but don't add to message display
 						systemUpdateStatus = {
@@ -769,17 +768,21 @@
 	<div class="terminal-status-bar">
 		<div class="status-left">
 			<span class="session-info">Session: {currentSessionId.slice(0, 8)}...</span>
-			<span class="status-text status-{sessionStatus}">
-				{#if sessionStatus === 'running'}
+			<span class="status-text status-{displayStatus}">
+				{#if displayStatus === 'running'}
 					active
-				{:else if sessionStatus === 'completed'}
+				{:else if displayStatus === 'completed'}
 					completed
-				{:else if sessionStatus === 'failed'}
+				{:else if displayStatus === 'failed'}
 					failed
-				{:else if sessionStatus === 'idle'}
+				{:else if displayStatus === 'idle'}
 					idle
+				{:else if displayStatus === 'disconnected'}
+					disconnected
+				{:else if displayStatus === 'reconnecting'}
+					reconnecting...
 				{:else}
-					{sessionStatus}
+					{displayStatus}
 				{/if}
 			</span>
 			{#if !isResumable}
