@@ -213,10 +213,8 @@
 	}
 
 	onMount(async () => {
-		// Initialize the session
-		if (urlSessionId) {
-			await initializeSession(urlSessionId);
-		}
+		// Session initialization is now handled by the reactive block
+		// to avoid race conditions on initial load.
 	});
 
 	onDestroy(() => {

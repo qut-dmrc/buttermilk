@@ -593,7 +593,14 @@
 				type: 'user',
 				message_id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
 				preview: inputMessage,
-				timestamp: new Date().toISOString()
+				timestamp: new Date().toISOString(),
+				agent_info: {
+					agent_id: 'user',
+					agent_name: 'user',
+					role: 'user',
+					description: 'The user interacting with the terminal.',
+					session_id: get(sessionId)
+				}
 			};
 
 			addMessage(userMessageFormatted); // Display user message immediately

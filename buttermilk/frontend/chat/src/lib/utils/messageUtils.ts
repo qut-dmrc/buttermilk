@@ -433,7 +433,9 @@ export function normalizeWebSocketMessage(data: any): Message {
 		// Create normalized message structure
 		const normalizedMessage: Message = {
 			type: data.type as MessageType,
-			message_id: data.message_id,
+			message_id:
+				data.message_id ||
+				`${data.type}_${Math.random().toString(36).substring(2, 15)}`,
 			preview: data.preview || '',
 			timestamp: data.timestamp,
 			outputs: data.outputs || null,
