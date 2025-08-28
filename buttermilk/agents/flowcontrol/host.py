@@ -62,6 +62,7 @@ class HostAgent(Agent):
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
+        self._tool_to_agent_map: dict[str, str] = {}  # Maps tool names to agent IDs
 
         # Tool schemas for LLM-based hosts
         self._tools: list[Tool] = []
@@ -255,7 +256,20 @@ class HostAgent(Agent):
                 self._agent_registry[agent_id] = message
                 # Update tool registry
                 self._tools.extend(message.tool_definitions)
-                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {[tool.name for tool in message.tool_definitions]}")
+                
+                # Build tool-to-agent mapping from the tools this agent provides
+                tool_names = []
+                for tool in message.tool_definitions:
+                    # Extract tool name from either name attribute or schema.name
+                    tool_name = getattr(tool, 'name', None) or getattr(tool.schema, 'name', None)
+                    if tool_name:
+                        self._tool_to_agent_map[tool_name] = agent_id
+                        tool_names.append(tool_name)
+                    else:
+                        tool_names.append('unknown')
+                
+                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {tool_names}")
+                logger.debug(f"Tool-to-agent mapping: {dict(self._tool_to_agent_map)}")
 
             # Invalidate cache
             self._registry_summary_cache = None
@@ -699,36 +713,44 @@ class HostAgent(Agent):
         import json
 
         for call in tool_calls:
-            # First check if it's a participant tool
-            if call.name.endswith("_call"):
-                # Extract role from tool name (e.g., "zotero_researcher_call" -> "ZOTERO_RESEARCHER")
-                role_part = call.name[:-5].upper()  # Remove "_call" suffix and uppercase
-                # Parse the arguments
-                try:
-                    arguments = json.loads(call.arguments)
-                    if "inputs" in arguments:
-                        # If inputs are present, use them directly
-                        arguments = arguments["inputs"]
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse tool arguments: {call.arguments}")
-                    continue
+            # Look up the agent that owns this tool
+            agent_id = self._tool_to_agent_map.get(call.name)
+            if not agent_id:
+                logger.error(f"No agent found for tool '{call.name}'. Available tools: {list(self._tool_to_agent_map.keys())}")
+                continue
+                
+            # Get the agent's role from the registry
+            agent_announcement = self._agent_registry.get(agent_id)
+            if not agent_announcement:
+                logger.error(f"Agent {agent_id} not found in registry for tool '{call.name}'")
+                continue
+                
+            role = agent_announcement.agent_config.role.upper()
+            
+            # Parse the arguments
+            try:
+                arguments = json.loads(call.arguments)
+                if "inputs" in arguments:
+                    # If inputs are present, use them directly
+                    arguments = arguments["inputs"]
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                continue
 
-                step_request = StepRequest(
-                    role=role_part, inputs=arguments,
-                    metadata={"tool_name": call.name, "tool_call_id": call.id})
+            step_request = StepRequest(role=role, inputs=arguments, metadata={"tool_name": call.name, "tool_call_id": call.id})
 
-                # Create a more descriptive log message
-                tool_desc = self._describe_tool_call(call.name, arguments)
-                logger.info(f"Host routing to {role_part}: {tool_desc}")
+            # Create a more descriptive log message
+            tool_desc = self._describe_tool_call(call.name, arguments)
+            logger.info(f"Host routing tool '{call.name}' to agent {agent_id} (role: {role}): {tool_desc}")
 
-                if self.human_in_loop:
-                    await self._proposed_step.put(step_request)
-                else:
-                    # If human_in_loop is False, we send the step request directly
-                    logger.info(f"Host {self.agent_name} routing tool call to agent {role_part}: {step_request}")
-                    # Route to role-specific topic
-                    role_topic = DefaultTopicId(type=role_part)
-                    await self._publish(step_request, topic_id=role_topic)
+            if self.human_in_loop:
+                await self._proposed_step.put(step_request)
+            else:
+                # If human_in_loop is False, we send the step request directly
+                logger.info(f"Host {self.agent_name} routing tool call to agent {agent_id}: {step_request}")
+                # Route to role-specific topic
+                role_topic = DefaultTopicId(type=role)
+                await self._publish(step_request, topic_id=role_topic)
 
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.

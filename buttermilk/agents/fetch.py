@@ -4,22 +4,24 @@ This module defines `FetchAgent`, a Buttermilk `Agent` that can act
 autonomously to fetch records based on incoming messages.
 """
 
+import datetime
 from typing import Any
 
 from autogen_core import (
     message_handler,
 )
+from autogen_core.tools import FunctionTool, Tool
 
-from buttermilk import bm, logger, get_bm
+from buttermilk import bm, logger
 from buttermilk._core.agent import Agent, AgentOutput
 from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
     StepRequest,
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.log import logger
 from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk._core.types import Record
+from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.utils import URL_PATTERN
 
 MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
@@ -37,10 +39,12 @@ class FetchAgent(Agent):
         storage (dict[str, BaseStorageConfig]): Datasets that can be used to fetch records.
     """
 
-    def __init__(self, storage: dict[str, BaseStorageConfig], **data):
+    def __init__(self, storage: dict[str, BaseStorageConfig] = None, **data):
         super().__init__(**data)
-
-        self._data_sources = {source_name: bm.get_storage(config) for source_name, config in storage.items()}
+        if storage:
+            self._data_sources = {source_name: bm.get_storage(config) for source_name, config in storage.items()}
+        else:
+            self._data_sources = {}
         self._tools = []
 
     # TODO: Add actual search functionality that works for different data loaders instead of just iterating
@@ -65,6 +69,29 @@ class FetchAgent(Agent):
 
         return None
 
+    async def fetch_uri(self, uri: str) -> Record:
+        """Fetches a record based on a given URI.
+
+        Args:
+            uri (str): The URI of the record to fetch.
+
+        Returns:
+            Record: The fetched record.
+
+        Raises:
+            ProcessingError: If no record could be found or fetched.
+        """
+        record = await download_and_convert(uri)
+        if record:  # Check if download_and_convert succeeded
+            # Ensure metadata exists and add provenance
+            if not record.metadata:
+                record.metadata = {}
+            record.metadata["fetch_source_uri"] = uri
+            record.metadata["fetch_timestamp_utc"] = datetime.now(datetime.UTC).isoformat()
+            return record
+        # Use original_uri for the error message
+        raise ProcessingError(f"Record not found for URI: {uri}")
+
     async def fetch_record(self, record_id: str, dataset: str | None = None) -> Record:
         """Fetches a record based on `record_id`.
 
@@ -86,7 +113,8 @@ class FetchAgent(Agent):
 
         raise ProcessingError(f"Record not found for ID: {record_id}")
 
-    @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
+    # @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
+    @message_handler
     async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | None:
         if message.role != self.role:
             logger.debug(
@@ -131,3 +159,22 @@ class FetchAgent(Agent):
 
         # No result found
         raise ProcessingError("No result found in _process")
+
+    def get_tool_definitions(self) -> list[Tool]:
+        """Generate structured tool definitions for this agent."""
+        internal_tools = [
+            FunctionTool(
+                name="fetch_uri",
+                description=("Get a record from a given URI."),
+                func=self.fetch_uri,
+                strict=True,
+            ),
+            FunctionTool(
+                name="fetch_record",
+                description=("Get a record from a given record ID."),
+                func=self.fetch_record,
+                strict=True,
+            ),
+        ]
+        agent_tool = super().get_tool_definitions()
+        return agent_tool + internal_tools

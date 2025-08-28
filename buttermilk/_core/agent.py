@@ -38,7 +38,7 @@ from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import bm, logger, get_bm
+from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -521,7 +521,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         announcement = AgentAnnouncement(
             content=f"Agent {self.agent_name} active and available",
             agent_config=self._cfg,
-            available_tools=list(self._tools.keys()),
+            available_tools=[],
             tool_definitions=tool_definitions,
             status="active",
             announcement_type="initial",
