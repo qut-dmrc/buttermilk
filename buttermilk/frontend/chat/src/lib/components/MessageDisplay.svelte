@@ -53,8 +53,12 @@
 	<SummaryMessage {message} {expanded} />
 {:else if messageType === 'differences'}
 	<DifferencesMessage {message} {expanded} />
-{:else if messageType === 'system_update'}{:else if messageType === 'system_error'}
-	<AgentMessage {message} {expanded} />
-{:else if messageType === 'user'}
+{:else if
+		messageType === 'system_update' ||
+		messageType === 'system_error' ||
+		messageType === 'system_message' ||
+		messageType === 'user' ||
+		messageType === 'user_message' ||
+		messageType === 'chat_message'}
 	<AgentMessage {message} {expanded} />
 {:else}{/if}

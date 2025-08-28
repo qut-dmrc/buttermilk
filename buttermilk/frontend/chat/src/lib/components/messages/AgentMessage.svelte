@@ -8,9 +8,6 @@
 
 	// --- Reactive variables to access nested data and determine input type ---
 
-	// Extract the original UIMessage data (cast for type safety)
-	$: MessageData = message.outputs as GenericMessage;
-
 	$: agentName = message.agent_info?.agent_id || 'SYSTEM';
 	$: model = message.agent_info?.parameters?.model;
 	$: template = message.agent_info?.parameters?.template;
@@ -22,7 +19,7 @@
 		<div class="message-text col-sm-10">
 			<span class="message-body agent-text">
 				<slot name="messageContent">
-					{MessageData.content}
+					{message.outputs?.content || message.preview}
 				</slot>
 			</span>
 		</div>
