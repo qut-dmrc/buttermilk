@@ -5,6 +5,7 @@ autonomously to fetch records based on incoming messages.
 """
 
 import datetime
+from functools import partial
 from typing import Any
 
 from autogen_core import (
@@ -47,28 +48,6 @@ class FetchAgent(Agent):
             self._data_sources = {}
         self._tools = []
 
-    # TODO: Add actual search functionality that works for different data loaders instead of just iterating
-    async def _get_record_dataset(self, record_id: str, dataset_name: str | None = None) -> Record | None:
-        """Retrieve a record by ID from loaded data sources.
-
-        Args:
-            record_id: The record ID to search for
-
-        Returns:
-            Record if found, None otherwise
-
-        """
-        if dataset_name:
-            return self._data_sources[dataset_name].get_record(record_id)
-
-        # Otherwise, iterate through all data sources to find the record
-        for data_loader in self._data_sources.values():
-            for record in data_loader:
-                if record.record_id == record_id:
-                    return record
-
-        return None
-
     async def fetch_uri(self, uri: str) -> Record:
         """Fetches a record based on a given URI.
 
@@ -92,13 +71,12 @@ class FetchAgent(Agent):
         # Use original_uri for the error message
         raise ProcessingError(f"Record not found for URI: {uri}")
 
-    async def fetch_record(self, record_id: str, dataset: str | None = None) -> Record:
+    async def fetch_record(self, record_id: str, dataset_name: str) -> Record:
         """Fetches a record based on `record_id`.
 
         Args:
             record_id (str): The ID of the record to fetch from loaded data sources.
-            dataset (str | None): The name of the dataset to use to fetch the record.
-                If None, it will search across all datasets.
+            dataset (str): The name of the dataset to use to fetch the record.
 
         Returns:
             Record: The fetched record.
@@ -106,12 +84,10 @@ class FetchAgent(Agent):
         Raises:
             ProcessingError: If no record could be found or fetched.
         """
-        record = await self._get_record_dataset(record_id)
-        if record:
-            # Ensure metadata exists and add provenance
-            return record
-
-        raise ProcessingError(f"Record not found for ID: {record_id}")
+        try:
+            return self._data_sources[dataset_name].get_record(record_id)
+        except Exception as e:
+            raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 
     # @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
     @message_handler
@@ -169,12 +145,17 @@ class FetchAgent(Agent):
                 func=self.fetch_uri,
                 strict=True,
             ),
-            FunctionTool(
-                name="fetch_record",
-                description=("Get a record from a given record ID."),
-                func=self.fetch_record,
-                strict=True,
-            ),
         ]
-        agent_tool = super().get_tool_definitions()
-        return agent_tool + internal_tools
+        
+        # Create dataset-specific fetch_record tools using partial
+        dataset_tools = [
+            FunctionTool(
+                name=f"fetch_record_from_{dataset_name}",
+                description=f"Get a record from the {dataset_name} dataset by record ID.",
+                func=partial(self.fetch_record, dataset_name=dataset_name),
+                strict=True,
+            )
+            for dataset_name in self._data_sources.keys()
+        ]
+        
+        return internal_tools + dataset_tools
