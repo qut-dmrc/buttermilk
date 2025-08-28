@@ -14,11 +14,8 @@ from autogen_core import (
 from autogen_core.tools import FunctionTool, Tool
 
 from buttermilk import bm, logger
-from buttermilk._core.agent import Agent, AgentOutput
-from buttermilk._core.contract import (  # Buttermilk message contracts
-    AgentInput,
-    StepRequest,
-)
+from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentInput, AgentOutput, AgentTrace, StepRequest  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk._core.types import Record
@@ -89,9 +86,8 @@ class FetchAgent(Agent):
         except Exception as e:
             raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 
-    # @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
-    @message_handler
-    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | None:
+    @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
+    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | AgentTrace | None:
         if message.role != self.role:
             logger.debug(
                 f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}"
