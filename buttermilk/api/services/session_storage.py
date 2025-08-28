@@ -1,7 +1,7 @@
 """Session storage service for persisting chat flow messages to disk."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import List, Optional
 
@@ -107,8 +107,8 @@ class SessionStorageService:
 
             # Add the new message
             session_data["messages"].append(message_dict)
-            session_data["last_updated"] = datetime.now().isoformat()
-            session_data["last_activity"] = datetime.now().isoformat()
+            session_data["last_updated"] = datetime.now(UTC).isoformat()
+            session_data["last_activity"] = datetime.now(UTC).isoformat()
 
             # Write back to file
             with open(session_file, "w", encoding="utf-8") as f:
@@ -134,8 +134,8 @@ class SessionStorageService:
 
             # Update parameters and activity
             session_data["parameters"] = parameters
-            session_data["last_updated"] = datetime.now().isoformat()
-            session_data["last_activity"] = datetime.now().isoformat()
+            session_data["last_updated"] = datetime.now(UTC).isoformat()
+            session_data["last_activity"] = datetime.now(UTC).isoformat()
 
             # Write back to file
             with open(session_file, "w", encoding="utf-8") as f:
@@ -161,8 +161,8 @@ class SessionStorageService:
 
             # Update flow status and activity
             session_data["flow_status"] = status
-            session_data["last_updated"] = datetime.now().isoformat()
-            session_data["last_activity"] = datetime.now().isoformat()
+            session_data["last_updated"] = datetime.now(UTC).isoformat()
+            session_data["last_activity"] = datetime.now(UTC).isoformat()
 
             # Write back to file
             with open(session_file, "w", encoding="utf-8") as f:

@@ -838,7 +838,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             # --- Metadata enhancement ---
             content_hash = self._get_content_hash(record)
-            current_timestamp = datetime.now().isoformat()
+            current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
             try:
                 from buttermilk import get_bm
 
