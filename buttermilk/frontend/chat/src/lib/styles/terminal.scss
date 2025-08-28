@@ -569,6 +569,10 @@
 	animation: pulse 1.5s ease-in-out infinite;
 }
 
+.status-terminated {
+	color: #ff6666;
+}
+
 @keyframes pulse {
 	0%, 100% {
 		opacity: 1;

@@ -46,7 +46,8 @@
 
 	// Compute unified status that combines connection and flow status
 	$: displayStatus = !isConnected && !readonly && sessionStatus !== 'demo' 
-		? (isReconnecting ? 'reconnecting' : 'disconnected')
+		? (connectionError?.includes('terminated') ? 'terminated' : 
+		   isReconnecting ? 'reconnecting' : 'disconnected')
 		: (sessionStatus === 'unknown' ? 'idle' : sessionStatus);
 
 	// Component state
@@ -528,14 +529,25 @@
 			socket.onerror = (error) => {
 				console.error('WebSocket error:', error);
 				connectionError = 'WebSocket connection error. See console for details.';
-				// isConnected = false;
+				isConnected = false;
 			};
 
 			socket.onclose = (event) => {
 				console.log('WebSocket connection closed:', event.code, event.reason);
 				isConnected = false;
 
-				// Set reconnecting state
+				// Check if this is a session termination by the backend
+				const isSessionTerminated = event.code === 1000 && event.reason?.includes('TERMINATED');
+				const isServerShutdown = event.code === 1001 || event.code === 1006;
+				
+				if (isSessionTerminated) {
+					console.log('Session terminated by backend, stopping reconnection attempts');
+					connectionError = 'Session terminated by server';
+					isReconnecting = false;
+					return;
+				}
+
+				// Set reconnecting state for other types of disconnections
 				isReconnecting = true;
 				reconnectAttempts++;
 
@@ -546,7 +558,7 @@
 				}
 
 				// Attempt to reconnect after a delay with exponential backoff (but not in readonly/demo mode)
-				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && !readonly && sessionStatus !== 'demo') {
+				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && !readonly && sessionStatus !== 'demo' && !isServerShutdown) {
 					const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
 					console.debug(
 						`Will attempt reconnection ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS} in ${backoffDelay}ms`
@@ -788,6 +800,8 @@
 					disconnected
 				{:else if displayStatus === 'reconnecting'}
 					reconnecting...
+				{:else if displayStatus === 'terminated'}
+					terminated
 				{:else}
 					{displayStatus}
 				{/if}
