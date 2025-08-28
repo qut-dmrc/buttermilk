@@ -245,7 +245,7 @@ class SessionStorageService:
                 return True
 
             last_activity = datetime.fromisoformat(last_activity_str)
-            stale_threshold = datetime.now() - timedelta(minutes=stale_minutes)
+            stale_threshold = datetime.now(UTC) - timedelta(minutes=stale_minutes)
 
             return last_activity < stale_threshold
 
@@ -331,10 +331,10 @@ class SessionStorageService:
         """
         return {
             "session_id": session_id,
-            "created_at": datetime.now().isoformat(),
-            "last_updated": datetime.now().isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
             "flow_status": "idle",  # idle, running, completed, failed
-            "last_activity": datetime.now().isoformat(),
+            "last_activity": datetime.now(UTC).isoformat(),
             "parameters": {},  # flow parameters (flow, record_id, criteria, etc.)
             "messages": [],
         }
@@ -449,7 +449,7 @@ class SessionStorageService:
             session_data = self._get_or_create_session_data(session_id)
             
             # Add archival metadata
-            session_data["archived_at"] = datetime.now().isoformat()
+            session_data["archived_at"] = datetime.now(UTC).isoformat()
             session_data["archived_from"] = str(self._get_session_file(session_id))
             
             # Use BM's save method to archive to GCS
@@ -485,9 +485,9 @@ class SessionStorageService:
             # Update the session with final status and completion time
             session_data = self._get_or_create_session_data(session_id)
             session_data["flow_status"] = final_status
-            session_data["completed_at"] = datetime.now().isoformat()
-            session_data["last_updated"] = datetime.now().isoformat()
-            session_data["last_activity"] = datetime.now().isoformat()
+            session_data["completed_at"] = datetime.now(UTC).isoformat()
+            session_data["last_updated"] = datetime.now(UTC).isoformat()
+            session_data["last_activity"] = datetime.now(UTC).isoformat()
             
             # Write the finalized session data
             session_file = self._get_session_file(session_id)

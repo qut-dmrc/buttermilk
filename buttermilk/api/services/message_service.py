@@ -83,12 +83,23 @@ class MessageService:
             if message is None:
                 return None
 
-            # Skip messages that shouldn't be sent to UI
-            if isinstance(message, (ChatMessage, ManagerMessage, StepRequest)):
+            # Handle messages that need special processing
+            if isinstance(message, (ChatMessage, StepRequest)):
                 message_type = type(message).__name__
                 action = "returning as-is" if isinstance(message, ChatMessage) else "not sending to UI"
                 logger.debug(f"[MessageService] {message_type} received, {action}")
                 return message if isinstance(message, ChatMessage) else None
+            
+            # Convert ManagerMessage to user_message for display
+            if isinstance(message, ManagerMessage):
+                logger.debug(f"[MessageService] ManagerMessage received, converting to user_message for UI")
+                return ChatMessage(
+                    type="user_message",
+                    preview=str(message.content)[:PREVIEW_LENGTH] if message.content else "",
+                    outputs=message.content,
+                    agent_info=None,
+                    timestamp=datetime.datetime.now()
+                )
 
             agent_info = getattr(message, "agent_info", None)
             message_id = getattr(message, "call_id", uuid())
@@ -166,6 +177,10 @@ class MessageService:
                 message_type = "system_update"
             elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
+            elif isinstance(message, str):
+                # Handle string messages (like StructuredLLMHost summaries) as chat messages
+                message_type = "chat_message"
+                preview = message[:PREVIEW_LENGTH]
             else:
                 return None
 
