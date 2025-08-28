@@ -29,6 +29,7 @@ from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values
 
 
+
 class LLMAgent(Agent):
     """Agent that uses an LLM for text processing and generation.
 
@@ -100,48 +101,6 @@ class LLMAgent(Agent):
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
-
-    def get_display_name(self) -> str:
-        """Get the display name for this LLM agent, including model information.
-
-        Extends the base agent display name to include model tag for UI consistency.
-
-        Returns:
-            str: Display name with model tag appended
-
-        """
-        base_name = self._config.get_display_name()
-        model_tag = self._get_model_tag()
-        if model_tag:
-            return f"{base_name} [{model_tag}]"
-        return base_name
-
-    def _get_model_tag(self) -> str:
-        """Extract a short tag from the model name for display purposes.
-
-        Returns:
-            str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
-
-        """
-        model = self.parameters.get("model") or ""
-        model_lower = model.lower()
-        if not model_lower:
-            return ""
-
-        patterns = {
-            "gpt-4": "GPT4",
-            "gpt-3.5": "GPT3",
-            "sonnet": "SONN",
-            "opus": "OPUS",
-            "haiku": "HAIK",
-            "claude": "CLDE",
-            "gemini": "GEMN",
-            "llama": "LLMA",
-        }
-        for key, tag in patterns.items():
-            if key in model_lower:
-                return tag
-        return ""
 
     async def _fill_template(
         self,

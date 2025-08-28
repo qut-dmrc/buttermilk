@@ -266,18 +266,8 @@ class CLIUserAgent(UIAgent):
             agent_icon = get_agent_icon(agent_name)
             timestamp = format_timestamp()
 
-            # Get display name from agent (includes model tag if LLM agent)
-            if hasattr(message, "agent_info") and message.agent_info and hasattr(message.agent_info, "get_display_name"):
-                display_name = message.agent_info.get_display_name()
-            else:
-                # Fallback to basic name with model tag for backward compatibility
-                model_tag = get_model_tag(message)
-                display_name = agent_name
-                if model_tag:
-                    display_name = f"{display_name}[{model_tag}]"
-
             # Apply UI-specific formatting (ljust for console alignment)
-            agent_display = display_name[:16].ljust(16)
+            agent_display = agent_name[:16].ljust(16)
 
             # Build the formatted message text
             result = Text()
