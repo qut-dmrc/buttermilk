@@ -6,7 +6,6 @@ This module provides a clean RAG agent that:
 - Relies on templates for orchestration
 """
 
-
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -60,27 +59,3 @@ class RagAgent(LLMAgent):
         if output_model is None:
             output_model = ResearchResult
         super().__init__(output_model=output_model, **kwargs)
-
-    def get_tool_definitions(self) -> list[Tool]:
-        """Generate structured tool definitions for this agent."""
-        internal_tools = [
-            FunctionTool(
-                name="fetch_uri",
-                description=("Get a record from a given URI."),
-                func=self.fetch_uri,
-                strict=True,
-            ),
-        ]
-
-        # Create dataset-specific fetch_record tools using partial
-        dataset_tools = [
-            FunctionTool(
-                name=f"fetch_record_from_{dataset_name}",
-                description=f"Get a record from the {dataset_name} dataset by record ID.",
-                func=partial(self.fetch_record, dataset_name=dataset_name),
-                strict=True,
-            )
-            for dataset_name in self._data_sources.keys()
-        ]
-
-        return internal_tools + dataset_tools

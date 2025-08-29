@@ -620,9 +620,9 @@
 
 			addMessage(userMessageFormatted); // Display user message immediately
 			inputMessage = ''; // Clear input field
-		} catch {
-			console.error('Error sending message:');
-			addSystemMessage(`Error sending message:`);
+		} catch (error) {
+			console.error('Error sending message:', error);
+			addSystemMessage(`Error sending message: ${error}`);
 		}
 	}
 

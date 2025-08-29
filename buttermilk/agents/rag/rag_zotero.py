@@ -7,8 +7,11 @@ simplified RagAgent base class and adds only Zotero-specific output formatting.
 from typing import Any
 
 import pydantic
+from autogen_core.tools import FunctionTool, Tool
 from pydantic import Field
 
+from buttermilk._core.contract import AgentTrace
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
@@ -54,3 +57,30 @@ class RagZotero(RagAgent):
         if output_model is None:
             output_model = ZoteroResearchResult
         super().__init__(output_model=ZoteroResearchResult, **kwargs)
+
+    @staticmethod
+    async def review_literature(prompt: str) -> AgentTrace:
+        """Independently search, review, and synthesise the scholarly literature.
+        Inputs:
+            prompt (str): An extended description in natural language of
+                a research question or task that can be answered by reviewing existing
+                scholarly materials. This agent will independently develop an efficient
+                and effective search strategy from this description. It will benefit
+                from any additional context or guidance that you can provide.
+        """
+        raise ProcessingError(
+            "These are fake tools; they shouldn't actually be getting called. The host usually calls the agent's .invoke() method instead."
+        )
+
+    def get_tool_definitions(self) -> list[Tool]:
+        """Generate structured tool definitions for this agent."""
+        internal_tools = [
+            FunctionTool(
+                name="review_literature",
+                description="Independently search, review, and synthesise the scholarly literature. Provide an extended description in natural language of a research question or task that can be answered by reviewing existing scholarly materials. This agent will independently develop an efficient and effective search strategy from this description. It will benefit from any additional context or guidance that you can provide.",
+                func=self.review_literature,
+                strict=True,
+            )
+        ]
+
+        return internal_tools

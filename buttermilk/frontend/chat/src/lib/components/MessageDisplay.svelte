@@ -59,6 +59,7 @@
 		messageType === 'system_message' ||
 		messageType === 'user' ||
 		messageType === 'user_message' ||
+		messageType === 'user_response' ||
 		messageType === 'chat_message'}
 	<AgentMessage {message} {expanded} />
 {:else}{/if}
