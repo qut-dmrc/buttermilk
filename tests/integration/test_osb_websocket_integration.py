@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocketState
 
-from buttermilk._core.contract import FlowMessage, UIMessage
+from buttermilk._core.contract import FlowMessage, SystemPromptMessage
 from buttermilk.runner.flowrunner import FlowRunContext, SessionStatus
 
 

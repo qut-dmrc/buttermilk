@@ -19,13 +19,13 @@ from ._core.contract import (
     FlowMessage as FlowMessage,
     GroupchatMessageTypes as GroupchatMessageTypes,
     HeartBeat as HeartBeat,
-    ManagerMessage as ManagerMessage,
+    UserResponseMessage as UserResponseMessage,
     OOBMessages as OOBMessages,
     ProceedToNextTaskSignal as ProceedToNextTaskSignal,
     StepRequest as StepRequest,
     TaskProcessingComplete as TaskProcessingComplete,
     ToolOutput as ToolOutput,
-    UIMessage as UIMessage,
+    SystemPromptMessage as SystemPromptMessage,
 )
 from ._core.dmrc import get_bm, set_bm
 
@@ -67,9 +67,8 @@ __all__ = [
     "FlowMessage",
     "AgentInput",
     "AgentTrace",
-    "ManagerMessage",
-    "UIMessage",
-    "ManagerMessage",
+    "UserResponseMessage",
+    "SystemPromptMessage",
     "TaskProcessingComplete",
     "OOBMessages",
     "ToolOutput",

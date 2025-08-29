@@ -13,9 +13,9 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
     GroupchatMessageTypes,
-    ManagerMessage,
+    UserResponseMessage,
     OOBMessages,
-    UIMessage,
+    SystemPromptMessage,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
@@ -92,12 +92,12 @@ class SlackUIAgent(UIAgent):
 
     async def _request_input(
         self,
-        message: UIMessage,
+        message: SystemPromptMessage,
         **kwargs,
     ) -> None:
         """Ask for user input from the UI."""
-        if isinstance(message, UIMessage):
-            if isinstance(message, UIMessage) and message.options is not None:
+        if isinstance(message, SystemPromptMessage):
+            if isinstance(message, SystemPromptMessage) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons
                     confirm_blocks = confirm_bool(
@@ -146,7 +146,7 @@ class SlackUIAgent(UIAgent):
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> None:
         """Tell the user we're expecting some data, but don't wait around"""
-        if isinstance(message, UIMessage):
+        if isinstance(message, SystemPromptMessage):
             await self._request_input(message)
         return None
 
@@ -178,7 +178,7 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self.callback_to_groupchat(ManagerMessage(confirm=False, params=message["text"]))
+            await self.callback_to_groupchat(UserResponseMessage(confirm=False, content=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):
@@ -210,7 +210,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean False
-            await self.callback_to_groupchat(ManagerMessage(confirm=False))
+            await self.callback_to_groupchat(UserResponseMessage(confirm=False))
 
         async def handle_confirm(ack, body, client):
             await ack()
@@ -245,7 +245,7 @@ class SlackUIAgent(UIAgent):
                 actions=None,
             )
             # Call callback with boolean True
-            await self.callback_to_groupchat(ManagerMessage(confirm=True))
+            await self.callback_to_groupchat(UserResponseMessage(confirm=True))
             self._current_input_message = None
 
         async def handle_cancel(ack, body, client):
@@ -276,7 +276,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean Halt signal.
-            await self.callback_to_groupchat(ManagerMessage(confirm=False, halt=True))
+            await self.callback_to_groupchat(UserResponseMessage(confirm=False, halt=True))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)
@@ -293,7 +293,7 @@ class SlackUIAgent(UIAgent):
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         # Ask for input if we need to
-        if isinstance(message, UIMessage):
+        if isinstance(message, SystemPromptMessage):
             await self._request_input(message)
         else:
             # otherwise just send to UI

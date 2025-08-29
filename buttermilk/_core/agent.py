@@ -50,7 +50,7 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
-    ManagerMessage,  # Messages from the user
+    UserResponseMessage,  # Messages from the user
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -472,7 +472,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         - LLM agents might return structured data within `AgentOutput.outputs`.
         - Flow control agents (e.g., a host agent managing sub-tasks) might
           return messages like `StepRequest` (wrapped in `AgentOutput`).
-        - Interface agents (e.g., for user interaction) might return `ManagerMessage`
+        - Interface agents (e.g., for user interaction) might return `UserResponseMessage`
           (wrapped in `AgentOutput`).
         - Tool-using agents might return `ToolOutput` (wrapped in `AgentOutput`).
 
@@ -621,16 +621,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
             )
 
-    @message_handler  # Add ManagerMessage content to model context
-    async def handle_manager_message(
+    @message_handler  # Add UserResponseMessage content to model context
+    async def handle_user_response_message(
         self,
-        message: ManagerMessage,
+        message: UserResponseMessage,
         ctx: MessageContext,
     ) -> None:
-        """Handle ManagerMessage messages, adding non-command content to model context.
+        """Handle UserResponseMessage messages, adding non-command content to model context.
 
         Args:
-            message: The ManagerMessage to process.
+            message: The UserResponseMessage to process.
             ctx: Message context containing sender and topic information.
 
         """

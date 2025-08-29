@@ -10,7 +10,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     StepRequest,
-    UIMessage,
+    SystemPromptMessage,
 )
 from buttermilk.agents.flowcontrol.host import HostAgent
 
@@ -86,7 +86,7 @@ class TestHostTopicRouting:
 
     @pytest.mark.anyio
     async def test_manager_step_sends_ui_message_only(self, mock_host_agent):
-        """Test that MANAGER steps only send UIMessage to main topic."""
+        """Test that MANAGER steps only send SystemPromptMessage to main topic."""
         step = StepRequest(
             role="MANAGER",
             content="What would you like to do next?"
@@ -94,12 +94,12 @@ class TestHostTopicRouting:
         
         await mock_host_agent._execute_step(step)
         
-        # Should only send UIMessage, not StepRequest
+        # Should only send SystemPromptMessage, not StepRequest
         assert mock_host_agent.publish_message.call_count == 1
         call_args = mock_host_agent.publish_message.call_args_list[0]
         
         message = call_args[0][0]
-        assert isinstance(message, UIMessage)
+        assert isinstance(message, SystemPromptMessage)
         assert message.content == "What would you like to do next?"
         assert call_args[1]["topic_id"] == mock_host_agent._topic_id
 

@@ -12,7 +12,7 @@ from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 
 from buttermilk import AgentInput, StepRequest, bm, logger
-from buttermilk._core.agent import ManagerMessage
+from buttermilk._core.agent import UserResponseMessage
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
@@ -74,7 +74,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
     @message_handler
     async def _receive_instructions(
         self,
-        message: ManagerMessage,
+        message: UserResponseMessage,
         ctx: MessageContext,
     ) -> None:
         """Listen to messages and use structured tools to determine next steps."""
@@ -82,7 +82,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # No need to manually call it here since we're overriding the handler
 
         # Wait for tool schemas to be populated if they haven't been yet
-        # This handles the race condition where ManagerMessage arrives before ConductorRequest processing completes
+        # This handles the race condition where UserResponseMessage arrives before ConductorRequest processing completes
         max_wait = 5  # seconds
         wait_interval = 0.1
         waited = 0

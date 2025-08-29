@@ -23,12 +23,12 @@ from buttermilk._core.contract import (
     AgentOutput,
     AgentTrace,
     FlowMessage,  # Base type for messages
-    ManagerMessage,  # Responses sent *from* the manager (this agent)
+    UserResponseMessage,  # Responses sent *from* the manager (this agent)
     OOBMessages,
     TaskProcessingComplete,  # Status updates
     TaskProcessingStarted,  # Task start notifications (to be filtered)
     ToolOutput,  # Potentially displayable tool output
-    UIMessage,  # Requests sent *to* the manager (this agent)
+    SystemPromptMessage,  # Requests sent *to* the manager (this agent)
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
@@ -179,7 +179,7 @@ FormattableMessages = Union[
     AgentTrace,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    UIMessage,
+    SystemPromptMessage,
     ToolOutput,
     AgentInput,
     Record,
@@ -198,7 +198,7 @@ class CLIUserAgent(UIAgent):
     Inherits from `UIAgent`. It uses `rich` to display formatted messages received
     by the agent (`_listen`, `_handle_events`) and `aioconsole` to asynchronously
     poll for user input (`_poll_input`). User input is interpreted as confirmation,
-    negation, or free text, which is then sent back to the system as a `ManagerMessage`
+    negation, or free text, which is then sent back to the system as a `UserResponseMessage`
     via the `callback_to_groupchat` provided during initialization.
     """
 
@@ -210,7 +210,7 @@ class CLIUserAgent(UIAgent):
         self._console: Console = Console(highlight=True, markup=True)
         # Background task for polling user input - moved from PrivateAttr declaration
         self._input_task: asyncio.Task | None = None
-        # Store the last UIMessage with options for proper confirmation handling - moved from PrivateAttr declaration
+        # Store the last SystemPromptMessage with options for proper confirmation handling - moved from PrivateAttr declaration
         self._last_confirmation_options: list[str] | None = None
 
     async def callback_to_ui(self, message, source: str = "system", **kwargs):
@@ -391,7 +391,7 @@ class CLIUserAgent(UIAgent):
 
                 content_added = True
 
-            elif isinstance(message, UIMessage):
+            elif isinstance(message, SystemPromptMessage):
                 # Check if this is an agent list command response
                 registry = getattr(message, "agent_registry_summary", None)
                 if registry:
@@ -475,7 +475,7 @@ class CLIUserAgent(UIAgent):
                         result.append("[Y/n] Press ENTER to confirm, 'n' to reject", style="dim italic")
 
                     else:
-                        # Standard UIMessage formatting
+                        # Standard SystemPromptMessage formatting
                         result.append("REQ: ", style="bright_yellow")
                         content_preview = content[:150].replace("\n", " ") if content else "No content"
                         result.append(content_preview, style="white")
@@ -555,9 +555,9 @@ class CLIUserAgent(UIAgent):
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_manager_message(self, message: ManagerMessage, ctx: MessageContext) -> None:
-        """Handle ManagerMessage messages by displaying them."""
-        await super().handle_manager_message(message, ctx)
+    async def handle_user_response_message(self, message: UserResponseMessage, ctx: MessageContext) -> None:
+        """Handle UserResponseMessage messages by displaying them."""
+        await super().handle_user_response_message(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
@@ -587,8 +587,8 @@ class CLIUserAgent(UIAgent):
                 # Only show failed tasks
                 if formatted_msg := self._fmt_msg(message, source=source):
                     self._console.print(formatted_msg)
-        elif isinstance(message, (UIMessage, ToolOutput, AgentAnnouncement)):
-            if isinstance(message, UIMessage):
+        elif isinstance(message, (SystemPromptMessage, ToolOutput, AgentAnnouncement)):
+            if isinstance(message, SystemPromptMessage):
                 # Store options if this is a confirmation request
                 options = getattr(message, "options", None)
                 if isinstance(options, list) and options:
@@ -623,18 +623,18 @@ class CLIUserAgent(UIAgent):
                 if input_lower == "exit":
                     logger.info("User requested exit.")
                     # TODO: How to signal exit cleanly to the orchestrator? Raising KeyboardInterrupt might be harsh.
-                    # Maybe send a specific ManagerMessage or signal?
+                    # Maybe send a specific UserResponseMessage or signal?
                     # For now, simulate interrupt. Need a better mechanism.
                     # Find the main task and cancel it? Difficult from here.
                     # Send a special message via callback?
-                    # await self.callback_to_groupchat(ManagerMessage(confirm=False, prompt="USER_EXIT_REQUEST"))
+                    # await self.callback_to_groupchat(UserResponseMessage(confirm=False, content="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
 
                 # Handle agent list command
                 if input_lower in ["!agents", "!list", "!who"]:
                     logger.info("User requested agent list.")
                     # Send a special message requesting agent list
-                    response = ManagerMessage(
+                    response = UserResponseMessage(
                         confirm=False,
                         interrupt=False,
                         content="!agents",
@@ -671,7 +671,7 @@ class CLIUserAgent(UIAgent):
                     # User selected a specific option
                     logger.info(f"User selected option: {selected_option}")
                     is_confirm = selected_option.lower() in ["confirm", "yes", "y", "accept", "ok"]
-                    response = ManagerMessage(
+                    response = UserResponseMessage(
                         confirm=is_confirm,
                         interrupt=False,
                         content=selected_option,
@@ -681,7 +681,7 @@ class CLIUserAgent(UIAgent):
                     await self.callback_to_groupchat(response)
                 elif is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerMessage(confirm=False, interrupt=False, content="reject")
+                    response = UserResponseMessage(confirm=False, interrupt=False, content="reject")
                     self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
@@ -691,10 +691,10 @@ class CLIUserAgent(UIAgent):
                     has_feedback = bool(current_prompt_lines)
                     if has_feedback:
                         logger.info("User input interpreted as POSITIVE confirmation with feedback (interrupt).")
-                        response = ManagerMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
+                        response = UserResponseMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
                     else:
                         logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = ManagerMessage(confirm=True, interrupt=False, content="confirm")
+                        response = UserResponseMessage(confirm=True, interrupt=False, content="confirm")
 
                     self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
@@ -733,7 +733,7 @@ class CLIUserAgent(UIAgent):
 
         Args:
             callback_to_groupchat: The async function to call when user input is received.
-                            Expected signature: `async def callback(response: ManagerMessage)`
+                            Expected signature: `async def callback(response: UserResponseMessage)`
             **kwargs: Additional keyword arguments passed to the base class initializer.
 
         """

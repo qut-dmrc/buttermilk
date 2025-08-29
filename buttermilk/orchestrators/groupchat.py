@@ -40,7 +40,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowMessage,
-    ManagerMessage,
+    UserResponseMessage,
     TaskProcessingComplete,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
@@ -58,7 +58,7 @@ class InterruptHandler(BaseModel):
 
     async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any | type[DropMessage]:
         """Called when a message is published to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.publish_message`."""
-        if isinstance(message, ManagerMessage):
+        if isinstance(message, UserResponseMessage):
             if message.interrupt:
                 # Pause the flow
                 logger.info(f"Manager interrupt message received: {message}")

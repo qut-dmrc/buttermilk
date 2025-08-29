@@ -22,10 +22,10 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
     FlowProgressUpdate,
-    ManagerMessage,
+    UserResponseMessage,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    UIMessage,
+    SystemPromptMessage,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
@@ -83,7 +83,7 @@ class MockOrchestrator(Orchestrator):
 
         # Send initial welcome message
         await self._publish_message(
-            ManagerMessage(content=msg),
+            UserResponseMessage(content=msg),
         )
 
         # Handle any initial data if provided
@@ -315,8 +315,8 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(judge_result)
             await asyncio.sleep(1)
 
-            # Step 4: User interaction with UIMessage
-            user_request = UIMessage(
+            # Step 4: User interaction with SystemPromptMessage
+            user_request = SystemPromptMessage(
                 content="How should I proceed with this analysis?",
                 options=["Detailed analysis", "Generate summary", "Request revisions"],
             )
@@ -623,9 +623,9 @@ class MockOrchestrator(Orchestrator):
             waiting_on={},  # Mock empty waiting_on for simplicity
         )
 
-    def _generate_ui_message(self, content=None, options=None) -> UIMessage:
+    def _generate_ui_message(self, content=None, options=None) -> SystemPromptMessage:
         """Generate a fake UI message"""
-        from buttermilk._core.contract import UIMessage
+        from buttermilk._core.contract import SystemPromptMessage
 
         if content is None:
             questions = [
@@ -643,10 +643,10 @@ class MockOrchestrator(Orchestrator):
                 num_options = random.randint(2, 4)
                 options = [f"Option {i + 1}" for i in range(num_options)]
 
-        # UIMessage requires content, options, show_continue, allow_free_text, message_id
-        # response and response_timestamp are not part of UIMessage based on contract.py
+        # SystemPromptMessage requires content, options, show_continue, allow_free_text, message_id
+        # response and response_timestamp are not part of SystemPromptMessage based on contract.py
 
-        return UIMessage(
+        return SystemPromptMessage(
             content=content,
             options=options,
         )

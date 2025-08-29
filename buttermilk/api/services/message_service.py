@@ -8,7 +8,6 @@ from buttermilk import (
     AgentConfig,
     StepRequest,
     TaskProcessingComplete,
-    UIMessage,
     logger,
 )
 from buttermilk._core.config import RunRequest
@@ -20,7 +19,8 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
     FlowProgressUpdate,
-    ManagerMessage,
+    SystemPromptMessage,
+    UserResponseMessage,
     TaskProcessingStarted,
 )
 from buttermilk._core.types import AssistantMessage, Record
@@ -39,18 +39,16 @@ class ChatMessage(BaseModel):
     type: Literal[
         "chat_message",
         "record",
-        "ui_message",
-        "manager_response",
+        "system_prompt",
+        "user_response",
         "system_message",
         "system_update",
         "system_error",
-        "user_message",
         "assessments",
         "research_result",
         "differences",
         "judge_reasons",
         "start_flow",
-        "system_message",  # Added system_message
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
@@ -90,15 +88,16 @@ class MessageService:
                 logger.debug(f"[MessageService] {message_type} received, {action}")
                 return message if isinstance(message, ChatMessage) else None
             
-            # Convert ManagerMessage to user_message for display
-            if isinstance(message, ManagerMessage):
-                logger.debug(f"[MessageService] ManagerMessage received, converting to user_message for UI")
+            # Convert UserResponseMessage to user_response for display
+            if isinstance(message, UserResponseMessage):
+                logger.debug(f"[MessageService] UserResponseMessage received, converting to user_response for UI")
                 return ChatMessage(
-                    type="user_message",
+                    type="user_response",
                     preview=str(message.content)[:PREVIEW_LENGTH] if message.content else "",
                     outputs=message.content,
                     agent_info=None,
-                    timestamp=datetime.datetime.now()
+                    timestamp=datetime.datetime.now(),
+                    message_id=message.message_id  # Preserve the message_id
                 )
 
             agent_info = getattr(message, "agent_info", None)
@@ -113,30 +112,15 @@ class MessageService:
             
             if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
                 # Extract token/cost data from metadata
-                if hasattr(message, "metadata") and message.metadata:
-                    # First check for pricing info directly in metadata
-                    if "pricing" in message.metadata:
-                        pricing_data = message.metadata["pricing"]
-                        prompt_tokens = pricing_data.get("prompt_tokens", 0)
-                        completion_tokens = pricing_data.get("completion_tokens", 0)
-                        cost_usd = pricing_data.get("total_cost", 0.0)
-                        logger.debug(
-                            f"[MessageService] Extracted pricing from metadata: "
-                            f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
-                        )
-                    else:
-                        # Fallback to extracting usage data for backwards compatibility
-                        usage_data = extract_usage_from_metadata(message.metadata)
-                        if usage_data:
-                            # Extract tokens directly from usage data
-                            prompt_tokens = usage_data.get("prompt_tokens", usage_data.get("input_tokens", 0))
-                            completion_tokens = usage_data.get("completion_tokens", usage_data.get("output_tokens", 0))
-                            # No cost calculation here - that's done in llms.py
-                            cost_usd = 0.0
-                            logger.debug(
-                                f"[MessageService] Extracted usage (legacy): "
-                                f"{prompt_tokens} prompt, {completion_tokens} completion"
-                            )
+                if hasattr(message, "metadata") and message.metadata and "pricing" in message.metadata:
+                    pricing_data = message.metadata["pricing"]
+                    prompt_tokens = pricing_data.get("prompt_tokens", 0)
+                    completion_tokens = pricing_data.get("completion_tokens", 0)
+                    cost_usd = pricing_data.get("total_cost", 0.0)
+                    logger.debug(
+                        f"[MessageService] Extracted pricing from metadata: "
+                        f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
+                    )
                 
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
@@ -164,8 +148,8 @@ class MessageService:
                 message_type = "differences"
             elif isinstance(message, ResearchResult):
                 message_type = "research_result"
-            elif isinstance(message, UIMessage):
-                message_type = "ui_message"
+            elif isinstance(message, SystemPromptMessage):
+                message_type = "system_prompt"
             elif isinstance(message, AssistantMessage):
                 message_type = "chat_message"
                 preview = str(message.content)[:PREVIEW_LENGTH]
@@ -247,12 +231,12 @@ class MessageService:
                     from buttermilk.api.job_queue import JobQueueClient
 
                     return await JobQueueClient().pull_tox_example()
-                case "ui_message":
-                    return UIMessage(**data)
-                case "manager_response":
-                    # Remove 'type' field as ManagerMessage doesn't expect it
+                case "system_prompt":
+                    return SystemPromptMessage(**data)
+                case "user_response":
+                    # Remove 'type' field as UserResponseMessage doesn't expect it
                     message_data = {k: v for k, v in data.items() if k != "type"}
-                    return ManagerMessage(**message_data)
+                    return UserResponseMessage(**message_data)
                 case "TaskProcessingComplete":
                     return TaskProcessingComplete(**data)
                 case "TaskProcessingStarted":

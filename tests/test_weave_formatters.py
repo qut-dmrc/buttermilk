@@ -55,7 +55,7 @@ class TestEmptyTraceFilter:
             {
                 "op_name": "Agent.handle_manager_message.message_handler",
                 "output": "",
-                "inputs": {"message": {"type": "ManagerMessage"}}
+                "inputs": {"message": {"type": "UserResponseMessage"}}
             },
         ]
 

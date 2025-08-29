@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from buttermilk._core.contract import ManagerMessage, StepRequest
+from buttermilk._core.contract import UserResponseMessage, StepRequest
 # from buttermilk.runner.selector import Selector  # Module no longer exists
 
 import pytest
@@ -57,21 +57,21 @@ class TestStructuredDebate:
         # Configure the user responses
         selector._in_the_loop.side_effect = [
             # Phase 1: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 2: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 3: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 4 (Point 1): User provides feedback with interrupt
-            ManagerMessage(confirm=True, interrupt=True, prompt="I think we should consider X factor in this disagreement"),
+            UserResponseMessage(confirm=True, interrupt=True, content="I think we should consider X factor in this disagreement"),
             # Phase 4 (Point 2): User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 5: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 6: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 7: User confirms
-            ManagerMessage(confirm=True, interrupt=False, prompt=None),
+            UserResponseMessage(confirm=True, interrupt=False, content=None),
             # Phase 8 (END): No response needed
         ]
 

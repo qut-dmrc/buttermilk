@@ -20,11 +20,11 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowProgressUpdate,
-    ManagerMessage,
+    UserResponseMessage,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    UIMessage,
+    SystemPromptMessage,
 )
 from buttermilk._core.exceptions import FatalError
 
@@ -70,7 +70,7 @@ class HostAgent(Agent):
         self._current_step: str = ""
 
         # User confirmation attributes
-        self._user_confirmation: ManagerMessage | None = None
+        self._user_confirmation: UserResponseMessage | None = None
         self._user_confirmation_received: asyncio.Event = asyncio.Event()
         self._user_feedback: list[str] = []
         self._progress_reporter_task: asyncio.Task | None = None
@@ -205,10 +205,10 @@ class HostAgent(Agent):
     @message_handler
     async def handle_manager_message(
         self,
-        message: ManagerMessage,
+        message: UserResponseMessage,
         ctx: MessageContext,
     ) -> None:
-        """Handle ManagerMessage for user confirmations and feedback."""
+        """Handle UserResponseMessage for user confirmations and feedback."""
         logger.info(f"Host {self.agent_name} received user input: {message}")
         self._user_confirmation = message
         self._user_confirmation_received.set()
@@ -313,20 +313,20 @@ class HostAgent(Agent):
         content: str,
         options: bool | list[str] | None = None,
         **kwargs: Any,
-    ) -> UIMessage:
+    ) -> SystemPromptMessage:
         """Create a UI message that includes the agent registry summary.
         
         Args:
             content: The message content.
             options: Optional interaction options.
-            **kwargs: Additional UIMessage fields.
+            **kwargs: Additional SystemPromptMessage fields.
             
         Returns:
-            UIMessage: UI message with registry summary.
+            SystemPromptMessage: UI message with registry summary.
 
         """
         registry_summary = self.create_registry_summary()
-        return UIMessage(
+        return SystemPromptMessage(
             content=content,
             options=options,
             agent_registry_summary=registry_summary,
@@ -348,7 +348,7 @@ class HostAgent(Agent):
         """
         self._user_confirmation_received.clear()
         # Send the request to the user
-        confirmation_request = UIMessage(
+        confirmation_request = SystemPromptMessage(
             content=step.content or f"Confirm next step: {step.role}",
             options=["confirm", "reject"],
         )
@@ -674,8 +674,8 @@ class HostAgent(Agent):
 
             elif step.role == MANAGER:
                 # MANAGER steps don't spawn trackable worker tasks, so don't set _step_starting
-                # Convert StepRequest to UIMessage for frontend display
-                ui_message = UIMessage(
+                # Convert StepRequest to SystemPromptMessage for frontend display
+                ui_message = SystemPromptMessage(
                     content=step.content or "What would you like to do?",
                     options=None,  # No specific options, just free text response
                 )

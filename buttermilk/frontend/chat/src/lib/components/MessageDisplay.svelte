@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type ManagerResponse, type Message } from '$lib/utils/messageUtils';
+	import { type UserResponseMessage, type Message } from '$lib/utils/messageUtils';
 	import { createEventDispatcher } from 'svelte';
 	// Import modular components
 	import JudgeMessage from './messages/JudgeMessage.svelte'; // Import JudgeMessage directly
@@ -30,8 +30,8 @@
 	const dispatch = createEventDispatcher();
 
 	// Explicitly type the event parameter
-	function forwardManagerResponse(event: CustomEvent<ManagerResponse>) {
-		dispatch('managerResponse', event.detail);
+	function forwardUserResponse(event: CustomEvent<UserResponseMessage>) {
+		dispatch('userResponse', event.detail);
 	}
 </script>
 
@@ -47,8 +47,8 @@
 	<ZoteroResearchResult {message} {expanded} />
 {:else if messageType === 'zotero_ref_result'}
 	<ZoteroRefResult {message} {expanded} />
-{:else if messageType === 'ui_message'}
-	<ManagerRequestMessage {message} on:managerResponse={forwardManagerResponse} />
+{:else if messageType === 'system_prompt'}
+	<ManagerRequestMessage {message} on:userResponse={forwardUserResponse} />
 {:else if messageType === 'summary_result'}
 	<SummaryMessage {message} {expanded} />
 {:else if messageType === 'differences'}

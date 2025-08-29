@@ -14,12 +14,12 @@
 	import { tokenUsageDisplay } from './stores/tokenUsageStore';
 	import './styles/terminal.scss';
 	import {
-		type ManagerMessage,
-		type ManagerResponse,
+		type SystemPromptMessage,
+		type UserResponseMessage,
 		type Message,
 		type MessageType,
 		type SystemUpdate,
-		createManagerResponse,
+		createUserResponse,
 		isSystemUpdate,
 		normalizeWebSocketMessage
 	} from './utils/messageUtils';
@@ -53,6 +53,7 @@
 	// Component state
 	let socket: WebSocket | null = null;
 	let messages: Message[] = [];
+	let displayedMessageIds = new Set<string>(); // Track message IDs to prevent duplicates
 	let inputMessage = '';
 	let isConnected = false;
 	let connectionError = '';
@@ -68,8 +69,8 @@
 	// System update state
 	let systemUpdateStatus: SystemUpdate | null = null;
 
-	// Manager request state
-	let currentUIMessage: ManagerMessage | null = null;
+	// System prompt state
+	let currentUIMessage: SystemPromptMessage | null = null;
 	let selectionOptions: string[] = [];
 	let isConfirmRequest = false;
 
@@ -87,13 +88,13 @@
 				// Set the messages array directly to avoid any reprocessing
 				messages = storedMessages;
 
-				// Restore manager request state from the last ui_message if any
+				// Restore system prompt state from the last system_prompt if any
 				const lastUIMessage = storedMessages
 					.slice()
 					.reverse()
-					.find((msg) => msg.type === 'ui_message');
+					.find((msg) => msg.type === 'system_prompt');
 				if (lastUIMessage && lastUIMessage.outputs) {
-					currentUIMessage = lastUIMessage.outputs as ManagerMessage;
+					currentUIMessage = lastUIMessage.outputs as SystemPromptMessage;
 
 					// Determine input type
 					const inputs = currentUIMessage.options;
@@ -211,8 +212,9 @@
 		recordStore.set('');
 		selectedCriteria.set('');
 
-		// Clear messages
+		// Clear messages and message ID tracking
 		messages = [];
+		displayedMessageIds.clear();
 		// Get new session ID
 		addSystemMessage('Starting a new session...');
 		await getNewSessionId();
@@ -224,8 +226,8 @@
 	function toggleAutoApprove() {
 		humanInLoop = !humanInLoop;
 		console.log('Toggled human in loop state:', humanInLoop, ' approving:', !humanInLoop);
-		const message = createManagerResponse(!humanInLoop, null, null, null, null, humanInLoop);
-		sendManagerResponse(message);
+		const message = createUserResponse(!humanInLoop, null, null, null, null, humanInLoop);
+		sendUserResponse(message);
 	}
 
 	// Toggle interrupt state
@@ -240,16 +242,16 @@
 				agent_id: 'web socket'
 			};
 			// Also send separate interrupt message
-			const response = createManagerResponse(false, null, null, null, true, humanInLoop);
-			sendManagerResponse(response);
+			const response = createUserResponse(false, null, null, null, true, humanInLoop);
+			sendUserResponse(response);
 		} else {
 			message = {
 				type: 'TaskProcessingComplete',
 				role: 'MANAGER',
 				agent_id: 'web socket'
 			};
-			const response = createManagerResponse(false, null, null, null, false, humanInLoop);
-			sendManagerResponse(response);
+			const response = createUserResponse(false, null, null, null, false, humanInLoop);
+			sendUserResponse(response);
 		}
 
 		try {
@@ -262,48 +264,48 @@
 		}
 	}
 
-	// Function to send ManagerResponse back via WebSocket
-	function handleManagerResponse(event: CustomEvent<ManagerResponse>) {
+	// Function to send UserResponse back via WebSocket
+	function handleUserResponse(event: CustomEvent<UserResponseMessage>) {
 		const response = event.detail;
-		console.debug('Received manager response from component:', response);
-		sendManagerResponse(response);
+		console.debug('Received user response from component:', response);
+		sendUserResponse(response);
 	}
 
-	function sendManagerResponse(response: ManagerResponse) {
+	function sendUserResponse(response: UserResponseMessage) {
 		if (socket && socket.readyState === WebSocket.OPEN) {
 			try {
 				socket.send(JSON.stringify(response));
-				console.log('Sent manager response via WebSocket:', response);
-				// Clear current manager request after responding
+				console.log('Sent user response via WebSocket:', response);
+				// Clear current system prompt after responding
 				currentUIMessage = null;
 				selectionOptions = [];
 				isConfirmRequest = false;
 			} catch (e) {
-				console.error('Error sending manager response:', e);
+				console.error('Error sending user response:', e);
 				addSystemMessage(`Error sending response: ${e}`);
 			}
 		} else {
-			console.error('WebSocket not open, cannot send manager response.');
+			console.error('WebSocket not open, cannot send user response.');
 			addSystemMessage('Error: Connection not open.');
 		}
 	}
 
 	// Handle selection from options
 	function handleSelection(value: string) {
-		const response = createManagerResponse(true, value, null, null, false, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(true, value, null, null, false, humanInLoop);
+		sendUserResponse(response);
 	}
 
 	// Handle confirm/reject
 	function handleConfirm(value: boolean) {
-		const response = createManagerResponse(value, null, null, null, false, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(value, null, null, null, false, humanInLoop);
+		sendUserResponse(response);
 	}
 
 	// Handle halt
 	function handleHalt() {
-		const response = createManagerResponse(false, null, null, true, null, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(false, null, null, true, null, humanInLoop);
+		sendUserResponse(response);
 	}
 	async function getNewSessionId() {
 		try {
@@ -490,9 +492,9 @@
 						console.debug('added message for display: ', normalizedMessage);
 						addMessage(normalizedMessage);
 					}
-					// Check if this is a manager request and update state
-					if (normalizedMessage.type === 'ui_message' && outputs) {
-						currentUIMessage = outputs as ManagerMessage;
+					// Check if this is a system prompt and update state
+					if (normalizedMessage.type === 'system_prompt' && outputs) {
+						currentUIMessage = outputs as SystemPromptMessage;
 
 						// Determine input type
 						const inputs = currentUIMessage.options;
@@ -594,16 +596,17 @@
 
 		console.log('Sending message:', inputMessage);
 
-		// Create user message
-		const userMessage = createManagerResponse(false, null, inputMessage, false, false, humanInLoop);
+		// Create user message with unique ID for deduplication
+		const messageId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+		const userMessage = createUserResponse(false, null, inputMessage, false, false, humanInLoop, messageId);
 
 		try {
 			socket.send(JSON.stringify(userMessage));
 
 			// Create a properly formatted message object from the user message
 			const userMessageFormatted: Message = {
-				type: 'user',
-				message_id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+				type: 'user_response',
+				message_id: messageId, // Use the same ID for deduplication
 				preview: inputMessage,
 				timestamp: new Date().toISOString(),
 				agent_info: {
@@ -736,12 +739,21 @@
 
 	// Add a message to the list and scroll down
 	function addMessage(message: Message) {
+		// Check for duplicate messages using message_id
+		if (message.message_id && displayedMessageIds.has(message.message_id)) {
+			console.debug(`Skipping duplicate message: ${message.message_id}`);
+			return;
+		}
+
 		// Format timestamp (remove fractions of a second)
 		if (message.timestamp) {
 			message.timestamp = formatTimestamp(message.timestamp);
 		}
 
-		// Note: Manager request state is handled in WebSocket message handler
+		// Track this message ID as displayed
+		if (message.message_id) {
+			displayedMessageIds.add(message.message_id);
+		}
 
 		messages = [...messages, message];
 
