@@ -63,7 +63,7 @@ class FetchAgent(Agent):
             if not record.metadata:
                 record.metadata = {}
             record.metadata["fetch_source_uri"] = uri
-            record.metadata["fetch_timestamp_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
+            record.metadata["fetch_timestamp_utc"] = datetime.now(datetime.UTC).isoformat()
             return record
         # Use original_uri for the error message
         raise ProcessingError(f"Record not found for URI: {uri}")

@@ -180,6 +180,7 @@ FormattableMessages = Union[
     TaskProcessingComplete,
     TaskProcessingStarted,
     SystemPromptMessage,
+    UserResponseMessage,  # Added for user response messages
     ToolOutput,
     AgentInput,
     Record,
@@ -502,6 +503,23 @@ class CLIUserAgent(UIAgent):
                 result.append(f"TOOL:{message.call_id} ", style="green")
                 content_preview = str(message.content)[:100].replace("\n", " ") if message.content else "No output"
                 result.append(content_preview, style="dim white")
+                content_added = True
+
+            elif isinstance(message, UserResponseMessage):
+                # Format user response messages (echo back user input)
+                result.append("USER: ", style="bright_cyan")
+                if message.content:
+                    content_preview = str(message.content)[:200].replace("\n", " ")
+                    result.append(content_preview, style="white")
+                    if len(str(message.content)) > 200:
+                        result.append("...", style="dim")
+                else:
+                    # Show confirmation type for non-content messages
+                    if hasattr(message, "confirm") and message.confirm is not None:
+                        confirm_text = "✓ CONFIRM" if message.confirm else "✗ REJECT"
+                        result.append(confirm_text, style="green" if message.confirm else "red")
+                    else:
+                        result.append("(empty)", style="dim")
                 content_added = True
 
             elif hasattr(message, "content") and message.content:
