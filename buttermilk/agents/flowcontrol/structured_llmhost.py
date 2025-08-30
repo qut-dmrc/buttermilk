@@ -258,3 +258,30 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         if len(unique_tools) <= 3:
             return f"Calling: {', '.join(unique_tools)}"
         return f"Orchestrating {len(tool_calls)} tool calls across {len(unique_tools)} tools"
+
+    async def wait_check_current_step_completions(self) -> bool:
+        """Override to disable error threshold logic for structured LLM hosts.
+        
+        Unlike sequence-based hosts, structured LLM hosts make dynamic decisions
+        about which agents to call and should not terminate flows based on error rates.
+        Individual agent failures are part of the LLM's decision-making process.
+        
+        Returns:
+            bool: Always True, unless manually halted by user.
+        """
+        # Wait for pending tasks to complete but don't check error thresholds
+        last_step_successful = await self._wait_for_all_tasks_complete()
+        
+        # Clear error tracking for the next step (but don't evaluate thresholds)
+        async with self._tasks_condition:
+            total_failed = sum(self._failed_tasks_by_agent.values())
+            if total_failed > 0:
+                logger.info(
+                    f"StructuredLLMHost {self.agent_id}: {total_failed}/{self._total_tasks_in_step} tasks failed "
+                    f"but continuing (no error threshold for LLM-driven flows)"
+                )
+            self._failed_tasks_by_agent.clear()
+            self._total_tasks_in_step = 0
+
+        logger.info("Current step completed, clear to proceed.")
+        return True

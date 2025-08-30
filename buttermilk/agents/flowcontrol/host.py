@@ -213,6 +213,14 @@ class HostAgent(Agent):
         self._user_confirmation = message
         self._user_confirmation_received.set()
 
+        # Handle halt request - user wants to stop the entire flow
+        if message.halt:
+            logger.info(f"Host {self.agent_name} received halt request from user - terminating flow")
+            # Send END message to signal flow termination
+            end_step = StepRequest(role=END, content="Flow halted by user request")
+            await self._publish(end_step)
+            return
+
         if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
             logger.info(
                 f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})",
