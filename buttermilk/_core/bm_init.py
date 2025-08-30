@@ -38,6 +38,7 @@ import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
+from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
@@ -47,7 +48,7 @@ from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
 from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
 from buttermilk._core.query import QueryRunner  # For running SQL queries
-from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig, StorageFactory  # Unified storage config
+from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
 
@@ -1005,7 +1006,7 @@ class BM(BaseModel):
             return_df=return_df,
         )
 
-    def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
+    def get_storage(self, config: StorageConfig | dict | DictConfig | None = None) -> Any:
         """Factory method to create unified storage instances.
 
         Creates the appropriate storage class based on the configuration type,
@@ -1027,22 +1028,9 @@ class BM(BaseModel):
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        if not isinstance(config, BaseStorageConfig):
-            # Convert OmegaConf objects to StorageConfig
-            # This is necessary for Hydra integration
-            try:
-                from omegaconf import DictConfig, OmegaConf
-
-                if isinstance(config, DictConfig):
-                    config_dict = OmegaConf.to_container(config, resolve=True)
-                    config = StorageFactory.create_config(config_dict)
-                else:
-                    raise ValueError(f"Config must be a BaseStorageConfig or OmegaConf DictConfig, got {type(config)}")
-            except ImportError:
-                raise ValueError("Config must be a BaseStorageConfig object") from None
 
         # Use the storage factory to create the appropriate storage instance
-        from buttermilk._core.storage_config import StorageFactory
+        from buttermilk._core.storage_config import StorageFactory  # noqa import here to avoid loop
 
         return StorageFactory.create_storage(config, self)
 

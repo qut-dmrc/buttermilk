@@ -18,3 +18,10 @@ NO EXCEPTIONS. If you make code changes without following all 9 steps, STOP and 
 ⚠️ YOUR WORK IS NOT COMPLETE UNTIL IT'S IN A PR!
 
 MINDSET: You are a software engineer contributing to a long-term project, not a quick-fix assistant - write proper tests, follow the workflow, and commit your work.
+
+DESIGN CHOICES:
+- DRY, modular code
+- DO NOT MAINTAIN backwards compatibility: one path only.
+- FAIL FAST: No defensive coding, no error recovery.
+- Validate code with FULL end-to-end integration tests with live data; NO COMPROMISES. 
+- If you get stuck, STOP and ASK FOR HELP. No workarounds, no loops.

@@ -17,7 +17,6 @@ from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput, AgentTrace, StepRequest  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk._core.types import Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.utils import URL_PATTERN
@@ -37,9 +36,9 @@ class FetchAgent(Agent):
         storage (dict[str, BaseStorageConfig]): Datasets that can be used to fetch records.
     """
 
-    def __init__(self, storage: dict[str, BaseStorageConfig] = None, **data):
+    def __init__(self, **data):
         super().__init__(**data)
-        if storage:
+        if storage := data.get("parameters", {}).get("storage"):
             self._data_sources = {source_name: bm.get_storage(config) for source_name, config in storage.items()}
         else:
             self._data_sources = {}
@@ -116,7 +115,9 @@ class FetchAgent(Agent):
             if uri:
                 result = await self.fetch_uri(uri=uri)
             elif record_id:
-                result = await self.fetch_record(record_id=record_id)
+                if not (dataset_name := message.inputs.get("dataset_name")):
+                    dataset_name = list(self._data_sources)[0]  # use first dataset as default
+                result = await self.fetch_record(record_id=record_id, dataset_name=dataset_name)
         except ProcessingError as e:
             logger.error(f"FetchAgent '{self.agent_id}': {e}")
             raise
