@@ -53,6 +53,23 @@ class Storage(ABC):
         """
         pass
 
+    def get_record_by_id(self, record_id: str) -> BaseModel | None:
+        """Get a single record by its ID.
+        
+        Default implementation: iterates through all records (assumes small datasets).
+        Storage backends optimized for large datasets should override this method.
+
+        Args:
+            record_id: The unique identifier of the record to retrieve
+
+        Returns:
+            The record if found, None otherwise
+        """
+        for record in self:
+            if hasattr(record, 'record_id') and record.record_id == record_id:
+                return record
+        return None
+
     @abstractmethod
     def count(self) -> int:
         """Count total records in storage.

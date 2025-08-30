@@ -81,7 +81,12 @@ class FetchAgent(Agent):
             ProcessingError: If no record could be found or fetched.
         """
         try:
-            return self._data_sources[dataset_name].get_record(record_id)
+            record = self._data_sources[dataset_name].get_record_by_id(record_id)
+            if record is None:
+                raise ProcessingError(f"Record not found for ID: {record_id}")
+            return record
+        except ProcessingError:
+            raise
         except Exception as e:
             raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 

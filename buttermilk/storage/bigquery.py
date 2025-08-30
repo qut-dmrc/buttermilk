@@ -186,6 +186,28 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error saving records to BigQuery: {e}")
             raise StorageError(f"Failed to save to BigQuery: {e}") from e
 
+    def get_record_by_id(self, record_id: str) -> Record | None:
+        """Get a single record by ID.
+        
+        BigQuery is optimized for large datasets and should use SQL queries for efficiency.
+        The default iteration approach would be too slow for typical BigQuery usage.
+        
+        TODO: Implement SQL-based query: SELECT * FROM table WHERE record_id = @record_id
+        
+        Args:
+            record_id: The unique identifier of the record to retrieve
+            
+        Returns:
+            The record if found, None otherwise
+            
+        Raises:
+            NotImplementedError: SQL-based implementation needed for BigQuery efficiency
+        """
+        raise NotImplementedError(
+            "BigQuery get_record_by_id requires SQL implementation for efficiency. "
+            "For small datasets, use FileStorage with the default iteration approach."
+        )
+
     def count(self) -> int:
         """Count total records matching the criteria.
 
