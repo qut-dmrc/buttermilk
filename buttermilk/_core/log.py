@@ -50,11 +50,19 @@ class ContextFilter(logging.Filter):
         record.agent_id = original_agent_id
 
         # Add condensed string attributes for the console format
-        record.short_context = (
-            f"{original_session_id[-4:] if original_session_id else None}" + f":{original_agent_id}"
-            if original_agent_id
-            else ""
-        )
+        # Provide safe defaults for session_id and agent_id
+        session_part = original_session_id[-4:] if original_session_id else ""
+        agent_part = original_agent_id if original_agent_id else ""
+        
+        # Build short_context safely - always provide a value (even if empty)
+        if session_part and agent_part:
+            record.short_context = f"{session_part}:{agent_part}"
+        elif agent_part:
+            record.short_context = agent_part
+        elif session_part:
+            record.short_context = session_part
+        else:
+            record.short_context = ""
 
         return True
 
@@ -170,6 +178,15 @@ def setup_console_logging(verbose: bool = False) -> None:
         stream=sys.stdout,
         level=logging.INFO,  # Always INFO for console
     )
+    
+    # Add ContextFilter to ALL handlers on the buttermilk logger
+    # This ensures ALL log records going through any handler get the context fields
+    context_filter = ContextFilter()
+    for handler in logger.handlers:
+        # Check if handler already has a ContextFilter to avoid duplicates
+        has_context_filter = any(isinstance(f, ContextFilter) for f in handler.filters)
+        if not has_context_filter:
+            handler.addFilter(context_filter)
     
     # Configure asyncio debug mode based on verbosity
     try:

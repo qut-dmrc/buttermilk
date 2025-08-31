@@ -753,10 +753,12 @@ class BM(BaseModel):
         """
         from buttermilk._core.log import setup_console_logging, setup_file_logging
 
-        # Clear existing handlers from the root logger to avoid duplicate logs
+        # Clear existing handlers from buttermilk logger and root logger to avoid conflicts
+        logger.handlers.clear()
+        
+        # Also clear root logger handlers that might have old formatters
         root_logger = logging.getLogger()
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
+        root_logger.handlers.clear()
 
         # Set up console logging with coloredlogs
         setup_console_logging(verbose=verbose)
@@ -765,6 +767,10 @@ class BM(BaseModel):
         log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
         for log_file in log_files:
             logger.highlight(f"Logging enabled - writing to: {log_file}")
+        
+        # Apply ContextFilter to ALL existing handlers in the logging system
+        # This is needed because libraries like OpenTelemetry might use our handlers
+        self._apply_context_filter_globally()
 
         # Defer Google Cloud Logging setup to improve startup performance
         # Cloud logging will be initialized on first cloud operation
@@ -772,14 +778,15 @@ class BM(BaseModel):
             logger.debug("Cloud logging configuration detected - will be initialized on first cloud access")
 
         # Set default logging levels for other loggers to WARNING to reduce noise
+        root_logger = logging.getLogger()
         root_logger.setLevel(logging.WARNING)
         for logger_name in list(logging.Logger.manager.loggerDict.keys()):
             # Check if it's a Logger instance to avoid issues with placeholders
             if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
                 logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-        # Set Buttermilk's own logger level based on verbosity
-        logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+        # Keep console at INFO level always - verbose only affects file logging
+        logger.setLevel(logging.INFO)
 
         # Log initialization message
         log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.run_info.save_dir}"
@@ -793,6 +800,34 @@ class BM(BaseModel):
             logger.info(f"Buttermilk version: {bm_version}")
         except Exception:  # importlib.metadata.PackageNotFoundError or other issues
             logger.warning("Could not determine Buttermilk version.")
+
+    def _apply_context_filter_globally(self) -> None:
+        """Apply ContextFilter to all handlers in the logging system.
+
+        This ensures that any handler that uses our format string with "short_context"
+        will have the ContextFilter applied, preventing KeyError exceptions.
+        """
+        from buttermilk._core.log import ContextFilter
+
+        context_filter = ContextFilter()
+
+        # Apply to all loggers in the system
+        for logger_name in logging.Logger.manager.loggerDict:
+            logger_obj = logging.getLogger(logger_name)
+            if isinstance(logger_obj, logging.Logger):
+                for handler in logger_obj.handlers:
+                    # Check if this handler uses our format string with short_context
+                    if (hasattr(handler, "formatter") and
+                        handler.formatter and
+                        hasattr(handler.formatter, "_fmt") and
+                        handler.formatter._fmt and
+                        "short_context" in handler.formatter._fmt):
+
+                        # Check if handler already has a ContextFilter
+                        has_context_filter = any(isinstance(f, ContextFilter) for f in handler.filters)
+                        if not has_context_filter:
+                            handler.addFilter(context_filter)
+                            logger.debug(f"Applied ContextFilter to handler for logger '{logger_name}'")
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
