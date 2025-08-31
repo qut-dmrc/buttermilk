@@ -8,7 +8,7 @@
 #     def silence_task_logs():
 #         pass
 
-from ._core.bm_init import BM, logger
+from ._core.bm_init import BM, logger, tracer
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
@@ -19,13 +19,13 @@ from ._core.contract import (
     FlowMessage as FlowMessage,
     GroupchatMessageTypes as GroupchatMessageTypes,
     HeartBeat as HeartBeat,
-    UserResponseMessage as UserResponseMessage,
     OOBMessages as OOBMessages,
     ProceedToNextTaskSignal as ProceedToNextTaskSignal,
     StepRequest as StepRequest,
+    SystemPromptMessage as SystemPromptMessage,
     TaskProcessingComplete as TaskProcessingComplete,
     ToolOutput as ToolOutput,
-    SystemPromptMessage as SystemPromptMessage,
+    UserResponseMessage as UserResponseMessage,
 )
 from ._core.dmrc import get_bm, set_bm
 
@@ -78,4 +78,5 @@ __all__ = [
     "ProceedToNextTaskSignal",
     "ConductorRequest",
     "HeartBeat",
+    "tracer",
 ]

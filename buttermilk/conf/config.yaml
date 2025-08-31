@@ -16,4 +16,9 @@ bm:
     job: ${run.job}
   llms: ${llms}
   tracing:
-    enabled: true
+    weave: 
+      enabled: true
+    traceloop:
+      enabled: false
+    otel:
+      enabled: true

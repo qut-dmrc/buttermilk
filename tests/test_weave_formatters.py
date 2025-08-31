@@ -3,7 +3,7 @@
 
 import pytest
 
-from buttermilk._core.weave_formatters import EmptyTraceFilter, NoOpFormatter
+from buttermilk._core.tracing import EmptyTraceFilter, NoOpFormatter
 
 
 class TestNoOpFormatter:

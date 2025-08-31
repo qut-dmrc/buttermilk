@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any, Self
 
 import weave
+from opentelemetry import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -291,6 +292,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
+        
+        # Get OTEL tracer for business logic spans
+        tracer = trace.get_tracer("buttermilk.orchestrator")
+        
         weave_client = await bm.get_weave_client()
         if weave_client is not None:
             try:
@@ -309,28 +314,44 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 orchestrator_trace = None
                 op = None
 
-        try:
-            logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
-            await self._run(request=request)
-            # Log success, attach trace URL if present
-            msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
-            if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
-                msg += f" Tracing link: {orchestrator_trace.ui_url}"
-            logger.highlight(msg)
-        except Exception as e:
-            logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
-        finally:
-            # Finish trace if it was created and a finisher is available
-            if orchestrator_trace is not None:
-                try:
-                    bm = get_bm()
-                    weave_client = await bm.get_weave_client()
-                    if weave_client is not None and orchestrator_trace is not None:
-                        weave_client.finish_call(orchestrator_trace, op=op)
-                    elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
-                        _weave_mod.finish_call(orchestrator_trace, op=op)
-                except Exception as e:
-                    logger.debug(f"Weave finish_call failed or is unavailable: {e!s}")
+        # Create OTEL span for orchestrator execution
+        with tracer.start_as_current_span(
+            f"orchestrator.{self.name}",
+            attributes={
+                "flow.name": self.name,
+                "flow.display_name": display_name,
+                "session_id": getattr(bm.run_info, 'run_id', None),
+                "run_id": getattr(bm.run_info, 'run_id', None),
+                "platform": getattr(bm.run_info, 'platform', None),
+                "job": getattr(bm.run_info, 'job', None),
+            }
+        ) as otel_span:
+            try:
+                logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
+                await self._run(request=request)
+                # Log success, attach trace URL if present
+                msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
+                if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
+                    msg += f" Tracing link: {orchestrator_trace.ui_url}"
+                logger.highlight(msg)
+                otel_span.set_status(trace.Status(trace.StatusCode.OK))
+            except Exception as e:
+                logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
+                otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                otel_span.record_exception(e)
+                raise
+            finally:
+                # Finish trace if it was created and a finisher is available
+                if orchestrator_trace is not None:
+                    try:
+                        bm = get_bm()
+                        weave_client = await bm.get_weave_client()
+                        if weave_client is not None and orchestrator_trace is not None:
+                            weave_client.finish_call(orchestrator_trace, op=op)
+                        elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
+                            _weave_mod.finish_call(orchestrator_trace, op=op)
+                    except Exception as e:
+                        logger.debug(f"Weave finish_call failed or is unavailable: {e!s}")
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:

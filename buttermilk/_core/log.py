@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+from datetime import datetime, timezone
 from logging import getLogger
 
 from buttermilk._core.context import agent_id_var, session_id_var
@@ -77,6 +79,65 @@ class TruncatingFilter(logging.Filter):
                 record.args = ()
                 record.truncated = True  # Optional: can be used by formatters
         return True
+
+
+class CloudJSONFormatter(logging.Formatter):
+    """JSON formatter specifically for Google Cloud Logging.
+    
+    Formats log records as JSON with structured fields while preserving
+    all context information from ContextFilter. Designed to work with
+    Google Cloud Logging for better log querying and analysis.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record as JSON.
+        
+        Args:
+            record: The log record to format
+            
+        Returns:
+            JSON-formatted string with structured log data
+        """
+        # Create base log entry with standard fields
+        log_entry = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "filename": record.filename,
+            "lineno": record.lineno,
+            "funcName": record.funcName,
+        }
+        
+        # Add context information if available (from ContextFilter)
+        if hasattr(record, "session_id") and record.session_id:
+            log_entry["session_id"] = record.session_id
+        if hasattr(record, "agent_id") and record.agent_id:
+            log_entry["agent_id"] = record.agent_id
+        if hasattr(record, "short_context") and record.short_context:
+            log_entry["short_context"] = record.short_context
+            
+        # Add any extra fields from the log record
+        if hasattr(record, "run_details"):
+            log_entry["run_details"] = record.run_details
+            
+        # Handle exceptions if present
+        if record.exc_info:
+            log_entry["exception"] = {
+                "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
+                "message": str(record.exc_info[1]) if record.exc_info[1] else None,
+                "traceback": self.formatException(record.exc_info) if record.exc_info else None,
+            }
+            
+        # Handle stack traces
+        if record.stack_info:
+            log_entry["stack_info"] = record.stack_info
+            
+        # Add truncation info if present
+        if hasattr(record, "truncated") and record.truncated:
+            log_entry["truncated"] = True
+            
+        return json.dumps(log_entry, ensure_ascii=False)
 
 
 # Attach filters (idempotently) to the buttermilk logger

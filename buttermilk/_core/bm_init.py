@@ -38,7 +38,8 @@ import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
@@ -62,6 +63,10 @@ _SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # Global variable to store the run ID, ensuring it's generated once per execution.
 _global_run_id = ""
+
+_TRACER_NAME = "buttermilk"
+
+tracer = trace.get_tracer(_TRACER_NAME)
 
 
 def _make_run_id() -> str:
@@ -218,8 +223,8 @@ class BM(BaseModel):
         default_factory=list,
         description="List of configurations for different cloud providers to initialize (e.g., GCP, Azure).",
     )
-    tracing: Tracing | None = Field(
-        default_factory=Tracing,  # Default to Tracing() which might have enabled=False
+    tracing: dict[str, Tracing] | None = Field(
+        default_factory=dict(),
         description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
     )
     datasets: dict[str, BaseStorageConfig] = Field(
@@ -239,7 +244,7 @@ class BM(BaseModel):
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
     _initialization_complete: asyncio.Event = PrivateAttr(default=asyncio.Event())
     _initialization_error: Exception | None = PrivateAttr(default=None)
-    _tracing_istrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
+    _tracing_instrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -443,32 +448,36 @@ class BM(BaseModel):
         This method is called during initialization to set up tracing
         systems like OpenTelemetry or Weave, depending on the configuration.
         """
-        # We disable weave autopatching for Autogen because it's too noisy and slow
-        # We will instead trace manually.
 
-        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
-        # Retrieve necessary credentials before initializing Weave.
-        # This is necessary because otherwise Weave will interactive authentication.
-        self._setup_weave_credentials()
-        autopatch = {"autogen": {"enabled": False}}
-        logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
-        # Weave project HAS to be in the format "entity/collection_name"
-        client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
-        # logger.info("Weave initialized successfully")
+        if self.tracing.get("weave") and self.tracing["weave"].enabled:
+            # We disable weave autopatching for Autogen because it's too noisy and slow
+            # We will instead trace manually.
 
-        logger.debug("Attempting to start Traceloop client with app_name 'buttermilk'")
+            collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
+            # Retrieve necessary credentials before initializing Weave.
+            # This is necessary because otherwise Weave will interactive authentication.
+            self._setup_weave_credentials()
+            autopatch = {"autogen": {"enabled": False}}
+            logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
 
-        from traceloop.sdk import Traceloop
+            # Weave project has to be in the format "entity/collection_name"
+            client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
+            logger.info("Weave initialized successfully")
 
-        Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
-        logger.info("Traceloop initialized.")
+        if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
+            from traceloop.sdk import Traceloop
 
-        # Setup other Otel tracing if configured
-        from buttermilk.utils.otel import setup_tracing_otel
+            Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
+            logger.info("Traceloop initialized.")
 
-        setup_tracing_otel(self.tracing)
-        self._tracing_istrumented.set()  # Mark tracing as set up
-        logger.debug("Tracing has been set up successfully")
+        if self.tracing.get("otel") and self.tracing["otel"].enabled:
+            # Setup other Otel tracing if configured
+            from buttermilk.utils.otel import setup_tracing_otel
+
+            setup_tracing_otel(self.tracing["otel"])
+            logger.info("OTEL Tracing has been set up successfully")
+
+        self._tracing_instrumented.set()  # Mark tracing as set up
 
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
@@ -510,6 +519,16 @@ class BM(BaseModel):
                     labels=self.run_info.model_dump(include={"run_id", "name", "job", "platform"}),
                 )
                 cloudHandler.setLevel(logging.INFO)
+                
+                # Use JSON formatting for structured cloud logs
+                from buttermilk._core.log import CloudJSONFormatter, ContextFilter
+                json_formatter = CloudJSONFormatter()
+                cloudHandler.setFormatter(json_formatter)
+                
+                # Add context filter to cloud handler
+                cloud_context_filter = ContextFilter()
+                cloudHandler.addFilter(cloud_context_filter)
+                
                 logger.addHandler(cloudHandler)
                 logger.debug("Cloud logging handler added")
             except Exception as e:
@@ -731,10 +750,10 @@ class BM(BaseModel):
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client for tracing."""
-        if self.tracing and self.tracing.enabled and not self._tracing_istrumented.is_set():
+        if "weave" in self.tracing and self.tracing["weave"].enabled and not self._tracing_instrumented.is_set():
             # If tracing is enabled but not yet instrumented, set it up
             asyncio.create_task(self._setup_tracing())
-            await self._tracing_istrumented.wait()
+            await self._tracing_instrumented.wait()
         return weave.get_client()
 
     @property

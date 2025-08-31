@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing - core dependency
+from opentelemetry import trace
 
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
@@ -38,7 +39,7 @@ from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import bm, logger
+from buttermilk import bm, logger, tracer
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -50,10 +51,10 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
-    UserResponseMessage,  # Messages from the user
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
+    UserResponseMessage,  # Messages from the user
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
@@ -250,7 +251,20 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
     # --- Announcement Methods ---
+    async def _send_event(
+        self,
+        message: OOBMessages,
+        topic_id: TopicId | None = None,
+    ):
+        # Use provided topic_id or fall back to the agent's default topic
+        target_topic = topic_id or self._topic_id
+        await super().publish_message(message, topic_id=target_topic)
+        logger.debug(
+            f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
+        )
 
+    @weave.op
+    @tracer.start_as_current_span("process_data")
     async def _publish(
         self,
         message: Any,
@@ -335,7 +349,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
             # Create an ErrorEvent to capture the error
             err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-            await self._publish(
+            await self._send_event(
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, is_error=True, error=[err_result]),
                 topic_id=self._topic_id,
             )
@@ -407,10 +421,25 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         }
         exception_obj = None  # Used to capture exceptions for tracing
         weave_client = await bm.get_weave_client()
-        try:
-            logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-            if weave_client is not None:
-                process_op = weave.op(self._process, call_display_name=self.agent_name)
+
+        # Get OTEL tracer for agent spans
+        tracer = trace.get_tracer("buttermilk.agent")
+
+        # Create OTEL span for agent execution
+        with tracer.start_as_current_span(
+            f"agent.{self.agent_name}",
+            attributes={
+                "agent.name": self.agent_name,
+                "agent.id": self.agent_id,
+                "agent.type": self._cfg.type if self._cfg else None,
+                "session_id": getattr(message, "session_id", None),
+                "parent_call_id": getattr(message, "parent_call_id", None),
+            },
+        ) as otel_span:
+            try:
+                logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
+                if weave_client is not None:
+                    process_op = weave.op(self._process, call_display_name=self.agent_name)
                 parent_call = await get_parent_call_weave(message)
 
                 child_call = weave_client.create_call(
@@ -424,21 +453,25 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 if parent_call is not None:
                     parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
-            # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
-            result = await self._process(message=message)
-        except Exception as e:
-            logger.error(f"Agent {self.agent_id} error during invoke: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-            result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
-            exception_obj = e  # Capture the exception for tracing
-        finally:
-            # Mark the child call as complete, regardless of success or failure.
-            # Output is passed to bm.weave.finish_call if result is not None
-            # Error is also passed if exception_obj is not None
-            if weave_client and child_call:
-                weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
-                tracing_link = child_call.ui_url
+                # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
+                result = await self._process(message=message)
+
+                otel_span.set_status(trace.Status(trace.StatusCode.OK))
+            except Exception as e:
+                logger.error(f"Agent {self.agent_id} error during invoke: {e}")
+                # Create an ErrorEvent to capture the error
+                err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
+                result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
+                exception_obj = e  # Capture the exception for tracing
+                otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                otel_span.record_exception(e)
+            finally:
+                # Mark the child call as complete, regardless of success or failure.
+                # Output is passed to bm.weave.finish_call if result is not None
+                # Error is also passed if exception_obj is not None
+                if weave_client and child_call:
+                    weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
+                    tracing_link = child_call.ui_url
 
         # --- Turn the result into AgentTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)

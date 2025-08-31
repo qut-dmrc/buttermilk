@@ -5,7 +5,6 @@ autonomously to fetch records based on incoming messages.
 """
 
 import datetime
-from functools import partial
 from typing import Any
 
 from autogen_core import (
@@ -146,18 +145,18 @@ class FetchAgent(Agent):
                 description=("Get a record from a given URI."),
                 func=self.fetch_uri,
                 strict=True,
-            ),
-        ]
-        
-        # Create dataset-specific fetch_record tools using partial
-        dataset_tools = [
-            FunctionTool(
-                name=f"fetch_record_from_{dataset_name}",
-                description=f"Get a record from the {dataset_name} dataset by record ID.",
-                func=partial(self.fetch_record, dataset_name=dataset_name),
-                strict=True,
             )
-            for dataset_name in self._data_sources.keys()
         ]
-        
-        return internal_tools + dataset_tools
+
+        datasets = list(self._data_sources.keys())
+        if datasets:
+            internal_tools.append(
+                FunctionTool(
+                    name="fetch_record",
+                    description=f"Get a record from a dataset (literal: {', '.join(datasets)}) by record ID.",
+                    func=self.fetch_record,
+                    strict=True,
+                )
+            )
+
+        return internal_tools

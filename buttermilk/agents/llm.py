@@ -290,7 +290,7 @@ class LLMAgent(Agent):
         schema: type[pydantic.BaseModel] | None,
         cancellation_token: CancellationToken | None,
     ) -> CreateResult | ModelOutput:
-        """Helper method to call the LLM with proper error handling.
+        """Helper method to call the LLM.
 
         This method can be overridden by subclasses that need special LLM handling.
 

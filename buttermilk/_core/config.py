@@ -6,6 +6,7 @@ saving information, agent behaviors, and tracing. These models are typically
 instantiated by Hydra based on YAML configuration files.
 """
 
+import copy
 from collections.abc import Mapping
 from typing import (
     Annotated,
@@ -13,8 +14,7 @@ from typing import (
     Literal,
     Self,
 )
-import copy
-import cloudpathlib  # For handling cloud storage paths
+
 import jmespath  # For JSON query language processing
 
 # BigQuery import - now a core dependency
@@ -218,13 +218,12 @@ class ToolConfig(BaseModel):
 class Tracing(BaseModel):
     """Configuration for tracing agent and system activities.
 
-    Specifies whether tracing is enabled, the provider to use (e.g., Langfuse, Weave),
+    for each tracing provider, specifies whether tracing is enabled,
     API keys, and other provider-specific settings.
 
     Attributes:
         enabled (bool): If `True`, tracing is enabled for operations.
         api_key (str): API key for the tracing provider.
-        provider (str): Name of the tracing provider (e.g., "langfuse", "weave").
         endpoint (str | None): Optional endpoint URL for the tracing provider,
             if different from the default.
         otlp_headers (Mapping | None): Optional OTLP (OpenTelemetry Protocol)
@@ -234,7 +233,6 @@ class Tracing(BaseModel):
 
     enabled: bool = Field(default=False, description="Enable or disable tracing.")
     api_key: str = Field(default="", description="API key for the tracing provider.")
-    provider: str = Field(default="", description="Name of the tracing provider (e.g., 'langfuse', 'weave').")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
     otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
         default_factory=dict,
