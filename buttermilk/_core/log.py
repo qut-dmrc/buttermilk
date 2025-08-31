@@ -1,8 +1,14 @@
+import asyncio
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 from logging import getLogger
+
+import coloredlogs
+from google.cloud import logging as gcp_logging
+from google.cloud.logging_v2.handlers import CloudLoggingHandler
 
 from buttermilk._core.context import agent_id_var, session_id_var
 
@@ -145,3 +151,116 @@ if not any(isinstance(f, ContextFilter) for f in logger.filters):
     logger.addFilter(ContextFilter())
 if not any(isinstance(f, TruncatingFilter) for f in logger.filters):
     logger.addFilter(TruncatingFilter())
+
+
+def setup_console_logging(verbose: bool = False) -> None:
+    """Set up colored console logging with coloredlogs.
+    
+    Args:
+        verbose: If True, enables debug mode for asyncio. Console always shows INFO+ level.
+    """
+    # Console format - shorter version with context
+    console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
+    
+    # Console always shows INFO level, regardless of verbose setting
+    coloredlogs.install(
+        logger=logger,
+        fmt=console_format,
+        isatty=True,
+        stream=sys.stdout,
+        level=logging.INFO,  # Always INFO for console
+    )
+    
+    # Configure asyncio debug mode based on verbosity
+    try:
+        current_loop = asyncio.get_running_loop()
+        current_loop.set_debug(verbose)
+    except RuntimeError:  # No event loop running
+        pass
+
+
+def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
+    """Set up file logging handlers.
+    
+    Args:
+        run_id: Unique run identifier for log file naming
+        verbose: If True, creates both INFO and DEBUG file handlers
+        
+    Returns:
+        List of log file paths created
+    """
+    context_filter = ContextFilter()
+    console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
+    log_files = []
+    
+    # Always create an INFO log file
+    info_log_filename = f"/tmp/buttermilk_{run_id}_info.log"
+    info_file_handler = logging.FileHandler(info_log_filename, mode="w")
+    info_file_handler.setLevel(logging.INFO)
+    info_file_formatter = logging.Formatter(console_format)
+    info_file_handler.setFormatter(info_file_formatter)
+    info_file_handler.addFilter(context_filter)
+    logger.addHandler(info_file_handler)
+    log_files.append(info_log_filename)
+    
+    # Add debug file logging when verbose is True
+    if verbose:
+        debug_log_filename = f"/tmp/buttermilk_{run_id}_debug.log"
+        debug_file_handler = logging.FileHandler(debug_log_filename, mode="w")
+        debug_file_handler.setLevel(logging.DEBUG)
+        debug_file_formatter = logging.Formatter(console_format)
+        debug_file_handler.setFormatter(debug_file_formatter)
+        debug_file_handler.addFilter(context_filter)
+        logger.addHandler(debug_file_handler)
+        log_files.append(debug_log_filename)
+    
+    return log_files
+
+
+def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
+    """Set up Google Cloud Logging with JSON formatting.
+    
+    Args:
+        logger_cfg: Logger configuration object
+        cloud_manager: Cloud manager instance for GCS client access
+        run_info: Session run information
+    """
+    if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
+        try:
+            cloud_logging_resource = gcp_logging.Resource(
+                type="generic_task",
+                labels={
+                    "project": logger_cfg.project_id,
+                    "location": logger_cfg.location,
+                    "namespace": run_info.name,
+                    "job": run_info.job,
+                    "task_id": run_info.run_id,
+                },
+            )
+
+            cloud_handler = CloudLoggingHandler(
+                client=cloud_manager.gcs_log_client(logger_cfg),
+                resource=cloud_logging_resource,
+                name=run_info.name,
+                labels=run_info.model_dump(include={"run_id", "name", "job", "platform"}),
+            )
+            cloud_handler.setLevel(logging.INFO)
+            
+            # Use JSON formatting for structured cloud logs
+            json_formatter = CloudJSONFormatter()
+            cloud_handler.setFormatter(json_formatter)
+            
+            # Add context filter to cloud handler
+            cloud_context_filter = ContextFilter()
+            cloud_handler.addFilter(cloud_context_filter)
+            
+            logger.addHandler(cloud_handler)
+            logger.debug("Cloud logging handler added")
+        except Exception as e:
+            # Provide better error messages distinguishing between config and service issues
+            logger.error(
+                f"Cloud logging setup failed due to configuration issue: {e}. "
+                f"Logger config: type={logger_cfg.type}, "
+                f"project={logger_cfg.project_id}, "
+                f"location={logger_cfg.location}",
+            )

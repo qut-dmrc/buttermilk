@@ -51,6 +51,7 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
+    OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -251,20 +252,17 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
     # --- Announcement Methods ---
-    async def _send_event(
-        self,
-        message: OOBMessages,
-        topic_id: TopicId | None = None,
-    ):
-        # Use provided topic_id or fall back to the agent's default topic
-        target_topic = topic_id or self._topic_id
-        await super().publish_message(message, topic_id=target_topic)
-        logger.debug(
-            f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
-        )
 
     @weave.op
-    @tracer.start_as_current_span("process_data")
+    @tracer.start_as_current_span("send_chat")
+    async def _send_chat(
+        self,
+        message: OOBMessages,
+        topic_id: TopicId,
+    ):
+        # Agents should call the _publish method; this one just exists for tracing.
+        await super().publish_message(message, topic_id=topic_id)
+
     async def _publish(
         self,
         message: Any,
@@ -289,7 +287,19 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Use provided topic_id or fall back to the agent's default topic
         target_topic = topic_id or self._topic_id
-        await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
+
+        if isinstance(message, OOBMessages):
+            # send events without tracing
+            logger.debug(
+                f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
+            )
+            await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
+        else:
+            # send and trace
+            await self._send_chat(message, topic_id=target_topic)
+            logger.debug(
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
+            )
 
         if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
             highlight = True  # Highlight traces and outputs by default
@@ -349,33 +359,33 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
             # Create an ErrorEvent to capture the error
             err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-            await self._send_event(
+            await self._publish(
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, is_error=True, error=[err_result]),
                 topic_id=self._topic_id,
             )
             return None
 
-        trace = await self.trace_and_execute(message=final_input)
+        trace_object = await self.trace_and_execute(message=final_input)
 
         # If the agent didn't run, just exit.
-        if not trace:
+        if not trace_object:
             return None
 
         # Publish the AgentTrace result.
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.
-        await self._publish(trace, topic_id=self._topic_id)
+        await self._publish(trace_object, topic_id=self._topic_id)
 
         # Publish status update: Task Complete (including error if error)
         await self._publish(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error),
+            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace_object.is_error),
             topic_id=self._topic_id,
         )
 
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
 
-        return trace
+        return trace_object
 
     async def trace_and_execute(
         self,
@@ -431,7 +441,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             attributes={
                 "agent.name": self.agent_name,
                 "agent.id": self.agent_id,
-                "agent.type": self._cfg.type if self._cfg else None,
+                "agent.type": str(type(self)),
+                "agent.role": self._cfg.role if self._cfg else None,
                 "session_id": getattr(message, "session_id", None),
                 "parent_call_id": getattr(message, "parent_call_id", None),
             },
@@ -481,7 +492,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Create AgentTrace from the result, overwriting call_id and parent_call_id with
         # values directly from Weave.
-        trace = AgentTrace.from_output(
+        trace_object = AgentTrace.from_output(
             result,
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
@@ -490,7 +501,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             tracing_link=tracing_link,
         )
 
-        return trace
+        return trace_object
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:

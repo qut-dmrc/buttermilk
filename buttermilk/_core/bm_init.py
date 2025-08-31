@@ -47,7 +47,7 @@ from buttermilk._core.cloud import CloudManager  # Manages cloud provider connec
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
-from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
+from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.query import QueryRunner  # For running SQL queries
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
@@ -496,49 +496,9 @@ class BM(BaseModel):
 
     def _setup_cloud_logging(self) -> None:
         """Set up Google Cloud Logging after cloud authentication."""
-        if self.logger_cfg and self.logger_cfg.type == "gcp" and self._cloud_manager:
-            try:
-                from google.cloud import logging as gcp_logging
-                from google.cloud.logging_v2.handlers import CloudLoggingHandler
-
-                cloud_logging_resource = gcp_logging.Resource(
-                    type="generic_task",
-                    labels={
-                        "project": self.logger_cfg.project_id,
-                        "location": self.logger_cfg.location,
-                        "namespace": self.run_info.name,
-                        "job": self.run_info.job,
-                        "task_id": self.run_info.run_id,
-                    },
-                )
-
-                cloudHandler = CloudLoggingHandler(
-                    client=self._cloud_manager.gcs_log_client(self.logger_cfg),
-                    resource=cloud_logging_resource,
-                    name=self.run_info.name,
-                    labels=self.run_info.model_dump(include={"run_id", "name", "job", "platform"}),
-                )
-                cloudHandler.setLevel(logging.INFO)
-                
-                # Use JSON formatting for structured cloud logs
-                from buttermilk._core.log import CloudJSONFormatter, ContextFilter
-                json_formatter = CloudJSONFormatter()
-                cloudHandler.setFormatter(json_formatter)
-                
-                # Add context filter to cloud handler
-                cloud_context_filter = ContextFilter()
-                cloudHandler.addFilter(cloud_context_filter)
-                
-                logger.addHandler(cloudHandler)
-                logger.debug("Cloud logging handler added")
-            except Exception as e:
-                # Provide better error messages distinguishing between config and service issues
-                logger.error(
-                    f"Cloud logging setup failed due to configuration issue: {e}. "
-                    f"Logger config: type={self.logger_cfg.type}, "
-                    f"project={self.logger_cfg.project_id}, "
-                    f"location={self.logger_cfg.location}",
-                )
+        from buttermilk._core.log import setup_cloud_logging
+        
+        setup_cloud_logging(self.logger_cfg, self._cloud_manager, self.run_info)
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -790,68 +750,21 @@ class BM(BaseModel):
                 enables asyncio debug mode. Otherwise, sets to INFO.
                 Defaults to False.
 
-        Raises:
-            RuntimeError: If GCP logger is configured but essential attributes
-                like 'project' or 'location' are missing in `self.logger_cfg`.
-
         """
-        import sys
-
-        import coloredlogs  # For colored console output
-
-        # Logger config validation is now done in _validate_logger_config() during initialization
+        from buttermilk._core.log import setup_console_logging, setup_file_logging
 
         # Clear existing handlers from the root logger to avoid duplicate logs
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-        # Set up console logging
-        context_filter = ContextFilter()
-        logger.addFilter(context_filter)
-        # Original format: "%(asctime)s %(hostname)s %(name)s [%(session_id)s:%(agent_id)s] %(filename)s:%(lineno)d %(levelname)s %(message)s"
-        # Shorter: Timestamp [short_context] LEVEL filename: Message
-        console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
+        # Set up console logging with coloredlogs
+        setup_console_logging(verbose=verbose)
 
-        # Console always shows INFO level, regardless of verbose setting
-        coloredlogs.install(
-            logger=logger,  # Target Buttermilk's main logger
-            fmt=console_format,
-            isatty=True,  # Enable colors if output is a TTY
-            stream=sys.stdout,  # Log to stdout for better test visibility
-            level=logging.INFO,  # Always INFO for console
-        )
-
-        # Always create an INFO log file
-        info_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_info.log"
-        info_file_handler = logging.FileHandler(info_log_filename, mode="w")
-        info_file_handler.setLevel(logging.INFO)
-
-        info_file_formatter = logging.Formatter(console_format)
-        info_file_handler.setFormatter(info_file_formatter)
-        info_file_handler.addFilter(context_filter)
-
-        logger.addHandler(info_file_handler)
-        logger.highlight(f"INFO logging enabled - writing to: {info_log_filename}")
-
-        # Add debug file logging when verbose is True
-        if verbose:
-            debug_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_debug.log"
-
-            # Create debug file handler
-            debug_file_handler = logging.FileHandler(debug_log_filename, mode="w")
-            debug_file_handler.setLevel(logging.DEBUG)
-
-            # Use the same format as console but without colors
-            debug_file_formatter = logging.Formatter(console_format)
-            debug_file_handler.setFormatter(debug_file_formatter)
-
-            # Add the same context filter
-            debug_file_handler.addFilter(context_filter)
-
-            # Add handler to the logger
-            logger.addHandler(debug_file_handler)
-            logger.highlight(f"DEBUG logging enabled - writing to: {debug_log_filename}")
+        # Set up file logging
+        log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
+        for log_file in log_files:
+            logger.highlight(f"Logging enabled - writing to: {log_file}")
 
         # Defer Google Cloud Logging setup to improve startup performance
         # Cloud logging will be initialized on first cloud operation
@@ -867,13 +780,6 @@ class BM(BaseModel):
 
         # Set Buttermilk's own logger level based on verbosity
         logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-        # Configure asyncio debug mode based on verbosity
-        try:
-            current_loop = asyncio.get_event_loop()
-            if current_loop.is_running():
-                current_loop.set_debug(verbose)
-        except RuntimeError:  # No event loop running
-            pass
 
         # Log initialization message
         log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.run_info.save_dir}"
@@ -884,9 +790,9 @@ class BM(BaseModel):
             from importlib.metadata import version
 
             bm_version = version("buttermilk")  # Assumes package is named 'buttermilk'
-            logger.debug(f"Buttermilk version: {bm_version}")
+            logger.info(f"Buttermilk version: {bm_version}")
         except Exception:  # importlib.metadata.PackageNotFoundError or other issues
-            logger.debug("Could not determine Buttermilk version.")
+            logger.warning("Could not determine Buttermilk version.")
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
