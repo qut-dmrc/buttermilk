@@ -42,7 +42,7 @@ def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     with initialize_config_dir(version_base=None, config_dir=path):
         cfg = compose(config_name="config", overrides=overrides)
 
-    objs = hydra.utils.instantiate(conf)
+    objs = hydra.utils.instantiate(cfg)
 
     bm = BM.model_validate(objs.bm)
 
@@ -51,7 +51,6 @@ def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
 
-    objs = hydra.utils.instantiate(cfg)
 
     logger.info(
         f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",
