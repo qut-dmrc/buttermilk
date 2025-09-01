@@ -114,3 +114,17 @@ export function logBackendStatus(context: string, available: boolean): void {
 		console.warn(`${context}: Backend unavailable${error ? ` (${error})` : ''}`);
 	}
 }
+
+/**
+ * Get the configured sessions directory from environment variable
+ * Falls back to default path if not configured
+ * 
+ * @returns Configured sessions directory path
+ */
+export function getSessionsDir(): string {
+	// Use environment variable or fallback to default
+	// Use process.env for server-side (Node.js) or import.meta.env for client-side (Vite)
+	const sessionsDir = (typeof process !== 'undefined' ? process.env.SESSIONS_DIR : import.meta.env.SESSIONS_DIR) || 'data/sessions';
+	console.debug(`Using sessions directory: ${sessionsDir}`);
+	return sessionsDir;
+}

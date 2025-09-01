@@ -436,3 +436,107 @@ class TestSessionGCSArchival:
             
             # Verify archival was attempted even for failed status
             mock_bm.save.assert_called_once()
+
+
+class TestConfigurableSessionsDirectory:
+    """Test configurable sessions directory functionality."""
+
+    @pytest.fixture
+    def temp_storage_dir(self):
+        """Create a temporary directory for session storage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    def test_get_sessions_dir_with_bm_config(self, temp_storage_dir):
+        """Test get_sessions_dir uses BM configuration when available."""
+        from buttermilk.api.services.session_storage import get_sessions_dir
+        
+        # Mock BM instance with custom sessions_dir
+        mock_bm = MagicMock()
+        mock_bm.run_info.sessions_dir = str(temp_storage_dir)
+        
+        with patch("buttermilk.get_bm", return_value=mock_bm):
+            result = get_sessions_dir()
+            assert result == temp_storage_dir
+
+    def test_get_sessions_dir_fallback_when_bm_unavailable(self):
+        """Test get_sessions_dir falls back to default when BM is unavailable."""
+        from buttermilk.api.services.session_storage import get_sessions_dir, SESSIONS_DIR
+        
+        with patch("buttermilk.get_bm", side_effect=Exception("BM not available")):
+            result = get_sessions_dir()
+            assert result == SESSIONS_DIR
+
+    def test_get_sessions_dir_fallback_when_no_sessions_dir_attr(self):
+        """Test get_sessions_dir falls back when sessions_dir attribute missing."""
+        from buttermilk.api.services.session_storage import get_sessions_dir, SESSIONS_DIR
+        
+        # Mock BM instance without sessions_dir attribute
+        mock_bm = MagicMock()
+        del mock_bm.run_info.sessions_dir  # Remove the attribute
+        
+        with patch("buttermilk.get_bm", return_value=mock_bm):
+            result = get_sessions_dir()
+            assert result == SESSIONS_DIR
+
+    def test_session_storage_service_uses_get_sessions_dir(self, temp_storage_dir):
+        """Test SessionStorageService uses get_sessions_dir for initialization."""
+        from buttermilk.api.services.session_storage import SessionStorageService
+        
+        # Mock get_sessions_dir to return our temp directory
+        with patch("buttermilk.api.services.session_storage.get_sessions_dir", return_value=temp_storage_dir):
+            service = SessionStorageService()
+            assert service.sessions_dir == temp_storage_dir
+
+    def test_session_storage_service_custom_dir_override(self, temp_storage_dir):
+        """Test SessionStorageService accepts custom directory override."""
+        from buttermilk.api.services.session_storage import SessionStorageService
+        
+        custom_dir = temp_storage_dir / "custom"
+        service = SessionStorageService(sessions_dir=custom_dir)
+        assert service.sessions_dir == custom_dir
+
+    def test_session_storage_creates_directory(self, temp_storage_dir):
+        """Test SessionStorageService creates the sessions directory if it doesn't exist."""
+        from buttermilk.api.services.session_storage import SessionStorageService
+        
+        # Use a subdirectory that doesn't exist yet
+        new_dir = temp_storage_dir / "new_sessions"
+        assert not new_dir.exists()
+        
+        service = SessionStorageService(sessions_dir=new_dir)
+        assert new_dir.exists()
+        assert new_dir.is_dir()
+
+    def test_end_to_end_configurable_sessions_dir(self, temp_storage_dir):
+        """Test end-to-end functionality with configurable sessions directory."""
+        from buttermilk.api.services.session_storage import SessionStorageService
+        from buttermilk.api.services.message_service import ChatMessage
+        
+        # Mock BM configuration to use our temp directory
+        mock_bm = MagicMock()
+        mock_bm.run_info.sessions_dir = str(temp_storage_dir)
+        
+        with patch("buttermilk.get_bm", return_value=mock_bm):
+            # Create service (should use configured directory)
+            service = SessionStorageService()
+            assert service.sessions_dir == temp_storage_dir
+            
+            # Save a message
+            session_id = "config-test-session"
+            message = ChatMessage(
+                type="record",
+                message_id="config-msg-001",
+                preview="Configurable directory test",
+                outputs={"content": "Testing configured sessions directory"},
+            )
+            service.save_message(session_id, message)
+            
+            # Verify file was created in configured directory
+            session_file = temp_storage_dir / f"{session_id}.json"
+            assert session_file.exists()
+            
+            # Verify we can retrieve the message
+            messages = service.get_session_messages(session_id)
+            assert len(messages) == 1
+            assert messages[0].message_id == "config-msg-001"

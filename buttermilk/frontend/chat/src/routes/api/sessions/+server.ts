@@ -1,11 +1,13 @@
 import { json } from '@sveltejs/kit';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { getSessionsDir } from '$lib/utils/backendUtils';
 
-export async function GET() {
+export async function GET({ fetch }) {
 	try {
-		// Path to the sessions directory
-		const sessionsDir = join(process.cwd(), '../../../data/sessions');
+		// Get configured sessions directory from environment variable
+		const configuredSessionsDir = getSessionsDir();
+		const sessionsDir = join(process.cwd(), '../../..', configuredSessionsDir);
 		
 		// Read all JSON files from the sessions directory
 		const files = await readdir(sessionsDir);

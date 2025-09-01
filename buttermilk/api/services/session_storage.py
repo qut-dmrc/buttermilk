@@ -8,9 +8,25 @@ from typing import List, Optional
 from buttermilk import logger
 from buttermilk.api.services.message_service import ChatMessage
 
-# Default sessions directory
+# Default sessions directory - will be overridden by get_sessions_dir() 
 SESSIONS_DIR = Path("data/sessions")
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+def get_sessions_dir() -> Path:
+    """Get the configured sessions directory from BM instance.
+    
+    Returns:
+        Path to the sessions directory from bm.run_info.sessions_dir,
+        falling back to SESSIONS_DIR if BM is not available.
+    """
+    try:
+        from buttermilk import get_bm
+        bm = get_bm()
+        if bm and bm.run_info and hasattr(bm.run_info, 'sessions_dir'):
+            return Path(bm.run_info.sessions_dir)
+    except Exception:
+        # Fall back to default if BM is not available or configured
+        pass
+    return SESSIONS_DIR
 
 
 class SessionStorageService:
@@ -28,9 +44,9 @@ class SessionStorageService:
         
         Args:
             sessions_dir: Optional custom directory for session files.
-                         Defaults to data/sessions/
+                         Defaults to bm.run_info.sessions_dir or data/sessions/
         """
-        self.sessions_dir = sessions_dir or SESSIONS_DIR
+        self.sessions_dir = sessions_dir or get_sessions_dir()
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_session_file(self, session_id: str) -> Path:

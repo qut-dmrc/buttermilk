@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
-import { checkBackendHealth, logBackendStatus } from '$lib/utils/backendUtils';
+import { checkBackendHealth, logBackendStatus, getSessionsDir } from '$lib/utils/backendUtils';
 
 export const GET: RequestHandler = async ({ params, url, fetch }) => {
   const { sessionId } = params;
@@ -45,7 +45,9 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
   
   // Fallback: Read directly from file system (demo mode)
   try {
-    const sessionsDir = join(process.cwd(), '../../../data/sessions');
+    // Get configured sessions directory from environment variable
+    const configuredSessionsDir = getSessionsDir();
+    const sessionsDir = join(process.cwd(), '../../..', configuredSessionsDir);
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
     
     const fileContent = await readFile(sessionFile, 'utf-8');

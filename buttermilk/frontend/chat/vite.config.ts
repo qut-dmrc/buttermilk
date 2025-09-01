@@ -4,9 +4,14 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
 	const backendApiUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+	const sessionsDir = env.SESSIONS_DIR || 'data/sessions';
 
 	return {
 		plugins: [sveltekit()],
+		define: {
+			// Make environment variables available to client-side code
+			'import.meta.env.SESSIONS_DIR': JSON.stringify(sessionsDir),
+		},
 		server: {
 			// Add proper CORS handling
 			cors: true,
