@@ -37,6 +37,7 @@ def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
         path = Path(__file__).parent.parent.resolve() / "conf"
         path = path.as_posix()
 
+    overrides.append(f"+run=notebook")
     overrides.append(f"bm.run_info.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):

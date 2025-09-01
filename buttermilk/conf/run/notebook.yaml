@@ -1,11 +1,8 @@
-# @package _global_
 defaults:
   - _self_
-  - /local
+  
+mode: notebook
+ui: notebook
+human_in_loop: true
 
-run:
-  mode: notebook
-  ui: notebook
-  human_in_loop: true
-
-  name: bm_notebook
+name: bm_notebook
