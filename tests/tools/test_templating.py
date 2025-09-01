@@ -8,7 +8,7 @@ try:
 except ImportError:
     CHATPARSER_AVAILABLE = False
 
-from buttermilk.utils.templating import load_template
+from buttermilk.utils.templating import calculate_template_hash, load_template
 from buttermilk.utils.utils import read_json
 
 
@@ -20,7 +20,7 @@ def test_template_synth():
         "criteria": "criteria_ordinary",
         "formatting": "json_rules",
     }
-    rendered, unfilled = load_template(
+    rendered, unfilled, template_hash = load_template(
         template="synthesise",
         parameters=parameters,
         untrusted_inputs=flow_data,
@@ -29,6 +29,66 @@ def test_template_synth():
     assert "RULE 1, TARGETS A MARGINALIZED GROUP" in rendered
     assert "Prompt is a jinja2 template that generates prompt for LLM" not in rendered
     assert "This phrase is highly ambiguous" in rendered
+    
+    # Test template hash is returned and has correct format
+    assert template_hash is not None
+    assert isinstance(template_hash, str)
+    assert template_hash.startswith("sha256:")
+    assert len(template_hash) == 71  # "sha256:" (7 chars) + 64 hex chars
+
+
+def test_calculate_template_hash():
+    """Test that calculate_template_hash returns consistent hash for a template."""
+    template_hash, template_path = calculate_template_hash("synthesise")
+    
+    # Test hash format
+    assert isinstance(template_hash, str)
+    assert template_hash.startswith("sha256:")
+    assert len(template_hash) == 71  # "sha256:" + 64 hex chars
+    
+    # Test path is returned
+    assert isinstance(template_path, str)
+    assert template_path.endswith("synthesise.jinja2")
+    
+    # Test consistency - same template should return same hash
+    hash2, path2 = calculate_template_hash("synthesise")
+    assert template_hash == hash2
+    assert template_path == path2
+
+
+def test_calculate_template_hash_nonexistent():
+    """Test that calculate_template_hash raises error for non-existent template."""
+    from buttermilk._core.exceptions import FatalError
+    
+    with pytest.raises(FatalError, match="Template file 'nonexistent.jinja2' not found"):
+        calculate_template_hash("nonexistent")
+
+
+def test_load_template_hash_consistency():
+    """Test that load_template and calculate_template_hash return same hash."""
+    # Get hash from calculate_template_hash
+    direct_hash, _ = calculate_template_hash("synthesise")
+    
+    # Get hash from load_template
+    _, _, template_hash = load_template(
+        template="synthesise",
+        parameters={"test": "value"},
+        untrusted_inputs={},
+    )
+    
+    # Should be the same
+    assert direct_hash == template_hash
+
+
+def test_different_templates_different_hashes():
+    """Test that different templates have different hashes."""
+    hash1, _ = calculate_template_hash("synthesise")
+    hash2, _ = calculate_template_hash("judge")
+    
+    # Different templates should have different hashes
+    assert hash1 != hash2
+    assert hash1.startswith("sha256:")
+    assert hash2.startswith("sha256:")
 
 
 def test_parse_valid_json():

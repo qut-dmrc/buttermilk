@@ -29,7 +29,6 @@ from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values
 
 
-
 class LLMAgent(Agent):
     """Agent that uses an LLM for text processing and generation.
 
@@ -101,6 +100,9 @@ class LLMAgent(Agent):
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
+        
+        # Template metadata for tracking in AgentTrace
+        self._template_metadata: dict[str, str] = {}
 
     async def _fill_template(
         self,
@@ -155,7 +157,7 @@ class LLMAgent(Agent):
                 logger.debug(f"Agent '{self.agent_name}': Removing duplicate prompt from inputs (already in context)")
                 del filtered_inputs["prompt"]
 
-        rendered_template_str, unfilled_vars = load_template(
+        rendered_template_str, unfilled_vars, template_hash = load_template(
             template=template_name,
             parameters=combined_params,
             untrusted_inputs=filtered_inputs,
@@ -187,6 +189,12 @@ class LLMAgent(Agent):
             if self._fail_on_unfilled_parameters:
                 raise ProcessingError(err_msg)
             logger.warning(f"{err_msg}. Proceeding as fail_on_unfilled_parameters is False.")
+
+        # Store template metadata for AgentTrace
+        self._template_metadata = {
+            "template_name": template_name,
+            "template_hash": template_hash,
+        }
 
         logger.debug(f"Agent '{self.agent_name}': Template '{template_name}' rendered into {len(llm_messages)} messages for LLM.")
         return llm_messages
@@ -264,9 +272,12 @@ class LLMAgent(Agent):
             "usage": chat_result.usage,
         }
         
+        # Add template metadata for tracking template versions
+        output_metadata.update(self._template_metadata)
+        
         # Include pricing metadata if available
-        if isinstance(chat_result, ModelOutput) and hasattr(chat_result, 'metadata') and 'pricing' in chat_result.metadata:
-            output_metadata['pricing'] = chat_result.metadata['pricing']
+        if isinstance(chat_result, ModelOutput) and hasattr(chat_result, "metadata") and "pricing" in chat_result.metadata:
+            output_metadata["pricing"] = chat_result.metadata["pricing"]
         
         # Fail-fast: at this point, chat_result is a successful CreateResult/ModelOutput
         llm_messages_to_send.append(

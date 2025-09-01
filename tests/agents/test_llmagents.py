@@ -96,3 +96,54 @@ async def test_scorer(model_name: str, request_paris: AgentInput):
     # else:
     #     # Weaker assertion if output is neither string nor dict
     #     assert "paris" in str(response.outputs).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)
+async def test_llm_agent_template_metadata(model_name: str, request_paris: AgentInput):
+    """Test that LLMAgent includes template metadata in AgentOutput."""
+    agent = LLMAgent(
+        role="tester", 
+        name="Template Test Agent", 
+        description="Test template metadata tracking", 
+        parameters={"model": model_name, "template": "best"}
+    )
+
+    # Call the agent to get the output
+    result = await agent._process(message=request_paris)
+
+    # Verify the result is an AgentOutput
+    assert isinstance(result, AgentOutput), "Result should be AgentOutput"
+    assert not result.is_error, f"Agent returned error: {result.error}"
+    
+    # Check that template metadata is included
+    assert "template_name" in result.metadata, "Template name should be in metadata"
+    assert "template_hash" in result.metadata, "Template hash should be in metadata"
+    
+    # Verify the template metadata values
+    assert result.metadata["template_name"] == "best", "Template name should match"
+    assert isinstance(result.metadata["template_hash"], str), "Template hash should be string"
+    assert result.metadata["template_hash"].startswith("sha256:"), "Template hash should start with sha256:"
+    assert len(result.metadata["template_hash"]) == 71, "Template hash should be 71 chars (sha256: + 64 hex chars)"
+    
+    # Test that AgentTrace also includes the metadata when created from output
+    from buttermilk._core.config import AgentConfig
+    
+    agent_config = AgentConfig(
+        name="test_agent",
+        role="TESTER",
+        instructions="Test instructions"
+    )
+    
+    trace = AgentTrace.from_output(
+        output=result,
+        inputs=request_paris,
+        agent_info=agent_config
+    )
+    
+    # Verify the trace includes the template metadata
+    assert isinstance(trace, AgentTrace), "Trace should be AgentTrace"
+    assert "template_name" in trace.metadata, "Template name should be in AgentTrace metadata"
+    assert "template_hash" in trace.metadata, "Template hash should be in AgentTrace metadata"
+    assert trace.metadata["template_name"] == "best", "Template name should match in trace"
+    assert trace.metadata["template_hash"] == result.metadata["template_hash"], "Template hash should match between output and trace"

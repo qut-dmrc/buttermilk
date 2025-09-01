@@ -11,6 +11,7 @@ This module provides functionalities for:
   `make_messages`).
 """
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -154,6 +155,46 @@ class KeyValueCollector(BaseModel):
         self._data.clear()
 
 
+def calculate_template_hash(template_name: str) -> tuple[str, str]:
+    """Calculate SHA-256 hash of a template file for tracking template versions.
+
+    Args:
+        template_name (str): The name of the template file (without .jinja2 extension)
+            to calculate hash for, located in `TEMPLATES_PATH`.
+
+    Returns:
+        tuple[str, str]: A tuple containing:
+            - str: The SHA-256 hash prefixed with "sha256:" for clarity
+            - str: The full path to the template file that was hashed
+
+    Raises:
+        FatalError: If the template file cannot be found or read.
+
+    """
+    template_filename = f"{template_name}.jinja2"
+    
+    # Search for the template file in TEMPLATES_PATH and subdirectories
+    recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
+    
+    template_path = None
+    for search_path in recursive_search_paths:
+        potential_path = Path(search_path) / template_filename
+        if potential_path.exists() and potential_path.is_file():
+            template_path = potential_path
+            break
+    
+    if template_path is None:
+        raise FatalError(f"Template file '{template_filename}' not found in {TEMPLATES_PATH} or its subdirectories.")
+    
+    try:
+        # Read the template file content and calculate hash
+        template_content = template_path.read_text(encoding="utf-8")
+        hash_value = hashlib.sha256(template_content.encode("utf-8")).hexdigest()
+        return f"sha256:{hash_value}", str(template_path)
+    except Exception as e:
+        raise FatalError(f"Failed to read template file '{template_path}' for hash calculation: {e!s}") from e
+
+
 def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2") -> list[tuple[str, str]]:  # Added default extension
     """Lists template files and their content from the configured `TEMPLATES_PATH`.
 
@@ -238,7 +279,7 @@ def load_template(
     template: str,  # Name of the template file (without .jinja2 extension)
     parameters: dict[str, Any],  # Parameters for template rendering (trusted)
     untrusted_inputs: dict[str, Any] | None = None,  # User inputs (less trusted)
-) -> tuple[str, set[str]]:
+) -> tuple[str, set[str], str]:
     """Renders a Jinja2 template with hierarchical includes and security considerations.
 
     It uses a sandboxed Jinja2 environment to limit potential risks from templates
@@ -261,11 +302,12 @@ def load_template(
             Defaults to an empty dictionary if None.
 
     Returns:
-        tuple[str, set[str]]: A tuple containing:
+        tuple[str, set[str], str]: A tuple containing:
             - str: The fully rendered template content as a string.
             - set[str]: A set of strings, where each string is the name of a
               variable that was present in the template but not found in
               `parameters` or `untrusted_inputs`.
+            - str: The SHA-256 hash of the template file content, prefixed with "sha256:".
 
     Raises:
         FatalError: If the specified template file cannot be loaded.
@@ -321,7 +363,15 @@ def load_template(
 
     rendered_string = jinja_template.render(**rendering_context)
 
-    return rendered_string, set(collected_undefined_vars)
+    # Calculate template hash for version tracking
+    try:
+        template_hash, _ = calculate_template_hash(template)
+    except FatalError:
+        # If hash calculation fails, re-raise as the template loading should have also failed
+        logger.warning(f"Could not calculate hash for template '{template}' - this may indicate a template loading issue")
+        raise
+
+    return rendered_string, set(collected_undefined_vars), template_hash
 
 
 def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
