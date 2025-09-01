@@ -427,16 +427,24 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         tracer = trace.get_tracer("buttermilk.agent")
 
         # Create OTEL span for agent execution
+        # Filter out None values to avoid OpenTelemetry attribute warnings
+        span_attributes = {
+            "agent.name": self.agent_name,
+            "agent.id": self.agent_id,
+            "agent.type": str(type(self)),
+        }
+        
+        # Only add optional attributes if they have non-None values
+        if self._config and self._config.role:
+            span_attributes["agent.role"] = self._config.role
+        if session_id := getattr(message, "session_id", None):
+            span_attributes["session_id"] = session_id
+        if parent_call_id := getattr(message, "parent_call_id", None):
+            span_attributes["parent_call_id"] = parent_call_id
+        
         with tracer.start_as_current_span(
             f"agent.{self.agent_name}",
-            attributes={
-                "agent.name": self.agent_name,
-                "agent.id": self.agent_id,
-                "agent.type": str(type(self)),
-                "agent.role": self._config.role if self._config else None,
-                "session_id": getattr(message, "session_id", None),
-                "parent_call_id": getattr(message, "parent_call_id", None),
-            },
+            attributes=span_attributes,
         ) as otel_span:
             try:
                 logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
