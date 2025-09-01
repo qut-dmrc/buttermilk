@@ -20,11 +20,11 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowProgressUpdate,
-    UserResponseMessage,
     StepRequest,
+    SystemPromptMessage,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    SystemPromptMessage,
+    UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError
 
@@ -269,12 +269,12 @@ class HostAgent(Agent):
                 tool_names = []
                 for tool in message.tool_definitions:
                     # Extract tool name from either name attribute or schema.name
-                    tool_name = getattr(tool, 'name', None) or getattr(tool.schema, 'name', None)
+                    tool_name = getattr(tool, "name", None) or getattr(tool.schema, "name", None)
                     if tool_name:
                         self._tool_to_agent_map[tool_name] = agent_id
                         tool_names.append(tool_name)
                     else:
-                        tool_names.append('unknown')
+                        tool_names.append("unknown")
                 
                 logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {tool_names}")
                 logger.debug(f"Tool-to-agent mapping: {dict(self._tool_to_agent_map)}")
@@ -430,14 +430,15 @@ class HostAgent(Agent):
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
 
                 # Calculate dynamic timeout based on number of tasks
-                # Base timeout + (60 seconds per task / 6 parallel capacity)
-                # With 6 parallel tasks potentially taking 1 minute each due to rate limits
-                # But capped between 5-20 minutes (300-1200 seconds) per step
+                # Base timeout + (120 seconds per task / 6 parallel capacity)
+                # With 6 parallel tasks potentially taking 2 minutes total
+                # TODO: Need to add some allowance for rate limits
+                # But capped between at no more than 5 minutes per step
                 total_pending_tasks = sum(self._pending_tasks_by_agent.values())
                 additional_time = (total_pending_tasks * 60) / 6  # Assuming 6 parallel workers
                 calculated_timeout = self._max_wait_time + additional_time
-                # Ensure timeout is between 5 and 20 minutes
-                dynamic_timeout = max(300, min(calculated_timeout, 1200))
+
+                dynamic_timeout = max(120, min(calculated_timeout, 300))
 
                 logger.info(f"Using dynamic timeout of {dynamic_timeout:.0f}s for {total_pending_tasks} pending tasks")
 

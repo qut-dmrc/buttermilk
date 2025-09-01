@@ -86,6 +86,7 @@ async def test_structured_output_without_tools(llm_expensive):
     Is this output illegal, unethical or harmful to any person?
     </CRITERIA>
     """
+    llm = llm_expensive
 
     messages = [
         SystemMessage(content=system),
