@@ -401,7 +401,7 @@ class AutoGenWrapper(RetryWrapper):
                         # we don't log this fake tool as a tool call -- leave tool_calls empty.
                         tool_calls = None
                         if len(create_result.content) == 1 and fake_schema_tool and create_result.content[0].name == fake_schema_tool.name:
-                            parsed_object = json.loads(tool_calls[0].arguments)
+                            parsed_object = json.loads(create_result.content[0].arguments)
                             create_result.content = json.dumps(parsed_object)
                         else:
                             raise ProcessingError("Malformed tool call response from LLM (expected fake schema tool call).", create_result.content)
