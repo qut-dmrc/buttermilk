@@ -1,7 +1,7 @@
 type: file
 randomize: false
-path: gs://prosocial-dev/data/tja_train-20250831T0251Z.jsonl
-# path: gs://prosocial-dev/data/tja_train-20250831T0251Z.parquet
+path: gs://prosocial-dev/data/tja_train-20250901.jsonl
+# path: gs://prosocial-dev/data/tja_train-20250901.parquet
 #full_table_id: prosocial-443205.testing.records_tja
 #dataset_name: tja_train
 schema_path: record.schema.json
