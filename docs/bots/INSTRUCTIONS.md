@@ -12,6 +12,13 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
+**🛑 UNIVERSAL FILE CREATION CHECKPOINT 🛑**
+**BEFORE creating ANY file (.py, .js, .md, etc.), you MUST ask yourself:**
+1. **Location check**: Am I creating this in the correct directory? (tests/ for test files)
+2. **Purpose check**: Is this following proper conventions? (pytest for tests)
+3. **Alternative check**: Can I use existing files/tests instead?
+4. **IF ANY ANSWER IS NO OR UNCLEAR: STOP and find the correct approach**
+
 **BEFORE you test, validate, or verify ANY code behavior, you MUST:**
 
 ### ❌ NEVER CREATE THESE FILES:
@@ -21,17 +28,39 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
 
 ### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
+
+**🛑 CRITICAL: These phrases indicate you're about to violate workflow. STOP and use approved methods instead:**
+
+**Test Creation Violations:**
 - "Let me create a test to..."
 - "I'll write a quick test..."
+- "Let me create a simple test..."
+- "I'll create a test script..."
+- "I'll make a test file..."
+
+**Validation Violations:**
 - "Let me verify this works..."
 - "I'll test the serialization..."
 - "Let me check if this runs..."
 - "I'll validate my implementation..."
 - "Let me see if this works..."
+- "I need to test this..."
+- "Let me make sure this works..."
+
+**File Creation Violations:**
 - "I'll create a script to test..."
 - "Let me create an example..."
 - "I'll make a demo..."
 - "Here's a sample script..."
+- "I'll write a quick validation..."
+- "Let me create a verification..."
+
+**🔧 WHEN YOU CATCH YOURSELF USING THESE PHRASES:**
+1. **STOP immediately** - Do not proceed with file creation
+2. **Check the validation decision tree above** 
+3. **Use approved validation methods only**
+4. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
+5. **If unclear**: Ask for guidance rather than creating files
 
 ### 🤖 SUBAGENT AVAILABLE:
 When you need to create examples or demonstrations, use:
@@ -76,6 +105,42 @@ def test_myclass_serialization():
 ```
 
 **ENFORCEMENT**: If you catch yourself about to create a test file, STOP and ask: "Am I creating this in the tests/ directory using proper pytest conventions?" If no, RESTART your approach.
+
+## 🚨 POST-IMPLEMENTATION VALIDATION PROTOCOL 🚨
+
+**When you need to validate or verify your implementation works:**
+
+### ✅ APPROVED VALIDATION METHODS:
+1. **Run existing tests**: Use `uv run pytest tests/[relevant_module]` to run existing test suites
+2. **Use debugging tools**: Refer to `docs/bots/debugging.md` for validation tools
+3. **Check with project's validation tools**: Use documented debugging and monitoring tools
+4. **Extend existing tests**: Add test cases to existing test files in `tests/` directory
+5. **Manual verification**: Use project's established debugging endpoints and tools
+
+### ❌ FORBIDDEN VALIDATION METHODS:
+- Creating any standalone validation scripts
+- Creating "quick test" files anywhere outside tests/
+- Writing verification code in project root or implementation directories
+- Creating demo files, sample scripts, or proof-of-concept files
+
+### 🔄 VALIDATION DECISION TREE:
+1. **Do existing tests cover this functionality?** 
+   - YES: Run those tests with `uv run pytest tests/path/to/test.py`
+   - NO: Go to step 2
+
+2. **Can I add a test case to an existing test file?**
+   - YES: Edit the existing test file in tests/ directory
+   - NO: Go to step 3
+
+3. **Do I need to create a completely new test?**
+   - Create it in tests/ directory following pytest conventions
+   - NOT in project root or implementation directories
+
+4. **Do I just need to verify basic functionality?**
+   - Use the project's debugging tools from docs/bots/debugging.md
+   - Use existing API endpoints or monitoring tools
+
+**REMEMBER**: The urge to "quickly test" or "verify it works" is the most common trigger for workflow violations. Resist this urge and use proper validation methods.
 
 ## 📚 EXAMPLE CREATION PROTOCOL
 
@@ -124,8 +189,33 @@ def test_myclass_serialization():
 - "I'll write a test script..."
 - "Let me verify this works..."
 - "I'll test the implementation..."
+- "Let me create a simple test..."
+- "I need to validate this..."
 
 **WHEN YOU CATCH YOURSELF USING THESE PHRASES: STOP. FOLLOW THE PROPER WORKFLOW.**
+
+## 🚨 PREVENTION SYSTEM: Pre-Action Verification 🚨
+
+**UNIVERSAL RULE: Before performing ANY action that involves creating files or testing:**
+
+### 📋 MANDATORY PRE-ACTION CHECKLIST:
+**Ask yourself these questions BEFORE taking action:**
+
+1. **Am I about to create a file?**
+   - If YES: Where am I creating it? Is it in the correct directory?
+   - For tests: MUST be in `tests/` directory with pytest conventions
+
+2. **Am I about to validate/test something?**
+   - If YES: Check the validation decision tree in the previous section
+   - Use existing tests or debugging tools FIRST
+
+3. **Am I using any red flag phrases?**
+   - If YES: STOP immediately and use approved methods instead
+
+4. **Can I accomplish this goal without creating new files?**
+   - If MAYBE: Try existing methods first before creating anything new
+
+**ENFORCEMENT: If you cannot answer these questions confidently with approved methods, STOP and ask for guidance.**
 
 # CRITICAL RULES for 🤖 LLM Agents: 
 
@@ -206,7 +296,7 @@ When you find yourself about to paste:
 
 7. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
 
-8. **VALIDATE**: Use the project's end-to-end debugging tools to ensure no regressions and all success criteria are met
+8. **VALIDATE**: Use ONLY approved validation methods (see validation decision tree above). Use existing tests, debugging tools from `docs/bots/debugging.md`, or extend existing test files in `tests/` directory. **NEVER create standalone validation scripts.**
 
 9. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue. If you're working independently, don't forget to file a pull request with your new changes!
 

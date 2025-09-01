@@ -5,7 +5,7 @@ extend-include = ["*.ipynb"]
 
 [lint]
 select = ["E", "F", "W", "Q", "I", "PL"]
-ignore = [
+extend-ignore = [
     "RET504",  # Unnecessary variable assignment before return
     "RET503",  # Multiple returns 
     "E501",    # Line too long 
@@ -15,13 +15,15 @@ ignore = [
     "RET505",  # Unnecessary else after return
     "PLR0904",  # Too many public methods
     "PLR0915",  # Too many public methods
-    "W293", # ?
+    "W293",
+    "PLR1702",
 ]
 
 [lint.isort]
 combine-as-imports = true
 known-first-party = ["buttermilk"]
- 
+#dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
 [format]
 quote-style = "double"
 indent-style = "space"

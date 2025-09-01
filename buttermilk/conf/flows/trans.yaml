@@ -30,7 +30,6 @@ description: "Journalism quality assessment for trans issues reporting"
 
 parameters:
   human_in_loop: ${run.human_in_loop}
-  criteria: []  # Will be populated by criteria default above
 
 save: {}
 storage: {}

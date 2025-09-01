@@ -38,6 +38,8 @@ import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
+from omegaconf import DictConfig
+from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
@@ -45,9 +47,9 @@ from buttermilk._core.cloud import CloudManager  # Manages cloud provider connec
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
-from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
+from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.query import QueryRunner  # For running SQL queries
-from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig, StorageFactory  # Unified storage config
+from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
 
@@ -61,6 +63,10 @@ _SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # Global variable to store the run ID, ensuring it's generated once per execution.
 _global_run_id = ""
+
+_TRACER_NAME = "buttermilk"
+
+tracer = trace.get_tracer(_TRACER_NAME)
 
 
 def _make_run_id() -> str:
@@ -217,8 +223,8 @@ class BM(BaseModel):
         default_factory=list,
         description="List of configurations for different cloud providers to initialize (e.g., GCP, Azure).",
     )
-    tracing: Tracing | None = Field(
-        default_factory=Tracing,  # Default to Tracing() which might have enabled=False
+    tracing: dict[str, Tracing] | None = Field(
+        default_factory=dict(),
         description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
     )
     datasets: dict[str, BaseStorageConfig] = Field(
@@ -238,7 +244,7 @@ class BM(BaseModel):
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
     _initialization_complete: asyncio.Event = PrivateAttr(default=asyncio.Event())
     _initialization_error: Exception | None = PrivateAttr(default=None)
-    _tracing_istrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
+    _tracing_instrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -442,32 +448,36 @@ class BM(BaseModel):
         This method is called during initialization to set up tracing
         systems like OpenTelemetry or Weave, depending on the configuration.
         """
-        # We disable weave autopatching for Autogen because it's too noisy and slow
-        # We will instead trace manually.
 
-        collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
-        # Retrieve necessary credentials before initializing Weave.
-        # This is necessary because otherwise Weave will interactive authentication.
-        self._setup_weave_credentials()
-        autopatch = {"autogen": {"enabled": False}}
-        logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
-        # Weave project HAS to be in the format "entity/collection_name"
-        client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
-        # logger.info("Weave initialized successfully")
+        if self.tracing.get("weave") and self.tracing["weave"].enabled:
+            # We disable weave autopatching for Autogen because it's too noisy and slow
+            # We will instead trace manually.
 
-        logger.debug("Attempting to start Traceloop client with app_name 'buttermilk'")
+            collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
+            # Retrieve necessary credentials before initializing Weave.
+            # This is necessary because otherwise Weave will interactive authentication.
+            self._setup_weave_credentials()
+            autopatch = {"autogen": {"enabled": False}}
+            logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
 
-        from traceloop.sdk import Traceloop
+            # Weave project has to be in the format "entity/collection_name"
+            client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
+            logger.info("Weave initialized successfully")
 
-        Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
-        logger.info("Traceloop initialized.")
+        if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
+            from traceloop.sdk import Traceloop
 
-        # Setup other Otel tracing if configured
-        from buttermilk.utils.otel import setup_tracing_otel
+            Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
+            logger.info("Traceloop initialized.")
 
-        setup_tracing_otel(self.tracing)
-        self._tracing_istrumented.set()  # Mark tracing as set up
-        logger.debug("Tracing has been set up successfully")
+        if self.tracing.get("otel") and self.tracing["otel"].enabled:
+            # Setup other Otel tracing if configured
+            from buttermilk.utils.otel import setup_tracing_otel
+
+            setup_tracing_otel(self.tracing["otel"])
+            logger.info("OTEL Tracing has been set up successfully")
+
+        self._tracing_instrumented.set()  # Mark tracing as set up
 
     def _ensure_cloud_authentication(self) -> None:
         """Ensure cloud providers are authenticated and tracing is set up.
@@ -486,39 +496,9 @@ class BM(BaseModel):
 
     def _setup_cloud_logging(self) -> None:
         """Set up Google Cloud Logging after cloud authentication."""
-        if self.logger_cfg and self.logger_cfg.type == "gcp" and self._cloud_manager:
-            try:
-                from google.cloud import logging as gcp_logging
-                from google.cloud.logging_v2.handlers import CloudLoggingHandler
-
-                cloud_logging_resource = gcp_logging.Resource(
-                    type="generic_task",
-                    labels={
-                        "project": self.logger_cfg.project_id,
-                        "location": self.logger_cfg.location,
-                        "namespace": self.run_info.name,
-                        "job": self.run_info.job,
-                        "task_id": self.run_info.run_id,
-                    },
-                )
-
-                cloudHandler = CloudLoggingHandler(
-                    client=self._cloud_manager.gcs_log_client(self.logger_cfg),
-                    resource=cloud_logging_resource,
-                    name=self.run_info.name,
-                    labels=self.run_info.model_dump(include={"run_id", "name", "job", "platform"}),
-                )
-                cloudHandler.setLevel(logging.INFO)
-                logger.addHandler(cloudHandler)
-                logger.debug("Cloud logging handler added")
-            except Exception as e:
-                # Provide better error messages distinguishing between config and service issues
-                logger.error(
-                    f"Cloud logging setup failed due to configuration issue: {e}. "
-                    f"Logger config: type={self.logger_cfg.type}, "
-                    f"project={self.logger_cfg.project_id}, "
-                    f"location={self.logger_cfg.location}",
-                )
+        from buttermilk._core.log import setup_cloud_logging
+        
+        setup_cloud_logging(self.logger_cfg, self._cloud_manager, self.run_info)
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -730,10 +710,10 @@ class BM(BaseModel):
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client for tracing."""
-        if self.tracing and self.tracing.enabled and not self._tracing_istrumented.is_set():
+        if "weave" in self.tracing and self.tracing["weave"].enabled and not self._tracing_instrumented.is_set():
             # If tracing is enabled but not yet instrumented, set it up
             asyncio.create_task(self._setup_tracing())
-            await self._tracing_istrumented.wait()
+            await self._tracing_instrumented.wait()
         return weave.get_client()
 
     @property
@@ -759,117 +739,64 @@ class BM(BaseModel):
         return self._credentials_cached
 
     def setup_logging(self, verbose: bool = False) -> None:
-        """Sets up logging for the Buttermilk application.
+        """Sets up modern logging for the Buttermilk application.
 
-        Configures console logging (with colors via `coloredlogs`) and optionally
-        Google Cloud Logging if `self.logger_cfg` is set up for GCP.
-        Sets logging levels for Buttermilk's logger and other loggers.
+        Uses structlog for JSON output to files and cloud, and Rich for beautiful console output.
+        No format strings or context filters needed - everything is structured.
 
         Args:
-            verbose (bool): If True, sets Buttermilk logger level to DEBUG and
-                enables asyncio debug mode. Otherwise, sets to INFO.
+            verbose (bool): If True, creates DEBUG level file logs and enables more console detail.
                 Defaults to False.
 
-        Raises:
-            RuntimeError: If GCP logger is configured but essential attributes
-                like 'project' or 'location' are missing in `self.logger_cfg`.
-
         """
-        import sys
+        from buttermilk._core.log import setup_console_logging, setup_file_logging
 
-        import coloredlogs  # For colored console output
-
-        # Logger config validation is now done in _validate_logger_config() during initialization
-
-        # Clear existing handlers from the root logger to avoid duplicate logs
+        # Clear existing handlers to avoid conflicts
+        logger.handlers.clear()
         root_logger = logging.getLogger()
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
+        root_logger.handlers.clear()
 
-        # Set up console logging
-        context_filter = ContextFilter()
-        logger.addFilter(context_filter)
-        # Original format: "%(asctime)s %(hostname)s %(name)s [%(session_id)s:%(agent_id)s] %(filename)s:%(lineno)d %(levelname)s %(message)s"
-        # Shorter: Timestamp [short_context] LEVEL filename: Message
-        console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
+        # Set up beautiful console logging with Rich
+        setup_console_logging(verbose=verbose)
 
-        # Console always shows INFO level, regardless of verbose setting
-        coloredlogs.install(
-            logger=logger,  # Target Buttermilk's main logger
-            fmt=console_format,
-            isatty=True,  # Enable colors if output is a TTY
-            stream=sys.stdout,  # Log to stdout for better test visibility
-            level=logging.INFO,  # Always INFO for console
-        )
+        # Set up structured JSON file logging
+        log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
+        for log_file in log_files:
+            logger.highlight(f"Logging enabled - writing to: {log_file}")
 
-        # Always create an INFO log file
-        info_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_info.log"
-        info_file_handler = logging.FileHandler(info_log_filename, mode="w")
-        info_file_handler.setLevel(logging.INFO)
-
-        info_file_formatter = logging.Formatter(console_format)
-        info_file_handler.setFormatter(info_file_formatter)
-        info_file_handler.addFilter(context_filter)
-
-        logger.addHandler(info_file_handler)
-        logger.highlight(f"INFO logging enabled - writing to: {info_log_filename}")
-
-        # Add debug file logging when verbose is True
-        if verbose:
-            debug_log_filename = f"/tmp/buttermilk_{self.run_info.run_id}_debug.log"
-
-            # Create debug file handler
-            debug_file_handler = logging.FileHandler(debug_log_filename, mode="w")
-            debug_file_handler.setLevel(logging.DEBUG)
-
-            # Use the same format as console but without colors
-            debug_file_formatter = logging.Formatter(console_format)
-            debug_file_handler.setFormatter(debug_file_formatter)
-
-            # Add the same context filter
-            debug_file_handler.addFilter(context_filter)
-
-            # Add handler to the logger
-            logger.addHandler(debug_file_handler)
-            logger.highlight(f"DEBUG logging enabled - writing to: {debug_log_filename}")
-
-        # Defer Google Cloud Logging setup to improve startup performance
-        # Cloud logging will be initialized on first cloud operation
+        # Cloud logging will be set up when cloud_manager is first accessed
         if self.logger_cfg and self.logger_cfg.type == "gcp":
             logger.debug("Cloud logging configuration detected - will be initialized on first cloud access")
 
-        # Set default logging levels for other loggers to WARNING to reduce noise
+        # Set logging levels to reduce noise from other libraries
         root_logger.setLevel(logging.WARNING)
         for logger_name in list(logging.Logger.manager.loggerDict.keys()):
-            # Check if it's a Logger instance to avoid issues with placeholders
             if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
                 logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-        # Set Buttermilk's own logger level based on verbosity
-        logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-        # Configure asyncio debug mode based on verbosity
-        try:
-            current_loop = asyncio.get_event_loop()
-            if current_loop.is_running():
-                current_loop.set_debug(verbose)
-        except RuntimeError:  # No event loop running
-            pass
+        # Keep buttermilk logger at INFO level
+        logger.setLevel(logging.INFO)
 
-        # Log initialization message
-        log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.run_info.save_dir}"
-        # Note: cloud_logging_resource is only available if cloud logging is active
-        # It's set up in _setup_cloud_logging() which is called lazily
-
-        logger.info(log_init_message, extra={"run_details": self.run_info.model_dump(exclude_none=True)})
+        # Log initialization message with structured context
+        logger.info(
+            "Logging set up for run",
+            extra={
+                "platform": self.run_info.platform,
+                "project_name": self.run_info.name,  # Renamed to avoid LogRecord conflict
+                "job": self.run_info.job,
+                "run_id": self.run_info.run_id,
+                "save_dir": self.run_info.save_dir
+            }
+        )
 
         # Log Buttermilk version if available
         try:
             from importlib.metadata import version
+            bm_version = version("buttermilk")
+            logger.info(f"Buttermilk version: {bm_version}")
+        except Exception:
+            logger.warning("Could not determine Buttermilk version.")
 
-            bm_version = version("buttermilk")  # Assumes package is named 'buttermilk'
-            logger.debug(f"Buttermilk version: {bm_version}")
-        except Exception:  # importlib.metadata.PackageNotFoundError or other issues
-            logger.debug("Could not determine Buttermilk version.")
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
@@ -1008,7 +935,7 @@ class BM(BaseModel):
             return_df=return_df,
         )
 
-    def get_storage(self, config: StorageConfig | dict | None = None) -> Any:
+    def get_storage(self, config: StorageConfig | dict | DictConfig | None = None) -> Any:
         """Factory method to create unified storage instances.
 
         Creates the appropriate storage class based on the configuration type,
@@ -1030,22 +957,9 @@ class BM(BaseModel):
         # Ensure config is a StorageConfig object
         if config is None:
             raise ValueError("Storage configuration is required")
-        if not isinstance(config, BaseStorageConfig):
-            # Convert OmegaConf objects to StorageConfig
-            # This is necessary for Hydra integration
-            try:
-                from omegaconf import DictConfig, OmegaConf
-
-                if isinstance(config, DictConfig):
-                    config_dict = OmegaConf.to_container(config, resolve=True)
-                    config = StorageFactory.create_config(config_dict)
-                else:
-                    raise ValueError(f"Config must be a BaseStorageConfig or OmegaConf DictConfig, got {type(config)}")
-            except ImportError:
-                raise ValueError("Config must be a BaseStorageConfig object") from None
 
         # Use the storage factory to create the appropriate storage instance
-        from buttermilk._core.storage_config import StorageFactory
+        from buttermilk._core.storage_config import StorageFactory  # noqa import here to avoid loop
 
         return StorageFactory.create_storage(config, self)
 

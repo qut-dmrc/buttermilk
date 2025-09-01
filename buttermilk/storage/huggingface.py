@@ -129,6 +129,26 @@ class HuggingFaceStorage:
             "Use FileStorage or BigQueryStorage for saving records."
         )
 
+    def get_record_by_id(self, record_id: str) -> Record | None:
+        """Get a single record by ID.
+        
+        HuggingFace datasets can be very large, so we don't allow the default 
+        iteration-based approach. For small datasets, export to FileStorage.
+        
+        Args:
+            record_id: The unique identifier of the record to retrieve
+            
+        Returns:
+            The record if found, None otherwise
+            
+        Raises:
+            NotImplementedError: HuggingFace datasets may be too large for iteration
+        """
+        raise NotImplementedError(
+            "HuggingFace get_record_by_id disabled for potentially large datasets. "
+            "For small datasets, export to FileStorage and use the default implementation."
+        )
+
     def count(self) -> int:
         """Count records in the dataset."""
         return len(self)

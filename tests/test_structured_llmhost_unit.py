@@ -7,7 +7,7 @@ import pytest
 from autogen_core.tools import ToolSchema
 
 from buttermilk import AgentInput, StepRequest
-from buttermilk._core.agent import ManagerMessage
+from buttermilk._core.contract import UserResponseMessage
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import END, MANAGER
 from buttermilk._core.contract import AgentAnnouncement
@@ -173,7 +173,7 @@ class TestStructuredLLMHostListen:
     @pytest.mark.anyio
     async def test_listen_manager_message(self, mock_host):
         """Test processing manager messages."""
-        message = ManagerMessage(content="Analyze this data")
+        message = UserResponseMessage(content="Analyze this data")
 
         # Mock invoke to return a trace
         mock_trace = Mock()
@@ -203,7 +203,7 @@ class TestStructuredLLMHostListen:
     @pytest.mark.anyio
     async def test_listen_skip_command_messages(self, mock_host):
         """Test that command messages are skipped."""
-        message = ManagerMessage(content="/command test")
+        message = UserResponseMessage(content="/command test")
 
         # Add a step to the queue before the command
         await mock_host._proposed_step.put(StepRequest(role="TEST"))
@@ -227,7 +227,7 @@ class TestStructuredLLMHostListen:
         await mock_host._proposed_step.put(StepRequest(role="OLD"))
         await mock_host._proposed_step.put(StepRequest(role="OLD2"))
 
-        message = ManagerMessage(content="New request")
+        message = UserResponseMessage(content="New request")
 
         # Use patch to mock the invoke method at the class level
         from unittest.mock import patch
@@ -248,7 +248,7 @@ class TestStructuredLLMHostListen:
     @pytest.mark.anyio
     async def test_listen_handle_end_response(self, mock_host):
         """Test handling of END responses from LLM."""
-        message = ManagerMessage(content="I'm done")
+        message = UserResponseMessage(content="I'm done")
 
         # Mock invoke to return END indication
         mock_trace = Mock()

@@ -1,19 +1,15 @@
 host: gemini25flash
 
 general:
-  - gemini25pro
-  - gpt5mini
-  - llama4maverick
+  - gemini25flash
   - sonnet
 
 judgers:
   - gemini25pro
-  - gpt5mini
-  - llama4maverick
+  - gemini25flash
   - sonnet
 
 synthesisers:
   - gemini25pro
-  - gpt5mini
-  - llama4maverick
+  - gemini25flash
   - sonnet

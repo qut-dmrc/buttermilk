@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any, Self
 
 import weave
+from opentelemetry import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -51,7 +52,6 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.data.loaders import DataLoader  # Legacy data loading interface
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
@@ -207,11 +207,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     Internal State Attributes:
         _flow_data (KeyValueCollector): An internal state collector used to store
             and manage data passed between steps or used for templating within the flow.
-        _input_loaders (dict[str, DataLoader]): A dictionary to store loaded input data loaders,
-            keyed by the names defined in the `storage` configuration. Values are
-            DataLoader instances that provide iterators over Record objects.
-        _records (list[Record]): A list of `Record` objects currently loaded or
-            being processed by the flow.
         model_config (ConfigDict): Pydantic model configuration.
             - `extra`: "forbid" - Disallows extra fields not explicitly defined.
             - `arbitrary_types_allowed`: False.
@@ -219,8 +214,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     """
 
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _input_loaders: dict[str, DataLoader] = PrivateAttr(default_factory=dict)  # Input data loaders
-    _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
         extra="forbid",
@@ -272,52 +265,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         self._flow_data.init(agent_roles)
         return self
 
-    async def load_data(self) -> None:
-        """Creates storage instances from the configured data sources.
-
-        Initializes `self._input_loaders` by creating appropriate storage
-        instances for each `DataSourceConfig` in `self.storage`.
-        This method should be called before attempting to access data via
-        `get_record_dataset` if data sources are defined.
-        """
-        if self.storage:  # Only load if data sources are configured
-            for source_name, config in self.storage.items():
-                try:
-                    # Convert config to proper StorageConfig - no fallbacks allowed
-                    if isinstance(config, BaseStorageConfig):
-                        # Already a proper storage config
-                        storage_config = config
-                    else:
-                        # Convert dict/OmegaConf to StorageConfig using factory
-                        if hasattr(config, "to_container"):
-                            # OmegaConf object - convert to dict
-                            config_dict = config.to_container()
-                        elif isinstance(config, dict):
-                            # Regular dict
-                            config_dict = config
-                        else:
-                            raise ValueError(f"Unsupported storage config type for '{source_name}': {type(config)}")
-
-                        # Use StorageFactory to create the proper subclass
-                        from buttermilk._core.storage_config import StorageFactory
-
-                        try:
-                            storage_config = StorageFactory.create_config(config_dict)
-                        except Exception as e:
-                            raise ValueError(f"Failed to create storage config for '{source_name}': {e}") from e
-
-                    # Use unified storage system
-                    bm = get_bm()
-                    storage = bm.get_storage(storage_config)
-                    self._input_loaders[source_name] = storage
-                    logger.debug(f"Created storage for source '{source_name}': {type(storage).__name__}")
-                except Exception as e:
-                    logger.error(f"Failed to create storage for source '{source_name}': {e}")
-                    raise
-            logger.info(f"Storage instances created for orchestrator '{self.name}': {list(self._input_loaders.keys())}")
-        else:
-            logger.info(f"No data sources configured for orchestrator '{self.name}'.")
-
     async def run(self, request: RunRequest) -> None:
         """Public entry point to start the orchestrator's flow execution.
 
@@ -345,6 +292,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
+        
+        # Get OTEL tracer for business logic spans
+        tracer = trace.get_tracer("buttermilk.orchestrator")
+        
         weave_client = await bm.get_weave_client()
         if weave_client is not None:
             try:
@@ -363,28 +314,44 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 orchestrator_trace = None
                 op = None
 
-        try:
-            logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
-            await self._run(request=request)
-            # Log success, attach trace URL if present
-            msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
-            if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
-                msg += f" Tracing link: {orchestrator_trace.ui_url}"
-            logger.highlight(msg)
-        except Exception as e:
-            logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
-        finally:
-            # Finish trace if it was created and a finisher is available
-            if orchestrator_trace is not None:
-                try:
-                    bm = get_bm()
-                    weave_client = await bm.get_weave_client()
-                    if weave_client is not None and orchestrator_trace is not None:
-                        weave_client.finish_call(orchestrator_trace, op=op)
-                    elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
-                        _weave_mod.finish_call(orchestrator_trace, op=op)
-                except Exception as e:
-                    logger.debug(f"Weave finish_call failed or is unavailable: {e!s}")
+        # Create OTEL span for orchestrator execution
+        with tracer.start_as_current_span(
+            f"orchestrator.{self.name}",
+            attributes={
+                "flow.name": self.name,
+                "flow.display_name": display_name,
+                "session_id": getattr(bm.run_info, 'run_id', None),
+                "run_id": getattr(bm.run_info, 'run_id', None),
+                "platform": getattr(bm.run_info, 'platform', None),
+                "job": getattr(bm.run_info, 'job', None),
+            }
+        ) as otel_span:
+            try:
+                logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")
+                await self._run(request=request)
+                # Log success, attach trace URL if present
+                msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
+                if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
+                    msg += f" Tracing link: {orchestrator_trace.ui_url}"
+                logger.highlight(msg)
+                otel_span.set_status(trace.Status(trace.StatusCode.OK))
+            except Exception as e:
+                logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
+                otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                otel_span.record_exception(e)
+                raise
+            finally:
+                # Finish trace if it was created and a finisher is available
+                if orchestrator_trace is not None:
+                    try:
+                        bm = get_bm()
+                        weave_client = await bm.get_weave_client()
+                        if weave_client is not None and orchestrator_trace is not None:
+                            weave_client.finish_call(orchestrator_trace, op=op)
+                        elif _weave_mod is not None and hasattr(_weave_mod, "finish_call"):
+                            _weave_mod.finish_call(orchestrator_trace, op=op)
+                    except Exception as e:
+                        logger.debug(f"Weave finish_call failed or is unavailable: {e!s}")
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:
@@ -395,20 +362,16 @@ class Orchestrator(OrchestratorProtocol, ABC):
         - Initializing communication runtimes (e.g., Autogen's group chat).
         - Establishing connections to databases or external services.
         - Pre-loading essential components or models.
-        - Fetching initial records based on the `request` if not already loaded.
 
         This method is called once at the beginning of the `_run` method.
 
         Args:
             request: The `RunRequest` object containing initial parameters and
-                data for the flow. Implementations should use this to fetch
-                initial records if `self._records` is empty.
+                data for the flow.
 
         """
-        # Example of how initial records might be fetched. Subclasses should adapt this.
-        if not self._records:  # Only fetch if no records are already present
-            await self._fetch_initial_records(request)
-        # raise NotImplementedError("Orchestrator subclasses must implement _setup.") # Keep if base does nothing else
+        # Default implementation does basic setup. Subclasses should override as needed.
+        pass
 
     @abstractmethod
     async def _run(self, request: RunRequest) -> None:
@@ -443,136 +406,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
             # Optionally re-raise as FatalError or a more specific orchestrator error
             # raise ProcessingError(f"Orchestrator _run failed: {e!s}") from e
         # Cleanup is handled by the public `run` method's finally block.
-
-    async def _fetch_initial_records(self, request: RunRequest) -> None:
-        """Fetch initial records based on the `RunRequest` if not already loaded.
-
-        This helper method checks if `self._records` is empty. If so, and if the
-        `request` provides a `record_id` or `uri` in parameters, it attempts to fetch the
-        corresponding record(s). If `records` are provided in parameters,
-        those are used directly.
-
-        Args:
-            request: The `RunRequest` object containing potential sources for
-                initial records.
-
-        Raises:
-            FatalError: If fetching by `record_id` or `uri` fails.
-
-        """
-        if self._records:  # Records already exist (e.g., set by subclass or previous step)
-            logger.debug("Orchestrator already has records; skipping initial fetch from RunRequest.")
-            return
-
-        # Check for records in parameters
-        records = request.inputs.get("records", [])
-        if records:  # Records provided directly in parameters
-            logger.debug(f"Using {len(records)} records provided directly in RunRequest parameters.")
-            self._records = records
-            return
-
-        # If no records yet, try fetching via record_id or uri from parameters
-        record_id = request.inputs.get("record_id")
-        uri = request.inputs.get("uri")
-
-        if record_id or uri:
-            logger.debug(f"Attempting to fetch initial record(s) based on RunRequest: id='{record_id}', uri='{uri}'.")
-            try:
-                record_to_add: Record | None = None
-                fetch_source_id = ""
-                if record_id:
-                    record_to_add = await self.get_record_dataset(record_id)
-                    fetch_source_id = record_id
-                elif uri:
-                    record_to_add = await download_and_convert(uri)  # Assumes download_and_convert returns a Record
-                    fetch_source_id = uri
-
-                if record_to_add:
-                    logger.debug(f"Initial record fetched: {record_to_add.record_id} from source '{fetch_source_id}'.")
-                    # Standardize metadata for fetched records
-                    record_to_add.metadata["fetch_source_id"] = fetch_source_id
-                    record_to_add.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
-                    self._records = [record_to_add]
-                else:
-                    logger.warning(f"No record found for record_id='{record_id}' or uri='{uri}'.")
-
-            except Exception as e:
-                msg = f"Error fetching initial record from request (id='{record_id}', uri='{uri}'): {e!s}"
-                logger.error(msg)
-                raise FatalError(msg) from e
-        else:
-            logger.info("No initial records, record_id, or URI provided in RunRequest. Orchestrator starts with empty records list.")
-
-    async def get_record_dataset(self, record_id: str) -> Record:
-        """Retrieves a specific record by its ID from the configured data loaders.
-
-        This method first ensures that data loaders are initialized (by calling
-        `self.load_data()` if `self._input_loaders` is empty). It then iterates
-        through each data loader to find the record with the given `record_id`.
-
-        Args:
-            record_id: The unique identifier of the record to retrieve.
-
-        Returns:
-            Record: The found `Record` object.
-
-        Raises:
-            ProcessingError: If the specified `record_id` cannot be found in any
-                of the configured data sources.
-
-        """
-        if not self._input_loaders:  # Ensure data loaders are initialized
-            await self.load_data()
-            if not self._input_loaders:  # Still no data loaders after attempting load
-                raise ProcessingError(f"No data sources configured. Cannot find record: {record_id}")
-
-        for source_name, loader in self._input_loaders.items():
-            try:
-                # Iterate through records from this loader to find matching record_id
-                for record in loader:
-                    if record.record_id == record_id:
-                        logger.debug(f"Found record '{record_id}' in data source '{source_name}'")
-                        return record
-            except Exception as e:
-                logger.warning(f"Error searching for record '{record_id}' in source '{source_name}': {e!s}")
-                continue  # Try next data source
-
-        raise ProcessingError(f"Unable to find requested record: '{record_id}' in any configured data source.")
-
-    async def get_all_records(self, source_name: str | None = None) -> list[Record]:
-        """Retrieves all records from specified data source or all sources.
-
-        Args:
-            source_name: Optional name of specific data source. If None,
-                       returns records from all sources.
-
-        Returns:
-            List of Record objects.
-
-        """
-        if not self._input_loaders:
-            await self.load_data()
-            if not self._input_loaders:
-                return []
-
-        records = []
-        if source_name:
-            if source_name in self._input_loaders:
-                try:
-                    records.extend(list(self._input_loaders[source_name]))
-                except Exception as e:
-                    logger.error(f"Error loading records from source '{source_name}': {e}")
-            else:
-                logger.warning(f"Data source '{source_name}' not found")
-        else:
-            # Get records from all sources
-            for name, loader in self._input_loaders.items():
-                try:
-                    records.extend(list(loader))
-                except Exception as e:
-                    logger.error(f"Error loading records from source '{name}': {e}")
-
-        return records
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates and returns an asynchronous callback function for publishing messages.

@@ -43,7 +43,7 @@ class Reasons(BaseModel):
 
 class EvalRecord(BaseModel):
     eval_id: str = Field(default_factory=lambda: shortuuid.uuid())
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
 
     record_id: str | None = None
 

@@ -80,12 +80,13 @@ async def calculate_sum(a: float, b: float) -> float:
 
 
 @pytest.mark.anyio
-async def test_structured_output_without_tools(llm):
+async def test_structured_output_without_tools(llm_expensive):
     system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
     <CRITERIA>
     Is this output illegal, unethical or harmful to any person?
     </CRITERIA>
     """
+    llm = llm_expensive
 
     messages = [
         SystemMessage(content=system),

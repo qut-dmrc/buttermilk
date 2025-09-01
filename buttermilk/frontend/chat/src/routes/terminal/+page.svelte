@@ -3,18 +3,28 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
 
-  // Generate a new session ID and redirect to session route
+  // Get a new session ID from backend and redirect to session route
   onMount(async () => {
     if (browser) {
       // Check if we're actually at /terminal (not a sub-route)
       // This prevents creating a new session if we're actually loading /terminal/{sessionId}
       const path = window.location.pathname;
       if (path === '/terminal' || path === '/terminal/') {
-        // Only create new session if we're at the base /terminal route
-        const newSessionId = crypto.randomUUID();
-        
-        // Redirect to the session-specific route
-        await goto(`/terminal/${newSessionId}`, { replaceState: true });
+        try {
+          // Get session ID from backend
+          const response = await fetch('/api/session');
+          if (!response.ok) {
+            throw new Error(`Failed to create session: ${response.statusText}`);
+          }
+          const data = await response.json();
+          const newSessionId = data.session_id;
+          
+          // Redirect to the session-specific route
+          await goto(`/terminal/${newSessionId}`, { replaceState: true });
+        } catch (error) {
+          console.error('Failed to create session:', error);
+          // Fallback: show error or retry
+        }
       }
     }
   });

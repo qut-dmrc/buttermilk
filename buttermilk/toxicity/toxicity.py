@@ -125,7 +125,7 @@ class ToxicityModel(BaseModel):
         trace = AgentTrace(
             agent_id=self.agent_id,
             session_id=self.session_id,  # session_id is required for AgentTrace
-            agent_info=self._cfg,  # agent_info is required for AgentTrace
+            agent_info=self._config,  # agent_info is required for AgentTrace
             inputs=message,  # Include the original input message
             outputs=response,  # Store the EvalRecord in outputs
             # Add other relevant metadata if needed

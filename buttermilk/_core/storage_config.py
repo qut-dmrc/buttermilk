@@ -3,9 +3,8 @@
 import os
 from typing import Annotated, Any, Literal
 
+from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field, model_validator
-
-from buttermilk._core.log import logger
 
 
 class AdditionalFieldConfig(BaseModel):
@@ -46,7 +45,7 @@ class MultiFieldEmbeddingConfig(BaseModel):
 
 class BaseStorageConfig(BaseModel):
     """Base configuration for all storage operations.
-    
+
     Contains common fields shared across all storage types.
     """
 
@@ -128,6 +127,7 @@ class BaseStorageConfig(BaseModel):
 
 # Type-specific storage configuration classes
 
+
 class BigQueryStorageConfig(BaseStorageConfig):
     """Configuration for BigQuery storage operations."""
 
@@ -208,7 +208,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
     @property
     def full_table_id(self) -> str | None:
         """Get full BigQuery table identifier from constituent parts.
-        
+
         This is a regular property, not a computed field, so it won't be included
         in model dumps or cause validation errors.
         """
@@ -336,7 +336,7 @@ class StorageFactory:
         return adapter.validate_python(config_dict)
 
     @staticmethod
-    def create_storage(config: StorageConfig | BaseStorageConfig, bm_instance=None):
+    def create_storage(config: StorageConfig | BaseStorageConfig | dict | DictConfig, bm_instance=None):
         """Create storage instance based on configuration type.
 
         Args:
@@ -349,15 +349,11 @@ class StorageFactory:
         """
         from buttermilk.data.vector import ChromaDBEmbeddings
 
-        # Handle both new type-specific configs and legacy unified configs
-        if not isinstance(config, (BaseStorageConfig, dict)):
-            raise ValueError(f"Expected StorageConfig or dict instance, got {type(config)}")
-
-        # Convert dict (from OmegaConf) to appropriate config type
+        if isinstance(config, DictConfig):
+            # Convert to dict first
+            config = OmegaConf.to_container(config, resolve=True)
         if isinstance(config, dict):
             config = StorageFactory.create_config(config)
-
-        storage_type = config.type
 
         storage_type = config.type
 

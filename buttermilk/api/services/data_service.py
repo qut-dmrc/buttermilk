@@ -203,17 +203,19 @@ class DataService:
             bm = get_bm()
             storage = bm.get_storage(storage_config_raw)
 
-            for record in storage:
-                if record.record_id == record_id:
-                    # Enhance the existing Record object with computed metadata
-                    record.metadata.update(
-                        {
-                            "dataset": flow_name,
-                            "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
-                            "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
-                        },
-                    )
-                    return record
+            # Use storage's get_record_by_id method (handles iteration internally)
+            record = storage.get_record_by_id(record_id)
+            
+            if record:
+                # Enhance the existing Record object with computed metadata
+                record.metadata.update(
+                    {
+                        "dataset": flow_name,
+                        "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
+                        "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
+                    },
+                )
+                return record
             return None
         except Exception as e:
             logger.warning(f"Error getting record {record_id} for flow {flow_name}: {e}")

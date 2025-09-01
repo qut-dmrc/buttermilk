@@ -6,7 +6,6 @@ This module provides a clean RAG agent that:
 - Relies on templates for orchestration
 """
 
-
 from typing import Any
 
 from pydantic import BaseModel, Field

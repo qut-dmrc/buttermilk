@@ -39,9 +39,6 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
     # Search-specific parameters (in addition to those inherited from ChromaDBEmbeddings)
     n_results: int = Field(default=10, description="Number of results per search")
 
-    # Override these as we're not creating a storage config
-    description: str = Field(default="ChromaDB vector search tool", description="Tool description")
-    tool_obj: str = Field(default="chromadb_search", description="Tool identifier")
     _initialized: bool = False
 
     async def initialize(self) -> None:

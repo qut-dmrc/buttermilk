@@ -308,7 +308,6 @@ class AutoGenWrapper(RetryWrapper):
 
         """
         parsed_object = None
-        tool_outputs = None
         tool_calls = []
 
         is_valid_schema_type = (
@@ -399,9 +398,10 @@ class AutoGenWrapper(RetryWrapper):
                         )
                     elif used_fake_schema_tool:
                         # If we used a fake schema tool, parse the tool call
-                        tool_calls = create_result.content
-                        if len(tool_calls) == 1 and fake_schema_tool and tool_calls[0].name == fake_schema_tool.name:
-                            parsed_object = json.loads(tool_calls[0].arguments)
+                        # we don't log this fake tool as a tool call -- leave tool_calls empty.
+                        tool_calls = None
+                        if len(create_result.content) == 1 and fake_schema_tool and create_result.content[0].name == fake_schema_tool.name:
+                            parsed_object = json.loads(create_result.content[0].arguments)
                             create_result.content = json.dumps(parsed_object)
                         else:
                             raise ProcessingError("Malformed tool call response from LLM (expected fake schema tool call).", create_result.content)
@@ -499,13 +499,13 @@ class AutoGenWrapper(RetryWrapper):
                 Returns ModelOutput if schema was provided or if synthesis was performed.
 
         """
-        # Step 1: Initial call with tools only (no schema to avoid conflicts)
+        # Step 1: Initial call
         try:
             create_result = await self.create(
                 messages=messages,
                 tools=tools_list,
                 cancellation_token=cancellation_token,
-                schema=None,  # No schema on first call to avoid conflicts
+                schema=schema,
             )
         except Exception as e:
             # The call failed
@@ -564,45 +564,6 @@ class AutoGenWrapper(RetryWrapper):
                 return synthesis_result
             except Exception as e:
                 raise ProcessingError(f"Failed to synthesize after tool execution: {e!s}") from e
-
-        # Step 4: No tool calls - apply schema to original result if provided
-        if schema:
-            try:
-                # Try to parse the original result with schema
-                if isinstance(create_result.content, str):
-                    parsed_object = await self._parse_structured_output(create_result.content, schema)
-                    return ModelOutput(
-                        content=create_result.content,
-                        finish_reason=create_result.finish_reason,
-                        usage=create_result.usage,
-                        thought=getattr(create_result, "thought", None),
-                        parsed_object=parsed_object,
-                        cached=create_result.cached,
-                        metadata={"pricing": aggregated_pricing},
-                    )
-            except ProcessingError:
-                # If parsing failed, the LLM didn't follow schema instructions
-                # Make a synthesis call with schema only (no tools) to force structured output
-                logger.debug("Initial response couldn't be parsed with schema, making synthesis call")
-                try:
-                    synthesis_result = await self.create(
-                        messages=messages + [AssistantMessage(content=create_result.content, source="assistant")],
-                        tools=[],  # No tools on synthesis call
-                        cancellation_token=cancellation_token,
-                        schema=schema,  # Apply schema for structured output
-                    )
-                    
-                    # Aggregate pricing from synthesis call
-                    if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
-                        synthesis_pricing = synthesis_result.metadata["pricing"]
-                        aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens", 0)
-                        aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
-                        aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
-                        synthesis_result.metadata["pricing"] = aggregated_pricing
-                    
-                    return synthesis_result
-                except Exception as e:
-                    raise ProcessingError(f"Failed to synthesize structured response: {e!s}") from e
 
         # Return the original result
         return create_result

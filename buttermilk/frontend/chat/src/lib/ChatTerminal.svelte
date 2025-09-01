@@ -14,12 +14,12 @@
 	import { tokenUsageDisplay } from './stores/tokenUsageStore';
 	import './styles/terminal.scss';
 	import {
-		type ManagerMessage,
-		type ManagerResponse,
+		type SystemPromptMessage,
+		type UserResponseMessage,
 		type Message,
 		type MessageType,
 		type SystemUpdate,
-		createManagerResponse,
+		createUserResponse,
 		isSystemUpdate,
 		normalizeWebSocketMessage
 	} from './utils/messageUtils';
@@ -44,9 +44,16 @@
 		);
 	}
 
+	// Compute unified status that combines connection and flow status
+	$: displayStatus = !isConnected && !readonly && sessionStatus !== 'demo' 
+		? (connectionError?.includes('terminated') ? 'terminated' : 
+		   isReconnecting ? 'reconnecting' : 'disconnected')
+		: (sessionStatus === 'unknown' ? 'idle' : sessionStatus);
+
 	// Component state
 	let socket: WebSocket | null = null;
 	let messages: Message[] = [];
+	let displayedMessageIds = new Set<string>(); // Track message IDs to prevent duplicates
 	let inputMessage = '';
 	let isConnected = false;
 	let connectionError = '';
@@ -62,8 +69,8 @@
 	// System update state
 	let systemUpdateStatus: SystemUpdate | null = null;
 
-	// Manager request state
-	let currentUIMessage: ManagerMessage | null = null;
+	// System prompt state
+	let currentUIMessage: SystemPromptMessage | null = null;
 	let selectionOptions: string[] = [];
 	let isConfirmRequest = false;
 
@@ -81,13 +88,13 @@
 				// Set the messages array directly to avoid any reprocessing
 				messages = storedMessages;
 
-				// Restore manager request state from the last ui_message if any
+				// Restore system prompt state from the last system_prompt if any
 				const lastUIMessage = storedMessages
 					.slice()
 					.reverse()
-					.find((msg) => msg.type === 'ui_message');
+					.find((msg) => msg.type === 'system_prompt');
 				if (lastUIMessage && lastUIMessage.outputs) {
-					currentUIMessage = lastUIMessage.outputs as ManagerMessage;
+					currentUIMessage = lastUIMessage.outputs as SystemPromptMessage;
 
 					// Determine input type
 					const inputs = currentUIMessage.options;
@@ -205,8 +212,9 @@
 		recordStore.set('');
 		selectedCriteria.set('');
 
-		// Clear messages
+		// Clear messages and message ID tracking
 		messages = [];
+		displayedMessageIds.clear();
 		// Get new session ID
 		addSystemMessage('Starting a new session...');
 		await getNewSessionId();
@@ -218,8 +226,8 @@
 	function toggleAutoApprove() {
 		humanInLoop = !humanInLoop;
 		console.log('Toggled human in loop state:', humanInLoop, ' approving:', !humanInLoop);
-		const message = createManagerResponse(!humanInLoop, null, null, null, null, humanInLoop);
-		sendManagerResponse(message);
+		const message = createUserResponse(!humanInLoop, null, null, null, null, humanInLoop);
+		sendUserResponse(message);
 	}
 
 	// Toggle interrupt state
@@ -234,16 +242,16 @@
 				agent_id: 'web socket'
 			};
 			// Also send separate interrupt message
-			const response = createManagerResponse(false, null, null, null, true, humanInLoop);
-			sendManagerResponse(response);
+			const response = createUserResponse(false, null, null, null, true, humanInLoop);
+			sendUserResponse(response);
 		} else {
 			message = {
 				type: 'TaskProcessingComplete',
 				role: 'MANAGER',
 				agent_id: 'web socket'
 			};
-			const response = createManagerResponse(false, null, null, null, false, humanInLoop);
-			sendManagerResponse(response);
+			const response = createUserResponse(false, null, null, null, false, humanInLoop);
+			sendUserResponse(response);
 		}
 
 		try {
@@ -256,48 +264,48 @@
 		}
 	}
 
-	// Function to send ManagerResponse back via WebSocket
-	function handleManagerResponse(event: CustomEvent<ManagerResponse>) {
+	// Function to send UserResponse back via WebSocket
+	function handleUserResponse(event: CustomEvent<UserResponseMessage>) {
 		const response = event.detail;
-		console.debug('Received manager response from component:', response);
-		sendManagerResponse(response);
+		console.debug('Received user response from component:', response);
+		sendUserResponse(response);
 	}
 
-	function sendManagerResponse(response: ManagerResponse) {
+	function sendUserResponse(response: UserResponseMessage) {
 		if (socket && socket.readyState === WebSocket.OPEN) {
 			try {
 				socket.send(JSON.stringify(response));
-				console.log('Sent manager response via WebSocket:', response);
-				// Clear current manager request after responding
+				console.log('Sent user response via WebSocket:', response);
+				// Clear current system prompt after responding
 				currentUIMessage = null;
 				selectionOptions = [];
 				isConfirmRequest = false;
 			} catch (e) {
-				console.error('Error sending manager response:', e);
+				console.error('Error sending user response:', e);
 				addSystemMessage(`Error sending response: ${e}`);
 			}
 		} else {
-			console.error('WebSocket not open, cannot send manager response.');
+			console.error('WebSocket not open, cannot send user response.');
 			addSystemMessage('Error: Connection not open.');
 		}
 	}
 
 	// Handle selection from options
 	function handleSelection(value: string) {
-		const response = createManagerResponse(true, value, null, null, false, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(true, value, null, null, false, humanInLoop);
+		sendUserResponse(response);
 	}
 
 	// Handle confirm/reject
 	function handleConfirm(value: boolean) {
-		const response = createManagerResponse(value, null, null, null, false, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(value, null, null, null, false, humanInLoop);
+		sendUserResponse(response);
 	}
 
 	// Handle halt
 	function handleHalt() {
-		const response = createManagerResponse(false, null, null, true, null, humanInLoop);
-		sendManagerResponse(response);
+		const response = createUserResponse(false, null, null, true, null, humanInLoop);
+		sendUserResponse(response);
 	}
 	async function getNewSessionId() {
 		try {
@@ -430,7 +438,6 @@
 					if (typeof event.data === 'string') {
 						try {
 							messageData = JSON.parse(event.data);
-							console.debug('Message received:', messageData);
 						} catch (parseError) {
 							// Not valid JSON
 							console.error('Message is not valid JSON, ignoring:', event.data);
@@ -446,18 +453,13 @@
 					const outputs = normalizedMessage.outputs;
 					if (!isSystemUpdate(normalizedMessage)) {
 						console.log('Normalized message received from websocket:', normalizedMessage);
-					} else {
-						console.debug('Normalized message received from websocket:', normalizedMessage);
 					}
 
 					// Check for system updates and flow progress
 					if (isSystemUpdate(messageData)) {
 						// Assign a shallow copy to ensure reactivity if properties change within the object
 						systemUpdateStatus = outputs as SystemUpdate;
-						console.debug('Updated system status:', systemUpdateStatus);
-						// Add logs to check specific properties
-						console.debug('systemUpdateStatus.step_name:', systemUpdateStatus.step_name);
-						console.debug('systemUpdateStatus.waiting_on:', systemUpdateStatus.waiting_on);
+						console.debug('Updated system status:', systemUpdateStatus, ' step_name: ', systemUpdateStatus.step_name, ' waiting_on:', systemUpdateStatus.waiting_on);
 					} else if (normalizedMessage.type === 'flow_progress_update') {
 						// Handle flow progress updates - update system status but don't add to message display
 						systemUpdateStatus = {
@@ -490,9 +492,9 @@
 						console.debug('added message for display: ', normalizedMessage);
 						addMessage(normalizedMessage);
 					}
-					// Check if this is a manager request and update state
-					if (normalizedMessage.type === 'ui_message' && outputs) {
-						currentUIMessage = outputs as ManagerMessage;
+					// Check if this is a system prompt and update state
+					if (normalizedMessage.type === 'system_prompt' && outputs) {
+						currentUIMessage = outputs as SystemPromptMessage;
 
 						// Determine input type
 						const inputs = currentUIMessage.options;
@@ -529,14 +531,25 @@
 			socket.onerror = (error) => {
 				console.error('WebSocket error:', error);
 				connectionError = 'WebSocket connection error. See console for details.';
-				// isConnected = false;
+				isConnected = false;
 			};
 
 			socket.onclose = (event) => {
 				console.log('WebSocket connection closed:', event.code, event.reason);
 				isConnected = false;
 
-				// Set reconnecting state
+				// Check if this is a session termination by the backend
+				const isSessionTerminated = event.code === 1000 && event.reason?.includes('TERMINATED');
+				const isServerShutdown = event.code === 1001 || event.code === 1006;
+				
+				if (isSessionTerminated) {
+					console.log('Session terminated by backend, stopping reconnection attempts');
+					connectionError = 'Session terminated by server';
+					isReconnecting = false;
+					return;
+				}
+
+				// Set reconnecting state for other types of disconnections
 				isReconnecting = true;
 				reconnectAttempts++;
 
@@ -547,7 +560,7 @@
 				}
 
 				// Attempt to reconnect after a delay with exponential backoff (but not in readonly/demo mode)
-				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && !readonly && sessionStatus !== 'demo') {
+				if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && !readonly && sessionStatus !== 'demo' && !isServerShutdown) {
 					const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
 					console.debug(
 						`Will attempt reconnection ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS} in ${backoffDelay}ms`
@@ -583,25 +596,33 @@
 
 		console.log('Sending message:', inputMessage);
 
-		// Create user message
-		const userMessage = createManagerResponse(false, null, inputMessage, false, false, humanInLoop);
+		// Create user message with unique ID for deduplication
+		const messageId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+		const userMessage = createUserResponse(false, null, inputMessage, false, false, humanInLoop, messageId);
 
 		try {
 			socket.send(JSON.stringify(userMessage));
 
 			// Create a properly formatted message object from the user message
 			const userMessageFormatted: Message = {
-				type: 'user',
-				message_id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+				type: 'user_response',
+				message_id: messageId, // Use the same ID for deduplication
 				preview: inputMessage,
-				timestamp: new Date().toISOString()
+				timestamp: new Date().toISOString(),
+				agent_info: {
+					agent_id: 'user',
+					agent_name: 'user',
+					role: 'user',
+					description: 'The user interacting with the terminal.',
+					session_id: get(sessionId)
+				}
 			};
 
 			addMessage(userMessageFormatted); // Display user message immediately
 			inputMessage = ''; // Clear input field
-		} catch {
-			console.error('Error sending message:');
-			addSystemMessage(`Error sending message:`);
+		} catch (error) {
+			console.error('Error sending message:', error);
+			addSystemMessage(`Error sending message: ${error}`);
 		}
 	}
 
@@ -718,12 +739,21 @@
 
 	// Add a message to the list and scroll down
 	function addMessage(message: Message) {
+		// Check for duplicate messages using message_id
+		if (message.message_id && displayedMessageIds.has(message.message_id)) {
+			console.debug(`Skipping duplicate message: ${message.message_id}`);
+			return;
+		}
+
 		// Format timestamp (remove fractions of a second)
 		if (message.timestamp) {
 			message.timestamp = formatTimestamp(message.timestamp);
 		}
 
-		// Note: Manager request state is handled in WebSocket message handler
+		// Track this message ID as displayed
+		if (message.message_id) {
+			displayedMessageIds.add(message.message_id);
+		}
 
 		messages = [...messages, message];
 
@@ -769,17 +799,23 @@
 	<div class="terminal-status-bar">
 		<div class="status-left">
 			<span class="session-info">Session: {currentSessionId.slice(0, 8)}...</span>
-			<span class="status-text status-{sessionStatus}">
-				{#if sessionStatus === 'running'}
+			<span class="status-text status-{displayStatus}">
+				{#if displayStatus === 'running'}
 					active
-				{:else if sessionStatus === 'completed'}
+				{:else if displayStatus === 'completed'}
 					completed
-				{:else if sessionStatus === 'failed'}
+				{:else if displayStatus === 'failed'}
 					failed
-				{:else if sessionStatus === 'idle'}
+				{:else if displayStatus === 'idle'}
 					idle
+				{:else if displayStatus === 'disconnected'}
+					disconnected
+				{:else if displayStatus === 'reconnecting'}
+					reconnecting...
+				{:else if displayStatus === 'terminated'}
+					terminated
 				{:else}
-					{sessionStatus}
+					{displayStatus}
 				{/if}
 			</span>
 			{#if !isResumable}

@@ -4,7 +4,6 @@ import os
 from typing import Any
 
 # flake8: noqa
-
 from pathlib import Path
 import json
 import matplotlib.pyplot as plt
@@ -32,7 +31,7 @@ nest_asyncio.apply()
 
 # Configuration files are stored in the local directory, and
 # options can be passed in at initialization.
-def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
+def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     if not path:
         # Must be absolute.Get the abs path of ../../conf from the current file
         path = Path(__file__).parent.parent.resolve() / "conf"
@@ -41,9 +40,9 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     overrides.append(f"bm.run_info.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
-        conf = compose(config_name="config", overrides=overrides)
+        cfg = compose(config_name="config", overrides=overrides)
 
-    objs = hydra.utils.instantiate(conf)
+    objs = hydra.utils.instantiate(cfg)
 
     bm = BM.model_validate(objs.bm)
 
@@ -51,6 +50,7 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     from buttermilk import set_bm
 
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+
 
     logger.info(
         f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",

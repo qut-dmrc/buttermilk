@@ -6,6 +6,7 @@ saving information, agent behaviors, and tracing. These models are typically
 instantiated by Hydra based on YAML configuration files.
 """
 
+import copy
 from collections.abc import Mapping
 from typing import (
     Annotated,
@@ -217,13 +218,12 @@ class ToolConfig(BaseModel):
 class Tracing(BaseModel):
     """Configuration for tracing agent and system activities.
 
-    Specifies whether tracing is enabled, the provider to use (e.g., Langfuse, Weave),
+    for each tracing provider, specifies whether tracing is enabled,
     API keys, and other provider-specific settings.
 
     Attributes:
         enabled (bool): If `True`, tracing is enabled for operations.
         api_key (str): API key for the tracing provider.
-        provider (str): Name of the tracing provider (e.g., "langfuse", "weave").
         endpoint (str | None): Optional endpoint URL for the tracing provider,
             if different from the default.
         otlp_headers (Mapping | None): Optional OTLP (OpenTelemetry Protocol)
@@ -233,7 +233,6 @@ class Tracing(BaseModel):
 
     enabled: bool = Field(default=False, description="Enable or disable tracing.")
     api_key: str = Field(default="", description="API key for the tracing provider.")
-    provider: str = Field(default="", description="Name of the tracing provider (e.g., 'langfuse', 'weave').")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
     otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
         default_factory=dict,
@@ -259,9 +258,8 @@ class AgentConfig(BaseModel):
             and capabilities.
         output_model (type[pydantic.BaseModel] | None): Optional Pydantic model
                 for structured output parsing.
-        tools (dict[str, Any]): A dictionary of tool configurations, defining the
+        tools (dict[str, ToolConfig]): A dictionary of tool configurations, defining the
             tools (functions) available to this agent, keyed by tool name.
-            Can be ToolConfig objects or direct tool instances.
         data (Mapping[str, StorageConfig]): Configuration for data sources the
             agent might need to access, keyed by a descriptive name.
             Serialized as `mapping_data`.
@@ -460,25 +458,12 @@ class AgentConfig(BaseModel):
 
         return self
 
-    def get_display_name(self) -> str:
-        """Get the display name for this agent.
-
-        Returns the agent_name which is consistently formatted across UIs.
-        LLM agents may override this to include model information.
-
-        Returns:
-            str: The display name for the agent
-
-        """
-        return self.agent_name
-
 
 class AgentVariants(AgentConfig):
     """A factory for creating multiple `AgentConfig` instances (variants).
 
-    based on
-    parameter combinations. This is useful for running experiments with different
-    agent settings or for creating ensembles of agents.
+    Creates variants based on parameter combinations. Allows flows to produce
+    results with multiple different agent settings or to create ensembles of agents.
 
     It extends `AgentConfig` to inherit base configuration fields and adds
     specific fields for defining variant parameters.
@@ -622,7 +607,7 @@ class AgentVariants(AgentConfig):
             for parallel_params in parallel_variant_combinations:
                 for task_params in sequential_task_sets:
                     # Start with the static parts of AgentVariants config
-                    current_config_dict = static_config_dict.copy()
+                    current_config_dict = copy.deepcopy(static_config_dict)
 
                     # Combine parameters: flow defaults, then base (agent + RunRequest), then parallel, then task-specific.
                     # This order defines precedence - later values override earlier ones.

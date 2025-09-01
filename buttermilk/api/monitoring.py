@@ -9,7 +9,7 @@ This module provides basic REST API endpoints for:
 External monitoring tools handle detailed metrics and alerting.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -86,7 +86,7 @@ async def check_fatal_errors(health_monitor: SimpleHealthMonitor = Depends(get_h
         return {
             "fatal_error_detected": health_monitor.check_fatal_errors(),
             "fatal_error_message": health_monitor.get_fatal_error_message(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error(f"Fatal error check failed: {e}")
@@ -108,7 +108,7 @@ async def report_fatal_error(
         return {
             "message": "Fatal error reported",
             "error_message": error_message,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to report fatal error: {e}")
@@ -157,7 +157,7 @@ async def check_flow_responsiveness(
             "flow_name": flow_name,
             "is_responsive": is_responsive,
             "timeout_seconds": timeout_seconds,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to check flow responsiveness for {flow_name}: {e}")
@@ -178,12 +178,7 @@ async def check_interactive_ui_timeout(
     try:
         is_ui_active = health_monitor.check_interactive_flow_ui_timeout(session_id, timeout_seconds)
         
-        return {
-            "session_id": session_id,
-            "ui_active": is_ui_active,
-            "timeout_seconds": timeout_seconds,
-            "timestamp": datetime.now().isoformat()
-        }
+        return {"session_id": session_id, "ui_active": is_ui_active, "timeout_seconds": timeout_seconds, "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
         logger.error(f"Failed to check UI timeout for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to check UI timeout")
@@ -202,7 +197,7 @@ async def get_monitoring_status():
             "monitoring_type": "simplified",
             "description": "Basic health monitoring focused on fatal errors and flow responsiveness",
             "external_monitoring_recommended": True,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to get monitoring status: {e}")

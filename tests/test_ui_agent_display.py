@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.text import Text
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentAnnouncement, UIMessage
+from buttermilk._core.contract import AgentAnnouncement, SystemPromptMessage
 from buttermilk.agents.ui.console import CLIUserAgent
 
 
@@ -58,9 +58,9 @@ class TestUIAgentDisplay:
 
     @pytest.mark.anyio
     async def test_ui_message_with_agent_summary(self, console_agent):
-        """Test UIMessage with agent registry summary is displayed properly."""
-        # Create UIMessage with agent summary and trigger word for detailed display
-        ui_message = UIMessage(
+        """Test SystemPromptMessage with agent registry summary is displayed properly."""
+        # Create SystemPromptMessage with agent summary and trigger word for detailed display
+        ui_message = SystemPromptMessage(
             content="!agents",  # This triggers detailed display
             agent_registry_summary={
                 "HOST-host123": {
@@ -129,7 +129,7 @@ class TestUIAgentDisplay:
         console_agent._console.print = lambda msg: printed_messages.append(msg)
 
         # Create a UI message requesting agent list
-        ui_msg = UIMessage(
+        ui_msg = SystemPromptMessage(
             content="!agents",  # Command to list agents
             agent_registry_summary={
                 "JUDGE-j123": {
@@ -222,7 +222,7 @@ class TestUIAgentDisplay:
             }
         }
 
-        ui_msg = UIMessage(
+        ui_msg = SystemPromptMessage(
             content="Agent Status Report",
             agent_registry_summary=registry_summary
         )

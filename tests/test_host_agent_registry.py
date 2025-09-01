@@ -28,13 +28,13 @@ class TestHostAgentRegistry:
         """Test that host agent initializes agent and tool registries."""
         # Verify registries are initialized (private attributes)
         assert hasattr(host_agent, "_agent_registry")
-        assert hasattr(host_agent, "_tool_registry")
+        assert hasattr(host_agent, "_tool_to_agent_map")
         assert hasattr(host_agent, "_registry_lock")
         assert isinstance(host_agent._agent_registry, dict)
-        assert isinstance(host_agent._tool_registry, dict)
+        assert isinstance(host_agent._tool_to_agent_map, dict)
         assert isinstance(host_agent._registry_lock, asyncio.Lock)
         assert len(host_agent._agent_registry) == 0
-        assert len(host_agent._tool_registry) == 0
+        assert len(host_agent._tool_to_agent_map) == 0
 
     @pytest.mark.anyio
     async def test_update_agent_registry_joining(self, host_agent):

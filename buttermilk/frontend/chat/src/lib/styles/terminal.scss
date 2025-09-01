@@ -560,6 +560,28 @@
 	color: #ffaa00;
 }
 
+.status-disconnected {
+	color: #ff4444;
+}
+
+.status-reconnecting {
+	color: #ffaa00;
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-terminated {
+	color: #ff6666;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
 .readonly-text {
 	color: #ffaa00;
 }

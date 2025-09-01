@@ -7,7 +7,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.exceptions import ProcessingError  # Added ProcessingError
 from buttermilk._core.types import Record
-from buttermilk.agents.fetch import FetchAgent, FetchRecord
+from buttermilk.agents.fetch import FetchAgent
 
 NEWS_RECORDS = [
     (
@@ -51,7 +51,7 @@ class TestFetch:
 
     @pytest.fixture
     def fetch(self):
-        return FetchRecord(description="test only")
+        return FetchAgent(description="test only")
 
     @pytest.mark.anyio
     async def test_load_data(self, fetch):
@@ -81,43 +81,8 @@ class TestFetch:
             assert fetch._data_sources["test_data"] == mock_storage
 
     @pytest.mark.anyio
-    async def test_get_record_dataset_success(self, fetch):
-        """Test _get_record_dataset with a valid record ID."""
-        # Setup mock DataLoader
-        mock_record = Record(record_id="123", content="Sample text")
-        mock_loader = MagicMock()
-        mock_loader.__iter__ = MagicMock(return_value=iter([mock_record]))
-
-        fetch._data_sources = {"test": mock_loader}
-
-        # Execute
-        result = await fetch._get_record_dataset("123")
-
-        # Assert
-        assert isinstance(result, Record)
-        assert result.record_id == "123"
-        assert result.content == "Sample text"
-
-    @pytest.mark.anyio
-    async def test_get_record_dataset_not_found(self, fetch):
-        """Test _get_record_dataset when record not found."""
-        # Setup mock DataLoader with different record
-        mock_record = Record(record_id="456", content="Other text")
-        mock_loader = MagicMock()
-        mock_loader.__iter__ = MagicMock(return_value=iter([mock_record]))
-
-        fetch._data_sources = {"test": mock_loader}
-
-        # Execute
-        result = await fetch._get_record_dataset("123")
-
-        # Assert
-        assert result is None
-
-
-    @pytest.mark.anyio
     @patch("buttermilk.agents.fetch.download_and_convert")
-    async def test_fetch_nonexistent_uri_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
+    async def test_fetch_nonexistent_uri_raises_processing_error(self, mock_download_and_convert, fetch: FetchAgent):
         """Test fetch raises ProcessingError when a URI is not found."""
         mock_download_and_convert.return_value = None
 
@@ -129,7 +94,7 @@ class TestFetch:
 
     @pytest.mark.anyio
     @patch("buttermilk.agents.fetch.download_and_convert")
-    async def test_fetch_specific_url_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
+    async def test_fetch_specific_url_raises_processing_error(self, mock_download_and_convert, fetch: FetchAgent):
         """Test fetch raises ProcessingError for a specific URI when not found."""
         mock_download_and_convert.return_value = None
 
@@ -140,14 +105,17 @@ class TestFetch:
         mock_download_and_convert.assert_called_once_with(specific_uri)
 
     @pytest.mark.anyio
-    async def test_fetch_nonexistent_id_raises_processing_error(self, fetch: FetchRecord):
+    async def test_fetch_nonexistent_id_raises_processing_error(self, fetch: FetchAgent):
         """Test fetch raises ProcessingError when a record ID is not found."""
         record_id_to_test = "nonexistent_id_123"
+        
+        # Mock storage to return None for the record ID
+        mock_storage = MagicMock()
+        mock_storage.get_record_by_id.return_value = None
+        fetch._data_sources = {"test_data": mock_storage}
 
-        with patch.object(fetch, "_get_record_dataset", return_value=None) as patched_get_record_dataset:
-            with pytest.raises(ProcessingError, match=f"Record not found for ID: {record_id_to_test}"):
-                await fetch.fetch(record_id=record_id_to_test)
-            patched_get_record_dataset.assert_called_once()  # Verify it was called
+        with pytest.raises(ProcessingError, match=f"Record not found for ID: {record_id_to_test}"):
+            await fetch.fetch_record(record_id_to_test, "test_data")
 
     @pytest.mark.anyio
     @pytest.mark.integration
@@ -156,7 +124,7 @@ class TestFetch:
         argnames=["id", "uri", "expected_mimetype", "expected_size"],
         ids=[x[0] for x in NEWS_RECORDS],
     )
-    async def test_ingest_news(self, fetch: FetchRecord, id, uri, expected_mimetype, expected_size):
+    async def test_ingest_news(self, fetch: FetchAgent, id, uri, expected_mimetype, expected_size):
         media_obj = await fetch.fetch(uri=uri)
         assert len(media_obj.content) == expected_size
         assert media_obj.metadata["fetch_source_uri"] == uri
@@ -180,7 +148,7 @@ def fetch_agent_cfg() -> AgentConfig:
     )
 
 
-@pytest.mark.skip(reason="Test uses wrong agent architecture - FetchRecord doesn't have register method for Autogen runtime")
+@pytest.mark.skip(reason="Test uses wrong agent architecture - FetchAgent doesn't have register method for Autogen runtime")
 @pytest.mark.parametrize(["expected", "agent_input"], messages)
 @pytest.mark.anyio
 async def test_run_record_agent(
@@ -213,12 +181,12 @@ async def test_run_record_agent(
         return mock_r
 
     with patch("buttermilk.utils.media.download_and_convert", side_effect=mock_download_and_convert_conditional) as mock_d_and_c, \
-         patch.object(FetchRecord, "_get_record_dataset", side_effect=mock_get_record_dataset_conditional) as mock_get_rec_dataset:
+         patch.object(FetchAgent, "fetch_record", side_effect=mock_get_record_dataset_conditional) as mock_get_rec_dataset:
 
-        agent_id = await FetchRecord.register(
+        agent_id = await FetchAgent.register(
             runtime,
             DefaultTopicId().type,
-            lambda: FetchRecord(**fetch_agent_cfg.model_dump()),
+            lambda: FetchAgent(**fetch_agent_cfg.model_dump()),
         )
         await runtime.add_subscription(
             TypeSubscription(

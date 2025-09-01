@@ -24,6 +24,7 @@ Note:
 
 """
 import base64
+import logging
 import os
 import urllib  # Added for os.environ usage
 
@@ -31,8 +32,12 @@ from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
+from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
+from opentelemetry.instrumentation.chromadb import ChromaInstrumentor
 from opentelemetry.instrumentation.google_generativeai import GoogleGenerativeAiInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.instrumentation.vertexai import VertexAIInstrumentor
 
 # Import trace_sdk at the top level for clarity, though original was inline
 from opentelemetry.sdk.trace import TracerProvider
@@ -41,27 +46,34 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 # Buttermilk core imports
 from buttermilk._core.config import FatalError, Tracing
-from buttermilk._core.log import logger
+from buttermilk import logger, tracer
 
 """Base URL for Weights & Biases tracing services."""
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
-def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    if not tracing_cfg.enabled:
-        return
 
+def setup_tracing_otel(tracing_cfg: Tracing) -> None:
     # Configure Tracing
     provider = TracerProvider()
 
-    # instrument OpenAI and Google Generative AI manually
+    os.environ["OTEL_PYTHON_LOG_CORRELATION"] = "true"
+
+    # Configure instrumentors with specific settings
     OpenAIInstrumentor().instrument(tracer_provider=provider)
     GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
+    ChromaInstrumentor().instrument(tracer_provider=provider)
+    VertexAIInstrumentor().instrument(tracer_provider=provider)
+    AnthropicInstrumentor().instrument(tracer_provider=provider)
+    
+    # Configure LoggingInstrumentor to exclude debug logs from traces
+    LoggingInstrumentor().instrument(
+        tracer_provider=provider,
+        set_logging_format=True,
+        log_level=logging.INFO  # Only include INFO+ logs in OTEL traces
+    )
 
     # Configure the GCP Cloud Trace Span Exporter
-    # metrics_exporter = CloudMonitoringMetricsExporter()
-    # logs_exporter = CloudLoggingExporter()
-
     gcp_exporter = CloudTraceSpanExporter()
     provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
     logger.info("Initialized tracing with Google Cloud")

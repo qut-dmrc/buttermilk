@@ -2,16 +2,13 @@ from typing import Any
 
 from autogen_core.tools import Tool
 
-from buttermilk._core.config import ToolConfig
-
 
 def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
     """Instantiate tools and return their wrapped entry functions.
-    
+
     Args:
         tool_cfg: Dictionary of tool configurations, keyed by tool name.
-                 Values can be ToolConfig objects or direct tool instances.
-    
+
     Returns:
         A list of Tool objects for consistency with autogen's tool system.
     """
@@ -37,19 +34,6 @@ def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
             elif isinstance(cfg, Tool):
                 # Direct Tool instance (e.g., FunctionTool)
                 tools.append(cfg)
-            elif isinstance(cfg, ToolConfig):
-                # Traditional ToolConfig object
-                from buttermilk.tools import AVAILABLE_TOOLS
-                obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
-                tool = obj(**cfg.model_dump())
-                fn_list = tool.get_functions()
-
-                # Ensure all returned items are Tool instances
-                for fn in fn_list:
-                    if isinstance(fn, Tool):
-                        tools.append(fn)
-                    else:
-                        logger.warning(f"Tool {name} ({cfg.tool_obj}) returned non-Tool object: {type(fn)}")
             else:
                 logger.warning(f"Tool {name} has unknown configuration type: {type(cfg)}")
 

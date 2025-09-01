@@ -141,16 +141,18 @@ function formatTime(date: Date): string {
 	return `${hours}:${minutes}:${seconds}`;
 }
 
-export function createManagerResponse(
+export function createUserResponse(
 	confirm: boolean | null | undefined,
 	selection: string | null = null,
 	prompt: string | null = null,
 	halt: boolean | null = false,
 	interrupt: boolean | null = false,
-	human_in_loop: boolean | null = true
-): ManagerResponse {
+	human_in_loop: boolean | null = true,
+	message_id?: string
+): UserResponseMessage {
 	return {
-		type: 'manager_response',
+		type: 'user_response',
+		message_id: message_id || `user_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
 		confirm: confirm,
 		halt: halt,
 		interrupt: interrupt,
@@ -163,9 +165,8 @@ export function createManagerResponse(
 export type MessageType =
 	| 'chat_message'
 	| 'record'
-	| 'ui_message'
-	| 'user'
-	| 'manager_response'
+	| 'system_prompt'
+	| 'user_response'
 	| 'system_message'
 	| 'qual_results'
 	| 'differences'
@@ -309,19 +310,19 @@ export interface TaskProcessingFinished {
 	agent_id: 'web socket';
 }
 
-// Manager Request types (from Python definition)
+// System Prompt types (from Python definition)
 
-export interface ManagerMessage {
+export interface SystemPromptMessage {
 	content: string;
-	options?: boolean | string[] | null; // Options for the manager to choose from
-	confirm?: boolean | null;
-	selection?: string | null;
-	toughts?: string;
+	options?: boolean | string[] | null; // Options for the user to choose from
+	thought?: string;
+	agent_registry_summary?: Record<string, any> | null;
 }
 
-// Manager Response types (from Python definition)
-export interface ManagerResponse {
-	type: 'manager_response';
+// User Response types (from Python definition)
+export interface UserResponseMessage {
+	type: 'user_response';
+	message_id: string;
 	confirm?: boolean | null;
 	halt: boolean | null;
 	interrupt: boolean | null;
@@ -359,9 +360,9 @@ export interface GenericMessage {
 export type WebSocketData =
 	| SystemUpdate
 	| SystemMessage
-	| ManagerMessage
+	| SystemPromptMessage
 	| RecordData
-	| ManagerResponse
+	| UserResponseMessage
 	| SummaryResult
 	| GenericMessage;
 
@@ -423,41 +424,19 @@ export function isDifferences(data: any): data is DifferencesData {
  * Normalizes raw WebSocket messages to a consistent structure
  */
 export function normalizeWebSocketMessage(data: any): Message {
-	try {
-		// Validate basic message structure
-		if (typeof data !== 'object' || data === null) {
-			console.error('Invalid message format, not an object:', data);
-			return createErrorMessage(`Invalid message format: ${JSON.stringify(data)}`);
-		}
-
-		// Create normalized message structure
-		const normalizedMessage: Message = {
-			type: data.type as MessageType,
-			message_id: data.message_id,
-			preview: data.preview || '',
-			timestamp: data.timestamp,
-			outputs: data.outputs || null,
-			agent_info: (data.agent_info as AgentInfo) || null,
-			prompt_tokens: data.prompt_tokens || 0,
-			completion_tokens: data.completion_tokens || 0,
-			cost_usd: data.cost_usd || 0
-		};
-
-		return normalizedMessage;
-	} catch (e) {
-		console.error('Error normalizing WebSocket message:', e);
-		return createErrorMessage(`Error processing message: ${e}`);
-	}
-}
-
-/**
- * Helper function to create error messages with consistent format
- */
-function createErrorMessage(content: string): Message {
-	return {
-		type: 'system_error',
-		message_id: 'SYSTEM_ERROR' + Math.random().toString(36).substring(2, 15),
-		preview: content,
-		timestamp: new Date().toISOString()
+	// Trust the data contract - let errors propagate if data is malformed
+	const normalizedMessage: Message = {
+		type: data.type,
+		message_id: data.message_id,
+		preview: data.preview,
+		timestamp: data.timestamp,
+		outputs: data.outputs,
+		agent_info: data.agent_info,
+		prompt_tokens: data.prompt_tokens,
+		completion_tokens: data.completion_tokens,
+		cost_usd: data.cost_usd
 	};
+
+	return normalizedMessage;
 }
+

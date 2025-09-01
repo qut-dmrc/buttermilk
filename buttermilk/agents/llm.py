@@ -14,7 +14,6 @@ workflow.
 
 from typing import Any
 
-import hydra
 import pydantic
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
@@ -26,9 +25,9 @@ from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import Record
-from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values
+
 
 
 class LLMAgent(Agent):
@@ -97,92 +96,11 @@ class LLMAgent(Agent):
 
         # Initialize private attributes
         self._model: str = self.parameters.get("model", "")
-        self._tools: list[Tool] = self._load_tools()
 
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Control behavior - moved from Field declaration
         self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
-
-    def _load_tools(self) -> list[Tool]:
-        """Loads tool configurations and converts them to Autogen-compatible tools.
-
-        This Pydantic validator runs after the agent model is created.
-        It checks `self.tools` (an `AgentConfig` field, typically populated from
-        Hydra configuration) and uses `create_tool_functions` to convert these
-        tool definitions into a list of Autogen-compatible tool objects
-        (`_tools`).
-
-        Returns:
-            Self: The agent instance with `_tools` populated.
-
-        """
-        # `self._config.tools` is populated by AgentConfig based on Hydra config.
-        if self._config.tools:
-            logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
-
-            # Instantiate tools here if they are OmegaConf objects
-            _tool_objects = hydra.utils.instantiate(self._config.tools)
-
-            # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
-            _tools = create_tool_functions(_tool_objects)
-        else:
-            logger.debug(f"Agent '{self.agent_name}': No tools configured.")
-            _tools = []
-        return _tools
-
-    def get_available_tools(self) -> list["Tool"]:
-        """Get list of tools this agent can respond to.
-
-        Returns the configured tools from self._tools.
-
-        Returns:
-            list[Tool]: List of configured tools.
-
-        """
-        return self._tools
-
-    def get_display_name(self) -> str:
-        """Get the display name for this LLM agent, including model information.
-
-        Extends the base agent display name to include model tag for UI consistency.
-
-        Returns:
-            str: Display name with model tag appended
-
-        """
-        base_name = self._config.get_display_name()
-        model_tag = self._get_model_tag()
-        if model_tag:
-            return f"{base_name} [{model_tag}]"
-        return base_name
-
-    def _get_model_tag(self) -> str:
-        """Extract a short tag from the model name for display purposes.
-
-        Returns:
-            str: Short model identifier (e.g., 'GPT4', 'SONN', 'OPUS')
-
-        """
-        model = self.parameters.get("model") or ""
-        model_lower = model.lower()
-        if not model_lower:
-            return ""
-
-        patterns = {
-            "gpt-4": "GPT4",
-            "gpt-3.5": "GPT3",
-            "sonnet": "SONN",
-            "opus": "OPUS",
-            "haiku": "HAIK",
-            "claude": "CLDE",
-            "gemini": "GEMN",
-            "llama": "LLMA",
-        }
-        for key, tag in patterns.items():
-            if key in model_lower:
-                return tag
-        return ""
 
     async def _fill_template(
         self,
@@ -372,7 +290,7 @@ class LLMAgent(Agent):
         schema: type[pydantic.BaseModel] | None,
         cancellation_token: CancellationToken | None,
     ) -> CreateResult | ModelOutput:
-        """Helper method to call the LLM with proper error handling.
+        """Helper method to call the LLM.
 
         This method can be overridden by subclasses that need special LLM handling.
 

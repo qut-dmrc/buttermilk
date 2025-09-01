@@ -13,10 +13,11 @@ systems like Autogen.
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import weave  # For tracing - core dependency
+from opentelemetry import trace
 
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
@@ -34,11 +35,11 @@ from autogen_core import (
     TopicId,
     message_handler,
 )
-from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
+from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import bm, logger, get_bm
+from buttermilk import bm, logger, tracer
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -50,10 +51,11 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
-    ManagerMessage,  # Messages from the user
+    OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
+    UserResponseMessage,  # Messages from the user
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
@@ -68,7 +70,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
 
     This class serves as the foundation for all specialized agents within the
-    Buttermilk framework. It inherits its configuration structure from `AgentConfig`
+    Buttermilk framework. It uses the configuration structure from `AgentConfig`
     and defines a common interface for agent execution, state management, and
     lifecycle hooks.
 
@@ -149,6 +151,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
+        self._tools = self._get_available_tools()
 
     @property
     def metadata(self) -> AgentMetadata:
@@ -193,23 +196,37 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Called when the runtime is closed"""
         await self.cleanup()
 
-    # --- Internal State ---
-    _records: list[Record]
-    _model_context: ChatCompletionContext
-    _data: KeyValueCollector
-    _heartbeat: asyncio.Queue[bool | None] | asyncio.Queue
-    _announcement_callback: Callable[[Any], Awaitable[None]] | None
-    _announced: bool = False  # Track if agent has announced itself
 
-    @property
-    def _cfg(self) -> AgentConfig:
-        """Provides the agent's configuration.
+    def _get_available_tools(self) -> list[Tool]:
+        """Get list of tools this agent can respond to.
+
+        This method checks `self.tools` (an `AgentConfig` field, typically populated
+        from Hydra configuration) and uses `create_tool_functions` to convert these
+        tool definitions into a list of Autogen-compatible tool objects (`_tools`).
 
         Returns:
-            AgentConfig: The agent's configuration instance.
+            list[Tool]: List of tools.
 
         """
-        return self._config
+
+        import hydra
+        from omegaconf import OmegaConf
+
+        from buttermilk.utils._tools import create_tool_functions
+
+        logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
+
+        tools = {}
+        for tool_name, tool in self._config.tools.items():
+            if OmegaConf.is_config(tool):
+                # If the tool configuration is an OmegaConf object, instantiate it
+                tool_cfg = hydra.utils.instantiate(tool)
+                tools[tool_name] = tool_cfg
+            else:
+                tools[tool_name] = tool
+
+        # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
+        return create_tool_functions(tools)
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
@@ -226,6 +243,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
     # --- Announcement Methods ---
+
+    @weave.op
+    @tracer.start_as_current_span("send_chat")
+    async def _send_chat(
+        self,
+        message: OOBMessages,
+        topic_id: TopicId,
+    ):
+        # Agents should call the _publish method; this one just exists for tracing.
+        await super().publish_message(message, topic_id=topic_id)
 
     async def _publish(
         self,
@@ -251,7 +278,19 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Use provided topic_id or fall back to the agent's default topic
         target_topic = topic_id or self._topic_id
-        await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
+
+        if isinstance(message, OOBMessages):
+            # send events without tracing
+            logger.debug(
+                f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
+            )
+            await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
+        else:
+            # send and trace
+            await self._send_chat(message, topic_id=target_topic)
+            logger.debug(
+                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
+            )
 
         if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
             highlight = True  # Highlight traces and outputs by default
@@ -263,16 +302,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.debug(
                 f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
             )
-
-    def get_available_tools(self) -> list[Tool]:
-        """Get list of tools this agent can respond to.
-        This is overridden in the LLMAgent class to load tools from the config.
-
-        Returns:
-            list[Tool]: List of tools.
-
-        """
-        return []
 
     # --- Core Execution Logic ---
 
@@ -327,27 +356,27 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             return None
 
-        trace = await self.trace_and_execute(message=final_input)
+        trace_object = await self.trace_and_execute(message=final_input)
 
         # If the agent didn't run, just exit.
-        if not trace:
+        if not trace_object:
             return None
 
         # Publish the AgentTrace result.
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.
-        await self._publish(trace, topic_id=self._topic_id)
+        await self._publish(trace_object, topic_id=self._topic_id)
 
         # Publish status update: Task Complete (including error if error)
         await self._publish(
-            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace.is_error),
+            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=trace_object.is_error),
             topic_id=self._topic_id,
         )
 
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
 
-        return trace
+        return trace_object
 
     async def trace_and_execute(
         self,
@@ -386,17 +415,33 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # --- Tracing ---
         trace_params = {
             "name": self.agent_name,
-            "model": (self._cfg.parameters or {}).get("model"),
+            "model": (self._config.parameters or {}).get("model"),
             **(message.parameters or {}),
             **(message.metadata or {}),
             **(self.parameters or {}),
         }
         exception_obj = None  # Used to capture exceptions for tracing
         weave_client = await bm.get_weave_client()
-        try:
-            logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-            if weave_client is not None:
-                process_op = weave.op(self._process, call_display_name=self.agent_name)
+
+        # Get OTEL tracer for agent spans
+        tracer = trace.get_tracer("buttermilk.agent")
+
+        # Create OTEL span for agent execution
+        with tracer.start_as_current_span(
+            f"agent.{self.agent_name}",
+            attributes={
+                "agent.name": self.agent_name,
+                "agent.id": self.agent_id,
+                "agent.type": str(type(self)),
+                "agent.role": self._config.role if self._config else None,
+                "session_id": getattr(message, "session_id", None),
+                "parent_call_id": getattr(message, "parent_call_id", None),
+            },
+        ) as otel_span:
+            try:
+                logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
+                if weave_client is not None:
+                    process_op = weave.op(self._process, call_display_name=self.agent_name)
                 parent_call = await get_parent_call_weave(message)
 
                 child_call = weave_client.create_call(
@@ -410,21 +455,25 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 if parent_call is not None:
                     parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
 
-            # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
-            result = await self._process(message=message)
-        except Exception as e:
-            logger.error(f"Agent {self.agent_id} error during invoke: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-            result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
-            exception_obj = e  # Capture the exception for tracing
-        finally:
-            # Mark the child call as complete, regardless of success or failure.
-            # Output is passed to bm.weave.finish_call if result is not None
-            # Error is also passed if exception_obj is not None
-            if weave_client and child_call:
-                weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
-                tracing_link = child_call.ui_url
+                # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
+                result = await self._process(message=message)
+
+                otel_span.set_status(trace.Status(trace.StatusCode.OK))
+            except Exception as e:
+                logger.error(f"Agent {self.agent_id} error during invoke: {e}")
+                # Create an ErrorEvent to capture the error
+                err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
+                result = AgentOutput(agent_id=self.agent_id, outputs=None, error=[err_result])
+                exception_obj = e  # Capture the exception for tracing
+                otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                otel_span.record_exception(e)
+            finally:
+                # Mark the child call as complete, regardless of success or failure.
+                # Output is passed to bm.weave.finish_call if result is not None
+                # Error is also passed if exception_obj is not None
+                if weave_client and child_call:
+                    weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
+                    tracing_link = child_call.ui_url
 
         # --- Turn the result into AgentTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)
@@ -434,16 +483,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Create AgentTrace from the result, overwriting call_id and parent_call_id with
         # values directly from Weave.
-        trace = AgentTrace.from_output(
+        trace_object = AgentTrace.from_output(
             result,
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
             inputs=message,
-            agent_info=self._cfg,
+            agent_info=self._config,
             tracing_link=tracing_link,
         )
 
-        return trace
+        return trace_object
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
@@ -458,7 +507,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         - LLM agents might return structured data within `AgentOutput.outputs`.
         - Flow control agents (e.g., a host agent managing sub-tasks) might
           return messages like `StepRequest` (wrapped in `AgentOutput`).
-        - Interface agents (e.g., for user interaction) might return `ManagerMessage`
+        - Interface agents (e.g., for user interaction) might return `UserResponseMessage`
           (wrapped in `AgentOutput`).
         - Tool-using agents might return `ToolOutput` (wrapped in `AgentOutput`).
 
@@ -506,8 +555,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         announcement = AgentAnnouncement(
             content=f"Agent {self.agent_name} active and available",
-            agent_config=self._cfg,
-            available_tools=[tool.name for tool in self.get_available_tools()],
+            agent_config=self._config,
+            available_tools=[],
             tool_definitions=tool_definitions,
             status="active",
             announcement_type="initial",
@@ -607,16 +656,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 AssistantMessage(content=str(content_to_add), source=source or self.agent_name),
             )
 
-    @message_handler  # Add ManagerMessage content to model context
-    async def handle_manager_message(
+    @message_handler  # Add UserResponseMessage content to model context
+    async def handle_user_response_message(
         self,
-        message: ManagerMessage,
+        message: UserResponseMessage,
         ctx: MessageContext,
     ) -> None:
-        """Handle ManagerMessage messages, adding non-command content to model context.
+        """Handle UserResponseMessage messages, adding non-command content to model context.
 
         Args:
-            message: The ManagerMessage to process.
+            message: The UserResponseMessage to process.
             ctx: Message context containing sender and topic information.
 
         """

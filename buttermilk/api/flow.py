@@ -195,8 +195,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             logger.warning(f"[WEBSOCKET] Unexpected WebSocket state {websocket.client_state} for session {session_id}")
         flow_runner: FlowRunner = websocket.app.state.flow_runner
         if not (session := await flow_runner.get_websocket_session_async(session_id=session_id, websocket=websocket)):
-            logger.error(f"[WEBSOCKET] Session {session_id} not found.")
-            await websocket.close()
+            logger.error(f"[WEBSOCKET] Session {session_id} not found or terminated.")
+            await websocket.close(code=1000, reason="Session TERMINATED or not found")
             raise HTTPException(status_code=404, detail="Session not found")
 
         # Start session metrics tracking
