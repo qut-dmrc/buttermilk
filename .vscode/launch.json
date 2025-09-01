@@ -111,7 +111,7 @@
       "justMyCode": false,
       "args": [
         "+run=batch",
-        "+max_records=2",
+        "+max_records=30",
         "+flows=[trans,zot,osb]",
         "+flow=trans",
         "+dataset_key=tja",

@@ -8,7 +8,8 @@ WITH SCORES_AGGREGATED AS (
     IFNULL(parent_call_id, JSON_VALUE(inputs, "$.inputs.answers[0].answer_id")) as parent_call_id,
     JSON_VALUE(agent_info, "$.name") AS scorer,
     JSON_VALUE(agent_info, "$.parameters.model") AS scoring_model,
-    JSON_VALUE(agent_info, "$.parameters.template") AS scoring_template,
+    JSON_VALUE(metadata, "$.template_name") AS scoring_template,
+    JSON_VALUE(metadata, "$.template_hash") AS scoring_hash,
     JSON_VALUE(agent_info, "$.role") AS role,
     CAST(JSON_VALUE(outputs, "$.correctness") AS FLOAT64) AS correctness,
     JSON_EXTRACT_ARRAY(outputs, '$.assessments') AS assessments
@@ -28,7 +29,8 @@ PREDICTIONS AS (
     JSON_VALUE(records, '$.record_id') AS record_id,
     JSON_VALUE(agent_info, "$.name") AS judge,
     JSON_VALUE(agent_info, "$.parameters.model") AS judge_model,
-    JSON_VALUE(agent_info, "$.parameters.template") AS judge_template,
+    JSON_VALUE(metadata, "$.template_name") AS judge_template,
+    JSON_VALUE(metadata, "$.template_hash") AS judge_hash,
     JSON_VALUE(agent_info, "$.parameters.criteria") AS judge_criteria,
     JSON_VALUE(agent_info, "$.role") AS judge_role,
     -- Calculate full_prediction_summary within this CTE
@@ -55,6 +57,7 @@ SELECT
   PREDICTIONS.judge,
   PREDICTIONS.judge_model,
   PREDICTIONS.judge_template,
+  PREDICTIONS.judge_hash,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
   PREDICTIONS.full_prediction_summary, -- Use the pre-calculated summary
@@ -64,6 +67,7 @@ SELECT
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
+  SCORES_AGGREGATED.scoring_hash,
   SCORES_AGGREGATED.role,
   SCORES_AGGREGATED.tracing_link as scorer_tracing_link,
   SCORES_AGGREGATED.correctness,
@@ -95,6 +99,7 @@ GROUP BY
   PREDICTIONS.judge,
   PREDICTIONS.judge_model,
   PREDICTIONS.judge_template,
+  PREDICTIONS.judge_hash,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
   PREDICTIONS.full_prediction_summary, -- Group by the pre-calculated summary
@@ -105,6 +110,7 @@ GROUP BY
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
+  SCORES_AGGREGATED.scoring_hash,
   SCORES_AGGREGATED.role,
   SCORES_AGGREGATED.correctness
 ORDER BY

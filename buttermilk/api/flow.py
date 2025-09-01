@@ -373,6 +373,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             })
         return {"sessions": sessions_info, "total": len(sessions_info)}
 
+
     # --- Defer heavy routes for Phase 2 optimization ---
     # Set up templates
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
