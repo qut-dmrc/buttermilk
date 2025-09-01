@@ -196,15 +196,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Called when the runtime is closed"""
         await self.cleanup()
 
-    @property
-    def _cfg(self) -> AgentConfig:
-        """Provides the agent's configuration.
-
-        Returns:
-            AgentConfig: The agent's configuration instance.
-
-        """
-        return self._config
 
     def _get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
@@ -424,7 +415,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # --- Tracing ---
         trace_params = {
             "name": self.agent_name,
-            "model": (self._cfg.parameters or {}).get("model"),
+            "model": (self._config.parameters or {}).get("model"),
             **(message.parameters or {}),
             **(message.metadata or {}),
             **(self.parameters or {}),
@@ -442,7 +433,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 "agent.name": self.agent_name,
                 "agent.id": self.agent_id,
                 "agent.type": str(type(self)),
-                "agent.role": self._cfg.role if self._cfg else None,
+                "agent.role": self._config.role if self._config else None,
                 "session_id": getattr(message, "session_id", None),
                 "parent_call_id": getattr(message, "parent_call_id", None),
             },
@@ -497,7 +488,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
             inputs=message,
-            agent_info=self._cfg,
+            agent_info=self._config,
             tracing_link=tracing_link,
         )
 
@@ -564,7 +555,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         announcement = AgentAnnouncement(
             content=f"Agent {self.agent_name} active and available",
-            agent_config=self._cfg,
+            agent_config=self._config,
             available_tools=[],
             tool_definitions=tool_definitions,
             status="active",
