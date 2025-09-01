@@ -29,7 +29,6 @@ import os
 import urllib  # Added for os.environ usage
 
 from opentelemetry import trace
-from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
@@ -43,62 +42,46 @@ from opentelemetry.instrumentation.vertexai import VertexAIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from buttermilk import logger
+
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 # Buttermilk core imports
 from buttermilk._core.config import FatalError, Tracing
-from buttermilk import logger, tracer
 
 """Base URL for Weights & Biases tracing services."""
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
-
+# --- OpenTelemetry Tracing Setup for Google Cloud Telemetry API ---
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    # Configure Tracing
-    provider = TracerProvider()
-
+    # Set environment variables for Google Cloud authentication
+    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otel.googleapis.com:443"
+    os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"x-goog-project-id={tracing_cfg.project_id}"
     os.environ["OTEL_PYTHON_LOG_CORRELATION"] = "true"
 
-    # Configure instrumentors with specific settings
+    # Set up the tracer provider
+    provider = TracerProvider()
+
+    # Instrument libraries
     OpenAIInstrumentor().instrument(tracer_provider=provider)
     GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
     ChromaInstrumentor().instrument(tracer_provider=provider)
     VertexAIInstrumentor().instrument(tracer_provider=provider)
     AnthropicInstrumentor().instrument(tracer_provider=provider)
-    
-    # Configure LoggingInstrumentor to exclude debug logs from traces
-    LoggingInstrumentor().instrument(
-        tracer_provider=provider,
-        set_logging_format=True,
-        log_level=logging.INFO  # Only include INFO+ logs in OTEL traces
-    )
 
-    # Configure the GCP Cloud Trace Span Exporter
-    gcp_exporter = CloudTraceSpanExporter()
-    provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
-    logger.info("Initialized tracing with Google Cloud")
+    LoggingInstrumentor().instrument(tracer_provider=provider, set_logging_format=True, log_level=logging.INFO)
+
+    # Use OTLP exporter for Google Cloud Telemetry API
+    otlp_exporter = OTLPSpanExporter()
+    provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
     # Set global tracer provider
     trace.set_tracer_provider(provider)
 
-    # # get wandb exporter
-    # if wandb_exporter := setup_wandb_otel_tracing():
-    #     wandb_processor = BatchSpanProcessor(wandb_exporter)
-    #     provider.add_span_processor(wandb_processor)
-    #     logger.info("OpenTelemetry W&B exporter configured successfully")
-
-    # This doesn't work yet -- authorization header isn't right in the docs?
-    # if traceloop_exporter := setup_traceloop_otel():
-    #     traceloop_processor = BatchSpanProcessor(traceloop_exporter)
-    #     provider.add_span_processor(traceloop_processor)
-    #     logger.info("Traceloop OTLP exporter configured successfully")
-
-    # Instead we'll rely on the traceloop and weave sdks (set up in bm_init.py)
-    #
-    # The disadvantage of using this approach is that it relies on Traceloop's
-    # and/or Weave's magic to instrument everything, and that's often TOO MUCH.
+    logger.info("Initialized tracing with Google Cloud Telemetry API")
 
 
+# --- OpenTelemetry Tracing Setup for Traceloop ---
 def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
     """Initialize Traceloop for OpenTelemetry tracing."""
     from buttermilk import get_bm

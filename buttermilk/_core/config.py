@@ -238,6 +238,7 @@ class Tracing(BaseModel):
         default_factory=dict,
         description="Optional OTLP headers for providers supporting it.",
     )
+    project_id: str | None = Field(default=None, description="Optional project ID for the tracing provider.")
 
 
 # --- Agent Configuration ---
