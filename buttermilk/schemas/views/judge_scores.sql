@@ -57,7 +57,7 @@ SELECT
   PREDICTIONS.judge,
   PREDICTIONS.judge_model,
   PREDICTIONS.judge_template,
-  PREDICTIONS.judge_hash,
+  SUBSTR(PREDICTIONS.judge_hash, 8, 8) as judge_hash, -- remove 'SHA256:' prefix and return first eight digits of hash (4 billion unique ids)
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
   PREDICTIONS.full_prediction_summary, -- Use the pre-calculated summary
@@ -67,7 +67,7 @@ SELECT
   SCORES_AGGREGATED.scorer,
   SCORES_AGGREGATED.scoring_model,
   SCORES_AGGREGATED.scoring_template,
-  SCORES_AGGREGATED.scoring_hash,
+  SUBSTR(SCORES_AGGREGATED.scoring_hash, 8, 8) as scoring_hash,
   SCORES_AGGREGATED.role,
   SCORES_AGGREGATED.tracing_link as scorer_tracing_link,
   SCORES_AGGREGATED.correctness,

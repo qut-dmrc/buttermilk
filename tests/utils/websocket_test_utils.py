@@ -62,16 +62,16 @@ class WebSocketTestSession:
             self.is_connected = True
             self.connection_events.append(("connected", time.time()))
 
-            logger.debug(f"WebSocket connected for session {self.session_id} in {self.connection_time:.3f}s")
+            logger.debug("WebSocket connected", session_id=self.session_id, connection_time=f"{self.connection_time:.3f}s")
             return True
 
         except asyncio.TimeoutError:
             self.connection_events.append(("connect_timeout", time.time()))
-            logger.warning(f"WebSocket connection timeout for session {self.session_id}")
+            logger.warning("WebSocket connection timeout", session_id=self.session_id)
             return False
         except Exception as e:
             self.connection_events.append(("connect_error", time.time(), str(e)))
-            logger.error(f"WebSocket connection failed for session {self.session_id}: {e}")
+            logger.error("WebSocket connection failed", session_id=self.session_id, error=e)
             return False
 
     async def disconnect(self):
@@ -81,9 +81,9 @@ class WebSocketTestSession:
                 await self.websocket.close()
                 self.is_connected = False
                 self.connection_events.append(("disconnected", time.time()))
-                logger.debug(f"WebSocket disconnected for session {self.session_id}")
+                logger.debug("WebSocket disconnected", session_id=self.session_id)
             except Exception as e:
-                logger.warning(f"Error during WebSocket disconnect for session {self.session_id}: {e}")
+                logger.warning("Error during WebSocket disconnect", session_id=self.session_id, error=e)
 
     async def send_message(self, message: Dict[str, Any], track_latency: bool = True) -> bool:
         """Send message with optional latency tracking."""
@@ -109,7 +109,7 @@ class WebSocketTestSession:
         except Exception as e:
             self.error_count += 1
             self.connection_events.append(("send_error", time.time(), str(e)))
-            logger.error(f"Failed to send message in session {self.session_id}: {e}")
+            logger.error("Failed to send message in session", session_id=self.session_id, error=e)
             return False
 
     async def receive_message(self, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
@@ -146,7 +146,7 @@ class WebSocketTestSession:
         except Exception as e:
             self.error_count += 1
             self.connection_events.append(("receive_error", time.time(), str(e)))
-            logger.error(f"Failed to receive message in session {self.session_id}: {e}")
+            logger.error("Failed to receive message in session", session_id=self.session_id, error=e)
             return None
 
     async def send_osb_query(self, query: str, **kwargs) -> bool:
@@ -191,7 +191,7 @@ class WebSocketStressTestRunner:
 
     async def run_concurrent_connection_test(self, num_sessions: int = 5, duration_seconds: int = 30) -> Dict[str, Any]:
         """Test concurrent WebSocket connections under load."""
-        logger.info(f"Starting concurrent connection test with {num_sessions} sessions for {duration_seconds}s")
+        logger.info("Starting concurrent connection test", num_sessions=num_sessions, duration_seconds=duration_seconds)
 
         start_time = time.time()
 
@@ -207,7 +207,7 @@ class WebSocketStressTestRunner:
         connection_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
         successful_connections = sum(1 for result in connection_results if result is True)
 
-        logger.info(f"Connected {successful_connections}/{num_sessions} sessions")
+        logger.info("Connected sessions", successful_connections=successful_connections, num_sessions=num_sessions)
 
         # Run message exchange test
         message_tasks = []
@@ -253,7 +253,7 @@ class WebSocketStressTestRunner:
                 message_count += 1
 
             except Exception as e:
-                logger.error(f"Error in message loop for {session.session_id}: {e}")
+                logger.error("Error in message loop", session_id=session.session_id, error=e)
                 break
 
     def _calculate_aggregate_metrics(self) -> Dict[str, Any]:

@@ -156,7 +156,7 @@ class HealthMonitor:
                 status=HealthStatus.UNKNOWN,
                 error_message=f"Failed to check system resources: {e}"
             )
-            logger.error(f"System health check failed: {e}")
+            logger.error("System health check failed", error=e)
 
     def _register_basic_system_check(self):
         """Register basic system health component."""

@@ -96,7 +96,7 @@ class Describer(LLMAgent):
             and isinstance(record.metadata, dict)
             and record.metadata.get("alt_text")
         ):
-            logger.info(f"Record already has alt_text: {record.metadata['alt_text'][:50]}...")
+            logger.info("Record already has alt_text", alt_text=record.metadata['alt_text'][:50])
             # Return structured output even for existing alt text
             existing_description = MediaDescription(
                 description=record.metadata["alt_text"],
@@ -127,11 +127,7 @@ class Describer(LLMAgent):
 
     def _create_text_response(self, record: Any) -> AgentOutput:
         """Create a response for text-only records."""
-        text_description = MediaDescription(
-            description=f"This is a text-only record. Content: {record.text[:200]}...",
-            media_type="text",
-            confidence=1.0,
-        )
+        logger.info("Creating text-only response", record_id=record.id)
         return AgentOutput(
             agent_id=self.agent_id,
             outputs=text_description,
@@ -143,7 +139,7 @@ class Describer(LLMAgent):
         # Check if we need to download from URI
         uri = record.metadata.get("uri") if hasattr(record, "metadata") else None
         if uri and not record.media:
-            logger.info(f"Downloading media from URI: {uri}")
+            logger.info("Downloading media from URI", uri=uri)
             try:
                 # Import here to avoid circular imports
                 from buttermilk.utils.media import download_and_convert
@@ -154,7 +150,7 @@ class Describer(LLMAgent):
                 else:
                     raise ProcessingError(f"Failed to download media from URI: {uri}")
             except Exception as e:
-                logger.error(f"Error downloading media from {uri}: {e}", exc_info=True)
+                logger.error("Error downloading media", uri=uri, error=e)
                 raise ProcessingError(f"Failed to download media: {e!s}") from e
 
         # Determine media type

@@ -16,8 +16,6 @@ defaults:
     - owl
     - scorer
     - host/sequence_host
-  # Criteria for this specific flow
-  - /flows/criteria@parameters.criteria: trans
   # Data source configuration
   - /storage@storage.tja: tja
   # Storage configuration for saving outputs
@@ -29,7 +27,10 @@ name: "trans"
 description: "Journalism quality assessment for trans issues reporting"
 
 parameters:
-  human_in_loop: ${run.human_in_loop}
+  criteria:
+    - tja
+    - glaad
+    - trans_simplified
 
 save: {}
 storage: {}

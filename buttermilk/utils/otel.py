@@ -29,6 +29,7 @@ import os
 import urllib  # Added for os.environ usage
 
 from opentelemetry import trace
+from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
@@ -52,11 +53,7 @@ from buttermilk._core.config import FatalError, Tracing
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
-# --- OpenTelemetry Tracing Setup for Google Cloud Telemetry API ---
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    # Set environment variables for Google Cloud authentication
-    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otel.googleapis.com:443"
-    os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"x-goog-project-id={tracing_cfg.project_id}"
     os.environ["OTEL_PYTHON_LOG_CORRELATION"] = "true"
 
     # Set up the tracer provider
@@ -69,16 +66,22 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
     VertexAIInstrumentor().instrument(tracer_provider=provider)
     AnthropicInstrumentor().instrument(tracer_provider=provider)
 
-    LoggingInstrumentor().instrument(tracer_provider=provider, set_logging_format=True, log_level=logging.INFO)
+    # Configure LoggingInstrumentor to exclude debug logs from traces
+    LoggingInstrumentor().instrument(
+        tracer_provider=provider,
+        set_logging_format=True,
+        log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
+    )
 
-    # Use OTLP exporter for Google Cloud Telemetry API
-    otlp_exporter = OTLPSpanExporter()
-    provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+    # Configure the GCP Cloud Trace Span Exporter
+    gcp_exporter = CloudTraceSpanExporter()
+    provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
+    logger.info("Initialized tracing with Google Cloud")
 
     # Set global tracer provider
     trace.set_tracer_provider(provider)
 
-    logger.info("Initialized tracing with Google Cloud Telemetry API")
+    logger.info("Initialized tracing with Google Cloud Trace")
 
 
 # --- OpenTelemetry Tracing Setup for Traceloop ---
@@ -99,7 +102,7 @@ def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
         return traceloop_exporter
 
     except Exception as e_traceloop:
-        logger.warning(f"Error configuring traceloop exporter: {e_traceloop}")
+        logger.warning("Error configuring traceloop exporter", error=e_traceloop)
         return None
 
 
@@ -148,5 +151,5 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
         return wandb_exporter
 
     except Exception as e_wandb:
-        logger.warning(f"Error configuring W&B exporter: {e_wandb}")
+        logger.warning("Error configuring W&B exporter", error=e_wandb)
         return None

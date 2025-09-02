@@ -46,7 +46,7 @@ class BatchRunner(BaseModel):
                 self.job_queue = JobQueueClient()
                 logger.info("Initialized job queue client")
             except Exception as e:
-                logger.warning(f"Failed to create job queue client: {e}. Jobs will be processed locally.")
+                logger.warning("Failed to create job queue client. Jobs will be processed locally.", error=e)
 
     async def get_batch_jobs(self, batch_id: str) -> list[RunRequest]:
         """Get job definitions for a batch.
@@ -62,6 +62,7 @@ class BatchRunner(BaseModel):
 
         """
         if batch_id not in self._active_batches:
+            logger.error("Batch not found", batch_id=batch_id)
             raise ValueError(f"Batch '{batch_id}' not found")
 
         # Combine pending jobs with completed/failed jobs from results
@@ -91,6 +92,7 @@ class BatchRunner(BaseModel):
 
         """
         if batch_id not in self._job_results:
+            logger.error("Batch not found", batch_id=batch_id)
             raise ValueError(f"Batch '{batch_id}' not found")
 
         for job_id, result in self._job_results[batch_id].items():
@@ -98,4 +100,5 @@ class BatchRunner(BaseModel):
             if job_def and job_def.record_id == record_id:
                 return result
 
+        logger.error("Task not found for record in batch", record_id=record_id, batch_id=batch_id)
         raise ValueError(f"Task for record '{record_id}' in batch '{batch_id}' not found")  # Updated message

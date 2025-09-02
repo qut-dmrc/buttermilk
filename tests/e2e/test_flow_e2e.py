@@ -23,8 +23,8 @@ async def backend_process():
     try:
         logger.info("[backend_fixture] Attempting to kill processes on port 8000...")
         result = subprocess.run(["fuser", "-k", "8000/tcp"], capture_output=True, text=True)
-        logger.info(f"[backend_fixture] fuser stdout: {result.stdout}")
-        logger.info(f"[backend_fixture] fuser stderr: {result.stderr}")
+        logger.info("[backend_fixture] fuser stdout", stdout=result.stdout)
+        logger.info("[backend_fixture] fuser stderr", stderr=result.stderr)
         if result.returncode == 0:
             logger.info("[backend_fixture] Successfully killed processes on port 8000.")
         else:
@@ -32,7 +32,7 @@ async def backend_process():
     except FileNotFoundError:
         logger.info("[backend_fixture] fuser command not found. Skipping port cleanup.")
     except Exception as e:
-        logger.info(f"[backend_fixture] Error during fuser execution: {e}")
+        logger.info("[backend_fixture] Error during fuser execution", error=e)
 
     process = await asyncio.create_subprocess_exec(
         "uv",
@@ -58,7 +58,7 @@ async def backend_process():
                 break
             line = line.decode("utf-8").strip()
             if line:  # Only print non-empty lines
-                logger.info(f"[backend-stdout] {line}")
+                logger.info("[backend-stdout]", line=line)
 
     async def monitor_stderr():
         while True:
@@ -67,7 +67,7 @@ async def backend_process():
                 break
             line = line.decode("utf-8").strip()
             if line:
-                logger.info(f"[backend-stderr] {line}")
+                logger.info("[backend-stderr]", line=line)
                 # Check for server ready message (might have ANSI codes)
                 if "Uvicorn running on" in line or "Application startup complete" in line:
                     server_ready.set()
@@ -91,10 +91,10 @@ async def backend_process():
     yield process
 
     # Teardown: terminate the process after all tests are done
-    logger.info(f"[backend_fixture] Terminating backend process (PID: {process.pid}).")
+    logger.info("[backend_fixture] Terminating backend process", pid=process.pid)
     process.kill()  # Use kill for more forceful shutdown
     await process.wait()
-    logger.info(f"[backend_fixture] Backend process (PID: {process.pid}) terminated with exit code {process.returncode}.")
+    logger.info("[backend_fixture] Backend process terminated", pid=process.pid, exit_code=process.returncode)
 
 
 @pytest.mark.e2e
@@ -131,15 +131,15 @@ class TestFlowE2E:
                     await asyncio.sleep(60)  # Give time for processing
 
                     # Check what messages we received
-                    logger.info(f"\n[TEST] Total messages received: {len(client.collector.all_messages)}")
+                    logger.info("Total messages received", num_messages=len(client.collector.all_messages))
                     for i, msg in enumerate(client.collector.all_messages):
-                        logger.info(f"[TEST] Message {i}: type={msg.type}, content preview={msg.content[:100] if msg.content else 'N/A'}")
+                        logger.info("Message received", message_num=i, message_type=msg.type, content_preview=msg.content[:100] if msg.content else 'N/A')
 
                     # Look for agent outputs or research results
                     agent_responses = client.collector.agent_traces + client.collector.ui_messages
 
                     assert len(agent_responses) > 0, "Expected agent responses to prompt in RunRequest"
-                    logger.info(f"[TEST] ✓ Found {len(agent_responses)} agent responses")
+                    logger.info("Found agent responses", num_responses=len(agent_responses))
 
         except TimeoutError:
             pytest.fail("Test timed out waiting for prompt processing")
@@ -163,14 +163,14 @@ class TestFlowE2E:
                     # Also verify we got the setup message
                     try:
                         init_msg = await client.wait_for_ui_message("Setting up AutogenOrchestrator", timeout=5)
-                        logger.info(f"[TEST] ✓ Found setup message: {init_msg}")
+                        logger.info("Found setup message", message=init_msg)
                     except TimeoutError:
                         # It's OK if we miss this specific message as long as orchestrator is ready
-                        logger.info("[TEST] Setup message not found, but orchestrator is ready")
+                        logger.info("Setup message not found, but orchestrator is ready")
 
                     # Log message summary
                     summary = client.get_message_summary()
-                    logger.info(f"[TEST] Message summary: {summary}")
+                    logger.info("Message summary", summary=summary)
 
                     return
 
@@ -200,13 +200,13 @@ class TestFlowE2E:
                     try:
                         # OSB might ask for confirmation or additional input
                         prompt_msg = await client.wait_for_ui_message(pattern="(proceed|confirm|continue)", timeout=10)
-                        logger.info(f"[TEST] ✓ Received prompt: {prompt_msg}")
+                        logger.info("Received prompt", prompt=prompt_msg)
 
                         # Send confirmation
-                        logger.info("[TEST] Sending confirmation...")
+                        logger.info("Sending confirmation...")
                         await client.send_manager_response("yes")
                     except TimeoutError:
-                        logger.info("[TEST] No user prompt received, flow proceeding automatically")
+                        logger.info("No user prompt received, flow proceeding automatically")
 
                     # Step 4: Wait for agent activity
                     logger.info("[TEST] Step 4: Waiting for agent responses...")
@@ -214,7 +214,7 @@ class TestFlowE2E:
 
                     # Check for agent activity
                     summary = client.get_message_summary()
-                    logger.info(f"[TEST] Current message summary: {summary}")
+                    logger.info("Current message summary", summary=summary)
 
                     assert summary["agent_announcements"] > 0, "No agents announced themselves"
                     assert summary["agent_traces"] > 0 or summary["ui_messages"] > 5, "No agent activity detected"
@@ -227,16 +227,16 @@ class TestFlowE2E:
                     for msg in client.collector.all_messages:
                         if any(keyword in msg.content.lower() for keyword in ["hate", "speech", "meta", "facebook", "policy"]):
                             found_relevant_content = True
-                            logger.info(f"[TEST] ✓ Found relevant content in {msg.type}: {msg.content[:100]}...")
+                            logger.info("Found relevant content", message_type=msg.type, content_preview=f"{msg.content[:100]}...")
                             break
 
                     assert found_relevant_content, "No relevant content about hate speech found in responses"
 
                     # Step 6: Log final state
-                    logger.info("[TEST] Step 6: Test completed successfully")
+                    logger.info("Test completed successfully")
                     final_summary = client.get_message_summary()
-                    logger.info(f"[TEST] Final message summary: {final_summary}")
-                    logger.info(f"[TEST] Active agents: {final_summary['agents_active']}")
+                    logger.info("Final message summary", summary=final_summary)
+                    logger.info("Active agents", active_agents=final_summary['agents_active'])
 
         except TimeoutError:
             pytest.fail("Test timed out - flow may be stuck")

@@ -112,7 +112,7 @@ class QualResults(QualScore):
         try:
             return sum(cra.correct for cra in self.assessments) / len(self.assessments)
         except Exception as e:  # Catch any potential errors during calculation
-            logger.error(f"Error calculating correctness for QualResults (call_id: {self.assessed_call_id}): {e!s}")
+            logger.error("Error calculating correctness for QualResults", call_id=self.assessed_call_id, error=e)
             return None
 
     @property
@@ -232,12 +232,13 @@ class LLMScorer(LLMAgent):
            not isinstance(message.outputs, JudgeReasons) or \
            not hasattr(message, "inputs") or not message.inputs:  # Ensure inputs exist
             logger.debug(
-                f"Scorer '{self.agent_id}' received message from '{message.agent_id}' that "
-                "is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
+                "Scorer received message that is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
+                agent_id=self.agent_id,
+                message_agent_id=message.agent_id,
             )
             return
 
-        logger.debug(f"Scorer '{self.agent_id}' received potential scoring target from agent '{message.agent_id}' (Call ID: {message.call_id}).")
+        logger.debug("Scorer received potential scoring target", scorer_agent_id=self.agent_id, from_agent_id=message.agent_id, call_id=message.call_id)
 
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
@@ -251,7 +252,7 @@ class LLMScorer(LLMAgent):
         # Ignore messages that don't have ground truth in the input record
         record = extracted_data.pop("records", [])
         if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
-            logger.debug(f"Scorer {self.agent_name} received message from agent {message.agent_id} without ground truth.")
+            logger.debug("Scorer received message without ground truth.", scorer_agent_name=self.agent_name, from_agent_id=message.agent_id)
             return
 
         # `records` for scoring should come from the original input to the agent being judged.
@@ -279,7 +280,7 @@ class LLMScorer(LLMAgent):
         )
 
         # Invoke the scoring process using the LLM
-        logger.debug(f"Scorer '{self.agent_name}' scoring request for {message.agent_id} call {message.call_id}.")
+        logger.debug("Scorer scoring request", scorer_agent_name=self.agent_name, assessed_agent_id=message.agent_id, assessed_call_id=message.call_id)
         response = await self.invoke(message=scorer_agent_input)
 
         # We don't publish here, because the invoke() method have already published the result.
@@ -348,18 +349,19 @@ class LLMScorer(LLMAgent):
                 )
                 # Replace the simpler QualScore in outputs with the richer QualResults
                 llm_output_base.outputs = qual_results
-                logger.debug(f"Scorer '{self.agent_id}' successfully processed score into QualResults for assessed call ID '{assessed_call_id}'.")
+                logger.debug("Scorer successfully processed score into QualResults", scorer_agent_id=self.agent_id, assessed_call_id=assessed_call_id)
             else:
                 logger.warning(
-                    f"Scorer '{self.agent_id}': Could not extract assessed agent/call ID from "
-                    f"message.inputs['answers'] to create QualResults. Input answers data: {message.inputs.get('answers')}. "
-                    "LLM output (QualScore) will be returned directly in AgentOutput.",
+                    "Scorer could not extract assessed agent/call ID from message.inputs to create QualResults.",
+                    scorer_agent_id=self.agent_id,
+                    answers_data=message.inputs.get('answers'),
                 )
                 # llm_output_base.outputs remains QualScore in this case
         elif llm_output_base:
             logger.warning(
-                f"Scorer '{self.agent_id}': LLM output was not of type QualScore. Actual type: {type(llm_output_base.outputs)}. "
-                "Raw output will be returned.",
+                "Scorer LLM output was not of type QualScore. Raw output will be returned.",
+                scorer_agent_id=self.agent_id,
+                actual_type=type(llm_output_base.outputs),
             )
         # If llm_output_base is None or an error, it will be returned as is.
         return llm_output_base

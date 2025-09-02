@@ -40,7 +40,7 @@ class FlowTestServer:
             f"--config-name={self.config_name}"
         ]
         
-        logger.info(f"Starting test server: {' '.join(cmd)}")
+        logger.info("Starting test server", command=' '.join(cmd))
         
         with open(self.log_file, "w") as f:
             self.process = subprocess.Popen(
@@ -72,6 +72,7 @@ class FlowTestServer:
             if self.process.poll() is not None:
                 with open(self.log_file, "r") as f:
                     logs = f.read()
+                logger.error("Server process died", logs=logs[-1000:])
                 raise RuntimeError(f"Server process died. Logs:\n{logs[-1000:]}")
             
             await asyncio.sleep(0.5)
@@ -93,7 +94,7 @@ class FlowTestServer:
             if self.process.returncode != 0 and self.log_file and self.log_file.exists():
                 with open(self.log_file, "r") as f:
                     logs = f.read()
-                logger.error(f"Server logs (last 500 chars):\n{logs[-500:]}")
+                logger.error("Server logs", logs=logs[-500:])
 
 
 @pytest_asyncio.fixture
@@ -118,7 +119,7 @@ async def test_osb_hate_speech_query(test_server):
         # The host typically asks for confirmation to proceed
         logger.info("Waiting for initial prompt...")
         prompt = await client.wait_for_prompt(timeout=60)
-        logger.info(f"Got prompt: {prompt}")
+        logger.info("Got prompt", prompt=prompt)
         
         # Confirm to proceed
         await client.send_manager_response("Yes, please proceed")
@@ -151,10 +152,10 @@ async def test_osb_hate_speech_query(test_server):
         assert len(all_messages) > 10, f"Too few messages: {len(all_messages)}"
         
         # Log summary
-        logger.info(f"Flow completed successfully with {len(all_messages)} messages")
-        logger.info(f"Agents involved: {client.collector.get_agents_announced()}")
-        logger.info(f"UI messages: {len(client.collector.ui_messages)}")
-        logger.info(f"Agent traces: {len(client.collector.agent_traces)}")
+        logger.info("Flow completed successfully", num_messages=len(all_messages))
+        logger.info("Agents involved", agents=client.collector.get_agents_announced())
+        logger.info("UI messages", num_ui_messages=len(client.collector.ui_messages))
+        logger.info("Agent traces", num_agent_traces=len(client.collector.agent_traces))
 
 
 @pytest.mark.integration
@@ -233,7 +234,7 @@ async def test_osb_error_handling(test_server):
         except TimeoutError:
             # Check if we got any error messages
             if client.collector.errors:
-                logger.info(f"Got expected error: {client.collector.errors[0].data}")
+                logger.info("Got expected error", error=client.collector.errors[0].data)
             else:
                 # Flow might just ignore the input
                 logger.info("Flow handled invalid input without error")

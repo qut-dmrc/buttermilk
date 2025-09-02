@@ -111,19 +111,21 @@ class HostAgent(Agent):
         await super().handle_conductor_request(message, ctx)
 
         logger.info(
-            f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest "
-            f"with {len(message.participants)} participants: {list(message.participants.keys())}",
+            "Host received ConductorRequest",
+            agent_name=self.agent_name,
+            num_participants=len(message.participants),
+            participants=list(message.participants.keys()),
         )
 
         if hasattr(self, "_conductor_task") and self._conductor_task:
-            logger.warning(f"[HostAgent.handle_conductor_request] Host {self.agent_name} received ConductorRequest but task is already running.")
+            logger.warning("Host received ConductorRequest but task is already running.", agent_name=self.agent_name)
             return
 
         # Store the participants from the message
         self._participants = dict(message.participants)
 
         self._conductor_task = "starting"  # Mark as starting to avoid re-entrance
-        logger.debug(f"[HostAgent.handle_conductor_request] Host {self.agent_name} starting new conductor task")
+        logger.debug("Host starting new conductor task", agent_name=self.agent_name)
         self._conductor_task = asyncio.create_task(self._run_flow(message=message))
 
     @message_handler
@@ -144,22 +146,27 @@ class HostAgent(Agent):
                 if message.is_error:
                     self._failed_tasks_by_agent[agent_id_to_update] += 1
                     logger.warning(
-                        f"Host noted TaskComplete with ERROR from agent {agent_id_to_update} for role '{message.role}'. "
-                        f"Failed tasks by agent: {dict(self._failed_tasks_by_agent)}.",
+                        "Host noted TaskComplete with ERROR from agent",
+                        agent_id=agent_id_to_update,
+                        role=message.role,
+                        failed_tasks=dict(self._failed_tasks_by_agent),
                     )
 
                 if self._pending_tasks_by_agent[agent_id_to_update] <= 0:
                     del self._pending_tasks_by_agent[agent_id_to_update]
 
                 logger.debug(
-                    f"Host noted TaskComplete from agent {agent_id_to_update} for role '{message.role}' "
-                    f"(error: {message.is_error}). "
-                    f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",
+                    "Host noted TaskComplete from agent",
+                    agent_id=agent_id_to_update,
+                    role=message.role,
+                    error=message.is_error,
+                    pending_tasks=dict(self._pending_tasks_by_agent),
                 )
                 self._tasks_condition.notify_all()
             else:
                 logger.warning(
-                    f"Host received TaskComplete from agent {agent_id_to_update} but it was not in pending tasks.",
+                    "Host received TaskComplete from agent but it was not in pending tasks.",
+                    agent_id=agent_id_to_update,
                 )
 
     @message_handler
@@ -175,9 +182,11 @@ class HostAgent(Agent):
             self._total_tasks_in_step += 1
             self._pending_tasks_by_agent[agent_id_to_update] += 1
             logger.debug(
-                f"Host noted TaskStarted from agent {agent_id_to_update} for role '{message.role}'. "
-                f"Pending tasks: {dict(self._pending_tasks_by_agent)}. "
-                f"Total tasks in step: {self._total_tasks_in_step}.",
+                "Host noted TaskStarted from agent",
+                agent_id=agent_id_to_update,
+                role=message.role,
+                pending_tasks=dict(self._pending_tasks_by_agent),
+                total_tasks_in_step=self._total_tasks_in_step,
             )
 
     @message_handler
@@ -187,7 +196,7 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle FlowProgressUpdate messages."""
-        logger.debug(f"Host {self.agent_name} received FlowProgressUpdate message. Ignoring.")
+        logger.debug("Host received FlowProgressUpdate message. Ignoring.", agent_name=self.agent_name)
         # Do nothing with progress updates received by the host
 
     @message_handler
@@ -209,13 +218,13 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle UserResponseMessage for user confirmations and feedback."""
-        logger.info(f"Host {self.agent_name} received user input: {message}")
+        logger.info("Host received user input", agent_name=self.agent_name, message=message)
         self._user_confirmation = message
         self._user_confirmation_received.set()
 
         # Handle halt request - user wants to stop the entire flow
         if message.halt:
-            logger.info(f"Host {self.agent_name} received halt request from user - terminating flow")
+            logger.info("Host received halt request from user - terminating flow", agent_name=self.agent_name)
             # Send END message to signal flow termination
             end_step = StepRequest(role=END, content="Flow halted by user request")
             await self._publish(end_step)
@@ -223,7 +232,10 @@ class HostAgent(Agent):
 
         if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
             logger.info(
-                f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})",
+                "Host received user request to set human in the loop",
+                agent_name=self.agent_name,
+                new_value=message.human_in_loop,
+                old_value=self.human_in_loop,
             )
             self.human_in_loop = message.human_in_loop
 
@@ -258,7 +270,7 @@ class HostAgent(Agent):
             role = message.agent_config.role.upper()  # Normalize to uppercase
 
             if message.status == "leaving":
-                logger.warning(f"Host {self.agent_name} received notification to remove agent {agent_id}, but functionality is not implemented.")
+                logger.warning("Host received notification to remove agent, but functionality is not implemented.", agent_name=self.agent_name, agent_id=agent_id)
             else:
                 # Add or update agent in registry
                 self._agent_registry[agent_id] = message
@@ -276,8 +288,8 @@ class HostAgent(Agent):
                     else:
                         tool_names.append("unknown")
                 
-                logger.info(f"Host {self.agent_name} registered agent {agent_id} with tools: {tool_names}")
-                logger.debug(f"Tool-to-agent mapping: {dict(self._tool_to_agent_map)}")
+                logger.info("Host registered agent", agent_name=self.agent_name, agent_id=agent_id, tools=tool_names)
+                logger.debug("Tool-to-agent mapping", mapping=dict(self._tool_to_agent_map))
 
             # Invalidate cache
             self._registry_summary_cache = None
@@ -371,21 +383,21 @@ class HostAgent(Agent):
             bool: True if user confirmed, False if rejected or timed out
 
         """
-        logger.info(f"Host {self.agent_name}: _wait_for_user called for step {step.role}")
+        logger.info("Host waiting for user confirmation", agent_name=self.agent_name, step_role=step.role)
         max_tries = self._max_user_confirmation_time // 60
         for _ in range(max_tries):
-            logger.info(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
+            logger.info("Host waiting for user confirmation", agent_name=self.agent_name, step_role=step.role)
             try:
                 await self.request_user_confirmation(step)
                 await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
             except TimeoutError:
-                logger.info(f"{self.agent_name} hit timeout waiting for manager response after 60 seconds.")
+                logger.info("Host hit timeout waiting for manager response after 60 seconds.", agent_name=self.agent_name)
                 continue
 
             if self._user_confirmation and getattr(self._user_confirmation, "confirm", False):
-                logger.info(f"User confirmed step: {step.role}")
+                logger.info("User confirmed step", step_role=step.role)
                 return True
-            logger.info(f"User rejected step: {step.role}")
+            logger.info("User rejected step", step_role=step.role)
             return False
         msg = "User did not respond to confirm step in time. Ending flow."
         logger.error(msg)
@@ -418,16 +430,16 @@ class HostAgent(Agent):
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
         except Exception as e:
-            logger.exception(f"Error in progress reporting task: {e}")
+            logger.exception("Error in progress reporting task", error=e)
         finally:
-            logger.debug(f"Host {self.agent_name} progress reporting task terminated.")
+            logger.debug("Host progress reporting task terminated.", agent_name=self.agent_name)
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed, reporting progress periodically."""
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
-                    logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
+                    logger.info("Waiting for pending tasks to complete", pending_from=list(self._pending_tasks_by_agent.keys()))
 
                 # Calculate dynamic timeout based on number of tasks
                 # Base timeout + (120 seconds per task / 6 parallel capacity)
@@ -440,7 +452,7 @@ class HostAgent(Agent):
 
                 dynamic_timeout = max(120, min(calculated_timeout, 300))
 
-                logger.info(f"Using dynamic timeout of {dynamic_timeout:.0f}s for {total_pending_tasks} pending tasks")
+                logger.info("Using dynamic timeout", timeout=f"{dynamic_timeout:.0f}s", pending_tasks=total_pending_tasks)
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
@@ -467,7 +479,7 @@ class HostAgent(Agent):
             return False  # Indicate timeout occurred
         except Exception as e:
             # Catch other potential errors during wait
-            logger.exception(f"Unexpected error during task completion wait: {e}")
+            logger.exception("Unexpected error during task completion wait", error=e)
             self._step_starting.clear()  # Reset on error too
             return False  # Indicate failure due to error
 
@@ -504,12 +516,15 @@ class HostAgent(Agent):
         """
         try:
             logger.info(
-                f"Host {self.agent_name} starting flow execution with {len(self._participants)} participants: {list(self._participants.keys())}",
+                "Host starting flow execution",
+                agent_name=self.agent_name,
+                num_participants=len(self._participants),
+                participants=list(self._participants.keys()),
             )
 
             if not self._participants:
                 msg = "Host received ConductorRequest with no participants."
-                logger.error(f"{msg} Aborting.")
+                logger.error(msg, aborting=True)
                 # Send an END message with the error
                 await self._publish(StepRequest(role=END, content=msg))
                 raise FatalError(msg)
@@ -537,18 +552,22 @@ class HostAgent(Agent):
 
             # Initialize generator now that participants are known
             self._step_generator = self._sequence()
-            logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
+            logger.info("Host participants initialized", participants=list(self._participants.keys()))
 
             async for next_step in self._step_generator:
-                logger.info(f"Host {self.agent_name}: Processing step {next_step.role}")
+                logger.info("Host processing step", agent_name=self.agent_name, step_role=next_step.role)
 
                 # Don't seek confirmation from the manager to send a request to the manager
                 logger.debug(
-                    f"Host {self.agent_name}: human_in_loop={self.human_in_loop}, next_step.role={next_step.role}, MANAGER={MANAGER}"
+                    "Host checking human_in_loop",
+                    agent_name=self.agent_name,
+                    human_in_loop=self.human_in_loop,
+                    next_step_role=next_step.role,
+                    manager_role=MANAGER,
                 )
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
-                    logger.info(f"Host {self.agent_name}: User rejected step or timed out, stopping flow")
+                    logger.info("User rejected step or timed out, stopping flow", agent_name=self.agent_name)
                     break
 
                 # Execute the current step
@@ -561,7 +580,7 @@ class HostAgent(Agent):
                         break
 
             # --- Sequence finished ---
-            logger.info(f"Host {self.agent_name} flow execution finished.")
+            logger.info("Host flow execution finished.", agent_name=self.agent_name)
 
             # Send final progress update before any cleanup begins
             final_progress_message = FlowProgressUpdate(
@@ -571,13 +590,13 @@ class HostAgent(Agent):
                 waiting_on={},
                 message="Flow completed",
             )
-            logger.info(f"Host {self.agent_name} sending final progress update before cleanup.")
+            logger.info("Host sending final progress update before cleanup.", agent_name=self.agent_name)
             await self._publish(final_progress_message)
 
         except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
         except (FatalError, Exception) as e:
-            logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
+            logger.exception("Unexpected and unhandled fatal error", error=e)
         finally:
             # Cancel the progress reporter task
             if self._progress_reporter_task:
@@ -606,7 +625,7 @@ class HostAgent(Agent):
                     await self._progress_reporter_task  # Await cancellation
                 except asyncio.CancelledError:
                     pass  # Expected
-        logger.info(f"Host {self.agent_name} shutdown complete.")
+        logger.info("Host shutdown complete.", agent_name=self.agent_name)
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""
@@ -621,7 +640,10 @@ class HostAgent(Agent):
                 for agent_id, pending_count in timed_out_agents.items():
                     self._failed_tasks_by_agent[agent_id] += pending_count
                     logger.warning(
-                        f"Host {self.agent_id} marking {pending_count} timed-out tasks from agent {agent_id} as failed."
+                        "Host marking timed-out tasks as failed",
+                        agent_id=self.agent_id,
+                        timed_out_agent_id=agent_id,
+                        pending_count=pending_count,
                     )
                 # Clear the pending tasks since we're treating them as completed (with errors)
                 self._pending_tasks_by_agent.clear()
@@ -629,24 +651,27 @@ class HostAgent(Agent):
         # Check if too many tasks failed (including timeouts)
         total_failed = sum(self._failed_tasks_by_agent.values())
         if self._total_tasks_in_step == 0:
-            logger.warning(f"Host {self.agent_id} encountered no tasks in the current step.")
+            logger.warning("Host encountered no tasks in the current step.", agent_id=self.agent_id)
             error_ratio = 0  # No tasks started, error ratio is undefined or treated as 0
         else:
             error_ratio = total_failed / self._total_tasks_in_step
 
         if error_ratio > self._error_threshold:
             msg = (
-                f"Host {self.agent_id} stopping flow: {total_failed}/{self._total_tasks_in_step} tasks failed "
+                f"Host stopping flow: {total_failed}/{self._total_tasks_in_step} tasks failed "
                 f"({error_ratio:.1%} > {self._error_threshold:.1%} threshold). "
                 f"Failed tasks by agent: {dict(self._failed_tasks_by_agent)}"
             )
-            logger.error(msg)
+            logger.error(msg, agent_id=self.agent_id)
             return False
 
         if total_failed > 0:
             logger.warning(
-                f"Host {self.agent_id} proceeding despite {total_failed}/{self._total_tasks_in_step} failed tasks "
-                f"({error_ratio:.1%} ≤ {self._error_threshold:.1%} threshold)",
+                "Host proceeding despite failed tasks",
+                agent_id=self.agent_id,
+                failed_tasks=f"{total_failed}/{self._total_tasks_in_step}",
+                error_ratio=f"{error_ratio:.1%}",
+                threshold=f"{self._error_threshold:.1%}",
             )
 
         # Clear error tracking for the next step
@@ -659,20 +684,20 @@ class HostAgent(Agent):
 
     async def _execute_step(self, step: StepRequest) -> None:
         """Process a single step."""
-        logger.info(f"Host executing step: {step}")
+        logger.info("Host executing step", step=step)
         self._current_step = step.role
         if step.role == WAIT:
             logger.info("Host waiting for 10 seconds as requested by WAIT step.")
             await asyncio.sleep(10)
         elif step.role == END:
-            logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
+            logger.info("Flow completed and all tasks finished. Sending END signal", step=step)
             await self._publish(step)
         else:
             if step.role in self._participants:
                 # Signal that we expect at least one response/task start for this step
                 # This event is used in the wait_for predicate.
                 self._step_starting.set()
-                logger.debug(f"Host set _step_starting event for role: {step.role}")
+                logger.debug("Host set _step_starting event", role=step.role)
 
                 # Send a FlowEvent to the main topic to notify UI about the step starting
                 flow_event = FlowEvent(
@@ -691,7 +716,7 @@ class HostAgent(Agent):
                 await self._publish(ui_message)
                 return  # Don't send the StepRequest itself
             else:
-                logger.warning(f"Host executing step for unknown participant role: {step.role}")
+                logger.warning("Host executing step for unknown participant role", role=step.role)
 
             # Route StepRequest to role-specific topic
             role_topic = DefaultTopicId(type=step.role)
@@ -725,13 +750,13 @@ class HostAgent(Agent):
             # Look up the agent that owns this tool
             agent_id = self._tool_to_agent_map.get(call.name)
             if not agent_id:
-                logger.error(f"No agent found for tool '{call.name}'. Available tools: {list(self._tool_to_agent_map.keys())}")
+                logger.error("No agent found for tool", tool_name=call.name, available_tools=list(self._tool_to_agent_map.keys()))
                 continue
                 
             # Get the agent's role from the registry
             agent_announcement = self._agent_registry.get(agent_id)
             if not agent_announcement:
-                logger.error(f"Agent {agent_id} not found in registry for tool '{call.name}'")
+                logger.error("Agent not found in registry for tool", agent_id=agent_id, tool_name=call.name)
                 continue
                 
             role = agent_announcement.agent_config.role.upper()
@@ -743,20 +768,20 @@ class HostAgent(Agent):
                     # If inputs are present, use them directly
                     arguments = arguments["inputs"]
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse tool arguments: {call.arguments}")
+                logger.error("Failed to parse tool arguments", arguments=call.arguments)
                 continue
 
             step_request = StepRequest(role=role, inputs=arguments, metadata={"tool_name": call.name, "tool_call_id": call.id})
 
             # Create a more descriptive log message
             tool_desc = self._describe_tool_call(call.name, arguments)
-            logger.info(f"Host routing tool '{call.name}' to agent {agent_id} (role: {role}): {tool_desc}")
+            logger.info("Host routing tool to agent", tool_name=call.name, agent_id=agent_id, role=role, tool_description=tool_desc)
 
             if self.human_in_loop:
                 await self._proposed_step.put(step_request)
             else:
                 # If human_in_loop is False, we send the step request directly
-                logger.info(f"Host {self.agent_name} routing tool call to agent {agent_id}: {step_request}")
+                logger.info("Host routing tool call to agent", agent_name=self.agent_name, agent_id=agent_id, step_request=step_request)
                 # Route to role-specific topic
                 role_topic = DefaultTopicId(type=role)
                 await self._publish(step_request, topic_id=role_topic)

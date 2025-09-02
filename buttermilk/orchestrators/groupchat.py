@@ -176,7 +176,7 @@ class AutogenOrchestrator(Orchestrator):
         await self._runtime.publish_message(flow_event, topic_id=topic)
 
         # Start up the host agent with participants and their tools
-        logger.highlight(
+        logger.info(
             f"Sending ConductorRequest to topic '{self._topic}' with {len(self.agents)} agents: {list(self.agents.keys())} and {len(self.observers)} observers: {list(self.observers.keys())}",
         )
         conductor_request = ConductorRequest(

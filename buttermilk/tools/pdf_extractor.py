@@ -30,11 +30,9 @@ class PdfTextExtractor(BaseModel):
         try:
             with metadata_file.open("w", encoding="utf-8") as f:
                 json.dump(item.model_dump(), f, ensure_ascii=False, indent=4)
-            logger.debug(f"Saved item record to {metadata_file}")
+            logger.debug("Saved item record", file=metadata_file)
         except Exception as json_e:
-            logger.error(
-                f"Failed to save item JSON for {item.record_id} to {metadata_file}: {json_e} {json_e.args=}",
-            )
+            logger.error("Failed to save item JSON", record_id=item.record_id, file=metadata_file, error=json_e, error_args=json_e.args)
         return item
 
     @staticmethod
@@ -60,18 +58,18 @@ class PdfTextExtractor(BaseModel):
 
         """
         try:
-            logger.debug(f"Extracting text from PDF: {file_path}")
+            logger.debug("Extracting text from PDF", file_path=file_path)
             full_text = extract_text(file_path, laparams=self._laparams)
-            if _is_garbage_pdf_text(full_text):
+            if self._is_garbage_pdf_text(full_text):
                 logger.warning(
-                    f"Extracted text from {file_path} appears to be garbage. "
-                    "Consider using a different extraction method or preprocessing.",
+                    "Extracted text appears to be garbage",
+                    file_path=file_path,
                 )
                 return None
-            logger.debug(f"Successfully extracted text from {file_path} (length: {len(full_text)}).")
+            logger.debug("Successfully extracted text", file_path=file_path, length=len(full_text))
             return full_text
         except Exception as e:
             logger.error(
-                f"Error extracting text from PDF {file_path}: {e} {e.args=}",
+                "Error extracting text from PDF", file_path=file_path, error=e, error_args=e.args
             )
             return None

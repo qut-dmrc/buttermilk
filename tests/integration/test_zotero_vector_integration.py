@@ -319,7 +319,7 @@ class TestZoteroVectorIntegration:
                     # Verify overlap exists (except for first chunk)
                     assert len(chunk.chunk_text) > chunk_size - chunk_overlap
 
-            logger.info(f"Created {len(chunks)} chunks with size {chunk_size}")
+            logger.info("Created chunks", num_chunks=len(chunks), chunk_size=chunk_size)
 
     @pytest.mark.anyio
     async def test_batch_upsert(self, temp_dirs, mock_embeddings, mock_chromadb):
@@ -487,7 +487,7 @@ class TestZoteroVectorIntegration:
 
                 # Verify sync was called
                 assert mock_upload.called
-                logger.info(f"Upload called {mock_upload.call_count} times")
+                logger.info("Upload called", call_count=mock_upload.call_count)
 
 
 @pytest.mark.anyio
@@ -527,13 +527,13 @@ async def test_full_pipeline_integration():
             result = await vector_store.process_record(record)
             if result.status == "processed":
                 processed += 1
-                logger.info(f"Processed: {record.record_id} - {result.chunks_created} chunks")
+                logger.info("Processed record", record_id=record.record_id, chunks_created=result.chunks_created)
         
         # Finalize
         await vector_store.finalize_processing()
         
         assert processed > 0
-        logger.info(f"Successfully processed {processed} records")
+        logger.info("Successfully processed records", processed_count=processed)
         """
 
 

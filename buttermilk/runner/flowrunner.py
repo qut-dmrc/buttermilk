@@ -12,29 +12,7 @@ from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk.api.services.session_storage import SessionStorageService
-
-
-class SessionStatus(str, Enum):
-    """Session status enumeration for robust lifecycle management."""
-
-    INITIALIZING = "initializing"    # Session created, resources allocating
-    ACTIVE = "active"               # Ready for operations
-    PAUSED = "paused"              # Temporarily suspended (legacy)
-    RECONNECTING = "reconnecting"   # Client disconnected, awaiting reconnect
-    TERMINATING = "terminating"     # Cleanup in progress
-    COMPLETED = "completed"         # Successfully completed
-    TERMINATED = "terminated"       # Cleanup complete
-    EXPIRED = "expired"            # Session expired due to timeout
-    ERROR = "error"                # Failed state, needs manual cleanup
-    FAILED = "failed"              # Legacy failed state
-
-
-from buttermilk import (
-    AgentTrace,
-    logger,
-)
-from buttermilk._core.agent import ErrorEvent
+from buttermilk import AgentTrace, logger
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -48,7 +26,23 @@ from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.message_service import MessageService
+from buttermilk.api.services.session_storage import SessionStorageService
 from buttermilk.utils.utils import expand_dict
+
+
+class SessionStatus(str, Enum):
+    """Session status enumeration for robust lifecycle management."""
+
+    INITIALIZING = "initializing"  # Session created, resources allocating
+    ACTIVE = "active"  # Ready for operations
+    PAUSED = "paused"  # Temporarily suspended (legacy)
+    RECONNECTING = "reconnecting"  # Client disconnected, awaiting reconnect
+    TERMINATING = "terminating"  # Cleanup in progress
+    COMPLETED = "completed"  # Successfully completed
+    TERMINATED = "terminated"  # Cleanup complete
+    EXPIRED = "expired"  # Session expired due to timeout
+    ERROR = "error"  # Failed state, needs manual cleanup
+    FAILED = "failed"  # Legacy failed state
 
 
 class SessionResources(BaseModel):
@@ -1014,7 +1008,7 @@ class FlowRunner(BaseModel):
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
-        logger.highlight(
+        logger.info(
             f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id}) | "
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
             f"New flow instance created",
@@ -1124,7 +1118,7 @@ class FlowRunner(BaseModel):
                 )
                 job_definitions.append(job)
                 logger.debug(f"Created run request: {job.model_dump_json()}")
-
+                logger.info("Batch job created", job.model_dump())
                 # Apply max_records limit if specified
                 if max_records is not None and max_records > 0 and i >= max_records:
                     break

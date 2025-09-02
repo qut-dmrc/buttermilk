@@ -20,7 +20,7 @@ def read_all_files(uri, pattern, columns: dict[str, str]):
     # Read each file into a DataFrame and store in a list
     dataset = pd.DataFrame(columns=columns.keys())
     for file in filelist:
-        logger.debug(f"Reading {file.name} from {file.parent}...")
+        logger.debug("Reading file", file_name=file.name, file_parent=file.parent)
         content = file.read_bytes().decode("utf-8")
         dataset.loc[len(dataset)] = (file.stem, content)
     return dataset

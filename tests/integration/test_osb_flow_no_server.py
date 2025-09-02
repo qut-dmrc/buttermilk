@@ -29,7 +29,7 @@ async def test_osb_hate_speech_query():
         # The host typically asks for confirmation to proceed
         logger.info("Waiting for initial prompt...")
         prompt = await client.wait_for_prompt(timeout=60)
-        logger.info(f"Got prompt: {prompt}")
+        logger.info("Got prompt", prompt=prompt)
         
         # Confirm to proceed
         await client.send_manager_response("Yes, please proceed")
@@ -62,10 +62,10 @@ async def test_osb_hate_speech_query():
         assert len(all_messages) > 10, f"Too few messages: {len(all_messages)}"
         
         # Log summary
-        logger.info(f"Flow completed successfully with {len(all_messages)} messages")
-        logger.info(f"Agents involved: {client.collector.get_agents_announced()}")
-        logger.info(f"UI messages: {len(client.collector.ui_messages)}")
-        logger.info(f"Agent traces: {len(client.collector.agent_traces)}")
+        logger.info("Flow completed successfully", num_messages=len(all_messages))
+        logger.info("Agents involved", agents=client.collector.get_agents_announced())
+        logger.info("UI messages", num_ui_messages=len(client.collector.ui_messages))
+        logger.info("Agent traces", num_agent_traces=len(client.collector.agent_traces))
 
 
 @pytest.mark.integration
@@ -81,9 +81,9 @@ async def test_osb_simple_connection():
         await asyncio.sleep(5)
         
         # Check if we received any messages
-        logger.info(f"Total messages received: {len(client.collector.all_messages)}")
+        logger.info("Total messages received", num_messages=len(client.collector.all_messages))
         for msg in client.collector.all_messages:
-            logger.info(f"Message type: {msg.type}, content: {msg.content[:100] if msg.content else 'N/A'}")
+            logger.info("Message received", message_type=msg.type, content=msg.content[:100] if msg.content else 'N/A')
         
         assert len(client.collector.all_messages) > 0, "Should have received some messages"
 

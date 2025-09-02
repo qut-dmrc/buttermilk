@@ -52,7 +52,7 @@ def init() -> Any:
         bm: BM = hydra.utils.instantiate(cfg.bm)
         set_bm(bm)
 
-        logger.info(f"Initialized Buttermilk with run info: {bm.run_info}")
+        logger.info("Initialized Buttermilk", run_info=bm.run_info)
 
         return cfg
 
@@ -83,7 +83,7 @@ async def run_flow(cfg):
     dbr_input = AgentInput(inputs={"record": record})
     features = dbr.invoke(message=dbr_input)
 
-    logger.info(f"Extracted features: {features}")
+    logger.info("Extracted features", features=features)
 
 
 if __name__ == "__main__":

@@ -196,7 +196,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Called when the runtime is closed"""
         await self.cleanup()
 
-
     def _get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
 
@@ -259,14 +258,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         message: Any,
         topic_id: TopicId | None = None,
         *,
-        highlight: bool = False,
         cancellation_token: CancellationToken | None = None,
     ) -> None:
         """Publish a message to the group chat or a specific topic.
 
         Args:
             message: The message to publish.
-            highlight: Whether to highlight the message in logs.
             topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
             cancellation_token: Optional cancellation token to cancel the operation.
 
@@ -288,17 +285,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         else:
             # send and trace
             await self._send_chat(message, topic_id=target_topic)
-            logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
-            )
-
-        if not highlight and isinstance(message, (AgentTrace, AgentOutput)):
-            highlight = True  # Highlight traces and outputs by default
-        if highlight:
-            logger.highlight(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
-            )
-        else:
             logger.debug(
                 f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
             )
@@ -572,11 +558,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             source=self.agent_id,
         )
 
-        await self._publish(
-            announcement,
-            topic_id=self._topic_id,
-            highlight=True,
-        )
+        await self._publish(announcement, topic_id=self._topic_id)
 
         # Mark as announced
         self._announced = True

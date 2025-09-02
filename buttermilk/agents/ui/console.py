@@ -232,7 +232,7 @@ class CLIUserAgent(UIAgent):
                    They interact via callbacks or listening methods.
 
         """
-        logger.debug(f"{self.agent_name}: Received direct input request via _process.")
+        logger.debug("Received direct input request via _process.", agent_name=self.agent_name)
         # Format and display the incoming message.
         if formatted_msg := self._fmt_msg(message, source="controller"):  # Use := walrus operator
             self._console.print(formatted_msg)
@@ -540,7 +540,7 @@ class CLIUserAgent(UIAgent):
             return result
 
         except Exception as e:
-            logger.error(f"Error formatting message type {type(message)} from {source}: {e}")
+            logger.error("Error formatting message", message_type=type(message), source=source, error=e)
             # Fallback IRC-style error message
             error_text = Text()
             error_text.append(f"[{format_timestamp()}] ", style="dim")
@@ -594,7 +594,7 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band messages, displaying relevant ones."""
-        logger.debug(f"{self.agent_name} received OOB message from {source}: {type(message).__name__}")
+        logger.debug("Received OOB message", agent_name=self.agent_name, source=source, message_type=type(message).__name__)
         # Check if the specific OOB message type is one we want to display.
         # Skip TaskProcessingStarted and successful TaskProcessingComplete messages to reduce noise
         if isinstance(message, TaskProcessingStarted):
@@ -618,14 +618,14 @@ class CLIUserAgent(UIAgent):
                 self._console.print(formatted_msg)
         else:
             # Log other OOB types at debug level if not explicitly formatted.
-            logger.debug(f"ConsoleAgent ignoring unformatted OOB message type: {type(message).__name__}")
+            logger.debug("ConsoleAgent ignoring unformatted OOB message type", message_type=type(message).__name__)
 
         # OOB handlers typically don't return responses unless specifically requested.
         return None
 
     async def _poll_input(self) -> None:
         """Continuously polls for user input from the console in a background task."""
-        logger.info(f"{self.agent_name}: Starting console input polling...")
+        logger.info("Starting console input polling...", agent_name=self.agent_name)
         current_prompt_lines: list[str] = []
         while True:
             try:
@@ -687,7 +687,7 @@ class CLIUserAgent(UIAgent):
 
                 if selected_option:
                     # User selected a specific option
-                    logger.info(f"User selected option: {selected_option}")
+                    logger.info("User selected option", selected_option=selected_option)
                     is_confirm = selected_option.lower() in ["confirm", "yes", "y", "accept", "ok"]
                     response = UserResponseMessage(
                         confirm=is_confirm,
@@ -719,7 +719,7 @@ class CLIUserAgent(UIAgent):
                     await self.callback_to_groupchat(response)
                 else:
                     # Non-empty, non-negation input: add to multi-line buffer
-                    logger.debug(f"User input added to buffer: '{user_input}'")
+                    logger.debug("User input added to buffer", user_input=user_input)
                     current_prompt_lines.append(user_input)
                     # Don't send response yet, wait for empty line to confirm multi-line input
                     continue  # Go back to prompt for more input
@@ -731,7 +731,7 @@ class CLIUserAgent(UIAgent):
                 await asyncio.sleep(0.1)  # Small sleep to prevent tight loop if needed
 
             except asyncio.CancelledError:
-                logger.info(f"{self.agent_name}: Input polling task cancelled.")
+                logger.info("Input polling task cancelled.", agent_name=self.agent_name)
                 break  # Exit loop cleanly on cancellation
             except RuntimeError as e:
                 # Happens sometimes if multiple consoles are called in parallel. Best to
@@ -739,7 +739,7 @@ class CLIUserAgent(UIAgent):
                 raise FatalError(f"Runtime error in CLIUserAgent: {e}")
             except Exception as e:
                 # Log errors during input polling but try to continue
-                logger.error(f"{self.agent_name}: Error polling console input: {e}")
+                logger.error("Error polling console input", agent_name=self.agent_name, error=e)
                 # Consider adding a delay before retrying after an error
                 await asyncio.sleep(1)
                 # Re-raise if it's KeyboardInterrupt to allow stopping the application
@@ -759,7 +759,7 @@ class CLIUserAgent(UIAgent):
         await super().initialize(ui_type="console", callback_to_groupchat=callback_to_groupchat, **kwargs)
 
         # Initialize the console and set up the input task.
-        logger.debug(f"Initializing {self.agent_name}...")
+        logger.debug("Initializing", agent_name=self.agent_name)
         self.callback_to_groupchat = callback_to_groupchat
         self._last_confirmation_options = None  # Clear any stored options on init
         # Ensure any existing task is cancelled before starting a new one (e.g., on reset)
@@ -784,43 +784,43 @@ class CLIUserAgent(UIAgent):
 
             # Start the background task to poll for console input.
             self._input_task = asyncio.create_task(self._poll_input())
-            logger.debug(f"{self.agent_name}: Input polling task created.")
+            logger.debug("Input polling task created.", agent_name=self.agent_name)
         else:
             # If no callback, input polling is disabled.
-            logger.warning(f"{self.agent_name}: Initialized without callback_to_groupchat. Console input polling disabled.")
+            logger.warning("Initialized without callback_to_groupchat. Console input polling disabled.", agent_name=self.agent_name)
             self._input_task = None
 
     async def cleanup(self) -> None:
         """Cleans up resources, primarily by cancelling the input polling task."""
-        logger.debug(f"Cleaning up {self.agent_name}...")
+        logger.debug("Cleaning up", agent_name=self.agent_name)
         if self._input_task and not self._input_task.done():
             self._input_task.cancel()
             try:
                 # Wait for the task to acknowledge cancellation
                 await self._input_task
             except asyncio.CancelledError:
-                logger.info(f"{self.agent_name}: Console input task successfully cancelled.")
+                logger.info("Console input task successfully cancelled.", agent_name=self.agent_name)
             except Exception as e:
                 # Log if waiting for cancellation fails unexpectedly
-                logger.error(f"{self.agent_name}: Error during input task cleanup: {e}")
+                logger.error("Error during input task cleanup", agent_name=self.agent_name, error=e)
         else:
-            logger.debug(f"{self.agent_name}: No active input task to cancel.")
+            logger.debug("No active input task to cancel.", agent_name=self.agent_name)
         # Call base class cleanup if needed
         # await super().cleanup()
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
             """Resets the agent state, including cancelling the input task."""
-            logger.info(f"{self.agent_name}: Resetting agent state...")
+            logger.info("Resetting agent state...", agent_name=self.agent_name)
             # Cancel the existing input task if it's running
             if self._input_task and not self._input_task.done():
                 self._input_task.cancel()
                 try:
                     await self._input_task
                 except asyncio.CancelledError:
-                    logger.debug(f"{self.agent_name}: Input task cancelled during reset.")
+                    logger.debug("Input task cancelled during reset.", agent_name=self.agent_name)
                 except Exception as e:
-                    logger.error(f"{self.agent_name}: Error cancelling input task during reset: {e}")
+                    logger.error("Error cancelling input task during reset", agent_name=self.agent_name, error=e)
             self._input_task = None  # Ensure the task reference is cleared
             # Note: The input task will be restarted by `initialize` if called again after reset.
             # Call base class reset if needed

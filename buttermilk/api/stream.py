@@ -35,7 +35,8 @@ async def flow_stream(
             agent_name = getattr(getattr(result, "agent_info", None), "name", "unknown")
             if not getattr(result, "outputs", None):
                  logger.info(
-                    f"No data to return from flow step {agent_name} (completed successfully).",
+                    "No data to return from flow step (completed successfully).",
+                    agent_name=agent_name,
                 )
                 # raise StopAsyncIteration
 
@@ -47,5 +48,5 @@ async def flow_stream(
 
     # Assuming flow object has a source attribute
     flow_source = getattr(flow, "source", "unknown")
-    logger.info(f"Finished flow {flow_source}.")  # Access source from flow object
+    logger.info("Finished flow", flow_source=flow_source)
     return

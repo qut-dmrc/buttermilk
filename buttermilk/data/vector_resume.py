@@ -72,7 +72,7 @@ async def import_parquet_files_to_chroma(
                     df = table.to_pandas()
 
                     if len(df) == 0:
-                        logger.warning(f"Empty dataframe in {file_path}, skipping")
+                        logger.warning("Empty dataframe in file, skipping", file_path=file_path)
                         continue
 
                     # Create InputDocument
@@ -113,7 +113,7 @@ async def import_parquet_files_to_chroma(
                         total_chunks += len(doc.chunks)
 
                 except Exception as e:
-                    logger.error(f"Error processing {file_path}: {e}")
+                    logger.error("Error processing file", file_path=file_path, error=e)
 
         # Only proceed if we have documents to upsert
         if not loaded_docs:
