@@ -524,3 +524,100 @@ selectedDataset.subscribe((datasetValue) => {
 
 // Derived store for flow selection status
 export const hasSelectedFlow = derived(selectedFlow, ($selectedFlow) => $selectedFlow !== '');
+
+// --- Admin Configuration Management ---
+
+// Interface for reload response
+interface ConfigReloadResponse {
+	success: boolean;
+	flows_loaded: string[];
+	flows_updated: string[];
+	flows_removed: string[];
+	errors: string[];
+	timestamp: string;
+	config_source: string;
+}
+
+// Interface for config status response
+interface ConfigStatusResponse {
+	flows_loaded: string[];
+	flow_count: number;
+	config_directory: string;
+	config_exists: boolean;
+	is_gcs_mounted: boolean;
+	mount_info: string;
+	config_timestamps: Record<string, number>;
+	gcs_bucket_env: string;
+	timestamp: string;
+	error?: string;
+}
+
+// Store for configuration reload status
+export const configReloadStore = writable<{
+	loading: boolean;
+	lastResult: ConfigReloadResponse | null;
+	error: string | null;
+}>({
+	loading: false,
+	lastResult: null,
+	error: null
+});
+
+// Store for configuration status
+export const configStatusStore = createApiStore<ConfigStatusResponse, ConfigStatusResponse>(
+	'/api/admin/config-status',
+	null
+);
+
+// Function to reload configuration
+export async function reloadConfiguration(): Promise<ConfigReloadResponse | null> {
+	configReloadStore.update(state => ({ ...state, loading: true, error: null }));
+	
+	try {
+		const response = await fetch('/api/admin/reload-config', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			}
+		});
+		
+		const result: ConfigReloadResponse = await response.json();
+		
+		configReloadStore.update(state => ({
+			...state,
+			loading: false,
+			lastResult: result,
+			error: result.success ? null : result.errors.join(', ')
+		}));
+		
+		// If reload was successful, refresh flow choices and other data
+		if (result.success) {
+			console.log('Configuration reload successful, refreshing data...');
+			initialFlowConfigStore.reset();
+			await initialFlowConfigStore.fetch();
+			
+			// If there's a currently selected flow and it was updated, refresh its info
+			const currentFlow = get(selectedFlow);
+			if (currentFlow && result.flows_updated.includes(currentFlow)) {
+				console.log(`Refreshing info for updated flow: ${currentFlow}`);
+				await refetchFlowInfo();
+			}
+		}
+		
+		return result;
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+		configReloadStore.update(state => ({
+			...state,
+			loading: false,
+			error: errorMessage
+		}));
+		console.error('Configuration reload failed:', error);
+		return null;
+	}
+}
+
+// Function to get configuration status
+export async function getConfigurationStatus(): Promise<ConfigStatusResponse | null> {
+	return configStatusStore.fetch();
+}

@@ -18,10 +18,12 @@ ENV PYTHONUNBUFFERED=1 \
 RUN ln -sf /usr/share/zoneinfo/Australia/Brisbane /etc/localtime && \
     echo "Australia/Brisbane" | tee /etc/timezone
 
-# Base runtime deps only  
+# Base runtime deps including gcsfuse for GCS mounting
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      curl less wget gnupg apt-transport-https ca-certificates ssh git \
-    && rm -rf /var/lib/apt/lists/*
+      curl less wget gnupg apt-transport-https ca-certificates ssh git lsb-release \
+    && echo "deb https://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" | tee /etc/apt/sources.list.d/gcsfuse.list \
+    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
+    && apt-get update && apt-get install -y gcsfuse 
 
 ##### INSTALL NODE.JS AND NPM #######
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
@@ -87,4 +89,8 @@ RUN rm -rf /wheels
 # Prepend venv to PATH
 ENV PATH="$VENV_PATH/bin:$PATH"
 
-CMD ["bash", "-c", "echo 'container ready; sleeping...'; sleep infinity"]
+# Copy the startup script
+COPY ./deploy/startup.sh /usr/local/bin/startup.sh
+RUN chmod +x /usr/local/bin/startup.sh
+
+CMD ["/usr/local/bin/startup.sh"]

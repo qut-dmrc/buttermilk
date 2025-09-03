@@ -60,7 +60,7 @@ SELECT
   SUBSTR(PREDICTIONS.judge_hash, 8, 8) as judge_hash, -- remove 'SHA256:' prefix and return first eight digits of hash (4 billion unique ids)
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.full_prediction_summary, -- Use the pre-calculated summary
+  PREDICTIONS.full_prediction_summary,
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
@@ -102,7 +102,7 @@ GROUP BY
   PREDICTIONS.judge_hash,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.full_prediction_summary, -- Group by the pre-calculated summary
+  PREDICTIONS.full_prediction_summary, 
   PREDICTIONS.violating,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,

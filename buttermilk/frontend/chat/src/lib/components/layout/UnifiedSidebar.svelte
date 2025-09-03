@@ -13,7 +13,11 @@
   	selectedCriteria,
   	selectedDataset,
   	selectedFlow,
-  	selectedRecord
+  	selectedRecord,
+  	configReloadStore,
+  	configStatusStore,
+  	reloadConfiguration,
+  	getConfigurationStatus
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
   import { onMount } from 'svelte';
@@ -197,6 +201,36 @@
       alert('Failed to find matching session');
     }
   }
+
+  // Admin panel functionality
+  let showAdmin = false;
+  
+  async function handleConfigReload() {
+    try {
+      const result = await reloadConfiguration();
+      if (result?.success) {
+        alert(`Configuration reloaded successfully!\n${result.flows_loaded.length} flows loaded.`);
+      } else {
+        alert(`Configuration reload failed:\n${result?.errors.join('\n') || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Config reload error:', error);
+      alert('Failed to reload configuration');
+    }
+  }
+
+  async function handleStatusCheck() {
+    try {
+      await getConfigurationStatus();
+    } catch (error) {
+      console.error('Status check error:', error);
+    }
+  }
+
+  // Auto-refresh status on admin panel open
+  $: if (showAdmin && !$configStatusStore.data) {
+    handleStatusCheck();
+  }
 </script>
 
 {#if isTerminalPage}
@@ -314,6 +348,101 @@
 				{/if}
 			</div>
 		{/if}
+
+		<!-- Admin Panel Section -->
+		<div class="admin-panel">
+			<h4 class="terminal-title">
+				<button 
+					class="admin-toggle btn" 
+					onclick={() => showAdmin = !showAdmin}
+				>
+					ADMIN {showAdmin ? '▼' : '▶'}
+				</button>
+			</h4>
+
+			{#if showAdmin}
+				<div class="admin-content">
+					<!-- Configuration Status -->
+					<div class="admin-section">
+						<h5 class="admin-section-title">Configuration Status</h5>
+						
+						{#if $configStatusStore.loading}
+							<div class="terminal-loading">Loading status...</div>
+						{:else if $configStatusStore.error}
+							<div class="terminal-error">Error: {$configStatusStore.error}</div>
+						{:else if $configStatusStore.data}
+							<div class="status-info">
+								<div class="status-item">
+									<strong>Flows:</strong> {$configStatusStore.data.flow_count}
+								</div>
+								<div class="status-item">
+									<strong>GCS Mount:</strong> 
+									<span class:gcs-mounted={$configStatusStore.data.is_gcs_mounted} 
+									      class:gcs-local={!$configStatusStore.data.is_gcs_mounted}>
+										{$configStatusStore.data.is_gcs_mounted ? 'YES' : 'NO'}
+									</span>
+								</div>
+								<div class="status-item">
+									<strong>Config Dir:</strong> 
+									<small>{$configStatusStore.data.config_directory}</small>
+								</div>
+								{#if $configStatusStore.data.gcs_bucket_env !== 'not_set'}
+									<div class="status-item">
+										<strong>GCS Bucket:</strong> 
+										<small>{$configStatusStore.data.gcs_bucket_env}</small>
+									</div>
+								{/if}
+							</div>
+						{/if}
+						
+						<button 
+							class="btn admin-button" 
+							onclick={handleStatusCheck}
+							disabled={$configStatusStore.loading}
+						>
+							REFRESH STATUS
+						</button>
+					</div>
+
+					<!-- Configuration Reload -->
+					<div class="admin-section">
+						<h5 class="admin-section-title">Configuration Reload</h5>
+						
+						{#if $configReloadStore.loading}
+							<div class="terminal-loading">Reloading configuration...</div>
+						{:else if $configReloadStore.error}
+							<div class="terminal-error">Error: {$configReloadStore.error}</div>
+						{:else if $configReloadStore.lastResult}
+							<div class="reload-result">
+								<div class="status-item">
+									<strong>Last Reload:</strong> 
+									<span class:reload-success={$configReloadStore.lastResult.success}
+									      class:reload-failure={!$configReloadStore.lastResult.success}>
+										{$configReloadStore.lastResult.success ? 'SUCCESS' : 'FAILED'}
+									</span>
+								</div>
+								{#if $configReloadStore.lastResult.success}
+									<div class="status-item">
+										<strong>Flows Loaded:</strong> {$configReloadStore.lastResult.flows_loaded.length}
+									</div>
+									<div class="status-item">
+										<strong>Updated:</strong> {$configReloadStore.lastResult.flows_updated.length}
+									</div>
+								{/if}
+							</div>
+						{/if}
+						
+						<button 
+							class="btn admin-button reload-button" 
+							onclick={handleConfigReload}
+							disabled={$configReloadStore.loading}
+						>
+							{$configReloadStore.loading ? 'RELOADING...' : 'RELOAD CONFIG'}
+						</button>
+					</div>
+				</div>
+			{/if}
+		</div>
 	</div>
 {:else if isScorePage}
 	<!-- Score Page Sidebar -->
@@ -666,5 +795,122 @@
 	/* Ensure both buttons are properly spaced */
 	.run-button-container .btn + .btn {
 		margin-top: 0.5rem;
+	}
+
+	/* Admin Panel Styles */
+	.admin-panel {
+		margin-top: 1.5rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.2);
+		padding-top: 1rem;
+	}
+
+	.admin-toggle {
+		background: transparent;
+		color: #00ffff;
+		border: none;
+		padding: 0;
+		font-weight: bold;
+		width: 100%;
+		text-align: left;
+		cursor: pointer;
+		transition: color 0.2s;
+	}
+
+	.admin-toggle:hover {
+		color: #ffffff;
+	}
+
+	.admin-content {
+		margin-top: 1rem;
+	}
+
+	.admin-section {
+		margin-bottom: 1.5rem;
+		padding: 0.75rem;
+		background-color: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 4px;
+	}
+
+	.admin-section-title {
+		color: #ffaa00;
+		font-size: 0.9rem;
+		font-weight: bold;
+		margin-bottom: 0.75rem;
+		text-transform: uppercase;
+	}
+
+	.status-info, .reload-result {
+		margin-bottom: 0.75rem;
+	}
+
+	.status-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.5rem;
+		font-size: 0.85rem;
+	}
+
+	.status-item strong {
+		color: #ccc;
+		min-width: 80px;
+	}
+
+	.status-item small {
+		color: #888;
+		font-size: 0.75rem;
+		word-break: break-all;
+	}
+
+	.gcs-mounted {
+		color: #00ff00;
+		font-weight: bold;
+	}
+
+	.gcs-local {
+		color: #ffaa00;
+		font-weight: bold;
+	}
+
+	.reload-success {
+		color: #00ff00;
+		font-weight: bold;
+	}
+
+	.reload-failure {
+		color: #ff4444;
+		font-weight: bold;
+	}
+
+	.admin-button {
+		background-color: #007acc;
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		font-size: 0.8rem;
+		font-weight: bold;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 0.2s;
+		width: 100%;
+	}
+
+	.admin-button:hover {
+		background-color: #005a99;
+	}
+
+	.admin-button:disabled {
+		background-color: #333;
+		color: #666;
+		cursor: not-allowed;
+	}
+
+	.reload-button {
+		background-color: #ff6600;
+	}
+
+	.reload-button:hover {
+		background-color: #cc5200;
 	}
 </style>

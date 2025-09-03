@@ -892,6 +892,189 @@ class FlowRunner(BaseModel):
             await self.session_manager.stop()
             self._session_manager_started = False
 
+    async def reload_configurations(self) -> dict[str, Any]:
+        """Reload flow configurations from the mounted GCS config directory.
+        
+        This method re-reads the configuration files and updates the flows without
+        disrupting active sessions. It uses Hydra to reload configurations from
+        the current config directory (which may be GCS-mounted).
+        
+        Returns:
+            A dictionary containing reload status and details:
+            - success: Whether the reload was successful
+            - flows_loaded: List of flow names that were loaded
+            - flows_updated: List of flow names that were updated
+            - errors: List of any errors encountered
+            - timestamp: When the reload occurred
+        """
+        import hydra
+        from hydra import compose, initialize_config_dir
+        from omegaconf import OmegaConf
+        from pathlib import Path
+        from datetime import datetime, UTC
+        import traceback
+        
+        result = {
+            "success": False,
+            "flows_loaded": [],
+            "flows_updated": [],
+            "flows_removed": [],
+            "errors": [],
+            "timestamp": datetime.now(UTC).isoformat(),
+            "config_source": "unknown"
+        }
+        
+        try:
+            logger.info("Starting configuration reload...")
+            
+            # Store current flows for comparison
+            current_flows = set(self.flows.keys())
+            
+            # Get the current config directory
+            config_dir = Path("/src/buttermilk/buttermilk/conf").resolve()
+            result["config_source"] = str(config_dir)
+            
+            # Check if config directory exists and has required files
+            if not config_dir.exists():
+                raise ValueError(f"Configuration directory not found: {config_dir}")
+            
+            config_yaml = config_dir / "config.yaml"
+            if not config_yaml.exists():
+                raise ValueError(f"Main config file not found: {config_yaml}")
+            
+            logger.info(f"Reloading configuration from: {config_dir}")
+            
+            # Clear Hydra's global state to ensure fresh load
+            hydra.core.global_hydra.GlobalHydra.instance().clear()
+            
+            # Initialize Hydra with the config directory
+            with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
+                # Compose the configuration using the same pattern as CLI
+                conf = compose(config_name="config")
+                OmegaConf.resolve(conf)
+                
+                # Extract flows from the reloaded configuration
+                if hasattr(conf, "run") and hasattr(conf.run, "flows"):
+                    new_flows = conf.run.flows
+                    logger.info(f"Found {len(new_flows)} flows in reloaded config")
+                    
+                    # Update flows dictionary
+                    old_flows = self.flows.copy()
+                    self.flows = new_flows
+                    
+                    # Determine what changed
+                    new_flow_names = set(new_flows.keys())
+                    
+                    result["flows_loaded"] = list(new_flow_names)
+                    result["flows_updated"] = list(current_flows.intersection(new_flow_names))
+                    result["flows_removed"] = list(current_flows - new_flow_names)
+                    
+                    # Log the changes
+                    if result["flows_updated"]:
+                        logger.info(f"Updated flows: {result['flows_updated']}")
+                    if new_flow_names - current_flows:
+                        logger.info(f"New flows: {list(new_flow_names - current_flows)}")
+                    if result["flows_removed"]:
+                        logger.info(f"Removed flows: {result['flows_removed']}")
+                    
+                    result["success"] = True
+                    logger.info("Configuration reload completed successfully")
+                    
+                else:
+                    raise ValueError("No flows found in reloaded configuration")
+                    
+        except Exception as e:
+            error_msg = f"Configuration reload failed: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            result["errors"].append(error_msg)
+            result["errors"].append(traceback.format_exc())
+            
+            # Don't leave flows in broken state - keep old flows on error
+            if "old_flows" in locals():
+                self.flows = old_flows
+                logger.info("Restored previous flow configuration due to reload error")
+        
+        finally:
+            # Clean up Hydra state
+            try:
+                hydra.core.global_hydra.GlobalHydra.instance().clear()
+            except Exception as cleanup_error:
+                logger.warning(f"Error cleaning up Hydra state: {cleanup_error}")
+        
+        return result
+
+    def _save_config_snapshot(self, run_request: 'RunRequest') -> None:
+        """Save a snapshot of the current configuration for reproducibility.
+        
+        Saves the current flow configuration to the run directory to ensure
+        experiment reproducibility. This captures the exact configuration
+        used for each flow execution.
+        
+        Args:
+            run_request: The run request containing flow and session information
+        """
+        try:
+            import json
+            import os
+            from pathlib import Path
+            from datetime import datetime, UTC
+            from omegaconf import OmegaConf
+            
+            # Create run directory for config snapshots
+            if hasattr(run_request, 'session_id') and run_request.session_id:
+                session_dir = Path(f"/tmp/runs/{run_request.session_id}")
+            else:
+                session_dir = Path(f"/tmp/runs/default")
+                
+            config_snapshot_dir = session_dir / "config_snapshot"
+            config_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Get current timestamp
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            
+            # Save flow configuration
+            if run_request.flow in self.flows:
+                flow_config = self.flows[run_request.flow]
+                
+                # Convert OmegaConf to serializable dict
+                if hasattr(flow_config, '_content'):
+                    # OmegaConf object
+                    config_dict = OmegaConf.to_container(flow_config, resolve=True)
+                else:
+                    # Regular dict or other object
+                    config_dict = dict(flow_config) if hasattr(flow_config, '__dict__') else str(flow_config)
+                
+                # Save flow-specific config
+                flow_config_file = config_snapshot_dir / f"{run_request.flow}_{timestamp}.json"
+                with open(flow_config_file, 'w') as f:
+                    json.dump({
+                        'flow_name': run_request.flow,
+                        'timestamp': timestamp,
+                        'session_id': run_request.session_id,
+                        'job_id': getattr(run_request, 'job_id', None),
+                        'flow_config': config_dict,
+                        'run_parameters': getattr(run_request, 'parameters', {}),
+                        'run_inputs': getattr(run_request, 'inputs', {})
+                    }, f, indent=2, default=str)
+                
+                logger.debug(f"Saved config snapshot for flow '{run_request.flow}' to {flow_config_file}")
+                
+                # Also save a latest.json for easy access
+                latest_file = config_snapshot_dir / "latest.json"
+                with open(latest_file, 'w') as f:
+                    json.dump({
+                        'flow_name': run_request.flow,
+                        'timestamp': timestamp,
+                        'session_id': run_request.session_id,
+                        'config_file': str(flow_config_file),
+                        'flows_available': list(self.flows.keys()),
+                        'total_flows': len(self.flows)
+                    }, f, indent=2)
+                
+        except Exception as e:
+            # Don't fail the flow execution if config snapshot fails
+            logger.warning(f"Failed to save config snapshot for flow '{run_request.flow}': {e}")
+
     async def pull_and_run_task(self) -> None:
         """Pull tasks from the queue and run them."""
         # Initialize the queue_manager if needed
@@ -997,6 +1180,9 @@ class FlowRunner(BaseModel):
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
         _session.update_activity()  # Update activity timestamp
+
+        # Save configuration snapshot for reproducibility
+        self._save_config_snapshot(run_request)
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
