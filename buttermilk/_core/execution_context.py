@@ -1,0 +1,434 @@
+"""Execution Context for managing process-level infrastructure.
+
+This module provides the ExecutionContext class, which manages shared infrastructure
+across multiple sessions within the same process. This includes:
+- Cloud provider connections (GCS, BigQuery)
+- Secret management
+- Logging infrastructure
+- LLM connections
+- Process-level configuration
+
+The ExecutionContext replaces the global singleton pattern for infrastructure
+while allowing session-specific BM instances to be created.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import datetime
+import os
+import platform
+from pathlib import Path
+from typing import Any
+
+import psutil
+import shortuuid
+import weave
+from pydantic import BaseModel, Field, PrivateAttr
+
+from buttermilk._core.cloud import CloudManager
+from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing
+from buttermilk._core.keys import SecretsManager
+from buttermilk._core.llms import LLMs
+from buttermilk._core.log import logger, setup_cloud_logging, setup_console_logging, setup_file_logging
+from buttermilk._core.query import QueryRunner
+from buttermilk._core.storage_config import BaseStorageConfig
+from buttermilk.utils.utils import load_json_flexi
+
+# Constants for configuration keys
+CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
+_MODELS_CFG_KEY = "models_secret"
+_SHARED_CREDENTIALS_KEY = "credentials_secret"
+
+# Global variable to store the execution context ID
+_global_execution_context_id = ""
+
+
+def _make_execution_context_id() -> str:
+    """Generates a unique execution context ID for the current process.
+
+    The ID is constructed using the current UTC timestamp, a short UUID,
+    the machine's node name, and the current username. This represents
+    the infrastructure context that spans multiple sessions.
+
+    Returns:
+        str: A unique string identifier for this execution context.
+    """
+    global _global_execution_context_id
+    if _global_execution_context_id:
+        return _global_execution_context_id
+
+    node_name = platform.uname().node
+    username = psutil.Process().username()
+    username = str.split(username, "\\")[-1]  # Strip domain if present
+
+    # Format timestamp for use in filenames (simplified ISO 8601)
+    context_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
+
+    execution_context_id = f"exec-{context_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    _global_execution_context_id = execution_context_id
+    return execution_context_id
+
+
+class ExecutionContext(BaseModel):
+    """Process-level infrastructure context shared across sessions.
+
+    ExecutionContext manages the shared infrastructure that was previously
+    handled by the global BM singleton. This includes cloud connections,
+    secrets, LLMs, and logging setup. Multiple sessions can share the same
+    ExecutionContext while maintaining their own session-specific state.
+
+    Attributes:
+        execution_context_id (str): Unique identifier for this execution context.
+        clouds (list[CloudProviderCfg]): List of cloud provider configurations.
+        secret_provider (CloudProviderCfg | None): Secret provider configuration.
+        logger_cfg (LoggerConfig | None): Logging configuration.
+        pubsub (CloudProviderCfg | None): Pub/Sub configuration.
+        tracing (dict[str, Tracing] | None): Tracing configurations.
+        datasets (dict[str, BaseStorageConfig]): Shared dataset configurations.
+    """
+
+    execution_context_id: str = Field(
+        default_factory=_make_execution_context_id,
+        description="Unique identifier for this execution context."
+    )
+    
+    # Infrastructure configuration
+    clouds: list[CloudProviderCfg] = Field(
+        default_factory=list,
+        description="List of cloud provider configurations."
+    )
+    secret_provider: CloudProviderCfg | None = Field(
+        default=None,
+        description="Configuration for the secret provider."
+    )
+    logger_cfg: LoggerConfig | None = Field(
+        default=None,
+        description="Configuration for cloud-based logging."
+    )
+    pubsub: CloudProviderCfg | None = Field(
+        default=None,
+        description="Configuration for Pub/Sub system."
+    )
+    tracing: dict[str, Tracing] | None = Field(
+        default_factory=dict,
+        description="Configuration for tracing systems."
+    )
+    datasets: dict[str, BaseStorageConfig] = Field(
+        default_factory=dict,
+        description="Shared dataset configurations."
+    )
+
+    # Private attributes for lazy-loaded infrastructure
+    _cloud_manager: CloudManager | None = PrivateAttr(default=None)
+    _secret_manager: SecretsManager | None = PrivateAttr(default=None)
+    _llms_instance: LLMs | None = PrivateAttr(default=None)
+    _query_runner: QueryRunner | None = PrivateAttr(default=None)
+    _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
+    _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _initialization_error: Exception | None = PrivateAttr(default=None)
+    _tracing_instrumented: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize the ExecutionContext with infrastructure setup."""
+        super().__init__(**data)
+        self._initialization_error = None
+        self._post_init_setup()
+
+    def _post_init_setup(self) -> None:
+        """Perform setup tasks after model initialization."""
+        # Set up logging early
+        self._setup_logging()
+        
+        # Set GCP environment variables immediately  
+        self._setup_gcp_environment()
+        
+        # Run initialization synchronously
+        self._sync_background_init()
+        
+        logger.info(
+            "Initialized ExecutionContext",
+            execution_context_id=self.execution_context_id,
+            cloud_providers=len(self.clouds),
+            secret_provider=self.secret_provider.type if self.secret_provider else None
+        )
+
+    def _setup_logging(self) -> None:
+        """Set up modern logging for the execution context."""
+        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
+        setup_console_logging(verbose=verbose)
+
+        # Set up structured JSON file logging
+        log_files = setup_file_logging(run_id=self.execution_context_id, verbose=verbose)
+        for log_file in log_files:
+            logger.info(f"ExecutionContext logging enabled - writing to: {log_file}")
+
+        # Log initialization message
+        logger.info(
+            "ExecutionContext logging initialized",
+            execution_context_id=self.execution_context_id
+        )
+
+    def _setup_gcp_environment(self) -> None:
+        """Set up GCP environment variables for early access."""
+        if not self.clouds:
+            return
+
+        gcp_cloud_cfg = next(
+            (c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"),
+            None,
+        )
+
+        if gcp_cloud_cfg:
+            project_id = getattr(gcp_cloud_cfg, "project_id", None)
+            quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
+
+            if project_id:
+                os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
+            if quota_project_id:
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
+
+            logger.debug(
+                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, "
+                f"GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
+            )
+
+    def _sync_background_init(self) -> None:
+        """Synchronous initialization of infrastructure components."""
+        try:
+            # Initialize cloud manager
+            if self.clouds:
+                logger.debug("Performing synchronous cloud authentication...")
+                _ = self.cloud_manager
+
+            # Initialize secret manager
+            if self.secret_provider:
+                logger.debug("Initializing secret manager synchronously...")
+                _ = self.secret_manager
+
+            logger.info("ExecutionContext synchronous initialization completed")
+            self._initialization_complete.set()
+        except Exception as e:
+            logger.error(f"Error during ExecutionContext initialization: {e}")
+            self._initialization_error = e
+            self._initialization_complete.set()
+
+    async def ensure_initialized(self) -> None:
+        """Ensure that ExecutionContext initialization is complete."""
+        await self._initialization_complete.wait()
+        if self._initialization_error:
+            raise RuntimeError(
+                f"ExecutionContext initialization failed: {self._initialization_error}"
+            ) from self._initialization_error
+        logger.debug("ExecutionContext initialization verified complete")
+
+    @property
+    def cloud_manager(self) -> CloudManager:
+        """Provides access to the CloudManager instance."""
+        if self._cloud_manager is None:
+            self._cloud_manager = CloudManager(clouds=self.clouds)
+            self._ensure_cloud_authentication()
+        return self._cloud_manager
+
+    def _ensure_cloud_authentication(self) -> None:
+        """Ensure cloud providers are authenticated."""
+        if self._cloud_manager:
+            logger.debug("Performing lazy cloud authentication...")
+            self._cloud_manager.login_clouds()
+
+            # Set up cloud logging now that cloud manager is authenticated
+            if self.logger_cfg and self.logger_cfg.type == "gcp":
+                # Create minimal run_info for cloud logging compatibility
+                from buttermilk._core.bm_init import SessionInfo
+                context_info = SessionInfo(
+                    name="execution-context",
+                    job="infrastructure",
+                    run_id=self.execution_context_id
+                )
+                setup_cloud_logging(self.logger_cfg, self._cloud_manager, context_info)
+
+            logger.debug("Cloud authentication completed")
+
+    @property
+    def secret_manager(self) -> SecretsManager:
+        """Provides access to the SecretsManager instance."""
+        if self._secret_manager is None:
+            if not self.secret_provider:
+                raise RuntimeError("Secret provider configuration is missing.")
+            self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
+            logger.debug("SecretsManager initialized successfully")
+        return self._secret_manager
+
+    @property 
+    def llms(self) -> LLMs:
+        """Provides access to the LLMs manager instance."""
+        if self._llms_instance is None:
+            connections_data: dict[str, Any] | None = None
+            cache_path = Path(CONFIG_CACHE_PATH)
+
+            # Try to load from local cache first
+            if cache_path.exists() and cache_path.is_file():
+                try:
+                    connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
+                    if not isinstance(connections_data, dict):
+                        logger.warning(
+                            f"LLM connections cache at {cache_path} is not a dict. Will try secrets."
+                        )
+                        connections_data = None
+                    else:
+                        logger.info(f"Loaded LLM connections from cache: {cache_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load LLM connections from cache: {e}. Will try secrets.")
+                    connections_data = None
+
+            # If not loaded from cache, get from secret manager
+            if connections_data is None:
+                try:
+                    connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
+                    if not isinstance(connections_data, dict):
+                        raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
+                    logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
+                    
+                    # Cache the connections data
+                    self._write_cache_sync(connections_data, cache_path)
+                except Exception as e:
+                    logger.error(f"Failed to load LLM connections from secret manager: {e}")
+                    raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
+
+            self._llms_instance = LLMs(connections=connections_data)
+        return self._llms_instance
+
+    def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+        """Synchronous cache writing helper."""
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        logger.info(f"Caching LLM connections to {cache_path}")
+        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
+
+    @property
+    def query_runner(self) -> QueryRunner:
+        """Provides access to the QueryRunner instance."""
+        if self._query_runner is None:
+            self._query_runner = QueryRunner(bq_client=self.bq)
+        return self._query_runner
+
+    @property
+    def gcp_credentials(self) -> Any:
+        """Provides access to GCP credentials."""
+        return self.cloud_manager.gcp_credentials
+
+    def get_gcp_access_token(self) -> str:
+        """Get a valid GCP access token, refreshing if needed."""
+        return self.cloud_manager.get_access_token()
+
+    @property
+    def gcs(self) -> Any:
+        """Provides access to the Google Cloud Storage client."""
+        return self.cloud_manager.gcs
+
+    @property
+    def bq(self) -> Any:
+        """Provides access to the Google BigQuery client."""
+        return self.cloud_manager.bq
+
+    @property
+    def genai(self) -> Any:
+        """Provides access to the Google GenAI client."""
+        return self.cloud_manager.genai
+
+    @property
+    def credentials(self) -> dict[str, str]:
+        """Retrieves shared system credentials from the secret manager."""
+        if self._credentials_cached is None:
+            logger.debug("Fetching shared credentials from secret manager...")
+            creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
+            if not isinstance(creds, dict):
+                raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
+            self._credentials_cached = creds
+        return self._credentials_cached
+
+    async def _setup_tracing(self) -> None:
+        """Set up tracing based on configuration."""
+        if self.tracing.get("weave") and self.tracing["weave"].enabled:
+            # Setup Weave tracing
+            collection_name = f"execution-context-{self.execution_context_id[:8]}"
+            self._setup_weave_credentials()
+            autopatch = {"autogen": {"enabled": False}}
+            logger.debug(f"Starting weave client initialization. Autopatching: {autopatch}")
+
+            client = weave.init(
+                project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}",
+                autopatch_settings=autopatch
+            )
+            logger.info("Weave initialized successfully")
+
+        if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
+            from traceloop.sdk import Traceloop
+            Traceloop.init(
+                app_name="buttermilk",
+                api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", ""))
+            )
+            logger.info("Traceloop initialized.")
+
+        if self.tracing.get("otel") and self.tracing["otel"].enabled:
+            from buttermilk.utils.otel import setup_tracing_otel
+            setup_tracing_otel(self.tracing["otel"])
+            logger.info("OTEL Tracing has been set up successfully")
+
+        self._tracing_instrumented.set()
+
+    def _setup_weave_credentials(self) -> None:
+        """Set up Weave/WANDB credentials."""
+        wandb_api_key = os.getenv("WANDB_API_KEY")
+        wandb_entity = os.getenv("WANDB_ENTITY")
+
+        if not wandb_api_key or not wandb_entity:
+            try:
+                creds = self.credentials
+                if not wandb_api_key:
+                    wandb_api_key = creds["WANDB_API_KEY"]
+                    os.environ["WANDB_API_KEY"] = wandb_api_key
+                    logger.debug("Loaded WANDB_API_KEY from secret manager")
+
+                if not wandb_entity:
+                    wandb_entity = creds["WANDB_ENTITY"]
+                    os.environ["WANDB_ENTITY"] = wandb_entity
+                    logger.debug("Loaded WANDB_ENTITY from secret manager")
+
+            except Exception as e:
+                logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
+
+        logger.debug(f"WANDB credentials configured: API_KEY=*****, ENTITY={wandb_entity}")
+
+    async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
+        """Provide access to the Weights & Biases Weave client."""
+        if ("weave" in self.tracing and self.tracing["weave"].enabled 
+            and not self._tracing_instrumented.is_set()):
+            asyncio.create_task(self._setup_tracing())
+            await self._tracing_instrumented.wait()
+        return weave.get_client()
+
+
+# Global execution context instance
+_global_execution_context: ExecutionContext | None = None
+
+
+def get_execution_context() -> ExecutionContext:
+    """Get the global ExecutionContext instance."""
+    global _global_execution_context
+    if _global_execution_context is None:
+        raise RuntimeError("ExecutionContext not initialized. Call set_execution_context() first.")
+    return _global_execution_context
+
+
+def set_execution_context(context: ExecutionContext) -> None:
+    """Set the global ExecutionContext instance."""
+    global _global_execution_context
+    _global_execution_context = context
+
+
+def create_execution_context(**kwargs) -> ExecutionContext:
+    """Create and set a new ExecutionContext."""
+    context = ExecutionContext(**kwargs)
+    set_execution_context(context)
+    return context

@@ -7,7 +7,14 @@ from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
 
-from buttermilk._core.context import agent_id_var, session_id_var
+from buttermilk._core.context import (
+    agent_id_var, 
+    session_id_var, 
+    run_id_var,
+    execution_context_id_var,
+    research_run_id_var,
+    get_logging_context
+)
 
 # Single logger for the entire application
 _LOGGER_NAME = "buttermilk"
@@ -94,12 +101,13 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
 
     log_files = []
 
-    # Set up context for this session
-    session_id = session_id_var.get()
-    agent_id = agent_id_var.get()
-
-    if session_id or agent_id:
-        structlog.contextvars.bind_contextvars(session_id=session_id, agent_id=agent_id, run_id=run_id)
+    # Set up context for this session using three-tier architecture
+    context = get_logging_context()
+    # Add run_id to context and bind all available context variables
+    context["run_id"] = run_id
+    non_null_context = {k: v for k, v in context.items() if v is not None}
+    if non_null_context:
+        structlog.contextvars.bind_contextvars(**non_null_context)
 
     # Always create an INFO JSON log file
     info_log_path = Path(f"/tmp/buttermilk_{run_id}_info.jsonl")
@@ -187,13 +195,21 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
             )
             cloud_handler.setFormatter(structlog_formatter)
 
-            # Bind session context for automatic inclusion
-            structlog.contextvars.bind_contextvars(
-                session_id=run_info.run_id[-12:],  # Last 12 chars for brevity
-                run_id=run_info.run_id,
-                job=run_info.job,
-                project=run_info.name,
-            )
+            # Bind session context for automatic inclusion (enhanced for three-tier architecture)
+            context_vars = {
+                "session_id": getattr(run_info, 'session_id', run_info.run_id)[-12:],  # Last 12 chars for brevity
+                "run_id": run_info.run_id,
+                "job": run_info.job,
+                "project": run_info.name,
+            }
+            
+            # Add research context if available
+            if hasattr(run_info, 'research_run_id') and run_info.research_run_id:
+                context_vars["research_run_id"] = run_info.research_run_id[-12:]  # Last 12 chars
+            if hasattr(run_info, 'execution_context_id') and run_info.execution_context_id:
+                context_vars["execution_context_id"] = run_info.execution_context_id[-12:]  # Last 12 chars
+                
+            structlog.contextvars.bind_contextvars(**context_vars)
 
             # Add to root logger so all log messages go to cloud
             logging.getLogger().addHandler(cloud_handler)
