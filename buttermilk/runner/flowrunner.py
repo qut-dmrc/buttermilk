@@ -1117,7 +1117,6 @@ class FlowRunner(BaseModel):
                     callback_to_ui=None,
                 )
                 job_definitions.append(job)
-                logger.debug(f"Created run request: {job.model_dump_json()}")
                 logger.info("Batch job created", job.model_dump())
                 # Apply max_records limit if specified
                 if max_records is not None and max_records > 0 and i >= max_records:

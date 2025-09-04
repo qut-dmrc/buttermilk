@@ -54,7 +54,6 @@ WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    os.environ["OTEL_PYTHON_LOG_CORRELATION"] = "true"
 
     # Set up the tracer provider
     provider = TracerProvider()

@@ -166,7 +166,7 @@ class HostAgent(Agent):
             else:
                 logger.warning(
                     "Host received TaskComplete from agent but it was not in pending tasks.",
-                    agent_id=agent_id_to_update,
+                    agent_id_to_update,
                 )
 
     @message_handler
@@ -657,12 +657,15 @@ class HostAgent(Agent):
             error_ratio = total_failed / self._total_tasks_in_step
 
         if error_ratio > self._error_threshold:
-            msg = (
-                f"Host stopping flow: {total_failed}/{self._total_tasks_in_step} tasks failed "
-                f"({error_ratio:.1%} > {self._error_threshold:.1%} threshold). "
-                f"Failed tasks by agent: {dict(self._failed_tasks_by_agent)}"
+            logger.error(
+                "Host stopping flow: error threshold exceeded",
+                agent_id=self.agent_id,
+                total_failed=total_failed,
+                total_tasks=self._total_tasks_in_step,
+                error_ratio=error_ratio,
+                error_threshold=self._error_threshold,
+                failed_tasks_by_agent=dict(self._failed_tasks_by_agent),
             )
-            logger.error(msg, agent_id=self.agent_id)
             return False
 
         if total_failed > 0:

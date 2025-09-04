@@ -371,16 +371,12 @@ class TaskDistributor(BaseModel):
             # Second time; quit immediately.
             raise FatalError("Keyboard interrupt. Aborting immediately.")
         except ExceptionGroup as eg:
-            logger.error(
-                "Received unhandled exception (in ExceptionGroup)",
-                error=e,
-                extra={"traceback": e.__traceback__},
-            )
-        logger.exception(
-                "Received unhandled exception!",
-                error=e,
-                error_args=e.args,
-            )
+            for e in eg.exceptions:
+                logger.exception(
+                    "Received unhandled exception (in ExceptionGroup)",
+                    error=e,
+                    error_args=e.args,
+                )
         finally:
             time_taken = time.perf_counter() - t0
             logger.info("Run finished", time_taken=format_timespan(time_taken))

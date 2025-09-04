@@ -96,7 +96,7 @@ class Describer(LLMAgent):
             and isinstance(record.metadata, dict)
             and record.metadata.get("alt_text")
         ):
-            logger.info("Record already has alt_text", alt_text=record.metadata['alt_text'][:50])
+            logger.info("Record already has alt_text", alt_text=record.metadata["alt_text"][:50])
             # Return structured output even for existing alt text
             existing_description = MediaDescription(
                 description=record.metadata["alt_text"],
@@ -128,11 +128,7 @@ class Describer(LLMAgent):
     def _create_text_response(self, record: Any) -> AgentOutput:
         """Create a response for text-only records."""
         logger.info("Creating text-only response", record_id=record.id)
-        return AgentOutput(
-            agent_id=self.agent_id,
-            outputs=text_description,
-            metadata={"media_type": "text", "skipped_reason": "text_only"},
-        )
+        raise NotImplementedError("Text-only response handling not implemented yet.")
 
     async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
         """Process media content and generate description."""

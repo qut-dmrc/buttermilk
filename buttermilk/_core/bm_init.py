@@ -311,7 +311,7 @@ class BM(BaseModel):
         """Performs setup tasks immediately after Pydantic model initialization."""
 
         # Set up logging early to ensure handlers are cleared before any are added
-        self._setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
+        self._setup_logging()
 
         # Set GCP environment variables immediately (needed for GCS access)
         self._setup_gcp_environment()
@@ -323,7 +323,7 @@ class BM(BaseModel):
         print("Initialized Buttermilk (bm) with configuration:")
         print(self.model_dump(exclude_none=True))
 
-    def _setup_logging(self, verbose: bool = False) -> None:
+    def _setup_logging(self) -> None:
         """Sets up modern logging for the Buttermilk application.
 
         Uses structlog for JSON output to files and cloud, and Rich for beautiful console output.
@@ -334,7 +334,7 @@ class BM(BaseModel):
                 Defaults to False.
 
         """
-
+        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
         setup_console_logging(verbose=verbose)
 
         # Set up structured JSON file logging

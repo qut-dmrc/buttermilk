@@ -9,7 +9,9 @@ from rich.logging import RichHandler
 
 from buttermilk._core.context import agent_id_var, session_id_var
 
+# Single logger for the entire application
 _LOGGER_NAME = "buttermilk"
+logger = structlog.get_logger(_LOGGER_NAME)
 
 
 # Configure structlog for structured JSON logging
@@ -23,6 +25,8 @@ def configure_structlog() -> None:
             structlog.processors.add_log_level,
             # Add timestamp
             structlog.processors.TimeStamper(fmt="iso"),
+            # Capture exception info if present
+            structlog.processors.format_exc_info,
             # Output as JSON
             structlog.processors.JSONRenderer(),
         ],
@@ -206,6 +210,3 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
                 },
             )
 
-
-# Single logger for the entire application
-logger = structlog.get_logger(_LOGGER_NAME)
