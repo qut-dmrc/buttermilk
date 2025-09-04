@@ -907,12 +907,15 @@ class FlowRunner(BaseModel):
             - errors: List of any errors encountered
             - timestamp: When the reload occurred
         """
+        import traceback
+        from datetime import UTC, datetime
+        from pathlib import Path
+
         import hydra
         from hydra import compose, initialize_config_dir
         from omegaconf import OmegaConf
-        from pathlib import Path
-        from datetime import datetime, UTC
-        import traceback
+
+        old_flows = None
         
         result = {
             "success": False,
@@ -990,7 +993,7 @@ class FlowRunner(BaseModel):
             result["errors"].append(traceback.format_exc())
             
             # Don't leave flows in broken state - keep old flows on error
-            if "old_flows" in locals():
+            if old_flows is not None:
                 self.flows = old_flows
                 logger.info("Restored previous flow configuration due to reload error")
         
@@ -1003,7 +1006,7 @@ class FlowRunner(BaseModel):
         
         return result
 
-    def _save_config_snapshot(self, run_request: 'RunRequest') -> None:
+    def _save_config_snapshot(self, run_request: "RunRequest") -> None:
         """Save a snapshot of the current configuration for reproducibility.
         
         Saves the current flow configuration to the run directory to ensure
@@ -1015,16 +1018,16 @@ class FlowRunner(BaseModel):
         """
         try:
             import json
-            import os
+            from datetime import UTC, datetime
             from pathlib import Path
-            from datetime import datetime, UTC
+
             from omegaconf import OmegaConf
             
             # Create run directory for config snapshots
-            if hasattr(run_request, 'session_id') and run_request.session_id:
+            if hasattr(run_request, "session_id") and run_request.session_id:
                 session_dir = Path(f"/tmp/runs/{run_request.session_id}")
             else:
-                session_dir = Path(f"/tmp/runs/default")
+                session_dir = Path("/tmp/runs/default")
                 
             config_snapshot_dir = session_dir / "config_snapshot"
             config_snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -1037,39 +1040,48 @@ class FlowRunner(BaseModel):
                 flow_config = self.flows[run_request.flow]
                 
                 # Convert OmegaConf to serializable dict
-                if hasattr(flow_config, '_content'):
+                if hasattr(flow_config, "_content"):
                     # OmegaConf object
                     config_dict = OmegaConf.to_container(flow_config, resolve=True)
                 else:
                     # Regular dict or other object
-                    config_dict = dict(flow_config) if hasattr(flow_config, '__dict__') else str(flow_config)
+                    config_dict = dict(flow_config) if hasattr(flow_config, "__dict__") else str(flow_config)
                 
                 # Save flow-specific config
                 flow_config_file = config_snapshot_dir / f"{run_request.flow}_{timestamp}.json"
-                with open(flow_config_file, 'w') as f:
-                    json.dump({
-                        'flow_name': run_request.flow,
-                        'timestamp': timestamp,
-                        'session_id': run_request.session_id,
-                        'job_id': getattr(run_request, 'job_id', None),
-                        'flow_config': config_dict,
-                        'run_parameters': getattr(run_request, 'parameters', {}),
-                        'run_inputs': getattr(run_request, 'inputs', {})
-                    }, f, indent=2, default=str)
+                with open(flow_config_file, "w") as f:
+                    json.dump(
+                        {
+                            "flow_name": run_request.flow,
+                            "timestamp": timestamp,
+                            "session_id": run_request.session_id,
+                            "job_id": getattr(run_request, "job_id", None),
+                            "flow_config": config_dict,
+                            "run_parameters": getattr(run_request, "parameters", {}),
+                            "run_inputs": getattr(run_request, "inputs", {}),
+                        },
+                        f,
+                        indent=2,
+                        default=str,
+                    )
                 
                 logger.debug(f"Saved config snapshot for flow '{run_request.flow}' to {flow_config_file}")
                 
                 # Also save a latest.json for easy access
                 latest_file = config_snapshot_dir / "latest.json"
-                with open(latest_file, 'w') as f:
-                    json.dump({
-                        'flow_name': run_request.flow,
-                        'timestamp': timestamp,
-                        'session_id': run_request.session_id,
-                        'config_file': str(flow_config_file),
-                        'flows_available': list(self.flows.keys()),
-                        'total_flows': len(self.flows)
-                    }, f, indent=2)
+                with open(latest_file, "w") as f:
+                    json.dump(
+                        {
+                            "flow_name": run_request.flow,
+                            "timestamp": timestamp,
+                            "session_id": run_request.session_id,
+                            "config_file": str(flow_config_file),
+                            "flows_available": list(self.flows.keys()),
+                            "total_flows": len(self.flows),
+                        },
+                        f,
+                        indent=2,
+                    )
                 
         except Exception as e:
             # Don't fail the flow execution if config snapshot fails

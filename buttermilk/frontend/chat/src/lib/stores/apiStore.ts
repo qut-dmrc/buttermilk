@@ -544,8 +544,6 @@ interface ConfigStatusResponse {
 	flow_count: number;
 	config_directory: string;
 	config_exists: boolean;
-	is_gcs_mounted: boolean;
-	mount_info: string;
 	config_timestamps: Record<string, number>;
 	gcs_bucket_env: string;
 	timestamp: string;

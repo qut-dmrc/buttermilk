@@ -376,22 +376,9 @@
 									<strong>Flows:</strong> {$configStatusStore.data.flow_count}
 								</div>
 								<div class="status-item">
-									<strong>GCS Mount:</strong> 
-									<span class:gcs-mounted={$configStatusStore.data.is_gcs_mounted} 
-									      class:gcs-local={!$configStatusStore.data.is_gcs_mounted}>
-										{$configStatusStore.data.is_gcs_mounted ? 'YES' : 'NO'}
-									</span>
-								</div>
-								<div class="status-item">
 									<strong>Config Dir:</strong> 
 									<small>{$configStatusStore.data.config_directory}</small>
 								</div>
-								{#if $configStatusStore.data.gcs_bucket_env !== 'not_set'}
-									<div class="status-item">
-										<strong>GCS Bucket:</strong> 
-										<small>{$configStatusStore.data.gcs_bucket_env}</small>
-									</div>
-								{/if}
 							</div>
 						{/if}
 						
@@ -861,16 +848,6 @@
 		color: #888;
 		font-size: 0.75rem;
 		word-break: break-all;
-	}
-
-	.gcs-mounted {
-		color: #00ff00;
-		font-weight: bold;
-	}
-
-	.gcs-local {
-		color: #ffaa00;
-		font-weight: bold;
 	}
 
 	.reload-success {

@@ -3,6 +3,7 @@ import datetime
 import uuid
 from typing import Annotated, Any
 
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -624,11 +625,10 @@ async def _get_score_page_impl(
 async def reload_configuration_endpoint(
     flows: Annotated[FlowRunner, Depends(get_flows)],
 ):
-    """Reload flow configurations from the mounted GCS config directory.
+    """Reload flow configurations from the config directory.
     
     This endpoint triggers a reload of all configuration files, allowing
-    for dynamic updates without restarting the server. Useful when configs
-    are mounted from GCS and updated externally.
+    for dynamic updates without restarting the server. 
     
     Returns:
         JSON response with reload status and details
@@ -678,22 +678,8 @@ async def get_configuration_status_endpoint(
         JSON response with configuration status
     """
     try:
-        from pathlib import Path
-        import os
         
         config_dir = Path("/src/buttermilk/buttermilk/conf")
-        
-        # Check if config directory is GCS mounted
-        is_gcs_mounted = False
-        mount_info = ""
-        try:
-            # Check if directory is a mount point
-            mount_output = os.popen("mount | grep 'gcsfuse'").read()
-            if str(config_dir) in mount_output:
-                is_gcs_mounted = True
-                mount_info = mount_output.strip()
-        except Exception:
-            pass
         
         # Get config file timestamps
         config_timestamps = {}
@@ -709,10 +695,7 @@ async def get_configuration_status_endpoint(
             "flow_count": len(flows.flows),
             "config_directory": str(config_dir),
             "config_exists": config_dir.exists(),
-            "is_gcs_mounted": is_gcs_mounted,
-            "mount_info": mount_info,
             "config_timestamps": config_timestamps,
-            "gcs_bucket_env": os.environ.get("GCS_CONFIG_BUCKET", "not_set"),
             "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
         }
         

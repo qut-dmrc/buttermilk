@@ -38,8 +38,6 @@ Returns current configuration status:
   "flow_count": 2,
   "config_directory": "/src/buttermilk/buttermilk/conf",
   "config_exists": true,
-  "is_gcs_mounted": true,
-  "mount_info": "gcsfuse on /src/buttermilk/buttermilk/conf",
   "config_timestamps": {"config.yaml": 1693747200},
   "gcs_bucket_env": "your-config-bucket",
   "timestamp": "2023-09-03T14:30:00Z"
