@@ -3,6 +3,7 @@ import datetime
 import uuid
 from typing import Annotated, Any
 
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -616,3 +617,96 @@ async def _get_score_page_impl(
     except Exception as e:
         logger.error(f"Error loading score page for record {record_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error loading score page")
+
+
+# --- Admin Configuration Management Endpoints ---
+
+@flow_data_router.post("/api/admin/reload-config")
+async def reload_configuration_endpoint(
+    flows: Annotated[FlowRunner, Depends(get_flows)],
+):
+    """Reload flow configurations from the config directory.
+    
+    This endpoint triggers a reload of all configuration files, allowing
+    for dynamic updates without restarting the server. 
+    
+    Returns:
+        JSON response with reload status and details
+    """
+    logger.info("Configuration reload requested via API")
+    
+    try:
+        # Call the reload method on FlowRunner
+        reload_result = await flows.reload_configurations()
+        
+        # Determine HTTP status code based on success
+        status_code = 200 if reload_result["success"] else 500
+        
+        # Log the result
+        if reload_result["success"]:
+            logger.info(f"Configuration reload successful: {len(reload_result['flows_loaded'])} flows loaded")
+        else:
+            logger.error(f"Configuration reload failed: {reload_result['errors']}")
+        
+        return JSONResponse(
+            content=reload_result,
+            status_code=status_code
+        )
+        
+    except Exception as e:
+        logger.error(f"Unexpected error during configuration reload: {e}", exc_info=True)
+        return JSONResponse(
+            content={
+                "success": False,
+                "errors": [f"Unexpected error: {str(e)}"],
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
+            },
+            status_code=500
+        )
+
+
+@flow_data_router.get("/api/admin/config-status")
+async def get_configuration_status_endpoint(
+    flows: Annotated[FlowRunner, Depends(get_flows)],
+):
+    """Get current configuration status and metadata.
+    
+    Returns information about the currently loaded flows and configuration
+    source for monitoring and debugging purposes.
+    
+    Returns:
+        JSON response with configuration status
+    """
+    try:
+        
+        config_dir = Path("/src/buttermilk/buttermilk/conf")
+        
+        # Get config file timestamps
+        config_timestamps = {}
+        try:
+            config_yaml = config_dir / "config.yaml"
+            if config_yaml.exists():
+                config_timestamps["config.yaml"] = config_yaml.stat().st_mtime
+        except Exception as e:
+            logger.debug(f"Could not get config timestamps: {e}")
+        
+        status = {
+            "flows_loaded": list(flows.flows.keys()),
+            "flow_count": len(flows.flows),
+            "config_directory": str(config_dir),
+            "config_exists": config_dir.exists(),
+            "config_timestamps": config_timestamps,
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
+        }
+        
+        return JSONResponse(content=status)
+        
+    except Exception as e:
+        logger.error(f"Error getting configuration status: {e}", exc_info=True)
+        return JSONResponse(
+            content={
+                "error": f"Failed to get configuration status: {str(e)}",
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
+            },
+            status_code=500
+        )
