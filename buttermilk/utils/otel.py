@@ -54,7 +54,11 @@ WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
+    from buttermilk import get_bm
 
+    bm = get_bm()
+    creds = bm.gcp_credentials
+    project_id = tracing_cfg.project_id
     # Set up the tracer provider
     provider = TracerProvider()
 
@@ -73,7 +77,7 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
     )
 
     # Configure the GCP Cloud Trace Span Exporter
-    gcp_exporter = CloudTraceSpanExporter()
+    gcp_exporter = CloudTraceSpanExporter(project_id=project_id)
     provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
     logger.info("Initialized tracing with Google Cloud")
 
@@ -96,7 +100,8 @@ def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
         traceloop_base_url = os.getenv("TRACELOOP_BASE_URL") or creds["TRACELOOP_BASE_URL"]
         traceloop_endpoint = f"{traceloop_base_url}/v1/traces"
         traceloop_auth_header = urllib.parse.quote(f"Bearer {traceloop_api_key}")
-        traceloop_headers = {"Authorization": traceloop_auth_header}
+        # Do not URL-encode Authorization headers
+        traceloop_headers = {"Authorization": f"Bearer {traceloop_api_key}"}
         traceloop_exporter = OTLPHttpSpanExporter(endpoint=traceloop_endpoint, headers=traceloop_headers)
         return traceloop_exporter
 
@@ -140,11 +145,10 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
             "project_id": f"{wandb_entity}/{wandb_project}",           # W&B Project ID for trace grouping
         }
 
-        # Configure the OTLP Span Exporter to send traces to W&B.
-        wandb_exporter = OTLPSpanExporter(
+        # Use the HTTP OTLP exporter for the HTTPS endpoint
+        wandb_exporter = OTLPHttpSpanExporter(
             endpoint=wandb_endpoint,
             headers=wandb_headers,
-            # Other options like `timeout` or `compression` can be set here if needed.
         )
 
         return wandb_exporter

@@ -228,6 +228,7 @@ class Tracing(BaseModel):
             if different from the default.
         otlp_headers (Mapping | None): Optional OTLP (OpenTelemetry Protocol)
             headers for providers that support it.
+        project_id (str | None): Optional project ID for the tracing provider.
 
     """
 
