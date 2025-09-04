@@ -200,9 +200,6 @@
     }
   }
 
-  // Admin panel functionality
-  let showAdmin = false;
-  
   async function handleConfigReload() {
     try {
       const result = await reloadConfiguration();
@@ -337,55 +334,42 @@
 
 		<!-- Admin Panel Section -->
 		<div class="admin-panel">
-			<h4 class="terminal-title">
-				<button 
-					class="admin-toggle btn" 
-					onclick={() => showAdmin = !showAdmin}
-				>
-					ADMIN {showAdmin ? '▼' : '▶'}
-				</button>
-			</h4>
-
-			{#if showAdmin}
-				<div class="admin-content">
-					<!-- Configuration Reload -->
-					<div class="admin-section">
-						<h5 class="admin-section-title">Configuration Reload</h5>
-						
-						{#if $configReloadStore.loading}
-							<div class="terminal-loading">Reloading configuration...</div>
-						{:else if $configReloadStore.error}
-							<div class="terminal-error">Error: {$configReloadStore.error}</div>
-						{:else if $configReloadStore.lastResult}
-							<div class="reload-result">
-								<div class="status-item">
-									<strong>Last Reload:</strong> 
-									<span class:reload-success={$configReloadStore.lastResult.success}
-									      class:reload-failure={!$configReloadStore.lastResult.success}>
-										{$configReloadStore.lastResult.success ? 'SUCCESS' : 'FAILED'}
-									</span>
-								</div>
-								{#if $configReloadStore.lastResult.success}
-									<div class="status-item">
-										<strong>Flows Loaded:</strong> {$configReloadStore.lastResult.flows_loaded.length}
-									</div>
-									<div class="status-item">
-										<strong>Updated:</strong> {$configReloadStore.lastResult.flows_updated.length}
-									</div>
-								{/if}
+			<div class="admin-content">
+				<!-- Configuration Reload -->
+				<div class="admin-section">					
+					{#if $configReloadStore.loading}
+						<div class="terminal-loading">Reloading configuration...</div>
+					{:else if $configReloadStore.error}
+						<div class="terminal-error">Unable to reload config...</div>
+					{:else if $configReloadStore.lastResult}
+						<div class="reload-result">
+							<div class="status-item">
+								<strong>Last Reload:</strong> 
+								<span class:reload-success={$configReloadStore.lastResult.success}
+										class:reload-failure={!$configReloadStore.lastResult.success}>
+									{$configReloadStore.lastResult.success ? 'SUCCESS' : 'FAILED'}
+								</span>
 							</div>
-						{/if}
-						
-						<button 
-							class="btn admin-button reload-button" 
-							onclick={handleConfigReload}
-							disabled={$configReloadStore.loading}
-						>
-							{$configReloadStore.loading ? 'RELOADING...' : 'RELOAD CONFIG'}
-						</button>
-					</div>
+							{#if $configReloadStore.lastResult.success}
+								<div class="status-item">
+									<strong>Flows Loaded:</strong> {$configReloadStore.lastResult.flows_loaded.length}
+								</div>
+								<div class="status-item">
+									<strong>Updated:</strong> {$configReloadStore.lastResult.flows_updated.length}
+								</div>
+							{/if}
+						</div>
+					{/if}
+					
+					<button 
+						class="btn admin-button reload-button" 
+						onclick={handleConfigReload}
+						disabled={$configReloadStore.loading}
+					>
+						{$configReloadStore.loading ? 'RELOADING...' : 'RELOAD CONFIG'}
+					</button>
 				</div>
-			{/if}
+			</div>
 		</div>
 	</div>
 {:else if isScorePage}
