@@ -31,7 +31,7 @@ async def test_model(client, prompt):
     )
     assert not image.error
     image.image.show()
-    logger.info(f"Saved image from {imagegenerator.model} to {image.uri}")
+    logger.info("Saved image", model=imagegenerator.model, uri=image.uri)
     assert image
 
 

@@ -563,11 +563,11 @@ class OSBVectorStoreMonitor:
             (current_avg * (count - 1) + search_time) / count
         )
         
-        logger.info(f"Search completed in {search_time:.3f}s")
+        logger.info("Search completed", search_time=f"{search_time:.3f}s")
         return results
     
     def log_metrics(self):
-        logger.info(f"OSB Vector Store Metrics: {self.metrics}")
+        logger.info("OSB Vector Store Metrics", metrics=self.metrics)
 ```
 
 ## Troubleshooting

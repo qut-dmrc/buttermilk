@@ -403,10 +403,10 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
             seen.add(msg_key)
             deduplicated.append(msg)
         else:
-            logger.debug(f"Removing duplicate message: {type(msg).__name__} with content: {getattr(msg, 'content', '')[:50]}...")
+            logger.debug("Removing duplicate message", message_type=type(msg).__name__, content=getattr(msg, 'content', '')[:50])
 
     if len(deduplicated) < len(messages):
-        logger.info(f"Removed {len(messages) - len(deduplicated)} duplicate messages from llm_messages_to_send")
+        logger.info("Removed duplicate messages", count=len(messages) - len(deduplicated))
 
     return deduplicated
 
@@ -485,7 +485,7 @@ def make_messages(
         normalized_placeholder_key = re.sub(r"[^\w\d_]+", "", content_str).lower()
 
         if not content_str and role_lower != "placeholder":  # Skip empty non-placeholder messages
-            logger.debug(f"Skipping message with empty content for role '{role_lower}'.")
+            logger.debug("Skipping message with empty content", role=role_lower)
             continue
 
         if role_lower in ("developer", "system"):

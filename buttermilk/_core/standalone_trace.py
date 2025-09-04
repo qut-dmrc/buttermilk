@@ -76,7 +76,7 @@ class StandaloneTraceContext:
             logger.debug(f"Finished standalone trace context: {self.name}")
 
             if self.trace_call.ui_url:
-                logger.highlight(f"Trace URL: {self.trace_call.ui_url}")
+                logger.info(f"Trace URL: {self.trace_call.ui_url}")
 
     def get_trace_id(self) -> str:
         """Get the trace ID for this context."""

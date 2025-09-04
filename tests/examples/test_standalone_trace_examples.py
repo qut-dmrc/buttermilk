@@ -39,7 +39,7 @@ class TestStandaloneTraceExamples:
             assert isinstance(call_id, str)
 
             # Your batch processing logic would go here
-            logger.info(f"Processing batch with trace ID: {trace_id}")
+            logger.info("Processing batch", trace_id=trace_id)
 
     @pytest.mark.anyio
     async def test_agent_integration_example(self):
@@ -84,7 +84,7 @@ class TestStandaloneTraceExamples:
                     await self._mock_process_item(item)
                     processed_items.append(item)
                 except Exception as e:
-                    logger.error(f"Failed to process {item}: {e}")
+                    logger.error("Failed to process item", item=item, error=e)
                     # Continue processing other items
 
             # Trace will automatically close with success/error status

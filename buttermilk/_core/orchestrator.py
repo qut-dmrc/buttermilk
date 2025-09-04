@@ -333,7 +333,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
                 if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
                     msg += f" Tracing link: {orchestrator_trace.ui_url}"
-                logger.highlight(msg)
+                logger.info(msg)
                 otel_span.set_status(trace.Status(trace.StatusCode.OK))
             except Exception as e:
                 logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")

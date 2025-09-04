@@ -38,8 +38,8 @@ async def main():
         set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
         # Extract storage config
         storage_cfg = OmegaConf.to_container(cfg.storage, resolve=True)
-        logger.info(f"Using collection: {storage_cfg['collection_name']}")
-        logger.info(f"Embedding model: {storage_cfg['embedding_model']}")
+        logger.info("Using collection", collection_name=storage_cfg['collection_name'])
+        logger.info("Embedding model", embedding_model=storage_cfg['embedding_model'])
 
         # Create and initialize the search tool
         search_tool = ChromaDBSearchTool(**storage_cfg)
@@ -47,7 +47,7 @@ async def main():
 
         # Get collection info
         count = search_tool.collection.count()
-        logger.info(f"\nCollection contains {count} embeddings")
+        logger.info("Collection contains embeddings", count=count)
 
         # Perform searches
         queries = [
@@ -58,9 +58,9 @@ async def main():
         ]
 
         for query in queries:
-            logger.info(f"\n{'=' * 60}")
-            logger.info(f"QUERY: {query}")
-            logger.info(f"{'=' * 60}")
+            logger.info("\n============================================================")
+            logger.info("QUERY", query=query)
+            logger.info("============================================================")
 
             try:
                 results = await search_tool.search(query=query, n_results=3)
@@ -70,30 +70,30 @@ async def main():
                     continue
 
                 for i, result in enumerate(results, 1):
-                    logger.info(f"\n--- Result {i} ---")
-                    logger.info(f"Document: {result.document_title or 'Unknown'}")
-                    logger.info(f"Document ID: {result.document_id}")
-                    logger.info(f"Chunk ID: {result.id}")
-                    logger.info(f"Score: {result.score:.4f}" if result.score else "Score: N/A")
+                    logger.info("--- Result ---", result_num=i)
+                    logger.info("Document", document_title=result.document_title or 'Unknown')
+                    logger.info("Document ID", document_id=result.document_id)
+                    logger.info("Chunk ID", chunk_id=result.id)
+                    logger.info("Score", score=f"{result.score:.4f}" if result.score else "N/A")
 
                     # Show content preview
                     content_preview = result.content[:300].replace("\n", " ")
-                    logger.info(f"Content: {content_preview}...")
+                    logger.info("Content", content=f"{content_preview}...")
 
                     # Show some metadata
                     if result.metadata:
                         important_keys = ["chunk_index", "content_type", "embedding_model", "created_timestamp"]
                         metadata_preview = {k: v for k, v in result.metadata.items() if k in important_keys}
                         if metadata_preview:
-                            logger.info(f"Metadata: {metadata_preview}")
+                            logger.info("Metadata", metadata=metadata_preview)
 
             except Exception as e:
-                logger.error(f"Search failed: {e}")
+                logger.error("Search failed", error=e)
 
         # Demo filtering by metadata
-        logger.info(f"\n{'=' * 60}")
+        logger.info("\n============================================================")
         logger.info("FILTERED SEARCH: Looking for abstracts about 'institutions'")
-        logger.info(f"{'=' * 60}")
+        logger.info("============================================================")
 
         try:
             filtered_results = await search_tool.search(
@@ -102,13 +102,13 @@ async def main():
                 where={"content_type": "abstract"},
             )
 
-            logger.info(f"Found {len(filtered_results)} results with content_type='abstract'")
+            logger.info("Found results with content_type='abstract'", count=len(filtered_results))
             for result in filtered_results[:2]:  # Show first 2
-                logger.info(f"\nDocument: {result.document_title}")
-                logger.info(f"Content preview: {result.content[:200]}...")
+                logger.info("Document", document_title=result.document_title)
+                logger.info("Content preview", content=f"{result.content[:200]}...")
 
         except Exception as e:
-            logger.error(f"Filtered search failed: {e}")
+            logger.error("Filtered search failed", error=e)
 
 
 if __name__ == "__main__":

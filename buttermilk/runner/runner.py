@@ -185,7 +185,10 @@ class Consumer(BaseModel):
         except Exception as e:
             # If we hit here, all remaining tasks for this worker will be canceled.
             logger.error(
-                f"Canceling worker {self.agent} and remaining tasks after hitting error: {e} {e.args=}",
+                "Canceling worker and remaining tasks after hitting error",
+                agent=self.agent,
+                error=e,
+                error_args=e.args,
             )
 
         finally:
@@ -226,7 +229,12 @@ class Consumer(BaseModel):
 
         except Exception as e:
             logger.error(
-                f"Error processing task {self.agent} by {self.agent} with job {job.job_id}. Error: {e or type(e)} {e.args=}",
+                "Error processing task",
+                task=self.agent,
+                agent=self.agent,
+                job_id=job.job_id,
+                error=e or type(e),
+                error_args=e.args,
             )
 
     @abstractmethod
@@ -332,7 +340,9 @@ class TaskDistributor(BaseModel):
                             if w.done and not w.input_queue.empty():
                                 # at least one of our consumers has died prematurely. We'll keep going with the others though.
                                 logger.warning(
-                                    f"Consumer {w.agent} died with {w.input_queue.qsize()} items left in the queue of type `{w.agent}. Continuing other tasks.",
+                                    "Consumer died prematurely",
+                                    agent=w.agent,
+                                    queue_size=w.input_queue.qsize(),
                                 )
                                 continue
                         self._collector.pbar.refresh()
@@ -362,14 +372,11 @@ class TaskDistributor(BaseModel):
             raise FatalError("Keyboard interrupt. Aborting immediately.")
         except ExceptionGroup as eg:
             for e in eg.exceptions:
-                logger.error(
-                    f"Received unhandled exception (in ExceptionGroup): {e}. Aborting.",
-                    extra={"traceback": e.__traceback__},
+                logger.exception(
+                    "Received unhandled exception (in ExceptionGroup)",
+                    error=e,
+                    error_args=e.args,
                 )
-        except Exception as e:
-            logger.exception(
-                f"Received unhandled exception! {e} {e.args=}",
-            )
         finally:
             time_taken = time.perf_counter() - t0
-            logger.info(f"Run finished in {format_timespan(time_taken)}.")
+            logger.info("Run finished", time_taken=format_timespan(time_taken))

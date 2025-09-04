@@ -55,7 +55,7 @@ class SimpleHealthMonitor:
         """Report a fatal error that should cause system exit."""
         self.fatal_error_detected = True
         self.fatal_error_message = error_message
-        logger.critical(f"Fatal error detected: {error_message}")
+        logger.critical("Fatal error detected", error_message=error_message)
 
     def check_fatal_errors(self) -> bool:
         """Check if any fatal errors have been detected."""
@@ -74,7 +74,7 @@ class SimpleHealthMonitor:
         """
         # TODO: Implement actual flow responsiveness checking
         # For now, return True (no flows detected as stuck)
-        logger.debug(f"Checking flow responsiveness: {flow_name} (timeout: {timeout_seconds}s)")
+        logger.debug("Checking flow responsiveness", flow_name=flow_name, timeout_seconds=timeout_seconds)
         return True
 
     def check_interactive_flow_ui_timeout(self, session_id: str, timeout_seconds: int = 1800) -> bool:
@@ -86,7 +86,7 @@ class SimpleHealthMonitor:
         """
         # TODO: Implement actual UI timeout checking
         # For now, return True (no flows detected as stuck without UI)
-        logger.debug(f"Checking interactive flow UI timeout: {session_id} (timeout: {timeout_seconds}s)")
+        logger.debug("Checking interactive flow UI timeout", session_id=session_id, timeout_seconds=timeout_seconds)
         return True
 
     async def start_monitoring(self):
@@ -133,7 +133,7 @@ class SimpleHealthMonitor:
             )
             
         except Exception as e:
-            logger.error(f"Error getting health status: {e}")
+            logger.error("Error getting health status", error=e)
             return SystemStatus(
                 overall_status=HealthStatus.UNKNOWN,
                 timestamp=self.last_check,
@@ -161,7 +161,7 @@ class SimpleHealthMonitor:
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            logger.error(f"Error getting metrics summary: {e}")
+            logger.error("Error getting metrics summary", error=e)
             return {
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

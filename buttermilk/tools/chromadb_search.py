@@ -51,10 +51,10 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             await self.ensure_cache_initialized()
             self._initialized = True
 
-            logger.info(f"ChromaDBSearchTool initialized with collection: {self.collection_name}")
+            logger.info("ChromaDBSearchTool initialized", collection_name=self.collection_name)
 
         except Exception as e:
-            logger.error(f"Failed to initialize ChromaDBSearchTool: {e}")
+            logger.error("Failed to initialize ChromaDBSearchTool", error=e)
             raise
 
     async def search(self, query: str, n_results: int = 10) -> list[SearchResult]:

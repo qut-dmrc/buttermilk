@@ -387,7 +387,7 @@ def list_files_with_content(
                 content = file.read()
             result.append((file_path.name, content))
         except OSError as e:
-            logger.warning(f"Could not read file {file_path}: {e!s}")
+            logger.warning("Could not read file", file_path=file_path, error=e)
 
     return result
 
@@ -773,7 +773,7 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     try:
         local_path = pathlib.Path(persist_directory)
         if local_path.exists() and (local_path / "chroma.sqlite3").exists():
-            logger.debug(f"Using existing local ChromaDB at {persist_directory}")
+            logger.debug("Using existing local ChromaDB", persist_directory=persist_directory)
             return local_path
     except (OSError, ValueError):
         pass  # Not a valid local path, treat as remote
@@ -786,7 +786,7 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     # Check if we already have cached data
     chroma_db_path = local_cache_path / "chroma.sqlite3"
     if chroma_db_path.exists():
-        logger.debug(f"Found cached ChromaDB at {local_cache_path}")
+        logger.debug("Found cached ChromaDB", local_cache_path=local_cache_path)
         return local_cache_path
 
     # Use thread-safe download to prevent multiple parallel downloads of the same DB

@@ -123,7 +123,7 @@ class MetricsCollector:
             self.flow_metrics[flow_name] = FlowMetrics(flow_name=flow_name)
 
         self.flow_metrics[flow_name].update_execution(execution_time, success)
-        logger.debug(f"Recorded flow execution: {flow_name}, time: {execution_time:.2f}s, success: {success}")
+        logger.debug("Recorded flow execution", flow_name=flow_name, execution_time=f"{execution_time:.2f}s", success=success)
 
     def record_agent_invocation(self, agent_name: str, flow_name: str, response_time: float, success: bool):
         """Record agent invocation metrics."""
@@ -132,7 +132,7 @@ class MetricsCollector:
             self.agent_metrics[agent_key] = AgentMetrics(agent_name=agent_name, flow_name=flow_name)
 
         self.agent_metrics[agent_key].update_invocation(response_time, success)
-        logger.debug(f"Recorded agent invocation: {agent_key}, time: {response_time:.2f}s")
+        logger.debug("Recorded agent invocation", agent_key=agent_key, response_time=f"{response_time:.2f}s")
 
     def start_session_tracking(self, session_id: str, flow_name: str):
         """Start tracking a new session."""
@@ -144,7 +144,7 @@ class MetricsCollector:
             self.system_metrics["total_sessions_created"] += 1
             self._update_active_session_count()
 
-            logger.debug(f"Started session tracking: {session_id} for flow: {flow_name}")
+            logger.debug("Started session tracking", session_id=session_id, flow_name=flow_name)
 
     def update_session_activity(self, session_id: str, error_occurred: bool = False):
         """Update session activity metrics."""
@@ -157,7 +157,7 @@ class MetricsCollector:
             self.session_metrics[session_id].mark_inactive()
             self._update_active_session_count()
 
-            logger.debug(f"Ended session tracking: {session_id}")
+            logger.debug("Ended session tracking", session_id=session_id)
 
     def update_system_metrics(self, memory_mb: float, cpu_percent: Optional[float] = None, websocket_connections: Optional[int] = None):
         """Update basic system-level metrics. Extra parameters ignored for compatibility."""

@@ -17,7 +17,7 @@ async def test_websocket_connection():
     
     try:
         async with FlowTestClient.create() as client:
-            logger.info(f"Connected with session ID: {client.session_id}")
+            logger.info("Connected with session ID", session_id=client.session_id)
             
             # Send a test flow request
             await client.start_flow("osb", "test query")
@@ -26,14 +26,14 @@ async def test_websocket_connection():
             await asyncio.sleep(2)
             
             # Check if we received any messages
-            logger.info(f"Total messages received: {len(client.collector.all_messages)}")
+            logger.info("Total messages received", num_messages=len(client.collector.all_messages))
             for msg in client.collector.all_messages:
-                logger.info(f"Message type: {msg.type}, content: {msg.content[:100] if msg.content else 'N/A'}")
+                logger.info("Message received", message_type=msg.type, content=msg.content[:100] if msg.content else 'N/A')
             
             assert client.session_id is not None, "Should have a session ID"
             
     except Exception as e:
-        logger.error(f"Connection test failed: {e}")
+        logger.error("Connection test failed", error=e)
         raise
 
 
@@ -46,17 +46,17 @@ async def test_api_session_endpoint():
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get("http://localhost:8000/api/session") as resp:
-                logger.info(f"Session endpoint status: {resp.status}")
+                logger.info("Session endpoint status", status=resp.status)
                 if resp.status == 200:
                     data = await resp.json()
-                    logger.info(f"Session data: {data}")
+                    logger.info("Session data", data=data)
                     assert "session_id" in data
                 else:
                     text = await resp.text()
-                    logger.error(f"Session endpoint error: {text}")
+                    logger.error("Session endpoint error", error=text)
                     
         except Exception as e:
-            logger.error(f"Session endpoint test failed: {e}")
+            logger.error("Session endpoint test failed", error=e)
             raise
 
 

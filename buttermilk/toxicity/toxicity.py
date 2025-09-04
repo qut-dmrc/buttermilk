@@ -492,9 +492,7 @@ class AzureContentSafety(ToxicityModel):
 
                 severity_score = severity
             except Exception:
-                raise ValueError(
-                    f"Unable to interpret Azure content safety score: {item}.",
-                )
+                raise ValueError(f"Unable to interpret Azure content safety score: {item}.")
 
             if measure is not None:
                 outcome.scores.append(
@@ -798,9 +796,7 @@ class GPTJT(ToxicityModel):
             outcome.prediction = self.ResponseMap[response] >= 2
             outcome.labels = [response]
         except Exception as e:
-            raise ValueError(
-                f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}",
-            )
+            raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
 
         return outcome
 

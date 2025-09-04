@@ -37,7 +37,7 @@ class TestChromaDBSearchToolIntegration:
         """Test searching for 'transaction costs' in the Zotero collection."""
         # Perform the search
         query = "what are transaction costs"
-        logger.info(f"Searching for: {query}")
+        logger.info("Searching for query", query=query)
 
         results = await search_tool.search(query=query, n_results=5)
 
@@ -54,12 +54,12 @@ class TestChromaDBSearchToolIntegration:
             assert result.document_id, f"Result {i} should have a document ID"
 
             # Log the result for inspection
-            logger.info(f"\nResult {i + 1}:")
-            logger.info(f"  Document: {result.document_title or 'Unknown'}")
-            logger.info(f"  Score: {result.score}")
-            logger.info(f"  Content preview: {result.content[:200]}...")
+            logger.info("Search Result", result_num=i + 1)
+            logger.info("  Document", document_title=result.document_title or 'Unknown')
+            logger.info("  Score", score=result.score)
+            logger.info("  Content preview", content_preview=f"{result.content[:200]}...")
             if result.metadata:
-                logger.info(f"  Metadata keys: {list(result.metadata.keys())}")
+                logger.info("  Metadata keys", metadata_keys=list(result.metadata.keys()))
 
     @pytest.mark.anyio
     async def test_search_with_filter(self, search_tool):
@@ -109,7 +109,7 @@ class TestChromaDBSearchToolIntegration:
         """Test getting collection information."""
         # Get collection stats
         count = search_tool.collection.count()
-        logger.info(f"Collection '{search_tool.collection_name}' contains {count} embeddings")
+        logger.info("Collection info", collection_name=search_tool.collection_name, num_embeddings=count)
 
         assert count > 0, "Collection should not be empty"
 
@@ -118,7 +118,7 @@ class TestChromaDBSearchToolIntegration:
         if peek_results and "metadatas" in peek_results:
             logger.info("\nSample metadata fields:")
             for i, metadata in enumerate(peek_results["metadatas"][:3]):
-                logger.info(f"  Document {i + 1} metadata keys: {list(metadata.keys())}")
+                logger.info("  Document metadata keys", document_num=i + 1, metadata_keys=list(metadata.keys()))
 
     @pytest.mark.anyio
     async def test_tool_function_interface(self, search_tool):

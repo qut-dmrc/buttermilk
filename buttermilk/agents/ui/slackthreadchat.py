@@ -64,7 +64,9 @@ class SlackUIAgent(UIAgent):
                 await self.send_to_thread(**formatted_blocks)
             else:
                 logger.warning(
-                    f"Message type {type(message)} not supported for sending to user.")
+                    "Message type not supported for sending to user",
+                    message_type=type(message),
+                )
         except Exception as e:  # noqa
             _fn_debug_blocks(message)
 
@@ -168,7 +170,7 @@ class SlackUIAgent(UIAgent):
 
     def register_chat_thread_handler(self, thread_ts):
         """Connect messages in a Slack thread to the agent's callback"""
-        logger.debug(f"Registering thread handler for {thread_ts}")
+        logger.debug("Registering thread handler", thread_ts=thread_ts)
 
         async def matcher(message):
             return (
@@ -305,12 +307,15 @@ class SlackUIAgent(UIAgent):
 def reregister_all_active_threads():
     """Re-register handlers for all active threads after reconnection"""
     logger.info(
-        f"Re-registering handlers for {len(_active_thread_registry)} active threads",
+        "Re-registering handlers for active threads",
+        thread_count=len(_active_thread_registry),
     )
     for thread_ts, agent in list(_active_thread_registry.items()):
         try:
             agent.register_chat_thread_handler(thread_ts)
         except Exception as e:
             logger.error(
-                f"Failed to re-register handlers for thread {thread_ts}: {e!s}",
+                "Failed to re-register handlers for thread",
+                thread_ts=thread_ts,
+                error=e,
             )

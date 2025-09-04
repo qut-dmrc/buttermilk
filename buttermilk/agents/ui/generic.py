@@ -45,7 +45,7 @@ class UIAgent(Agent):
 
         """
         super().initialize(**kwargs)
-        logger.debug(f"Initializing {self.__class__.__name__}")
+        logger.debug("Initializing", agent_name=self.__class__.__name__)
 
         # Store the callback to groupchat for later use
         self.callback_to_groupchat = callback_to_groupchat
@@ -96,7 +96,7 @@ class UIAgent(Agent):
         UI agents typically need to listen to control messages to update the UI.
 
         """
-        logger.debug(f"{self.__class__.__name__} received OOB message: {type(message).__name__}")
+        logger.debug("Received OOB message", agent_name=self.__class__.__name__, message_type=type(message).__name__)
         return None
 
     # Default implementations for UI display - subclasses should override as needed
@@ -108,7 +108,7 @@ class UIAgent(Agent):
             source: The source of the message
 
         """
-        logger.debug(f"{self.__class__.__name__} received message from {source} for display")
+        logger.debug("Received message for display", agent_name=self.__class__.__name__, source=source)
 
     async def cleanup(self) -> None:
         """Clean up resources when the agent is no longer needed.
@@ -116,7 +116,7 @@ class UIAgent(Agent):
         This method should be implemented by concrete UI classes to properly
         release any resources like open connections, background tasks, etc.
         """
-        logger.debug(f"Cleaning up {self.__class__.__name__}")
+        logger.debug("Cleaning up", agent_name=self.__class__.__name__)
 
         # Cancel any input polling task if it exists
         if hasattr(self, "_input_task") and self._input_task and not self._input_task.done():

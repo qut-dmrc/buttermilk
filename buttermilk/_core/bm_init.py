@@ -26,7 +26,6 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 
 import asyncio
 import datetime
-import logging
 import os
 import platform  # For system information like node name
 from pathlib import Path
@@ -47,7 +46,7 @@ from buttermilk._core.cloud import CloudManager  # Manages cloud provider connec
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
 from buttermilk._core.keys import SecretsManager  # Manages secrets
 from buttermilk._core.llms import LLMs  # Manages LLM clients
-from buttermilk._core.log import logger  # Centralized logger instance
+from buttermilk._core.log import logger, setup_cloud_logging, setup_console_logging, setup_file_logging  # Centralized logger instance
 from buttermilk._core.query import QueryRunner  # For running SQL queries
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
@@ -310,18 +309,59 @@ class BM(BaseModel):
 
     def _post_init_setup(self) -> None:
         """Performs setup tasks immediately after Pydantic model initialization."""
+
+        # Set up logging early to ensure handlers are cleared before any are added
+        self._setup_logging()
+
         # Set GCP environment variables immediately (needed for GCS access)
         self._setup_gcp_environment()
 
         # Run initialization synchronously
         self._sync_background_init()
 
-        # Set up logging now that initialization is complete
-        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
-
         # Print current config to console
         print("Initialized Buttermilk (bm) with configuration:")
         print(self.model_dump(exclude_none=True))
+
+    def _setup_logging(self) -> None:
+        """Sets up modern logging for the Buttermilk application.
+
+        Uses structlog for JSON output to files and cloud, and Rich for beautiful console output.
+        No format strings or context filters needed - everything is structured.
+
+        Args:
+            verbose (bool): If True, creates DEBUG level file logs and enables more console detail.
+                Defaults to False.
+
+        """
+        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
+        setup_console_logging(verbose=verbose)
+
+        # Set up structured JSON file logging
+        log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
+        for log_file in log_files:
+            logger.info(f"Logging enabled - writing to: {log_file}")
+
+        # Log Buttermilk version if available
+        try:
+            from importlib.metadata import version
+
+            bm_version = version("buttermilk")
+        except ImportError:
+            bm_version = "unknown"
+
+        # Log initialization message with structured context
+        logger.info(
+            "Logging set up for run",
+            extra={
+                "platform": self.run_info.platform,
+                "project_name": self.run_info.name,  # Renamed to avoid LogRecord conflict
+                "job": self.run_info.job,
+                "run_id": self.run_info.run_id,
+                "save_dir": self.run_info.save_dir,
+                "buttermilk_version": bm_version,
+            },
+        )
 
     def _setup_gcp_environment(self) -> None:
         """Set up GCP environment variables immediately for early GCS access.
@@ -350,9 +390,7 @@ class BM(BaseModel):
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
 
-            logger.debug(
-                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
-            )
+            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
     def _sync_background_init(self) -> None:
         """Fallback synchronous version of background initialization."""
@@ -380,7 +418,7 @@ class BM(BaseModel):
 
     def _finalize_save_dir(self) -> None:
         """Construct the final save_dir path after cloud authentication is complete.
-        
+
         This method is called after cloud authentication to ensure that GCS paths
         can be properly handled. It constructs the full save directory path and
         stores it in run_info.save_dir.
@@ -404,9 +442,7 @@ class BM(BaseModel):
         """
         await self._initialization_complete.wait()
         if self._initialization_error:
-            raise RuntimeError(
-                f"BM initialization failed: {self._initialization_error}"
-            ) from self._initialization_error
+            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
         logger.debug("BM initialization verified complete")
 
     def _save_initial_config(self) -> None:
@@ -490,15 +526,10 @@ class BM(BaseModel):
             self._cloud_manager.login_clouds()  # Perform logins
 
             # Set up cloud logging now that cloud manager is authenticated
-            self._setup_cloud_logging()
+            if self.logger_cfg and self.logger_cfg.type == "gcp":
+                setup_cloud_logging(self.logger_cfg, self._cloud_manager, self.run_info)
 
             logger.debug("Cloud authentication completed")
-
-    def _setup_cloud_logging(self) -> None:
-        """Set up Google Cloud Logging after cloud authentication."""
-        from buttermilk._core.log import setup_cloud_logging
-        
-        setup_cloud_logging(self.logger_cfg, self._cloud_manager, self.run_info)
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
@@ -552,9 +583,7 @@ class BM(BaseModel):
 
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):  # Validate type from cache
-                        logger.warning(
-                            f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets."
-                        )
+                        logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
                         connections_data = None
                     else:
                         logger.info(f"Loaded LLM connections from cache: {cache_path}")
@@ -737,66 +766,6 @@ class BM(BaseModel):
                 raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
             self._credentials_cached = creds
         return self._credentials_cached
-
-    def setup_logging(self, verbose: bool = False) -> None:
-        """Sets up modern logging for the Buttermilk application.
-
-        Uses structlog for JSON output to files and cloud, and Rich for beautiful console output.
-        No format strings or context filters needed - everything is structured.
-
-        Args:
-            verbose (bool): If True, creates DEBUG level file logs and enables more console detail.
-                Defaults to False.
-
-        """
-        from buttermilk._core.log import setup_console_logging, setup_file_logging
-
-        # Clear existing handlers to avoid conflicts
-        logger.handlers.clear()
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
-
-        # Set up beautiful console logging with Rich
-        setup_console_logging(verbose=verbose)
-
-        # Set up structured JSON file logging
-        log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
-        for log_file in log_files:
-            logger.highlight(f"Logging enabled - writing to: {log_file}")
-
-        # Cloud logging will be set up when cloud_manager is first accessed
-        if self.logger_cfg and self.logger_cfg.type == "gcp":
-            logger.debug("Cloud logging configuration detected - will be initialized on first cloud access")
-
-        # Set logging levels to reduce noise from other libraries
-        root_logger.setLevel(logging.WARNING)
-        for logger_name in list(logging.Logger.manager.loggerDict.keys()):
-            if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
-                logging.getLogger(logger_name).setLevel(logging.WARNING)
-
-        # Keep buttermilk logger at INFO level
-        logger.setLevel(logging.INFO)
-
-        # Log initialization message with structured context
-        logger.info(
-            "Logging set up for run",
-            extra={
-                "platform": self.run_info.platform,
-                "project_name": self.run_info.name,  # Renamed to avoid LogRecord conflict
-                "job": self.run_info.job,
-                "run_id": self.run_info.run_id,
-                "save_dir": self.run_info.save_dir
-            }
-        )
-
-        # Log Buttermilk version if available
-        try:
-            from importlib.metadata import version
-            bm_version = version("buttermilk")
-            logger.info(f"Buttermilk version: {bm_version}")
-        except Exception:
-            logger.warning("Could not determine Buttermilk version.")
-
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.

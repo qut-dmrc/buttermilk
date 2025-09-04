@@ -8,7 +8,7 @@
 #     def silence_task_logs():
 #         pass
 
-from ._core.bm_init import BM, logger, tracer
+from ._core.bm_init import BM, tracer
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
@@ -28,6 +28,7 @@ from ._core.contract import (
     UserResponseMessage as UserResponseMessage,
 )
 from ._core.dmrc import get_bm, set_bm
+from ._core.log import logger
 
 get_buttermilk_instance = get_bm
 

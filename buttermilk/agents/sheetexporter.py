@@ -104,7 +104,7 @@ class GSheetExporter(Agent):
         from buttermilk.utils.gsheet import format_strings  # Local import for utility
 
         if not message.inputs:
-            logger.warning(f"GSheetExporter '{self.agent_id}': Received message with no inputs to export.")
+            logger.warning("GSheetExporter received message with no inputs to export.", agent_id=self.agent_id)
             # Return an empty or error trace
             raise ProcessingError("No data in message.inputs to export.")
 
@@ -115,17 +115,17 @@ class GSheetExporter(Agent):
         elif isinstance(message.inputs, list):
             input_data_list = message.inputs # type: ignore # Assuming list of dicts
         else:
-            logger.error(f"GSheetExporter '{self.agent_id}': message.inputs is not a dict or list of dicts. Type: {type(message.inputs)}")
+            logger.error("GSheetExporter message.inputs is not a dict or list of dicts.", agent_id=self.agent_id, type=type(message.inputs))
             raise ProcessingError(f"message.inputs type {type(message.inputs)} not supported.")
 
         try:
             dataset_df = pd.DataFrame.from_records(input_data_list)
         except Exception as e:
-            logger.error(f"GSheetExporter '{self.agent_id}': Failed to create DataFrame from inputs: {e!s}", exc_info=True)
+            logger.error("GSheetExporter failed to create DataFrame from inputs", agent_id=self.agent_id, error=e)
             raise ProcessingError(f"Failed to create DataFrame: {e!s}") from e
 
         if dataset_df.empty:
-            logger.info(f"GSheetExporter '{self.agent_id}': Input data resulted in an empty DataFrame. Nothing to export.")
+            logger.info("GSheetExporter input data resulted in an empty DataFrame. Nothing to export.", agent_id=self.agent_id)
             # Empty dataset - return None or minimal output
             return AgentOutput(
                 agent_id=self.agent_id,
@@ -141,16 +141,16 @@ class GSheetExporter(Agent):
         if self.save: # self.save is a configuration object from AgentConfig
             save_config_params = self.save.model_dump(exclude_none=True)
         else:
-            logger.warning(f"GSheetExporter '{self.agent_id}': No 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.")
+            logger.warning("GSheetExporter no 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.", agent_id=self.agent_id)
             # Depending on GSheet.save_gsheet behavior, this might fail or use defaults.
 
         try:
             sheet_info = self._gsheet.save_gsheet(df=formatted_contents_df, **save_config_params)
             # Assuming sheet_info has 'id' and 'url' attributes as per original code
             output_payload = {"sheet_url": sheet_info.url, "sheet_id": sheet_info.id, **save_config_params}
-            logger.info(f"GSheetExporter '{self.agent_id}': Successfully saved data to Google Sheet. URL: {sheet_info.url}, ID: {sheet_info.id}")
+            logger.info("GSheetExporter successfully saved data to Google Sheet.", agent_id=self.agent_id, url=sheet_info.url, sheet_id=sheet_info.id)
         except Exception as e:
-            logger.error(f"GSheetExporter '{self.agent_id}': Failed to save data to Google Sheet: {e!s}", exc_info=True)
+            logger.error("GSheetExporter failed to save data to Google Sheet", agent_id=self.agent_id, error=e)
             raise ProcessingError(f"GSheet save error: {e!s}") from e
 
         return AgentOutput(
