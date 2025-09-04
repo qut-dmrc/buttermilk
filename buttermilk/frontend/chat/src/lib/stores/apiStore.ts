@@ -561,12 +561,6 @@ export const configReloadStore = writable<{
 	error: null
 });
 
-// Store for configuration status
-export const configStatusStore = createApiStore<ConfigStatusResponse, ConfigStatusResponse>(
-	'/api/admin/config-status',
-	null
-);
-
 // Function to reload configuration
 export async function reloadConfiguration(): Promise<ConfigReloadResponse | null> {
 	configReloadStore.update(state => ({ ...state, loading: true, error: null }));
@@ -598,7 +592,7 @@ export async function reloadConfiguration(): Promise<ConfigReloadResponse | null
 			const currentFlow = get(selectedFlow);
 			if (currentFlow && result.flows_updated.includes(currentFlow)) {
 				console.log(`Refreshing info for updated flow: ${currentFlow}`);
-				await refetchFlowInfo();
+				// await refetchFlowInfo();
 			}
 		}
 		
@@ -613,9 +607,4 @@ export async function reloadConfiguration(): Promise<ConfigReloadResponse | null
 		console.error('Configuration reload failed:', error);
 		return null;
 	}
-}
-
-// Function to get configuration status
-export async function getConfigurationStatus(): Promise<ConfigStatusResponse | null> {
-	return configStatusStore.fetch();
 }

@@ -10,8 +10,7 @@ echo "=== Buttermilk Container Startup ==="
 # Environment variables with defaults
 GCS_CONFIG_BUCKET="${GCS_CONFIG_BUCKET:-}"
 GCS_CONFIG_PATH="${GCS_CONFIG_PATH:-buttermilk-configs}"
-MOUNT_POINT="${MOUNT_POINT:-/src/buttermilk/buttermilk/conf}"
-BACKUP_CONF_DIR="${BACKUP_CONF_DIR:-/src/buttermilk/buttermilk/conf.backup}"
+MOUNT_POINT="${MOUNT_POINT:-/mnt/conf}"
 
 # Function to check if directory is mounted
 is_mounted() {
@@ -48,32 +47,12 @@ mount_gcs_config() {
     fi
 }
 
-# Function to backup local configuration
-backup_local_config() {
-    if [ -d "$MOUNT_POINT" ] && [ ! -d "$BACKUP_CONF_DIR" ]; then
-        echo "Backing up local configuration to $BACKUP_CONF_DIR"
-        cp -r "$MOUNT_POINT" "$BACKUP_CONF_DIR"
-    fi
-}
-
-# Function to restore local configuration
-restore_local_config() {
-    if [ -d "$BACKUP_CONF_DIR" ]; then
-        echo "Restoring local configuration from backup"
-        rm -rf "$MOUNT_POINT"
-        cp -r "$BACKUP_CONF_DIR" "$MOUNT_POINT"
-    fi
-}
-
 # Main configuration setup
 setup_configuration() {
     if [ -n "$GCS_CONFIG_BUCKET" ]; then
         echo "GCS configuration mode enabled"
         echo "Bucket: $GCS_CONFIG_BUCKET"
         echo "Path: $GCS_CONFIG_PATH"
-        
-        # Backup local config before mounting
-        backup_local_config
         
         # Check if already mounted
         if is_mounted "$MOUNT_POINT"; then
@@ -90,23 +69,6 @@ setup_configuration() {
         fi
     else
         echo "Using local configuration (GCS_CONFIG_BUCKET not set)"
-    fi
-}
-
-# Function to start application
-start_application() {
-    echo "Starting Buttermilk application..."
-    
-    # Change to app directory
-    cd /src/buttermilk
-    
-    # Default to sleeping if no command specified
-    if [ $# -eq 0 ]; then
-        echo "No command specified, container ready and waiting..."
-        exec sleep infinity
-    else
-        echo "Executing command: $*"
-        exec "$@"
     fi
 }
 
@@ -129,7 +91,6 @@ trap cleanup EXIT INT TERM
 # Main execution
 main() {
     setup_configuration
-    start_application "$@"
 }
 
 # Execute main function with all arguments

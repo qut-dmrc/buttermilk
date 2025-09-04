@@ -68,10 +68,10 @@ In the web interface sidebar, an "ADMIN" section provides:
 
 ### Configuration Snapshots
 
-Every flow execution automatically saves a configuration snapshot to `/tmp/runs/{session_id}/config_snapshot/`:
+Every flow execution automatically saves a configuration snapshot to `{data_dir}/runs/{session_id}/config_snapshot/`:
 
 ```
-/tmp/runs/session_123/config_snapshot/
+{data_dir}/runs/session_123/config_snapshot/
 ├── latest.json                           # Latest snapshot metadata
 ├── flow_name_20230903_143000.json       # Timestamped flow config
 └── flow_name_20230903_144500.json       # Additional snapshots

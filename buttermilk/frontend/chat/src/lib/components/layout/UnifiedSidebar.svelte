@@ -14,10 +14,8 @@
   	selectedDataset,
   	selectedFlow,
   	selectedRecord,
+	reloadConfiguration,
   	configReloadStore,
-  	configStatusStore,
-  	reloadConfiguration,
-  	getConfigurationStatus
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
   import { onMount } from 'svelte';
@@ -219,18 +217,6 @@
     }
   }
 
-  async function handleStatusCheck() {
-    try {
-      await getConfigurationStatus();
-    } catch (error) {
-      console.error('Status check error:', error);
-    }
-  }
-
-  // Auto-refresh status on admin panel open
-  $: if (showAdmin && !$configStatusStore.data) {
-    handleStatusCheck();
-  }
 </script>
 
 {#if isTerminalPage}
@@ -362,35 +348,6 @@
 
 			{#if showAdmin}
 				<div class="admin-content">
-					<!-- Configuration Status -->
-					<div class="admin-section">
-						<h5 class="admin-section-title">Configuration Status</h5>
-						
-						{#if $configStatusStore.loading}
-							<div class="terminal-loading">Loading status...</div>
-						{:else if $configStatusStore.error}
-							<div class="terminal-error">Error: {$configStatusStore.error}</div>
-						{:else if $configStatusStore.data}
-							<div class="status-info">
-								<div class="status-item">
-									<strong>Flows:</strong> {$configStatusStore.data.flow_count}
-								</div>
-								<div class="status-item">
-									<strong>Config Dir:</strong> 
-									<small>{$configStatusStore.data.config_directory}</small>
-								</div>
-							</div>
-						{/if}
-						
-						<button 
-							class="btn admin-button" 
-							onclick={handleStatusCheck}
-							disabled={$configStatusStore.loading}
-						>
-							REFRESH STATUS
-						</button>
-					</div>
-
 					<!-- Configuration Reload -->
 					<div class="admin-section">
 						<h5 class="admin-section-title">Configuration Reload</h5>
