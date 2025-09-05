@@ -310,7 +310,7 @@ def job_minimal(fight_no_more_forever):
         "source": "testing",
         "flow_id": "testflow",
         "record": fight_no_more_forever,
-        "run_info": {"info": "test_run_info"},
+        "session_info": {"info": "test_session_info"},
     }
 
 

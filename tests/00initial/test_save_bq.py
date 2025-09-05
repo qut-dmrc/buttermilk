@@ -27,7 +27,7 @@ mock_schema = [
     {"name": "record_id", "type": "INTEGER"},
     {"name": "toxicity_score", "type": "FLOAT"},
     {"name": "another_score", "type": "FLOAT"},
-    {"name": "run_info", "type": "RECORD", "fields": []},
+    {"name": "session_info", "type": "RECORD", "fields": []},
     {"name": "inputs", "type": "RECORD", "fields": []},
 ]
 
@@ -52,9 +52,9 @@ def test_save_to_bigquery(mock_upload_rows):
         "record_id",
         "toxicity_score",
         "another_score",
-        "run_info",
+        "session_info",
         "inputs",
     ]
     assert all([col in df.columns for col in expected_columns])
-    assert df["run_info"].apply(lambda x: "moderation" in x["step"]).all()
+    assert df["session_info"].apply(lambda x: "moderation" in x["step"]).all()
     assert df["inputs"].apply(lambda x: "Text 1" in x["content"]).any()

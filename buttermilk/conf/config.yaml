@@ -11,7 +11,7 @@ flows: {}
 
 bm:
   _target_: buttermilk._core.bm_init.BM
-  run_info:
+  session_info:
     name: ${run.name}
     job: ${run.job}
   llms: ${llms}

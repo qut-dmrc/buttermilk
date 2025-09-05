@@ -82,8 +82,8 @@ class TestBMAsyncInitialization:
             assert mock_logger.info.called
 
             # Verify save_dir includes GCS path
-            assert bm.run_info.save_dir.startswith("gs://test-bucket/runs")
-            assert "test/test-job" in bm.run_info.save_dir
+            assert bm.session_info.save_dir.startswith("gs://test-bucket/runs")
+            assert "test/test-job" in bm.session_info.save_dir
 
     @pytest.mark.anyio
     async def test_initialization_error_handling(self, mock_cloud_config):

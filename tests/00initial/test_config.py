@@ -8,10 +8,10 @@ from buttermilk import BM
 
 
 def test_has_test_info(bm: BM):
-    assert bm.run_info.name == "buttermilk"
-    assert bm.run_info.job == "testing"
-    assert bm.run_info.save_dir is not None
-    assert bm.run_info.save_dir != ""
+    assert bm.session_info.name == "buttermilk"
+    assert bm.session_info.job == "testing"
+    assert bm.session_info.save_dir is not None
+    assert bm.session_info.save_dir != ""
 
 
 def test_config_llms(bm: BM):
@@ -20,8 +20,8 @@ def test_config_llms(bm: BM):
 
 
 def test_save_dir(bm: BM):
-    assert "runs/buttermilk/testing/" in bm.run_info.save_dir
-    assert AnyPath(bm.run_info.save_dir)
+    assert "runs/buttermilk/testing/" in bm.session_info.save_dir
+    assert AnyPath(bm.session_info.save_dir)
 
 
 def test_singleton(bm: BM):

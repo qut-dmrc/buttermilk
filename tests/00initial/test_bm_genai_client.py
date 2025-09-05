@@ -28,7 +28,7 @@ def mock_cloud_config():
 def bm_config(mock_cloud_config):
     """Create BM configuration."""
     return {
-        "run_info": {
+        "session_info": {
             "name": "test",
             "job": "test_job",
         },
@@ -118,7 +118,7 @@ def test_genai_client_missing_location():
     )
 
     bm_config = {
-        "run_info": {
+        "session_info": {
             "name": "test",
             "job": "test_job",
         },
@@ -141,7 +141,7 @@ def test_genai_client_missing_location():
 def test_genai_client_no_gcp_config():
     """Test error when no GCP config is present."""
     bm_config = {
-        "run_info": {
+        "session_info": {
             "name": "test",
             "job": "test_job",
         },

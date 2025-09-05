@@ -18,7 +18,7 @@ def test_logger_initialised(bm):
 
 def test_save(bm):
     uri = bm.save(data=["test data"], extension=".txt")
-    assert uri.startswith(bm.run_info.save_dir)
+    assert uri.startswith(bm.session_info.save_dir)
     assert uri.endswith(".txt")
     uploaded = AnyPath(uri)
     assert uploaded.exists()

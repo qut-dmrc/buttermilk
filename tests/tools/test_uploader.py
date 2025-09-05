@@ -21,7 +21,7 @@ def sample_outputs() -> list[AgentTrace]:
             },
             session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
             call_id="Bc8scgvzT3vycJrrJUMhov",
-            run_info={
+            session_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
@@ -39,7 +39,7 @@ def sample_outputs() -> list[AgentTrace]:
             },
             session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
             call_id="8MPyjSZt6PikCEMocsPFr6",
-            run_info={
+            session_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",

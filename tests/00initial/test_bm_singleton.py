@@ -4,24 +4,22 @@ import hydra
 
 """Tests for the BM singleton implementation."""
 
-import pytest
 
 from buttermilk import (
     BM,  # Removed logger import here
     get_bm,  # Import get_bm
 )
-from buttermilk._core.exceptions import FatalError
 
 
 def test_conf(conf):
     """Test that the test configuration is loaded correctly."""
     # Test the actual nested configuration structure
-    assert conf.bm.run_info.job == "testing"
-    assert conf.bm.run_info.name == "buttermilk"
+    assert conf.bm.session_info.job == "testing"
+    assert conf.bm.session_info.name == "buttermilk"
 
 
 def test_bm_instance(bm):
-    # After BM instantiation, run_info is converted to session_info
+    # After BM instantiation, session_info is available
     assert bm.session_info.job == "testing"
     assert bm.session_info.name == "buttermilk"
 
@@ -57,10 +55,10 @@ def test_singleton_instance(bm, conf):
     assert bm_new_session.session_info.session_id != bm.session_info.session_id, "Different sessions have different IDs"
 
     # But both should have the same basic configuration
-    assert bm_new_session.session_info.name == conf.bm.run_info.name, "New session should match config"
-    assert bm_new_session.session_info.job == conf.bm.run_info.job, "New session should match config"
-    assert bm_direct.session_info.name == conf.bm.run_info.name, "Singleton should match config"
-    assert bm_direct.session_info.job == conf.bm.run_info.job, "Singleton should match config"
+    assert bm_new_session.session_info.name == conf.bm.session_info.name, "New session should match config"
+    assert bm_new_session.session_info.job == conf.bm.session_info.job, "New session should match config"
+    assert bm_direct.session_info.name == conf.bm.session_info.name, "Singleton should match config"
+    assert bm_direct.session_info.job == conf.bm.session_info.job, "Singleton should match config"
 
 
 def test_session_scoped_instances(conf, bm):
@@ -106,11 +104,11 @@ def test_singleton_between_modules(bm):
     assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
 
 
-def test_run_info_backward_compatibility():
-    """Test that run_info gets automatically converted to session_info."""
-    # Create BM with old run_info format - should show deprecation warning
+def test_session_info_backward_compatibility():
+    """Test that session_info gets automatically converted to session_info."""
+    # Create BM with old session_info format - should show deprecation warning
     old_config = {
-        "run_info": {
+        "session_info": {
             "name": "test-project",
             "job": "test-task"
         }
