@@ -238,12 +238,11 @@ class ExecutionContext(BaseModel):
 
             # Set up cloud logging now that cloud manager is authenticated
             if self.logger_cfg and self.logger_cfg.type == "gcp":
-                # Create minimal run_info for cloud logging compatibility
+                # Create minimal session_info for cloud logging compatibility
                 from buttermilk._core.bm_init import SessionInfo
                 context_info = SessionInfo(
                     name="execution-context",
-                    job="infrastructure",
-                    run_id=self.execution_context_id
+                    job="infrastructure"
                 )
                 setup_cloud_logging(self.logger_cfg, self._cloud_manager, context_info)
 

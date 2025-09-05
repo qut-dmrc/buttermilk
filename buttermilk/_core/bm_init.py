@@ -18,7 +18,7 @@ Key functionalities:
 -   Access to secrets via a configured secret provider (`bm.secret_manager`).
 -   Execution of SQL queries (`bm.query_runner`).
 -   Setup and management of logging, including optional cloud logging.
--   Handling of session information (`bm.run_info`) and standardized saving of artifacts.
+-   Handling of session information (`bm.session_info`) and standardized saving of artifacts.
 -   Integration with Weave for tracing (`bm.get_weave_client()`).
 """
 
@@ -42,7 +42,6 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 from rich import print  # For rich console output
 
-from buttermilk._core.execution_context import ExecutionContext, get_execution_context  # Execution context
 from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
@@ -77,19 +76,17 @@ def _make_session_id() -> str:
 
 
 class SessionInfo(BaseModel):
-    """Comprehensive session information for observability and tracking.
+    """Simplified session information for observability and tracking.
 
-    SessionInfo serves as the primary observability unit in Buttermilk's architecture.
-    It captures all relevant information about a session for logging, monitoring,
-    organizing outputs, and tracking research activities.
+    SessionInfo serves as the primary observability unit with a clean, simple design.
+    Each session has a unique identifier and optional batch grouping for related tasks.
 
-    This replaces the previous run-centric approach with session-centric observability,
-    allowing for proper isolation and tracking of individual tasks while maintaining
-    relationships to research runs and execution contexts.
+    This approach eliminates artificial complexity while providing proper session
+    isolation and optional task grouping when needed.
 
     Attributes:
         session_id (str): Unique identifier for this session.
-        run_id (str): Research run identifier this session belongs to.
+        batch_id (str | None): Optional batch identifier for grouping related sessions.
         platform (str): Platform where the session is running.
         name (str): User-defined name for the current session or project.
         job (str): User-defined name for the specific job or task.
@@ -98,15 +95,11 @@ class SessionInfo(BaseModel):
         save_dir (str | None): Primary directory for saving session outputs.
         flow_api (str | None): URL or identifier for a flow API, if applicable.
         
-        # Enhanced observability fields
+        # Observability fields
         status (str): Current session status.
         started_at (datetime | None): When the session started execution.
         completed_at (datetime | None): When the session completed.
         error_message (str | None): Error message if session failed.
-        
-        # Research context
-        research_run_id (str | None): ID of the research run this session belongs to.
-        execution_context_id (str | None): ID of the execution context.
         
         # Metrics
         records_processed (int): Number of records processed.
@@ -120,7 +113,7 @@ class SessionInfo(BaseModel):
 
     # Core identification
     session_id: str = Field(default_factory=_make_session_id, description="Unique identifier for this session.")
-    run_id: str = Field(..., description="Research run identifier - can be shared across related sessions.")
+    batch_id: str | None = Field(default=None, description="Optional batch identifier for grouping related sessions.")
     
     # Basic session info
     platform: str = Field(default="local", description="Platform where the session is running.")
@@ -138,10 +131,6 @@ class SessionInfo(BaseModel):
     started_at: datetime.datetime | None = Field(default=None, description="When the session started execution.")
     completed_at: datetime.datetime | None = Field(default=None, description="When the session completed.")
     error_message: str | None = Field(default=None, description="Error message if session failed.")
-    
-    # Research context
-    research_run_id: str | None = Field(default=None, description="ID of the research run this session belongs to.")
-    execution_context_id: str | None = Field(default=None, description="ID of the execution context.")
     
     # Metrics
     records_processed: int = Field(default=0, description="Number of records processed.")
@@ -181,7 +170,7 @@ class SessionInfo(BaseModel):
             session_id=self.session_id,
             old_status=old_status,
             new_status=status,
-            research_run_id=self.research_run_id
+            batch_id=self.batch_id
         )
     
     def increment_records_processed(self, count: int = 1) -> None:
@@ -200,21 +189,14 @@ class SessionInfo(BaseModel):
         """
         self.outputs_generated += count
         
-    def set_research_context(
-        self, 
-        research_run_id: str | None = None,
-        execution_context_id: str | None = None
-    ) -> None:
-        """Set the research context identifiers.
+    def set_batch_context(self, batch_id: str | None = None) -> None:
+        """Set the batch context identifier.
         
         Args:
-            research_run_id: ID of the research run this session belongs to.
-            execution_context_id: ID of the execution context.
+            batch_id: ID of the batch this session belongs to (if any).
         """
-        if research_run_id is not None:
-            self.research_run_id = research_run_id
-        if execution_context_id is not None:
-            self.execution_context_id = execution_context_id
+        if batch_id is not None:
+            self.batch_id = batch_id
             
     def get_session_summary(self) -> dict[str, Any]:
         """Get a comprehensive summary of the session.
@@ -230,9 +212,7 @@ class SessionInfo(BaseModel):
             
         return {
             "session_id": self.session_id,
-            "run_id": self.run_id,
-            "research_run_id": self.research_run_id,
-            "execution_context_id": self.execution_context_id,
+            "batch_id": self.batch_id,
             "name": self.name,
             "job": self.job,
             "status": self.status,
@@ -264,14 +244,11 @@ class SessionInfo(BaseModel):
 
 
 class BM(BaseModel):
-    """Session-scoped Buttermilk instance providing access to resources.
+    """Session-scoped Buttermilk instance with simplified infrastructure sharing.
 
-    `BM` serves as a session-specific gateway to Buttermilk's resources. It delegates
-    infrastructure access to the shared ExecutionContext while maintaining its own
-    session-specific state like run information and save directories.
-
-    Unlike the previous singleton pattern, each session gets its own BM instance
-    while sharing infrastructure through ExecutionContext.
+    Each session gets its own BM instance with session-specific state while sharing
+    infrastructure resources (clouds, secrets, LLMs) through dependency injection.
+    This eliminates complex hierarchy while providing proper session isolation.
 
     Typical Usage:
     ```python
@@ -279,29 +256,23 @@ class BM(BaseModel):
 
     bm = create_session_bm(name="my_project", job="analysis")
 
-    # Access cloud storage (delegated to ExecutionContext)
+    # Access shared infrastructure
     bm.gcs.upload_from_filename(...)
-
-    # Interact with LLMs (delegated to ExecutionContext)
     response = bm.llms.my_chat_model.create(messages=[...])
 
-    # Session-specific save operations
+    # Session-specific operations
     bm.save(data, "results.json")
     ```
 
     Attributes:
-        run_info (SessionInfo): Session-specific information including session and run IDs.
-        execution_context (ExecutionContext): Reference to shared infrastructure context.
+        session_info (SessionInfo): Session-specific information and metrics.
         save_dir_base (str): Base directory for this session's outputs.
         datasets (dict[str, BaseStorageConfig]): Session-specific dataset overrides.
 
     """
 
     # Session information
-    run_info: SessionInfo = Field(..., description="Session information including session ID, run ID, job name, etc.")
-    
-    # Reference to shared infrastructure
-    execution_context: ExecutionContext = Field(..., description="Reference to shared execution context.")
+    session_info: SessionInfo = Field(..., description="Session information including session ID, batch ID, job name, etc.")
     
     # Session-specific configuration
     datasets: dict[str, BaseStorageConfig] = Field(
@@ -313,6 +284,12 @@ class BM(BaseModel):
         validate_default=True,
         description="Base directory for saving session-specific outputs.",
     )
+
+    # Shared infrastructure - injected during creation
+    _cloud_manager = None  # Will be injected
+    _secret_manager = None  # Will be injected
+    _llms_instance = None  # Will be injected
+    _query_runner = None  # Will be injected
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -382,9 +359,6 @@ class BM(BaseModel):
         """Performs session-specific setup tasks after model initialization."""
         
         try:
-            # Ensure execution context is initialized
-            _ = self.execution_context
-            
             # Set up session-specific logging context
             self._setup_session_logging()
             
@@ -397,9 +371,9 @@ class BM(BaseModel):
             self._initialization_complete.set()
             logger.info(
                 "Session initialized successfully",
-                session_id=self.run_info.session_id,
-                run_id=self.run_info.run_id,
-                save_dir=self.run_info.save_dir
+                session_id=self.session_info.session_id,
+                batch_id=self.session_info.batch_id,
+                save_dir=self.session_info.save_dir
             )
         except Exception as e:
             logger.error(f"Error during session initialization: {e}")
@@ -407,31 +381,23 @@ class BM(BaseModel):
             self._initialization_complete.set()
 
     def _setup_session_logging(self) -> None:
-        """Sets up session-specific logging context.
-        
-        The actual logging infrastructure is managed by ExecutionContext.
-        This method sets up the complete hierarchical context for this session.
-        """
+        """Sets up simplified session-specific logging context."""
         from buttermilk._core.context import set_logging_context
         
-        # Set complete logging context for this session
+        # Set simplified logging context for this session
         set_logging_context(
-            session_id=self.run_info.session_id,
-            run_id=self.run_info.run_id,
-            execution_context_id=self.run_info.execution_context_id,
-            research_run_id=self.run_info.research_run_id,
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
             agent_id=None  # Will be set by agents when needed
         )
         
         logger.info(
             "Session logging context established",
-            session_id=self.run_info.session_id,
-            run_id=self.run_info.run_id,
-            research_run_id=self.run_info.research_run_id,
-            execution_context_id=self.run_info.execution_context_id,
-            platform=self.run_info.platform,
-            project_name=self.run_info.name,
-            job=self.run_info.job
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
+            platform=self.session_info.platform,
+            project_name=self.session_info.name,
+            job=self.session_info.job
         )
 
 
@@ -439,25 +405,20 @@ class BM(BaseModel):
     def _finalize_save_dir(self) -> None:
         """Construct the final save_dir path for this session.
         
-        Constructs the full save directory path and stores it in run_info.save_dir.
+        Constructs the full save directory path and stores it in session_info.save_dir.
         """
         # Construct full save directory path using session_id for uniqueness
-        save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.session_id
-        self.run_info.save_dir = str(save_dir_path)
-        logger.debug(f"Finalized session save_dir: {self.run_info.save_dir}")
+        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.name / self.session_info.job / self.session_info.session_id
+        self.session_info.save_dir = str(save_dir_path)
+        logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
     async def ensure_initialized(self) -> None:
         """Ensure that session initialization is complete.
-        
-        Also ensures the underlying ExecutionContext is initialized.
 
         Raises:
             RuntimeError: If initialization failed with an error
         """
-        # Ensure execution context is initialized first
-        await self.execution_context.ensure_initialized()
-        
-        # Then ensure session initialization is complete
+        # Ensure session initialization is complete
         await self._initialization_complete.wait()
         if self._initialization_error:
             raise RuntimeError(f"Session initialization failed: {self._initialization_error}") from self._initialization_error
@@ -465,10 +426,10 @@ class BM(BaseModel):
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
-        # Data to save: BM config and run_info
+        # Data to save: BM config and session_info
         config_data_to_save = [
             self.model_dump(exclude_none=True),
-            self.run_info.model_dump(exclude_none=True),
+            self.session_info.model_dump(exclude_none=True),
         ]
         self.save(
             data=config_data_to_save,
@@ -479,61 +440,73 @@ class BM(BaseModel):
 
     @property
     def cloud_manager(self):
-        """Provides access to the CloudManager instance via ExecutionContext."""
-        return self.execution_context.cloud_manager
+        """Provides access to the CloudManager instance."""
+        if self._cloud_manager is None:
+            raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
+        return self._cloud_manager
 
 
 
     @property
     def secret_manager(self):
-        """Provides access to the SecretsManager instance via ExecutionContext."""
-        return self.execution_context.secret_manager
+        """Provides access to the SecretsManager instance."""
+        if self._secret_manager is None:
+            raise RuntimeError("SecretsManager not available. Ensure infrastructure is properly injected.")
+        return self._secret_manager
 
     @property
     def llms(self):
-        """Provides access to the LLMs manager instance via ExecutionContext."""
-        return self.execution_context.llms
+        """Provides access to the LLMs manager instance."""
+        if self._llms_instance is None:
+            raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
+        return self._llms_instance
 
 
 
     @property
     def query_runner(self):
-        """Provides access to the QueryRunner instance via ExecutionContext."""
-        return self.execution_context.query_runner
+        """Provides access to the QueryRunner instance."""
+        if self._query_runner is None and self._cloud_manager is not None:
+            from buttermilk._core.query import QueryRunner
+            self._query_runner = QueryRunner(bq_client=self.bq)
+        if self._query_runner is None:
+            raise RuntimeError("QueryRunner not available. Ensure cloud infrastructure is properly injected.")
+        return self._query_runner
 
     @property
     def gcp_credentials(self) -> Any:
-        """Provides access to GCP credentials via ExecutionContext."""
-        return self.execution_context.gcp_credentials
+        """Provides access to GCP credentials."""
+        return self.cloud_manager.gcp_credentials
 
     def get_gcp_access_token(self) -> str:
-        """Get a valid GCP access token via ExecutionContext."""
-        return self.execution_context.get_gcp_access_token()
+        """Get a valid GCP access token."""
+        return self.cloud_manager.get_access_token()
 
     @property
     def gcs(self) -> Any:
-        """Provides access to the GCS client via ExecutionContext."""
-        return self.execution_context.gcs
+        """Provides access to the GCS client."""
+        return self.cloud_manager.gcs
 
     @property
     def bq(self) -> Any:
-        """Provides access to the BigQuery client via ExecutionContext."""
-        return self.execution_context.bq
+        """Provides access to the BigQuery client."""
+        return self.cloud_manager.bq
 
     @property
     def genai(self) -> Any:
-        """Provides access to the GenAI client via ExecutionContext."""
-        return self.execution_context.genai
+        """Provides access to the GenAI client."""
+        return self.cloud_manager.genai
 
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client via ExecutionContext."""
-        return await self.execution_context.get_weave_client()
+        """Provide access to the Weights & Biases Weave client."""
+        import weave
+        return weave.get_client()
 
     @property
     def credentials(self) -> dict[str, str]:
-        """Provides access to shared system credentials via ExecutionContext."""
-        return self.execution_context.credentials
+        """Provides access to shared system credentials."""
+        return self.secret_manager.get_secret(cfg_key="credentials_secret")
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
@@ -551,7 +524,7 @@ class BM(BaseModel):
 
                     async def _fetch_and_set_ip():
                         ip = await get_ip()
-                        self.run_info.ip = ip
+                        self.session_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
                     self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
@@ -590,8 +563,8 @@ class BM(BaseModel):
         effective_save_dir_str: str
         if save_dir:
             effective_save_dir_str = str(save_dir)
-        elif self.run_info.save_dir:
-            effective_save_dir_str = self.run_info.save_dir
+        elif self.session_info.save_dir:
+            effective_save_dir_str = self.session_info.save_dir
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
@@ -616,7 +589,7 @@ class BM(BaseModel):
                 {
                     "message": f"Successfully saved data to: {saved_file_path}",
                     "uri": str(saved_file_path),  # Ensure URI is a string
-                    "run_id": self.run_info.run_id,  # Include run_id for context
+                    "session_id": self.session_info.session_id,  # Include session_id for context
                 },
             )
             return str(saved_file_path)  # Return path as string
@@ -668,7 +641,7 @@ class BM(BaseModel):
             overwrite=overwrite,
             do_not_return_results=do_not_return_results,
             save_to_gcs=save_to_gcs,
-            save_dir=self.run_info.save_dir,  # Pass BM's default save directory
+            save_dir=self.session_info.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )
 
@@ -768,10 +741,12 @@ class BM(BaseModel):
 def create_session_bm(
     name: str,
     job: str,
-    run_id: str | None = None,
-    execution_context: ExecutionContext | None = None,
+    batch_id: str | None = None,
     platform: str = "local",
     save_dir_base: str | None = None,
+    cloud_manager=None,
+    secret_manager=None,
+    llms_instance=None,
     **kwargs
 ) -> BM:
     """Create a new session-scoped BM instance.
@@ -779,121 +754,88 @@ def create_session_bm(
     Args:
         name: User-defined name for the current session or project.
         job: User-defined name for the specific job or task.
-        run_id: Research run identifier. If None, uses session_id as run_id.
-        execution_context: ExecutionContext to use. If None, uses global context.
+        batch_id: Optional batch identifier for grouping related sessions.
         platform: Platform where the session is running.
         save_dir_base: Base directory for session outputs.
+        cloud_manager: Shared cloud manager instance (optional).
+        secret_manager: Shared secret manager instance (optional).
+        llms_instance: Shared LLMs instance (optional).
         **kwargs: Additional arguments for SessionInfo.
         
     Returns:
         BM: A new session-scoped BM instance.
-        
-    Raises:
-        RuntimeError: If no ExecutionContext is available.
     """
-    # Get or create execution context
-    if execution_context is None:
-        try:
-            execution_context = get_execution_context()
-        except RuntimeError:
-            raise RuntimeError(
-                "No ExecutionContext available. Create one with create_execution_context() first."
-            )
-    
     # Create session info
     session_info_data = {
         "name": name,
         "job": job,
         "platform": platform,
+        "batch_id": batch_id,
         **kwargs
     }
     
     # Create SessionInfo instance to get auto-generated session_id
     session_info = SessionInfo(**session_info_data)
     
-    # If no run_id provided, use session_id as run_id (single-session runs)
-    if run_id is None:
-        run_id = session_info.session_id
-    
-    # Update the session_info with the run_id and context information
-    session_info.run_id = run_id
-    session_info.set_research_context(
-        research_run_id=run_id,  # For single-session runs, run_id is the research_run_id
-        execution_context_id=execution_context.execution_context_id
-    )
-    
     # Create BM instance
     bm_data = {
-        "run_info": session_info,
-        "execution_context": execution_context,
+        "session_info": session_info,
     }
     
     if save_dir_base is not None:
         bm_data["save_dir_base"] = save_dir_base
         
-    return BM(**bm_data)
+    bm = BM(**bm_data)
+    
+    # Inject shared infrastructure if provided
+    if cloud_manager is not None:
+        bm._cloud_manager = cloud_manager
+    if secret_manager is not None:
+        bm._secret_manager = secret_manager
+    if llms_instance is not None:
+        bm._llms_instance = llms_instance
+        
+    return bm
 
 
-def create_research_run_bm(
+def create_batch_session_bm(
     name: str,
     job: str,
-    research_run_id: str,
-    execution_context: ExecutionContext | None = None,
+    batch_id: str,
     platform: str = "local",
     save_dir_base: str | None = None,
+    cloud_manager=None,
+    secret_manager=None,
+    llms_instance=None,
     **kwargs
 ) -> BM:
-    """Create a new session-scoped BM instance that belongs to a research run.
+    """Create a new session-scoped BM instance that belongs to a batch.
     
     This is a convenience function for creating BM instances that are part of
-    a larger research run (e.g., multiple related sessions in a batch).
+    a larger batch (e.g., multiple related sessions in a batch job).
     
     Args:
         name: User-defined name for the current session or project.
         job: User-defined name for the specific job or task.
-        research_run_id: Research run identifier that this session belongs to.
-        execution_context: ExecutionContext to use. If None, uses global context.
+        batch_id: Batch identifier that this session belongs to.
         platform: Platform where the session is running.
         save_dir_base: Base directory for session outputs.
+        cloud_manager: Shared cloud manager instance (optional).
+        secret_manager: Shared secret manager instance (optional).
+        llms_instance: Shared LLMs instance (optional).
         **kwargs: Additional arguments for SessionInfo.
         
     Returns:
-        BM: A new session-scoped BM instance belonging to the research run.
+        BM: A new session-scoped BM instance belonging to the batch.
     """
-    # Get or create execution context
-    if execution_context is None:
-        try:
-            execution_context = get_execution_context()
-        except RuntimeError:
-            raise RuntimeError(
-                "No ExecutionContext available. Create one with create_execution_context() first."
-            )
-    
-    # Create session info with proper research context
-    session_info_data = {
-        "name": name,
-        "job": job,
-        "platform": platform,
+    return create_session_bm(
+        name=name,
+        job=job,
+        batch_id=batch_id,
+        platform=platform,
+        save_dir_base=save_dir_base,
+        cloud_manager=cloud_manager,
+        secret_manager=secret_manager,
+        llms_instance=llms_instance,
         **kwargs
-    }
-    
-    session_info = SessionInfo(**session_info_data)
-    
-    # Set run_id to session_id (each session has its own run for tracing)
-    # but set research_run_id to link sessions together
-    session_info.run_id = session_info.session_id
-    session_info.set_research_context(
-        research_run_id=research_run_id,
-        execution_context_id=execution_context.execution_context_id
     )
-    
-    # Create BM instance
-    bm_data = {
-        "run_info": session_info,
-        "execution_context": execution_context,
-    }
-    
-    if save_dir_base is not None:
-        bm_data["save_dir_base"] = save_dir_base
-        
-    return BM(**bm_data)

@@ -8,9 +8,8 @@
 #     def silence_task_logs():
 #         pass
 
-from ._core.bm_init import BM, tracer, create_session_bm, create_research_run_bm
+from ._core.bm_init import BM, tracer, create_session_bm, create_batch_session_bm
 from ._core.execution_context import ExecutionContext, create_execution_context
-from ._core.research_run import ResearchRun, create_research_run, create_batch_research_run
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
@@ -67,12 +66,9 @@ __all__ = [
     "initialize_session_bm",  # Initialize session-scoped BM as singleton
     # New session-scoped API
     "create_session_bm",  # Factory for session-scoped BM instances
-    "create_research_run_bm",  # Factory for research run BM instances
+    "create_batch_session_bm",  # Factory for batch session BM instances
     "ExecutionContext",  # Execution context class
     "create_execution_context",  # Factory for execution context
-    "ResearchRun",  # Research run class for task grouping
-    "create_research_run",  # Factory for research runs
-    "create_batch_research_run",  # Factory for batch research runs
     # Agent contracts
     "AgentConfig",
     "AgentVariants",

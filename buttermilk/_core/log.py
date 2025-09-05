@@ -10,9 +10,7 @@ from rich.logging import RichHandler
 from buttermilk._core.context import (
     agent_id_var, 
     session_id_var, 
-    run_id_var,
-    execution_context_id_var,
-    research_run_id_var,
+    batch_id_var,
     get_logging_context
 )
 
@@ -101,10 +99,9 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
 
     log_files = []
 
-    # Set up context for this session using three-tier architecture
+    # Set up context for this session using simplified architecture
     context = get_logging_context()
-    # Add run_id to context and bind all available context variables
-    context["run_id"] = run_id
+    # Bind all available context variables
     non_null_context = {k: v for k, v in context.items() if v is not None}
     if non_null_context:
         structlog.contextvars.bind_contextvars(**non_null_context)
@@ -146,7 +143,7 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
     return log_files
 
 
-def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
+def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
     """Set up Google Cloud Logging with structured JSON.
 
     Uses the same structlog JSON format as file logging for consistency.
@@ -154,7 +151,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
     Args:
         logger_cfg: Logger configuration object
         cloud_manager: Cloud manager instance for GCS client access
-        run_info: Session run information
+        session_info: Session information
     """
     if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
         try:
@@ -166,17 +163,17 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
                 labels={
                     "project": logger_cfg.project_id,
                     "location": logger_cfg.location,
-                    "namespace": run_info.name,
-                    "job": run_info.job,
-                    "task_id": run_info.run_id,
+                    "namespace": session_info.name,
+                    "job": session_info.job,
+                    "task_id": session_info.session_id,
                 },
             )
 
             cloud_handler = CloudLoggingHandler(
                 client=cloud_manager.gcs_log_client(logger_cfg),
                 resource=cloud_logging_resource,
-                name=run_info.name,
-                labels=run_info.model_dump(include={"run_id", "name", "job", "platform"}),
+                name=session_info.name,
+                labels=session_info.model_dump(include={"session_id", "name", "job", "platform"}),
             )
             cloud_handler.setLevel(logging.INFO)
 
@@ -195,19 +192,16 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
             )
             cloud_handler.setFormatter(structlog_formatter)
 
-            # Bind session context for automatic inclusion (enhanced for three-tier architecture)
+            # Bind session context for automatic inclusion (simplified architecture)
             context_vars = {
-                "session_id": getattr(run_info, 'session_id', run_info.run_id)[-12:],  # Last 12 chars for brevity
-                "run_id": run_info.run_id,
-                "job": run_info.job,
-                "project": run_info.name,
+                "session_id": session_info.session_id[-12:],  # Last 12 chars for brevity
+                "job": session_info.job,
+                "project": session_info.name,
             }
             
-            # Add research context if available
-            if hasattr(run_info, 'research_run_id') and run_info.research_run_id:
-                context_vars["research_run_id"] = run_info.research_run_id[-12:]  # Last 12 chars
-            if hasattr(run_info, 'execution_context_id') and run_info.execution_context_id:
-                context_vars["execution_context_id"] = run_info.execution_context_id[-12:]  # Last 12 chars
+            # Add batch context if available
+            if session_info.batch_id:
+                context_vars["batch_id"] = session_info.batch_id[-12:]  # Last 12 chars
                 
             structlog.contextvars.bind_contextvars(**context_vars)
 
