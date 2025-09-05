@@ -216,7 +216,7 @@ class TestAsyncBackgroundOperations:
             
             # Make save async to simulate real behavior
             async def async_save(*args, **kwargs):
-                return {"uri": "/tmp/test", "run_id": "test"}
+                return {"uri": "/tmp/test", "session_id": "test"}
             
             mock_save.return_value = async_save()
             

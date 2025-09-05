@@ -17,7 +17,7 @@ def mock_session_info():
         name="test_project",
         job="test_job",
         platform="local",
-        run_id="test-run-123",
+        session_id="test-run-123",
         save_dir="/tmp/test",
         flow_api="http://localhost:8000/flow/",
     )
@@ -82,7 +82,7 @@ def test_agenttrace_serializes_runinfo_correctly(mock_bm, agent_config, agent_in
     session_info = serialized["session_info"]
     assert "name" in session_info
     assert "job" in session_info
-    assert "run_id" in session_info
+    assert "session_id" in session_info
     assert "platform" in session_info
     assert "save_dir" in session_info
     assert "flow_api" in session_info
@@ -90,7 +90,7 @@ def test_agenttrace_serializes_runinfo_correctly(mock_bm, agent_config, agent_in
     # Verify values match
     assert session_info["name"] == "test_project"
     assert session_info["job"] == "test_job"
-    assert session_info["run_id"] == "test-run-123"
+    assert session_info["session_id"] == "test-run-123"
     assert session_info["platform"] == "local"
     # save_dir gets modified during BM initialization to include full path
     assert session_info["save_dir"] == "/tmp/test_project/test_job/test-run-123"

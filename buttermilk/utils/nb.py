@@ -38,7 +38,7 @@ def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
         path = path.as_posix()
 
     overrides.append(f"+run=notebook")
-    overrides.append(f"bm.run_info.job={job}")
+    overrides.append(f"bm.session_info.job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
         cfg = compose(config_name="config", overrides=overrides)
@@ -54,7 +54,7 @@ def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
 
 
     logger.info(
-        f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",
+        f"Starting interactive run for {bm.session_info.name} job {bm.session_info.job} in notebook",
     )
 
     return objs

@@ -40,8 +40,8 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowMessage,
-    UserResponseMessage,
     TaskProcessingComplete,
+    UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
@@ -136,7 +136,7 @@ class AutogenOrchestrator(Orchestrator):
         """Initializes the Autogen runtime and registers all configured agents."""
         # Initialize the topic ID if not already set
         if self._topic is None:
-            self._topic = DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}")
+            self._topic = DefaultTopicId(type=f"{bm.session_info.name}-{bm.session_info.job}-{shortuuid.uuid()[:8]}")
 
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")

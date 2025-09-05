@@ -20,7 +20,6 @@ an Autogen-based multi-agent conversation).
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import UTC, datetime
 from typing import Any, Self
 
 import weave
@@ -41,18 +40,14 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Added SaveInfo
 )
 from buttermilk._core.contract import FlowMessage
-from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.log import logger
 from buttermilk._core.message_data import clean_empty_values
 from buttermilk._core.storage_config import (
-    BaseStorageConfig,  # Storage configuration models
     StorageConfig,
 )
 from buttermilk._core.types import (
-    Record,  # Data types
     RunRequest,
 )
-from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
 
@@ -320,11 +315,11 @@ class Orchestrator(OrchestratorProtocol, ABC):
             attributes={
                 "flow.name": self.name,
                 "flow.display_name": display_name,
-                "session_id": getattr(bm.run_info, 'run_id', None),
-                "run_id": getattr(bm.run_info, 'run_id', None),
-                "platform": getattr(bm.run_info, 'platform', None),
-                "job": getattr(bm.run_info, 'job', None),
-            }
+                "session_id": getattr(bm.run_info, "session_id", None),
+                "session_id": getattr(bm.run_info, "session_id", None),
+                "platform": getattr(bm.run_info, "platform", None),
+                "job": getattr(bm.run_info, "job", None),
+            },
         ) as otel_span:
             try:
                 logger.debug(f"Running orchestrator '{self.name}' with inputs: {inputs}")

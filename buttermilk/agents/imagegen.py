@@ -38,7 +38,7 @@ from PIL import Image  # Pillow library for image manipulation
 from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
 
-from buttermilk import bm, logger, get_bm  # Global Buttermilk instance for accessing config/credentials
+from buttermilk import get_bm, logger  # Global Buttermilk instance for accessing config/credentials
 from buttermilk._core.image import ImageRecord, google_genai_image_to_pil, read_image  # Buttermilk ImageRecord model
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
@@ -91,7 +91,7 @@ class TextToImageClient(RetryWrapper):
             text: The textual prompt to generate the image from.
             save_path: Optional. The full path (local or cloud) where the generated
                 image should be saved. If empty, a default path is constructed
-                using `bm.run_info.save_dir`, the client's `prefix`, a UUID, and `filetype`.
+                using `bm.session_info.save_dir`, the client's `prefix`, a UUID, and `filetype`.
             negative_prompt: Optional. A textual prompt describing elements to avoid
                 in the generated image.
             filetype: The desired filetype for the saved image. Currently defaults
@@ -107,16 +107,16 @@ class TextToImageClient(RetryWrapper):
         final_save_path = save_path
         bm = get_bm()
         if not final_save_path:
-            # Ensure bm.run_info.save_dir is available and valid
-            if not bm.run_info.save_dir or not Path(bm.run_info.save_dir).is_dir():  # Check if local dir, cloud paths need different check
-                # Fallback if bm.run_info.save_dir is not set or invalid, consider a temporary directory
+            # Ensure bm.session_info.save_dir is available and valid
+            if not bm.session_info.save_dir or not Path(bm.session_info.save_dir).is_dir():  # Check if local dir, cloud paths need different check
+                # Fallback if bm.session_info.save_dir is not set or invalid, consider a temporary directory
                 import tempfile
 
                 temp_dir = tempfile.mkdtemp()
-                logger.warning(f"bm.run_info.save_dir not available or invalid, using temporary directory: {temp_dir}")
+                logger.warning(f"bm.session_info.save_dir not available or invalid, using temporary directory: {temp_dir}")
                 final_save_path = f"{temp_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
             else:
-                final_save_path = f"{bm.run_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
+                final_save_path = f"{bm.session_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
 
         log_msg_parts = [f"Generating image with {self.model} using prompt: ```{text}```"]
         if negative_prompt:
@@ -863,7 +863,7 @@ class BatchImageGenerator(BaseModel):
         save_path (CloudPath | Path): The base directory path (local or cloud)
             where generated images and the summary JSON file will be saved.
             A unique subdirectory will be created under this path for each batch run.
-            Defaults to `bm.run_info.save_dir` if not provided.
+            Defaults to `bm.session_info.save_dir` if not provided.
         _clients (dict[str, TextToImageClient]): Private dictionary to store
             instantiated client objects, keyed by client class name.
         _tasks (list[asyncio.Task[ImageRecord]]): Private list to hold asyncio tasks for
@@ -887,7 +887,7 @@ class BatchImageGenerator(BaseModel):
         cls,
         v: str | CloudPath | Path | None,  # Allow None as input
     ) -> CloudPath | Path:
-        """Validates `save_path` and defaults to `bm.run_info.save_dir` if not provided.
+        """Validates `save_path` and defaults to `bm.session_info.save_dir` if not provided.
 
         Args:
             v: The input value for `save_path`.
@@ -897,21 +897,21 @@ class BatchImageGenerator(BaseModel):
 
         Raises:
             ValueError: If `v` is not a string, Path, or CloudPath.
-            RuntimeError: If `bm.run_info.save_dir` is not available when `v` is None.
+            RuntimeError: If `bm.session_info.save_dir` is not available when `v` is None.
         """
         if v is None:
             bm = get_bm()
-            if bm.run_info.save_dir:
+            if bm.session_info.save_dir:
                 return (
-                    CloudPath(bm.run_info.save_dir)
-                    if isinstance(bm.run_info.save_dir, str) and bm.run_info.save_dir.startswith(("gs://", "s3://", "az://"))
-                    else Path(bm.run_info.save_dir)
+                    CloudPath(bm.session_info.save_dir)
+                    if isinstance(bm.session_info.save_dir, str) and bm.session_info.save_dir.startswith(("gs://", "s3://", "az://"))
+                    else Path(bm.session_info.save_dir)
                 )  # type: ignore
             else:
-                # Fallback to a temporary directory if bm.run_info.save_dir is also None
+                # Fallback to a temporary directory if bm.session_info.save_dir is also None
                 # This ensures save_path is always set.
                 temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
-                logger.warning(f"No save_path provided and bm.run_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
+                logger.warning(f"No save_path provided and bm.session_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
                 return temp_dir
         if isinstance(v, str):
             return CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)

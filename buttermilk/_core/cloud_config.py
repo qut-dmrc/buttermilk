@@ -375,10 +375,7 @@ class InfrastructureConfig(BaseModel):
     )
 
     # Execution configuration
-    run_info: RunInfoConfig = Field(
-        default_factory=RunInfoConfig,
-        description="Run execution configuration"
-    )
+    session_info: RunInfoConfig = Field(default_factory=RunInfoConfig, description="Run execution configuration")
     tracing: TracingConfig = Field(
         default_factory=TracingConfig,
         description="Experiment tracing configuration"

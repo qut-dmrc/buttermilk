@@ -79,7 +79,7 @@ def save(
         data (Any): The data to be saved. Can be a Pandas DataFrame, list of dicts,
             Pydantic model, string, bytes, or other pickleable Python object.
         save_dir (AnyPath | str): The base directory for saving. If empty,
-            it attempts to use `bm.run_info.save_dir` from the global Buttermilk instance.
+            it attempts to use `bm.session_info.save_dir` from the global Buttermilk instance.
             Can be a local path string or a `CloudPath` object.
         uri (CloudPath | str): An optional full URI (e.g., "gs://bucket/file.json",
             "s3://...", or a local file path) where the data should be saved.
@@ -116,14 +116,12 @@ def save(
     else:  # save_dir is empty or not a path type
         try:
             bm = get_bm()
-            final_save_dir_str = bm.run_info.save_dir
-            if not final_save_dir_str:  # If bm.run_info.save_dir is also None or empty
-                logger.warning(
-                    "`save_dir` not provided and `bm.run_info.save_dir` is not set. Saving might default to temporary or current dir."
-                )
+            final_save_dir_str = bm.session_info.save_dir
+            if not final_save_dir_str:  # If bm.session_info.save_dir is also None or empty
+                logger.warning("`save_dir` not provided and `bm.session_info.save_dir` is not set. Saving might default to temporary or current dir.")
         except Exception as e:
             logger.warning(
-                f"Could not find default save_dir from BM object (bm.run_info.save_dir). Error: {e!s}. Saving might default to temporary or current dir."
+                f"Could not find default save_dir from BM object (bm.session_info.save_dir). Error: {e!s}. Saving might default to temporary or current dir."
             )
 
     # Prepare data: Ensure DataFrame index is serializable if it's a DataFrame

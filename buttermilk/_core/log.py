@@ -7,12 +7,7 @@ from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
 
-from buttermilk._core.context import (
-    agent_id_var, 
-    session_id_var, 
-    batch_id_var,
-    get_logging_context
-)
+from buttermilk._core.context import get_logging_context
 
 # Single logger for the entire application
 _LOGGER_NAME = "buttermilk"
@@ -84,11 +79,11 @@ def setup_console_logging(verbose: bool = False) -> None:
     configure_structlog()
 
 
-def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
+def setup_file_logging(session_id: str, verbose: bool = False) -> list[str]:
     """Set up structured JSON logging to files.
 
     Args:
-        run_id: Unique run identifier for log file naming
+        session_id: Unique run identifier for log file naming
         verbose: If True, creates both INFO and DEBUG log files
 
     Returns:
@@ -107,7 +102,7 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
         structlog.contextvars.bind_contextvars(**non_null_context)
 
     # Always create an INFO JSON log file
-    info_log_path = Path(f"/tmp/buttermilk_{run_id}_info.jsonl")
+    info_log_path = Path(f"/tmp/buttermilk_{session_id}_info.jsonl")
     info_handler = logging.FileHandler(info_log_path, mode="w")
     info_handler.setLevel(logging.INFO)
 
@@ -132,7 +127,7 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
 
     # Add debug file logging when verbose is True
     if verbose:
-        debug_log_path = Path(f"/tmp/buttermilk_{run_id}_debug.jsonl")
+        debug_log_path = Path(f"/tmp/buttermilk_{session_id}_debug.jsonl")
         debug_handler = logging.FileHandler(debug_log_path, mode="w")
         debug_handler.setLevel(logging.DEBUG)
         debug_handler.setFormatter(structlog_formatter)
@@ -219,4 +214,3 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
                     "location": logger_cfg.location,
                 },
             )
-

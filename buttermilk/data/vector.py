@@ -843,9 +843,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 from buttermilk import get_bm
 
                 bm = get_bm()
-                run_id = bm.run_info.run_id if bm and bm.run_info else None
+                session_id = bm.session_info.session_id if bm and bm.session_info else None
             except:
-                run_id = None
+                session_id = None
 
             for chunk in record.chunks:
                 chunk.metadata.update(
@@ -856,8 +856,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "deduplication_strategy": self.deduplication_strategy,
                     },
                 )
-                if run_id:
-                    chunk.metadata["processing_run_id"] = run_id
+                if session_id:
+                    chunk.metadata["processing_session_id"] = session_id
 
             logger.debug(f"💾 [VECTORIZER-{record.record_id}] Storing chunks in ChromaDB...")
             await self._store_chunks_for_record(record)
@@ -886,7 +886,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 metadata={
                     "chunk_types": chunk_types,
                     "content_hash": content_hash,
-                    "run_id": run_id,
+                    "session_id": session_id,
                 },
             )
 
@@ -1703,9 +1703,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
                 try:
                     failed_doc_filename = (
-                        Path(bm.run_info.save_dir)
-                        / Path(FAILED_BATCH_DIR)
-                        / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                        Path(bm.session_info.save_dir) / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     )
                     logger.info(
                         f"Saving failed document {doc.record_id} to {failed_doc_filename}",
