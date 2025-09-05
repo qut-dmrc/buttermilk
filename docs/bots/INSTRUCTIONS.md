@@ -52,7 +52,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **🔧 WHEN YOU CATCH YOURSELF USING THESE PHRASES:**
 1. **STOP immediately** - Do not proceed with file creation OR command execution
-2. **REDIRECT to exemplar agent**: Use `Task: exemplar - [describe your testing/validation need]`
+2. **REDIRECT to tester agent**: Use `Task: tester - [describe your testing/validation need]`
 3. **Check the validation decision tree below** 
 4. **Use approved validation methods only**
 5. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
@@ -61,7 +61,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 ### 🤖 EXEMPLAR TESTING SUBAGENT AVAILABLE:
 When you need ANY form of testing, validation, or verification, use:
 ```
-Task: exemplar
+Task: tester
 ```
 This specialized agent handles ALL testing scenarios including:
 - Creating examples and demonstrations as proper pytest tests
@@ -197,9 +197,9 @@ def test_myclass_serialization():
 **CRITICAL**: When you need ANY form of testing, validation, examples, or verification:
 
 1. **DO NOT** create standalone scripts, files, or use inline commands
-2. **IMMEDIATELY** invoke the exemplar testing subagent:
+2. **IMMEDIATELY** invoke the testing subagent:
    ```
-   Task: exemplar - [describe your testing/validation need]
+   Task: tester - [describe your testing/validation need]
    ```
 3. The subagent will create proper pytest tests that serve as:
    - Living documentation and examples

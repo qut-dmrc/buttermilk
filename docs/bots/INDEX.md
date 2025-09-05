@@ -62,7 +62,7 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Integration with DocProcessor and agents
 - Examples for scripts and CLI tools
 
-### [exemplar subagent](.claude/agents/exemplar.md) - Testing Specialist Subagent
+### [tester subagent](.claude/agents/tester.md) - Testing Specialist Subagent
 - Comprehensive testing, validation, and verification agent (configured in .claude/agents/)
 - Prevents standalone validation code creation
 - Converts all testing needs into proper pytest tests
@@ -97,8 +97,8 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 **STANDALONE VALIDATION PATTERN:**
 1. **NEVER** create standalone validation (files OR commands) outside proper pytest workflow
 2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "I'll use python -c..."
-3. **ALWAYS** redirect to exemplar agent: `Task: exemplar - [describe need]`
-4. **ENFORCEMENT**: Any standalone validation = immediately redirect to exemplar agent
+3. **ALWAYS** redirect to tester agent: `Task: tester - [describe need]`
+4. **ENFORCEMENT**: Any standalone validation = immediately redirect to tester agent
 
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
@@ -122,7 +122,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 - **ALWAYS** trace data flow when debugging validation errors
 - **NEVER** commit without updating relevant documentation
 - **ALWAYS** use the provided debugging framework
-- **NEVER** create standalone validation (files OR commands) - Use exemplar agent ONLY (violating this = restart task)
+- **NEVER** create standalone validation (files OR commands) - Use tester agent ONLY (violating this = restart task)
 
 ## 🔗 External Resources
 - [Main Project README](/README.md)

@@ -1,5 +1,5 @@
 ---
-name: exemplar
+name: tester
 description: Use this agent when you need to verify, validate, test, or demonstrate code usage, create examples, or show how a feature works. This agent handles ALL testing, validation, and verification scenarios.
 tools: Read, Write, MultiEdit, Grep, Glob
 ---

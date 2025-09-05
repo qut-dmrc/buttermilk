@@ -9,6 +9,9 @@ all: test
 config:
 	uv run python -m buttermilk.runner.cli -c job +flows=[trans,transllm,zot,osb] +run=api verbose=true llms=full
 
+kill: kill_api kill_chat
+	@echo "All Buttermilk processes terminated."
+
 kill_chat:
 	@echo "Killing chat (frontend) process..."
 	@pkill -SIGTERM -f "node.*frontend/chat.*vite dev" || true
@@ -20,9 +23,6 @@ kill_api:
 	@pkill -SIGTERM -f "python.*buttermilk.runner.cli" || true
 	@sleep 5
 	@pkill -SIGKILL -f "python.*buttermilk.runner.cli" || true
-
-kill: kill_chat kill_api
-	@echo "All Buttermilk processes terminated."
 
 # For production API server ONLY.
 api:
@@ -61,3 +61,6 @@ test tests:
 
 scheduled_tests:
 	uv run 	python -m pytest -m scheduled tests
+
+	
+.PHONY: config kill kill_api kill_chat build
