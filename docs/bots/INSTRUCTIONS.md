@@ -6,9 +6,10 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 # 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
-**YOU HAVE TWO DOCUMENTED PATTERNS THAT MUST STOP:**
+**YOU HAVE THREE DOCUMENTED PATTERNS THAT MUST STOP:**
 1. **RUSH-TO-CODE**: Jumping to implementation without exploration
 2. **STANDALONE TEST SCRIPTS**: Creating single-use test files instead of proper pytest tests
+3. **INLINE PYTHON VALIDATION**: Using `uv run python -c "..."` or similar commands for testing/validation
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
@@ -21,11 +22,13 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **BEFORE you test, validate, or verify ANY code behavior, you MUST:**
 
-### ❌ NEVER CREATE THESE FILES:
+### ❌ NEVER CREATE THESE FILES OR COMMANDS:
 - `test_*.py` files outside the `tests/` directory
 - "Quick test scripts" or "validation files" in the project root
 - Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
 - `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
+- **Inline Python validation commands**: `uv run python -c "..."`, `python -c "..."`, or similar execution patterns
+- **Bash-embedded test scripts**: Multi-line Python code in heredocs or command strings
 
 ### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
 
@@ -46,6 +49,9 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - "Let me see if this works..."
 - "I need to test this..."
 - "Let me make sure this works..."
+- "I'll run a quick test..."
+- "Let me execute this to check..."
+- "I'll use python -c to verify..."
 
 **File Creation Violations:**
 - "I'll create a script to test..."
@@ -54,6 +60,13 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - "Here's a sample script..."
 - "I'll write a quick validation..."
 - "Let me create a verification..."
+
+**Inline Command Violations:**
+- "I'll run python -c to test..."
+- "Let me execute this inline..."
+- "I'll use uv run python -c..."
+- "Let me run a quick python command..."
+- "I'll test this with a simple python execution..."
 
 **🔧 WHEN YOU CATCH YOURSELF USING THESE PHRASES:**
 1. **STOP immediately** - Do not proceed with file creation
@@ -89,6 +102,19 @@ print("Success!")
 assert result["field"] == "expected"
 ```
 
+**❌ WRONG (Inline Python Command)**:
+```bash
+uv run python -c "
+import logging
+from buttermilk._core.execution_context import ExecutionContext
+from buttermilk._core.log import logger
+
+ctx = ExecutionContext()
+logger.info('Test log message')
+print('Logging test complete')
+"
+```
+
 **✅ CORRECT (Proper Pytest)**:
 ```python
 # tests/unit/test_something.py
@@ -122,8 +148,17 @@ def test_myclass_serialization():
 - Creating "quick test" files anywhere outside tests/
 - Writing verification code in project root or implementation directories
 - Creating demo files, sample scripts, or proof-of-concept files
+- **Using inline Python commands for validation**: `uv run python -c "..."`, `python -c "..."`, or similar
+- **Executing Python code via Bash**: Multi-line Python in heredocs, command strings, or pipes
+- **"Quick verification" commands**: Any form of standalone Python execution for testing purposes
 
 ### 🔄 VALIDATION DECISION TREE:
+
+**🛑 CRITICAL CHECKPOINT: Before ANY testing/validation action, ask:**
+- Am I about to use `python -c`, `uv run python -c`, or similar inline execution?
+- Am I about to create ANY form of standalone test code (file or command)?
+- **IF YES TO EITHER: STOP IMMEDIATELY and use approved methods below**
+
 1. **Do existing tests cover this functionality?** 
    - YES: Run those tests with `uv run pytest tests/path/to/test.py`
    - NO: Go to step 2
@@ -139,8 +174,35 @@ def test_myclass_serialization():
 4. **Do I just need to verify basic functionality?**
    - Use the project's debugging tools from docs/bots/debugging.md
    - Use existing API endpoints or monitoring tools
+   - **NEVER** use inline Python execution for "quick verification"
 
-**REMEMBER**: The urge to "quickly test" or "verify it works" is the most common trigger for workflow violations. Resist this urge and use proper validation methods.
+**REMEMBER**: The urge to "quickly test" or "verify it works" is the most common trigger for workflow violations. This includes the temptation to use `python -c` for "simple checks". Resist this urge and use proper validation methods.
+
+### 🆘 WHEN YOU HIT VALIDATION ROADBLOCKS:
+
+**Common scenarios that trigger violations:**
+- "The existing tests don't cover this exact case"
+- "I need to test this quickly before moving on"
+- "Let me just verify my changes work"
+- "The debugging tools seem complex for this simple check"
+
+**CORRECT responses to these scenarios:**
+1. **No exact test coverage**: Add a test case to the most relevant existing test file
+2. **Need quick verification**: Use debugging tools from `docs/bots/debugging.md` or run existing related tests
+3. **Want to verify changes**: Run the full test suite or specific relevant test modules
+4. **Debugging tools seem complex**: ASK FOR HELP rather than creating workarounds
+
+**🛑 NEVER justify inline Python with phrases like:**
+- "This is just a simple check..."
+- "It's faster than writing a proper test..."
+- "I just need to see if this works..."
+- "This is temporary validation..."
+
+**✅ ALWAYS choose:**
+- Proper pytest tests in tests/ directory
+- Existing project debugging tools
+- Running existing test suites
+- Asking for guidance when stuck
 
 ## 📚 EXAMPLE CREATION PROTOCOL
 
@@ -201,13 +263,16 @@ def test_myclass_serialization():
 ### 📋 MANDATORY PRE-ACTION CHECKLIST:
 **Ask yourself these questions BEFORE taking action:**
 
-1. **Am I about to create a file?**
-   - If YES: Where am I creating it? Is it in the correct directory?
+1. **Am I about to create a file OR execute inline code for testing?**
+   - File creation: Where am I creating it? Is it in the correct directory?
+   - Inline execution: Am I using `python -c`, `uv run python -c`, or similar for validation?
    - For tests: MUST be in `tests/` directory with pytest conventions
+   - **CRITICAL**: Inline Python execution for testing is FORBIDDEN
 
 2. **Am I about to validate/test something?**
    - If YES: Check the validation decision tree in the previous section
    - Use existing tests or debugging tools FIRST
+   - **NEVER** use inline Python commands or Bash-embedded scripts for validation
 
 3. **Am I using any red flag phrases?**
    - If YES: STOP immediately and use approved methods instead
@@ -261,6 +326,8 @@ Specific rules:
 - Ignoring tool-specific syntax requirements (e.g., `--wait` needs values)
 - Dumping full outputs instead of extracting key findings
 - Creating custom debugging scripts instead of using documented tools
+- **Using inline Python commands for debugging validation**: `uv run python -c "..."` or similar
+- **Creating "quick debug scripts"** when debugging tools seem difficult to use
 
 ### 🚨 DEBUGGING OUTPUT ENFORCEMENT:
 When you find yourself about to paste:
