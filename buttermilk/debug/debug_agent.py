@@ -56,7 +56,7 @@ class DebugAgent(Agent):
         Returns:
             The last N lines of the most recent log file, or error message if no logs found
         """
-        log_files = glob.glob("/tmp/buttermilk_*.log")
+        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
         if not log_files:
             return "No buttermilk log files found in /tmp/"
 
@@ -76,7 +76,7 @@ class DebugAgent(Agent):
         Returns:
             List of log files with path, size, and modification time
         """
-        log_files = glob.glob("/tmp/buttermilk_*.log")
+        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
 
         files_info = []
         for log_file in log_files:

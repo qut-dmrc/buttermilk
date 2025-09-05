@@ -140,7 +140,7 @@ class ExecutionContext(BaseModel):
         # Set up logging early
         self._setup_logging()
         
-        # Set GCP environment variables immediately  
+        # Set GCP environment variables immediately
         self._setup_gcp_environment()
         
         # Run initialization synchronously
@@ -159,7 +159,7 @@ class ExecutionContext(BaseModel):
         setup_console_logging(verbose=verbose)
 
         # Set up structured JSON file logging
-        log_files = setup_file_logging(run_id=self.execution_context_id, verbose=verbose)
+        log_files = setup_file_logging(session_id=self.execution_context_id, verbose=verbose)
         for log_file in log_files:
             logger.info(f"ExecutionContext logging enabled - writing to: {log_file}")
 
@@ -258,7 +258,7 @@ class ExecutionContext(BaseModel):
             logger.debug("SecretsManager initialized successfully")
         return self._secret_manager
 
-    @property 
+    @property
     def llms(self) -> LLMs:
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
@@ -401,7 +401,7 @@ class ExecutionContext(BaseModel):
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client."""
-        if ("weave" in self.tracing and self.tracing["weave"].enabled 
+        if ("weave" in self.tracing and self.tracing["weave"].enabled
             and not self._tracing_instrumented.is_set()):
             asyncio.create_task(self._setup_tracing())
             await self._tracing_instrumented.wait()

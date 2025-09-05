@@ -243,7 +243,7 @@ class NonInteractiveDebugClient:
 
     async def get_logs(self, lines: int = 50, min_level: str = "INFO") -> dict:
         """Get recent log lines, with an optional minimum level filter."""
-        log_files = glob.glob("/tmp/buttermilk_*.log")
+        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
         if not log_files:
             return {"error": "No log files found in /tmp/"}
 
@@ -254,10 +254,18 @@ class NonInteractiveDebugClient:
         min_level_num = levels.get(min_level.upper(), 1)
 
         def get_line_level(line: str) -> int:
-            match = re.search(r" - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ", line)
-            if match:
-                return levels.get(match.group(1), -1)
-            return 99
+            try:
+                # Try to parse as JSON first (new JSONL format)
+                import json
+                log_entry = json.loads(line.strip())
+                level = log_entry.get("level", "").upper()
+                return levels.get(level, -1)
+            except (json.JSONDecodeError, AttributeError):
+                # Fallback to old text format parsing
+                match = re.search(r" - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ", line)
+                if match:
+                    return levels.get(match.group(1), -1)
+                return 99
 
         try:
             with open(latest_log) as f:
