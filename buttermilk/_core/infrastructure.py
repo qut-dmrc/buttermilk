@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import hydra
 import pydantic
+from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field
 
 from buttermilk._core.log import logger
@@ -237,7 +239,7 @@ class InfrastructureManager(BaseModel):
             platform=platform,
             save_dir_base=save_dir_base,
             cloud_manager=self.cloud_manager if self.clouds else None,
-            secret_manager=self.secret_manager if self.secret_provider else None,
+            secret_manager=self.secret_manager if self._find_cloud_with_service("secrets") else None,
             llms_instance=self.llms_instance if self.llms else None,
             **kwargs
         )
@@ -303,80 +305,42 @@ def create_infrastructure_manager(
 def create_infrastructure_from_config(config: dict[str, Any]) -> InfrastructureManager:
     """Create an InfrastructureManager from a configuration dictionary.
     
-    This function handles the migration from old configuration format to new
-    service-aware cloud provider format.
+    This function properly instantiates cloud provider configurations using Hydra
+    to ensure they have the required methods for service detection.
     
     Args:
-        config: Configuration dictionary that may contain old-style separate
-                service configs or new-style service-aware cloud configs.
+        config: Configuration dictionary containing cloud and LLM configurations.
                 
     Returns:
-        InfrastructureManager: A new infrastructure manager instance.
+        InfrastructureManager: A new infrastructure manager instance with hydrated clouds.
     """
-    # If we have the new format with service-aware clouds, use it directly
-    if 'clouds' in config and all(
-        hasattr(cloud, 'secrets') or hasattr(cloud, 'logging') or 
-        hasattr(cloud, 'pubsub') or hasattr(cloud, 'tracing')
-        for cloud in config.get('clouds', [])
-    ):
-        return create_infrastructure_manager(
-            clouds=config.get('clouds', []),
-            llms=config.get('llms', {})
-        )
+    hydrated_clouds = []
     
-    # Otherwise, migrate from old format
-    from buttermilk._core.cloud_config import GCPConfig, SecretsServiceConfig, LoggingServiceConfig, PubSubServiceConfig, TracingServiceConfig
+    # Process cloud configurations and instantiate them properly
+    for cloud_config in config.get("clouds", []):
+        try:
+            # If it's a DictConfig, instantiate it using Hydra
+            if isinstance(cloud_config, DictConfig):
+                hydrated_cloud = hydra.utils.instantiate(cloud_config)
+                hydrated_clouds.append(hydrated_cloud)
+            else:
+                # Already instantiated - use as-is
+                hydrated_clouds.append(cloud_config)
+        except Exception as e:
+            logger.error(f"Failed to instantiate cloud config {cloud_config}: {e}")
+            raise RuntimeError(f"Cannot instantiate cloud provider: {e}") from e
     
-    migrated_clouds = []
-    
-    # Process existing clouds and add service configurations
-    for cloud_config in config.get('clouds', []):
-        if cloud_config.get('type') == 'gcp':
-            # Create GCP config with integrated services
-            gcp_config_data = {
-                'type': 'gcp',
-                'project_id': cloud_config.get('project_id'),
-                'region': cloud_config.get('region', 'us-central1'),
-                'location': cloud_config.get('location'),
-                'storage_bucket': cloud_config.get('bucket'),
-                'bigquery_dataset': cloud_config.get('bigquery_dataset', 'buttermilk'),
-            }
-            
-            # Add secrets service if configured
-            if 'secret_provider' in config and config['secret_provider'].get('type') == 'gcp':
-                gcp_config_data['secrets'] = SecretsServiceConfig(
-                    models_secret=config['secret_provider'].get('models_secret', 'dev__llm__connections'),
-                    credentials_secret=config['secret_provider'].get('credentials_secret', 'dev__shared_credentials')
-                )
-            
-            # Add logging service if configured
-            if 'logger_cfg' in config and config['logger_cfg'].get('type') == 'gcp':
-                gcp_config_data['logging'] = LoggingServiceConfig(
-                    verbose=config['logger_cfg'].get('verbose', False)
-                )
-            
-            # Add pubsub service if configured
-            if 'pubsub' in config and config['pubsub'].get('type') == 'gcp':
-                gcp_config_data['pubsub'] = PubSubServiceConfig(
-                    jobs_topic=config['pubsub'].get('jobs_topic', 'jobs'),
-                    jobs_subscription=config['pubsub'].get('jobs_subscription', 'jobs-sub'),
-                    status_topic=config['pubsub'].get('status_topic', 'flow'),
-                    status_subscription=config['pubsub'].get('status_subscription', 'flow-sub')
-                )
-            
-            # Add tracing service if configured
-            if 'tracing' in config and config['tracing'].get('otel', {}).get('enabled'):
-                gcp_config_data['tracing'] = TracingServiceConfig(
-                    enabled=True
-                )
-            
-            migrated_clouds.append(GCPConfig(**gcp_config_data))
-        
-        else:
-            # Keep other cloud types as-is
-            migrated_clouds.append(cloud_config)
+    # Also instantiate LLM configs if they're DictConfigs
+    llms_config = config.get("llms", {})
+    if isinstance(llms_config, DictConfig):
+        try:
+            # Convert DictConfig to regular dict for LLMs
+            llms_config = OmegaConf.to_container(llms_config, resolve=True)
+        except Exception as e:
+            logger.error(f"Failed to convert LLMs config: {e}")
+            raise RuntimeError(f"Cannot process LLMs configuration: {e}") from e
     
     return create_infrastructure_manager(
-        clouds=migrated_clouds,
-        llms=config.get('llms', {})
+        clouds=hydrated_clouds,
+        llms=llms_config
     )
