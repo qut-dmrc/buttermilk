@@ -51,8 +51,60 @@ class CloudProviderConfig(BaseModel, ABC):
         pass
 
 
+class SecretsServiceConfig(BaseModel):
+    """Configuration for secrets management service."""
+    
+    models_secret: str = Field(
+        default="dev__llm__connections",
+        description="Secret name for LLM API keys"
+    )
+    credentials_secret: str = Field(
+        default="dev__shared_credentials", 
+        description="Secret name for shared credentials"
+    )
+
+
+class LoggingServiceConfig(BaseModel):
+    """Configuration for cloud logging service."""
+    
+    verbose: bool = Field(
+        default=False,
+        description="Enable verbose logging"
+    )
+
+
+class PubSubServiceConfig(BaseModel):
+    """Configuration for pub/sub messaging service."""
+    
+    jobs_topic: str = Field(
+        default="jobs",
+        description="Topic name for job messages"
+    )
+    jobs_subscription: str = Field(
+        default="jobs-sub",
+        description="Subscription name for job messages"  
+    )
+    status_topic: str = Field(
+        default="flow",
+        description="Topic name for status messages"
+    )
+    status_subscription: str = Field(
+        default="flow-sub",
+        description="Subscription name for status messages"
+    )
+
+
+class TracingServiceConfig(BaseModel):
+    """Configuration for OpenTelemetry tracing service."""
+    
+    enabled: bool = Field(
+        default=True,
+        description="Enable OpenTelemetry tracing"
+    )
+
+
 class GCPConfig(CloudProviderConfig):
-    """Google Cloud Platform configuration."""
+    """Google Cloud Platform configuration with integrated services."""
 
     type: Literal["gcp"] = "gcp"
     project_id: Optional[str] = Field(
@@ -72,7 +124,7 @@ class GCPConfig(CloudProviderConfig):
         description="Default location (defaults to region)"
     )
 
-    # Service-specific configurations
+    # Core storage configurations
     storage_bucket: Optional[str] = Field(
         default=None,
         description="Default GCS bucket for storage operations"
@@ -80,6 +132,24 @@ class GCPConfig(CloudProviderConfig):
     bigquery_dataset: str = Field(
         default="buttermilk",
         description="Default BigQuery dataset"
+    )
+    
+    # Integrated service configurations
+    secrets: Optional[SecretsServiceConfig] = Field(
+        default=None,
+        description="Secrets management configuration"
+    )
+    logging: Optional[LoggingServiceConfig] = Field(
+        default=None,
+        description="Cloud logging configuration"
+    )
+    pubsub: Optional[PubSubServiceConfig] = Field(
+        default=None,
+        description="Pub/Sub messaging configuration"
+    )
+    tracing: Optional[TracingServiceConfig] = Field(
+        default=None,
+        description="OpenTelemetry tracing configuration"
     )
 
     @model_validator(mode="after")
@@ -116,6 +186,7 @@ class GCPConfig(CloudProviderConfig):
             },
             "pubsub": {
                 **base_config,
+                **(self.pubsub.model_dump() if self.pubsub else {}),
             },
             "logging": {
                 **base_config,
@@ -123,13 +194,29 @@ class GCPConfig(CloudProviderConfig):
                     "type": "global",
                     "labels": {"project_id": self.project_id},
                 },
+                **(self.logging.model_dump() if self.logging else {}),
             },
             "secretmanager": {
                 **base_config,
+                **(self.secrets.model_dump() if self.secrets else {}),
+            },
+            "tracing": {
+                **base_config,
+                **(self.tracing.model_dump() if self.tracing else {}),
             },
         }
 
         return service_configs.get(service, base_config)
+    
+    def has_service(self, service: str) -> bool:
+        """Check if this cloud provider has a specific service configured."""
+        service_map = {
+            "secrets": self.secrets,
+            "logging": self.logging,
+            "pubsub": self.pubsub,
+            "tracing": self.tracing,
+        }
+        return service_map.get(service) is not None
 
 
 class VertexAIConfig(CloudProviderConfig):
@@ -148,6 +235,16 @@ class VertexAIConfig(CloudProviderConfig):
         default=None,
         description="Vertex AI location (defaults to region)"
     )
+    bucket: Optional[str] = Field(
+        default=None,
+        description="GCS bucket for Vertex AI artifacts"
+    )
+    
+    # Vertex AI can also support tracing since it's GCP-based
+    tracing: Optional[TracingServiceConfig] = Field(
+        default=None,
+        description="OpenTelemetry tracing configuration"
+    )
 
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "VertexAIConfig":
@@ -162,10 +259,30 @@ class VertexAIConfig(CloudProviderConfig):
 
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get Vertex AI client configuration."""
-        return {
+        base_config = {
             "project": self.project_id,
             "location": self.location,
         }
+        
+        service_configs = {
+            "vertex": {
+                **base_config,
+                "bucket": self.bucket,
+            },
+            "tracing": {
+                **base_config,
+                **(self.tracing.model_dump() if self.tracing else {}),
+            },
+        }
+        
+        return service_configs.get(service, base_config)
+    
+    def has_service(self, service: str) -> bool:
+        """Check if this cloud provider has a specific service configured."""
+        service_map = {
+            "tracing": self.tracing,
+        }
+        return service_map.get(service) is not None
 
 
 class AWSConfig(CloudProviderConfig):

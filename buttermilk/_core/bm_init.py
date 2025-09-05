@@ -341,29 +341,6 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
-    @pydantic.model_validator(mode="before")
-    @classmethod
-    def _handle_legacy_run_info(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Handle backward compatibility for run_info → session_info transition.
-
-        This validator automatically converts old `run_info` configuration to the new
-        `session_info` format during the migration period.
-
-        Args:
-            values: The dictionary of raw input values for the model.
-
-        Returns:
-            dict[str, Any]: The `values` dictionary with run_info converted to session_info.
-
-        """
-        if "run_info" in values and "session_info" not in values:
-            logger.warning(
-                "Configuration uses deprecated 'run_info' field. "
-                "Please update to use 'session_info' instead. "
-                "Automatically converting for backward compatibility."
-            )
-            values["session_info"] = values.pop("run_info")
-        return values
 
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
@@ -490,11 +467,8 @@ class BM(BaseModel):
     @property
     def query_runner(self):
         """Provides access to the QueryRunner instance."""
-        if self._query_runner is None and self._cloud_manager is not None:
-            from buttermilk._core.query import QueryRunner
-            self._query_runner = QueryRunner(bq_client=self.bq)
         if self._query_runner is None:
-            raise RuntimeError("QueryRunner not available. Ensure cloud infrastructure is properly injected.")
+            raise RuntimeError("QueryRunner not available. Ensure infrastructure is properly injected.")
         return self._query_runner
 
     @property
@@ -814,6 +788,9 @@ def create_session_bm(
     # Inject shared infrastructure if provided
     if cloud_manager is not None:
         bm._cloud_manager = cloud_manager
+        # Auto-inject query_runner if cloud_manager is available
+        from buttermilk._core.query import QueryRunner
+        bm._query_runner = QueryRunner(bq_client=cloud_manager.bq)
     if secret_manager is not None:
         bm._secret_manager = secret_manager
     if llms_instance is not None:

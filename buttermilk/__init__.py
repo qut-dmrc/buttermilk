@@ -9,6 +9,7 @@
 #         pass
 
 from ._core.bm_init import BM, tracer, create_session_bm, create_batch_session_bm
+from ._core.infrastructure import InfrastructureManager, create_infrastructure_manager, create_infrastructure_from_config
 from ._core.execution_context import ExecutionContext, create_execution_context
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
@@ -69,6 +70,10 @@ __all__ = [
     "create_batch_session_bm",  # Factory for batch session BM instances
     "ExecutionContext",  # Execution context class
     "create_execution_context",  # Factory for execution context
+    # Infrastructure management
+    "InfrastructureManager",  # Infrastructure manager class
+    "create_infrastructure_manager",  # Factory for infrastructure manager
+    "create_infrastructure_from_config",  # Migration helper for infrastructure manager
     # Agent contracts
     "AgentConfig",
     "AgentVariants",

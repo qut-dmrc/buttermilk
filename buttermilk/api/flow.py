@@ -27,8 +27,16 @@ STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
 
 
-def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
-    """Create and configure the FastAPI application."""
+def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
+    """Create and configure the FastAPI application.
+    
+    Args:
+        infrastructure: InfrastructureManager instance for creating session-scoped BMs.
+        flows: FlowRunner instance for executing flows.
+        
+    Returns:
+        FastAPI: Configured FastAPI application.
+    """
     logger.info("Starting create_app function...")
 
     @asynccontextmanager
@@ -40,9 +48,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             # API functions might take a few more seconds
             asyncio.get_event_loop().slow_callback_duration = 2
 
-            # Complete BM initialization in the FastAPI event loop
-            if hasattr(app.state, "bm") and hasattr(app.state.bm, "_background_init"):
-                await app.state.bm._background_init()
+            # Initialize infrastructure components
+            if hasattr(app.state, "infrastructure"):
+                app.state.infrastructure.initialize_components()
 
             # Initialize and start monitoring infrastructure
             from buttermilk.monitoring import get_observability_manager
@@ -81,8 +89,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
     logger.info("FastAPI() instance created.")
 
-    # Set up state
-    app.state.bm = bm
+    # Set up state - store infrastructure manager instead of global BM
+    app.state.infrastructure = infrastructure
     app.state.flow_runner = flows
 
     # Initialize batch runner

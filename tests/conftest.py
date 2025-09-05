@@ -31,6 +31,7 @@ def get_bm():
 from buttermilk._core.bm_init import BM
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
+from buttermilk import create_infrastructure_from_config, set_bm
 
 # Don't initialize BM here, we'll let the fixture handle it
 from buttermilk.utils.media import download_and_convert
@@ -46,14 +47,27 @@ def conf():
     try:
         resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
 
-        # Initialize the global Buttermilk instance (bm) with its configuration section
-        if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
-            raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-        bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
-        # Set the singleton BM instance
-        from buttermilk import set_bm
-
-        set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+        # Create infrastructure manager from test configuration
+        
+        # Use new infrastructure configuration if available, otherwise migrate from BM config
+        if "infrastructure" in resolved_cfg_dict:
+            infrastructure = create_infrastructure_from_config(resolved_cfg_dict["infrastructure"])
+        elif "bm" in resolved_cfg_dict:
+            infrastructure = create_infrastructure_from_config(resolved_cfg_dict["bm"])
+        else:
+            raise ValueError("Test configuration must contain either 'infrastructure' or 'bm' configuration.")
+        
+        # Initialize infrastructure components
+        infrastructure.initialize_components()
+        
+        # Create a test session-scoped BM and set as singleton for backward compatibility
+        test_bm = infrastructure.create_session_bm(
+            name="buttermilk",
+            job="testing",
+            platform="local"
+        )
+        
+        set_bm(test_bm)
 
     except Exception as e:
         print(f"Error with test configuration, cannot create BM instance: {e}")

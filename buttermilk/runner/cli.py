@@ -55,19 +55,35 @@ def main(conf: DictConfig) -> None:
 
     """
     OmegaConf.resolve(conf)
-    bm = hydra.utils.instantiate(conf.bm)
-
-    # bm = BM.model_validate(objs.bm)  # type: ignore # Assuming dict matches BM fields
-    # Set the singleton BM instance
+    
+    # Create infrastructure manager from configuration
+    from buttermilk import create_infrastructure_from_config
+    
+    # If new infrastructure configuration exists, use it directly
+    if 'infrastructure' in conf:
+        infrastructure = create_infrastructure_from_config(conf.infrastructure)
+    else:
+        # Fallback: migrate old BM configuration to infrastructure manager
+        infrastructure = create_infrastructure_from_config(conf.bm)
+    
+    # Initialize infrastructure components
+    infrastructure.initialize_components()
+    logger.info("Infrastructure initialization complete")
+    
+    # Create a session-scoped BM for CLI operations
+    bm = infrastructure.create_session_bm(
+        name=conf.get('run', {}).get('name', 'cli_session'),
+        job=conf.get('run', {}).get('job', 'cli_operation'),
+        platform='local'
+    )
+    
+    # Set as global singleton for backward compatibility with existing code
     from buttermilk import set_bm
-
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
-
+    set_bm(bm)
+    
     # Ensure BM is fully initialized before proceeding
     asyncio.run(bm.ensure_initialized())
-    # Ensure tracing has been set up.
-    asyncio.run(bm._setup_tracing())
-    logger.info("BM initialization complete")
+    logger.info("Session BM initialization complete")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
@@ -136,7 +152,7 @@ def main(conf: DictConfig) -> None:
             # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
             # These are typically passed to the app creation function.
             fastapi_app = create_fastapi_app(
-                bm=bm,  # Pass the global BM instance
+                infrastructure=infrastructure,  # Pass the infrastructure manager
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
@@ -144,8 +160,8 @@ def main(conf: DictConfig) -> None:
             logger.debug("Verifying FastAPI app readiness...")
             if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
                 raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
-            if not hasattr(fastapi_app.state, "bm") or not fastapi_app.state.bm:
-                raise RuntimeError("BM instance not properly initialized in FastAPI app state")
+            if not hasattr(fastapi_app.state, "infrastructure") or not fastapi_app.state.infrastructure:
+                raise RuntimeError("Infrastructure manager not properly initialized in FastAPI app state")
             logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")

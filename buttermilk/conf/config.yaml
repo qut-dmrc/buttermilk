@@ -14,11 +14,10 @@ bm:
   session_info:
     name: ${run.name}
     job: ${run.job}
-  llms: ${llms}
-  tracing:
-    weave: 
-      enabled: true
-    traceloop:
-      enabled: false
-    otel:
-      enabled: true
+
+# Default tracing configuration for non-cloud tracing providers
+tracing:
+  weave: 
+    enabled: true
+  traceloop:
+    enabled: false
