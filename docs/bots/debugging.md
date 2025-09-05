@@ -42,13 +42,16 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 **Flow Control:**
 - `start <flow_name> [query]` - Start a flow with optional initial query
 - `send <text>` - Send a response to the current flow
-- `logs [n]` - Show last n lines from latest log file
+- `logs -n <number>` - Show last n lines from latest log file
 
 **Session Control:**
 - `clear-session` - Clear message history
 - `list-flows` - Get available flows
-- `export <file>` - Export messages to JSON file
 - `help` - Show available commands
+
+**❌ DEPRECATED COMMANDS:**
+- `export <file>` - Command removed, use other export methods
+- `logs <number>` - Wrong syntax, use `logs -n <number>` instead
 
 *   **Test Connection:**
     ```bash
@@ -76,12 +79,22 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 
 ## 3. Analyze the Logs
 
-To inspect the detailed logs from the running server, use the `buttermilk_logs.py` script directly.
+**⚠️ CRITICAL WARNING: Do not use `scripts/view-logs.sh` directly - it hangs indefinitely**
 
-**Canonical command:**
+**Preferred method**: Use ws_debug_cli for log access:
 ```bash
-scripts/view-logs.sh <command>
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 30
 ```
+
+**Alternative**: Direct log file access (if ws_debug_cli fails):
+```bash
+# Find latest log file first
+ls -la /tmp/buttermilk_*.log | tail -1
+# Then view specific lines
+tail -n 50 /path/to/latest/log/file
+```
+
+**❌ NEVER USE**: `scripts/view-logs.sh` - This command hangs and violates debugging workflow
 
 
 ## 4. Validate the Frontend
@@ -129,7 +142,19 @@ This ensures no orphaned processes are left running.
 **Solution**: 
 1. Verify the API server is running: `ps aux | grep buttermilk`
 2. Test connection first: `uv run python -m buttermilk.debug.ws_debug_cli test-connection`
-3. Check the latest log file for errors: `./scripts/mcp_debug/getlog.sh`
+3. Check logs with correct syntax: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 30`
+
+**Problem**: Command syntax errors or "command not found".
+**Solution**: 
+- Use `logs -n <number>` not `logs <number>`
+- Check available commands with `help`
+- Verify command exists before using (some commands have been deprecated)
+
+**Problem**: Stale log data returned.
+**Solution**: 
+- Check if log files are being created for current date
+- Verify session is actually running and generating logs
+- May indicate infrastructure regression (see GitHub issues #226, #227)
 
 ### Playwright Browser Issues
 
@@ -143,10 +168,32 @@ This ensures no orphaned processes are left running.
 
 **Problem**: Log outputs are too verbose for analysis.
 **Solution**: 
-- Use focused searches: `scripts/view-logs.sh | grep "ERROR\|WebSocket"`
-- Limit output to recent entries: `scripts/view-logs.sh | tail -50`
+- Use focused searches with ws_debug_cli: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 | grep "ERROR\|WebSocket"`
+- Limit output with `-n` parameter: `logs -n 20` for recent entries
 - Focus on specific timeframes when the issue occurred
 - **Follow OUTPUT RULE**: Summarize findings instead of dumping raw logs
+
+**❌ AVOID**: Any commands that pipe from `scripts/view-logs.sh` - use ws_debug_cli instead
+
+### Hanging Commands Prevention
+
+**🚨 CRITICAL: Commands That Will Hang Your Session**
+
+These commands will hang indefinitely and violate debugging workflow:
+- `scripts/view-logs.sh` - Hangs indefinitely, use `ws_debug_cli logs -n X` instead
+- `tail -f /path/to/log` - Follow mode hangs, use `tail -n X` for specific line count
+- Any command with continuous monitoring without timeout
+
+**✅ Safe Alternatives:**
+- Instead of `scripts/view-logs.sh`: Use `ws_debug_cli logs -n 30`
+- Instead of `tail -f logfile`: Use `tail -n 50 logfile` for snapshot
+- Always use commands with explicit limits and timeouts
+
+**🛑 If a Command Hangs:**
+1. Stop immediately - don't wait to see if it completes
+2. Use the timeout mechanisms in the environment
+3. Switch to the safe alternative documented above
+4. Never proceed with hanging commands "just to see what happens"
 
 ### Output Conciseness Guidelines
 
