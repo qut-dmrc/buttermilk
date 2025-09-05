@@ -88,6 +88,59 @@ class Differences(BaseModel):
         ...,
         description="A list of specific topics where divergences or disagreements were identified.",
     )
+    
+    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+        """Returns a Markdown formatted string for insertion into templates.
+        
+        Format follows the standard: agent identifier on first line, followed by
+        content-specific fields without empty lines between components.
+        
+        Args:
+            agent_id: The agent identifier (e.g., "DIFF-gpt4")
+            call_id: The call identifier for this execution
+            
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        header = ""
+        if agent_id and call_id:
+            # Use only the last 8 characters of call_id for brevity
+            short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
+            header = f"**{agent_id} #{short_call_id}**\n"
+        
+        # Format divergences as structured list
+        divergences_parts = []
+        for div in self.divergences:
+            positions_str = "; ".join(
+                f"{pos.position} (by {', '.join(pos.experts)})"
+                for pos in div.positions
+            )
+            divergences_parts.append(f"- {div.topic}: {positions_str}")
+        
+        divergences_str = "\n".join(divergences_parts)
+        
+        return (
+            f"{header}"
+            f"{self.conclusion}\n"
+            f"Divergences:\n"
+            f"{divergences_str if divergences_str else '- No divergences identified'}"
+        )
+    
+    def __str__(self) -> str:
+        """Returns a Markdown formatted string representation.
+        
+        When agent context is available (via _agent_id and _call_id attributes),
+        includes the full header. Otherwise returns the conclusion and divergences.
+        """
+        # Check if agent context is available (set by AgentTrace)
+        agent_id = getattr(self, '_agent_id', None)
+        call_id = getattr(self, '_call_id', None)
+        
+        if agent_id and call_id:
+            return self.as_markdown(agent_id, call_id)
+        
+        # Fallback to just the conclusion for simpler format
+        return self.conclusion
 
 
 class DifferencesOutput(Differences):

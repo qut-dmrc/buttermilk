@@ -50,13 +50,8 @@ Your response should be written for an external audience. Do not mention our int
 {# --- User Message Construction --- #}
 # User:
 {# Raise an error if answers do not exist: #}{%- if not answers -%}{{ answers }}{% endif -%}
-{# Loop through each provided draft answer. #}
+{# Loop through each provided draft answer, using simplified formatting. #}
 {% for answer in answers %}
-<BEGIN {{answer['agent_id']}} DRAFT ANSWER #{{answer['answer_id'][-4:]}}>
-{%- if 'error' not in answer or not answer['error'] -%}
 {{ answer['result'] }}
-{%- else -%}
-ERROR: {{ answer['error'] }}
-{%- endif -%}
-<END DRAFT ANSWER>
+
 {% endfor %}

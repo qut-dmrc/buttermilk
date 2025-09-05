@@ -563,10 +563,25 @@ class AgentTrace(AgentOutput):
     )
 
     def model_dump(self, *args, **kwargs) -> dict[str, Any]:
-        """Override model_dump to exclude empty collections."""
+        """Override model_dump to exclude empty collections and add template-friendly fields."""
         raw_dump = super().model_dump(*args, **kwargs)
         # Apply the cleaning function to the result
-        return clean_empty_values(raw_dump)
+        cleaned = clean_empty_values(raw_dump)
+        
+        # Add template-friendly fields for backward compatibility
+        # Templates expect 'answer_id' and 'result' fields
+        if 'call_id' in cleaned:
+            cleaned['answer_id'] = cleaned.get('call_id', '')
+        
+        # Add 'result' field that contains the formatted markdown output
+        if self.outputs and hasattr(self.outputs, 'as_markdown'):
+            cleaned['result'] = self.outputs.as_markdown(self.agent_id, self.call_id)
+        elif self.outputs:
+            cleaned['result'] = str(self.outputs)
+        else:
+            cleaned['result'] = ''
+        
+        return cleaned
 
     @computed_field
     @property
@@ -586,9 +601,40 @@ class AgentTrace(AgentOutput):
             pass  # Fall through to return "null"
         return "null"  # Default if outputs is None or type cannot be determined
 
+    def as_markdown(self) -> str:
+        """Returns a Markdown formatted string for use in templates.
+        
+        If the outputs have an as_markdown method, uses that with agent context.
+        Otherwise falls back to string representation.
+        
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        if self.outputs and hasattr(self.outputs, 'as_markdown'):
+            # Pass agent context to the output's as_markdown method
+            return self.outputs.as_markdown(self.agent_id, self.call_id)
+        elif self.outputs:
+            # Fallback: create simple formatted output
+            short_call_id = self.call_id[-8:] if len(self.call_id) > 8 else self.call_id
+            header = f"**{self.agent_id} #{short_call_id}**\n"
+            return f"{header}{str(self.outputs)}"
+        else:
+            # No outputs, return error or empty message
+            if self.error:
+                return f"**{self.agent_id}**\nERROR: {self.error}"
+            return f"**{self.agent_id}**\n(No output)"
+    
     def __str__(self) -> str:
         """Returns the `content` (string representation of `outputs`) of the agent trace."""
-        # Inherits content property from AgentOutput
+        # If outputs have as_markdown, use that for better formatting
+        if self.outputs and hasattr(self.outputs, 'as_markdown'):
+            # Set context attributes on the output object for __str__ to use
+            if not hasattr(self.outputs, '_agent_id'):
+                self.outputs._agent_id = self.agent_id
+            if not hasattr(self.outputs, '_call_id'):
+                self.outputs._call_id = self.call_id
+            return str(self.outputs)
+        # Otherwise use inherited content property from AgentOutput
         return super().content
 
     @classmethod

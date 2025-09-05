@@ -35,6 +35,44 @@ class ZoteroResearchResult(ResearchResult):
         ...,
         description="List of Zotero literature references with full citations.",
     )
+    
+    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+        """Returns a Markdown formatted string for insertion into templates.
+        
+        Format follows the standard: agent identifier on first line, followed by
+        content-specific fields without empty lines between components.
+        
+        Args:
+            agent_id: The agent identifier (e.g., "ZOTERO-gpt4")
+            call_id: The call identifier for this execution
+            
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        header = ""
+        if agent_id and call_id:
+            # Use only the last 8 characters of call_id for brevity
+            short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
+            header = f"**{agent_id} #{short_call_id}**\n"
+        
+        # Format Zotero references with DOI if available
+        lit_str = ""
+        if self.literature:
+            lit_parts = []
+            for ref in self.literature[:3]:  # Show first 3 references
+                doi_str = f" [{ref.doi}]" if ref.doi else ""
+                lit_parts.append(f"- {ref.citation}{doi_str}")
+            lit_str = "\n".join(lit_parts)
+            if len(self.literature) > 3:
+                lit_str += f"\n- ... and {len(self.literature) - 3} more references"
+        
+        return (
+            f"{header}"
+            f"{self.summary}\n"
+            f"Response: {self.response[:200]}...\n"
+            f"Academic References:\n"
+            f"{lit_str if lit_str else '- No references'}"
+        )
 
 
 class RagZotero(RagAgent):

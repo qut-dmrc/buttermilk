@@ -77,6 +77,27 @@ class FramedStatement(BaseModel):
         description="Confidence level in the frame identification (0-1)"
     )
 
+    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+        """Returns a Markdown formatted string for insertion into templates.
+        
+        Note: This is for a single statement. Usually used within FrameAnalysisResults.
+        
+        Args:
+            agent_id: The agent identifier (e.g., "FRAME-gpt4")
+            call_id: The call identifier for this execution
+            
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        # For individual statements, we don't include header (handled by FrameAnalysisResults)
+        return (
+            f'"{self.statement}" - {self.speaker_name} ({self.speaker_affiliation})\n'
+            f"Problem: {self.problem_definition}\n"
+            f"Blame: {self.blame_attribution or 'Not specified'}\n"
+            f"Evaluation: {self.moral_evaluation or 'Not specified'}\n"
+            f"Recommendation: {self.recommendation or 'Not specified'}"
+        )
+    
     def __str__(self) -> str:
         """Returns a formatted string representation of the framed statement."""
         return (
@@ -89,6 +110,87 @@ class FramedStatement(BaseModel):
             f"**Solution Addressee:** {self.solution_addressee or 'Not specified'}\n"
             f"**Confidence:** {self.confidence_score:.2f}"
         )
+
+
+class FrameAnalysisResults(BaseModel):
+    """Container for multiple framed statements from an article analysis.
+    
+    This model aggregates all the framed statements identified in a news article,
+    providing a complete frame analysis following Entman's (1993) theory.
+    
+    Attributes:
+        statements (list[FramedStatement]): List of all framed statements identified.
+        article_summary (str): Brief summary of the article being analyzed.
+        dominant_frame (Optional[str]): The predominant framing pattern in the article.
+    """
+    
+    statements: list[FramedStatement] = Field(
+        ...,
+        description="List of all framed statements identified in the article"
+    )
+    article_summary: str = Field(
+        ...,
+        description="Brief summary of the article being analyzed"
+    )
+    dominant_frame: Optional[str] = Field(
+        None,
+        description="The predominant framing pattern identified in the article"
+    )
+    
+    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+        """Returns a Markdown formatted string for insertion into templates.
+        
+        Format follows the standard: agent identifier on first line, followed by
+        content-specific fields without empty lines between components.
+        
+        Args:
+            agent_id: The agent identifier (e.g., "FRAME-gpt4")
+            call_id: The call identifier for this execution
+            
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        header = ""
+        if agent_id and call_id:
+            # Use only the last 8 characters of call_id for brevity
+            short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
+            header = f"**{agent_id} #{short_call_id}**\n"
+        
+        # Format statements
+        statements_str = ""
+        if self.statements:
+            statement_parts = []
+            for stmt in self.statements[:3]:  # Show first 3 statements
+                statement_parts.append(f"- {stmt.speaker_name}: \"{stmt.statement[:100]}...\"")
+            statements_str = "\n".join(statement_parts)
+            if len(self.statements) > 3:
+                statements_str += f"\n- ... and {len(self.statements) - 3} more statements"
+        
+        frame_str = f"Frame: {self.dominant_frame}\n" if self.dominant_frame else ""
+        
+        return (
+            f"{header}"
+            f"{self.article_summary}\n"
+            f"{frame_str}"
+            f"Statements analyzed: {len(self.statements)}\n"
+            f"{statements_str}"
+        )
+    
+    def __str__(self) -> str:
+        """Returns a Markdown formatted string representation.
+        
+        When agent context is available (via _agent_id and _call_id attributes),
+        includes the full header. Otherwise returns the summary.
+        """
+        # Check if agent context is available (set by AgentTrace)
+        agent_id = getattr(self, '_agent_id', None)
+        call_id = getattr(self, '_call_id', None)
+        
+        if agent_id and call_id:
+            return self.as_markdown(agent_id, call_id)
+        
+        # Fallback to summary
+        return self.article_summary
 
 
 # --- Frame Agent ---
