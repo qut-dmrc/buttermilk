@@ -341,6 +341,30 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _handle_legacy_run_info(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Handle backward compatibility for run_info → session_info transition.
+
+        This validator automatically converts old `run_info` configuration to the new
+        `session_info` format during the migration period.
+
+        Args:
+            values: The dictionary of raw input values for the model.
+
+        Returns:
+            dict[str, Any]: The `values` dictionary with run_info converted to session_info.
+
+        """
+        if "run_info" in values and "session_info" not in values:
+            logger.warning(
+                "Configuration uses deprecated 'run_info' field. "
+                "Please update to use 'session_info' instead. "
+                "Automatically converting for backward compatibility."
+            )
+            values["session_info"] = values.pop("run_info")
+        return values
+
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 

@@ -10,6 +10,7 @@ defaults:
 verbose: true
 
 bm:
+  _target_: buttermilk._core.bm_init.BM
   run_info:
     name: buttermilk
     job: testing
