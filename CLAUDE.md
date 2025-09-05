@@ -25,3 +25,5 @@ DESIGN CHOICES:
 - FAIL FAST: No defensive coding, no error recovery.
 - Validate code with FULL end-to-end integration tests with live data; NO COMPROMISES. 
 - If you get stuck, STOP and ASK FOR HELP. No workarounds, no loops.
+
+WARNING: You may be interrupted at any time and all your memory and progress will be lost. DOCUMENT your progress and COMMIT at every opportunity!
