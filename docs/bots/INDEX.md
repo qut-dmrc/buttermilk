@@ -62,6 +62,12 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Integration with DocProcessor and agents
 - Examples for scripts and CLI tools
 
+### [exemplar subagent](.claude/agents/exemplar.md) - Testing Specialist Subagent
+- Comprehensive testing, validation, and verification agent (configured in .claude/agents/)
+- Prevents standalone validation code creation
+- Converts all testing needs into proper pytest tests
+- Handles examples, demos, and test creation workflows
+
 ## 🚀 Quick Reference
 
 ### Essential Commands
@@ -88,11 +94,11 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 3. **JUSTIFY NEW CODE**: Explain why existing solutions won't work
 4. **IF YOU CAN'T JUSTIFY**: You're probably overengineering
 
-**STANDALONE TEST SCRIPT PATTERN:**
-1. **NEVER** create `test_*.py` files outside `tests/` directory
-2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "Let me test the serialization..."
-3. **ALWAYS** use proper pytest in `tests/` directory with existing patterns
-4. **ENFORCEMENT**: Creating standalone tests = restart the entire task
+**STANDALONE VALIDATION PATTERN:**
+1. **NEVER** create standalone validation (files OR commands) outside proper pytest workflow
+2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "I'll use python -c..."
+3. **ALWAYS** redirect to exemplar agent: `Task: exemplar - [describe need]`
+4. **ENFORCEMENT**: Any standalone validation = immediately redirect to exemplar agent
 
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
@@ -116,7 +122,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 - **ALWAYS** trace data flow when debugging validation errors
 - **NEVER** commit without updating relevant documentation
 - **ALWAYS** use the provided debugging framework
-- **NEVER** create test files outside `tests/` directory - Use pytest conventions ONLY (violating this = restart task)
+- **NEVER** create standalone validation (files OR commands) - Use exemplar agent ONLY (violating this = restart task)
 
 ## 🔗 External Resources
 - [Main Project README](/README.md)

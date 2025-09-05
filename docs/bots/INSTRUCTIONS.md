@@ -52,17 +52,22 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **🔧 WHEN YOU CATCH YOURSELF USING THESE PHRASES:**
 1. **STOP immediately** - Do not proceed with file creation OR command execution
-2. **Check the validation decision tree below** 
-3. **Use approved validation methods only**
-4. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
-5. **If unclear**: Ask for guidance rather than creating standalone validation
+2. **REDIRECT to exemplar agent**: Use `Task: exemplar - [describe your testing/validation need]`
+3. **Check the validation decision tree below** 
+4. **Use approved validation methods only**
+5. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
+6. **If unclear**: Ask for guidance rather than creating standalone validation
 
-### 🤖 SUBAGENT AVAILABLE:
-When you need to create examples or demonstrations, use:
+### 🤖 EXEMPLAR TESTING SUBAGENT AVAILABLE:
+When you need ANY form of testing, validation, or verification, use:
 ```
-Task: example-redirect
+Task: exemplar
 ```
-This specialized agent ensures all examples are created as proper pytest tests.
+This specialized agent handles ALL testing scenarios including:
+- Creating examples and demonstrations as proper pytest tests
+- Converting standalone validation needs into proper tests  
+- Creating new test files or extending existing ones
+- Replacing "quick verification" commands with systematic tests
 
 ### ✅ CORRECT APPROACH - ALWAYS USE PYTEST:
 - Create tests in `tests/` directory following existing structure
@@ -187,16 +192,19 @@ def test_myclass_serialization():
 - Running existing test suites
 - Asking for guidance when stuck
 
-## 📚 EXAMPLE CREATION PROTOCOL
+## 📚 TESTING & VALIDATION PROTOCOL
 
-**CRITICAL**: When asked to create examples, demos, or show how something works:
+**CRITICAL**: When you need ANY form of testing, validation, examples, or verification:
 
-1. **DO NOT** create standalone scripts
-2. **IMMEDIATELY** invoke the example-redirect subagent:
+1. **DO NOT** create standalone scripts, files, or use inline commands
+2. **IMMEDIATELY** invoke the exemplar testing subagent:
    ```
-   Task: example-redirect - Create a proper test example for [feature]
+   Task: exemplar - [describe your testing/validation need]
    ```
-3. The subagent will create tests in `tests/examples/` that serve as living documentation
+3. The subagent will create proper pytest tests that serve as:
+   - Living documentation and examples
+   - Systematic validation of functionality
+   - Reusable test cases for CI/CD
 
 **WHY THIS MATTERS**:
 - Examples in tests are verified by CI/CD

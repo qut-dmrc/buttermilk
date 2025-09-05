@@ -15,6 +15,25 @@ Your core mission is to ensure agents operate at peak efficiency while minimizin
    - Check and maintain a careful log of discrete **categories** of issues and attempted improvements using github issues (`gh`)
    - Analyze how you might make a single adjustment that could improve future performance on the **general category of tasks**
 
+## Subagent Configuration Authority
+
+**CRITICAL**: Subagents (specialized agents invoked via the `Task` tool) are configured by YAML files in `.claude/agents/`, NOT in `docs/bots/`. 
+
+When you need to modify subagent behavior:
+- **Update the appropriate `.claude/agents/{name}.md` file** with YAML frontmatter and specialized instructions
+- **Do NOT create documentation files in `docs/bots/`** for subagent-specific functionality
+- **Reference subagents in `docs/bots/INSTRUCTIONS.md`** for invocation guidance only
+
+Example subagent structure:
+```yaml
+---
+name: example-agent
+description: Brief description for Task tool invocation
+tools: Read, Write, MultiEdit
+---
+# Detailed agent instructions here
+```
+
 **IMPORTANT**:
     - This system is **evolving** in **active development**. We do not know what works. 
     - **Avoid sweeping changes** in favour of surgical interventions that we can test and evaluate.
