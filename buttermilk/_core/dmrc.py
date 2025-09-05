@@ -24,26 +24,21 @@ def set_bm(instance: BM) -> None:
 
 
 def initialize_session_bm(
-    name: str,
-    job: str,
-    run_id: str | None = None,
-    execution_context: ExecutionContext | None = None,
-    platform: str = "local",
-    **kwargs
+    name: str, job: str, session_id: str | None = None, execution_context: ExecutionContext | None = None, platform: str = "local", **kwargs
 ) -> BM:
     """Initialize and set a session-scoped BM instance as the global singleton.
-    
+
     This function provides backward compatibility by creating a session-scoped BM
     and setting it as the global singleton for existing code to access via get_bm().
-    
+
     Args:
         name: User-defined name for the current session or project.
         job: User-defined name for the specific job or task.
-        run_id: Research run identifier. If None, uses session_id as run_id.
+        session_id: Research run identifier. If None, a new unique ID is generated.
         execution_context: ExecutionContext to use. If None, creates a new one.
         platform: Platform where the session is running.
         **kwargs: Additional arguments for SessionInfo.
-        
+
     Returns:
         BM: The newly created and set session-scoped BM instance.
     """
@@ -57,14 +52,7 @@ def initialize_session_bm(
             execution_context = create_execution_context()
     
     # Create session-scoped BM
-    bm_instance = create_session_bm(
-        name=name,
-        job=job,
-        run_id=run_id,
-        execution_context=execution_context,
-        platform=platform,
-        **kwargs
-    )
+    bm_instance = create_session_bm(name=name, job=job, session_id=session_id, execution_context=execution_context, platform=platform, **kwargs)
     
     # Set as global singleton for backward compatibility
     set_bm(bm_instance)
