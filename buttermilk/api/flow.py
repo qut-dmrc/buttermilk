@@ -236,6 +236,20 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
                     # use to create a new flow.
                     logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
                     logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
+                    
+                    # Create session-scoped BM for this flow execution
+                    if hasattr(websocket.app.state, 'infrastructure'):
+                        session_bm = websocket.app.state.infrastructure.create_session_bm(
+                            name=f"api_session_{run_request.flow}",
+                            job=run_request.flow,
+                            batch_id=getattr(run_request, 'batch_id', None)
+                        )
+                        # Set the session-scoped BM for this flow execution
+                        flow_runner.set_session_bm(session_bm)
+                        logger.debug(f"Created session-scoped BM for session {session_id} with session_id: {session_bm.session_info.session_id}")
+                    else:
+                        logger.debug(f"No infrastructure manager available, using global singleton BM for session {session_id}")
+                    
                     task = asyncio.create_task(flow_runner.run_flow(
                         run_request=run_request,
                         wait_for_completion=False,

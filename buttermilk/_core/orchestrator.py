@@ -202,6 +202,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     Internal State Attributes:
         _flow_data (KeyValueCollector): An internal state collector used to store
             and manage data passed between steps or used for templating within the flow.
+        _bm (Any | None): Optional session-scoped BM instance. If None, falls back to global singleton.
         model_config (ConfigDict): Pydantic model configuration.
             - `extra`: "forbid" - Disallows extra fields not explicitly defined.
             - `arbitrary_types_allowed`: False.
@@ -209,6 +210,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     """
 
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
+    _bm: Any | None = PrivateAttr(default=None)
 
     model_config = ConfigDict(
         extra="forbid",
@@ -260,6 +262,46 @@ class Orchestrator(OrchestratorProtocol, ABC):
         self._flow_data.init(agent_roles)
         return self
 
+    def set_bm(self, bm: Any) -> None:
+        """Set a session-scoped BM instance for this orchestrator.
+        
+        This method is called automatically by FlowRunner when creating orchestrators
+        to provide session-level observability isolation. The session-scoped BM is
+        automatically passed to all agents created by this orchestrator.
+        
+        Args:
+            bm: Session-scoped BM instance containing unique session context.
+                Used for tracing, storage access, and observability that's isolated
+                per session rather than shared globally.
+                
+        Note:
+            This is typically called automatically by the orchestration framework.
+            Manual calls are rarely needed unless implementing custom orchestration logic.
+        """
+        self._bm = bm
+        logger.debug(f"Set session-scoped BM for orchestrator '{self.name}' with session_id: {bm.session_info.session_id}")
+    
+    def get_effective_bm(self) -> Any:
+        """Get the effective BM instance (session-scoped if available, otherwise global singleton).
+        
+        This method provides transparent access to BM functionality while supporting
+        both session-scoped and global singleton patterns. Orchestrators should use
+        this method instead of calling get_bm() directly to benefit from session isolation.
+        
+        Returns:
+            BM instance to use for operations. Returns session-scoped BM if one was
+            injected via set_bm(), otherwise falls back to the global singleton.
+            
+        Example:
+            >>> bm = self.get_effective_bm()
+            >>> storage = bm.get_storage(config)  # Gets session-isolated or global storage
+            >>> tracer = bm.get_tracer()  # Gets session-isolated or global tracer
+        """
+        if self._bm is not None:
+            return self._bm
+        else:
+            return get_bm()
+
     async def run(self, request: RunRequest) -> None:
         """Public entry point to start the orchestrator's flow execution.
 
@@ -283,7 +325,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         except Exception:
             inputs = {}
 
-        bm = get_bm()
+        bm = self.get_effective_bm()
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
@@ -339,7 +381,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 # Finish trace if it was created and a finisher is available
                 if orchestrator_trace is not None:
                     try:
-                        bm = get_bm()
+                        bm = self.get_effective_bm()
                         weave_client = await bm.get_weave_client()
                         if weave_client is not None and orchestrator_trace is not None:
                             weave_client.finish_call(orchestrator_trace, op=op)

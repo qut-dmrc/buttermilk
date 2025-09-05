@@ -19,3 +19,5 @@ run:
   mode: console
   ui: console
   human_in_loop: false
+  name: buttermilk
+  job: testing

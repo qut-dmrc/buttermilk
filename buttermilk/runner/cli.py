@@ -87,6 +87,9 @@ def main(conf: DictConfig) -> None:
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
+    
+    # Set the session-scoped BM for this FlowRunner
+    flow_runner.set_session_bm(bm)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:

@@ -286,6 +286,10 @@ class AutogenOrchestrator(Orchestrator):
             # Check if this is a Buttermilk Agent subclass
             if issubclass(agent_cls, Agent):
                 config_with_session = {**variant_config.model_dump(), "session_id": params.session_id, "topic_id": self._topic}
+                
+                # Add BM instance if available from orchestrator
+                if hasattr(self, "get_effective_bm"):
+                    config_with_session["bm"] = self.get_effective_bm()
 
                 # Create factory function for the agent
                 def agent_factory(
