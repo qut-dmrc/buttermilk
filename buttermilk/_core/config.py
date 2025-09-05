@@ -48,7 +48,6 @@ CloudProvider = Literal[
     "env",
     "local",
     "gsheets",
-    "vertex",
 ]
 """Specifies the cloud provider or storage type.
 
@@ -60,7 +59,6 @@ Allowed values:
     - "env": Environment variables.
     - "local": Local filesystem.
     - "gsheets": Google Sheets.
-    - "vertex": Google Vertex AI.
 """
 
 
@@ -72,7 +70,7 @@ class CloudProviderCfg(BaseModel):
 
     Attributes:
         type (CloudProvider): The type of cloud provider or storage.
-        project (str | None): GCP project ID (required for GCP-based providers).
+        project_id (str | None): GCP project ID (required for GCP-based providers).
         location (str | None): Cloud region/location (required for specific services).
         model_config (ConfigDict): Pydantic model configuration.
 

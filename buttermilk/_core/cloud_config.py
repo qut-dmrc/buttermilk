@@ -58,10 +58,7 @@ class SecretsServiceConfig(BaseModel):
         default="dev__llm__connections",
         description="Secret name for LLM API keys"
     )
-    credentials_secret: str = Field(
-        default="dev__shared_credentials", 
-        description="Secret name for shared credentials"
-    )
+    credentials_secret: str = Field(default="dev__shared_credentials", description="Secret name for shared credentials")
 
 
 class LoggingServiceConfig(BaseModel):
@@ -80,10 +77,7 @@ class PubSubServiceConfig(BaseModel):
         default="jobs",
         description="Topic name for job messages"
     )
-    jobs_subscription: str = Field(
-        default="jobs-sub",
-        description="Subscription name for job messages"  
-    )
+    jobs_subscription: str = Field(default="jobs-sub", description="Subscription name for job messages")
     status_topic: str = Field(
         default="flow",
         description="Topic name for status messages"
@@ -100,6 +94,15 @@ class TracingServiceConfig(BaseModel):
     enabled: bool = Field(
         default=True,
         description="Enable OpenTelemetry tracing"
+    )
+
+
+class VertexServiceConfig(BaseModel):
+    """Vertex AI service configuration."""
+    
+    enabled: bool = Field(
+        default=True,
+        description="Enable Vertex AI service"
     )
 
 
@@ -151,6 +154,10 @@ class GCPConfig(CloudProviderConfig):
         default=None,
         description="OpenTelemetry tracing configuration"
     )
+    vertex: Optional[VertexServiceConfig] = Field(
+        default=None,
+        description="Vertex AI service configuration"
+    )
 
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "GCPConfig":
@@ -169,7 +176,7 @@ class GCPConfig(CloudProviderConfig):
     def get_client_config(self, service: str) -> Dict[str, Any]:
         """Get GCP service client configuration."""
         base_config = {
-            "project": self.project_id,
+            "project_id": self.project_id,
             "location": self.location,
         }
 
@@ -198,11 +205,17 @@ class GCPConfig(CloudProviderConfig):
             },
             "secretmanager": {
                 **base_config,
+                "type": "gcp",
                 **(self.secrets.model_dump() if self.secrets else {}),
             },
             "tracing": {
                 **base_config,
                 **(self.tracing.model_dump() if self.tracing else {}),
+            },
+            "vertex": {
+                **base_config,
+                "bucket": self.storage_bucket,
+                **(self.vertex.model_dump() if self.vertex else {}),
             },
         }
 
@@ -215,72 +228,7 @@ class GCPConfig(CloudProviderConfig):
             "logging": self.logging,
             "pubsub": self.pubsub,
             "tracing": self.tracing,
-        }
-        return service_map.get(service) is not None
-
-
-class VertexAIConfig(CloudProviderConfig):
-    """Vertex AI specific configuration (extends GCP)."""
-
-    type: Literal["vertex"] = "vertex"
-    project_id: Optional[str] = Field(
-        default=None,
-        description="GCP Project ID for Vertex AI"
-    )
-    region: str = Field(
-        default="us-central1",
-        description="Vertex AI region"
-    )
-    location: Optional[str] = Field(
-        default=None,
-        description="Vertex AI location (defaults to region)"
-    )
-    bucket: Optional[str] = Field(
-        default=None,
-        description="GCS bucket for Vertex AI artifacts"
-    )
-    
-    # Vertex AI can also support tracing since it's GCP-based
-    tracing: Optional[TracingServiceConfig] = Field(
-        default=None,
-        description="OpenTelemetry tracing configuration"
-    )
-
-    @model_validator(mode="after")
-    def set_defaults_from_env(self) -> "VertexAIConfig":
-        """Set defaults from environment variables."""
-        if not self.project_id:
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-
-        if not self.location:
-            self.location = self.region
-
-        return self
-
-    def get_client_config(self, service: str) -> Dict[str, Any]:
-        """Get Vertex AI client configuration."""
-        base_config = {
-            "project": self.project_id,
-            "location": self.location,
-        }
-        
-        service_configs = {
-            "vertex": {
-                **base_config,
-                "bucket": self.bucket,
-            },
-            "tracing": {
-                **base_config,
-                **(self.tracing.model_dump() if self.tracing else {}),
-            },
-        }
-        
-        return service_configs.get(service, base_config)
-    
-    def has_service(self, service: str) -> bool:
-        """Check if this cloud provider has a specific service configured."""
-        service_map = {
-            "tracing": self.tracing,
+            "vertex": self.vertex,
         }
         return service_map.get(service) is not None
 
@@ -461,7 +409,7 @@ class TracingConfig(BaseModel):
 
 
 # Union type for all cloud providers
-CloudProvider = Union[GCPConfig, VertexAIConfig, AWSConfig, AzureConfig]
+CloudProvider = Union[GCPConfig, AWSConfig, AzureConfig]
 
 
 class InfrastructureConfig(BaseModel):

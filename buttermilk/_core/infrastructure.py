@@ -62,8 +62,8 @@ class InfrastructureManager(BaseModel):
             logger.debug("CloudManager initialized successfully")
         
         return self._cloud_manager
-    
-    @cached_property 
+
+    @cached_property
     def secret_manager(self) -> Any:
         """Get or create the SecretsManager instance."""
         if self._secret_manager is None:
@@ -71,8 +71,8 @@ class InfrastructureManager(BaseModel):
             secrets_cloud = self._find_cloud_with_service("secrets")
             if not secrets_cloud:
                 raise RuntimeError("No cloud provider with secrets service configured.")
-            
-            from buttermilk._core.secrets import SecretsManager
+
+            from buttermilk._core.keys import SecretsManager
             
             # Get secrets configuration from cloud provider
             secrets_config = secrets_cloud.get_client_config("secretmanager")
@@ -130,7 +130,7 @@ class InfrastructureManager(BaseModel):
             Cloud provider configuration with the service, or None if not found.
         """
         for cloud in self.clouds:
-            if hasattr(cloud, 'has_service') and cloud.has_service(service):
+            if hasattr(cloud, "has_service") and cloud.has_service(service):
                 return cloud
         return None
     
@@ -187,12 +187,12 @@ class InfrastructureManager(BaseModel):
         logging_cloud = self._find_cloud_with_service("logging")
         if not logging_cloud:
             return
-        
+
         try:
-            from buttermilk._core.log import setup_cloud_logging
             from buttermilk._core.context import get_logging_context
+            from buttermilk._core.log import setup_cloud_logging
             
-            context_info = get_logging_context()
+            context_info_dict = get_logging_context()
             logging_config = logging_cloud.get_client_config("logging")
             
             # Create a logger config object for backward compatibility
@@ -202,11 +202,41 @@ class InfrastructureManager(BaseModel):
                     for key, value in config_dict.items():
                         setattr(self, key, value)
             
+            # Create a session info object for backward compatibility
+            class SessionInfo:
+                def __init__(self, context_dict):
+                    # Set required attributes with defaults
+                    self.name = "infrastructure_logging"
+                    self.job = "setup"
+                    self.session_id = context_dict.get("session_id", "unknown")
+                    self.platform = "server"
+                    # Set all other context variables
+                    for key, value in context_dict.items():
+                        setattr(self, key, value)
+                
+                def model_dump(self, include=None):
+                    data = {k: v for k, v in self.__dict__.items()}
+                    if include:
+                        data = {k: v for k, v in data.items() if k in include}
+                    return data
+            
             logger_cfg = LoggerConfig(logging_config)
-            setup_cloud_logging(logger_cfg, self.cloud_manager, context_info)
-            logger.debug(f"Cloud logging configured with {logging_cloud.type} provider")
+            session_info = SessionInfo(context_info_dict)
+            
+            # Add detailed error catching
+            try:
+                setup_cloud_logging(logger_cfg, self.cloud_manager, session_info)
+                logger.debug(f"Cloud logging configured with {logging_cloud.type} provider")
+            except Exception as setup_error:
+                logger.warning(f"Cloud logging setup_cloud_logging failed: {setup_error}")
+                import traceback
+                logger.debug(f"Cloud logging setup traceback: {traceback.format_exc()}")
+                raise
+                
         except Exception as e:
             logger.warning(f"Failed to setup cloud logging: {e}")
+            import traceback
+            logger.debug(f"Full cloud logging error traceback: {traceback.format_exc()}")
     
     def create_session_bm(
         self,

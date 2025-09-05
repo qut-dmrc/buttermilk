@@ -3,6 +3,7 @@ import contextlib
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
-from buttermilk import BM, logger
+from buttermilk import logger
 from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk.runner.flowrunner import FlowRunner
@@ -238,11 +239,9 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
                     logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
                     
                     # Create session-scoped BM for this flow execution
-                    if hasattr(websocket.app.state, 'infrastructure'):
+                    if hasattr(websocket.app.state, "infrastructure"):
                         session_bm = websocket.app.state.infrastructure.create_session_bm(
-                            name=f"api_session_{run_request.flow}",
-                            job=run_request.flow,
-                            batch_id=getattr(run_request, 'batch_id', None)
+                            name=f"api_session_{run_request.flow}", job=run_request.flow, batch_id=getattr(run_request, "batch_id", None)
                         )
                         # Set the session-scoped BM for this flow execution
                         flow_runner.set_session_bm(session_bm)
@@ -394,7 +393,6 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
                 "is_expired": session.is_expired()
             })
         return {"sessions": sessions_info, "total": len(sessions_info)}
-
 
     # --- Defer heavy routes for Phase 2 optimization ---
     # Set up templates

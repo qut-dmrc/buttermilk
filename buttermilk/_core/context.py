@@ -67,14 +67,3 @@ def clear_logging_context() -> None:
     session_id_var.set(None)
     batch_id_var.set(None)
     agent_id_var.set(None)
-
-
-# Legacy function for backward compatibility
-def set_session_context(session_id: str | None, agent_id: str | None = None) -> None:
-    """Legacy function for backward compatibility.
-    
-    Args:
-        session_id: Session identifier.
-        agent_id: Agent identifier.
-    """
-    set_logging_context(session_id=session_id, agent_id=agent_id)

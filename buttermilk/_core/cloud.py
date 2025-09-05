@@ -10,6 +10,7 @@ from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
 
 from buttermilk._core.config import CloudProviderCfg
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 from buttermilk._core.utils.lazy_loading import cached_property, refreshable_cached_property
 
@@ -66,8 +67,8 @@ class CloudManager:
         if not self.gcp_cloud_cfg:
             raise RuntimeError("No GCP cloud configuration found")
 
-        # Try both 'project_id' (config field) and 'project' (legacy field)
-        project_id = getattr(self.gcp_cloud_cfg, "project_id", None) or getattr(self.gcp_cloud_cfg, "project", None)
+        # Get project_id from config
+        project_id = getattr(self.gcp_cloud_cfg, "project_id", None)
         quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
 
         if not project_id:
@@ -204,7 +205,7 @@ class CloudManager:
 
         project = logger_cfg.project_id
         if not project:
-            raise RuntimeError("Logger config missing 'project' attribute")
+            raise RuntimeError("Logger config missing 'project_id' attribute")
 
         try:
             return CloudLoggingClient(
@@ -216,21 +217,24 @@ class CloudManager:
 
     def login_clouds(self) -> None:
         """Initialize cloud provider connections."""
+        # Initialize Vertex AI if configured in any GCP cloud
         for cloud in self.clouds:
             if not cloud or not hasattr(cloud, "type"):
                 continue  # Skip invalid cloud entries
 
-            if cloud.type == "vertex":
+            if cloud.type == "gcp" and hasattr(cloud, "has_service") and cloud.has_service("vertex"):
                 self._init_vertex_ai(cloud)
 
     def _init_vertex_ai(self, cloud: CloudProviderCfg) -> None:
         """Initialize Vertex AI connection."""
         from vertexai import init as aiplatform_init
 
-        # Ensure required attributes exist
-        project_id = getattr(cloud, "project_id", None)
-        location = getattr(cloud, "location", None)
-        bucket = getattr(cloud, "bucket", None)
+        # Get vertex service configuration
+        vertex_config = cloud.get_client_config("vertex")
+        
+        project_id = vertex_config.get("project_id")
+        location = vertex_config.get("location")
+        bucket = vertex_config.get("bucket")
 
         if project_id and location and bucket:
             try:
