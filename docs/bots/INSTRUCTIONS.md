@@ -6,10 +6,9 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 # 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
-**YOU HAVE THREE DOCUMENTED PATTERNS THAT MUST STOP:**
+**YOU HAVE TWO DOCUMENTED PATTERNS THAT MUST STOP:**
 1. **RUSH-TO-CODE**: Jumping to implementation without exploration
-2. **STANDALONE TEST SCRIPTS**: Creating single-use test files instead of proper pytest tests
-3. **INLINE PYTHON VALIDATION**: Using `uv run python -c "..."` or similar commands for testing/validation
+2. **STANDALONE VALIDATION**: Creating standalone validation code (files OR inline commands) instead of using proper pytest workflows
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
@@ -22,58 +21,41 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **BEFORE you test, validate, or verify ANY code behavior, you MUST:**
 
-### ❌ NEVER CREATE THESE FILES OR COMMANDS:
+### ❌ NEVER CREATE STANDALONE VALIDATION (FILES OR COMMANDS):
+
+**Forbidden File-Based Validation:**
 - `test_*.py` files outside the `tests/` directory
 - "Quick test scripts" or "validation files" in the project root
 - Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
 - `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
-- **Inline Python validation commands**: `uv run python -c "..."`, `python -c "..."`, or similar execution patterns
+
+**Forbidden Command-Based Validation:**
+- **Inline Python validation**: `uv run python -c "..."`, `python -c "..."`, or similar execution patterns
 - **Bash-embedded test scripts**: Multi-line Python code in heredocs or command strings
+- **"Quick verification" commands**: Any form of standalone Python execution for testing purposes
 
 ### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
 
 **🛑 CRITICAL: These phrases indicate you're about to violate workflow. STOP and use approved methods instead:**
 
-**Test Creation Violations:**
-- "Let me create a test to..."
-- "I'll write a quick test..."
-- "Let me create a simple test..."
-- "I'll create a test script..."
-- "I'll make a test file..."
-
-**Validation Violations:**
-- "Let me verify this works..."
-- "I'll test the serialization..."
-- "Let me check if this runs..."
-- "I'll validate my implementation..."
-- "Let me see if this works..."
-- "I need to test this..."
-- "Let me make sure this works..."
-- "I'll run a quick test..."
-- "Let me execute this to check..."
-- "I'll use python -c to verify..."
-
-**File Creation Violations:**
-- "I'll create a script to test..."
-- "Let me create an example..."
-- "I'll make a demo..."
-- "Here's a sample script..."
-- "I'll write a quick validation..."
-- "Let me create a verification..."
-
-**Inline Command Violations:**
-- "I'll run python -c to test..."
-- "Let me execute this inline..."
-- "I'll use uv run python -c..."
-- "Let me run a quick python command..."
-- "I'll test this with a simple python execution..."
+**Standalone Validation Violations (ANY form of standalone testing/validation):**
+- "Let me create a test to..." / "I'll write a quick test..." / "Let me create a simple test..."
+- "I'll create a test script..." / "I'll make a test file..."
+- "Let me verify this works..." / "I'll test the serialization..." / "Let me check if this runs..."
+- "I'll validate my implementation..." / "Let me see if this works..." / "I need to test this..."
+- "Let me make sure this works..." / "I'll run a quick test..." / "Let me execute this to check..."
+- "I'll use python -c to verify..." / "I'll run python -c to test..." / "Let me execute this inline..."
+- "I'll use uv run python -c..." / "Let me run a quick python command..."
+- "I'll test this with a simple python execution..." / "I'll create a script to test..."
+- "Let me create an example..." / "I'll make a demo..." / "Here's a sample script..."
+- "I'll write a quick validation..." / "Let me create a verification..."
 
 **🔧 WHEN YOU CATCH YOURSELF USING THESE PHRASES:**
-1. **STOP immediately** - Do not proceed with file creation
-2. **Check the validation decision tree above** 
+1. **STOP immediately** - Do not proceed with file creation OR command execution
+2. **Check the validation decision tree below** 
 3. **Use approved validation methods only**
 4. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
-5. **If unclear**: Ask for guidance rather than creating files
+5. **If unclear**: Ask for guidance rather than creating standalone validation
 
 ### 🤖 SUBAGENT AVAILABLE:
 When you need to create examples or demonstrations, use:
@@ -89,9 +71,9 @@ This specialized agent ensures all examples are created as proper pytest tests.
 - Use pytest fixtures and assertions
 - Ensure tests integrate with CI/CD pipeline
 
-### 📋 CONCRETE EXAMPLE:
+### 📋 CONCRETE EXAMPLES:
 
-**❌ WRONG (Standalone Script)**:
+**❌ WRONG (Standalone File-Based Validation)**:
 ```python
 # test_something.py in project root
 import json
@@ -102,7 +84,7 @@ print("Success!")
 assert result["field"] == "expected"
 ```
 
-**❌ WRONG (Inline Python Command)**:
+**❌ WRONG (Standalone Command-Based Validation)**:
 ```bash
 uv run python -c "
 import logging
@@ -130,7 +112,7 @@ def test_myclass_serialization():
     assert isinstance(result, dict)
 ```
 
-**ENFORCEMENT**: If you catch yourself about to create a test file, STOP and ask: "Am I creating this in the tests/ directory using proper pytest conventions?" If no, RESTART your approach.
+**ENFORCEMENT**: If you catch yourself about to create standalone validation (file OR command), STOP and ask: "Am I using proper pytest tests in the tests/ directory OR approved debugging tools?" If no, RESTART your approach.
 
 ## 🚨 POST-IMPLEMENTATION VALIDATION PROTOCOL 🚨
 
@@ -143,8 +125,8 @@ def test_myclass_serialization():
 4. **Extend existing tests**: Add test cases to existing test files in `tests/` directory
 5. **Manual verification**: Use project's established debugging endpoints and tools
 
-### ❌ FORBIDDEN VALIDATION METHODS:
-- Creating any standalone validation scripts
+### ❌ FORBIDDEN VALIDATION METHODS (Both File-Based AND Command-Based):
+- Creating any standalone validation scripts or files
 - Creating "quick test" files anywhere outside tests/
 - Writing verification code in project root or implementation directories
 - Creating demo files, sample scripts, or proof-of-concept files
@@ -155,9 +137,10 @@ def test_myclass_serialization():
 ### 🔄 VALIDATION DECISION TREE:
 
 **🛑 CRITICAL CHECKPOINT: Before ANY testing/validation action, ask:**
+- Am I about to create standalone validation in ANY form (file-based OR command-based)?
 - Am I about to use `python -c`, `uv run python -c`, or similar inline execution?
 - Am I about to create ANY form of standalone test code (file or command)?
-- **IF YES TO EITHER: STOP IMMEDIATELY and use approved methods below**
+- **IF YES TO ANY: STOP IMMEDIATELY and use approved methods below**
 
 1. **Do existing tests cover this functionality?** 
    - YES: Run those tests with `uv run pytest tests/path/to/test.py`
@@ -176,7 +159,7 @@ def test_myclass_serialization():
    - Use existing API endpoints or monitoring tools
    - **NEVER** use inline Python execution for "quick verification"
 
-**REMEMBER**: The urge to "quickly test" or "verify it works" is the most common trigger for workflow violations. This includes the temptation to use `python -c` for "simple checks". Resist this urge and use proper validation methods.
+**REMEMBER**: The urge to "quickly test" or "verify it works" is the most common trigger for workflow violations. This includes both creating test files AND using `python -c` for "simple checks". Resist both urges and use proper validation methods.
 
 ### 🆘 WHEN YOU HIT VALIDATION ROADBLOCKS:
 
@@ -192,11 +175,11 @@ def test_myclass_serialization():
 3. **Want to verify changes**: Run the full test suite or specific relevant test modules
 4. **Debugging tools seem complex**: ASK FOR HELP rather than creating workarounds
 
-**🛑 NEVER justify inline Python with phrases like:**
-- "This is just a simple check..."
-- "It's faster than writing a proper test..."
-- "I just need to see if this works..."
-- "This is temporary validation..."
+**🛑 NEVER justify standalone validation with phrases like:**
+- "This is just a simple check..." / "It's faster than writing a proper test..."
+- "I just need to see if this works..." / "This is temporary validation..."
+- "It's just a quick file..." / "This command is simpler..."
+- "I'll delete it after..." / "It's just for testing..."
 
 **✅ ALWAYS choose:**
 - Proper pytest tests in tests/ directory
@@ -263,16 +246,16 @@ def test_myclass_serialization():
 ### 📋 MANDATORY PRE-ACTION CHECKLIST:
 **Ask yourself these questions BEFORE taking action:**
 
-1. **Am I about to create a file OR execute inline code for testing?**
+1. **Am I about to create standalone validation in ANY form?**
    - File creation: Where am I creating it? Is it in the correct directory?
-   - Inline execution: Am I using `python -c`, `uv run python -c`, or similar for validation?
+   - Command execution: Am I using `python -c`, `uv run python -c`, or similar for validation?
    - For tests: MUST be in `tests/` directory with pytest conventions
-   - **CRITICAL**: Inline Python execution for testing is FORBIDDEN
+   - **CRITICAL**: ALL forms of standalone validation (files AND commands) are FORBIDDEN
 
 2. **Am I about to validate/test something?**
    - If YES: Check the validation decision tree in the previous section
    - Use existing tests or debugging tools FIRST
-   - **NEVER** use inline Python commands or Bash-embedded scripts for validation
+   - **NEVER** use standalone validation in ANY form (files OR commands)
 
 3. **Am I using any red flag phrases?**
    - If YES: STOP immediately and use approved methods instead
@@ -326,8 +309,8 @@ Specific rules:
 - Ignoring tool-specific syntax requirements (e.g., `--wait` needs values)
 - Dumping full outputs instead of extracting key findings
 - Creating custom debugging scripts instead of using documented tools
-- **Using inline Python commands for debugging validation**: `uv run python -c "..."` or similar
-- **Creating "quick debug scripts"** when debugging tools seem difficult to use
+- **Using standalone validation for debugging**: Files, `uv run python -c "..."`, or similar
+- **Creating "quick debug scripts" or commands** when debugging tools seem difficult to use
 
 ### 🚨 DEBUGGING OUTPUT ENFORCEMENT:
 When you find yourself about to paste:
@@ -363,7 +346,7 @@ When you find yourself about to paste:
 
 7. **DOCUMENT**: ALWAYS document your code with clear docstrings and comments
 
-8. **VALIDATE**: Use ONLY approved validation methods (see validation decision tree above). Use existing tests, debugging tools from `docs/bots/debugging.md`, or extend existing test files in `tests/` directory. **NEVER create standalone validation scripts.**
+8. **VALIDATE**: Use ONLY approved validation methods (see validation decision tree above). Use existing tests, debugging tools from `docs/bots/debugging.md`, or extend existing test files in `tests/` directory. **NEVER create standalone validation in ANY form (files OR commands).**
 
 9. **COMMIT** and **UPDATE GITHUB ISSUES**: Commit your changes in logical chunks and document each step in the appropriate github issue. If you're working independently, don't forget to file a pull request with your new changes!
 
