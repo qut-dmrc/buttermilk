@@ -524,9 +524,30 @@ class BM(BaseModel):
             execution_context = get_execution_context()
             return await execution_context.get_weave_client()
         except (RuntimeError, ImportError):
-            # Fallback to direct weave client for backward compatibility
-            # Note: This may not have proper initialization if weave.init() wasn't called
+            # Fallback: try to initialize weave ourselves if we have access to credentials
             import weave
+            import os
+            
+            # Try to set up weave credentials if we have access to secret manager
+            try:
+                if hasattr(self, '_secret_manager') and self._secret_manager:
+                    credentials = self.credentials
+                    
+                    # Set up WANDB credentials for weave if available
+                    if "WANDB_API_KEY" in credentials and "WANDB_ENTITY" in credentials:
+                        os.environ["WANDB_API_KEY"] = credentials["WANDB_API_KEY"]
+                        os.environ["WANDB_ENTITY"] = credentials["WANDB_ENTITY"]
+                        
+                        # Initialize weave with a basic project name
+                        collection_name = f"session-{self.session_info.session_id[:8]}"
+                        weave.init(
+                            project_name=f"{credentials['WANDB_ENTITY']}/{collection_name}",
+                            autopatch_settings={"autogen": {"enabled": False}}
+                        )
+            except Exception as e:
+                # If weave setup fails, log but continue with basic client
+                logger.debug(f"Could not initialize weave in fallback: {e}")
+            
             return weave.get_client()
 
     @property
