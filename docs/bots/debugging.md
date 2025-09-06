@@ -28,14 +28,21 @@ This command handles killing any old processes and starts a new one, logging out
 
 ---
 
-## 2. Validate the Backend (Live Run)
+## 2. Validate Complete Flow Execution (END-TO-END RESULTS)
 
-To interact with flows, use the primary WebSocket debug client: `ws_debug_cli.py`. This is the most powerful tool for observing the system's live behavior.
+**🚨 CRITICAL**: Success means flows complete with real output from ALL agents (fetch, judge, synth, scorer, diff). Component validation without end-to-end completion is NOT sufficient.
+
+To run complete flows, use the primary WebSocket debug client: `ws_debug_cli.py`. This tool must show flows completing with actual results, not just starting successfully.
 
 **Canonical command:**
 ```bash
 uv run python -m buttermilk.debug.ws_debug_cli <command>
 ```
+
+**🛑 KNOWN CRITICAL ISSUES BLOCKING FLOW COMPLETION:**
+- **Issue #226**: Flows start but don't process messages (sessions stuck in "reconnecting")
+- **Issue #227**: Logging system shows stale data, can't see current session activity
+- **Until these are fixed, flows will NOT complete end-to-end**
 
 ### Available Commands
 
@@ -58,6 +65,24 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
     uv run python -m buttermilk.debug.ws_debug_cli test-connection
     ```
 
+### SUCCESS CRITERIA: What Complete Flow Execution Looks Like
+
+**❌ INSUFFICIENT (Component Validation)**:
+- WebSocket connects ✓
+- Flow starts ✓
+- No immediate errors ✓
+- Session created ✓
+
+**✅ REQUIRED (End-to-End Completion)**:
+- Flow runs through ALL agents sequentially ✓
+- fetch agent retrieves real data ✓
+- judge agent processes and scores data ✓
+- synth agent synthesizes findings ✓
+- scorer agent validates results ✓
+- diff agent compares outputs ✓
+- **VISIBLE OUTPUT from each agent stage** ✓
+- Session shows "completed" not "reconnecting" ✓
+
 *   **Start a Flow:**
     ```bash
     # Usage: uv run python -m buttermilk.debug.ws_debug_cli start <flow_name> --record <record_id> --criteria <criteria>
@@ -66,6 +91,8 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
     This will return a `session_id` for use in other commands.
     
     **Note**: The `--wait` option requires a numeric value (seconds). Default is 60 seconds if omitted.
+    
+    **🚨 EXPECTED RESULT**: You should see output from multiple agents in sequence, not just successful connection.
 
 *   **Send a Message to a Flow:**
     ```bash
