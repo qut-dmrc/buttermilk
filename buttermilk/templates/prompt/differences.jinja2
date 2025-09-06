@@ -58,19 +58,6 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 
 {% if answers %}
 # User:
-Analyse the underlying reasons behind differences among the answers below.
-{# Loop through the provided answers. #}
 {% for answer in answers %}
-<BEGIN {{answer['agent_id']}} DRAFT ANSWER #{{answer['answer_id'][-4:]}}>
-{%- if 'error' not in answer or not answer['error'] -%}
-{{ answer['result'] }}
-{%- else -%}
-ERROR: {{ answer['error'] }}
-{%- endif -%}
-<END DRAFT ANSWER>
+{{ answer }}
 {% endfor %}
-{% else %}
-{# Fallback if 'answers' are not provided. Uses 'context': history of messages so far. #}
-# Placeholder:
-{{context}}
-{% endif %}

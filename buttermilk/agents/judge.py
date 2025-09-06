@@ -6,14 +6,11 @@ criteria or a policy. It uses Pydantic models like `Reasons` and `JudgeReasons`
 to structure the LLM's output, ensuring a consistent and parsable evaluation format.
 """
 
-import random  # For random emoji selection in preview
 from typing import Literal  # For type hinting
 
-from pydantic import BaseModel, Field, computed_field  # Pydantic components
+from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentTrace  # Base types
-from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
 # --- Pydantic Models for Evaluation Output ---
@@ -52,10 +49,7 @@ class Reasons(BaseModel):
 
         """
         reasons_str = "\n\n\t".join(f"- {reason}" for reason in self.reasons)
-        return (
-            f"**Conclusion:** {self.conclusion}\n\n"
-            f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
-        )
+        return f"**Conclusion:** {self.conclusion}\n\n**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
 
 
 class JudgeReasons(Reasons):
@@ -96,23 +90,30 @@ class JudgeReasons(Reasons):
         description="Assesses the scope for reasonable minds to differ on this conclusion (high, medium, or low uncertainty).",
     )
 
-    def __str__(self) -> str:
-        """Returns a Markdown formatted string representation of the full judgment.
+    def as_markdown(self) -> str:
+        """Return a simplified markdown block for use in prompt templates.
 
-        Includes the conclusion, policy violation prediction, uncertainty level,
-        and detailed reasoning steps.
-
-        Returns:
-            str: A comprehensive Markdown formatted summary of the judgment.
-
+        Format:
+        **AGENT-NAME #CALLID**
+        <conclusion>
+        - reason 1
+        - reason 2
+        Prediction: Yes|No
+        Uncertainty: High|Medium|Low
         """
-        reasons_str = "\n".join(f"\t- {reason}" for reason in self.reasons)
+        reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
+        prediction_str = "Yes" if self.prediction else "No"
+
         return (
-            f"**Conclusion:** {self.conclusion}\n"
-            f"**Prediction (e.g., Violates Policy):** {'Yes' if self.prediction else 'No'}\n"
-            f"**Uncertainty Level:** {self.uncertainty.capitalize()}\n\n"
-            f"**Detailed Reasoning:**\n{reasons_str or 'No specific reasons provided.'}"
+            f"**{self.agent_name} #{self.call_id}**\n"
+            f"{self.conclusion}\n"
+            f"{reasons_str or '- No specific reasons provided.'}\n"
+            f"Prediction: {prediction_str}\n"
+            f"Uncertainty: {self.uncertainty.capitalize()}"
         )
+
+    def __str__(self) -> str:
+        return self.as_markdown()
 
 
 # --- Judge Agent ---
