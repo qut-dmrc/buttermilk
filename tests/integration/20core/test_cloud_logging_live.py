@@ -34,30 +34,10 @@ EXPECTED_NUMERIC_FIELD = 42
 # Helper functions
 
 
-def _get_gcp_project_id() -> str:
-    """Get GCP project ID from environment or service account."""
-    # Try to get from environment first
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-    if project_id:
-        return project_id
-
-    # Try to extract from service account credentials
-    try:
-        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if creds_path:
-            with open(creds_path, encoding="utf-8") as f:
-                creds = json.load(f)
-                return creds.get("project_id", "buttermilk-test")
-    except Exception:
-        pass
-
-    return "buttermilk-test"  # Default fallback
-
-
 @pytest.fixture(scope="session")
-def gcp_project_id() -> str:
+def gcp_project_id(bm) -> str:
     """Get GCP project ID for testing."""
-    return _get_gcp_project_id()
+    return bm.cloud_manager.clouds[0].project_id
 
 
 @pytest.fixture(scope="session")
@@ -72,12 +52,9 @@ def log_client(gcp_project_id: str) -> gcp_logging.Client:
 def test_session_cloud_logging_end_to_end(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test complete end-to-end cloud logging flow with real session context."""
 
-    # Skip if no cloud logging configured in the test environment
-    if not bm._logger_cfg or bm._logger_cfg.type != "gcp":
-        pytest.skip("No GCP cloud logging configured in test environment")
-
-    if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        pytest.skip("GOOGLE_APPLICATION_CREDENTIALS not set for live GCP testing")
+    # Integration test must fail if cloud logging not properly configured
+    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     # Create a unique test identifier for log verification
     test_run_id = f"test-{uuid.uuid4().hex[:8]}"
@@ -117,12 +94,9 @@ def test_session_cloud_logging_end_to_end(bm: BM, infrastructure: Infrastructure
 def test_multiple_sessions_isolated_logging(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that multiple BM sessions have isolated but proper cloud logging."""
 
-    # Skip if no cloud logging configured in the test environment
-    if not bm._logger_cfg or bm._logger_cfg.type != "gcp":
-        pytest.skip("No GCP cloud logging configured in test environment")
-
-    if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        pytest.skip("GOOGLE_APPLICATION_CREDENTIALS not set for live GCP testing")
+    # Integration test must fail if cloud logging not properly configured
+    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"multi-test-{uuid.uuid4().hex[:8]}"
 
@@ -159,12 +133,9 @@ def test_multiple_sessions_isolated_logging(bm: BM, infrastructure: Infrastructu
 def test_structured_json_format_consistency(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that cloud logs use consistent structured JSON format."""
 
-    # Skip if no cloud logging configured in the test environment
-    if not bm._logger_cfg or bm._logger_cfg.type != "gcp":
-        pytest.skip("No GCP cloud logging configured in test environment")
-
-    if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        pytest.skip("GOOGLE_APPLICATION_CREDENTIALS not set for live GCP testing")
+    # Integration test must fail if cloud logging not properly configured
+    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"json-test-{uuid.uuid4().hex[:8]}"
 
@@ -174,7 +145,9 @@ def test_structured_json_format_consistency(bm: BM, infrastructure: Infrastructu
     )
 
     # Log structured data
-    logger.info("Structured test message", test_run_id=test_run_id, custom_field="custom_value", numeric_field=EXPECTED_NUMERIC_FIELD, boolean_field=True)
+    logger.info(
+        "Structured test message", test_run_id=test_run_id, custom_field="custom_value", numeric_field=EXPECTED_NUMERIC_FIELD, boolean_field=True
+    )
 
     time.sleep(5)
 
@@ -202,9 +175,9 @@ def test_structured_json_format_consistency(bm: BM, infrastructure: Infrastructu
 def test_cloud_logging_error_handling(bm: BM, infrastructure: InfrastructureManager, tmp_path):
     """Test that cloud logging setup failures are handled gracefully."""
 
-    # Skip if no cloud logging configured in the test environment
-    if not bm._logger_cfg or bm._logger_cfg.type != "gcp":
-        pytest.skip("No GCP cloud logging configured in test environment")
+    # Integration test must fail if cloud logging not properly configured
+    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"error-test-{uuid.uuid4().hex[:8]}"
 
@@ -282,7 +255,6 @@ def _verify_logs_in_gcp(log_client: gcp_logging.Client, test_run_id: str, sessio
 
 @pytest.mark.integration
 @pytest.mark.anyio
-@pytest.mark.skipif(not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"), reason="Requires GOOGLE_APPLICATION_CREDENTIALS for live GCP testing")
 async def test_async_cloud_logging_performance(infrastructure: InfrastructureManager):
     """Test cloud logging performance under concurrent session creation."""
 

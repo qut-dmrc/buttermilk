@@ -1,6 +1,5 @@
 import pytest
 from hydra import compose, initialize
-from omegaconf import OmegaConf
 
 from buttermilk import create_infrastructure_from_config, get_bm, set_bm
 from buttermilk._core.bm_init import BM
@@ -17,9 +16,8 @@ def conf():
     with initialize(version_base=None, config_path="../../buttermilk/conf"):
         cfg = compose(config_name="testing")
 
-    resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-
-    return resolved_cfg_dict
+    # Keep as DictConfig for infrastructure, but resolve for other uses
+    return cfg
 
 
 # Create infrastructure manager from test configuration
@@ -29,6 +27,7 @@ def infrastructure(conf):
 
     # Use new infrastructure configuration
     if "infrastructure" in conf:
+        # Pass the DictConfig directly to preserve instantiation capability
         infrastructure = create_infrastructure_from_config(conf["infrastructure"])
     else:
         raise ValueError("Test configuration must contain 'infrastructure' configuration.")

@@ -202,9 +202,8 @@ class TestConfigReloadIntegration:
         # For now, just verify it exists and is executable
         startup_script = Path("/src/buttermilk/deploy/startup.sh")
         
-        # Skip if not in container environment
-        if not startup_script.exists():
-            pytest.skip("Startup script not found - not in container environment")
+        # Integration test must fail if startup script not present
+        assert startup_script.exists(), "Startup script must be present for integration tests"
         
         # Verify script is executable
         assert startup_script.stat().st_mode & 0o111, "Startup script should be executable"

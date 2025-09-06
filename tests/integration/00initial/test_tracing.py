@@ -17,10 +17,13 @@ async def test_weave_tracing_initialised_and_creates_calls(bm: BM):
     if weave is None:
         pytest.skip("Weave library is not installed in this environment.")
 
-    client = bm.weave
+    try:
+        client = await bm.get_weave_client()
+    except Exception:
+        pytest.skip("Weave client is not available or not configured in this environment.")
 
     if client is None:
-        pytest.skip("Weave client is not configured (bm.weave is None) in this environment.")
+        pytest.skip("Weave client is not configured (get_weave_client returned None) in this environment.")
 
     # Define a minimal operation to be traced
     def _inc(x: int) -> int:
