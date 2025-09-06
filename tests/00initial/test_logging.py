@@ -20,37 +20,43 @@ LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 @pytest.fixture(scope="function")
 def bm_instance(tmp_path) -> BM:
     """Provides a BM instance with a temporary save directory."""
-    # Create a minimal BM instance for testing
-    # You might need to adjust parameters depending on what your tests need
-    # Ensure that the save_dir_base is a temporary path
-    test_bm = BM(
-        platform="test",  # Required field
+    from buttermilk._core.bm_init import create_session_bm
+    
+    # Create a session-scoped BM instance for testing
+    test_bm = create_session_bm(
         name="test_bm_instance",
         job="test_job",
+        platform="test",
         save_dir_base=str(tmp_path),  # Use pytest's tmp_path for a unique temp dir
+        # No cloud infrastructure by default for most tests
+        cloud_manager=None,
+        secret_manager=None,
+        llms_instance=None,
         logger_cfg=None,  # Disable cloud logging by default for most tests
-        secret_provider=CloudProviderCfg(type="local", project="test-project", location="test-location"),  # Mock secret provider
-        clouds=[],
-        datasets={},
     )
     return test_bm
 
 
 @pytest.fixture(scope="function")
 def configured_logger(bm_instance):
-    # bm_instance.setup_logging() will use the logger_cfg from bm_instance
-    # If logger_cfg is None (as default in bm_instance fixture), cloud logging won't be set up
-    bm_instance.setup_logging(verbose=True)  # ensure debug is also captured if needed by some tests
-    # The global buttermilk logger is configured by bm_instance.setup_logging()
+    # In the new session-scoped architecture, logging is set up automatically
+    # during BM initialization. We just need to set up console/file logging for tests.
+    from buttermilk._core.log import setup_console_logging
+    
+    # Set up console logging for test visibility
+    setup_console_logging(verbose=True)
+    
+    # The global buttermilk logger is ready to use
     yield logger
-    # Cleanup: remove handlers added by setup_logging to avoid test interference
-    # This is important if other tests configure logging differently.
-    # A simple way is to remove all handlers from the logger.
-    # More robustly, store handlers before and restore after, or re-initialize.
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+    
+    # Cleanup: remove handlers to avoid test interference
+    import logging as std_logging
+    root_logger = std_logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
     # Reset context vars
-    set_logging_context(None, None)
+    set_logging_context(None, None, None)
 
 
 # Test Case 1: Context Variables Set
@@ -109,54 +115,49 @@ def test_logging_without_context_vars(configured_logger):
     assert f"[None:None] {log_message}" in log_output
 
 
-# Test Case 3: Cloud Logging (Mocking) - Skip due to complex GCP cloud setup requirements
-@pytest.mark.skip(reason="Complex cloud logging test requires full GCP cloud configuration setup")
+# Test Case 3: Cloud Logging with Session-Scoped Architecture
 @patch("google.cloud.logging_v2.handlers.CloudLoggingHandler")  # Patch the actual class
-def test_cloud_logging_with_context_vars(MockCloudLoggingHandler, tmp_path):
-    # Configure a BM instance to enable cloud logging
-    # We need to provide a logger_cfg that would trigger cloud logging setup
-    mock_gcp_logger_cfg = CloudProviderCfg(
-        type="gcp", project="test-gcp-project", location="us-central1",
+def test_cloud_logging_with_session_context(MockCloudLoggingHandler, tmp_path):
+    from buttermilk._core.bm_init import create_session_bm
+    from buttermilk._core.config import LoggerConfig
+    from buttermilk._core.cloud import CloudManager
+    
+    # Create a mock logger configuration
+    mock_logger_cfg = LoggerConfig(
+        type="gcp", 
+        project_id="test-gcp-project", 
+        location="us-central1"
     )
 
-    # Mock the GCS log client that BM would try to create
+    # Mock cloud manager and GCS log client
+    mock_cloud_manager = MagicMock()
     mock_log_client = MagicMock()
+    mock_cloud_manager.gcs_log_client.return_value = mock_log_client
 
-    cloud_bm = BM(
-        platform="test",  # Required field
+    # Create session-scoped BM instance with cloud logging enabled
+    cloud_bm = create_session_bm(
         name="test_cloud_bm",
         job="test_cloud_job",
+        platform="test",
         save_dir_base=str(tmp_path),
-        logger_cfg=mock_gcp_logger_cfg,  # Enable cloud logging path
-        secret_provider=CloudProviderCfg(type="local", project="test-project", location="test-location"),
-        clouds=[],  # Keep it simple, no actual cloud connections needed for this mock
+        cloud_manager=mock_cloud_manager,
+        logger_cfg=mock_logger_cfg,  # Enable cloud logging
     )
 
-    # Mock the cloud_manager's method that provides the gcs_log_client
-    # This avoids needing full GCS credentials or actual client creation
-    # Since cloud_manager is a cached_property, we need to mock the underlying _cloud_manager
-    mock_cloud_manager = MagicMock()
-    mock_cloud_manager.gcs_log_client.return_value = mock_log_client
-    mock_cloud_manager.login_clouds.return_value = None  # Mock the login_clouds method
-    cloud_bm._cloud_manager = mock_cloud_manager
-
-    # The mock CloudLoggingHandler instance will be created by setup_logging
+    # The mock CloudLoggingHandler instance will be created during BM initialization
     mock_handler_instance = MockCloudLoggingHandler.return_value
     mock_handler_instance.emit = MagicMock()  # Mock the emit method
     mock_handler_instance.handle = MagicMock()  # Also mock handle as it's often called
 
-    # Call setup_logging to trigger the CloudLoggingHandler instantiation and attachment
-    cloud_bm.setup_logging(verbose=True)
+    # In the new architecture, cloud logging is set up automatically during BM initialization
+    # The session context is already established with the real session_id from the BM
     
-    # Access cloud_manager to trigger lazy cloud authentication and cloud logging setup
-    _ = cloud_bm.cloud_manager
-
-    test_session_id = "cloud_session_789"
+    test_session_id = cloud_bm.session_info.session_id  # Use the real session ID
     test_agent_id = "cloud_agent_xyz"
-    set_logging_context(test_session_id, test_agent_id)
+    set_logging_context(test_session_id, None, test_agent_id)  # Update context with agent
 
     log_message = "Test cloud message"
-    # Use the global logger instance that bm.setup_logging() configured
+    # Use the global logger instance
     global_logger = logging.getLogger("buttermilk")
     global_logger.info(log_message)
 
@@ -194,13 +195,20 @@ def test_cloud_logging_with_context_vars(MockCloudLoggingHandler, tmp_path):
 
 @pytest.fixture(scope="function")
 def logger_new(bm_instance):  # Use the new bm_instance fixture
-    bm_instance.setup_logging(verbose=True)  # Set verbose=True to enable DEBUG level
+    from buttermilk._core.log import setup_console_logging
+    
+    # Set up console logging for test visibility (session logging is automatic)
+    setup_console_logging(verbose=True)
+    
     # logger instance is the global buttermilk logger
     yield logger
     logger.info("Tearing test logger_new down.")
+    
     # It's important to clean up handlers to prevent test interference
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+    import logging as std_logging
+    root_logger = std_logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
 
 
 def test_error(capsys, logger_new):  # logger_new now uses bm_instance

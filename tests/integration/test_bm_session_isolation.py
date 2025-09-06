@@ -137,7 +137,7 @@ class TestBMInjectionSystem:
         assert effective_bm is session_bm
         assert effective_bm.session_info.session_id == "test-session-123"
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_end_to_end_bm_flow(self, mock_flow_config, session_bm):
         """Test complete BM injection flow from FlowRunner to Agent."""
         # This test verifies the complete chain:

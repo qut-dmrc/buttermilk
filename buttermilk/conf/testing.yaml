@@ -15,6 +15,15 @@ bm:
     name: buttermilk
     job: testing
 
+infrastructure:
+  clouds:
+    - type: gcp
+      _target_: buttermilk._core.cloud_config.GCPConfig
+      project_id: prosocial-443205
+      region: us-central1
+      location: us-central1
+      storage_bucket: prosocial-dev
+      
 run:
   mode: console
   ui: console

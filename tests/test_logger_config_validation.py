@@ -1,9 +1,14 @@
-"""Test logger configuration validation for early failure detection."""
+"""Test logger configuration validation for early failure detection.
+
+Note: In the session-scoped architecture, logger configuration is handled at
+the Infrastructure level and injected into BM sessions. These tests focus on
+LoggerConfig validation and session-level cloud logging setup.
+"""
 
 import pytest
 from unittest.mock import Mock, patch
 
-from buttermilk._core.bm_init import BM
+from buttermilk._core.bm_init import create_session_bm
 from buttermilk._core.config import LoggerConfig
 from pydantic import ValidationError
 
@@ -13,23 +18,28 @@ class TestLoggerConfigValidation:
     
     def test_valid_gcp_logger_config(self):
         """Test that valid GCP logger config passes validation."""
-        config = {
-            "platform": "local",
-            "name": "test",
-            "job": "testing",
-            "logger_cfg": {
-                "type": "gcp",
-                "project": "test-project",
-                "location": "us-central1"
-            }
-        }
+        from buttermilk._core.config import LoggerConfig
+        from buttermilk._core.bm_init import create_session_bm
         
-        # Should not raise any validation errors
-        bm = BM(**config)
-        assert bm.logger_cfg is not None
-        assert bm.logger_cfg.type == "gcp"
-        assert bm.logger_cfg.project == "test-project"
-        assert bm.logger_cfg.location == "us-central1"
+        # Test that LoggerConfig validation works correctly
+        logger_cfg = LoggerConfig(
+            type="gcp",
+            project_id="test-project",
+            location="us-central1"
+        )
+        
+        # Test that BM can be created with valid logger config
+        bm = create_session_bm(
+            name="test",
+            job="testing",
+            platform="local",
+            logger_cfg=logger_cfg
+        )
+        
+        assert bm._logger_cfg is not None
+        assert bm._logger_cfg.type == "gcp"
+        assert bm._logger_cfg.project_id == "test-project"
+        assert bm._logger_cfg.location == "us-central1"
     
     def test_gcp_logger_missing_project_fails_early(self):
         """Test that GCP logger config without project fails during initialization."""

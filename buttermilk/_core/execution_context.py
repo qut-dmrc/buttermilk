@@ -236,15 +236,8 @@ class ExecutionContext(BaseModel):
             logger.debug("Performing lazy cloud authentication...")
             self._cloud_manager.login_clouds()
 
-            # Set up cloud logging now that cloud manager is authenticated
-            if self.logger_cfg and self.logger_cfg.type == "gcp":
-                # Create minimal session_info for cloud logging compatibility
-                from buttermilk._core.bm_init import SessionInfo
-                context_info = SessionInfo(
-                    name="execution-context",
-                    job="infrastructure"
-                )
-                setup_cloud_logging(self.logger_cfg, self._cloud_manager, context_info)
+            # Note: Cloud logging is now set up at the BM session level
+            # This ensures proper session context and avoids mock session objects
 
             logger.debug("Cloud authentication completed")
 

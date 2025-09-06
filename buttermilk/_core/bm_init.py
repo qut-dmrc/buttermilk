@@ -290,6 +290,7 @@ class BM(BaseModel):
     _secret_manager = None  # Will be injected
     _llms_instance = None  # Will be injected
     _query_runner = None  # Will be injected
+    _logger_cfg = None  # Will be injected from ExecutionContext
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -391,6 +392,23 @@ class BM(BaseModel):
             batch_id=self.session_info.batch_id,
             agent_id=None  # Will be set by agents when needed
         )
+        
+        # Set up cloud logging if configured and cloud manager is available
+        if self._logger_cfg and self._cloud_manager:
+            try:
+                from buttermilk._core.log import setup_cloud_logging
+                setup_cloud_logging(self._logger_cfg, self._cloud_manager, self.session_info)
+                logger.info(
+                    "Cloud logging configured for session",
+                    session_id=self.session_info.session_id,
+                    logger_type=self._logger_cfg.type
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to setup cloud logging for session",
+                    session_id=self.session_info.session_id,
+                    error=str(e)
+                )
         
         logger.info(
             "Session logging context established",
@@ -745,6 +763,7 @@ def create_session_bm(
     cloud_manager=None,
     secret_manager=None,
     llms_instance=None,
+    logger_cfg=None,
     **kwargs
 ) -> BM:
     """Create a new session-scoped BM instance.
@@ -758,6 +777,7 @@ def create_session_bm(
         cloud_manager: Shared cloud manager instance (optional).
         secret_manager: Shared secret manager instance (optional).
         llms_instance: Shared LLMs instance (optional).
+        logger_cfg: Logger configuration for cloud logging (optional).
         **kwargs: Additional arguments for SessionInfo.
         
     Returns:
@@ -795,6 +815,8 @@ def create_session_bm(
         bm._secret_manager = secret_manager
     if llms_instance is not None:
         bm._llms_instance = llms_instance
+    if logger_cfg is not None:
+        bm._logger_cfg = logger_cfg
         
     return bm
 

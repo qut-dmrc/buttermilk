@@ -79,11 +79,11 @@ def setup_console_logging(verbose: bool = False) -> None:
     configure_structlog()
 
 
-def setup_file_logging(session_id: str, verbose: bool = False) -> list[str]:
+def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list[str]:
     """Set up structured JSON logging to files.
 
     Args:
-        session_id: Unique run identifier for log file naming
+        execution_context_id: Unique execution context identifier for log file naming
         verbose: If True, creates both INFO and DEBUG log files
 
     Returns:
@@ -102,7 +102,7 @@ def setup_file_logging(session_id: str, verbose: bool = False) -> list[str]:
         structlog.contextvars.bind_contextvars(**non_null_context)
 
     # Always create an INFO JSON log file
-    info_log_path = Path(f"/tmp/buttermilk_{session_id}_info.jsonl")
+    info_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_info.jsonl")
     info_handler = logging.FileHandler(info_log_path, mode="w")
     info_handler.setLevel(logging.INFO)
 
@@ -127,7 +127,7 @@ def setup_file_logging(session_id: str, verbose: bool = False) -> list[str]:
 
     # Add debug file logging when verbose is True
     if verbose:
-        debug_log_path = Path(f"/tmp/buttermilk_{session_id}_debug.jsonl")
+        debug_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_debug.jsonl")
         debug_handler = logging.FileHandler(debug_log_path, mode="w")
         debug_handler.setLevel(logging.DEBUG)
         debug_handler.setFormatter(structlog_formatter)
@@ -164,11 +164,15 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
                 },
             )
 
+            # Filter out None values from labels as protobuf doesn't accept them
+            raw_labels = session_info.model_dump(include={"session_id", "name", "job", "platform"})
+            labels = {k: str(v) for k, v in raw_labels.items() if v is not None}
+            
             cloud_handler = CloudLoggingHandler(
                 client=cloud_manager.gcs_log_client(logger_cfg),
                 resource=cloud_logging_resource,
                 name=session_info.name,
-                labels=session_info.model_dump(include={"session_id", "name", "job", "platform"}),
+                labels=labels,
             )
             cloud_handler.setLevel(logging.INFO)
 
@@ -189,12 +193,15 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
 
             # Bind session context for automatic inclusion (simplified architecture)
             context_vars = {
-                "session_id": session_info.session_id[-12:],  # Last 12 chars for brevity
                 "job": session_info.job,
                 "project": session_info.name,
+                "session_id": "unknown",
+                "batch_id": "unknown",
             }
-            
+
             # Add batch context if available
+            if session_info.session_id:
+                context_vars["session_id"] = session_info.session_id[-12:]  # Last 12 chars for brevity
             if session_info.batch_id:
                 context_vars["batch_id"] = session_info.batch_id[-12:]  # Last 12 chars
                 
@@ -205,7 +212,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             logger.info("Cloud logging handler added")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Cloud logging setup failed",
                 extra={
                     "error": str(e),

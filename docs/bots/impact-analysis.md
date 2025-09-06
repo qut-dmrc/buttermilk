@@ -53,38 +53,13 @@
 - Any `__init__.py` - Module initialization affects all importers
 - Configuration files in `conf/` - Used by multiple flows and agents
 
-### 🔧 Resilient Shared Infrastructure Patterns:
+## No workarounds!
 
-**When you MUST modify shared files, make them resilient:**
-
-```python
-# ❌ BRITTLE: Assumes all components are available
-@pytest.fixture
-def bm():
-    return Buttermilk(config="dev")
-
-# ✅ RESILIENT: Handles missing components gracefully
-@pytest.fixture  
-def bm():
-    try:
-        return Buttermilk(config="dev")
-    except MissingDependencyError:
-        pytest.skip("LLM services not available")
-```
-
-```python
-# ❌ BRITTLE: Forces all tests to use LLMs
-@pytest.fixture
-def llm(bm):
-    return bm.llms["gpt-4"]
-
-# ✅ RESILIENT: Conditional based on test needs
-@pytest.fixture
-def llm(bm, request):
-    if hasattr(request, 'param') and request.param == 'no_llm':
-        pytest.skip("Test marked as no_llm")
-    return bm.llms["gpt-4"]
-```
+If you hit a problem related to some other part of the project, STOP.
+- DO NOT build a workaround that addresses only your current objective.
+- STEP BACK and IMMEDIATELY activate your error handling protocol.
+- Do not proceed. Raise an issue and seek help.
+- We expect EVERYTHING to work. No workarounds, no shortcuts.
 
 ## Specific Test Infrastructure Guidelines
 
@@ -96,48 +71,6 @@ def llm(bm, request):
 2. **Check dependencies**: Search for fixtures used across multiple test files
 3. **Test your changes**: Run the FULL test suite, not just the tests you're fixing
 4. **Consider alternatives**: Can you create test-specific fixtures instead?
-
-### Creating Targeted Solutions
-
-**Instead of modifying shared infrastructure:**
-
-```python
-# ❌ WRONG: Modify conftest.py to remove LLMs for all tests
-# tests/integration/conftest.py
-@pytest.fixture
-def bm():
-    # Removed LLM config - BREAKS OTHER TESTS
-    return Buttermilk(config="minimal")
-
-# ✅ RIGHT: Create specific fixture for cloud logging tests
-# tests/integration/test_cloud_logging.py
-@pytest.fixture
-def bm_no_llm():
-    """Buttermilk instance without LLM dependencies for cloud logging tests."""
-    return Buttermilk(config="cloud-logging-only")
-
-def test_cloud_logging_without_llms(bm_no_llm):
-    # Use specific fixture that doesn't need LLMs
-    assert bm_no_llm.logging.can_log_to_cloud()
-```
-
-**Or make shared infrastructure conditional:**
-
-```python
-# ✅ BETTER: Make conftest.py resilient to missing services
-# tests/integration/conftest.py
-@pytest.fixture
-def bm():
-    config = "dev"
-    try:
-        bm_instance = Buttermilk(config=config)
-        # Test if LLMs are actually available
-        _ = bm_instance.llms["mock-model"]
-        return bm_instance
-    except (KeyError, ConfigurationError):
-        # Fall back to minimal config for tests that don't need LLMs
-        return Buttermilk(config="minimal")
-```
 
 ## Red Flag Detection System
 

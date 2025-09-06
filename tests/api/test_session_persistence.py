@@ -180,7 +180,7 @@ class TestSessionStorageService:
         assert messages[0].message_id == "msg-recovery"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestWebSocketMessagePersistence:
     """Test WebSocket message persistence integration."""
 
@@ -217,7 +217,7 @@ class TestWebSocketMessagePersistence:
             mock_storage_service.save_message.assert_called_once_with("test-session", formatted)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestSessionRestoration:
     """Test session restoration functionality."""
 

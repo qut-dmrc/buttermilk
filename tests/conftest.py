@@ -93,7 +93,7 @@ def llm_multimodal(bm):
 
 @pytest.fixture
 def llm(bm):
-    """Mock LLM fixture.""" 
+    """Mock LLM fixture."""
     return bm.llms["mock-model"]
 
 

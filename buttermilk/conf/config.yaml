@@ -15,6 +15,12 @@ bm:
     name: ${run.name}
     job: ${run.job}
 
+infrastructure:
+  clouds:
+    - type: local
+      _target_: buttermilk._core.cloud_config.LocalConfig
+  llms: {}
+  
 # Default tracing configuration for non-cloud tracing providers
 tracing:
   weave: 
