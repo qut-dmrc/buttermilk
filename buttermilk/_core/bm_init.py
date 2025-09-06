@@ -26,7 +26,6 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 
 import asyncio
 import datetime
-import os
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -40,11 +39,9 @@ from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud path
 from omegaconf import DictConfig
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
-from rich import print  # For rich console output
 
 from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
-from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
 
 _TRACER_NAME = "buttermilk"
@@ -515,9 +512,22 @@ class BM(BaseModel):
 
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client."""
-        import weave
-        return weave.get_client()
+        """Provide access to the Weights & Biases Weave client.
+        
+        Attempts to use the ExecutionContext's weave client if available (which handles
+        proper weave.init() calls), falling back to direct weave.get_client() for
+        backward compatibility.
+        """
+        try:
+            # Try to get properly initialized weave client from ExecutionContext
+            from buttermilk._core.execution_context import get_execution_context
+            execution_context = get_execution_context()
+            return await execution_context.get_weave_client()
+        except (RuntimeError, ImportError):
+            # Fallback to direct weave client for backward compatibility
+            # Note: This may not have proper initialization if weave.init() wasn't called
+            import weave
+            return weave.get_client()
 
     @property
     def credentials(self) -> dict[str, str]:
