@@ -4,11 +4,14 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 **🚨 CRITICAL: READ [exploration-before-implementation.md](exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
 
+**🚨 CRITICAL: READ [impact-analysis.md](impact-analysis.md) IMMEDIATELY IF YOU'RE ABOUT TO MODIFY SHARED INFRASTRUCTURE 🚨**
+
 # 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
-**YOU HAVE TWO DOCUMENTED PATTERNS THAT MUST STOP:**
+**YOU HAVE THREE DOCUMENTED PATTERNS THAT MUST STOP:**
 1. **RUSH-TO-CODE**: Jumping to implementation without exploration
 2. **STANDALONE VALIDATION**: Creating standalone validation code (files OR inline commands) instead of using proper pytest workflows
+3. **TUNNEL VISION ON SHARED INFRASTRUCTURE**: Breaking shared components to fix specific problems
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
@@ -192,6 +195,75 @@ def test_myclass_serialization():
 - Running existing test suites
 - Asking for guidance when stuck
 
+## 🚨 SHARED INFRASTRUCTURE IMPACT ANALYSIS 🚨
+
+**CRITICAL: Before modifying ANY shared file, you MUST perform impact analysis. See [impact-analysis.md](impact-analysis.md) for complete details.**
+
+### 🛑 HIGH-RISK SHARED FILES - EXTRA CAUTION REQUIRED:
+
+These files affect multiple components and require MANDATORY impact analysis:
+
+- **`tests/conftest.py`** - Affects ALL tests in the project
+- **`tests/*/conftest.py`** - Affects all tests in that test category  
+- **`buttermilk/_core/*`** - Core infrastructure used throughout
+- **`buttermilk/api/*`** - API endpoints and shared components
+- **Any `__init__.py`** - Module initialization affects all importers
+- **Configuration files in `conf/`** - Used by multiple flows and agents
+
+### 🚨 MANDATORY IMPACT ANALYSIS PROTOCOL:
+
+**BEFORE modifying ANY shared file, ask these questions:**
+
+1. **Scope Analysis**: What else depends on this file?
+   - Search for imports: `Grep: "from path.to.this.module import"`
+   - Search for usage: `Grep: "filename" --type py`
+   - Check test dependencies: Files that import from this module
+
+2. **Impact Assessment**: What would break if I make this change?
+   - Run tests that would be affected: `uv run pytest tests/path/that/uses/this`
+   - Consider downstream effects on other functionality
+
+3. **Alternative Solutions**: Can I solve this without touching shared infrastructure?
+   - Override in specific tests only
+   - Make the shared code more resilient  
+   - Use conditional logic based on environment
+   - Create test-specific fixtures
+
+### 🚨 RED FLAG PHRASES - STOP WHEN YOU THINK:
+
+- "I'll just remove this from conftest.py to make my tests pass"
+- "These other tests probably don't need this anyway"
+- "I can fix the other failures later"
+- "This shared file is causing problems, I'll simplify it"
+- "Let me modify this base class to handle my use case"
+
+### ✅ CORRECT RESPONSES TO SHARED INFRASTRUCTURE PROBLEMS:
+
+**Instead of modifying shared infrastructure, ALWAYS:**
+
+1. **Create targeted solutions**: Test-specific fixtures, conditional logic
+2. **Make shared code more resilient**: Handle missing dependencies gracefully
+3. **Use proper scoping**: Module-specific solutions rather than global changes
+4. **Validate with full test suite**: Ensure no regressions in other functionality
+
+**Example of WRONG vs RIGHT approach:**
+```python
+# ❌ WRONG: Modify conftest.py to remove LLMs for all tests
+# tests/integration/conftest.py
+@pytest.fixture
+def bm():
+    return Buttermilk(config="minimal")  # BREAKS OTHER TESTS
+
+# ✅ RIGHT: Create specific fixture for your tests
+# tests/integration/test_cloud_logging.py
+@pytest.fixture
+def bm_no_llm():
+    """Buttermilk instance without LLM dependencies."""
+    return Buttermilk(config="cloud-logging-only")
+```
+
+**ENFORCEMENT**: If you catch yourself about to modify shared infrastructure, STOP and ask: "How can I solve this with a targeted solution instead?" Read [impact-analysis.md](impact-analysis.md) for detailed guidance.
+
 ## 📚 TESTING & VALIDATION PROTOCOL
 
 **CRITICAL**: When you need ANY form of testing, validation, examples, or verification:
@@ -254,21 +326,27 @@ def test_myclass_serialization():
 ### 📋 MANDATORY PRE-ACTION CHECKLIST:
 **Ask yourself these questions BEFORE taking action:**
 
-1. **Am I about to create standalone validation in ANY form?**
+1. **Am I about to modify shared infrastructure?**
+   - Check the HIGH-RISK SHARED FILES list above
+   - If YES: MANDATORY impact analysis required - see [impact-analysis.md](impact-analysis.md)
+   - Search for all dependencies and usages before proceeding
+   - **CRITICAL**: Consider targeted solutions instead of modifying shared components
+
+2. **Am I about to create standalone validation in ANY form?**
    - File creation: Where am I creating it? Is it in the correct directory?
    - Command execution: Am I using `python -c`, `uv run python -c`, or similar for validation?
    - For tests: MUST be in `tests/` directory with pytest conventions
    - **CRITICAL**: ALL forms of standalone validation (files AND commands) are FORBIDDEN
 
-2. **Am I about to validate/test something?**
+3. **Am I about to validate/test something?**
    - If YES: Check the validation decision tree in the previous section
    - Use existing tests or debugging tools FIRST
    - **NEVER** use standalone validation in ANY form (files OR commands)
 
-3. **Am I using any red flag phrases?**
+4. **Am I using any red flag phrases?**
    - If YES: STOP immediately and use approved methods instead
 
-4. **Can I accomplish this goal without creating new files?**
+5. **Can I accomplish this goal without creating new files?**
    - If MAYBE: Try existing methods first before creating anything new
 
 **ENFORCEMENT: If you cannot answer these questions confidently with approved methods, STOP and ask for guidance.**
