@@ -305,6 +305,9 @@ class BM(BaseModel):
 
         self._initialization_error: Exception | None = None
 
+        self._get_ip_task: asyncio.Task | None = None
+        self._ip: str | None = None
+
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
@@ -779,10 +782,11 @@ class BM(BaseModel):
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Start task only if it hasn't been started or is already done
-                if not hasattr(self, "_get_ip_task") or self._get_ip_task is None or self._get_ip_task.done():
+                if self._get_ip_task is None or self._get_ip_task.done():
 
                     async def _fetch_and_set_ip():
                         ip = await get_ip()
+                        self._ip = ip
                         self.run_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
@@ -827,9 +831,7 @@ class BM(BaseModel):
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
-            logger.warning(
-                f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}"
-            )
+            logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
 
         # Ensure extension starts with a dot if provided, otherwise default to .json
         effective_extension = extension or ".json"
@@ -853,9 +855,7 @@ class BM(BaseModel):
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
-            logger.error(
-                f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}"
-            )
+            logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
             return None  # Indicate save failure
 
     def run_query(
