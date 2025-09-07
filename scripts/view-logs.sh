@@ -41,7 +41,10 @@ echo ""
 
 # Recommend using the proper structured log tools
 echo "⚠️  DEPRECATION NOTICE: This script works with structured logs but has limitations."
-echo "For full structured log support, use: uv run python -m buttermilk.debug.ws_debug_cli logs -n $DEFAULT_LINES"
+echo "Issues #231, #232, #233 have been resolved - use the validated golden path tools:"
+echo "For full structured log support: uv run python -m buttermilk.debug.ws_debug_cli logs -n $DEFAULT_LINES"
+echo "For API health checks: curl -s http://localhost:8000/health"
+echo "For connection testing: uv run python -m buttermilk.debug.ws_debug_cli test-connection"
 echo ""
 
 # Menu

@@ -288,7 +288,7 @@ def create_infrastructure_manager(
     )
 
 
-def create_infrastructure_from_config(config: dict[str, Any]) -> InfrastructureManager:
+def create_infrastructure_from_config(config: DictConfig | dict[str, Any]) -> InfrastructureManager:
     """Create an InfrastructureManager from a configuration dictionary.
     
     This function properly instantiates cloud provider configurations using Hydra

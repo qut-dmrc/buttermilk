@@ -159,7 +159,7 @@ class ExecutionContext(BaseModel):
         setup_console_logging(verbose=verbose)
 
         # Set up structured JSON file logging
-        log_files = setup_file_logging(session_id=self.execution_context_id, verbose=verbose)
+        log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose)
         for log_file in log_files:
             logger.info(f"ExecutionContext logging enabled - writing to: {log_file}")
 
@@ -220,6 +220,10 @@ class ExecutionContext(BaseModel):
             raise RuntimeError(
                 f"ExecutionContext initialization failed: {self._initialization_error}"
             ) from self._initialization_error
+        
+        # Set up async components like tracing
+        await self._setup_tracing()
+        
         logger.debug("ExecutionContext initialization verified complete")
 
     @property

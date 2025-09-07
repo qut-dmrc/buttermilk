@@ -125,21 +125,21 @@ class ConfigurationBootstrapper:
         if env_vars:
             logger.info(f"Configured {len(env_vars)} environment variables")
     
-    def get_infrastructure_config(self) -> dict[str, Any]:
+    def get_infrastructure_config(self) -> DictConfig:
         """Get configuration for all infrastructure components.
         
         Returns:
-            Dictionary containing infrastructure configuration
+            DictConfig containing infrastructure configuration with _target_ keys intact
         """
         config = self._load_configuration()
         
-        # Extract infrastructure configuration
+        # Extract infrastructure configuration as DictConfig to preserve _target_ keys
         if hasattr(config, 'infrastructure'):
-            return OmegaConf.to_container(config.infrastructure, resolve=True)
+            return config.infrastructure
         elif hasattr(config, 'bm'):
             # Fallback: migrate old BM configuration to infrastructure format
             logger.warning("Using legacy 'bm' configuration - consider migrating to 'infrastructure'")
-            return OmegaConf.to_container(config.bm, resolve=True)
+            return config.bm
         else:
             raise RuntimeError("No infrastructure configuration found in config")
     
@@ -177,14 +177,14 @@ class ConfigurationBootstrapper:
         """
         logger.info("Bootstrapping full application context...")
         
-        # Create infrastructure manager
-        infrastructure = self._create_infrastructure_manager()
-        
-        # Create baseline execution context for the application
+        # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
             self._execution_context = create_execution_context()
             await self._execution_context.ensure_initialized()
-            logger.info("Baseline execution context created")
+            logger.info("Baseline execution context created with structured logging")
+        
+        # Create infrastructure manager (may fail, but logs will be captured)
+        infrastructure = self._create_infrastructure_manager()
         
         logger.info("Full application context bootstrap complete")
         return self._execution_context, infrastructure
@@ -206,10 +206,11 @@ class ConfigurationBootstrapper:
         infrastructure = self._create_infrastructure_manager()
         
         # Create session-scoped BM instance
+        platform = kwargs.pop('platform', 'local')  # Extract platform to avoid duplicate
         session_bm = infrastructure.create_session_bm(
             name=name,
             job=job,
-            platform=kwargs.get('platform', 'local'),
+            platform=platform,
             **kwargs
         )
         

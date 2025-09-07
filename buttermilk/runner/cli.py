@@ -66,9 +66,9 @@ def main(conf: DictConfig) -> None:
         config=conf  # Pass the existing configuration from Hydra
     )
     
-    # Get infrastructure manager through bootstrapper
-    infrastructure = bootstrapper.get_infrastructure_manager()
-    logger.info("Infrastructure initialization complete via ConfigurationBootstrapper")
+    # Bootstrap full context (ExecutionContext + Infrastructure) to ensure structured logging
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+    logger.info("Full context initialization complete via ConfigurationBootstrapper")
     
     # Create a session-scoped BM for CLI operations using bootstrapper
     bm = asyncio.run(bootstrapper.bootstrap_session_context(

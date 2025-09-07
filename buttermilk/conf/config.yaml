@@ -16,9 +16,7 @@ bm:
     job: ${run.job}
 
 infrastructure:
-  clouds:
-    - type: local
-      _target_: buttermilk._core.cloud_config.LocalConfig
+  clouds: []
   llms: {}
   
 # Default tracing configuration for non-cloud tracing providers

@@ -357,10 +357,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
             attributes={
                 "flow.name": self.name,
                 "flow.display_name": display_name,
-                "session_id": getattr(bm.run_info, "session_id", None),
-                "session_id": getattr(bm.run_info, "session_id", None),
-                "platform": getattr(bm.run_info, "platform", None),
-                "job": getattr(bm.run_info, "job", None),
+                "session_id": getattr(bm.session_info, "session_id", None),
+                "platform": getattr(bm.session_info, "platform", None),
+                "job": getattr(bm.session_info, "job", None),
             },
         ) as otel_span:
             try:
