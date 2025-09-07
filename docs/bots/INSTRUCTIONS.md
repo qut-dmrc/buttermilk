@@ -8,19 +8,68 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 # 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
-**YOU HAVE THREE DOCUMENTED PATTERNS THAT MUST STOP:**
-1. **RUSH-TO-CODE**: Jumping to implementation without exploration
-2. **STANDALONE VALIDATION**: Creating standalone validation code (files OR inline commands) instead of using proper pytest workflows
-3. **TUNNEL VISION ON SHARED INFRASTRUCTURE**: Breaking shared components to fix specific problems
+**YOU HAVE SIX DOCUMENTED PATTERNS THAT MUST STOP:**
+1. **🔴 SECURITY BREACH - API KEY/SECRET EXPOSURE**: NEVER commit real API keys, tokens, passwords, or secrets to the repository
+2. **RUSH-TO-CODE**: Jumping to implementation without exploration
+3. **STANDALONE VALIDATION**: Creating standalone validation code (files OR inline commands) instead of using proper pytest workflows
+4. **TUNNEL VISION ON SHARED INFRASTRUCTURE**: Breaking shared components to fix specific problems
+5. **DEFENSIVE CODING AROUND BROKEN INFRASTRUCTURE**: Working around failures instead of fixing root causes
+6. **REPOSITORY DOCUMENTATION POLLUTION**: Creating issue tracking files in the repository instead of using GitHub issues
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
 **🛑 UNIVERSAL FILE CREATION CHECKPOINT 🛑**
 **BEFORE creating ANY file (.py, .js, .md, etc.), you MUST ask yourself:**
-1. **Location check**: Am I creating this in the correct directory? (tests/ for test files)
-2. **Purpose check**: Is this following proper conventions? (pytest for tests)
-3. **Alternative check**: Can I use existing files/tests instead?
-4. **IF ANY ANSWER IS NO OR UNCLEAR: STOP and find the correct approach**
+1. **🔴 SECURITY SCAN**: Does this file contain ANY real API keys, tokens, passwords, or secrets?
+2. **Location check**: Am I creating this in the correct directory? (tests/ for test files, docs/bots/ for general docs)
+3. **Purpose check**: Is this following proper conventions? (pytest for tests, GitHub issues for tracking)
+4. **Alternative check**: Can I use existing files/tests instead?
+5. **Repository cleanliness check**: Am I adding transitory documentation that belongs in GitHub issues?
+6. **IF ANY ANSWER IS NO OR UNCLEAR: STOP and find the correct approach**
+
+## 🚨 MANDATORY SECURITY VALIDATION PROTOCOL 🚨
+
+**🔴 CRITICAL SECURITY CHECKPOINT - EVERY FILE MUST BE SCANNED**
+
+**BEFORE creating or modifying ANY file, you MUST perform security validation:**
+
+### ❌ FORBIDDEN - REAL CREDENTIALS IN CODE:
+- **API Keys**: Any string that looks like a real API key (long alphanumeric strings)
+- **Tokens**: Authentication tokens, access tokens, refresh tokens
+- **Passwords**: Any real passwords or passphrases
+- **Secrets**: Database credentials, encryption keys, service account keys
+- **Personal Information**: Real email addresses, phone numbers, addresses
+
+### ✅ REQUIRED - ONLY FAKE/MOCK VALUES IN TESTS:
+- **API Keys**: `"fake-api-key-for-testing"`, `"test-api-key-123"`, `"mock-wandb-key"`
+- **Tokens**: `"fake-token-for-testing"`, `"test-auth-token"`
+- **Passwords**: `"test-password"`, `"fake-password-123"`
+- **URLs**: Use `example.com`, `test.example.org`, or other reserved domains
+- **IDs**: Sequential numbers, obvious fakes like `"test-project-id"`
+
+### 🚨 RED FLAG PATTERNS - STOP IMMEDIATELY:
+**If you see ANY of these patterns in code you're about to commit:**
+- Long alphanumeric strings that could be real API keys (20+ characters)
+- Strings starting with real service prefixes: `tl_`, `sk-`, `pk_`, `ey`
+- URLs pointing to real production services in test code
+- Real-looking UUIDs or hashes in configuration
+- Environment variable names with real service credentials
+
+### 🔧 SECURITY SCAN PROCESS:
+**For EVERY file before creation/modification:**
+1. **Pattern Scan**: Search for strings 15+ characters that are alphanumeric
+2. **Service Prefix Scan**: Look for `api_key`, `token`, `password`, `secret` variables
+3. **URL Scan**: Check for real service URLs (not example.com domains)
+4. **Context Check**: If this is a test, are ALL values obviously fake?
+5. **IF ANY REAL CREDENTIALS FOUND: STOP and replace with fake values**
+
+### 🛑 ZERO TOLERANCE SECURITY POLICY:
+- **NEVER commit real credentials** regardless of how "safe" the repository seems
+- **ALL test data must be obviously fake** (use "fake-", "test-", "mock-" prefixes)
+- **Real configuration belongs in .env files** (which are .gitignored)
+- **When in doubt, use fake values** - better safe than compromised
+
+**ENFORCEMENT: If you catch yourself about to commit real credentials, STOP IMMEDIATELY and replace with fake test values. This is the most serious security violation possible.**
 
 **BEFORE you test, validate, or verify ANY code behavior, you MUST:**
 
@@ -31,6 +80,12 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - "Quick test scripts" or "validation files" in the project root
 - Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
 - `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
+
+**❌ NEVER CREATE REPOSITORY ISSUE TRACKING FILES:**
+- `*_README.md`, `*_NOTES.md`, `*_STATUS.md` files for tracking specific bugs or implementations
+- Progress tracking documentation in test directories or implementation folders
+- Bug-specific documentation files anywhere in the repository
+- Implementation status files that duplicate GitHub issue information
 
 **Forbidden Command-Based Validation:**
 - **Inline Python validation**: `uv run python -c "..."`, `python -c "..."`, or similar execution patterns
@@ -60,6 +115,21 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 4. **Use approved validation methods only**
 5. **Ask**: "Can I accomplish this goal using existing tests or debugging tools?"
 6. **If unclear**: Ask for guidance rather than creating standalone validation
+
+### 🚨 REPOSITORY DOCUMENTATION VIOLATIONS - STOP WHEN YOU THINK:
+
+**Progress Tracking Violations:**
+- "I'll create a README to document what was fixed..."
+- "Let me add a status file to track this implementation..."
+- "I'll document this bug fix in a markdown file..."
+- "I need to create notes about this tracing work..."
+- "Let me add implementation details to a documentation file..."
+
+**🔧 CORRECT RESPONSES:**
+- **Progress tracking**: Use GitHub issues exclusively
+- **Bug documentation**: Update existing GitHub issues with resolution details
+- **Implementation notes**: Add to existing general documentation in `docs/bots/` only if widely applicable
+- **Test documentation**: Self-documenting tests with proper docstrings and naming
 
 ### 🤖 EXEMPLAR TESTING SUBAGENT AVAILABLE:
 When you need ANY form of testing, validation, or verification, use:
@@ -121,6 +191,69 @@ def test_myclass_serialization():
 ```
 
 **ENFORCEMENT**: If you catch yourself about to create standalone validation (file OR command), STOP and ask: "Am I using proper pytest tests in the tests/ directory OR approved debugging tools?" If no, RESTART your approach.
+
+## 🚨 CRITICAL: FAIL FAST - NO DEFENSIVE CODING 🚨
+
+**OBSERVABILITY IS NON-NEGOTIABLE**: This project is designed for academic research with MLOps principles. Logging, tracing, and data saving MUST work correctly.
+
+### ❌ FORBIDDEN PATTERNS - STOP IMMEDIATELY:
+
+**Defensive Coding Around Broken Infrastructure:**
+- "Let me add a check for None and skip tracing if it fails"
+- "I'll make this optional so the flow can continue without observability"  
+- "Let me wrap this in try/except so failures don't break the flow"
+- "I'll add defensive code to handle missing dependencies gracefully"
+- "I'll add a fallback when weave_client is None"
+- "Let me make logging optional since it's not essential"
+
+**Working Around Core Infrastructure:**
+- Making tracing optional when it should be required
+- Silently continuing when logging/saving fails
+- Adding fallbacks for broken observability systems
+- Coding around missing environment variables instead of ensuring they exist
+- Using `if weave_client is not None:` to skip tracing instead of fixing weave setup
+- Creating "graceful degradation" for core research infrastructure
+
+### ✅ CORRECT APPROACH - ALWAYS FIX THE ROOT CAUSE:
+
+**When Observability Fails:**
+1. **IDENTIFY** why tracing/logging is broken (missing env vars, config issues, etc.)
+2. **FIX** the root cause (set environment variables, fix configuration)
+3. **ENSURE** the observability system works correctly
+4. **FAIL FAST** if it cannot be fixed - do not work around it
+
+**Research Integrity Principle:**
+- Every research run must be fully observable and traceable
+- Silent failures compromise research validity
+- Better to fail loudly than succeed silently with missing data
+- MLOps infrastructure is core to the project's mission, not optional
+
+### 🔧 WHEN YOU CATCH YOURSELF ADDING DEFENSIVE CODE:
+
+**STOP and ask:**
+1. "Am I working around a broken system instead of fixing it?"
+2. "Will this hide failures that researchers need to know about?"
+3. "Am I making critical observability optional?"
+4. "Would this code allow a research run to complete with missing tracing data?"
+
+**IF YES TO ANY: Fix the underlying system instead**
+
+**Example of WRONG vs RIGHT approach:**
+```python
+# ❌ WRONG: Defensive coding around broken tracing
+if weave_client is not None:
+    child_call = weave_client.call(func, *args, **kwargs)
+else:
+    child_call = None  # HIDES THE FAILURE
+
+# ✅ RIGHT: Ensure tracing works or fail fast
+weave_client = self.get_weave_client()
+if weave_client is None:
+    raise RuntimeError("Weave client not available - fix environment setup")
+child_call = weave_client.call(func, *args, **kwargs)
+```
+
+**ENFORCEMENT**: If you catch yourself writing defensive code around infrastructure failures, STOP and ask: "How can I fix the root cause instead of hiding the failure?"
 
 ## 🚨 POST-IMPLEMENTATION VALIDATION PROTOCOL 🚨
 
@@ -326,27 +459,43 @@ def bm_no_llm():
 ### 📋 MANDATORY PRE-ACTION CHECKLIST:
 **Ask yourself these questions BEFORE taking action:**
 
-1. **Am I about to modify shared infrastructure?**
+1. **🔴 CRITICAL SECURITY SCAN: Does this file contain ANY real credentials?**
+   - Check for real API keys, tokens, passwords, secrets in ANY content I'm creating
+   - Scan for long alphanumeric strings, service prefixes like `tl_`, `sk_`, `pk_`
+   - If YES: STOP and replace with fake/mock values immediately
+   - **CRITICAL**: This is the most serious security violation possible
+
+2. **Am I about to add defensive coding around infrastructure?**
+   - Check for patterns like `if weave_client is not None:`, `try/except` around observability
+   - If YES: STOP and fix the root cause instead of working around it
+   - **CRITICAL**: Observability failures must be fixed, not hidden
+
+3. **Am I about to create repository issue tracking files?**
+   - Check for patterns like `*_README.md`, `*_STATUS.md`, progress tracking files
+   - If YES: STOP and use GitHub issues instead
+   - **CRITICAL**: Repository must stay clean of transitory documentation
+
+4. **Am I about to modify shared infrastructure?**
    - Check the HIGH-RISK SHARED FILES list above
    - If YES: MANDATORY impact analysis required - see [impact-analysis.md](impact-analysis.md)
    - Search for all dependencies and usages before proceeding
    - **CRITICAL**: Consider targeted solutions instead of modifying shared components
 
-2. **Am I about to create standalone validation in ANY form?**
+5. **Am I about to create standalone validation in ANY form?**
    - File creation: Where am I creating it? Is it in the correct directory?
    - Command execution: Am I using `python -c`, `uv run python -c`, or similar for validation?
    - For tests: MUST be in `tests/` directory with pytest conventions
    - **CRITICAL**: ALL forms of standalone validation (files AND commands) are FORBIDDEN
 
-3. **Am I about to validate/test something?**
+6. **Am I about to validate/test something?**
    - If YES: Check the validation decision tree in the previous section
    - Use existing tests or debugging tools FIRST
    - **NEVER** use standalone validation in ANY form (files OR commands)
 
-4. **Am I using any red flag phrases?**
+7. **Am I using any red flag phrases?**
    - If YES: STOP immediately and use approved methods instead
 
-5. **Can I accomplish this goal without creating new files?**
+8. **Can I accomplish this goal without creating new files?**
    - If MAYBE: Try existing methods first before creating anything new
 
 **ENFORCEMENT: If you cannot answer these questions confidently with approved methods, STOP and ask for guidance.**
@@ -371,8 +520,9 @@ Specific rules:
 - **DEBUGGING RULE**: For ANY debugging task, you MUST first check `docs/bots/debugging.md`. You MUST use the "golden path" tools documented there (e.g. `ws_debug_cli.py`, Playwright MCP) BEFORE reading source code. Going straight to source code is a workflow violation.
 - **FLOW COMPLETION RULE**: Success = complete flow execution with visible output from ALL agents (fetch, judge, synth, scorer, diff). Component validation without end-to-end completion is NOT sufficient. Infrastructure fixes are means to this end, not the end itself.
 - **OUTPUT RULE**: Keep outputs concise. When using debugging tools, focus on relevant excerpts. Avoid dumping entire JSON responses or log files. If output exceeds 15 lines, summarize key findings instead. For debugging specifically: extract key findings, limit excerpts to 10-15 lines maximum, summarize patterns rather than listing entries, highlight specific errors only.
-- **NO IMPLICIT DEFAULTS**: NEVER use implicit defaults or fallback behaviors. All configuration must be explicit. If something is missing, FAIL FAST with clear error messages. Do not infer, assume, or provide defaults.
+- **NO IMPLICIT DEFAULTS**: NEVER use implicit defaults or fallback behaviors. All configuration must be explicit. If something is missing, FAIL FAST with clear error messages. Do not infer, assume, or provide defaults. **ESPECIALLY** for observability infrastructure - never make tracing/logging optional.
 - **DATA CONTRACTS**: Schema changes require updating ALL components atomically. See `docs/bots/data-architecture.md` for data contract principles. No defensive programming - trust schemas and let errors propagate.
+- **OBSERVABILITY IS MANDATORY**: Never add defensive code around tracing, logging, or saving systems. If observability fails, FIX the root cause or FAIL FAST. Research integrity depends on complete observability.
 - **NO SINGLE-USE SCRIPTS**: NEVER create standalone test scripts or dummy examples. Always write proper tests in the existing test suite using pytest conventions. Test files must be reusable, follow project structure, and integrate with the CI/CD pipeline. 
 
 ## CRITICAL FIRST STEPS

@@ -68,16 +68,16 @@ This command handles killing any old processes and starts a new one, logging out
 
 **Canonical command (VALIDATED):**
 ```bash
-uv run python -m buttermilk.debug.ws_debug_cli logs -n 50
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 20
 ```
 
 **Alternative log levels (VALIDATED):**
 ```bash
 # Show only errors and warnings
-uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 -l ERROR
 
 # Show more detail with DEBUG level
-uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 -l DEBUG
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l DEBUG
 ```
 
 **Expected Output Evidence:**

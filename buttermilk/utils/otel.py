@@ -70,7 +70,7 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
 
     os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"gcp.project_id={project_id}"
     os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
-    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint or "https://telemetry.googleapis.com"
+    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
 
     # Request used to refresh credentials upon expiry
     request = google.auth.transport.requests.Request()

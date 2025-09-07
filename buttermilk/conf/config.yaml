@@ -19,9 +19,9 @@ infrastructure:
   clouds: []
   llms: {}
   
-# Default tracing configuration for non-cloud tracing providers
-tracing:
-  weave: 
-    enabled: true
-  traceloop:
-    enabled: false
+  # Default tracing configuration for non-cloud tracing providers
+  tracing:
+    weave: 
+      enabled: true
+    traceloop:
+      enabled: false

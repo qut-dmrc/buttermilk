@@ -92,25 +92,37 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ```
 
 ### 🚨 CRITICAL FAILURE MODE PREVENTION
-**THREE DOCUMENTED PATTERNS - MANDATORY CHECKPOINTS:**
+**FIVE DOCUMENTED PATTERNS - MANDATORY CHECKPOINTS:**
 
-**RUSH-TO-CODE PATTERN:**
+**1. RUSH-TO-CODE PATTERN:**
 1. **BEFORE ANY IMPLEMENTATION**: Complete exploration phase (minimum 3 searches)
 2. **SEARCH EXISTING CODE**: Find base classes, utilities, framework capabilities
 3. **JUSTIFY NEW CODE**: Explain why existing solutions won't work
 4. **IF YOU CAN'T JUSTIFY**: You're probably overengineering
 
-**STANDALONE VALIDATION PATTERN:**
+**2. STANDALONE VALIDATION PATTERN:**
 1. **NEVER** create standalone validation (files OR commands) outside proper pytest workflow
 2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "I'll use python -c..."
 3. **ALWAYS** redirect to tester agent: `Task: tester - [describe need]`
 4. **ENFORCEMENT**: Any standalone validation = immediately redirect to tester agent
 
-**SHARED INFRASTRUCTURE TUNNEL VISION PATTERN:**
+**3. SHARED INFRASTRUCTURE TUNNEL VISION PATTERN:**
 1. **BEFORE MODIFYING SHARED FILES**: Mandatory impact analysis (see `impact-analysis.md`)
 2. **HIGH-RISK FILES**: `conftest.py`, `_core/*`, base classes, `__init__.py`
 3. **RED FLAGS**: "I'll remove this from conftest.py...", "This shared file is causing problems..."
 4. **ALWAYS** consider targeted solutions instead of modifying shared components
+
+**4. DEFENSIVE CODING AROUND BROKEN INFRASTRUCTURE PATTERN:**
+1. **NEVER** add defensive code around observability failures (tracing, logging, saving)
+2. **RED FLAGS**: `if weave_client is not None:`, `try/except` around tracing
+3. **ALWAYS** fix the root cause instead of hiding failures
+4. **ENFORCEMENT**: Observability failures must be fixed, not worked around
+
+**5. REPOSITORY DOCUMENTATION POLLUTION PATTERN:**
+1. **NEVER** create issue tracking files in the repository (*_README.md, *_STATUS.md)
+2. **RED FLAGS**: "I'll create a README to document...", "Let me add notes about..."
+3. **ALWAYS** use GitHub issues for progress tracking and bug documentation
+4. **ENFORCEMENT**: Repository must stay clean of transitory documentation
 
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**

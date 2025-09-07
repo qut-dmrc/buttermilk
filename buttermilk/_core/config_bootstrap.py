@@ -179,9 +179,16 @@ class ConfigurationBootstrapper:
         
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
-            self._execution_context = create_execution_context()
+            # Get infrastructure configuration to extract tracing settings
+            config = self._load_configuration()
+            infrastructure_config = config.get('infrastructure', {})
+            
+            # Extract tracing configuration from infrastructure.tracing
+            tracing_config = infrastructure_config.get('tracing', {})
+            
+            self._execution_context = create_execution_context(tracing=tracing_config)
             await self._execution_context.ensure_initialized()
-            logger.info("Baseline execution context created with structured logging")
+            logger.info("Baseline execution context created with structured logging and tracing config")
         
         # Create infrastructure manager (may fail, but logs will be captured)
         infrastructure = self._create_infrastructure_manager()
