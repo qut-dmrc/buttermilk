@@ -39,6 +39,25 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
         FastAPI: Configured FastAPI application.
     """
     logger.info("Starting create_app function...")
+    
+    # Initialize API server's own execution context for logging and infrastructure
+    # This ensures the API server itself has proper context for generating structured logs
+    from buttermilk._core.execution_context import create_execution_context
+    from buttermilk._core.dmrc import set_bm
+    
+    # Create API server's baseline execution context
+    api_execution_context = create_execution_context()
+    
+    # Create API server's own session-scoped BM for infrastructure operations
+    api_bm = infrastructure.create_session_bm(
+        name="api_server",
+        job="api_infrastructure", 
+        platform="local"
+    )
+    
+    # Set as global singleton for API server operations
+    set_bm(api_bm)
+    logger.info("API server execution context and BM initialized")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -48,6 +67,13 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
 
             # API functions might take a few more seconds
             asyncio.get_event_loop().slow_callback_duration = 2
+
+            # Ensure API server's execution context is fully initialized
+            await api_execution_context.ensure_initialized()
+            
+            # Ensure API server's BM is fully initialized
+            await api_bm.ensure_initialized()
+            logger.info("API server context fully initialized")
 
             # Initialize infrastructure components
             if hasattr(app.state, "infrastructure"):

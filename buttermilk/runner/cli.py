@@ -41,10 +41,10 @@ from buttermilk.runner.flowrunner import FlowRunner
 def main(conf: DictConfig) -> None:
     """Main application entry point, configured and launched by Hydra.
 
-    This function initializes the Buttermilk environment (`BM` instance) and a
-    `FlowRunner` based on the Hydra configuration (`conf`). It then determines
-    the operational mode (e.g., "console", "api", "batch", "slackbot") from the
-    configuration and starts the corresponding application logic.
+    This function initializes the Buttermilk environment using the ConfigurationBootstrapper
+    as the single point of entry for all configuration management. It creates the infrastructure
+    and session-scoped BM instances, then determines the operational mode and starts the
+    corresponding application logic.
 
     Args:
         conf (DictConfig): The configuration object loaded and populated by Hydra.
@@ -56,34 +56,31 @@ def main(conf: DictConfig) -> None:
     """
     OmegaConf.resolve(conf)
     
-    # Create infrastructure manager from configuration
-    from buttermilk import create_infrastructure_from_config
+    # Use ConfigurationBootstrapper as single entry point for all configuration
+    from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
     
-    # If new infrastructure configuration exists, use it directly
-    if 'infrastructure' in conf:
-        infrastructure = create_infrastructure_from_config(conf.infrastructure)
-    else:
-        # Fallback: migrate old BM configuration to infrastructure manager
-        infrastructure = create_infrastructure_from_config(conf.bm)
+    # Create and use ConfigurationBootstrapper with the existing Hydra configuration
+    # This avoids double initialization of Hydra
+    bootstrapper = create_configuration_bootstrapper(
+        config_path="../conf",
+        config=conf  # Pass the existing configuration from Hydra
+    )
     
-    # Initialize infrastructure components
-    infrastructure.initialize_components()
-    logger.info("Infrastructure initialization complete")
+    # Get infrastructure manager through bootstrapper
+    infrastructure = bootstrapper.get_infrastructure_manager()
+    logger.info("Infrastructure initialization complete via ConfigurationBootstrapper")
     
-    # Create a session-scoped BM for CLI operations
-    bm = infrastructure.create_session_bm(
+    # Create a session-scoped BM for CLI operations using bootstrapper
+    bm = asyncio.run(bootstrapper.bootstrap_session_context(
         name=conf.get('run', {}).get('name', 'cli_session'),
         job=conf.get('run', {}).get('job', 'cli_operation'),
         platform='local'
-    )
+    ))
     
     # Set as global singleton for backward compatibility with existing code
     from buttermilk import set_bm
     set_bm(bm)
-    
-    # Ensure BM is fully initialized before proceeding
-    asyncio.run(bm.ensure_initialized())
-    logger.info("Session BM initialization complete")
+    logger.info("Session BM initialization complete via ConfigurationBootstrapper")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
@@ -152,10 +149,10 @@ def main(conf: DictConfig) -> None:
         case "api":
             # Starts a FastAPI web server.
             logger.info("Starting FastAPI API server...")
-            # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
-            # These are typically passed to the app creation function.
+            # The FastAPI app needs access to infrastructure and flow_runner to handle API requests.
+            # Pass the bootstrapper-managed infrastructure to ensure consistent configuration
             fastapi_app = create_fastapi_app(
-                infrastructure=infrastructure,  # Pass the infrastructure manager
+                infrastructure=infrastructure,  # Pass the bootstrapper-managed infrastructure
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
