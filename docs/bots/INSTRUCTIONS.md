@@ -377,7 +377,7 @@ Specific rules:
 
 ## CRITICAL FIRST STEPS
 1. **For Debugging Tasks**: ALWAYS read `docs/bots/debugging.md` FIRST
-2. **For Flow Validation**: Focus on end-to-end completion, not component validation. Issues #226 and #227 currently block all flow completion.
+2. **For Flow Validation**: Focus on end-to-end completion, not component validation. 
 3. **For Development Tasks**: Follow the 9-step workflow below
 4. **For Research Tasks**: Use documented tools, not source code exploration
 

@@ -31,12 +31,11 @@ api:
 # Run API server in debug mode. Use this one for development.
 debug: 
 	@echo "Starting Buttermilk API in debug mode..."
-	@echo "Logs are written to: /tmp/buttermilk_<run_id>.log"
-	@echo "To find the latest log: ./scripts/mcp_debug/getlog.sh"
+	@echo "Structured logs are written to: /tmp/buttermilk_<run_id>.jsonl"
+	@echo "To view logs: uv run python -m buttermilk.debug.ws_debug_cli logs -n 50"
 	@echo "Starting server in background..."
 	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=debug verbose=true > /dev/null 2>&1 &
-	@echo "Server starting... Latest log file (waiting...):"
-	@sleep 5s && ./scripts/mcp_debug/getlog.sh 
+	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs." 
 
 build:
 	@echo "Building Buttermilk Docker image..."

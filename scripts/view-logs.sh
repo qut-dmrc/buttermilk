@@ -9,18 +9,21 @@ if [ -n "$1" ] && [[ "$1" =~ ^[0-9]+$ ]]; then
     echo "Using custom line count: $DEFAULT_LINES"
 fi
 
-echo "📋 Buttermilk Server Log Viewer"
-echo "==============================="
+echo "📋 Buttermilk Server Log Viewer (Structured Logs)"
+echo "=================================================="
 echo ""
 
-LOG_FILE=$(./scripts/mcp_debug/getlog.sh)
+# Find the most recent structured log file (JSONL format)
+LOG_FILE=$(ls -t /tmp/buttermilk_*.jsonl 2>/dev/null | head -n 1)
 
 if [ ! -f "$LOG_FILE" ]; then
-    echo "❌ No debug log found at $LOG_FILE"
+    echo "❌ No structured log files found in /tmp/"
     echo ""
     echo "To create debug logs:"
     echo "1. Stop the current server: pkill -f buttermilk.runner.cli"
     echo "2. Start in debug mode: make debug"
+    echo ""
+    echo "Note: For better log access, use: uv run python -m buttermilk.debug.ws_debug_cli logs -n $DEFAULT_LINES"
     echo ""
     exit 1
 fi
@@ -36,17 +39,21 @@ echo "📝 Lines: $LOG_LINES"
 echo "🕒 Last modified: $LAST_MODIFIED"
 echo ""
 
-# Menu
-echo "Options:"
-echo "1. Show last $DEFAULT_LINES lines"
-echo "2. Show errors only"
-echo "3. Show warnings and errors"
-echo "4. Follow log (tail -f)"
-echo "5. Search for pattern"
-echo "6. Show WebSocket messages"
+# Recommend using the proper structured log tools
+echo "⚠️  DEPRECATION NOTICE: This script works with structured logs but has limitations."
+echo "For full structured log support, use: uv run python -m buttermilk.debug.ws_debug_cli logs -n $DEFAULT_LINES"
 echo ""
 
-read -p "Choose option (1-6): " choice
+# Menu
+echo "Options:"
+echo "1. Show last $DEFAULT_LINES lines (basic)"
+echo "2. Show errors only (basic text search)"
+echo "3. Show warnings and errors (basic text search)"
+echo "4. Use proper structured log tool (RECOMMENDED)"
+echo "5. Search for pattern (basic text search)"
+echo ""
+
+read -p "Choose option (1-5): " choice
 
 case $choice in
     1)
@@ -54,25 +61,22 @@ case $choice in
         tail -$DEFAULT_LINES "$LOG_FILE"
         ;;
     2)
-        echo -e "\n❌ Errors:\n"
+        echo -e "\n❌ Errors (basic text search - use ws_debug_cli for proper structured filtering):\n"
         grep -i "error\|exception\|traceback" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     3)
-        echo -e "\n⚠️  Warnings and Errors:\n"
+        echo -e "\n⚠️  Warnings and Errors (basic text search):\n"
         grep -i "warn\|error\|exception" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     4)
-        echo -e "\n👀 Following log (Ctrl+C to stop):\n"
-        tail -f "$LOG_FILE"
+        echo -e "\n🔧 Using proper structured log tool:\n"
+        cd /src/buttermilk
+        uv run python -m buttermilk.debug.ws_debug_cli logs -n $DEFAULT_LINES
         ;;
     5)
         read -p "Enter search pattern: " pattern
-        echo -e "\n🔍 Searching for '$pattern':\n"
+        echo -e "\n🔍 Searching for '$pattern' (basic text search):\n"
         grep -i "$pattern" "$LOG_FILE" | tail -$DEFAULT_LINES   
-        ;;
-    6)
-        echo -e "\n🌐 WebSocket messages:\n"
-        grep -i "websocket\|ws\|message_service" "$LOG_FILE" | tail -$DEFAULT_LINES
         ;;
     *)
         echo "Invalid option"

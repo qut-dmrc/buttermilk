@@ -4,15 +4,19 @@
 
 This guide provides the single, authoritative workflow for debugging and validating Buttermilk. It follows the "golden path" principle: a simple, clear, and powerful set of tools for the most common development tasks. This is the only debugging guide you need.
 
-## The Golden Path Workflow
+## The Simplified Golden Path Workflow
 
-The standard debugging loop consists of five steps, each with a single, recommended tool.
+**Two Core Tools, One Simple Workflow:**
+
+1. **Log Analysis**: Use `ws_debug_cli.py` for structured log access
+2. **Live Flow Debugging**: Use enhanced `DebugAgent` as interactive "puppet" UI
+
+**Standard debugging loop:**
 
 1.  **Start the Server**: Launch the backend API.
-2.  **Validate the Backend**: Run a flow and observe its live output.
-3.  **Analyze the Logs**: Inspect the logs for errors and details.
-4.  **Validate the Frontend**: Interact with the UI to confirm visual and functional correctness.
-5.  **Stop the Server**: Terminate the backend process.
+2.  **Check Logs First**: Use structured log tools to diagnose setup issues.
+3.  **Debug Live Flows**: Use DebugAgent puppet mode for interactive flow debugging.
+4.  **Stop the Server**: Terminate the backend process.
 
 ---
 
@@ -28,23 +32,70 @@ This command handles killing any old processes and starts a new one, logging out
 
 ---
 
-## 2. Validate Complete Flow Execution (END-TO-END RESULTS)
+## 2. Check Logs First (Setup Issues)
 
-**🚨 CRITICAL**: Success means flows complete with real output from ALL agents (fetch, judge, synth, scorer, diff). Component validation without end-to-end completion is NOT sufficient.
+**For environment and setup issues, ALWAYS check logs first.**
 
-To run complete flows, use the primary WebSocket debug client: `ws_debug_cli.py`. This tool must show flows completing with actual results, not just starting successfully.
+Use the structured log tool for reliable log access:
 
 **Canonical command:**
 ```bash
-uv run python -m buttermilk.debug.ws_debug_cli <command>
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50
 ```
 
-**🛑 KNOWN CRITICAL ISSUES BLOCKING FLOW COMPLETION:**
-- **Issue #226**: Flows start but don't process messages (sessions stuck in "reconnecting")
-- **Issue #227**: Logging system shows stale data, can't see current session activity
-- **Until these are fixed, flows will NOT complete end-to-end**
+**Alternative log levels:**
+```bash
+# Show only errors and warnings
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR
 
-### Available Commands
+# Show more detail with DEBUG level
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 -l DEBUG
+```
+
+## 3. Debug Live Flows (DebugAgent Puppet Mode)
+
+**For live flow debugging, use the enhanced DebugAgent as an interactive "puppet" UI.**
+
+The DebugAgent now includes "puppet mode" - a continuous WebSocket client that acts as a UI replacement, allowing LLM agents to control flows interactively in real-time.
+
+### Using DebugAgent Puppet Mode
+
+**Step 1: Start Puppet Mode**
+```python
+# In an LLM agent context with access to DebugAgent tools
+await debug_agent.start_puppet_mode(host="localhost", port=8000)
+```
+
+**Step 2: Start a Flow**
+```python
+await debug_agent.puppet_start_flow(
+    flow_name="trans", 
+    prompt="your initial query",
+    record="your_record_id",
+    criteria="your_criteria"
+)
+```
+
+**Step 3: Monitor Messages**
+```python
+# Get recent UI messages
+messages = debug_agent.puppet_get_messages(last_n=5, message_type="ui_message")
+
+# Get summary of flow state
+summary = debug_agent.puppet_get_summary()
+```
+
+**Step 4: Send Responses**
+```python
+await debug_agent.puppet_send_response("your response to the flow")
+```
+
+**Step 5: Clean Up**
+```python
+await debug_agent.stop_puppet_mode()
+```
+
+### Legacy ws_debug_cli Commands (Still Available)
 
 **Flow Control:**
 - `start <flow_name> [query]` - Start a flow with optional initial query
@@ -53,25 +104,14 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 
 **Session Control:**
 - `clear-session` - Clear message history
-- `list-flows` - Get available flows
-- `help` - Show available commands
-
-**❌ DEPRECATED COMMANDS:**
-- `export <file>` - Command removed, use other export methods
-- `logs <number>` - Wrong syntax, use `logs -n <number>` instead
+- `test-connection` - Test WebSocket connection
 
 *   **Test Connection:**
     ```bash
     uv run python -m buttermilk.debug.ws_debug_cli test-connection
     ```
 
-### SUCCESS CRITERIA: What Complete Flow Execution Looks Like
-
-**❌ INSUFFICIENT (Component Validation)**:
-- WebSocket connects ✓
-- Flow starts ✓
-- No immediate errors ✓
-- Session created ✓
+### SUCCESS CRITERIA: Complete Flow Execution
 
 **✅ REQUIRED (End-to-End Completion)**:
 - Flow runs through ALL agents sequentially ✓
@@ -81,64 +121,26 @@ uv run python -m buttermilk.debug.ws_debug_cli <command>
 - scorer agent validates results ✓
 - diff agent compares outputs ✓
 - **VISIBLE OUTPUT from each agent stage** ✓
-- Session shows "completed" not "reconnecting" ✓
+- Session shows completion, not hanging ✓
+
+### Quick ws_debug_cli Examples
+
+*   **Test Connection:**
+    ```bash
+    uv run python -m buttermilk.debug.ws_debug_cli test-connection
+    ```
 
 *   **Start a Flow:**
     ```bash
-    # Usage: uv run python -m buttermilk.debug.ws_debug_cli start <flow_name> --record <record_id> --criteria <criteria>
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "snape_betoota_trans" --criteria "cte" --wait 60
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "your_record" --criteria "cte" --wait 60
     ```
-    This will return a `session_id` for use in other commands.
-    
-    **Note**: The `--wait` option requires a numeric value (seconds). Default is 60 seconds if omitted.
-    
-    **🚨 EXPECTED RESULT**: You should see output from multiple agents in sequence, not just successful connection.
 
-*   **Send a Message to a Flow:**
+*   **Send a Response:**
     ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli send "what is digital constitutionalism?" --session <session_id> [--wait <seconds>]
+    uv run python -m buttermilk.debug.ws_debug_cli send "your response text" --session <session_id>
     ```
 
-*   **Wait for/Monitor Messages:**
-    ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli wait --session <session_id>
-    ```
-
-## 3. Analyze the Logs
-
-**⚠️ CRITICAL WARNING: Do not use `scripts/view-logs.sh` directly - it hangs indefinitely**
-
-**Preferred method**: Use ws_debug_cli for log access:
-```bash
-uv run python -m buttermilk.debug.ws_debug_cli logs -n 30
-```
-
-**Alternative**: Direct log file access (if ws_debug_cli fails):
-```bash
-# Find latest log file first
-ls -la /tmp/buttermilk_*.log | tail -1
-# Then view specific lines
-tail -n 50 /path/to/latest/log/file
-```
-
-**❌ NEVER USE**: `scripts/view-logs.sh` - This command hangs and violates debugging workflow
-
-
-## 4. Validate the Frontend
-
-To validate the web interface, use the official Playwright MCP tool. This allows you to automate browser actions and inspect the UI.
-
-The Playwright tool provides commands like `navigate`, `screenshot`, `click`, and `fill`. You must use these commands to interact with the frontend at `http://localhost:5173`.
-
-**Example Workflow:**
-
-1.  **Navigate to the page:** Use `navigate` to go to `http://localhost:5173/terminal`.
-2.  **Take a screenshot:** Use `screenshot` to capture the initial state.
-3.  **Interact with elements:** Use `click` and `fill` to select a flow, record, and criteria.
-4.  **Run the flow:** Use `click` on the "Run Flow" button.
-5.  **Observe results:** Use `screenshot` and `evaluate` to check if the output appears correctly in the UI.
-
-## 5. Stop the Server
+## 4. Stop the Server
 
 When you are finished debugging, use the `make kill_api` command to stop the background API server.
 
@@ -169,58 +171,40 @@ This ensures no orphaned processes are left running.
 **Solution**: 
 1. Verify the API server is running: `ps aux | grep buttermilk`
 2. Test connection first: `uv run python -m buttermilk.debug.ws_debug_cli test-connection`
-3. Check logs with correct syntax: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 30`
+3. Check logs: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 30`
 
-**Problem**: Command syntax errors or "command not found".
+**Problem**: DebugAgent puppet mode fails to connect.
 **Solution**: 
-- Use `logs -n <number>` not `logs <number>`
-- Check available commands with `help`
-- Verify command exists before using (some commands have been deprecated)
-
-**Problem**: Stale log data returned.
-**Solution**: 
-- Check if log files are being created for current date
-- Verify session is actually running and generating logs
-- May indicate infrastructure regression (see GitHub issues #226, #227)
-
-### Playwright Browser Issues
-
-**Problem**: Browser installation warnings or "browser not found" errors.
-**Solution**: 
-- Warnings about browser downloads are usually non-critical - the MCP tool often works despite warnings
-- If screenshots fail, verify the server is accessible at `http://localhost:5173`
-- The Playwright MCP handles browser installation automatically
+- Ensure server is running on correct host/port
+- Test basic connection with `ws_debug_cli test-connection` first
+- Check logs for connection errors
 
 ### Log Analysis Tips
 
 **Problem**: Log outputs are too verbose for analysis.
 **Solution**: 
-- Use focused searches with ws_debug_cli: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 | grep "ERROR\|WebSocket"`
+- Use level filtering: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR`
 - Limit output with `-n` parameter: `logs -n 20` for recent entries
-- Focus on specific timeframes when the issue occurred
+- Focus on specific timeframes when issues occurred
 - **Follow OUTPUT RULE**: Summarize findings instead of dumping raw logs
 
-**❌ AVOID**: Any commands that pipe from `scripts/view-logs.sh` - use ws_debug_cli instead
+**Problem**: `scripts/view-logs.sh` hangs or seems unreliable.
+**Solution**: 
+- Use the recommended tool: `ws_debug_cli logs` instead
+- The script now includes a deprecation notice pointing to proper tools
 
-### Hanging Commands Prevention
+### Simplified Debugging Rules
 
-**🚨 CRITICAL: Commands That Will Hang Your Session**
+**✅ DO:**
+- Use `ws_debug_cli logs` for all log access
+- Use DebugAgent puppet mode for interactive flow debugging  
+- Test connections before debugging flows
+- Check logs first for setup issues
 
-These commands will hang indefinitely and violate debugging workflow:
-- `scripts/view-logs.sh` - Hangs indefinitely, use `ws_debug_cli logs -n X` instead
-- `tail -f /path/to/log` - Follow mode hangs, use `tail -n X` for specific line count
-- Any command with continuous monitoring without timeout
-
-**✅ Safe Alternatives:**
-- Instead of `scripts/view-logs.sh`: Use `ws_debug_cli logs -n 30`
-- Instead of `tail -f logfile`: Use `tail -n 50 logfile` for snapshot
-- Always use commands with explicit limits and timeouts
-
-**🛑 If a Command Hangs:**
-1. Stop immediately - don't wait to see if it completes
-2. Use the timeout mechanisms in the environment
-3. Switch to the safe alternative documented above
-4. Never proceed with hanging commands "just to see what happens"
+**❌ DON'T:**
+- Use `scripts/view-logs.sh` in interactive mode (use option 4 for proper tools)
+- Create standalone debugging scripts (use existing tools)
+- Use deprecated commands or broken legacy tools
 
 ### Output Conciseness Guidelines
 
