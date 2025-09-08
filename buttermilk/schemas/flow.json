@@ -1,5 +1,10 @@
 [
     {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
         "name": "session_id",
         "type": "STRING",
         "mode": "REQUIRED"
@@ -10,17 +15,12 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "timestamp",
-        "type": "TIMESTAMP",
-        "mode": "REQUIRED"
-    },
-    {
         "name": "parent_call_id",
         "type": "STRING",
-        "mode": "REQUIRED"
+        "mode": "NULLABLE"
     },
     {
-        "name": "run_info",
+        "name": "session_info",
         "type": "JSON",
         "mode": "REQUIRED"
     },
@@ -28,11 +28,6 @@
         "name": "agent_info",
         "type": "JSON",
         "mode": "REQUIRED"
-    },
-    {
-        "name": "call_info",
-        "type": "JSON",
-        "mode": "NULLABLE"
     },
     {
         "name": "parameters",
@@ -67,6 +62,6 @@
     {
         "name": "tracing_link",
         "type": "STRING",
-        "mode": "REQUIRED"
+        "mode": "NULLABLE"
     }
 ]
