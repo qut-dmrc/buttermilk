@@ -27,51 +27,8 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 5. **Repository cleanliness check**: Am I adding transitory documentation that belongs in GitHub issues?
 6. **IF ANY ANSWER IS NO OR UNCLEAR: STOP and find the correct approach**
 
-## 🚨 MANDATORY SECURITY VALIDATION PROTOCOL 🚨
-
-**🔴 CRITICAL SECURITY CHECKPOINT - EVERY FILE MUST BE SCANNED**
-
-**BEFORE creating or modifying ANY file, you MUST perform security validation:**
-
-### ❌ FORBIDDEN - REAL CREDENTIALS IN CODE:
-- **API Keys**: Any string that looks like a real API key (long alphanumeric strings)
-- **Tokens**: Authentication tokens, access tokens, refresh tokens
-- **Passwords**: Any real passwords or passphrases
-- **Secrets**: Database credentials, encryption keys, service account keys
-- **Personal Information**: Real email addresses, phone numbers, addresses
-
-### ✅ REQUIRED - ONLY FAKE/MOCK VALUES IN TESTS:
-- **API Keys**: `"fake-api-key-for-testing"`, `"test-api-key-123"`, `"mock-wandb-key"`
-- **Tokens**: `"fake-token-for-testing"`, `"test-auth-token"`
-- **Passwords**: `"test-password"`, `"fake-password-123"`
-- **URLs**: Use `example.com`, `test.example.org`, or other reserved domains
-- **IDs**: Sequential numbers, obvious fakes like `"test-project-id"`
-
-### 🚨 RED FLAG PATTERNS - STOP IMMEDIATELY:
-**If you see ANY of these patterns in code you're about to commit:**
-- Long alphanumeric strings that could be real API keys (20+ characters)
-- Strings starting with real service prefixes: `tl_`, `sk-`, `pk_`, `ey`
-- URLs pointing to real production services in test code
-- Real-looking UUIDs or hashes in configuration
-- Environment variable names with real service credentials
-
-### 🔧 SECURITY SCAN PROCESS:
-**For EVERY file before creation/modification:**
-1. **Pattern Scan**: Search for strings 15+ characters that are alphanumeric
-2. **Service Prefix Scan**: Look for `api_key`, `token`, `password`, `secret` variables
-3. **URL Scan**: Check for real service URLs (not example.com domains)
-4. **Context Check**: If this is a test, are ALL values obviously fake?
-5. **IF ANY REAL CREDENTIALS FOUND: STOP and replace with fake values**
-
 ### 🛑 ZERO TOLERANCE SECURITY POLICY:
 - **NEVER commit real credentials** regardless of how "safe" the repository seems
-- **ALL test data must be obviously fake** (use "fake-", "test-", "mock-" prefixes)
-- **Real configuration belongs in .env files** (which are .gitignored)
-- **When in doubt, use fake values** - better safe than compromised
-
-**ENFORCEMENT: If you catch yourself about to commit real credentials, STOP IMMEDIATELY and replace with fake test values. This is the most serious security violation possible.**
-
-**BEFORE you test, validate, or verify ANY code behavior, you MUST:**
 
 ### ❌ NEVER CREATE STANDALONE VALIDATION (FILES OR COMMANDS):
 

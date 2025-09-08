@@ -128,6 +128,7 @@ class ExecutionContext(BaseModel):
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
     _tracing_instrumented: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _tracing_providers_initialized: bool = PrivateAttr(default=False)
 
     def __init__(self, **data: Any) -> None:
         """Initialize the ExecutionContext with infrastructure setup."""
@@ -344,76 +345,126 @@ class ExecutionContext(BaseModel):
         return self._credentials_cached
 
     async def _setup_tracing(self) -> None:
-        """Set up tracing based on configuration."""
+        """Set up tracing based on configuration.
+        
+        All tracing setup is deferred to avoid circular dependencies during
+        ExecutionContext initialization. Tracing will be initialized on-demand
+        when first accessed.
+        """
+        # Log configured tracing providers but defer actual initialization
+        enabled_providers = []
         if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            weave_config = self.tracing["weave"]
-            
-            # Extract credentials from configuration (fail-fast if missing)
-            wandb_entity = getattr(weave_config, 'project_id', None)
-            wandb_api_key = getattr(weave_config, 'api_key', None)
-            
-            if not wandb_entity:
-                raise RuntimeError("Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config.")
-            
-            if not wandb_api_key:
-                raise RuntimeError("Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config.")
-            
-            # Set environment variables for Weave initialization
-            os.environ["WANDB_ENTITY"] = wandb_entity
-            os.environ["WANDB_API_KEY"] = wandb_api_key
-            
-            try:
-                # Setup Weave tracing
-                collection_name = f"execution-context-{self.execution_context_id[:8]}"
-                autopatch = {"autogen": {"enabled": False}}
-                logger.debug(f"Starting weave client initialization. Entity: {wandb_entity}, Collection: {collection_name}")
-
-                client = weave.init(
-                    project_name=f"{wandb_entity}/{collection_name}",
-                    autopatch_settings=autopatch
-                )
-                logger.info(f"Weave initialized successfully for {wandb_entity}/{collection_name}")
-            except Exception as e:
-                logger.error(f"Failed to initialize Weave tracing: {e}")
-                raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
-
+            enabled_providers.append("weave")
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
-            traceloop_config = self.tracing["traceloop"]
-            api_key = getattr(traceloop_config, 'api_key', None)
-            
-            if not api_key:
-                raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")
-            
-            try:
-                from traceloop.sdk import Traceloop
-                Traceloop.init(
-                    app_name="buttermilk",
-                    api_key=api_key
-                )
-                logger.info("Traceloop initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Traceloop tracing: {e}")
-                raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
-
+            enabled_providers.append("traceloop")
         if self.tracing.get("otel") and self.tracing["otel"].enabled:
-            try:
-                from buttermilk.utils.otel import setup_tracing_otel
-                setup_tracing_otel(self.tracing["otel"])
-                logger.info("OTEL Tracing has been set up successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize OTEL tracing: {e}")
-                raise RuntimeError(f"OTEL tracing initialization failed: {e}") from e
+            enabled_providers.append("otel")
+            
+        if enabled_providers:
+            logger.debug(f"Tracing providers configured (deferred initialization): {', '.join(enabled_providers)}")
+        else:
+            logger.debug("No tracing providers enabled")
 
         self._tracing_instrumented.set()
 
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client."""
-        if ("weave" in self.tracing and self.tracing["weave"].enabled
-            and not self._tracing_instrumented.is_set()):
-            asyncio.create_task(self._setup_tracing())
-            await self._tracing_instrumented.wait()
+        # Ensure tracing is set up (this will be deferred initialization)
+        await self._ensure_tracing_initialized()
         return weave.get_client()
+
+    async def _ensure_tracing_initialized(self) -> None:
+        """Ensure all tracing providers are initialized on-demand."""
+        if not self._tracing_instrumented.is_set():
+            await self._setup_tracing()
+            
+        # Now perform actual tracing initialization for all enabled providers
+        await self._initialize_all_tracing_providers()
+
+    async def _initialize_all_tracing_providers(self) -> None:
+        """Initialize all configured tracing providers."""
+        # Skip if already initialized to prevent duplicate setup
+        if self._tracing_providers_initialized:
+            return
+            
+        # Initialize Weave if enabled
+        if self.tracing.get("weave") and self.tracing["weave"].enabled:
+            await self._initialize_weave()
+            
+        # Initialize Traceloop if enabled  
+        if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
+            await self._initialize_traceloop()
+            
+        # Initialize OTEL if enabled (now safe since BM singleton should be available)
+        if self.tracing.get("otel") and self.tracing["otel"].enabled:
+            await self._initialize_otel()
+            
+        # Mark as initialized
+        self._tracing_providers_initialized = True
+        logger.debug("All tracing providers initialization completed")
+
+    async def _initialize_weave(self) -> None:
+        """Initialize Weave tracing."""
+        weave_config = self.tracing["weave"]
+        
+        # Extract credentials from configuration (fail-fast if missing)
+        wandb_entity = getattr(weave_config, 'project_id', None)
+        wandb_api_key = getattr(weave_config, 'api_key', None)
+        
+        if not wandb_entity:
+            raise RuntimeError("Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config.")
+        
+        if not wandb_api_key:
+            raise RuntimeError("Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config.")
+        
+        # Set environment variables for Weave initialization
+        os.environ["WANDB_ENTITY"] = wandb_entity
+        os.environ["WANDB_API_KEY"] = wandb_api_key
+        
+        try:
+            # Setup Weave tracing
+            collection_name = f"execution-context-{self.execution_context_id[:8]}"
+            autopatch = {"autogen": {"enabled": False}}
+            logger.debug(f"Starting weave client initialization. Entity: {wandb_entity}, Collection: {collection_name}")
+
+            client = weave.init(
+                project_name=f"{wandb_entity}/{collection_name}",
+                autopatch_settings=autopatch
+            )
+            logger.info(f"Weave initialized successfully for {wandb_entity}/{collection_name}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Weave tracing: {e}")
+            raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
+
+    async def _initialize_traceloop(self) -> None:
+        """Initialize Traceloop tracing."""
+        traceloop_config = self.tracing["traceloop"]
+        api_key = getattr(traceloop_config, 'api_key', None)
+        
+        if not api_key:
+            raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")
+        
+        try:
+            from traceloop.sdk import Traceloop
+            Traceloop.init(
+                app_name="buttermilk",
+                api_key=api_key
+            )
+            logger.info("Traceloop initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Traceloop tracing: {e}")
+            raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
+
+    async def _initialize_otel(self) -> None:
+        """Initialize OTEL tracing."""
+        try:
+            from buttermilk.utils.otel import setup_tracing_otel
+            setup_tracing_otel(self.tracing["otel"])
+            logger.info("OTEL Tracing has been set up successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize OTEL tracing: {e}")
+            raise RuntimeError(f"OTEL tracing initialization failed: {e}") from e
 
 
 # Global execution context instance

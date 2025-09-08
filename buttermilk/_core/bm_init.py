@@ -514,41 +514,19 @@ class BM(BaseModel):
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.
         
-        Attempts to use the ExecutionContext's weave client if available (which handles
-        proper weave.init() calls), falling back to direct weave.get_client() for
-        backward compatibility.
+        Delegates to ExecutionContext for proper weave initialization. The ExecutionContext
+        handles unified tracing configuration, environment variables, and error handling.
         """
         try:
-            # Try to get properly initialized weave client from ExecutionContext
             from buttermilk._core.execution_context import get_execution_context
             execution_context = get_execution_context()
             return await execution_context.get_weave_client()
-        except (RuntimeError, ImportError):
-            # Fallback: try to initialize weave ourselves if we have access to credentials
-            import weave
-            import os
-            
-            # Try to set up weave credentials if we have access to secret manager
-            try:
-                if hasattr(self, '_secret_manager') and self._secret_manager:
-                    credentials = self.credentials
-                    
-                    # Set up WANDB credentials for weave if available
-                    if "WANDB_API_KEY" in credentials and "WANDB_ENTITY" in credentials:
-                        os.environ["WANDB_API_KEY"] = credentials["WANDB_API_KEY"]
-                        os.environ["WANDB_ENTITY"] = credentials["WANDB_ENTITY"]
-                        
-                        # Initialize weave with a basic project name
-                        collection_name = f"session-{self.session_info.session_id[:8]}"
-                        weave.init(
-                            project_name=f"{credentials['WANDB_ENTITY']}/{collection_name}",
-                            autopatch_settings={"autogen": {"enabled": False}}
-                        )
-            except Exception as e:
-                # If weave setup fails, log but continue with basic client
-                logger.debug(f"Could not initialize weave in fallback: {e}")
-            
-            return weave.get_client()
+        except RuntimeError as e:
+            raise RuntimeError(
+                "Weave client not available. Ensure ExecutionContext is properly initialized "
+                "with weave tracing configuration. Check that infrastructure.tracing.weave is "
+                "enabled in your configuration with valid project_id and api_key."
+            ) from e
 
     @property
     def credentials(self) -> dict[str, str]:

@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements to leverage layer caching
-COPY ./deploy/requirements.txt /tmp/requirements.txt
+COPY ./containers/deploy/requirements.txt /tmp/requirements.txt
 
 # Exclude editable -e . 
 RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.txt
@@ -90,7 +90,7 @@ RUN rm -rf /wheels
 ENV PATH="$VENV_PATH/bin:$PATH"
 
 # Copy the startup script
-COPY ./deploy/startup.sh /usr/local/bin/startup.sh
+COPY ./containers/deploy/startup.sh /usr/local/bin/startup.sh
 RUN chmod +x /usr/local/bin/startup.sh
 
 CMD ["/usr/local/bin/startup.sh"]

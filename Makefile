@@ -39,7 +39,7 @@ debug:
 
 build:
 	@echo "Building Buttermilk Docker image..."
-	@docker build -t buttermilk:latest -t us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest -f deploy/Dockerfile .
+	@docker build -t buttermilk:latest -t us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest -f containers/deploy/Dockerfile .
 	
 # Run unit tests and generate a coverage report.
 coverage:

@@ -1,8 +1,11 @@
+import asyncio
+
 import pytest
 from hydra import compose, initialize
 
-from buttermilk import create_infrastructure_from_config, get_bm, set_bm
+from buttermilk import get_bm, set_bm
 from buttermilk._core.bm_init import BM
+from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.log import logger
 
@@ -20,20 +23,17 @@ def conf():
     return cfg
 
 
-# Create infrastructure manager from test configuration
-@pytest.fixture(scope="session")
+# Create infrastructure manager from test configuration with proper ExecutionContext
+@pytest.fixture(scope="session", autouse=True)
 def infrastructure(conf):
-    """Provide the Infrastructure instance created from config."""
+    """Provide the Infrastructure instance created from config with ExecutionContext."""
 
-    # Use new infrastructure configuration
-    if "infrastructure" in conf:
-        # Pass the DictConfig directly to preserve instantiation capability
-        infrastructure = create_infrastructure_from_config(conf["infrastructure"])
-    else:
-        raise ValueError("Test configuration must contain 'infrastructure' configuration.")
+    # Use ConfigurationBootstrapper to create both ExecutionContext and Infrastructure
+    bootstrapper = ConfigurationBootstrapper(config=conf)
 
-    # Initialize infrastructure components
-    infrastructure.initialize_components()
+    # Bootstrap full context (ExecutionContext + Infrastructure)
+    # This ensures ExecutionContext is created and set before infrastructure
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
 
     # Create a test session-scoped BM and set as singleton for backward compatibility
     test_bm = infrastructure.create_session_bm(name="buttermilk", job="testing", platform="local")
