@@ -10,7 +10,7 @@ ARG USERNAME=debian
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install extra packages
-COPY devpackages.txt /tmp/packages.txt
+COPY ./containers/dev/devpackages.txt /tmp/packages.txt
 RUN apt update && xargs -a /tmp/packages.txt apt install -y --no-install-recommends && apt-get autoremove -y && apt-get -y clean
 
 ##### INSTALL NODE.JS #######
@@ -48,8 +48,8 @@ ENV LC_ALL en_US.UTF-8
 
 # Copy entrypoint script
 USER root
-COPY entrypoint-simple.sh /entrypoint.sh
-COPY entrypoint-complicated.sh /entrypoint-complicated.sh
+COPY ./containers/dev/entrypoint-simple.sh /entrypoint.sh
+COPY ./containers/dev/entrypoint-complicated.sh /entrypoint-complicated.sh
 RUN chmod +x /entrypoint.sh /entrypoint-complicated.sh
 
 
