@@ -66,4 +66,7 @@
   },
   "explorer.excludeGitIgnore": true,
   "python-envs.pythonProjects": [],
+  "[jinja]": {
+    "editor.defaultFormatter": "GlenBuktenica.unicode-substitutions"
+  },
 }
