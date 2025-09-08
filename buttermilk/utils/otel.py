@@ -66,7 +66,13 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
 
     bm = get_bm()
     creds = bm.gcp_credentials
+    
+    # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
     project_id = tracing_cfg.project_id
+    if project_id is None:
+        project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if project_id is None:
+            raise RuntimeError("OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable")
 
     os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"gcp.project_id={project_id}"
     os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id

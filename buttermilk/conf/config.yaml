@@ -16,7 +16,6 @@ bm:
     job: ${run.job}
 
 infrastructure:
-  clouds: []
   llms: {}
   
   # Default tracing configuration for non-cloud tracing providers

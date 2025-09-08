@@ -66,21 +66,21 @@ def main(conf: DictConfig) -> None:
         config=conf  # Pass the existing configuration from Hydra
     )
     
-    # Bootstrap full context (ExecutionContext + Infrastructure) to ensure structured logging
-    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
-    logger.info("Full context initialization complete via ConfigurationBootstrapper")
-    
-    # Create a session-scoped BM for CLI operations using bootstrapper
+    # Create a session-scoped BM first to set singleton before ExecutionContext tracing setup
     bm = asyncio.run(bootstrapper.bootstrap_session_context(
         name=conf.get('run', {}).get('name', 'cli_session'),
         job=conf.get('run', {}).get('job', 'cli_operation'),
         platform='local'
     ))
     
-    # Set as global singleton for backward compatibility with existing code
+    # Set as global singleton BEFORE ExecutionContext initialization to enable OTEL tracing
     from buttermilk import set_bm
     set_bm(bm)
-    logger.info("Session BM initialization complete via ConfigurationBootstrapper")
+    logger.info("Session BM singleton initialization complete - OTEL tracing can now access BM")
+    
+    # Bootstrap full context (ExecutionContext + Infrastructure) to ensure structured logging
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+    logger.info("Full context initialization complete via ConfigurationBootstrapper")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
