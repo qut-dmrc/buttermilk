@@ -138,7 +138,6 @@ class SessionInfo(BaseModel):
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
-    _ip: str | None = PrivateAttr(default=None)
 
     def update_status(self, status: str, error_message: str | None = None) -> None:
         """Update the session status and timestamps.
@@ -536,7 +535,7 @@ class BM(BaseModel):
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
 
-        The IP address is stored in `self._ip` upon completion. This task is
+        The IP address is stored in `self.session_info.ip` upon completion. This task is
         initiated if an event loop is running and the task hasn't been started already.
         """
         from buttermilk.utils import get_ip  # Utility function to get IP
