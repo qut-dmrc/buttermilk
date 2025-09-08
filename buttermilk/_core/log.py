@@ -7,7 +7,7 @@ from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
 
-from buttermilk._core.context import agent_id_var, session_id_var
+from buttermilk._core.context import get_logging_context
 
 # Single logger for the entire application
 _LOGGER_NAME = "buttermilk"
@@ -79,11 +79,11 @@ def setup_console_logging(verbose: bool = False) -> None:
     configure_structlog()
 
 
-def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
+def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list[str]:
     """Set up structured JSON logging to files.
 
     Args:
-        run_id: Unique run identifier for log file naming
+        execution_context_id: Unique execution context identifier for log file naming
         verbose: If True, creates both INFO and DEBUG log files
 
     Returns:
@@ -94,15 +94,15 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
 
     log_files = []
 
-    # Set up context for this session
-    session_id = session_id_var.get()
-    agent_id = agent_id_var.get()
-
-    if session_id or agent_id:
-        structlog.contextvars.bind_contextvars(session_id=session_id, agent_id=agent_id, run_id=run_id)
+    # Set up context for this session using simplified architecture
+    context = get_logging_context()
+    # Bind all available context variables
+    non_null_context = {k: v for k, v in context.items() if v is not None}
+    if non_null_context:
+        structlog.contextvars.bind_contextvars(**non_null_context)
 
     # Always create an INFO JSON log file
-    info_log_path = Path(f"/tmp/buttermilk_{run_id}_info.jsonl")
+    info_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_info.jsonl")
     info_handler = logging.FileHandler(info_log_path, mode="w")
     info_handler.setLevel(logging.INFO)
 
@@ -127,7 +127,7 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
 
     # Add debug file logging when verbose is True
     if verbose:
-        debug_log_path = Path(f"/tmp/buttermilk_{run_id}_debug.jsonl")
+        debug_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_debug.jsonl")
         debug_handler = logging.FileHandler(debug_log_path, mode="w")
         debug_handler.setLevel(logging.DEBUG)
         debug_handler.setFormatter(structlog_formatter)
@@ -138,7 +138,7 @@ def setup_file_logging(run_id: str, verbose: bool = False) -> list[str]:
     return log_files
 
 
-def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
+def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
     """Set up Google Cloud Logging with structured JSON.
 
     Uses the same structlog JSON format as file logging for consistency.
@@ -146,7 +146,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
     Args:
         logger_cfg: Logger configuration object
         cloud_manager: Cloud manager instance for GCS client access
-        run_info: Session run information
+        session_info: Session information
     """
     if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
         try:
@@ -158,17 +158,21 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
                 labels={
                     "project": logger_cfg.project_id,
                     "location": logger_cfg.location,
-                    "namespace": run_info.name,
-                    "job": run_info.job,
-                    "task_id": run_info.run_id,
+                    "namespace": session_info.name,
+                    "job": session_info.job,
+                    "task_id": session_info.session_id,
                 },
             )
 
+            # Filter out None values from labels as protobuf doesn't accept them
+            raw_labels = session_info.model_dump(include={"session_id", "name", "job", "platform"})
+            labels = {k: str(v) for k, v in raw_labels.items() if v is not None}
+            
             cloud_handler = CloudLoggingHandler(
                 client=cloud_manager.gcs_log_client(logger_cfg),
                 resource=cloud_logging_resource,
-                name=run_info.name,
-                labels=run_info.model_dump(include={"run_id", "name", "job", "platform"}),
+                name=session_info.name,
+                labels=labels,
             )
             cloud_handler.setLevel(logging.INFO)
 
@@ -187,20 +191,28 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
             )
             cloud_handler.setFormatter(structlog_formatter)
 
-            # Bind session context for automatic inclusion
-            structlog.contextvars.bind_contextvars(
-                session_id=run_info.run_id[-12:],  # Last 12 chars for brevity
-                run_id=run_info.run_id,
-                job=run_info.job,
-                project=run_info.name,
-            )
+            # Bind session context for automatic inclusion (simplified architecture)
+            context_vars = {
+                "job": session_info.job,
+                "project": session_info.name,
+                "session_id": "unknown",
+                "batch_id": "unknown",
+            }
+
+            # Add batch context if available
+            if session_info.session_id:
+                context_vars["session_id"] = session_info.session_id[-12:]  # Last 12 chars for brevity
+            if session_info.batch_id:
+                context_vars["batch_id"] = session_info.batch_id[-12:]  # Last 12 chars
+                
+            structlog.contextvars.bind_contextvars(**context_vars)
 
             # Add to root logger so all log messages go to cloud
             logging.getLogger().addHandler(cloud_handler)
             logger.info("Cloud logging handler added")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Cloud logging setup failed",
                 extra={
                     "error": str(e),
@@ -209,4 +221,3 @@ def setup_cloud_logging(logger_cfg, cloud_manager, run_info) -> None:
                     "location": logger_cfg.location,
                 },
             )
-

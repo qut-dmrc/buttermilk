@@ -20,7 +20,7 @@ def flow_describer(request):
         },
         inputs={"record": "record"},
         outputs={"record": "record"},
-        session_id="test_session", # Add required session_id
+        session_id="test_session",  # Add required session_id
     )
 
 
@@ -32,7 +32,7 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, bm):
         ui_type="testing",
         flow="testflow",  # Assuming a flow_id like "testflow"
         records=[record],
-        run_info=bm.run_info,
+        session_info=bm.session_info,
         session_id="test_session",  # Add required session_id
     )
     async for result in flow_describer.run_flows(run_request=run_request):  # Pass run_request

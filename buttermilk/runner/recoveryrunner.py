@@ -28,7 +28,7 @@ class RecoveryRunner(BaseModel):
         if not self.backup_dir:
             # Use BM save_dir if no backup_dir specified
             bm = get_bm()
-            self.backup_dir = bm.run_info.save_dir
+            self.backup_dir = bm.session_info.save_dir
 
     async def run(self) -> None:
         """Main recovery process."""

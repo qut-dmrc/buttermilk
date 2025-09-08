@@ -1,28 +1,29 @@
 """Session storage service for persisting chat flow messages to disk."""
 
 import json
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
 from buttermilk import logger
 from buttermilk.api.services.message_service import ChatMessage
 
-# Default sessions directory - will be overridden by get_sessions_dir() 
+# Default sessions directory - will be overridden by get_sessions_dir()
 SESSIONS_DIR = Path("data/sessions")
+
 
 def get_sessions_dir() -> Path:
     """Get the configured sessions directory from BM instance.
-    
+
     Returns:
-        Path to the sessions directory from bm.run_info.sessions_dir,
+        Path to the sessions directory from bm.session_info.sessions_dir,
         falling back to SESSIONS_DIR if BM is not available.
     """
     try:
         from buttermilk import get_bm
         bm = get_bm()
-        if bm and bm.run_info and hasattr(bm.run_info, 'sessions_dir'):
-            return Path(bm.run_info.sessions_dir)
+        if bm and bm.session_info and hasattr(bm.session_info, "sessions_dir"):
+            return Path(bm.session_info.sessions_dir)
     except Exception:
         # Fall back to default if BM is not available or configured
         pass
@@ -41,10 +42,10 @@ class SessionStorageService:
 
     def __init__(self, sessions_dir: Optional[Path] = None):
         """Initialize the session storage service.
-        
+
         Args:
             sessions_dir: Optional custom directory for session files.
-                         Defaults to bm.run_info.sessions_dir or data/sessions/
+                         Defaults to bm.session_info.sessions_dir or data/sessions/
         """
         self.sessions_dir = sessions_dir or get_sessions_dir()
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
@@ -449,11 +450,11 @@ class SessionStorageService:
                 bm = get_bm()
                 
                 # Check if save_dir is configured and points to GCS
-                if not bm.run_info.save_dir:
+                if not bm.session_info.save_dir:
                     logger.debug("No save_dir configured, skipping GCS archival for session", session_id=session_id)
                     return False
-                    
-                if not bm.run_info.save_dir.startswith(("gs://", "gcs://")):
+
+                if not bm.session_info.save_dir.startswith(("gs://", "gcs://")):
                     logger.debug("save_dir is not GCS path, skipping archival for session", session_id=session_id)
                     return False
                     

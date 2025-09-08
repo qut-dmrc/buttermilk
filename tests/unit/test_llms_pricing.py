@@ -1,10 +1,12 @@
 """Tests for pricing functionality in llms.py module."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from autogen_core.models import RequestUsage
-from buttermilk._core.llms import ModelOutput, AutoGenWrapper
-from buttermilk._core.types import AssistantMessage, UserMessage
+
+from buttermilk._core.llms import AutoGenWrapper, ModelOutput
+from buttermilk._core.types import UserMessage
 
 
 class TestModelOutputPricing:
@@ -37,9 +39,9 @@ class TestModelOutputPricing:
 
 class TestAutoGenWrapperPricing:
     """Test pricing calculation in AutoGenWrapper."""
-    
-    @pytest.mark.asyncio
-    @patch('buttermilk._core.llms.calculate_token_cost')
+
+    @pytest.mark.anyio
+    @patch("buttermilk._core.llms.calculate_token_cost")
     async def test_create_adds_pricing_to_metadata(self, mock_calculate_cost):
         """Test that create() adds pricing info to the result."""
         mock_calculate_cost.return_value = (100, 50, 0.003)
@@ -66,14 +68,14 @@ class TestAutoGenWrapperPricing:
         
         # Verify result is ModelOutput with pricing
         assert isinstance(result, ModelOutput)
-        assert hasattr(result, 'metadata')
-        assert 'pricing' in result.metadata
-        assert result.metadata['pricing']['prompt_tokens'] == 100
-        assert result.metadata['pricing']['completion_tokens'] == 50
-        assert result.metadata['pricing']['total_cost'] == 0.003
-    
-    @pytest.mark.asyncio  
-    @patch('buttermilk._core.llms.calculate_token_cost')
+        assert hasattr(result, "metadata")
+        assert "pricing" in result.metadata
+        assert result.metadata["pricing"]["prompt_tokens"] == 100
+        assert result.metadata["pricing"]["completion_tokens"] == 50
+        assert result.metadata["pricing"]["total_cost"] == 0.003
+
+    @pytest.mark.anyio
+    @patch("buttermilk._core.llms.calculate_token_cost")
     async def test_call_chat_aggregates_tokens(self, mock_calculate_cost):
         """Test that call_chat() aggregates tokens from multiple calls."""
         # First call (with tools): 100 prompt, 50 completion
@@ -118,10 +120,8 @@ class TestAutoGenWrapperPricing:
         mock_tool.name = "test_tool"
         mock_tool.run_json = AsyncMock(return_value="tool result")
         mock_tool.return_value_as_string = MagicMock(return_value="tool result")
-        
-        with patch.object(wrapper, '_execute_tools', return_value=[
-            FunctionExecutionResult(call_id="1", name="test_tool", content="tool result")
-        ]):
+
+        with patch.object(wrapper, "_execute_tools", return_value=[FunctionExecutionResult(call_id="1", name="test_tool", content="tool result")]):
             # Call call_chat with tools
             messages = [UserMessage(content="Hello", source="user")]
             result = await wrapper.call_chat(
@@ -132,11 +132,11 @@ class TestAutoGenWrapperPricing:
         
         # Verify aggregated pricing
         assert isinstance(result, ModelOutput)
-        assert result.metadata['pricing']['prompt_tokens'] == 250  # 100 + 150
-        assert result.metadata['pricing']['completion_tokens'] == 125  # 50 + 75
-        assert result.metadata['pricing']['total_cost'] == 0.007  # 0.003 + 0.004
-        
-    @pytest.mark.asyncio
+        assert result.metadata["pricing"]["prompt_tokens"] == 250  # 100 + 150
+        assert result.metadata["pricing"]["completion_tokens"] == 125  # 50 + 75
+        assert result.metadata["pricing"]["total_cost"] == 0.007  # 0.003 + 0.004
+
+    @pytest.mark.anyio
     async def test_create_handles_missing_usage(self):
         """Test create() handles responses without usage data gracefully."""
         # Create mock client without usage data
@@ -161,6 +161,6 @@ class TestAutoGenWrapperPricing:
         
         # Verify result has empty pricing
         assert isinstance(result, ModelOutput)
-        assert result.metadata['pricing']['prompt_tokens'] == 0
-        assert result.metadata['pricing']['completion_tokens'] == 0
-        assert result.metadata['pricing']['total_cost'] == 0.0
+        assert result.metadata["pricing"]["prompt_tokens"] == 0
+        assert result.metadata["pricing"]["completion_tokens"] == 0
+        assert result.metadata["pricing"]["total_cost"] == 0.0

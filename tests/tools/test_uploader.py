@@ -21,11 +21,11 @@ def sample_outputs() -> list[AgentTrace]:
             },
             session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
             call_id="Bc8scgvzT3vycJrrJUMhov",
-            run_info={
+            session_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
-                "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
+                "session_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
                 "save_dir": "gs://prosocial-dev/runs/batch/debugging/20250424T0122Z-Rvon-c218d8dfd611-vscode",
             },
             outputs=StepRequest(role="WAIT", prompt=""),
@@ -39,11 +39,11 @@ def sample_outputs() -> list[AgentTrace]:
             },
             session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode",
             call_id="8MPyjSZt6PikCEMocsPFr6",
-            run_info={
+            session_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
-                "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
+                "session_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
             },
             outputs=QualResults(conclusion="The content adheres to the guidelines.", prediction=False, confidence="high"),
             is_error=False,

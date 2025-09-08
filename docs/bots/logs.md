@@ -1,41 +1,53 @@
-# Buttermilk Log Analysis Guide
+# Buttermilk Structured Log Analysis Guide
 
-This guide provides comprehensive instructions for analyzing Buttermilk server logs.
+**🚨 DEPRECATION NOTICE**: Most content in this file is outdated. Use the simplified debugging workflow in [debugging.md](debugging.md) instead.
 
-## Finding the Current Debug Log
+**✅ RECOMMENDED**: Use `uv run python -m buttermilk.debug.ws_debug_cli logs -n 50` for all log access.
 
-The current debug log is located at:
+This document provides manual techniques for advanced structured log analysis only.
+
+## Finding Structured Logs
+
+Structured logs are written in JSONL format:
 ```bash
-# Get the most recent debug log file
-ls -t /tmp/buttermilk_*_debug.log 2>/dev/null | head -1
+# Get the most recent structured log file
+ls -t /tmp/buttermilk_*.jsonl 2>/dev/null | head -1
 
-# Alternative: Use the helper script
-./scripts/mcp_debug/getlog.sh
+# Recommended: Use the structured log tool
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50
 ```
 
 Debug logs are created when the server runs with `verbose=true` or in debug mode (`make debug`).
 
-## Common Log Patterns and Searches
+## Recommended: Use Structured Log Tools
 
-### 1. View Recent Log Entries
+### Primary Tool: ws_debug_cli
 ```bash
-# View last N lines (replace 50 with desired number)
-tail -50 /tmp/buttermilk_*_debug.log
+# View recent logs with level filtering
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR
 
-# Follow log in real-time
-tail -f /tmp/buttermilk_*_debug.log
+# Available log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 -l WARNING
 ```
 
-### 2. Filter by Log Level
+## Manual Analysis (Advanced)
+
+### 1. View Recent Structured Log Entries
+```bash
+# View last N lines of JSONL logs
+tail -50 /tmp/buttermilk_*.jsonl
+
+# Basic level filtering with jq (if available)
+tail -100 /tmp/buttermilk_*.jsonl | jq 'select(.level == "ERROR")'
+```
+
+### 2. Filter by Log Level (Manual)
 ```bash
 # Show only ERROR and CRITICAL messages
-grep -E " - (ERROR|CRITICAL) - " /tmp/buttermilk_*_debug.log | tail -50
+grep '"level":"ERROR"\|"level":"CRITICAL"' /tmp/buttermilk_*.jsonl | tail -50
 
-# Show WARNING and above
-grep -E " - (WARNING|ERROR|CRITICAL) - " /tmp/buttermilk_*_debug.log | tail -50
-
-# Show INFO and above
-grep -E " - (INFO|WARNING|ERROR|CRITICAL) - " /tmp/buttermilk_*_debug.log | tail -50
+# Show WARNING and above  
+grep '"level":"WARNING"\|"level":"ERROR"\|"level":"CRITICAL"' /tmp/buttermilk_*.jsonl | tail -50
 ```
 
 ### 3. Search for Errors and Exceptions

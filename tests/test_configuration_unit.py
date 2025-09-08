@@ -172,20 +172,18 @@ class TestCloudProviderConfigValidation:
         assert config.type == "azure"
         assert config.vault == "https://test-vault.vault.azure.net/"
 
-    def test_vertex_provider_config(self):
-        """Test Vertex AI CloudProviderCfg validation.""" 
+    def test_gcp_provider_config(self):
+        """Test GCP CloudProviderCfg validation.""" 
         from buttermilk._core.config import CloudProviderCfg
         
         config = CloudProviderCfg(
-            type="vertex",
-            project="test-project",
-            region="us-central1",
+            type="gcp",
+            project_id="test-project",
             location="us-central1"
         )
         
-        assert config.type == "vertex"
-        assert config.project == "test-project"
-        assert config.region == "us-central1"
+        assert config.type == "gcp"
+        assert config.project_id == "test-project"
         assert config.location == "us-central1"
 
 

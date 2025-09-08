@@ -128,7 +128,7 @@ class Consumer(BaseModel):
     input_queue: Queue[RunRequest] = Field(default_factory=Queue)  # Replaced Job with RunRequest
     output_queue: Queue[RunRequest] = None  # Replaced Job with RunRequest
     task_num: int | None = None
-    run_info: Agent
+    session_info: Agent
     init_vars: dict = {}  # Vars to use when initialising the client
     concurrent: int = 1  # Number of async tasks to run
 

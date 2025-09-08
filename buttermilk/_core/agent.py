@@ -134,6 +134,37 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
 
+    def get_effective_bm(self) -> Any:
+        """Get the effective BM instance (session-scoped if available, otherwise global singleton).
+        
+        This method provides agents with transparent access to BM functionality while
+        supporting session-level observability isolation. When agents are created through
+        the orchestration framework (FlowRunner -> Orchestrator -> Agent), they automatically
+        receive session-scoped BM instances for proper observability separation.
+        
+        Returns:
+            BM instance to use for operations. Returns session-scoped BM if one was
+            injected during agent creation, otherwise falls back to the global singleton.
+            
+        Example:
+            >>> # In an agent's _process method:
+            >>> bm = self.get_effective_bm()
+            >>> storage = bm.get_storage(self.data["input_source"])
+            >>> # Storage access is now session-isolated for multi-session environments
+            
+        Note:
+            Agents can continue using the global `get_bm()` pattern for backward compatibility,
+            but using `self.get_effective_bm()` provides session isolation benefits in
+            API and orchestrated environments.
+        """
+        # Check if BM was injected via config
+        if hasattr(self._config, "bm") and self._config.bm is not None:
+            return self._config.bm
+        else:
+            # Fall back to global singleton
+            from buttermilk import get_bm
+            return get_bm()
+
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""
         # Set groupchat topic ID, defaulting to a standard topic if not provided

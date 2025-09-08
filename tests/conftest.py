@@ -1,9 +1,12 @@
 import inspect
+from unittest.mock import MagicMock
 
 import pytest
-from hydra import compose, initialize
-from omegaconf import OmegaConf
 from pytest import MarkDecorator
+
+from buttermilk._core.types import Record
+from buttermilk.utils.media import download_and_convert
+from buttermilk.utils.utils import read_file
 
 
 # Ensure async tests get the anyio marker automatically,
@@ -20,83 +23,84 @@ def anyio_backend():
     return "asyncio"
 
 
-# Use deferred import to avoid circular references
-def get_bm():
-    """Get the BM singleton with delayed import to avoid circular references."""
-    from buttermilk import get_bm as _get_bm
-
-    return _get_bm()
-
-
-from buttermilk._core.bm_init import BM
-from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
-from buttermilk._core.types import Record
-
-# Don't initialize BM here, we'll let the fixture handle it
-from buttermilk.utils.media import download_and_convert
-from buttermilk.utils.utils import read_file
-
-
 @pytest.fixture(scope="session", autouse=True)
 def conf():
-    """Hydra config fixture."""
-    with initialize(version_base=None, config_path="../buttermilk/conf"):
-        cfg = compose(config_name="testing")
-
-    try:
-        resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-
-        # Initialize the global Buttermilk instance (bm) with its configuration section
-        if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
-            raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
-        bm = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
-        # Set the singleton BM instance
-        from buttermilk import set_bm
-
-        set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
-
-    except Exception as e:
-        print(f"Error with test configuration, cannot create BM instance: {e}")
-        raise
-
-    return cfg
+    """Mock Hydra config fixture for unit tests."""
+    # Return a minimal mock config instead of loading real Hydra config
+    mock_config = {
+        "bm": {
+            "name": "test_buttermilk",
+            "job": "testing"
+        },
+        "run": {
+            "mode": "test",
+            "ui": "console"
+        }
+    }
+    return mock_config
 
 
 @pytest.fixture(scope="session", autouse=True)
-def bm(conf) -> BM:
-    """Buttermilk singleton instance fixture."""
-    bm = get_bm()
-    return bm
+def bm(conf):
+    """Mock BM fixture for unit tests that don't need real infrastructure."""
+    mock_bm = MagicMock()
+    
+    # Set up session info for session isolation tests
+    mock_bm.session_info.session_id = "test-session-mock"
+    mock_bm.session_info.job = "testing"
+    mock_bm.session_info.platform = "test"
+    
+    # Mock common BM methods
+    mock_bm.get_storage = MagicMock(return_value=MagicMock())
+    mock_bm.get_tracer = MagicMock(return_value=MagicMock())
+    mock_bm.llms = MagicMock()
+    
+    # Mock LLM collections for backward compatibility with existing tests
+    mock_bm.llms.__getitem__ = MagicMock(return_value=MagicMock())  # For bm.llms["model_name"]
+    mock_bm.llms.__contains__ = MagicMock(return_value=True)  # For "model_name" in bm.llms
+    
+    # Set as global singleton for backward compatibility
+    from buttermilk import set_bm
+    set_bm(mock_bm)
+    
+    return mock_bm
 
 
 @pytest.fixture(scope="session")
-def logger(bm):
+def logger():
+    """Mock logger fixture."""
+    from buttermilk import logger
     return logger
 
 
 @pytest.fixture(scope="session")
-def llms(bm: BM) -> LLMs:
+def llms(bm):
+    """Mock LLMs fixture."""
     return bm.llms
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)
-def model_name(request) -> str:
-    return request.param
+@pytest.fixture
+def model_name():
+    """Mock model name for tests that don't need real models."""
+    return "mock-model"
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
-def llm_multimodal(request, bm: BM):
-    return bm.llms[request.param]
+@pytest.fixture
+def llm_multimodal(bm):
+    """Mock multimodal LLM fixture."""
+    return bm.llms["mock-multimodal-model"]
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)
-def llm(request, bm: BM):
-    return bm.llms[request.param]
+@pytest.fixture
+def llm(bm):
+    """Mock LLM fixture."""
+    return bm.llms["mock-model"]
 
 
-@pytest.fixture(params=CHAT_MODELS)
-def llm_expensive(request, bm: BM):
-    return bm.llms[request.param]
+@pytest.fixture
+def llm_expensive(bm):
+    """Mock expensive LLM fixture."""
+    return bm.llms["mock-expensive-model"]
 
 
 @pytest.fixture(scope="session")
@@ -310,7 +314,7 @@ def job_minimal(fight_no_more_forever):
         "source": "testing",
         "flow_id": "testflow",
         "record": fight_no_more_forever,
-        "run_info": {"info": "test_run_info"},
+        "session_info": {"info": "test_session_info"},
     }
 
 

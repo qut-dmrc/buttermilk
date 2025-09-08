@@ -11,14 +11,16 @@ flows: {}
 
 bm:
   _target_: buttermilk._core.bm_init.BM
-  run_info:
+  session_info:
     name: ${run.name}
     job: ${run.job}
-  llms: ${llms}
+
+infrastructure:
+  llms: {}
+  
+  # Default tracing configuration for non-cloud tracing providers
   tracing:
     weave: 
       enabled: true
     traceloop:
       enabled: false
-    otel:
-      enabled: true

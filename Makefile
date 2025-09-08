@@ -9,6 +9,9 @@ all: test
 config:
 	uv run python -m buttermilk.runner.cli -c job +flows=[trans,transllm,zot,osb] +run=api verbose=true llms=full
 
+kill: kill_api kill_chat
+	@echo "All Buttermilk processes terminated."
+
 kill_chat:
 	@echo "Killing chat (frontend) process..."
 	@pkill -SIGTERM -f "node.*frontend/chat.*vite dev" || true
@@ -21,9 +24,6 @@ kill_api:
 	@sleep 5
 	@pkill -SIGKILL -f "python.*buttermilk.runner.cli" || true
 
-kill: kill_chat kill_api
-	@echo "All Buttermilk processes terminated."
-
 # For production API server ONLY.
 api:
 	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
@@ -31,16 +31,15 @@ api:
 # Run API server in debug mode. Use this one for development.
 debug: 
 	@echo "Starting Buttermilk API in debug mode..."
-	@echo "Logs are written to: /tmp/buttermilk_<run_id>.log"
-	@echo "To find the latest log: ./scripts/mcp_debug/getlog.sh"
+	@echo "Structured logs are written to: /tmp/buttermilk_<run_id>.jsonl"
+	@echo "To view logs: uv run python -m buttermilk.debug.ws_debug_cli logs -n 50"
 	@echo "Starting server in background..."
 	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=debug verbose=true > /dev/null 2>&1 &
-	@echo "Server starting... Latest log file (waiting...):"
-	@sleep 5s && ./scripts/mcp_debug/getlog.sh 
+	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs." 
 
 build:
 	@echo "Building Buttermilk Docker image..."
-	@docker build -t buttermilk:latest -t us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest -f deploy/Dockerfile .
+	@docker build -t buttermilk:latest -t us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest -f containers/deploy/Dockerfile .
 	
 # Run unit tests and generate a coverage report.
 coverage:
@@ -61,3 +60,6 @@ test tests:
 
 scheduled_tests:
 	uv run 	python -m pytest -m scheduled tests
+
+	
+.PHONY: config kill kill_api kill_chat build

@@ -52,7 +52,7 @@ def init() -> Any:
         bm: BM = hydra.utils.instantiate(cfg.bm)
         set_bm(bm)
 
-        logger.info("Initialized Buttermilk", run_info=bm.run_info)
+        logger.info("Initialized Buttermilk", session_info=bm.session_info)
 
         return cfg
 

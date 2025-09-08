@@ -32,8 +32,8 @@ class TestBMInitialization:
         
         # BM creation should be very fast (under 100ms)
         assert creation_time < 0.1, f"BM creation took {creation_time:.3f}s, expected <0.1s"
-        assert bm.run_info.name == "test"
-        assert bm.run_info.job == "test"
+        assert bm.session_info.name == "test"
+        assert bm.session_info.job == "test"
 
     def test_llm_property_is_lazy(self):
         """Test that LLMs are not loaded until first access."""

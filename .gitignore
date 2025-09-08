@@ -13,6 +13,7 @@ __pycache__/
 .venv
 .idea
 .env
+MagicMock/
 .ipynb_checkpoints
 .ropeproject
 Untitled.ipynb
@@ -212,3 +213,4 @@ failed_upsert_batches
 *.bak
 data/sessions
 .playwright-mcp/*png
+uv.lock

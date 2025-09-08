@@ -32,6 +32,12 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Red flag detection and recovery procedures
 - Concrete search techniques and justification requirements
 
+### [impact-analysis.md](impact-analysis.md) - CRITICAL: Shared Infrastructure Protection
+- **MANDATORY READ**: Prevention of tunnel vision on shared infrastructure
+- Impact analysis protocol for shared files and components
+- High-risk file identification and protection strategies
+- Targeted solutions vs. shared infrastructure modifications
+
 ### [development.md](development.md) - Development Workflow
 - Systematic development approach (STOP → ANALYZE → PLAN → TEST → IMPLEMENT)
 - GitHub workflow and issue tracking
@@ -62,6 +68,12 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Integration with DocProcessor and agents
 - Examples for scripts and CLI tools
 
+### [tester subagent](.claude/agents/tester.md) - Testing Specialist Subagent
+- Comprehensive testing, validation, and verification agent (configured in .claude/agents/)
+- Prevents standalone validation code creation
+- Converts all testing needs into proper pytest tests
+- Handles examples, demos, and test creation workflows
+
 ## 🚀 Quick Reference
 
 ### Essential Commands
@@ -80,19 +92,37 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ```
 
 ### 🚨 CRITICAL FAILURE MODE PREVENTION
-**TWO DOCUMENTED PATTERNS - MANDATORY CHECKPOINTS:**
+**FIVE DOCUMENTED PATTERNS - MANDATORY CHECKPOINTS:**
 
-**RUSH-TO-CODE PATTERN:**
+**1. RUSH-TO-CODE PATTERN:**
 1. **BEFORE ANY IMPLEMENTATION**: Complete exploration phase (minimum 3 searches)
 2. **SEARCH EXISTING CODE**: Find base classes, utilities, framework capabilities
 3. **JUSTIFY NEW CODE**: Explain why existing solutions won't work
 4. **IF YOU CAN'T JUSTIFY**: You're probably overengineering
 
-**STANDALONE TEST SCRIPT PATTERN:**
-1. **NEVER** create `test_*.py` files outside `tests/` directory
-2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "Let me test the serialization..."
-3. **ALWAYS** use proper pytest in `tests/` directory with existing patterns
-4. **ENFORCEMENT**: Creating standalone tests = restart the entire task
+**2. STANDALONE VALIDATION PATTERN:**
+1. **NEVER** create standalone validation (files OR commands) outside proper pytest workflow
+2. **RED FLAGS**: "Let me create a test...", "I'll verify this works...", "I'll use python -c..."
+3. **ALWAYS** redirect to tester agent: `Task: tester - [describe need]`
+4. **ENFORCEMENT**: Any standalone validation = immediately redirect to tester agent
+
+**3. SHARED INFRASTRUCTURE TUNNEL VISION PATTERN:**
+1. **BEFORE MODIFYING SHARED FILES**: Mandatory impact analysis (see `impact-analysis.md`)
+2. **HIGH-RISK FILES**: `conftest.py`, `_core/*`, base classes, `__init__.py`
+3. **RED FLAGS**: "I'll remove this from conftest.py...", "This shared file is causing problems..."
+4. **ALWAYS** consider targeted solutions instead of modifying shared components
+
+**4. DEFENSIVE CODING AROUND BROKEN INFRASTRUCTURE PATTERN:**
+1. **NEVER** add defensive code around observability failures (tracing, logging, saving)
+2. **RED FLAGS**: `if weave_client is not None:`, `try/except` around tracing
+3. **ALWAYS** fix the root cause instead of hiding failures
+4. **ENFORCEMENT**: Observability failures must be fixed, not worked around
+
+**5. REPOSITORY DOCUMENTATION POLLUTION PATTERN:**
+1. **NEVER** create issue tracking files in the repository (*_README.md, *_STATUS.md)
+2. **RED FLAGS**: "I'll create a README to document...", "Let me add notes about..."
+3. **ALWAYS** use GitHub issues for progress tracking and bug documentation
+4. **ENFORCEMENT**: Repository must stay clean of transitory documentation
 
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
@@ -116,7 +146,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 - **ALWAYS** trace data flow when debugging validation errors
 - **NEVER** commit without updating relevant documentation
 - **ALWAYS** use the provided debugging framework
-- **NEVER** create test files outside `tests/` directory - Use pytest conventions ONLY (violating this = restart task)
+- **NEVER** create standalone validation (files OR commands) - Use tester agent ONLY (violating this = restart task)
 
 ## 🔗 External Resources
 - [Main Project README](/README.md)

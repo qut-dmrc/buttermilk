@@ -216,7 +216,7 @@ class TestAsyncBackgroundOperations:
             
             # Make save async to simulate real behavior
             async def async_save(*args, **kwargs):
-                return {"uri": "/tmp/test", "run_id": "test"}
+                return {"uri": "/tmp/test", "session_id": "test"}
             
             mock_save.return_value = async_save()
             
@@ -228,7 +228,7 @@ class TestAsyncBackgroundOperations:
             )
             
             # Config saving should not block BM creation
-            assert bm.run_info.name == "test"
+            assert bm.session_info.name == "test"
 
     async def test_ip_fetching_is_background(self):
         """Test that IP address fetching happens in background."""
@@ -255,7 +255,7 @@ class TestAsyncBackgroundOperations:
             
             # Should be fast despite slow IP fetch
             assert creation_time < 0.10
-            assert bm.run_info.name == "test"
+            assert bm.session_info.name == "test"
 
 
 class TestMemoryEfficiency:

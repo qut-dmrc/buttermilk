@@ -242,28 +242,28 @@ class TracingDetails(BaseModel):
         return value  # Return the explicitly provided value
 
 
-def _get_run_info() -> Any:
+def _get_session_info() -> Any:
     """Retrieves the current run/session information from the global Buttermilk instance.
 
     This function is used as a default factory for fields that need to be populated
     with context-specific run information at the time of model instantiation.
 
     Returns:
-        Any: The current run information object (e.g., `SessionInfo`) from `bm.run_info`.
-             The exact type depends on what `bm.run_info` holds. Returns None if
-             `bm` or `bm.run_info` is not available.
+        Any: The current run information object (e.g., `SessionInfo`) from `bm.session_info`.
+             The exact type depends on what `bm.session_info` holds. Returns None if
+             `bm` or `bm.session_info` is not available.
 
     """
     try:
         from buttermilk import get_bm
 
         bm = get_bm()
-        return bm.run_info
+        return bm.session_info
     except ImportError:
-        logger.warning("Buttermilk global instance (bm) not available to get run_info.")
+        logger.warning("Buttermilk global instance (bm) not available to get session_info.")
         return None
     except AttributeError:
-        logger.warning("bm.run_info not available to get run_info.")
+        logger.warning("bm.session_info not available to get session_info.")
         return None
 
 
@@ -494,8 +494,8 @@ class AgentTrace(AgentOutput):
     Attributes:
         timestamp (datetime.datetime): Timestamp of when the output was generated.
             Defaults to the current UTC time.
-        run_info (Any): Information about the current run or session, typically
-            obtained from the global Buttermilk instance (`bm.run_info`).
+        session_info (Any): Information about the current run or session, typically
+            obtained from the global Buttermilk instance (`bm.session_info`).
         agent_info (AgentConfig): The configuration of the agent that performed
             the execution. This is a mandatory field.
         session_id (str): Unique identifier for the client session or overall flow execution.
@@ -514,9 +514,9 @@ class AgentTrace(AgentOutput):
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         description="Timestamp of when the output was generated (UTC).",
     )
-    run_info: Any = Field(
-        default_factory=_get_run_info,
-        description="Information about the current run/session, from `bm.run_info`.",
+    session_info: Any = Field(
+        default_factory=_get_session_info,
+        description="Information about the current run/session, from `bm.session_info`.",
     )
     agent_info: AgentConfig = Field(
         ...,  # Mandatory field

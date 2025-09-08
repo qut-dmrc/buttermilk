@@ -23,6 +23,8 @@ class DebugAgent(Agent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._active_clients: dict[str, FlowTestClient] = {}
+        self._puppet_client: Optional[FlowTestClient] = None
+        self._puppet_listening: bool = False
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process debugging requests."""
@@ -40,7 +42,13 @@ class DebugAgent(Agent):
                     "get_websocket_messages",
                     "get_websocket_summary",
                     "stop_websocket_client",
-                    "list_active_clients"
+                    "list_active_clients",
+                    "start_puppet_mode",
+                    "puppet_start_flow",
+                    "puppet_send_response",
+                    "puppet_get_messages",
+                    "puppet_get_summary",
+                    "stop_puppet_mode"
                 ]
             }
         )
@@ -56,7 +64,7 @@ class DebugAgent(Agent):
         Returns:
             The last N lines of the most recent log file, or error message if no logs found
         """
-        log_files = glob.glob("/tmp/buttermilk_*.log")
+        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
         if not log_files:
             return "No buttermilk log files found in /tmp/"
 
@@ -76,7 +84,7 @@ class DebugAgent(Agent):
         Returns:
             List of log files with path, size, and modification time
         """
-        log_files = glob.glob("/tmp/buttermilk_*.log")
+        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
 
         files_info = []
         for log_file in log_files:
@@ -289,6 +297,15 @@ class DebugAgent(Agent):
                 logger.warning(f"Error cleaning up client {flow_id}: {e}")
         self._active_clients.clear()
 
+        # Clean up puppet client
+        if self._puppet_client:
+            try:
+                await self._puppet_client.disconnect()
+                self._puppet_client = None
+                self._puppet_listening = False
+            except Exception as e:
+                logger.warning(f"Error cleaning up puppet client: {e}")
+
         # Call parent cleanup
         await super().cleanup()
 
@@ -330,3 +347,236 @@ class DebugAgent(Agent):
             List of active flow_ids
         """
         return list(self._active_clients.keys())
+
+    # Puppet mode - continuous listening for LLM control
+
+    async def start_puppet_mode(
+        self,
+        host: str = "localhost",
+        port: int = 8000
+    ) -> dict[str, str]:
+        """Start puppet mode - continuous WebSocket client that acts as UI replacement.
+        
+        Args:
+            host: Host to connect to
+            port: Port to connect to
+            
+        Returns:
+            Status message and session details
+        """
+        if self._puppet_client and self._puppet_listening:
+            return {
+                "status": "error",
+                "message": "Puppet mode already active"
+            }
+
+        try:
+            # Stop any existing puppet client
+            if self._puppet_client:
+                await self._puppet_client.disconnect()
+
+            # Create new puppet client
+            self._puppet_client = FlowTestClient(
+                base_url=f"http://{host}:{port}",
+                ws_url=f"ws://{host}:{port}/ws"
+            )
+            
+            await self._puppet_client.connect()
+            self._puppet_listening = True
+
+            return {
+                "status": "success",
+                "message": "Puppet mode started - ready for LLM control",
+                "session_id": self._puppet_client.session_id or "unknown",
+                "host": host,
+                "port": port
+            }
+
+        except Exception as e:
+            self._puppet_listening = False
+            return {
+                "status": "error",
+                "message": f"Failed to start puppet mode: {str(e)}"
+            }
+
+    async def puppet_start_flow(
+        self,
+        flow_name: str,
+        prompt: str = "",
+        record: str = "",
+        criteria: str = ""
+    ) -> dict[str, str]:
+        """Start a flow in puppet mode.
+        
+        Args:
+            flow_name: Name of the flow to start
+            prompt: Initial prompt/query
+            record: Record ID to process
+            criteria: Criteria to use
+            
+        Returns:
+            Status and initial response summary
+        """
+        if not self._puppet_client or not self._puppet_listening:
+            return {
+                "status": "error",
+                "message": "Puppet mode not active. Start with start_puppet_mode() first."
+            }
+
+        try:
+            await self._puppet_client.start_flow(flow_name, prompt, record, criteria)
+            
+            # Give it a moment to collect initial messages
+            import asyncio
+            await asyncio.sleep(2)
+            
+            # Get message summary
+            summary = self._puppet_client.get_message_summary()
+            
+            return {
+                "status": "success",
+                "message": f"Started flow '{flow_name}' in puppet mode",
+                "flow_name": flow_name,
+                "prompt": prompt,
+                "record": record,
+                "criteria": criteria,
+                "session_id": self._puppet_client.session_id,
+                "initial_messages": summary["total"],
+                "agents_active": str(summary["agents_active"])
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to start flow: {str(e)}"
+            }
+
+    async def puppet_send_response(self, content: str) -> dict[str, str]:
+        """Send a manager response in puppet mode.
+        
+        Args:
+            content: Response content to send
+            
+        Returns:
+            Status and response details
+        """
+        if not self._puppet_client or not self._puppet_listening:
+            return {
+                "status": "error",
+                "message": "Puppet mode not active. Start with start_puppet_mode() first."
+            }
+
+        try:
+            await self._puppet_client.send_manager_response(content)
+            
+            return {
+                "status": "success",
+                "message": f"Sent response in puppet mode: {content[:50]}...",
+                "response_content": content,
+                "session_id": self._puppet_client.session_id
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to send response: {str(e)}"
+            }
+
+    def puppet_get_messages(
+        self,
+        last_n: Optional[int] = 10,
+        message_type: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """Get recent messages from puppet mode client.
+        
+        Args:
+            last_n: Number of most recent messages (default: 10, None for all)
+            message_type: Filter by message type (None for all types)
+            
+        Returns:
+            List of recent messages
+        """
+        if not self._puppet_client or not self._puppet_listening:
+            return [{"error": "Puppet mode not active. Start with start_puppet_mode() first."}]
+
+        collector = self._puppet_client.collector
+
+        # Get messages based on type filter
+        if message_type:
+            if message_type == "ui_message":
+                messages = collector.ui_messages
+            elif message_type == "agent_announcement":
+                messages = collector.agent_announcements
+            elif message_type == "agent_trace":
+                messages = collector.agent_traces
+            elif message_type == "error":
+                messages = collector.errors
+            elif message_type == "flow_event":
+                messages = collector.flow_events
+            else:
+                messages = collector.all_messages
+        else:
+            messages = collector.all_messages
+
+        # Apply last_n filter
+        if last_n is not None:
+            messages = messages[-last_n:]
+
+        # Convert to dict format
+        return [
+            {
+                "type": msg.type,
+                "timestamp": msg.timestamp.isoformat(),
+                "content": msg.content,
+                "agent_role": msg.agent_role,
+                "data": msg.data
+            }
+            for msg in messages
+        ]
+
+    def puppet_get_summary(self) -> dict[str, Any]:
+        """Get summary of puppet mode client state.
+        
+        Returns:
+            Summary of puppet client state and messages
+        """
+        if not self._puppet_client or not self._puppet_listening:
+            return {"error": "Puppet mode not active. Start with start_puppet_mode() first."}
+
+        summary = self._puppet_client.get_message_summary()
+        summary["puppet_mode"] = {
+            "active": self._puppet_listening,
+            "session_id": self._puppet_client.session_id,
+            "connection_status": "connected" if self._puppet_client.ws else "disconnected"
+        }
+        
+        return summary
+
+    async def stop_puppet_mode(self) -> dict[str, str]:
+        """Stop puppet mode and cleanup.
+        
+        Returns:
+            Status of the stop operation
+        """
+        if not self._puppet_client:
+            return {
+                "status": "info",
+                "message": "Puppet mode was not active"
+            }
+
+        try:
+            await self._puppet_client.disconnect()
+            self._puppet_client = None
+            self._puppet_listening = False
+
+            return {
+                "status": "success",
+                "message": "Puppet mode stopped and cleaned up"
+            }
+
+        except Exception as e:
+            self._puppet_listening = False
+            return {
+                "status": "error",
+                "message": f"Error stopping puppet mode: {str(e)}"
+            }

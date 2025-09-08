@@ -808,11 +808,20 @@ class FlowRunner(BaseModel):
 
     Handles orchestrator instantiation and execution in a consistent way, regardless
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
+    
+    The FlowRunner can accept a BM instance for session-scoped operations,
+    or fall back to the global singleton for backward compatibility.
     """
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     flows: dict[str, OrchestratorProtocol]
+    
+    # Session-scoped BM instance (optional)
+    bm: Any | None = Field(
+        default=None,
+        description="Optional session-scoped BM instance. If None, falls back to global singleton."
+    )
 
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
@@ -829,6 +838,54 @@ class FlowRunner(BaseModel):
         if not self._session_manager_started:
             await self.session_manager.start()
             self._session_manager_started = True
+    
+    def set_session_bm(self, bm: Any) -> None:
+        """Set a session-scoped BM instance for this FlowRunner.
+        
+        This enables session-level observability isolation by providing each flow execution
+        with its own BM instance containing unique session context (session_id, job, platform).
+        When set, all orchestrators and agents created by this FlowRunner will automatically
+        receive the session-scoped BM instead of the global singleton.
+        
+        Args:
+            bm: Session-scoped BM instance containing unique session context for observability.
+                Must have session_info.session_id for proper isolation.
+                
+        Example:
+            >>> infrastructure = InfrastructureManager()
+            >>> session_bm = infrastructure.create_session_bm(
+            ...     name="api_session", job="analysis", session_id="unique-123"
+            ... )
+            >>> flow_runner.set_session_bm(session_bm)
+            >>> # All flows will now use session-scoped observability
+        """
+        self.bm = bm
+        logger.debug(f"Set session-scoped BM with session_id: {bm.session_info.session_id}")
+    
+    def get_effective_bm(self) -> Any:
+        """Get the effective BM instance (session-scoped if available, otherwise global singleton).
+        
+        This method implements the dependency injection pattern for BM access, providing
+        session-scoped observability when available while maintaining backward compatibility
+        with the global singleton pattern.
+        
+        Returns:
+            BM instance to use for operations. Session-scoped if set via set_session_bm(),
+            otherwise the global singleton from get_bm().
+            
+        Raises:
+            RuntimeError: If no session-scoped BM is set and global singleton is not initialized.
+            
+        Example:
+            >>> bm = flow_runner.get_effective_bm()
+            >>> # Gets session-scoped BM if available, otherwise global singleton
+            >>> session_id = bm.session_info.session_id  # Unique per session
+        """
+        if self.bm is not None:
+            return self.bm
+        else:
+            from buttermilk import get_bm
+            return get_bm()
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
         """Get or create a session for the given session ID, handling reconnection scenarios.
@@ -1122,7 +1179,18 @@ class FlowRunner(BaseModel):
             raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}")
 
         flow_config = self.flows[flow_name]
-        return OrchestratorFactory.create_orchestrator(flow_config, flow_name)
+        orchestrator = OrchestratorFactory.create_orchestrator(flow_config, flow_name)
+        
+        # Inject session-scoped BM for observability isolation
+        # This ensures each flow execution gets its own observability context
+        # (session_id, job, platform) instead of sharing global singleton state
+        if self.bm is not None:
+            orchestrator.set_bm(self.bm)
+            logger.debug(f"Injected session-scoped BM into orchestrator for flow '{flow_name}' (session_id: {self.bm.session_info.session_id})")
+        else:
+            logger.debug(f"Using global singleton BM for orchestrator '{flow_name}' (legacy mode)")
+        
+        return orchestrator
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
         """Clean up resources associated with a flow run.
@@ -1156,9 +1224,16 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # Use injected BM if available, otherwise fall back to global singleton
+        if self.bm is not None:
+            bm = self.bm
+            logger.debug("Using injected session-scoped BM for flow execution")
+        else:
+            from buttermilk import get_bm
+            bm = get_bm()
+            logger.debug("Using global singleton BM for flow execution (legacy mode)")
+        
         # Ensure BM is fully initialized before running flow
-        from buttermilk import get_bm
-        bm = get_bm()
         if hasattr(bm, "ensure_initialized"):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")

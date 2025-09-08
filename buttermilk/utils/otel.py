@@ -29,7 +29,6 @@ import os
 import urllib  # Added for os.environ usage
 
 from opentelemetry import trace
-from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttpSpanExporter
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
@@ -53,12 +52,49 @@ from buttermilk._core.config import FatalError, Tracing
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
+import google.auth
+import google.auth.transport.grpc
+import google.auth.transport.requests
+import grpc
+from google.auth.transport.grpc import AuthMetadataPlugin
+
+from buttermilk import get_bm
+
+
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    from buttermilk import get_bm
+    # Initialize OpenTelemetry with OTLP exporters
 
     bm = get_bm()
     creds = bm.gcp_credentials
+    
+    # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
     project_id = tracing_cfg.project_id
+    if project_id is None:
+        project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if project_id is None:
+            raise RuntimeError("OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable")
+
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"gcp.project_id={project_id}"
+    os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
+    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
+
+    # Request used to refresh credentials upon expiry
+    request = google.auth.transport.requests.Request()
+
+    # Supply the request and credentials to AuthMetadataPlugin
+    # AuthMeatadataPlugin inserts credentials into each request
+    auth_metadata_plugin = AuthMetadataPlugin(credentials=creds, request=request)
+
+    # Initialize gRPC channel credentials using the AuthMetadataPlugin
+    channel_creds = grpc.composite_channel_credentials(
+        grpc.ssl_channel_credentials(),
+        grpc.metadata_call_credentials(auth_metadata_plugin),
+    )
+
+    # Initialize the OTLP gRPC or http exporter
+    otlp_grpc_exporter = OTLPSpanExporter(credentials=channel_creds)
+
+    # Initialize OpenTelemetry TracerProvider
     # Set up the tracer provider
     provider = TracerProvider()
 
@@ -76,21 +112,16 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
         log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
     )
 
-    # Configure the GCP Cloud Trace Span Exporter
-    gcp_exporter = CloudTraceSpanExporter(project_id=project_id)
-    provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
-    logger.info("Initialized tracing with Google Cloud")
+    provider.add_span_processor(BatchSpanProcessor(otlp_grpc_exporter))
 
-    # Set global tracer provider
+    # Configure OpenTelemetry tracing API with the initialized tracer provider
     trace.set_tracer_provider(provider)
-
-    logger.info("Initialized tracing with Google Cloud Trace")
+    logger.info("Initialized tracing with Google Cloud")
 
 
 # --- OpenTelemetry Tracing Setup for Traceloop ---
 def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
     """Initialize Traceloop for OpenTelemetry tracing."""
-    from buttermilk import get_bm
 
     try:
         bm = get_bm()

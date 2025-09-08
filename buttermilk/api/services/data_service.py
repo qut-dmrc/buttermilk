@@ -245,7 +245,7 @@ class DataService:
         inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
         outputs_data = row["outputs"]
         metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-        run_info_data = json.loads(row["run_info"]) if row["run_info"] else {}
+        session_info_data = json.loads(row["session_info"]) if row["session_info"] else {}
         messages_data = json.loads(row["messages"]) if row["messages"] else []
         error_data = json.loads(row["error"]) if row["error"] else []
 
@@ -268,7 +268,7 @@ class DataService:
             agent_id=agent_config.agent_id,
             metadata=metadata_data,
             outputs=outputs_data,
-            run_info=run_info_data,
+            session_info=session_info_data,
             agent_info=agent_config,
             session_id=row["session_id"],
             parent_call_id=row.get("parent_call_id"),
@@ -336,7 +336,7 @@ class DataService:
                 inputs,
                 outputs,
                 metadata,
-                run_info,
+                session_info,
                 parent_call_id,
                 tracing_link,
                 error,
@@ -426,7 +426,7 @@ class DataService:
                 inputs,
                 outputs,
                 metadata,
-                run_info,
+                session_info,
                 parent_call_id,
                 tracing_link,
                 error,

@@ -18,7 +18,7 @@ Key functionalities:
 -   Access to secrets via a configured secret provider (`bm.secret_manager`).
 -   Execution of SQL queries (`bm.query_runner`).
 -   Setup and management of logging, including optional cloud logging.
--   Handling of session information (`bm.run_info`) and standardized saving of artifacts.
+-   Handling of session information (`bm.session_info`) and standardized saving of artifacts.
 -   Integration with Weave for tracing (`bm.get_weave_client()`).
 """
 
@@ -26,7 +26,6 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 
 import asyncio
 import datetime
-import os
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -40,103 +39,197 @@ from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud path
 from omegaconf import DictConfig
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
-from rich import print  # For rich console output
 
-from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
-from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing  # Config models
-from buttermilk._core.keys import SecretsManager  # Manages secrets
-from buttermilk._core.llms import LLMs  # Manages LLM clients
-from buttermilk._core.log import logger, setup_cloud_logging, setup_console_logging, setup_file_logging  # Centralized logger instance
-from buttermilk._core.query import QueryRunner  # For running SQL queries
+from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
-from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
 from buttermilk.utils import save  # Utility for saving data
-
-# Constants for configuration keys
-CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
-"""Path to the cache file for LLM model configurations."""
-_MODELS_CFG_KEY = "models_secret"
-"""Key used to retrieve LLM model configurations from the secret manager."""
-_SHARED_CREDENTIALS_KEY = "credentials_secret"
-"""Key used to retrieve shared system credentials from the secret manager."""
-
-# Global variable to store the run ID, ensuring it's generated once per execution.
-_global_run_id = ""
 
 _TRACER_NAME = "buttermilk"
 
 tracer = trace.get_tracer(_TRACER_NAME)
 
 
-def _make_run_id() -> str:
-    """Generates a unique run ID for the current execution session.
+def _make_session_id() -> str:
+    """Generates a unique session ID for the current session.
 
     The ID is constructed using the current UTC timestamp, a short UUID,
-    the machine's node name, and the current username. This aims to create
-    a globally unique and informative identifier for each run.
-    If a global run ID has already been generated for the current session,
-    it returns the existing one.
+    the machine's node name, and the current username. Each session gets
+    its own unique identifier.
 
     Returns:
-        str: A unique string identifier for this execution run.
+        str: A unique string identifier for this session.
 
     """
-    global _global_run_id
-    if _global_run_id:  # Return existing ID if already generated
-        return _global_run_id
-
     node_name = platform.uname().node
     username = psutil.Process().username()
     # Strip domain from username if present (e.g., "DOMAIN\user" -> "user")
     username = str.split(username, "\\")[-1]
 
     # Format timestamp for use in filenames (simplified ISO 8601)
-    run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
+    session_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
-    run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-    _global_run_id = run_id  # Cache the generated ID globally
-    return run_id
+    session_id = f"session-{session_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    return session_id
 
 
 class SessionInfo(BaseModel):
-    """Pydantic model holding information about the current execution session.
+    """Simplified session information for observability and tracking.
 
-    This data is often used for logging, organizing outputs, and tracking runs.
+    SessionInfo serves as the primary observability unit with a clean, simple design.
+    Each session has a unique identifier and optional batch grouping for related tasks.
+
+    This approach eliminates artificial complexity while providing proper session
+    isolation and optional task grouping when needed.
 
     Attributes:
-        platform (str): The platform where the session is running (e.g., "local",
-            "gcp_vm", "azure_container"). Defaults to "local".
-        name (str): A user-defined name for the current session or project.
-        job (str): A user-defined name for the specific job or task being run.
-        run_id (str): A unique identifier for this specific execution run.
-            Defaults to a value generated by `_make_run_id()`.
-        ip (str | None): The IP address of the machine running the session.
-            Fetched asynchronously and may be None initially.
-        node_name (str): The network name of the machine. Defaults to
-            `platform.uname().node`.
-        save_dir (str | None): The primary directory path where outputs for this
-            session should be saved.
+        session_id (str): Unique identifier for this session.
+        batch_id (str | None): Optional batch identifier for grouping related sessions.
+        platform (str): Platform where the session is running.
+        name (str): User-defined name for the current session or project.
+        job (str): User-defined name for the specific job or task.
+        ip (str | None): IP address of the machine running the session.
+        node_name (str): Network name of the machine.
+        save_dir (str | None): Primary directory for saving session outputs.
         flow_api (str | None): URL or identifier for a flow API, if applicable.
-        _get_ip_task (asyncio.Task | None): Private attribute for the asyncio task
-            that fetches the IP address.
-        _ip (str | None): Private attribute storing the fetched IP address.
-        Config (class): Pydantic model configuration.
-            - `arbitrary_types_allowed`: True.
-            - `json_encoders`: Custom JSON encoder for `datetime.datetime`.
+        
+        # Observability fields
+        status (str): Current session status.
+        started_at (datetime | None): When the session started execution.
+        completed_at (datetime | None): When the session completed.
+        error_message (str | None): Error message if session failed.
+        
+        # Metrics
+        records_processed (int): Number of records processed.
+        outputs_generated (int): Number of outputs generated.
+        
+        # Configuration tracking
+        agent_configs (dict): Agent configurations used in this session.
+        flow_config (dict): Flow configuration for this session.
 
     """
 
-    platform: str = Field(default="local", description="Platform where the session is running (e.g., 'local', 'gcp').")
+    # Core identification
+    session_id: str = Field(default_factory=_make_session_id, description="Unique identifier for this session.")
+    batch_id: str | None = Field(default=None, description="Optional batch identifier for grouping related sessions.")
+    
+    # Basic session info
+    platform: str = Field(default="local", description="Platform where the session is running.")
     name: str = Field(..., description="User-defined name for the current session or project.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
-    run_id: str = Field(default_factory=_make_run_id, description="Unique identifier for this execution run.")
+    
+    # System information
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
     node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
+    
+    # Enhanced observability fields
+    status: str = Field(default="initializing", description="Current session status.")
+    started_at: datetime.datetime | None = Field(default=None, description="When the session started execution.")
+    completed_at: datetime.datetime | None = Field(default=None, description="When the session completed.")
+    error_message: str | None = Field(default=None, description="Error message if session failed.")
+    
+    # Metrics
+    records_processed: int = Field(default=0, description="Number of records processed.")
+    outputs_generated: int = Field(default=0, description="Number of outputs generated.")
+    
+    # Configuration tracking
+    agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
+    flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
     _ip: str | None = PrivateAttr(default=None)
+
+    def update_status(self, status: str, error_message: str | None = None) -> None:
+        """Update the session status and timestamps.
+        
+        Args:
+            status: New status for the session.
+            error_message: Error message if status indicates failure.
+        """
+        old_status = self.status
+        self.status = status
+        
+        current_time = datetime.datetime.now(datetime.UTC)
+        
+        # Update timestamps based on status
+        if status in ["active", "running"] and self.started_at is None:
+            self.started_at = current_time
+        elif status in ["completed", "failed", "error", "terminated"] and self.completed_at is None:
+            self.completed_at = current_time
+            
+        # Set error message if provided
+        if error_message:
+            self.error_message = error_message
+            
+        logger.info(
+            "Session status updated",
+            session_id=self.session_id,
+            old_status=old_status,
+            new_status=status,
+            batch_id=self.batch_id
+        )
+    
+    def increment_records_processed(self, count: int = 1) -> None:
+        """Increment the count of records processed.
+        
+        Args:
+            count: Number of records to add to the count.
+        """
+        self.records_processed += count
+        
+    def increment_outputs_generated(self, count: int = 1) -> None:
+        """Increment the count of outputs generated.
+        
+        Args:
+            count: Number of outputs to add to the count.
+        """
+        self.outputs_generated += count
+        
+    def set_batch_context(self, batch_id: str | None = None) -> None:
+        """Set the batch context identifier.
+        
+        Args:
+            batch_id: ID of the batch this session belongs to (if any).
+        """
+        if batch_id is not None:
+            self.batch_id = batch_id
+            
+    def get_session_summary(self) -> dict[str, Any]:
+        """Get a comprehensive summary of the session.
+        
+        Returns:
+            Dict containing session summary information.
+        """
+        duration = None
+        if self.started_at and self.completed_at:
+            duration = (self.completed_at - self.started_at).total_seconds()
+        elif self.started_at:
+            duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
+            
+        return {
+            "session_id": self.session_id,
+            "batch_id": self.batch_id,
+            "name": self.name,
+            "job": self.job,
+            "status": self.status,
+            "platform": self.platform,
+            "timing": {
+                "started_at": self.started_at.isoformat() if self.started_at else None,
+                "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+                "duration_seconds": duration,
+            },
+            "metrics": {
+                "records_processed": self.records_processed,
+                "outputs_generated": self.outputs_generated,
+            },
+            "system": {
+                "node_name": self.node_name,
+                "ip": self.ip,
+                "save_dir": self.save_dir,
+            },
+            "error_message": self.error_message,
+        }
 
     class Config:
         """Pydantic model configuration for SessionInfo."""
@@ -148,102 +241,57 @@ class SessionInfo(BaseModel):
 
 
 class BM(BaseModel):
-    """Central singleton-like class for Buttermilk, providing access to all resources.
+    """Session-scoped Buttermilk instance with simplified infrastructure sharing.
 
-    `BM` (often instantiated as `bm`) serves as the primary gateway to Buttermilk's
-    major components, including cloud clients (GCS, BigQuery), LLM connections,
-    configuration settings, and secret management. It handles the initialization
-    of these components based on a provided configuration (typically loaded by Hydra)
-    and offers a unified, simplified interface for accessing them from anywhere
-    in the application code.
-
-    It contains session information accessible via the `run_info` property.
+    Each session gets its own BM instance with session-specific state while sharing
+    infrastructure resources (clouds, secrets, LLMs) through dependency injection.
+    This eliminates complex hierarchy while providing proper session isolation.
 
     Typical Usage:
     ```python
-    from buttermilk import get_bm # Function to get/create the BM instance
+    from buttermilk import create_session_bm
 
-    bm = get_bm() # Get the initialized BM instance
+    bm = create_session_bm(name="my_project", job="analysis")
 
-    # Access cloud storage
+    # Access shared infrastructure
     bm.gcs.upload_from_filename(...)
-
-    # Interact with an LLM
     response = bm.llms.my_chat_model.create(messages=[...])
 
-    # Access secrets
-    api_key = bm.secret_manager.get_secret("my_api_key_name")
+    # Session-specific operations
+    bm.save(data, "results.json")
     ```
 
     Attributes:
-        connections (list[str]): List of connection names (e.g., for LLMs, databases).
-            (Purpose might need further clarification based on usage).
-        secret_provider (CloudProviderCfg | None): Configuration for the secret
-            provider (e.g., GCP Secret Manager, Azure Key Vault).
-        logger_cfg (CloudProviderCfg | None): Configuration for cloud-based logging
-            (e.g., GCP Logging).
-        pubsub (CloudProviderCfg | None): Configuration for a Pub/Sub system, if used.
-        clouds (list[CloudProviderCfg]): List of configurations for different cloud
-            providers to be initialized (e.g., GCP, Azure).
-        tracing (Tracing | None): Configuration for tracing (e.g., Langfuse, Weave).
-        datasets (dict[str, StorageConfig]): A dictionary of predefined data source
-            configurations accessible via the `BM` instance.
-        save_dir_base (str): The base directory under which session-specific save
-            directories will be created. Defaults to a new temporary directory.
-        _cloud_manager (CloudManager | None): Private attribute for the `CloudManager` instance.
-        _secret_manager (SecretsManager | None): Private attribute for the `SecretsManager` instance.
-        _llms_instance (LLMs | None): Private attribute for the `LLMs` manager instance.
-        _query_runner (QueryRunner | None): Private attribute for the `QueryRunner` instance.
-        _credentials_cached (dict[str, str] | None): Private cache for shared system credentials.
+        session_info (SessionInfo): Session-specific information and metrics.
+        save_dir_base (str): Base directory for this session's outputs.
+        datasets (dict[str, BaseStorageConfig]): Session-specific dataset overrides.
 
     """
 
     # Session information
-    run_info: SessionInfo = Field(..., description="Session information including run ID, job name, etc.")
-
-    # BM-specific fields
-    connections: list[str] = Field(
-        default_factory=list,
-        description="List of connection names (purpose may vary depending on context, e.g., active LLM connections).",
-    )
-    secret_provider: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for the secret provider (e.g., GCP Secret Manager, Azure Key Vault).",
-    )
-    logger_cfg: LoggerConfig | None = Field(
-        default=None,
-        description="Configuration for cloud-based logging (e.g., GCP Logging).",
-    )
-    pubsub: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for a Publish/Subscribe system, if used.",
-    )
-    clouds: list[CloudProviderCfg] = Field(
-        default_factory=list,
-        description="List of configurations for different cloud providers to initialize (e.g., GCP, Azure).",
-    )
-    tracing: dict[str, Tracing] | None = Field(
-        default_factory=dict(),
-        description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
-    )
+    session_info: SessionInfo = Field(..., description="Session information including session ID, batch ID, job name, etc.")
+    
+    # Session-specific configuration
     datasets: dict[str, BaseStorageConfig] = Field(
         default_factory=dict,
-        description="Dictionary of predefined storage configurations.",
+        description="Session-specific dataset configuration overrides.",
     )
     save_dir_base: str = Field(
         default_factory=mkdtemp,  # Creates a new temporary directory by default
         validate_default=True,
-        description="Base directory for saving session-specific outputs. Defaults to a new temporary directory.",
+        description="Base directory for saving session-specific outputs.",
     )
 
-    _cloud_manager: CloudManager | None = PrivateAttr(default=None)
-    _secret_manager: SecretsManager | None = PrivateAttr(default=None)
-    _llms_instance: LLMs | None = PrivateAttr(default=None)
-    _query_runner: QueryRunner | None = PrivateAttr(default=None)
-    _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
-    _initialization_complete: asyncio.Event = PrivateAttr(default=asyncio.Event())
+    # Shared infrastructure - injected during creation
+    _cloud_manager = None  # Will be injected
+    _secret_manager = None  # Will be injected
+    _llms_instance = None  # Will be injected
+    _query_runner = None  # Will be injected
+    _logger_cfg = None  # Will be injected from ExecutionContext
+
+    # Session-specific state
+    _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
-    _tracing_instrumented: asyncio.Event = PrivateAttr(default=asyncio.Event())
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -291,166 +339,113 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
+
     def __init__(self, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 
         After standard Pydantic model initialization, it calls `_post_init_setup`
-        to perform further setup tasks like logging, directory creation, and cloud logins.
+        to perform session-specific setup tasks.
 
         Args:
             **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
         super().__init__(**data)
-
-        self._initialization_error: Exception | None = None
-
+        self._initialization_error = None
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
-        """Performs setup tasks immediately after Pydantic model initialization."""
-
-        # Set up logging early to ensure handlers are cleared before any are added
-        self._setup_logging()
-
-        # Set GCP environment variables immediately (needed for GCS access)
-        self._setup_gcp_environment()
-
-        # Run initialization synchronously
-        self._sync_background_init()
-
-        # Print current config to console
-        print("Initialized Buttermilk (bm) with configuration:")
-        print(self.model_dump(exclude_none=True))
-
-    def _setup_logging(self) -> None:
-        """Sets up modern logging for the Buttermilk application.
-
-        Uses structlog for JSON output to files and cloud, and Rich for beautiful console output.
-        No format strings or context filters needed - everything is structured.
-
-        Args:
-            verbose (bool): If True, creates DEBUG level file logs and enables more console detail.
-                Defaults to False.
-
-        """
-        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
-        setup_console_logging(verbose=verbose)
-
-        # Set up structured JSON file logging
-        log_files = setup_file_logging(run_id=self.run_info.run_id, verbose=verbose)
-        for log_file in log_files:
-            logger.info(f"Logging enabled - writing to: {log_file}")
-
-        # Log Buttermilk version if available
+        """Performs session-specific setup tasks after model initialization."""
+        
         try:
-            from importlib.metadata import version
-
-            bm_version = version("buttermilk")
-        except ImportError:
-            bm_version = "unknown"
-
-        # Log initialization message with structured context
-        logger.info(
-            "Logging set up for run",
-            extra={
-                "platform": self.run_info.platform,
-                "project_name": self.run_info.name,  # Renamed to avoid LogRecord conflict
-                "job": self.run_info.job,
-                "run_id": self.run_info.run_id,
-                "save_dir": self.run_info.save_dir,
-                "buttermilk_version": bm_version,
-            },
-        )
-
-    def _setup_gcp_environment(self) -> None:
-        """Set up GCP environment variables immediately for early GCS access.
-
-        This extracts the environment variable setup from CloudManager
-        to ensure they're available before any cloud operations.
-        """
-
-        if not self.clouds:
-            return
-
-        # Find GCP cloud config
-        gcp_cloud_cfg = next(
-            (c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"),
-            None,
-        )
-
-        if gcp_cloud_cfg:
-            # Get project_id from config
-            project_id = getattr(gcp_cloud_cfg, "project_id", None)
-            quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
-
-            if project_id:
-                os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
-
-            if quota_project_id:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
-
-            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
-
-    def _sync_background_init(self) -> None:
-        """Fallback synchronous version of background initialization."""
-        try:
-            # Critical synchronous initialization
-            if hasattr(self, "_cloud_manager") or self.clouds:
-                logger.debug("Performing synchronous cloud authentication...")
-                _ = self.cloud_manager  # Trigger initialization
-
-            if self.secret_provider:
-                logger.debug("Initializing secret manager synchronously...")
-                _ = self.secret_manager  # Trigger initialization
-
-            # Finalize save_dir now that cloud auth is complete
+            # Set up session-specific logging context
+            self._setup_session_logging()
+            
+            # Finalize save directory
             self._finalize_save_dir()
-
+            
+            # Save initial session config
             self._save_initial_config()
-            logger.info("Synchronous background initialization completed")
-            # For sync path, mark as complete immediately
+            
             self._initialization_complete.set()
+            logger.info(
+                "Session initialized successfully",
+                session_id=self.session_info.session_id,
+                batch_id=self.session_info.batch_id,
+                save_dir=self.session_info.save_dir
+            )
         except Exception as e:
-            logger.error(f"Error during synchronous background initialization: {e}")
+            logger.error(f"Error during session initialization: {e}")
             self._initialization_error = e
             self._initialization_complete.set()
 
-    def _finalize_save_dir(self) -> None:
-        """Construct the final save_dir path after cloud authentication is complete.
+    def _setup_session_logging(self) -> None:
+        """Sets up simplified session-specific logging context."""
+        from buttermilk._core.context import set_logging_context
+        
+        # Set simplified logging context for this session
+        set_logging_context(
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
+            agent_id=None  # Will be set by agents when needed
+        )
+        
+        # Set up cloud logging if configured and cloud manager is available
+        if self._logger_cfg and self._cloud_manager:
+            try:
+                from buttermilk._core.log import setup_cloud_logging
+                setup_cloud_logging(self._logger_cfg, self._cloud_manager, self.session_info)
+                logger.info(
+                    "Cloud logging configured for session",
+                    session_id=self.session_info.session_id,
+                    logger_type=self._logger_cfg.type
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to setup cloud logging for session",
+                    session_id=self.session_info.session_id,
+                    error=str(e)
+                )
+        
+        logger.info(
+            "Session logging context established",
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
+            platform=self.session_info.platform,
+            project_name=self.session_info.name,
+            job=self.session_info.job
+        )
 
-        This method is called after cloud authentication to ensure that GCS paths
-        can be properly handled. It constructs the full save directory path and
-        stores it in run_info.save_dir.
+
+
+    def _finalize_save_dir(self) -> None:
+        """Construct the final save_dir path for this session.
+        
+        Constructs the full save directory path and stores it in session_info.save_dir.
         """
-        # Construct full save directory path (now that cloud auth is complete)
-        save_dir_path = AnyPath(self.save_dir_base) / self.run_info.name / self.run_info.job / self.run_info.run_id
-        self.run_info.save_dir = str(save_dir_path)
-        logger.debug(f"Finalized save_dir: {self.run_info.save_dir}")
+        # Construct full save directory path using session_id for uniqueness
+        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.name / self.session_info.job / self.session_info.session_id
+        self.session_info.save_dir = str(save_dir_path)
+        logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
     async def ensure_initialized(self) -> None:
-        """Ensure that BM initialization is complete before proceeding.
-
-        This method should be called before any operations that depend on:
-        - Cloud authentication being complete
-        - Secrets being available
-        - Save directory being properly configured
+        """Ensure that session initialization is complete.
 
         Raises:
             RuntimeError: If initialization failed with an error
-
         """
+        # Ensure session initialization is complete
         await self._initialization_complete.wait()
         if self._initialization_error:
-            raise RuntimeError(f"BM initialization failed: {self._initialization_error}") from self._initialization_error
-        logger.debug("BM initialization verified complete")
+            raise RuntimeError(f"Session initialization failed: {self._initialization_error}") from self._initialization_error
+        logger.debug("Session initialization verified complete")
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk."""
-        # Data to save: BM config and run_info
+        # Data to save: BM config and session_info
         config_data_to_save = [
             self.model_dump(exclude_none=True),
-            self.run_info.model_dump(exclude_none=True),
+            self.session_info.model_dump(exclude_none=True),
         ]
         self.save(
             data=config_data_to_save,
@@ -459,313 +454,84 @@ class BM(BaseModel):
         )
         logger.debug("Initial BM config saved successfully")
 
-    @cached_property
-    def cloud_manager(self) -> CloudManager:
-        """Provides access to the `CloudManager` instance.
-
-        The `CloudManager` handles interactions with various configured cloud
-        providers (e.g., GCP, Azure). It's instantiated on first access and
-        performs lazy authentication to improve startup performance.
-
-        Returns:
-            CloudManager: The initialized `CloudManager` instance.
-
-        """
+    @property
+    def cloud_manager(self):
+        """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
-            self._cloud_manager = CloudManager(clouds=self.clouds)
-            # Perform cloud login setup on first access
-            self._ensure_cloud_authentication()
-
+            raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
         return self._cloud_manager
 
-    async def _setup_tracing(self) -> None:
-        """Set up tracing based on the configured tracing settings.
 
-        This method is called during initialization to set up tracing
-        systems like OpenTelemetry or Weave, depending on the configuration.
-        """
 
-        if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            # We disable weave autopatching for Autogen because it's too noisy and slow
-            # We will instead trace manually.
-
-            collection_name = f"{self.run_info.name}-{self.run_info.job}"  # Construct collection name
-            # Retrieve necessary credentials before initializing Weave.
-            # This is necessary because otherwise Weave will interactive authentication.
-            self._setup_weave_credentials()
-            autopatch = {"autogen": {"enabled": False}}
-            logger.debug(f"Attempting to start weave client initialization. Autopatching: {autopatch}")
-
-            # Weave project has to be in the format "entity/collection_name"
-            client = weave.init(project_name=f"{os.environ['WANDB_ENTITY']}/{collection_name}", autopatch_settings=autopatch)
-            logger.info("Weave initialized successfully")
-
-        if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
-            from traceloop.sdk import Traceloop
-
-            Traceloop.init(app_name="buttermilk", api_key=self.credentials.get("TRACELOOP_API_KEY", os.getenv("TRACELOOP_API_KEY", "")))
-            logger.info("Traceloop initialized.")
-
-        if self.tracing.get("otel") and self.tracing["otel"].enabled:
-            # Setup other Otel tracing if configured
-            from buttermilk.utils.otel import setup_tracing_otel
-
-            setup_tracing_otel(self.tracing["otel"])
-            logger.info("OTEL Tracing has been set up successfully")
-
-        self._tracing_instrumented.set()  # Mark tracing as set up
-
-    def _ensure_cloud_authentication(self) -> None:
-        """Ensure cloud providers are authenticated and tracing is set up.
-
-        This method is called lazily when the cloud_manager is first accessed,
-        rather than during __post_init__, to improve startup performance.
-        """
-        if self._cloud_manager:
-            logger.debug("Performing lazy cloud authentication...")
-            self._cloud_manager.login_clouds()  # Perform logins
-
-            # Set up cloud logging now that cloud manager is authenticated
-            if self.logger_cfg and self.logger_cfg.type == "gcp":
-                setup_cloud_logging(self.logger_cfg, self._cloud_manager, self.run_info)
-
-            logger.debug("Cloud authentication completed")
-
-    @cached_property
-    def secret_manager(self) -> SecretsManager:
-        """Provides access to the `SecretsManager` instance.
-
-        The `SecretsManager` is responsible for retrieving secrets (like API keys)
-        from a configured backend (e.g., GCP Secret Manager, Azure Key Vault).
-        It's instantiated on first access using `self.secret_provider` config.
-
-        Returns:
-            SecretsManager: The initialized `SecretsManager` instance.
-
-        Raises:
-            RuntimeError: If `secret_provider` configuration is missing.
-
-        """
+    @property
+    def secret_manager(self):
+        """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
-            if not self.secret_provider:
-                raise RuntimeError("BM.secret_provider configuration is missing, cannot initialize SecretsManager.")
-            # Pass the model directly, SecretsManager will handle unpacking if needed
-            self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
-            logger.debug("SecretsManager initialized successfully")
+            raise RuntimeError("SecretsManager not available. Ensure infrastructure is properly injected.")
         return self._secret_manager
 
-    @cached_property
-    def llms(self) -> LLMs:
-        """Provides access to the `LLMs` manager instance.
-
-        The `LLMs` manager handles configurations and clients for different
-        Language Models. It attempts to load LLM connection configurations first
-        from a local cache (`CONFIG_CACHE_PATH`), then from the secret manager
-        if the cache is not found or fails to load. Loaded configurations are
-        cached locally for subsequent runs if fetched from secrets.
-
-        Returns:
-            LLMs: The initialized `LLMs` manager instance.
-
-        Raises:
-            RuntimeError: If loading LLM connections from both cache and secrets fails.
-            TypeError: If the loaded LLM connections data is not a dictionary.
-
-        """
+    @property
+    def llms(self):
+        """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
-            connections_data: dict[str, Any] | None = None
-            cache_path = Path(CONFIG_CACHE_PATH)
-
-            # Try to load from local cache file first
-            if cache_path.exists() and cache_path.is_file():
-                try:
-                    from buttermilk.utils.utils import load_json_flexi
-
-                    connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
-                    if not isinstance(connections_data, dict):  # Validate type from cache
-                        logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
-                        connections_data = None
-                    else:
-                        logger.info(f"Loaded LLM connections from cache: {cache_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to load LLM connections from cache {cache_path}: {e!s}. Will try secrets.")
-                    connections_data = None  # Ensure it's None if cache load fails
-
-            # If not loaded from cache, get from secret manager
-            if connections_data is None:
-                try:
-                    # Do this synchronously so we don't repeat the fetch
-                    connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
-                    if not isinstance(connections_data, dict):  # Validate type from secrets
-                        raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
-                    logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
-                    # Cache the connections data for future runs
-                    self._write_cache_sync(connections_data, cache_path)
-                except Exception as e:
-                    logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
-                    raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
-
-            self._llms_instance = LLMs(connections=connections_data)
+            raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
         return self._llms_instance
 
-    async def _cache_llm_connections_async(self, connections_data: dict[str, Any], cache_path: Path) -> None:
-        """Asynchronously cache LLM connections to avoid blocking startup - Phase 2 optimization."""
-        try:
-            # Run file operations in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._write_cache_sync, connections_data, cache_path)
-            logger.info(f"Cached LLM connections to: {cache_path}")
-        except Exception as e:
-            logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
 
-    def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
-        """Synchronous cache writing helper for thread pool execution."""
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        import json
 
-        logger.info(f"Caching LLM connections synchronously to {cache_path}")
-        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
-
-    @cached_property
-    def query_runner(self) -> QueryRunner:
-        """Provides access to the `QueryRunner` instance.
-
-        The `QueryRunner` is used for executing SQL queries, primarily against
-        Google BigQuery, using the `bm.bq` client. Instantiated on first access.
-
-        Returns:
-            QueryRunner: The initialized `QueryRunner` instance.
-
-        """
+    @property
+    def query_runner(self):
+        """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
-            self._query_runner = QueryRunner(bq_client=self.bq)  # Delegates bq client access
+            raise RuntimeError("QueryRunner not available. Ensure infrastructure is properly injected.")
         return self._query_runner
 
     @property
-    def gcp_credentials(
-        self,
-    ) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
-        """Provides access to Google Cloud Platform (GCP) credentials.
-
-        Delegates to `self.cloud_manager.gcp_credentials`.
-
-        Returns:
-            Any: The GCP credentials object.
-
-        """
+    def gcp_credentials(self) -> Any:
+        """Provides access to GCP credentials."""
         return self.cloud_manager.gcp_credentials
 
     def get_gcp_access_token(self) -> str:
-        """Get a valid GCP access token, refreshing if needed.
-
-        Delegates to `self.cloud_manager.get_access_token()`.
-
-        Returns:
-            str: A valid OAuth2 access token
-
-        """
+        """Get a valid GCP access token."""
         return self.cloud_manager.get_access_token()
 
     @property
-    def gcs(self) -> Any:  # Type hint could be storage.Client
-        """Provides access to the Google Cloud Storage (GCS) client.
-
-        Delegates to `self.cloud_manager.gcs`.
-
-        Returns:
-            Any: The GCS client instance.
-
-        """
+    def gcs(self) -> Any:
+        """Provides access to the GCS client."""
         return self.cloud_manager.gcs
 
     @property
-    def bq(self) -> Any:  # Type hint could be bigquery.Client
-        """Provides access to the Google BigQuery client.
-
-        Delegates to `self.cloud_manager.bq`.
-
-        Returns:
-            Any: The BigQuery client instance.
-
-        """
+    def bq(self) -> Any:
+        """Provides access to the BigQuery client."""
         return self.cloud_manager.bq
 
     @property
-    def genai(self) -> Any:  # Type hint could be genai.Client
-        """Provides access to the Google GenAI client with Vertex AI configuration.
-
-        Delegates to `self.cloud_manager.genai`.
-
-        Returns:
-            Any: The GenAI client instance configured with vertex=True.
-
-        """
+    def genai(self) -> Any:
+        """Provides access to the GenAI client."""
         return self.cloud_manager.genai
 
-    def _setup_weave_credentials(self) -> None:
-        """Set up Weave/WANDB credentials from environment variables or secret manager.
-
-        This method attempts to load WANDB credentials from multiple sources in order:
-        1. Environment variables (WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY)
-        2. Secret manager using existing credentials
-        3. Gracefully handle missing credentials
-
-        Environment variables are set so that weave.init() can authenticate without
-        requiring interactive login.
-        """
-
-        # Check if credentials are already set in environment
-        wandb_api_key = os.getenv("WANDB_API_KEY")
-        wandb_entity = os.getenv("WANDB_ENTITY")
-
-        # If not found in environment, try to load from secrets
-        if not wandb_api_key or not wandb_entity:
-            try:
-                creds = self.credentials
-                if not wandb_api_key:
-                    wandb_api_key = creds["WANDB_API_KEY"]
-                    os.environ["WANDB_API_KEY"] = wandb_api_key
-                    logger.debug("Loaded WANDB_API_KEY from secret manager")
-
-                if not wandb_entity:
-                    wandb_entity = creds["WANDB_ENTITY"]
-                    os.environ["WANDB_ENTITY"] = wandb_entity
-                    logger.debug("Loaded WANDB_ENTITY from secret manager")
-
-            except Exception as e:
-                logger.debug(f"Could not load WANDB credentials from secret manager: {e}")
-
-        logger.debug(f"WANDB credentials configured: API_KEY=*****, ENTITY={wandb_entity}")
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client for tracing."""
-        if "weave" in self.tracing and self.tracing["weave"].enabled and not self._tracing_instrumented.is_set():
-            # If tracing is enabled but not yet instrumented, set it up
-            asyncio.create_task(self._setup_tracing())
-            await self._tracing_instrumented.wait()
-        return weave.get_client()
+        """Provide access to the Weights & Biases Weave client.
+        
+        Delegates to ExecutionContext for proper weave initialization. The ExecutionContext
+        handles unified tracing configuration, environment variables, and error handling.
+        """
+        try:
+            from buttermilk._core.execution_context import get_execution_context
+            execution_context = get_execution_context()
+            return await execution_context.get_weave_client()
+        except RuntimeError as e:
+            raise RuntimeError(
+                "Weave client not available. Ensure ExecutionContext is properly initialized "
+                "with weave tracing configuration. Check that infrastructure.tracing.weave is "
+                "enabled in your configuration with valid project_id and api_key."
+            ) from e
 
     @property
     def credentials(self) -> dict[str, str]:
-        """Retrieves and caches shared system credentials from the secret manager.
-
-        Fetches credentials using `_SHARED_CREDENTIALS_KEY` on first access.
-
-        Returns:
-            dict[str, str]: A dictionary of shared credentials.
-
-        Raises:
-            TypeError: If the credentials retrieved from the secret manager
-                are not a dictionary.
-
-        """
-        if self._credentials_cached is None:
-            logger.debug("Fetching shared credentials from secret manager...")
-            creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
-            if not isinstance(creds, dict):
-                raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
-            self._credentials_cached = creds
-        return self._credentials_cached
+        """Provides access to shared system credentials."""
+        return self.secret_manager.get_secret(cfg_key="credentials_secret")
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
@@ -783,7 +549,7 @@ class BM(BaseModel):
 
                     async def _fetch_and_set_ip():
                         ip = await get_ip()
-                        self.run_info.ip = ip
+                        self.session_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
                     self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
@@ -822,8 +588,8 @@ class BM(BaseModel):
         effective_save_dir_str: str
         if save_dir:
             effective_save_dir_str = str(save_dir)
-        elif self.run_info.save_dir:
-            effective_save_dir_str = self.run_info.save_dir
+        elif self.session_info.save_dir:
+            effective_save_dir_str = self.session_info.save_dir
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
@@ -848,7 +614,7 @@ class BM(BaseModel):
                 {
                     "message": f"Successfully saved data to: {saved_file_path}",
                     "uri": str(saved_file_path),  # Ensure URI is a string
-                    "run_id": self.run_info.run_id,  # Include run_id for context
+                    "session_id": self.session_info.session_id,  # Include session_id for context
                 },
             )
             return str(saved_file_path)  # Return path as string
@@ -900,7 +666,7 @@ class BM(BaseModel):
             overwrite=overwrite,
             do_not_return_results=do_not_return_results,
             save_to_gcs=save_to_gcs,
-            save_dir=self.run_info.save_dir,  # Pass BM's default save directory
+            save_dir=self.session_info.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )
 
@@ -993,3 +759,115 @@ class BM(BaseModel):
         }
         config = StorageConfig(**config_data)
         return self.get_storage(config)
+
+
+# Factory functions for creating session-scoped BM instances
+
+def create_session_bm(
+    name: str,
+    job: str,
+    batch_id: str | None = None,
+    platform: str = "local",
+    save_dir_base: str | None = None,
+    cloud_manager=None,
+    secret_manager=None,
+    llms_instance=None,
+    logger_cfg=None,
+    **kwargs
+) -> BM:
+    """Create a new session-scoped BM instance.
+    
+    Args:
+        name: User-defined name for the current session or project.
+        job: User-defined name for the specific job or task.
+        batch_id: Optional batch identifier for grouping related sessions.
+        platform: Platform where the session is running.
+        save_dir_base: Base directory for session outputs.
+        cloud_manager: Shared cloud manager instance (optional).
+        secret_manager: Shared secret manager instance (optional).
+        llms_instance: Shared LLMs instance (optional).
+        logger_cfg: Logger configuration for cloud logging (optional).
+        **kwargs: Additional arguments for SessionInfo.
+        
+    Returns:
+        BM: A new session-scoped BM instance.
+    """
+    # Create session info
+    session_info_data = {
+        "name": name,
+        "job": job,
+        "platform": platform,
+        "batch_id": batch_id,
+        **kwargs
+    }
+    
+    # Create SessionInfo instance to get auto-generated session_id
+    session_info = SessionInfo(**session_info_data)
+    
+    # Create BM instance
+    bm_data = {
+        "session_info": session_info,
+    }
+    
+    if save_dir_base is not None:
+        bm_data["save_dir_base"] = save_dir_base
+        
+    bm = BM(**bm_data)
+    
+    # Inject shared infrastructure if provided
+    if cloud_manager is not None:
+        bm._cloud_manager = cloud_manager
+        # Auto-inject query_runner if cloud_manager is available
+        from buttermilk._core.query import QueryRunner
+        bm._query_runner = QueryRunner(bq_client=cloud_manager.bq)
+    if secret_manager is not None:
+        bm._secret_manager = secret_manager
+    if llms_instance is not None:
+        bm._llms_instance = llms_instance
+    if logger_cfg is not None:
+        bm._logger_cfg = logger_cfg
+        
+    return bm
+
+
+def create_batch_session_bm(
+    name: str,
+    job: str,
+    batch_id: str,
+    platform: str = "local",
+    save_dir_base: str | None = None,
+    cloud_manager=None,
+    secret_manager=None,
+    llms_instance=None,
+    **kwargs
+) -> BM:
+    """Create a new session-scoped BM instance that belongs to a batch.
+    
+    This is a convenience function for creating BM instances that are part of
+    a larger batch (e.g., multiple related sessions in a batch job).
+    
+    Args:
+        name: User-defined name for the current session or project.
+        job: User-defined name for the specific job or task.
+        batch_id: Batch identifier that this session belongs to.
+        platform: Platform where the session is running.
+        save_dir_base: Base directory for session outputs.
+        cloud_manager: Shared cloud manager instance (optional).
+        secret_manager: Shared secret manager instance (optional).
+        llms_instance: Shared LLMs instance (optional).
+        **kwargs: Additional arguments for SessionInfo.
+        
+    Returns:
+        BM: A new session-scoped BM instance belonging to the batch.
+    """
+    return create_session_bm(
+        name=name,
+        job=job,
+        batch_id=batch_id,
+        platform=platform,
+        save_dir_base=save_dir_base,
+        cloud_manager=cloud_manager,
+        secret_manager=secret_manager,
+        llms_instance=llms_instance,
+        **kwargs
+    )

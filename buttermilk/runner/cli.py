@@ -41,10 +41,10 @@ from buttermilk.runner.flowrunner import FlowRunner
 def main(conf: DictConfig) -> None:
     """Main application entry point, configured and launched by Hydra.
 
-    This function initializes the Buttermilk environment (`BM` instance) and a
-    `FlowRunner` based on the Hydra configuration (`conf`). It then determines
-    the operational mode (e.g., "console", "api", "batch", "slackbot") from the
-    configuration and starts the corresponding application logic.
+    This function initializes the Buttermilk environment using the ConfigurationBootstrapper
+    as the single point of entry for all configuration management. It creates the infrastructure
+    and session-scoped BM instances, then determines the operational mode and starts the
+    corresponding application logic.
 
     Args:
         conf (DictConfig): The configuration object loaded and populated by Hydra.
@@ -55,22 +55,38 @@ def main(conf: DictConfig) -> None:
 
     """
     OmegaConf.resolve(conf)
-    bm = hydra.utils.instantiate(conf.bm)
-
-    # bm = BM.model_validate(objs.bm)  # type: ignore # Assuming dict matches BM fields
-    # Set the singleton BM instance
+    
+    # Use ConfigurationBootstrapper as single entry point for all configuration
+    from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
+    
+    # Create and use ConfigurationBootstrapper with the existing Hydra configuration
+    # This avoids double initialization of Hydra
+    bootstrapper = create_configuration_bootstrapper(
+        config_path="../conf",
+        config=conf  # Pass the existing configuration from Hydra
+    )
+    
+    # Create a session-scoped BM first to set singleton before ExecutionContext tracing setup
+    bm = asyncio.run(bootstrapper.bootstrap_session_context(
+        name=conf.get('run', {}).get('name', 'cli_session'),
+        job=conf.get('run', {}).get('job', 'cli_operation'),
+        platform='local'
+    ))
+    
+    # Set as global singleton BEFORE ExecutionContext initialization to enable OTEL tracing
     from buttermilk import set_bm
-
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
-
-    # Ensure BM is fully initialized before proceeding
-    asyncio.run(bm.ensure_initialized())
-    # Ensure tracing has been set up.
-    asyncio.run(bm._setup_tracing())
-    logger.info("BM initialization complete")
+    set_bm(bm)
+    logger.info("Session BM singleton initialization complete - OTEL tracing can now access BM")
+    
+    # Bootstrap full context (ExecutionContext + Infrastructure) to ensure structured logging
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+    logger.info("Full context initialization complete via ConfigurationBootstrapper")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
+    
+    # Set the session-scoped BM for this FlowRunner
+    flow_runner.set_session_bm(bm)
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -133,10 +149,10 @@ def main(conf: DictConfig) -> None:
         case "api":
             # Starts a FastAPI web server.
             logger.info("Starting FastAPI API server...")
-            # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
-            # These are typically passed to the app creation function.
+            # The FastAPI app needs access to infrastructure and flow_runner to handle API requests.
+            # Pass the bootstrapper-managed infrastructure to ensure consistent configuration
             fastapi_app = create_fastapi_app(
-                bm=bm,  # Pass the global BM instance
+                infrastructure=infrastructure,  # Pass the bootstrapper-managed infrastructure
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
@@ -144,8 +160,8 @@ def main(conf: DictConfig) -> None:
             logger.debug("Verifying FastAPI app readiness...")
             if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
                 raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
-            if not hasattr(fastapi_app.state, "bm") or not fastapi_app.state.bm:
-                raise RuntimeError("BM instance not properly initialized in FastAPI app state")
+            if not hasattr(fastapi_app.state, "infrastructure") or not fastapi_app.state.infrastructure:
+                raise RuntimeError("Infrastructure manager not properly initialized in FastAPI app state")
             logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")
