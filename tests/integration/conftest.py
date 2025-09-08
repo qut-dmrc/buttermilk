@@ -28,17 +28,19 @@ def conf():
 def infrastructure(conf):
     """Provide the Infrastructure instance created from config with ExecutionContext."""
 
-    # Use ConfigurationBootstrapper to create both ExecutionContext and Infrastructure
+    # Follow CLI pattern: Create infrastructure and BM first, then bootstrap ExecutionContext
     bootstrapper = ConfigurationBootstrapper(config=conf)
-
-    # Bootstrap full context (ExecutionContext + Infrastructure)
-    # This ensures ExecutionContext is created and set before infrastructure
-    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
-
-    # Create a test session-scoped BM and set as singleton for backward compatibility
+    
+    # Create infrastructure manager first
+    infrastructure = bootstrapper.get_infrastructure_manager()
+    
+    # Create a test session-scoped BM and set as singleton BEFORE ExecutionContext initialization
     test_bm = infrastructure.create_session_bm(name="buttermilk", job="testing", platform="local")
-
     set_bm(test_bm)
+    
+    # Now bootstrap full context (ExecutionContext + tracing initialization)
+    # BM singleton is available, so tracing can initialize properly
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
 
     return infrastructure
 

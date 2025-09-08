@@ -193,6 +193,14 @@ class ConfigurationBootstrapper:
         # Create infrastructure manager (may fail, but logs will be captured)
         infrastructure = self._create_infrastructure_manager()
         
+        # Initialize tracing now that infrastructure is ready and BM singleton should be available
+        try:
+            await self._execution_context._initialize_all_tracing_providers()
+            logger.info("Tracing providers initialized successfully")
+        except Exception as e:
+            # Log but don't fail the bootstrap - tracing is important but not critical
+            logger.warning(f"Failed to initialize tracing providers: {e}")
+        
         logger.info("Full application context bootstrap complete")
         return self._execution_context, infrastructure
     
