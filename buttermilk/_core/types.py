@@ -7,8 +7,6 @@ different components of Buttermilk.
 """
 
 import datetime
-import hashlib
-import json
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
@@ -157,8 +155,10 @@ class Record(BaseModel):
         Returns:
             str: SHA256 hexdigest of the record's markdown representation.
         """
+        from buttermilk._core.hashing import compute_record_hash
+        
         markdown_content = self.as_markdown()
-        hash_value = hashlib.sha256(markdown_content.encode("utf-8")).hexdigest()
+        hash_value = compute_record_hash(markdown_content)
         # Store in metadata for easy access
         self.metadata["record_hash"] = hash_value
         return hash_value
@@ -174,16 +174,9 @@ class Record(BaseModel):
         Returns:
             str | None: SHA256 hexdigest of ground_truth data, or None if no ground_truth.
         """
-        if self.ground_truth is None:
-            # Store None in metadata for easy access
-            self.metadata["ground_truth_hash"] = None
-            return None
-            
-        # Convert ground_truth to consistent JSON string for hashing
-        # Sort keys to ensure consistent hash for same data
-        gt_json = json.dumps(self.ground_truth, sort_keys=True, separators=(",", ":"))
-        hash_value = hashlib.sha256(gt_json.encode("utf-8")).hexdigest()
+        from buttermilk._core.hashing import compute_ground_truth_hash
         
+        hash_value = compute_ground_truth_hash(self.ground_truth)
         # Store in metadata for easy access
         self.metadata["ground_truth_hash"] = hash_value
         return hash_value

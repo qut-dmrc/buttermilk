@@ -136,6 +136,7 @@ class SessionInfo(BaseModel):
     # Configuration tracking
     agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
+    flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 

@@ -11,7 +11,6 @@ This module provides functionalities for:
   `make_messages`).
 """
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -187,10 +186,10 @@ def calculate_template_hash(template_name: str) -> tuple[str, str]:
         raise FatalError(f"Template file '{template_filename}' not found in {TEMPLATES_PATH} or its subdirectories.")
     
     try:
-        # Read the template file content and calculate hash
-        template_content = template_path.read_text(encoding="utf-8")
-        hash_value = hashlib.sha256(template_content.encode("utf-8")).hexdigest()
-        return f"sha256:{hash_value}", str(template_path)
+        # Calculate hash using unified hashing module
+        from buttermilk._core.hashing import compute_template_hash_from_file
+        hash_value = compute_template_hash_from_file(template_path)
+        return hash_value, str(template_path)
     except Exception as e:
         raise FatalError(f"Failed to read template file '{template_path}' for hash calculation: {e!s}") from e
 
