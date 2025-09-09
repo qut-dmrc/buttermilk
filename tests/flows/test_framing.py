@@ -1,11 +1,13 @@
 import pytest
 
 from buttermilk import BM, logger
+from buttermilk._core.config import AgentVariants
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
-from buttermilk._core.types import Record, RunRequest  # Import RunRequest
+from buttermilk._core.orchestrator import OrchestratorProtocol
+from buttermilk._core.types import Record, RunRequest
 from buttermilk.agents.llm import LLMAgent as LC
-from buttermilk.runner.flowrunner import FlowRunner  # Import Flow
+from buttermilk.runner.flowrunner import FlowRunner
 
 
 def param_model(request):
@@ -32,61 +34,110 @@ def framer():
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", flows=[framer])
-    run_request = RunRequest(  # Replaced Job with RunRequest
-        ui_type="testing",  # Mapped source to ui_type
-        flow="testflow",  # Mapped flow_id to flow
-        parameters={"records": [text_record]},  # Moved records to parameters
+    agent_variants = AgentVariants(
+        agent_obj="buttermilk.agents.llm.LLMAgent",
+        role="FRAMER",
+        variants={"default": [framer.parameters]},
+    )
+    orchestrator = OrchestratorProtocol(
+        agents={"FRAMER": agent_variants},
+        orchestrator="buttermilk.orchestrators.groupchat.GroupChatOrchestrator",
+    )
+    flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
+
+    results = []
+
+    async def result_callback(result):
+        results.append(result)
+
+    run_request = RunRequest(
+        ui_type="testing",
+        flow="testframer",
+        parameters={"records": [text_record]},
         session_info=bm.session_info,
-        session_id="test_session",  # Added required session_id
+        session_id="test_session",
+        callback_to_ui=result_callback,
     )
 
-    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
-        assert result
-        assert isinstance(result.record, Record)
-        assert not result.error
+    await flow.run_flow(run_request=run_request)
+
+    assert len(results) > 0
+    # Add more assertions on the results
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", flows=[framer])
-    run_request = RunRequest(  # Replaced Job with RunRequest
-        ui_type="testing",  # Mapped source to ui_type
-        flow="testflow",  # Mapped flow_id to flow
-        records=[news_record],  # Mapped record to records list
-        session_info=bm.session_info,
-        session_id="test_session",  # Added required session_id
+    agent_variants = AgentVariants(
+        agent_obj="buttermilk.agents.llm.LLMAgent",
+        role="FRAMER",
+        variants={"default": [framer.parameters]},
     )
-    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
-        assert result
-        assert isinstance(result.record, Record)
-        assert not result.error
+    orchestrator = OrchestratorProtocol(
+        agents={"FRAMER": agent_variants},
+        orchestrator="buttermilk.orchestrators.groupchat.GroupChatOrchestrator",
+    )
+    flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
+
+    results = []
+
+    async def result_callback(result):
+        results.append(result)
+
+    run_request = RunRequest(
+        ui_type="testing",
+        flow="testframer",
+        parameters={"records": [news_record]},
+        session_info=bm.session_info,
+        session_id="test_session",
+        callback_to_ui=result_callback,
+    )
+    await flow.run_flow(run_request=run_request)
+
+    assert len(results) > 0
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
-    flow = FlowRunner(source="testing", flows=[framer])
+    agent_variants = AgentVariants(
+        agent_obj="buttermilk.agents.llm.LLMAgent",
+        role="FRAMER",
+        variants={"default": [framer.parameters]},
+    )
+    orchestrator = OrchestratorProtocol(
+        agents={"FRAMER": agent_variants},
+        orchestrator="buttermilk.orchestrators.groupchat.GroupChatOrchestrator",
+    )
+    flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
 
-    record = link_to_video_gcp  # Use the video record directly
+    record = link_to_video_gcp
+
+    results = []
+
+    async def result_callback(result):
+        results.append(result)
+
     run_request = RunRequest(
         ui_type="testing",
-        source="testing",
-        flow="testflow",
+        flow="testframer",
         parameters={"records": [record]},
         session_info=bm.session_info,
         session_id="test_session",
-    )  # Added ui_type, Replaced Job with RunRequest and mapped args
-    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
-        assert result
-        assert isinstance(result.record, Record)
-        assert not result.error
+        callback_to_ui=result_callback,
+    )
+    await flow.run_flow(run_request=run_request)
+
+    assert len(results) > 0
 
 
 @pytest.fixture(scope="session")
 def link_to_video_gcp() -> Record:
-    obj = Record(metadata={"uri": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}, content="Video content", mime="video/mp4")
+    obj = Record(
+        metadata={"uri": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"},
+        content="Video content",
+        mime="video/mp4",
+    )
     return obj

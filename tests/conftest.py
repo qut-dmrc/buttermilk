@@ -59,6 +59,11 @@ def bm(conf):
     mock_bm.llms.__getitem__ = MagicMock(return_value=MagicMock())  # For bm.llms["model_name"]
     mock_bm.llms.__contains__ = MagicMock(return_value=True)  # For "model_name" in bm.llms
     
+    async def async_magic_mock():
+        pass
+
+    mock_bm.ensure_initialized = MagicMock(side_effect=async_magic_mock)
+
     # Set as global singleton for backward compatibility
     from buttermilk import set_bm
     set_bm(mock_bm)
