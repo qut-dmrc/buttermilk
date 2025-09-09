@@ -31,6 +31,33 @@ This is the only debugging guide you need - all commands have been validated and
 - Functional API health monitoring
 - End-to-end flow execution with visible message generation
 
+## Valid System Configuration Parameters
+
+**⚠️ CRITICAL: Use Only Valid Parameters**
+
+**Available Flows**: 
+- `trans` - Transgender research flow
+- `transllm` - LLM-based transgender analysis 
+- `zot` - Zotero integration flow
+- `osb` - Online Safety Benchmark flow
+- `judger` - Judgment and scoring flow
+- `tox` - Toxicity analysis flow
+
+**Valid Criteria Templates**:
+- `tja` - Trans Journalists Association stylebook criteria
+- `glaad` - GLAAD media reference criteria
+- Other criteria from `/buttermilk/conf/flows/criteria/` and template files
+
+**Record ID Requirements**:
+- **MUST** use actual record IDs from your data sources
+- **NEVER** use placeholder values like 'demo_record', 'demo', 'test_record'
+- Check your data files or storage configurations for valid record IDs
+
+**❌ INVALID EXAMPLES** (DO NOT USE):
+- Flows: 'simple', 'test hashing', 'demo_flow' 
+- Records: 'demo_record', 'demo', 'test_record'
+- Criteria: 'test', 'demo_criteria'
+
 ## The Simplified Golden Path Workflow
 
 **Two Core Tools, Validated Workflow:**
@@ -182,9 +209,13 @@ await debug_agent.stop_puppet_mode()
 
 *   **Start a Flow (VALIDATED):**
     ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "demo_record" --criteria "test" --wait 10
+    # Use actual record IDs from your data sources, not placeholder values
+    # Available flows: trans, transllm, zot, osb, judger, tox
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "ACTUAL_RECORD_ID" --criteria "tja" --wait 10
     ```
     **Expected Evidence**: Message count increases from 0 to 20+ messages in logs
+    
+    **IMPORTANT**: Replace `ACTUAL_RECORD_ID` with a real record ID from your data sources. Do NOT use placeholder values like 'demo_record' or 'demo'.
 
 *   **View Recent Logs (VALIDATED):**
     ```bash
@@ -308,8 +339,11 @@ curl -s http://localhost:8000/health
 uv run python -m buttermilk.debug.ws_debug_cli test-connection
 # Expected: "Successfully connected to WebSocket at ws://localhost:8000/ws"
 
-uv run python -m buttermilk.debug.ws_debug_cli start trans --record "demo" --criteria "test" --wait 10
+uv run python -m buttermilk.debug.ws_debug_cli start trans --record "ACTUAL_RECORD_ID" --criteria "tja" --wait 10
 # Expected: Flow execution with message count increase from 0 to 20+ messages
+# NOTE: Replace ACTUAL_RECORD_ID with real record ID from data sources
 ```
 
 **Integration Test**: All evidence is validated by `/tests/integration/test_debugging_workflow.py`
+
+**⚠️ NOTE**: The integration test currently uses placeholder values ('demo_record', 'test') which should be updated to use valid configurations. This test file needs updating to align with the corrected documentation.
