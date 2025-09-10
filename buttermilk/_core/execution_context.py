@@ -122,6 +122,7 @@ class ExecutionContext(BaseModel):
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
+    _infrastructure_manager: Any | None = PrivateAttr(default=None)
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
     _tracing_instrumented: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -379,6 +380,30 @@ class ExecutionContext(BaseModel):
         # Now perform actual tracing initialization for all enabled providers
         await self._initialize_all_tracing_providers()
 
+    def get_infrastructure_manager(self) -> Any:
+        """Get InfrastructureManager that uses this ExecutionContext's infrastructure.
+        
+        Creates InfrastructureManager on first access that shares infrastructure
+        with this ExecutionContext, ensuring single source of truth for infrastructure.
+        
+        Returns:
+            InfrastructureManager instance that uses ExecutionContext's infrastructure
+        """
+        if self._infrastructure_manager is None:
+            from buttermilk._core.infrastructure import InfrastructureManager
+            
+            # Create InfrastructureManager using this ExecutionContext's infrastructure
+            self._infrastructure_manager = InfrastructureManager(
+                clouds=self.clouds,
+                secret_provider=self.secret_provider,
+                datasets=self.datasets,
+                execution_context=self  # Pass reference to this ExecutionContext
+            )
+            
+            logger.debug("Created InfrastructureManager using ExecutionContext's infrastructure")
+            
+        return self._infrastructure_manager
+
     async def _initialize_all_tracing_providers(self) -> None:
         """Initialize all configured tracing providers."""
         # Skip if already initialized to prevent duplicate setup
@@ -454,10 +479,10 @@ class ExecutionContext(BaseModel):
             raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
 
     async def _initialize_otel(self) -> None:
-        """Initialize OTEL tracing."""
+        """Initialize OTEL tracing using ExecutionContext's infrastructure."""
         try:
-            from buttermilk.utils.otel import setup_tracing_otel
-            setup_tracing_otel(self.tracing["otel"])
+            from buttermilk.utils.otel import setup_tracing_otel_with_execution_context
+            setup_tracing_otel_with_execution_context(self.tracing["otel"], self)
             logger.info("OTEL Tracing has been set up successfully")
         except Exception as e:
             logger.error(f"Failed to initialize OTEL tracing: {e}")
@@ -466,6 +491,7 @@ class ExecutionContext(BaseModel):
 
 # Global execution context instance
 _global_execution_context: ExecutionContext | None = None
+_execution_context_initialized: bool = False
 
 
 def get_execution_context() -> ExecutionContext:
@@ -478,12 +504,54 @@ def get_execution_context() -> ExecutionContext:
 
 def set_execution_context(context: ExecutionContext) -> None:
     """Set the global ExecutionContext instance."""
-    global _global_execution_context
+    global _global_execution_context, _execution_context_initialized
     _global_execution_context = context
+    _execution_context_initialized = True
 
 
 def create_execution_context(**kwargs) -> ExecutionContext:
-    """Create and set a new ExecutionContext."""
+    """Create and set a new ExecutionContext.
+    
+    Raises:
+        RuntimeError: If an ExecutionContext has already been initialized.
+                     This prevents accidental reinitialization that would
+                     break logging configuration and lose execution context state.
+    """
+    global _execution_context_initialized
+    
+    if _execution_context_initialized:
+        raise RuntimeError(
+            "ExecutionContext has already been initialized. "
+            "Creating multiple ExecutionContext instances will break logging configuration, "
+            "reset verbose logging settings, and cause loss of execution context state. "
+            "Use get_execution_context() to access the existing context, or "
+            "get_or_create_execution_context() for safe initialization."
+        )
+    
     context = ExecutionContext(**kwargs)
     set_execution_context(context)
+    _execution_context_initialized = True
     return context
+
+
+def get_or_create_execution_context(**kwargs) -> ExecutionContext:
+    """Get existing ExecutionContext or create a new one if none exists.
+    
+    This is the safe way to initialize ExecutionContext that won't break
+    if called multiple times. Use this instead of create_execution_context()
+    in scenarios where you're unsure if context has been initialized.
+    
+    Args:
+        **kwargs: Arguments passed to ExecutionContext constructor if creating new
+        
+    Returns:
+        ExecutionContext: The existing or newly created ExecutionContext
+    """
+    global _execution_context_initialized
+    
+    if _execution_context_initialized:
+        logger.debug("ExecutionContext already initialized, returning existing context")
+        return get_execution_context()
+    
+    logger.debug("No ExecutionContext found, creating new one")
+    return create_execution_context(**kwargs)

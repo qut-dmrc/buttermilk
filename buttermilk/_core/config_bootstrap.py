@@ -13,7 +13,7 @@ from typing import Any
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from buttermilk._core.execution_context import ExecutionContext, create_execution_context
+from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
 from buttermilk._core.infrastructure import InfrastructureManager
 from buttermilk._core.log import logger
 
@@ -179,20 +179,26 @@ class ConfigurationBootstrapper:
         
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
-            # Get infrastructure configuration to extract tracing settings
+            # Get infrastructure configuration to create ExecutionContext with full infrastructure
             config = self._load_configuration()
             infrastructure_config = config.get('infrastructure', {})
             
-            # Extract tracing configuration from infrastructure.tracing
-            tracing_config = infrastructure_config.get('tracing', {})
-            
-            logging_config = infrastructure_config.get('logging', {})
-            self._execution_context = create_execution_context(tracing=tracing_config, logging=logging_config)
+            # Pass the FULL infrastructure configuration to ExecutionContext
+            # This ensures ExecutionContext has its own CloudManager, SecretManager, etc.
+            self._execution_context = get_or_create_execution_context(
+                clouds=infrastructure_config.get('clouds', []),
+                secret_provider=infrastructure_config.get('secret_provider'),
+                logging=infrastructure_config.get('logging'),
+                pubsub=infrastructure_config.get('pubsub'),
+                tracing=infrastructure_config.get('tracing', {}),
+                datasets=infrastructure_config.get('datasets', {})
+            )
             await self._execution_context.ensure_initialized()
-            logger.info("Baseline execution context created with structured logging and tracing config")
+            logger.info("ExecutionContext created with full infrastructure configuration")
         
-        # Create infrastructure manager (may fail, but logs will be captured)
-        infrastructure = self._create_infrastructure_manager()
+        # Get infrastructure manager from ExecutionContext
+        # This ensures InfrastructureManager uses the same infrastructure as ExecutionContext
+        infrastructure = self._execution_context.get_infrastructure_manager()
         
         # Initialize tracing now that infrastructure is ready and BM singleton should be available
         try:
@@ -205,12 +211,13 @@ class ConfigurationBootstrapper:
         logger.info("Full application context bootstrap complete")
         return self._execution_context, infrastructure
     
-    async def bootstrap_session_context(self, name: str, job: str, **kwargs) -> Any:
+    async def bootstrap_session_context(self, name: str, job: str, infrastructure=None, **kwargs) -> Any:
         """Bootstrap session-specific BM instance.
         
         Args:
             name: User-defined name for the current session or project
             job: User-defined name for the specific job or task
+            infrastructure: Optional existing InfrastructureManager to use (preferred)
             **kwargs: Additional arguments for session creation
             
         Returns:
@@ -218,8 +225,15 @@ class ConfigurationBootstrapper:
         """
         logger.info(f"Bootstrapping session context: {name}/{job}")
         
-        # Ensure infrastructure is available
-        infrastructure = self._create_infrastructure_manager()
+        # Use existing infrastructure if provided, otherwise try to get from ExecutionContext
+        if infrastructure is not None:
+            logger.debug("Using existing infrastructure from ExecutionContext")
+        elif self._execution_context is not None:
+            logger.debug("Getting infrastructure from ExecutionContext")
+            infrastructure = self._execution_context.get_infrastructure_manager()
+        else:
+            logger.debug("Creating new infrastructure for session (legacy mode)")
+            infrastructure = self._create_infrastructure_manager()
         
         # Create session-scoped BM instance
         platform = kwargs.pop('platform', 'local')  # Extract platform to avoid duplicate

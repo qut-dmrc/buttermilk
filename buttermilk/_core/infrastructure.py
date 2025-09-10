@@ -43,6 +43,10 @@ class InfrastructureManager(BaseModel):
         default_factory=dict,
         description="LLM configuration data."
     )
+    execution_context: Any = Field(
+        default=None,
+        description="Optional ExecutionContext to share infrastructure with."
+    )
     
     # Private infrastructure instances
     _cloud_manager: Any = pydantic.PrivateAttr(default=None)
@@ -53,6 +57,10 @@ class InfrastructureManager(BaseModel):
     @cached_property
     def cloud_manager(self) -> Any:
         """Get or create the CloudManager instance."""
+        # Use ExecutionContext's cloud manager if available
+        if self.execution_context is not None:
+            return self.execution_context.cloud_manager
+            
         if self._cloud_manager is None:
             if not self.clouds:
                 raise RuntimeError("No cloud configurations provided.")
@@ -66,6 +74,10 @@ class InfrastructureManager(BaseModel):
     @cached_property
     def secret_manager(self) -> Any:
         """Get or create the SecretsManager instance."""
+        # Use ExecutionContext's secret manager if available
+        if self.execution_context is not None:
+            return self.execution_context.secret_manager
+            
         if self._secret_manager is None:
             # Find cloud provider with secrets service configured
             secrets_cloud = self._find_cloud_with_service("secrets")
@@ -84,6 +96,10 @@ class InfrastructureManager(BaseModel):
     @cached_property
     def llms_instance(self) -> Any:
         """Get or create the LLMs instance."""
+        # Use ExecutionContext's LLMs instance if available
+        if self.execution_context is not None:
+            return self.execution_context.llms
+            
         if self._llms_instance is None:
             if not self.llms:
                 raise RuntimeError("LLMs configuration is missing.")
@@ -113,6 +129,10 @@ class InfrastructureManager(BaseModel):
     @cached_property
     def query_runner(self) -> Any:
         """Get or create the QueryRunner instance."""
+        # Use ExecutionContext's query runner if available
+        if self.execution_context is not None:
+            return self.execution_context.query_runner
+            
         if self._query_runner is None:
             from buttermilk._core.query import QueryRunner
             self._query_runner = QueryRunner(bq_client=self.cloud_manager.bq)
@@ -129,7 +149,14 @@ class InfrastructureManager(BaseModel):
         Returns:
             Cloud provider configuration with the service, or None if not found.
         """
-        for cloud in self.clouds:
+        # Check ExecutionContext's clouds first if available
+        clouds_to_check = []
+        if self.execution_context is not None:
+            clouds_to_check = self.execution_context.clouds
+        else:
+            clouds_to_check = self.clouds
+            
+        for cloud in clouds_to_check:
             if hasattr(cloud, "has_service") and cloud.has_service(service):
                 return cloud
         return None

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .bm_init import BM, create_session_bm
-from .execution_context import ExecutionContext, create_execution_context
+from .execution_context import ExecutionContext, get_or_create_execution_context
 
 # This is a singleton pattern for the BM class.
 # The bm variable is initialized to None and will be set to an instance of BM
@@ -49,7 +49,7 @@ def initialize_session_bm(
             execution_context = get_execution_context()
         except RuntimeError:
             # No execution context exists, create one with minimal config
-            execution_context = create_execution_context()
+            execution_context = get_or_create_execution_context()
     
     # Create session-scoped BM
     bm_instance = create_session_bm(name=name, job=job, session_id=session_id, execution_context=execution_context, platform=platform, **kwargs)

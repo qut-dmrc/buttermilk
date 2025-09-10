@@ -62,10 +62,68 @@ from buttermilk import get_bm
 
 
 def setup_tracing_otel(tracing_cfg: Tracing) -> None:
+    """Legacy OTEL setup using BM singleton. Use setup_tracing_otel_with_execution_context instead."""
     # Initialize OpenTelemetry with OTLP exporters
 
     bm = get_bm()
     creds = bm.gcp_credentials
+
+
+def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context) -> None:
+    """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""
+    # Get credentials from ExecutionContext instead of BM singleton
+    creds = execution_context.gcp_credentials
+    
+    # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
+    project_id = tracing_cfg.project_id
+    if project_id is None:
+        project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if project_id is None:
+            raise RuntimeError("OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable")
+
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"gcp.project_id={project_id}"
+    os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
+    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
+
+    # Request used to refresh credentials upon expiry
+    request = google.auth.transport.requests.Request()
+
+    # Supply the request and credentials to AuthMetadataPlugin
+    # AuthMeatadataPlugin inserts credentials into each request
+    auth_metadata_plugin = AuthMetadataPlugin(credentials=creds, request=request)
+
+    # Initialize gRPC channel credentials using the AuthMetadataPlugin
+    channel_creds = grpc.composite_channel_credentials(
+        grpc.ssl_channel_credentials(),
+        grpc.metadata_call_credentials(auth_metadata_plugin),
+    )
+
+    # Initialize the OTLP gRPC or http exporter
+    otlp_grpc_exporter = OTLPSpanExporter(credentials=channel_creds)
+
+    # Initialize OpenTelemetry TracerProvider
+    # Set up the tracer provider
+    provider = TracerProvider()
+
+    # Instrument libraries
+    OpenAIInstrumentor().instrument(tracer_provider=provider)
+    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
+    ChromaInstrumentor().instrument(tracer_provider=provider)
+    VertexAIInstrumentor().instrument(tracer_provider=provider)
+    AnthropicInstrumentor().instrument(tracer_provider=provider)
+
+    # Configure LoggingInstrumentor to exclude debug logs from traces
+    LoggingInstrumentor().instrument(
+        tracer_provider=provider,
+        set_logging_format=True,
+        log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
+    )
+
+    provider.add_span_processor(BatchSpanProcessor(otlp_grpc_exporter))
+
+    # Configure OpenTelemetry tracing API with the initialized tracer provider
+    trace.set_tracer_provider(provider)
+    logger.info("Initialized tracing with Google Cloud using ExecutionContext infrastructure")
     
     # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
     project_id = tracing_cfg.project_id

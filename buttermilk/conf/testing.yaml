@@ -41,3 +41,6 @@ infrastructure:
       endpoint: https://telemetry.googleapis.com
       otlp_headers: {}
       
+  logging:
+    type: local
+    verbose: ${verbose}
