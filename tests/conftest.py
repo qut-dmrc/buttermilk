@@ -1,9 +1,15 @@
+import asyncio
 import inspect
 from unittest.mock import MagicMock
 
 import pytest
 from pytest import MarkDecorator
+from hydra import compose, initialize
 
+from buttermilk import get_bm, set_bm
+from buttermilk._core.bm_init import BM
+from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
@@ -22,6 +28,90 @@ def pytest_collection_modifyitems(items):
 def anyio_backend():
     return "asyncio"
 
+
+# =============================================================================
+# REAL CONFIGURATION FIXTURES (Preferred for new tests)
+# 
+# These fixtures provide real BM instances using testing.yaml configuration.
+# Use these instead of creating manual mock configurations:
+#
+# def test_example(real_bm, real_conf):
+#     # Uses actual testing.yaml configuration
+#     assert real_bm.session_info.job == "testing"
+#     
+# def test_with_override(real_conf, config_override):
+#     # Override specific config values for test
+#     custom_config = config_override(real_conf, {
+#         "infrastructure.logging.verbose": True
+#     })
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def real_conf():
+    """Real Hydra config fixture loaded from testing.yaml."""
+    with initialize(version_base=None, config_path="../buttermilk/conf"):
+        cfg = compose(config_name="testing")
+    return cfg
+
+
+@pytest.fixture(scope="session")
+def real_infrastructure(real_conf):
+    """Real infrastructure manager created from testing.yaml configuration."""
+    bootstrapper = ConfigurationBootstrapper(config=real_conf)
+    infrastructure = bootstrapper.get_infrastructure_manager()
+    
+    # Bootstrap full context to ensure ExecutionContext is properly initialized
+    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+    
+    return infrastructure
+
+
+@pytest.fixture(scope="session")
+def real_bm(real_infrastructure):
+    """Real BM instance using testing.yaml configuration."""
+    # Create a session-scoped BM using real infrastructure
+    test_bm = real_infrastructure.create_session_bm(
+        name="buttermilk", 
+        job="testing", 
+        platform="local"
+    )
+    set_bm(test_bm)
+    return test_bm
+
+
+@pytest.fixture(scope="session")
+def real_llms(real_bm: BM) -> LLMs:
+    """Real LLMs instance from testing configuration."""
+    return real_bm.llms
+
+
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def real_model_name(request) -> str:
+    """Real model name for testing with actual models."""
+    return request.param
+
+
+@pytest.fixture(params=MULTIMODAL_MODELS)
+def real_llm_multimodal(request, real_bm: BM):
+    """Real multimodal LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def real_llm(request, real_bm: BM):
+    """Real LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+@pytest.fixture(params=CHAT_MODELS)
+def real_llm_expensive(request, real_bm: BM):
+    """Real expensive LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+# =============================================================================
+# LEGACY MOCK FIXTURES (Maintained for backward compatibility)
+# =============================================================================
 
 @pytest.fixture(scope="session", autouse=True)
 def conf():
@@ -69,6 +159,29 @@ def bm(conf):
     set_bm(mock_bm)
     
     return mock_bm
+
+
+# =============================================================================
+# CONFIGURATION OVERRIDE UTILITIES
+# =============================================================================
+
+@pytest.fixture
+def config_override():
+    """Utility fixture for creating configuration overrides in tests."""
+    def _override_config(base_config, overrides):
+        """Apply overrides to base configuration for test-specific needs."""
+        from omegaconf import OmegaConf
+        
+        if isinstance(base_config, dict):
+            config = OmegaConf.create(base_config)
+        else:
+            config = base_config.copy()
+            
+        for key, value in overrides.items():
+            OmegaConf.set(config, key, value)
+        return config
+    
+    return _override_config
 
 
 @pytest.fixture(scope="session")
