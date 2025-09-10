@@ -36,12 +36,10 @@ This is the only debugging guide you need - all commands have been validated and
 **⚠️ CRITICAL: Use Only Valid Parameters**
 
 **Available Flows**: 
-- `trans` - Transgender research flow
-- `transllm` - LLM-based transgender analysis 
+- `trans` - Transgender journalist ethics research flow
+- `transllm` - LLM-based trans journalism analysis 
 - `zot` - Zotero integration flow
 - `osb` - Online Safety Benchmark flow
-- `judger` - Judgment and scoring flow
-- `tox` - Toxicity analysis flow
 
 **Valid Criteria Templates**:
 - `tja` - Trans Journalists Association stylebook criteria

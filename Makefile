@@ -22,7 +22,7 @@ kill_api:
 	@echo "Killing API (buttermilk) process..."
 	@pkill -SIGTERM -f "python.*buttermilk.runner.cli" || true
 	@sleep 5
-	@pkill -SIGKILL -f "python.*buttermilk.runner.cli" || true
+	@pkill -SIGKILL -f "buttermilk.runner.cli" || true
 
 # For production API server ONLY.
 api:

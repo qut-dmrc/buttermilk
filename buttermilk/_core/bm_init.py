@@ -340,16 +340,28 @@ class BM(BaseModel):
         return values
 
 
-    def __init__(self, **data: Any) -> None:
+    def __init__(self, logger_cfg=None, cloud_manager=None, secret_manager=None, llms_instance=None, query_runner=None, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 
         After standard Pydantic model initialization, it calls `_post_init_setup`
         to perform session-specific setup tasks.
 
         Args:
+            logger_cfg: Logger configuration for cloud logging (optional).
+            cloud_manager: Shared cloud manager instance (optional).
+            secret_manager: Shared secret manager instance (optional).
+            llms_instance: Shared LLMs instance (optional).
+            query_runner: Shared query runner instance (optional).
             **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
+        # Inject shared infrastructure before model initialization
+        self._logger_cfg = logger_cfg
+        self._cloud_manager = cloud_manager
+        self._secret_manager = secret_manager
+        self._llms_instance = llms_instance
+        self._query_runner = query_runner
+        
         super().__init__(**data)
         self._initialization_error = None
         self._post_init_setup()
@@ -804,28 +816,26 @@ def create_session_bm(
     # Create SessionInfo instance to get auto-generated session_id
     session_info = SessionInfo(**session_info_data)
     
-    # Create BM instance
+    # Create query_runner if cloud_manager is available
+    query_runner = None
+    if cloud_manager is not None:
+        from buttermilk._core.query import QueryRunner
+        query_runner = QueryRunner(bq_client=cloud_manager.bq)
+    
+    # Create BM instance with all dependencies passed to constructor
     bm_data = {
         "session_info": session_info,
+        "logger_cfg": logger_cfg,
+        "cloud_manager": cloud_manager,
+        "secret_manager": secret_manager,
+        "llms_instance": llms_instance,
+        "query_runner": query_runner,
     }
     
     if save_dir_base is not None:
         bm_data["save_dir_base"] = save_dir_base
         
     bm = BM(**bm_data)
-    
-    # Inject shared infrastructure if provided
-    if cloud_manager is not None:
-        bm._cloud_manager = cloud_manager
-        # Auto-inject query_runner if cloud_manager is available
-        from buttermilk._core.query import QueryRunner
-        bm._query_runner = QueryRunner(bq_client=cloud_manager.bq)
-    if secret_manager is not None:
-        bm._secret_manager = secret_manager
-    if llms_instance is not None:
-        bm._llms_instance = llms_instance
-    if logger_cfg is not None:
-        bm._logger_cfg = logger_cfg
         
     return bm
 

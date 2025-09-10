@@ -82,7 +82,7 @@ class ExecutionContext(BaseModel):
         execution_context_id (str): Unique identifier for this execution context.
         clouds (list[CloudProviderCfg]): List of cloud provider configurations.
         secret_provider (CloudProviderCfg | None): Secret provider configuration.
-        logger_cfg (LoggerConfig | None): Logging configuration.
+        logging (LoggerConfig | None): Logging configuration.
         pubsub (CloudProviderCfg | None): Pub/Sub configuration.
         tracing (dict[str, Tracing] | None): Tracing configurations.
         datasets (dict[str, BaseStorageConfig]): Shared dataset configurations.
@@ -102,10 +102,7 @@ class ExecutionContext(BaseModel):
         default=None,
         description="Configuration for the secret provider."
     )
-    logger_cfg: LoggerConfig | None = Field(
-        default=None,
-        description="Configuration for cloud-based logging."
-    )
+    logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
     pubsub: CloudProviderCfg | None = Field(
         default=None,
         description="Configuration for Pub/Sub system."
@@ -156,7 +153,7 @@ class ExecutionContext(BaseModel):
 
     def _setup_logging(self) -> None:
         """Set up modern logging for the execution context."""
-        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
+        verbose = getattr(self.logging, "verbose", False) if self.logging else False
         setup_console_logging(verbose=verbose)
 
         # Set up structured JSON file logging

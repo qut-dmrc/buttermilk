@@ -42,11 +42,11 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
     
     # Initialize API server's own execution context for logging and infrastructure
     # This ensures the API server itself has proper context for generating structured logs
-    from buttermilk._core.execution_context import create_execution_context
+    from buttermilk._core.execution_context import get_execution_context
     from buttermilk._core.dmrc import set_bm
     
-    # Create API server's baseline execution context
-    api_execution_context = create_execution_context()
+    # Use existing ExecutionContext from ConfigurationBootstrapper (preserves logging config)
+    api_execution_context = get_execution_context()
     
     # Create API server's own session-scoped BM for infrastructure operations
     api_bm = infrastructure.create_session_bm(

@@ -186,7 +186,8 @@ class ConfigurationBootstrapper:
             # Extract tracing configuration from infrastructure.tracing
             tracing_config = infrastructure_config.get('tracing', {})
             
-            self._execution_context = create_execution_context(tracing=tracing_config)
+            logging_config = infrastructure_config.get('logging', {})
+            self._execution_context = create_execution_context(tracing=tracing_config, logging=logging_config)
             await self._execution_context.ensure_initialized()
             logger.info("Baseline execution context created with structured logging and tracing config")
         

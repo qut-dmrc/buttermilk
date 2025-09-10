@@ -15,7 +15,7 @@ logger = structlog.get_logger(_LOGGER_NAME)
 
 
 # Configure structlog for structured JSON logging
-def configure_structlog() -> None:
+def configure_structlog(min_level) -> None:
     """Configure structlog for structured JSON logging."""
     structlog.configure(
         processors=[
@@ -30,7 +30,7 @@ def configure_structlog() -> None:
             # Output as JSON
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        wrapper_class=structlog.make_filtering_bound_logger(min_level),
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
@@ -60,10 +60,13 @@ def setup_console_logging(verbose: bool = False) -> None:
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     # Set logging levels to reduce noise from other libraries
-    # root_logger.setLevel(logging.WARNING)
+    root_logger.setLevel(logging.DEBUG if verbose else logging.WARNING)
     for logger_name in list(logging.Logger.manager.loggerDict.keys()):
         if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
             logging.getLogger(logger_name).setLevel(logging.WARNING)
+    
+    # Ensure buttermilk logger respects verbose setting
+    logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
     # Create Rich handler for beautiful console output
     rich_handler = StructlogRichHandler(show_time=True, show_level=True, show_path=False, markup=True, rich_tracebacks=True)
@@ -76,7 +79,8 @@ def setup_console_logging(verbose: bool = False) -> None:
     logging.getLogger().addHandler(rich_handler)
 
     # Also ensure structlog is configured for proper integration
-    configure_structlog()
+    struct_level = logging.DEBUG if verbose else logging.INFO
+    configure_structlog(min_level=struct_level)
 
 
 def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list[str]:
@@ -90,7 +94,16 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
         List of log file paths created
     """
     # Configure structlog if not already done
-    configure_structlog()
+    struct_level = logging.DEBUG if verbose else logging.INFO
+    configure_structlog(min_level=struct_level)
+    
+    # Ensure root logger level allows DEBUG messages when verbose
+    root_logger = logging.getLogger()
+    if verbose:
+        root_logger.setLevel(logging.DEBUG)
+    
+    # Ensure buttermilk logger respects verbose setting
+    logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
     log_files = []
 
@@ -101,11 +114,10 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
     if non_null_context:
         structlog.contextvars.bind_contextvars(**non_null_context)
 
-    # Always create an INFO JSON log file
-    info_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_info.jsonl")
-    info_handler = logging.FileHandler(info_log_path, mode="w")
-    info_handler.setLevel(logging.INFO)
-
+    # Create single JSON log file with level based on verbose setting
+    log_path = Path(f"/tmp/buttermilk_{execution_context_id}.jsonl")
+    file_handler = logging.FileHandler(log_path, mode="w")
+    file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     # Use structlog formatter for JSON output with full processing pipeline
     structlog_formatter = structlog.stdlib.ProcessorFormatter(
         processors=[
@@ -119,21 +131,15 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
             structlog.processors.JSONRenderer(),
         ],
     )
-    info_handler.setFormatter(structlog_formatter)
+    file_handler.setFormatter(structlog_formatter)
 
     # Add to both standard logger and structlog
-    logging.getLogger().addHandler(info_handler)
-    log_files.append(str(info_log_path))
+    logging.getLogger().addHandler(file_handler)
+    log_files.append(str(log_path))
 
-    # Add debug file logging when verbose is True
+    logging.info(f"Log file: {log_path}")
     if verbose:
-        debug_log_path = Path(f"/tmp/buttermilk_{execution_context_id}_debug.jsonl")
-        debug_handler = logging.FileHandler(debug_log_path, mode="w")
-        debug_handler.setLevel(logging.DEBUG)
-        debug_handler.setFormatter(structlog_formatter)
-
-        logging.getLogger().addHandler(debug_handler)
-        log_files.append(str(debug_log_path))
+        logging.debug("Verbose logging enabled.")
 
     return log_files
 
@@ -150,9 +156,6 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
     """
     if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
         try:
-            # Ensure structlog is configured
-            configure_structlog()
-
             cloud_logging_resource = gcp_logging.Resource(
                 type="generic_task",
                 labels={
