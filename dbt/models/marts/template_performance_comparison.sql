@@ -10,7 +10,7 @@ WITH predictions_with_scores AS (
     p.template_hash,
     p.model,
     JSON_EXTRACT_SCALAR(p.metadata, '$.criteria') as criteria,
-    p.record_hash,
+    JSON_EXTRACT_SCALAR(p.metadata, '$.record_hash') as record_hash,
     p.agent_name,
     p.timestamp,
     
@@ -23,7 +23,7 @@ WITH predictions_with_scores AS (
   LEFT JOIN {{ ref('stg_flows') }} s ON p.call_id = s.parent_call_id AND s.agent_name = 'SCORER'
   WHERE p.agent_name IN ('JUDGE', 'SYNTH')
     AND p.template_hash IS NOT NULL
-    AND p.record_hash IS NOT NULL
+    AND JSON_EXTRACT_SCALAR(p.metadata, '$.record_hash') IS NOT NULL
     AND JSON_EXTRACT_SCALAR(p.metadata, '$.criteria') IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5, 6, 7
 ),

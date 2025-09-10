@@ -9,12 +9,12 @@ WITH experiment_dimensions AS (
     template_hash,
     model,
     JSON_EXTRACT_SCALAR(metadata, '$.criteria') as criteria,
-    record_hash,
+    JSON_EXTRACT_SCALAR(metadata, '$.record_hash') as record_hash,
     agent_name
   FROM {{ ref('stg_flows') }}
   WHERE agent_name IN ('JUDGE', 'SYNTH')
     AND template_hash IS NOT NULL
-    AND record_hash IS NOT NULL
+    AND JSON_EXTRACT_SCALAR(metadata, '$.record_hash') IS NOT NULL
     AND JSON_EXTRACT_SCALAR(metadata, '$.criteria') IS NOT NULL
 ),
 
@@ -24,7 +24,7 @@ actual_predictions AS (
     template_hash,
     model,
     JSON_EXTRACT_SCALAR(metadata, '$.criteria') as criteria,
-    record_hash,
+    JSON_EXTRACT_SCALAR(metadata, '$.record_hash') as record_hash,
     agent_name,
     COUNT(DISTINCT call_id) as prediction_count,
     MIN(timestamp) as first_run,
@@ -32,7 +32,7 @@ actual_predictions AS (
   FROM {{ ref('stg_flows') }}
   WHERE agent_name IN ('JUDGE', 'SYNTH')
     AND template_hash IS NOT NULL
-    AND record_hash IS NOT NULL
+    AND JSON_EXTRACT_SCALAR(metadata, '$.record_hash') IS NOT NULL
     AND JSON_EXTRACT_SCALAR(metadata, '$.criteria') IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5
 ),
