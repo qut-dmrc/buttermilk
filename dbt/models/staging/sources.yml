@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: testing
+    description: "Raw data from the buttermilk platform"
+    database: prosocial-443205
+    schema: testing
+    tables:
+      - name: flow
+        description: "Contains all agent traces from flow runs."

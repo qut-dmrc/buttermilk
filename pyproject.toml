@@ -240,3 +240,10 @@ filterwarnings = [
     "ignore:Passing field metadata as keyword arguments is deprecated",
     "ignore:.*grpc_wait_for_shutdown_with_timeout.*:Warning",
 ]
+
+[dependency-groups]
+dev = [
+    "dbt>=1.0.0.40.6",
+    "dbt-bigquery>=1.10.2",
+    "dbt-core>=1.10.8",
+]
