@@ -171,7 +171,7 @@ class TestStructuredLLMHostListen:
         return host
 
     @pytest.mark.anyio
-    async def test_listen_manager_message(self, mock_host):
+    async def test_listen_manager_message(self, mock_host, real_bm):
         """Test processing manager messages."""
         message = UserResponseMessage(content="Analyze this data")
 
@@ -201,7 +201,7 @@ class TestStructuredLLMHostListen:
             assert "user_feedback" in call_args.inputs
 
     @pytest.mark.anyio
-    async def test_listen_skip_command_messages(self, mock_host):
+    async def test_listen_skip_command_messages(self, mock_host, real_bm):
         """Test that command messages are skipped."""
         message = UserResponseMessage(content="/command test")
 
@@ -221,7 +221,7 @@ class TestStructuredLLMHostListen:
         assert step.role == "TEST"
 
     @pytest.mark.anyio
-    async def test_listen_clear_pending_steps(self, mock_host):
+    async def test_listen_clear_pending_steps(self, mock_host, real_bm):
         """Test that pending steps are cleared on new message."""
         # Add some pending steps
         await mock_host._proposed_step.put(StepRequest(role="OLD"))
@@ -246,7 +246,7 @@ class TestStructuredLLMHostListen:
             assert mock_host._proposed_step.empty()
 
     @pytest.mark.anyio
-    async def test_listen_handle_end_response(self, mock_host):
+    async def test_listen_handle_end_response(self, mock_host, real_bm):
         """Test handling of END responses from LLM."""
         message = UserResponseMessage(content="I'm done")
 
@@ -272,7 +272,7 @@ class TestStructuredLLMHostListen:
         assert step.role == END
 
     @pytest.mark.anyio
-    async def test_process_routes_tool_calls(self, mock_host):
+    async def test_process_routes_tool_calls(self, mock_host, real_bm):
         """Test that _process routes tool calls to agents."""
         # Setup agent registry with tool
         from buttermilk._core.config import AgentConfig
@@ -323,38 +323,31 @@ class TestStructuredLLMHostListen:
         with patch.object(mock_host, "_fill_template", new_callable=AsyncMock) as mock_fill:
             mock_fill.return_value = [Mock()]  # Return mock messages
 
-            with patch("buttermilk.buttermilk.get_bm") as mock_get_bm:
-                mock_bm = Mock()
-                mock_llms = Mock()
-                mock_bm.llms = mock_llms
-                mock_get_bm.return_value = mock_bm
+            mock_client = Mock()
+            mock_client.create = AsyncMock(return_value=CreateResult(
+                content=[tool_call],
+                finish_reason="tool_calls",
+                usage=None,
+                cached=False
+            ))
+            real_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-                mock_llms.get_autogen_chat_client.return_value = mock_client
-                mock_client = Mock()
-                mock_client.create = AsyncMock(return_value=CreateResult(
-                    content=[tool_call],
-                    finish_reason="tool_calls",
-                    usage=None,
-                    cached=False
-                ))
-                mock_get_client.return_value = mock_client
+            # Call _process
+            result = await mock_host._process(
+                message=AgentInput(inputs={"prompt": "Search for cases"}),
+                cancellation_token=None
+            )
 
-                # Call _process
-                result = await mock_host._process(
-                    message=AgentInput(inputs={"prompt": "Search for cases"}),
-                    cancellation_token=None
-                )
+            # Should have routed the tool call
+            assert "Routing 1 tool calls" in result.outputs
 
-                # Should have routed the tool call
-                assert "Routing 1 tool calls" in result.outputs
-
-                # Check that step was queued
-                step = await mock_host._proposed_step.get()
-                assert step.role == "SEARCH_AGENT"
-                assert step.inputs["query"] == "ICCPR Article 20"
+            # Check that step was queued
+            step = await mock_host._proposed_step.get()
+            assert step.role == "SEARCH_AGENT"
+            assert step.inputs["query"] == "ICCPR Article 20"
 
     @pytest.mark.anyio
-    async def test_no_matching_agent_for_tool(self, mock_host):
+    async def test_no_matching_agent_for_tool(self, mock_host, real_bm):
         """Test handling when no agent owns the requested tool."""
         # Empty agent registry
         mock_host._agent_registry = {}
@@ -375,31 +368,24 @@ class TestStructuredLLMHostListen:
         with patch.object(mock_host, "_fill_template", new_callable=AsyncMock) as mock_fill:
             mock_fill.return_value = [Mock()]
 
-            with patch("buttermilk.buttermilk.get_bm") as mock_get_bm:
-                mock_bm = Mock()
-                mock_llms = Mock()
-                mock_bm.llms = mock_llms
-                mock_get_bm.return_value = mock_bm
+            mock_client = Mock()
+            mock_client.create = AsyncMock(return_value=CreateResult(
+                content=[tool_call],
+                finish_reason="tool_calls",
+                usage=None,
+                cached=False
+            ))
+            real_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-                mock_llms.get_autogen_chat_client.return_value = mock_client
-                mock_client = Mock()
-                mock_client.create = AsyncMock(return_value=CreateResult(
-                    content=[tool_call],
-                    finish_reason="tool_calls",
-                    usage=None,
-                    cached=False
-                ))
-                mock_get_client.return_value = mock_client
+            # Call _process
+            result = await mock_host._process(
+                message=AgentInput(inputs={"prompt": "Do something"}),
+                cancellation_token=None
+            )
 
-                # Call _process
-                result = await mock_host._process(
-                    message=AgentInput(inputs={"prompt": "Do something"}),
-                    cancellation_token=None
-                )
-
-                # Should still return success but queue should be empty
-                assert "Routing 1 tool calls" in result.outputs
-                assert mock_host._proposed_step.empty()
+            # Should still return success but queue should be empty
+            assert "Routing 1 tool calls" in result.outputs
+            assert mock_host._proposed_step.empty()
 
 
 class TestStructuredLLMHostTools:

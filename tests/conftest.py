@@ -141,38 +141,19 @@ def logger():
     from buttermilk import logger
     return logger
 
-@pytest.fixture(scope="session")
-def mock_bm():
-    return None
-
-@pytest.fixture(scope="session")
-def llms(mock_bm):
-    """Mock LLMs fixture."""
-    return mock_bm.llms
-
-
-@pytest.fixture
-def model_name():
-    """Mock model name for tests that don't need real models."""
-    return "mock-model"
-
-
-@pytest.fixture
-def llm_multimodal(mock_bm):
-    """Mock multimodal LLM fixture."""
-    return mock_bm.llms["mock-multimodal-model"]
-
-
-@pytest.fixture
-def llm(mock_bm):
-    """Mock LLM fixture."""
-    return mock_bm.llms["mock-model"]
-
-
-@pytest.fixture
-def llm_expensive(mock_bm):
-    """Mock expensive LLM fixture."""
-    return mock_bm.llms["mock-expensive-model"]
+# =============================================================================
+# DEPRECATED MOCK FIXTURES (Removed)
+#
+# The mock fixtures below have been removed in favor of real fixtures:
+# - mock_bm → real_bm
+# - llms → real_llms  
+# - model_name → real_model_name
+# - llm_multimodal → real_llm_multimodal
+# - llm → real_llm
+# - llm_expensive → real_llm_expensive
+#
+# If you have tests using the old fixtures, update them to use the real_ versions.
+# =============================================================================
 
 
 @pytest.fixture(scope="session")

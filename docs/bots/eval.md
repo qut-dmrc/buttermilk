@@ -2,9 +2,14 @@
 
 This document serves as a comprehensive guide for LLM agents assisting with evaluation, analysis, and DBT query creation for the Automod project.
 
-## Project Overview
+**Automod** provides an LLM groupchat pattern for the automated application of criteria to content. It uses the Buttermilk research platform to provide a practical tool for the automatic evaluation of content against complex guidelines. The system focuses on rigorous evaluation of LLM capabilities in applying nuanced content moderation rules.
 
-**Automod** is a high-impact public demonstration of the Buttermilk research platform, designed as a practical accountability tool for evaluating AI-generated content against complex guidelines. The system focuses on rigorous evaluation of LLM capabilities in applying nuanced content moderation rules, particularly around sensitive topics like trans journalism guidelines (TJA) and GLAAD media standards.
+Several distinct research projects utilise the Automod academic research flow environment, including:
+
+* **TJA**, the Trans Journalism ethical guidelines project, using 28 hand-coded news articles on trans issues (includes satire).
+*   **ChatGPT vs Oversight Board:** Facebook Oversight Board hate speech decisions, evaluated against FB rules and our custom prompts.
+*   **GBV:** News articles on sexual violence, evaluated against professional journalistic ethics.
+*   **Toxicity:** 20 examples from Thiago's "Silencing Drag Queens" paper, comparing commercial toxicity models to our custom prompts.
 
 ## Core Goals
 
@@ -13,9 +18,11 @@ This document serves as a comprehensive guide for LLM agents assisting with eval
 3. **Accountability**: Provide transparent, auditable evaluation of AI systems' performance on sensitive content
 4. **Accessibility**: Allow non-programmers to run experiments and analyze results without technical expertise
 
-## System Architecture
+## Core workflow
 
-### Data Flow Pipeline
+Automod projects use different combinations of prediction and validation processes to ensure quality and consistency.
+
+### Trans Flow Pipeline
 
 ```
 Input (Golden Set) → JUDGE Agents → SYNTH Agent → SCORER Agents → BigQuery → Analysis
@@ -28,36 +35,28 @@ Input (Golden Set) → JUDGE Agents → SYNTH Agent → SCORER Agents → BigQue
 5. **Storage**: Results stored as `AgentTrace` records in BigQuery
 6. **Analysis**: Looker Studio dashboards and Google Sheets for visualization
 
-## Data Structure
+#### Applicable criteria
 
-### Primary BigQuery Table
-- **Location**: `prosocial-443205.testing.flows`
-- **Record Type**: `AgentTrace` objects (Pydantic models)
-- **Key Fields**:
-  - `call_id`: Unique identifier for each prediction (CRITICAL for deduplication)
-  - `flow_id`: Identifies the experimental run
-  - `agent_name`: Which agent produced this trace (JUDGE, SYNTH, SCORER, etc.)
-  - `model`: LLM used (sonnet, gemini-2.5-pro, gpt-5-mini, etc.)
-  - `config_hash`: Hash of configuration for experiment tracking
-  - `template_hash`: Hash of system prompt template for A/B testing
-  - `record_hash`: Hash of input record from golden set
-  - `timestamp`: When the prediction was made
-  - `output`: The actual prediction/evaluation result
-  - `metadata`: Additional context (criteria used, prompt strategy, etc.)
+Each flow run assesses a record according to one set of criteria:
+1. **TJA (Trans Journalists Association)**: Complex guidelines for trans-inclusive journalism
+2. **GLAAD**: Media accountability standards for LGBTQ+ representation
+3. **Australian**: Regional content moderation guidelines
+4. **Simplified**: Streamlined rules for baseline testing
+
+
+## Architecture
+
+- **Input records:** Project datasets are stored in **Google Cloud Storage (GCS)**.
+- **Results:** All evaluation outputs are stored as `AgentTrace` objects in the BigQuery table `prosocial-443205.testing.flows`. Traces are additionally sent to **Weights and Biases**.
+- **Stochastic Testing:** Every prediction should be run at least 10 times to ensure results are stable.
+- **Test Configuration:** An experimental run is defined by: Language Model, System Prompt (hashed), Evaluation Criteria, Prompting Strategy (`JUDGE`/`SYNTH`), and the Example from the golden set.
+-   **Experiment Tracking**: To manage A/B testing, we use hashes of the `config`, `template`, and `record` for each run. This allows for precise aggregation of results from identical setups and helps filter out test/debug runs.
 
 ### Data Normalization Challenges
 - **CRITICAL**: Raw data is highly normalized with nested structures
 - **Multiple Rows Per Prediction**: Due to joins with SCORER evaluations, a single JUDGE/SYNTH prediction appears in multiple rows
 - **Deduplication Required**: Always use `DISTINCT call_id` when aggregating
 - **Nested Fields**: Qualitative and quantitative ratings are nested JSON that need unnesting
-
-## Evaluation Criteria Sets
-
-### Available Criteria
-1. **TJA (Trans Journalists Association)**: Complex guidelines for trans-inclusive journalism
-2. **GLAAD**: Media accountability standards for LGBTQ+ representation
-3. **Australian**: Regional content moderation guidelines
-4. **Simplified**: Streamlined rules for baseline testing
 
 ### Experiment Parameters
 Each experimental run is uniquely defined by:
@@ -77,65 +76,6 @@ Each experimental run is uniquely defined by:
 4. **Aggregate Correctly**: Account for multiple SCORER evaluations per prediction
 5. **Maintain Traceability**: Preserve flow_id and call_id for audit trails
 
-### Common Query Patterns
-
-#### 1. Basic Prediction Accuracy
-```sql
--- Get unique predictions with their scores
-WITH unique_predictions AS (
-  SELECT DISTINCT
-    call_id,
-    flow_id,
-    agent_name,
-    model,
-    output,
-    timestamp
-  FROM flows
-  WHERE agent_name IN ('JUDGE', 'SYNTH')
-)
-```
-
-#### 2. Scorer Aggregation
-```sql
--- Aggregate scorer evaluations per prediction
-WITH scorer_summary AS (
-  SELECT
-    parent_call_id,
-    AVG(CAST(JSON_EXTRACT_SCALAR(output, '$.score') AS FLOAT64)) as avg_score,
-    COUNT(DISTINCT scorer_model) as num_scorers
-  FROM flows
-  WHERE agent_name = 'SCORER'
-  GROUP BY parent_call_id
-)
-```
-
-#### 3. Model Performance Comparison
-```sql
--- Compare model performance by criteria
-SELECT
-  model,
-  criteria,
-  AVG(accuracy) as avg_accuracy,
-  STDDEV(accuracy) as accuracy_stddev,
-  COUNT(*) as num_predictions
-FROM aggregated_results
-GROUP BY model, criteria
-```
-
-#### 4. Stochastic Stability Analysis
-```sql
--- Check consistency across multiple runs
-WITH run_variance AS (
-  SELECT
-    model,
-    record_hash,
-    VAR_POP(score) as score_variance,
-    COUNT(*) as num_runs
-  FROM predictions
-  GROUP BY model, record_hash
-  HAVING COUNT(*) >= 10
-)
-```
 
 ## Key Validation Requirements
 
@@ -216,56 +156,3 @@ Calculate accuracy, consistency, and improvement metrics
 ### Step 5: Comparative Analysis
 Compare across models, criteria, and experimental conditions
 
-## Query Templates for Common Tasks
-
-### Get Latest Experiment Results
-```sql
-SELECT * FROM flows 
-WHERE flow_id IN (
-  SELECT DISTINCT flow_id 
-  FROM flows 
-  WHERE DATE(timestamp) = CURRENT_DATE()
-)
-```
-
-### Find Problematic Predictions
-```sql
--- Predictions with high scorer disagreement
-SELECT 
-  call_id,
-  MAX(score) - MIN(score) as score_range
-FROM scorer_evaluations
-GROUP BY call_id
-HAVING score_range > 0.5
-```
-
-### Model Performance Summary
-```sql
--- Overall model performance
-SELECT 
-  model,
-  COUNT(DISTINCT call_id) as total_predictions,
-  AVG(accuracy) as avg_accuracy,
-  PERCENTILE_CONT(accuracy, 0.5) as median_accuracy
-FROM model_predictions
-GROUP BY model
-ORDER BY avg_accuracy DESC
-```
-
-## Next Steps for Evaluation
-
-1. **Expand Golden Set**: Add more diverse, challenging examples
-2. **Refine Scoring**: Develop more nuanced SCORER prompts
-3. **Add Criteria**: Incorporate additional guideline sets
-4. **Improve Stability**: Increase minimum runs for stochastic testing
-5. **Automate Analysis**: Build scheduled DBT runs for regular reporting
-
-## Contact & Resources
-
-- **BigQuery Project**: `prosocial-443205`
-- **Main Table**: `testing.flows`
-- **DBT Models**: `/dbt/models/`
-- **Configuration**: `/conf/` directory (YAML files)
-- **Documentation**: `/docs/bots/` for additional context
-
-Remember: The goal is rigorous, reproducible evaluation that helps HASS scholars understand and improve AI content moderation capabilities while maintaining academic integrity and transparency.

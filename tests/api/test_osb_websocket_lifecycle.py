@@ -79,9 +79,9 @@ class WebSocketTestClient:
 
 
 @pytest.fixture
-async def test_app(mock_bm, real_flow_runner):
+async def test_app(real_bm, real_flow_runner):
     """Create test FastAPI app with WebSocket support."""
-    app = create_app(mock_bm, real_flow_runner)
+    app = create_app(real_bm, real_flow_runner)
     return app
 
 

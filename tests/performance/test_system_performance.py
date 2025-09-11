@@ -328,9 +328,8 @@ class LoadTestRunner:
 
 
 @pytest.fixture
-def performance_app():
+def performance_app(real_bm):
     """Create app configured for performance testing."""
-    mock_bm = MagicMock(spec=BM)
     real_flow_runner = MagicMock(spec=FlowRunner)
     
     # Configure multiple flows for testing
@@ -340,7 +339,7 @@ def performance_app():
         "research": create_test_flow_config("research", ["researcher", "analyst", "synthesizer"]),
     }
 
-    return create_app(mock_bm, real_flow_runner)
+    return create_app(real_bm, real_flow_runner)
 
 
 class TestSystemPerformance:

@@ -26,9 +26,9 @@ from buttermilk.api.flow import create_app
 
 
 @pytest.fixture
-def stress_test_app(mock_bm, real_flow_runner):
+def stress_test_app(real_bm, real_flow_runner):
     """Create test app optimized for stress testing."""
-    app = create_app(mock_bm, real_flow_runner)
+    app = create_app(real_bm, real_flow_runner)
     return app
 
 

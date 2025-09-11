@@ -60,7 +60,7 @@ class TestOSBFlowInitialization:
         assert parameters.enable_cross_validation is True
 
     @pytest.mark.anyio
-    async def test_osb_agents_have_vector_store_access(self, osb_flow_config, mock_bm_instance):
+    async def test_osb_agents_have_vector_store_access(self, osb_flow_config, real_bm):
         """
         FAILING TEST: OSB agents should initialize with vector store access.
         
@@ -71,32 +71,31 @@ class TestOSBFlowInitialization:
         """
         osb_config = osb_flow_config.osb
 
-        # Mock the global BM instance
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
-            # Extract agent configurations (this will currently fail)
-            agents_config = osb_config.agents
+        # Use real_bm directly
+        # Extract agent configurations (this will currently fail)
+        agents_config = osb_config.agents
 
-            # Test that each OSB agent type can access vector store
-            expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
+        # Test that each OSB agent type can access vector store
+        expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
 
-            for agent_name in expected_agents:
-                # This should work but currently fails due to missing data configuration
-                assert agent_name in agents_config, f"Missing {agent_name} in OSB agent configuration"
-                agent_cfg = agents_config[agent_name]
+        for agent_name in expected_agents:
+            # This should work but currently fails due to missing data configuration
+            assert agent_name in agents_config, f"Missing {agent_name} in OSB agent configuration"
+            agent_cfg = agents_config[agent_name]
 
-                # Verify agent has data configuration with vector store
-                assert "data" in agent_cfg, f"Agent {agent_name} missing data configuration"
-                assert "osb_vector" in agent_cfg.data, f"Agent {agent_name} missing osb_vector data source"
+            # Verify agent has data configuration with vector store
+            assert "data" in agent_cfg, f"Agent {agent_name} missing data configuration"
+            assert "osb_vector" in agent_cfg.data, f"Agent {agent_name} missing osb_vector data source"
 
-                # Test agent initialization with vector store access
-                if agent_cfg.get("agent_obj") == "buttermilk.agents.rag.RagAgent":
-                    # RagAgent uses external tools, not embedded vector store
-                    config_dict = OmegaConf.to_container(agent_cfg, resolve=True)
-                    agent = RagAgent(**config_dict)
+            # Test agent initialization with vector store access
+            if agent_cfg.get("agent_obj") == "buttermilk.agents.rag.RagAgent":
+                # RagAgent uses external tools, not embedded vector store
+                config_dict = OmegaConf.to_container(agent_cfg, resolve=True)
+                agent = RagAgent(**config_dict)
 
-                    # Verify agent has structured output configured
-                    assert agent.output_model is not None
-                    assert agent.output_model.__name__ == "ResearchResult"
+                # Verify agent has structured output configured
+                assert agent.output_model is not None
+                assert agent.output_model.__name__ == "ResearchResult"
 
     @pytest.mark.anyio
     async def test_osb_flow_supports_websocket_sessions(self, osb_flow_config):
@@ -127,7 +126,7 @@ class TestOSBFlowInitialization:
         assert session_params.enable_session_isolation is True
 
     @pytest.mark.anyio
-    async def test_osb_orchestrator_initialization(self, osb_flow_config, mock_bm_instance):
+    async def test_osb_orchestrator_initialization(self, osb_flow_config, real_bm):
         """
         FAILING TEST: OSB orchestrator should initialize with proper agent registration.
 
@@ -138,26 +137,26 @@ class TestOSBFlowInitialization:
         """
         osb_config = osb_flow_config.osb
 
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
-            # Test orchestrator initialization
-            orchestrator_class_path = osb_config.orchestrator
-            module_path, class_name = orchestrator_class_path.rsplit(".", 1)
+        # Use real_bm directly
+        # Test orchestrator initialization
+        orchestrator_class_path = osb_config.orchestrator
+        module_path, class_name = orchestrator_class_path.rsplit(".", 1)
 
-            # This should work but may fail due to configuration issues
-            import importlib
+        # This should work but may fail due to configuration issues
+        import importlib
 
-            module = importlib.import_module(module_path)
-            orchestrator_cls = getattr(module, class_name)
+        module = importlib.import_module(module_path)
+        orchestrator_cls = getattr(module, class_name)
 
-            # Create orchestrator with OSB configuration
-            # This will fail due to incomplete agent configuration
-            config_dict = OmegaConf.to_container(osb_config, resolve=True)
-            orchestrator = orchestrator_cls(**config_dict)
+        # Create orchestrator with OSB configuration
+        # This will fail due to incomplete agent configuration
+        config_dict = OmegaConf.to_container(osb_config, resolve=True)
+        orchestrator = orchestrator_cls(**config_dict)
 
-            # Test that orchestrator has all expected OSB agents
-            expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
-            for agent_name in expected_agents:
-                assert agent_name in orchestrator.agents, f"Orchestrator missing {agent_name} agent"
+        # Test that orchestrator has all expected OSB agents
+        expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
+        for agent_name in expected_agents:
+            assert agent_name in orchestrator.agents, f"Orchestrator missing {agent_name} agent"
 
     @pytest.mark.anyio
     async def test_osb_session_context_creation(self):

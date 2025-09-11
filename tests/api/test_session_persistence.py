@@ -357,87 +357,83 @@ class TestSessionGCSArchival:
             result = storage_service.archive_to_gcs(session_id)
             assert result is False
 
-    def test_archive_to_gcs_local_save_dir(self, storage_service):
+    def test_archive_to_gcs_local_save_dir(self, storage_service, real_bm):
         """Test archive_to_gcs with local save_dir (should skip archival)."""
         session_id = "test-session"
 
         # Create a test session
         storage_service.save_parameters(session_id, {"flow": "test"})
 
-        # Mock BM with local save_dir
-        mock_bm = MagicMock()
-        mock_bm.session_info.save_dir = "/tmp/local/path"
+        # Set up real_bm with local save_dir
+        real_bm.session_info.save_dir = "/tmp/local/path"
 
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
-            result = storage_service.archive_to_gcs(session_id)
-            assert result is False
+        result = storage_service.archive_to_gcs(session_id)
+        assert result is False
 
-    def test_archive_to_gcs_success(self, storage_service):
+    def test_archive_to_gcs_success(self, storage_service, real_bm):
         """Test successful GCS archival."""
         session_id = "test-session"
 
         # Create a test session
         storage_service.save_parameters(session_id, {"flow": "test"})
 
-        # Mock BM with GCS save_dir
-        mock_bm = MagicMock()
-        mock_bm.session_info.save_dir = "gs://my-bucket/sessions"
-        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
+        # Set up real_bm with GCS save_dir
+        real_bm.session_info.save_dir = "gs://my-bucket/sessions"
+        # Mock the save method to simulate GCS save
+        from unittest.mock import Mock
+        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
-            result = storage_service.archive_to_gcs(session_id)
-            assert result is True
+        result = storage_service.archive_to_gcs(session_id)
+        assert result is True
 
-            # Verify BM save was called with correct parameters
-            mock_bm.save.assert_called_once()
-            call_args = mock_bm.save.call_args
-            assert "sessions/session_test-session_archived.json" in call_args[1]["basename"]
+        # Verify BM save was called with correct parameters
+        real_bm.save.assert_called_once()
+        call_args = real_bm.save.call_args
+        assert "sessions/session_test-session_archived.json" in call_args[1]["basename"]
 
-    def test_finalize_session(self, storage_service):
+    def test_finalize_session(self, storage_service, real_bm):
         """Test session finalization with completion metadata."""
         session_id = "test-session"
 
         # Create a test session
         storage_service.save_parameters(session_id, {"flow": "test"})
 
-        # Mock BM to test archival is attempted
-        mock_bm = MagicMock()
-        mock_bm.session_info.save_dir = "gs://my-bucket/sessions"
-        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
+        # Set up real_bm to test archival is attempted
+        real_bm.session_info.save_dir = "gs://my-bucket/sessions"
+        from unittest.mock import Mock
+        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
-            storage_service.finalize_session(session_id, "completed")
+        storage_service.finalize_session(session_id, "completed")
 
-            # Verify session data was updated
-            session_data = storage_service._get_or_create_session_data(session_id)
-            assert session_data["flow_status"] == "completed"
-            assert "completed_at" in session_data
+        # Verify session data was updated
+        session_data = storage_service._get_or_create_session_data(session_id)
+        assert session_data["flow_status"] == "completed"
+        assert "completed_at" in session_data
 
-            # Verify archival was attempted
-            mock_bm.save.assert_called_once()
+        # Verify archival was attempted
+        real_bm.save.assert_called_once()
 
-    def test_finalize_session_always_attempts_archival(self, storage_service):
+    def test_finalize_session_always_attempts_archival(self, storage_service, real_bm):
         """Test that finalize_session always attempts archival for terminal states."""
         session_id = "test-session"
 
         # Create a test session
         storage_service.save_parameters(session_id, {"flow": "test"})
 
-        # Mock BM
-        mock_bm = MagicMock()
-        mock_bm.session_info.save_dir = "gs://my-bucket/sessions"
-        mock_bm.save.return_value = "gs://my-bucket/sessions/session_test-session_archived.json"
+        # Set up real_bm
+        real_bm.session_info.save_dir = "gs://my-bucket/sessions"
+        from unittest.mock import Mock
+        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
-        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm):
-            storage_service.finalize_session(session_id, "failed")
+        storage_service.finalize_session(session_id, "failed")
 
-            # Verify session data was updated
-            session_data = storage_service._get_or_create_session_data(session_id)
-            assert session_data["flow_status"] == "failed"
-            assert "completed_at" in session_data
+        # Verify session data was updated
+        session_data = storage_service._get_or_create_session_data(session_id)
+        assert session_data["flow_status"] == "failed"
+        assert "completed_at" in session_data
 
-            # Verify archival was attempted even for failed status
-            mock_bm.save.assert_called_once()
+        # Verify archival was attempted even for failed status
+        real_bm.save.assert_called_once()
 
 
 class TestConfigurableSessionsDirectory:
@@ -449,17 +445,15 @@ class TestConfigurableSessionsDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    def test_get_sessions_dir_with_bm_config(self, temp_storage_dir):
+    def test_get_sessions_dir_with_bm_config(self, temp_storage_dir, real_bm):
         """Test get_sessions_dir uses BM configuration when available."""
         from buttermilk.api.services.session_storage import get_sessions_dir
 
-        # Mock BM instance with custom sessions_dir
-        mock_bm = MagicMock()
-        mock_bm.session_info.sessions_dir = str(temp_storage_dir)
+        # Set up real_bm with custom sessions_dir
+        real_bm.session_info.sessions_dir = str(temp_storage_dir)
 
-        with patch("buttermilk.get_bm", return_value=mock_bm):
-            result = get_sessions_dir()
-            assert result == temp_storage_dir
+        result = get_sessions_dir()
+        assert result == temp_storage_dir
 
     def test_get_sessions_dir_fallback_when_bm_unavailable(self):
         """Test get_sessions_dir falls back to default when BM is unavailable."""
@@ -469,17 +463,16 @@ class TestConfigurableSessionsDirectory:
             result = get_sessions_dir()
             assert result == SESSIONS_DIR
 
-    def test_get_sessions_dir_fallback_when_no_sessions_dir_attr(self):
+    def test_get_sessions_dir_fallback_when_no_sessions_dir_attr(self, real_bm):
         """Test get_sessions_dir falls back when sessions_dir attribute missing."""
         from buttermilk.api.services.session_storage import SESSIONS_DIR, get_sessions_dir
 
-        # Mock BM instance without sessions_dir attribute
-        mock_bm = MagicMock()
-        del mock_bm.session_info.sessions_dir  # Remove the attribute
+        # Remove sessions_dir attribute from real_bm
+        if hasattr(real_bm.session_info, 'sessions_dir'):
+            delattr(real_bm.session_info, 'sessions_dir')
 
-        with patch("buttermilk.get_bm", return_value=mock_bm):
-            result = get_sessions_dir()
-            assert result == SESSIONS_DIR
+        result = get_sessions_dir()
+        assert result == SESSIONS_DIR
 
     def test_session_storage_service_uses_get_sessions_dir(self, temp_storage_dir):
         """Test SessionStorageService uses get_sessions_dir for initialization."""
@@ -510,35 +503,33 @@ class TestConfigurableSessionsDirectory:
         assert new_dir.exists()
         assert new_dir.is_dir()
 
-    def test_end_to_end_configurable_sessions_dir(self, temp_storage_dir):
+    def test_end_to_end_configurable_sessions_dir(self, temp_storage_dir, real_bm):
         """Test end-to-end functionality with configurable sessions directory."""
         from buttermilk.api.services.message_service import ChatMessage
         from buttermilk.api.services.session_storage import SessionStorageService
 
-        # Mock BM configuration to use our temp directory
-        mock_bm = MagicMock()
-        mock_bm.session_info.sessions_dir = str(temp_storage_dir)
+        # Set up real_bm configuration to use our temp directory
+        real_bm.session_info.sessions_dir = str(temp_storage_dir)
 
-        with patch("buttermilk.get_bm", return_value=mock_bm):
-            # Create service (should use configured directory)
-            service = SessionStorageService()
-            assert service.sessions_dir == temp_storage_dir
+        # Create service (should use configured directory)
+        service = SessionStorageService()
+        assert service.sessions_dir == temp_storage_dir
 
-            # Save a message
-            session_id = "config-test-session"
-            message = ChatMessage(
-                type="record",
-                message_id="config-msg-001",
-                preview="Configurable directory test",
-                outputs={"content": "Testing configured sessions directory"},
-            )
-            service.save_message(session_id, message)
+        # Save a message
+        session_id = "config-test-session"
+        message = ChatMessage(
+            type="record",
+            message_id="config-msg-001",
+            preview="Configurable directory test",
+            outputs={"content": "Testing configured sessions directory"},
+        )
+        service.save_message(session_id, message)
 
-            # Verify file was created in configured directory
-            session_file = temp_storage_dir / f"{session_id}.json"
-            assert session_file.exists()
+        # Verify file was created in configured directory
+        session_file = temp_storage_dir / f"{session_id}.json"
+        assert session_file.exists()
 
-            # Verify we can retrieve the message
-            messages = service.get_session_messages(session_id)
-            assert len(messages) == 1
-            assert messages[0].message_id == "config-msg-001"
+        # Verify we can retrieve the message
+        messages = service.get_session_messages(session_id)
+        assert len(messages) == 1
+        assert messages[0].message_id == "config-msg-001"

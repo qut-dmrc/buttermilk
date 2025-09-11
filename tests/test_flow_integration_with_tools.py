@@ -21,7 +21,7 @@ pytestmark = pytest.mark.anyio
 class TestOSBFlowIntegration:
     """Test OSB flow with structured tool definitions."""
     
-    async def test_osb_flow_with_structured_host(self, mock_bm):
+    async def test_osb_flow_with_structured_host(self, real_bm):
         """Test OSB flow with StructuredLLMHostAgent replacing the sequencer."""
         # Create mock agents with tool definitions
         class MockResearcherAgent(Agent):
@@ -129,7 +129,7 @@ class TestOSBFlowIntegration:
 class TestTransFlowIntegration:
     """Test trans flow with structured tool definitions."""
     
-    async def test_trans_flow_with_structured_tools(self, mock_bm):
+    async def test_trans_flow_with_structured_tools(self, real_bm):
         """Test trans flow with agents using tool definitions."""
         # Create mock judge agent with tools
         class MockJudgeAgent(Agent):
@@ -203,7 +203,7 @@ class TestTransFlowIntegration:
 class TestToxFlowIntegration:
     """Test tox flow with structured tool definitions."""
     
-    async def test_tox_flow_tool_coordination(self, mock_bm):
+    async def test_tox_flow_tool_coordination(self, real_bm):
         """Test tox flow with tool-based agent coordination."""
         # Create scorer agent with tools
         class MockScorerAgent(Agent):

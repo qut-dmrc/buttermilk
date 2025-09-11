@@ -25,9 +25,9 @@ from buttermilk.api.flow import create_app
 
 
 @pytest.fixture
-def e2e_app(mock_bm, real_flow_runner):
+def e2e_app(real_bm, real_flow_runner):
     """Create E2E test app with full configuration."""
-    app = create_app(mock_bm, real_flow_runner)
+    app = create_app(real_bm, real_flow_runner)
     return app
 
 
