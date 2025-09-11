@@ -12,8 +12,8 @@ verbose: true
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: buttermilk
-    job: testing
+    name: ${run.name}
+    job: ${run.job}
 
 infrastructure:
   clouds:
@@ -44,3 +44,13 @@ infrastructure:
   logging:
     type: local
     verbose: ${verbose}
+
+run:
+  mode: pytest
+  ui: console
+  human_in_loop: false
+
+  name: testing
+  job: tests
+
+  flows: ${flows}

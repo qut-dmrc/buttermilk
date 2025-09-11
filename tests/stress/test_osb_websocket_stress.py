@@ -14,36 +14,21 @@ production-level loads and stress conditions reliably.
 """
 
 import asyncio
-import pytest
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
+
+import pytest
 from fastapi.testclient import TestClient
 
-from buttermilk.api.flow import create_app
 from buttermilk._core.bm_init import BM
-from tests.utils.websocket_test_utils import (
-    WebSocketTestSession,
-    WebSocketStressTestRunner,
-    websocket_test_context,
-    simulate_osb_workflow,
-    create_mock_flow_runner_for_websocket_tests,
-    validate_websocket_test_results
-)
+from buttermilk.api.flow import create_app
+
 
 
 @pytest.fixture
-def mock_bm():
-    """Mock BM instance for stress testing."""
-    mock_bm = MagicMock(spec=BM)
-    mock_bm.llms = MagicMock()
-    return mock_bm
-
-
-@pytest.fixture
-def stress_test_app(mock_bm):
+def stress_test_app(mock_bm, real_flow_runner):
     """Create test app optimized for stress testing."""
-    mock_flow_runner = create_mock_flow_runner_for_websocket_tests()
-    app = create_app(mock_bm, mock_flow_runner)
+    app = create_app(mock_bm, real_flow_runner)
     return app
 
 
@@ -69,7 +54,7 @@ class TestOSBWebSocketConcurrency:
                     ws = client.websocket_connect(f"/ws/{session_id}")
                     session_ws = ws.__enter__()
                     sessions.append((session_id, session_ws))
-                except Exception as e:
+                except Exception:
                     # Track connection failures
                     pass
 
@@ -118,7 +103,7 @@ class TestOSBWebSocketConcurrency:
                 # Small delay to prevent overwhelming
                 await asyncio.sleep(0.1)
 
-            except Exception as e:
+            except Exception:
                 # Track errors but continue
                 break
 
@@ -152,7 +137,7 @@ class TestOSBWebSocketConcurrency:
                             "query": f"Burst test {i}"
                         })
 
-                except Exception as e:
+                except Exception:
                     # Connection failed - this is acceptable under burst load
                     pass
 
@@ -366,7 +351,7 @@ class TestOSBWebSocketReliability:
                     try:
                         websocket.send_json(malformed_msg)
                         # Connection should remain stable
-                    except Exception as e:
+                    except Exception:
                         # Some test clients may reject at send level
                         pass
 

@@ -23,14 +23,17 @@ def conf():
     return cfg
 
 
+@pytest.fixture
+def bootstrapper(conf):
+    """ConfigurationBootstrapper fixture."""
+    return ConfigurationBootstrapper(config=conf)
+
+
 # Create infrastructure manager from test configuration with proper ExecutionContext
 @pytest.fixture(scope="session", autouse=True)
 def infrastructure(conf):
     """Provide the Infrastructure instance created from config with ExecutionContext."""
 
-    # Follow CLI pattern: Create infrastructure and BM first, then bootstrap ExecutionContext
-    bootstrapper = ConfigurationBootstrapper(config=conf)
-    
     # Create infrastructure manager first
     infrastructure = bootstrapper.get_infrastructure_manager()
     
@@ -46,7 +49,7 @@ def infrastructure(conf):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def bm(infrastructure):
+def bm(infrastructure, conf):
     """Provide the real BM instance for integration tests."""
     return get_bm()
 

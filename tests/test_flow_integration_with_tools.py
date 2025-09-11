@@ -18,24 +18,6 @@ from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 pytestmark = pytest.mark.anyio
 
 
-@pytest.fixture
-def mock_bm():
-    """Mock the BM singleton."""
-    # Create mock BM instance
-    mock_bm = Mock()
-    mock_bm.llms = Mock()
-    mock_bm.llms.get_autogen_chat_client = Mock(return_value=Mock())
-    mock_bm.databases = {}
-    mock_bm.storage = {}
-    
-    # Mock weave
-    mock_bm.get_weave_client = Mock()
-    
-    # Use MagicMock to prevent AttributeError
-    with patch("buttermilk.buttermilk", mock_bm):
-        yield mock_bm
-
-
 class TestOSBFlowIntegration:
     """Test OSB flow with structured tool definitions."""
     

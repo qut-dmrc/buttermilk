@@ -2,33 +2,16 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from hydra import compose, initialize
-from omegaconf import OmegaConf
 
-from buttermilk import BM
 from buttermilk.api.flow import create_app
-from buttermilk.runner.flowrunner import FlowRunner
 
 
 @pytest.fixture(scope="session")
-def client():
+def client(flow_runner, real_infrastructure) -> TestClient:
     # Initialize with minimal configuration for testing
-    with initialize(config_path="../../conf", version_base="1.3"):
-        cfg = compose(config_name="config", overrides=["run=test_api"])
-        
-        # Create BM instance
-        resolved_cfg_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-        bm = BM(**resolved_cfg_dict["bm"])
 
-        # Create FlowRunner instance
-        flows = FlowRunner.model_validate(cfg.run)
-        
-        # Set BM singleton
-        from buttermilk import set_bm
-        set_bm(bm)
-        
-        app = create_app(bm=bm, flows=flows)
-        return TestClient(app)
+    app = create_app(infrastructure=real_infrastructure, flows=flow_runner)
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -63,7 +46,7 @@ def test_api_request_simple(
     assert "agent_info" in json_response
 
 
-def test_run_flow(bm: Any, client, flow_request_data: dict[str, Any]):
+def test_run_flow(client, flow_request_data: dict[str, Any]):
     response = client.post("/flow/test", json=flow_request_data)
     assert response.status_code == 200
     json_response = response.json()

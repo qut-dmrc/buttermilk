@@ -23,22 +23,6 @@ def mock_session_info():
     )
 
 
-@pytest.fixture
-def mock_bm(mock_session_info, monkeypatch):
-    """Create a mock BM instance with test session info."""
-    bm_config = {
-        "session_info": mock_session_info,
-        "save_dir_base": "/tmp",
-        "connections": [],
-    }
-    bm = BM(**bm_config)
-    
-    # Monkeypatch the global bm instance
-    import buttermilk
-    monkeypatch.setattr(buttermilk, "buttermilk", bm)
-    
-    return bm
-
 
 @pytest.fixture
 def agent_config():

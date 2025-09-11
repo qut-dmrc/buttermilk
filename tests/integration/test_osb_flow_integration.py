@@ -38,12 +38,6 @@ class TestOSBFlowInitialization:
         mock_store.ensure_cache_initialized = AsyncMock()
         return mock_store
 
-    @pytest.fixture
-    def mock_bm_instance(self, mock_vector_store):
-        """Mock Buttermilk instance with storage access."""
-        mock_bm = MagicMock()
-        mock_bm.get_storage = MagicMock(return_value=mock_vector_store)
-        return mock_bm
 
     @pytest.mark.anyio
     async def test_osb_flow_loads_configuration(self, osb_flow_config):

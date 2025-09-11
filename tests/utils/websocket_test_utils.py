@@ -465,38 +465,6 @@ async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expec
 
 # Utility functions for test setup and teardown
 
-
-def create_mock_flow_runner_for_websocket_tests() -> FlowRunner:
-    """Create mock FlowRunner for WebSocket testing."""
-    mock_runner = MagicMock(spec=FlowRunner)
-    mock_runner.flows = {"osb": {"name": "OSB Interactive Flow"}}
-    mock_runner.session_manager = MagicMock()
-
-    async def mock_get_session(session_id, websocket=None):
-        session = MagicMock(spec=FlowRunContext)
-        session.session_id = session_id
-        session.flow_name = "osb"
-        session.status = SessionStatus.ACTIVE
-        session.websocket = websocket
-        session.monitor_ui = AsyncMock()
-        session.send_message_to_ui = AsyncMock()
-
-        # Mock monitor_ui to yield run requests
-        async def mock_monitor():
-            while True:
-                await asyncio.sleep(0.1)
-                # In real tests, this would yield actual run requests
-                yield MagicMock()
-
-        session.monitor_ui.return_value = mock_monitor()
-        return session
-
-    mock_runner.get_websocket_session_async = AsyncMock(side_effect=mock_get_session)
-    mock_runner.run_flow = AsyncMock()
-
-    return mock_runner
-
-
 def validate_websocket_test_results(results: Dict[str, Any], expected_criteria: Dict[str, Any]) -> tuple[bool, List[str]]:
     """Validate WebSocket test results against expected criteria."""
     validation_errors = []

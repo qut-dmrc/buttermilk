@@ -2,10 +2,9 @@
 Tests for score pages API endpoints
 """
 
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI, HTTPException
 
 from buttermilk.api.services.data_service import DataService
 
@@ -14,7 +13,7 @@ class TestDataService:
     """Test the DataService methods"""
 
     @pytest.fixture
-    def mock_flow_runner(self):
+    def real_flow_runner(self):
         """Mock flow runner with test data"""
         mock_runner = Mock()
         
@@ -30,16 +29,9 @@ class TestDataService:
         
         yield mock_runner
 
-    @pytest.fixture
-    def mock_bm_instance(self):
-        """Mock BM instance with BigQuery client"""
-        mock_bm = Mock()
-        mock_bm.bq = Mock()
-        mock_bm.bq.project = "test-project"
-        return mock_bm
 
     @pytest.mark.anyio
-    async def test_get_record_by_id_found(self, mock_flow_runner):
+    async def test_get_record_by_id_found(self, real_flow_runner):
         """Test getting a record that exists"""
         with pytest.MonkeyPatch().context() as m:
             # Mock the data loader
@@ -54,15 +46,15 @@ class TestDataService:
             mock_bm = Mock()
             mock_bm.get_storage = Mock(return_value=mock_storage)
             m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
-            
-            result = await DataService.get_record_by_id("test_record_1", "test_flow", mock_flow_runner)
+
+            result = await DataService.get_record_by_id("test_record_1", "test_flow", real_flow_runner)
             
             assert result is not None
             assert result.record_id == "test_record_1"
             assert result.content == "Test content"
 
     @pytest.mark.anyio
-    async def test_get_record_by_id_not_found(self, mock_flow_runner):
+    async def test_get_record_by_id_not_found(self, real_flow_runner):
         """Test getting a record that doesn't exist"""
         with pytest.MonkeyPatch().context() as m:
             mock_storage = Mock()
@@ -71,13 +63,13 @@ class TestDataService:
             mock_bm = Mock()
             mock_bm.get_storage = Mock(return_value=mock_storage)
             m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
-            
-            result = await DataService.get_record_by_id("nonexistent", "test_flow", mock_flow_runner)
+
+            result = await DataService.get_record_by_id("nonexistent", "test_flow", real_flow_runner)
             
             assert result is None
 
     @pytest.mark.anyio
-    async def test_get_records_for_flow_without_scores(self, mock_flow_runner):
+    async def test_get_records_for_flow_without_scores(self, real_flow_runner):
         """Test getting records list without scores"""
         with pytest.MonkeyPatch().context() as m:
             mock_record = Mock()
@@ -91,15 +83,15 @@ class TestDataService:
             mock_bm = Mock()
             mock_bm.get_storage = Mock(return_value=mock_storage)
             m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
-            
-            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=False, dataset_name="test_dataset")
+
+            result = await DataService.get_records_for_flow("test_flow", real_flow_runner, include_scores=False, dataset_name="test_dataset")
             
             assert len(result) == 1
             assert result[0].record_id == "test_record_1"
             assert "summary_scores" not in result[0].metadata
 
     @pytest.mark.anyio
-    async def test_get_records_for_flow_with_scores(self, mock_flow_runner):
+    async def test_get_records_for_flow_with_scores(self, real_flow_runner):
         """Test getting records list with scores"""
         with pytest.MonkeyPatch().context() as m:
             mock_record = Mock()
@@ -113,8 +105,8 @@ class TestDataService:
             mock_bm = Mock()
             mock_bm.get_storage = Mock(return_value=mock_storage)
             m.setattr("buttermilk._core.dmrc.get_bm", lambda: mock_bm)
-            
-            result = await DataService.get_records_for_flow("test_flow", mock_flow_runner, include_scores=True, dataset_name="test_dataset")
+
+            result = await DataService.get_records_for_flow("test_flow", real_flow_runner, include_scores=True, dataset_name="test_dataset")
             
             assert len(result) == 1
             assert result[0].record_id == "test_record_1"
@@ -178,8 +170,9 @@ class TestDataService:
         """Test getting detailed responses for a record"""
         with pytest.MonkeyPatch().context() as m:
             # Mock DataFrame with response data
-            import pandas as pd
             from datetime import datetime
+
+            import pandas as pd
             
             test_data = {
                 "judge": ["GPT-4"],

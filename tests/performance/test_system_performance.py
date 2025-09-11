@@ -16,19 +16,19 @@ YAML-configured flow without hardcoded dependencies.
 """
 
 import asyncio
-import pytest
-import time
-import psutil
 import statistics
-from typing import Dict, Any, List, Optional, Generator
-from dataclasses import dataclass, asdict
-from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
-import concurrent.futures
 import threading
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
-from buttermilk.api.flow import create_app
+import psutil
+import pytest
+from fastapi.testclient import TestClient
+
 from buttermilk._core.bm_init import BM
+from buttermilk.api.flow import create_app
 from buttermilk.runner.flowrunner import FlowRunner
 from tests.utils.test_data_manager import TestDataManager, create_test_flow_config
 
@@ -100,15 +100,15 @@ class PerformanceMonitor:
                     "cpu_percent": process.cpu_percent(),
                     "memory_percent": process.memory_percent(),
                     "num_threads": process.num_threads(),
-                    "num_fds": process.num_fds() if hasattr(process, 'num_fds') else 0,
+                    "num_fds": process.num_fds() if hasattr(process, "num_fds") else 0,
                     "system_memory_percent": psutil.virtual_memory().percent,
-                    "system_cpu_percent": psutil.cpu_percent()
+                    "system_cpu_percent": psutil.cpu_percent(),
                 }
                 
                 self.metrics_timeline.append(metrics)
                 time.sleep(self.sampling_interval)
-                
-            except Exception as e:
+
+            except Exception:
                 # Continue monitoring even if individual samples fail
                 pass
 
@@ -150,10 +150,7 @@ class LoadTestRunner:
                 user_tasks = []
                 for user_id in range(concurrent_users):
                     task = asyncio.create_task(
-                        self._simulate_user_load(
-                            client, user_id, flow_name, test_duration, 
-                            requests_per_user, request_timings, errors
-                        )
+                        self._simulate_user_load(client, user_id, flow_name, test_duration, requests_per_user, request_timings, errors)
                     )
                     user_tasks.append(task)
                 
@@ -192,12 +189,17 @@ class LoadTestRunner:
             resource_timeline=resource_timeline,
             success=performance_metrics.success_rate >= 0.8
         )
-    
-    async def _simulate_user_load(self, client: TestClient, user_id: int, 
-                                 flow_name: str, duration: float, 
-                                 requests_per_user: int,
-                                 request_timings: List[float], 
-                                 errors: List[str]) -> Dict[str, int]:
+
+    async def _simulate_user_load(
+        self,
+        client: TestClient,
+        user_id: int,
+        flow_name: str,
+        duration: float,
+        requests_per_user: int,
+        request_timings: List[float],
+        errors: List[str],
+    ) -> Dict[str, int]:
         """Simulate load from individual user."""
         user_stats = {"successful_requests": 0, "total_requests": 0, "errors": 0}
         
@@ -329,16 +331,16 @@ class LoadTestRunner:
 def performance_app():
     """Create app configured for performance testing."""
     mock_bm = MagicMock(spec=BM)
-    mock_flow_runner = MagicMock(spec=FlowRunner)
+    real_flow_runner = MagicMock(spec=FlowRunner)
     
     # Configure multiple flows for testing
-    mock_flow_runner.flows = {
+    real_flow_runner.flows = {
         "osb": create_test_flow_config("osb", ["researcher", "policy_analyst", "fact_checker", "explorer"]),
         "content_moderation": create_test_flow_config("content_moderation", ["classifier", "reviewer"]),
-        "research": create_test_flow_config("research", ["researcher", "analyst", "synthesizer"])
+        "research": create_test_flow_config("research", ["researcher", "analyst", "synthesizer"]),
     }
-    
-    return create_app(mock_bm, mock_flow_runner)
+
+    return create_app(mock_bm, real_flow_runner)
 
 
 class TestSystemPerformance:
@@ -420,8 +422,7 @@ class TestSystemPerformance:
 
             print(f"\n{flow_name} Scalability:")
             for i, result in enumerate(results):
-                print(f"  Load {i+1}: {result.concurrent_users} users, "
-                      f"{result.avg_latency_ms:.1f}ms avg, {result.success_rate:.1%} success")
+                print(f"  Load {i + 1}: {result.concurrent_users} users, {result.avg_latency_ms:.1f}ms avg, {result.success_rate:.1%} success")
 
     @pytest.mark.anyio
     async def test_memory_usage_stability(self, performance_app):
@@ -457,7 +458,7 @@ class TestSystemPerformance:
 
             assert memory_cv < 0.3, f"Memory usage too unstable: CV={memory_cv:.2f}"
 
-            print(f"\nMemory Stability Results:")
+            print("\nMemory Stability Results:")
             print(f"  Start Memory: {start_memory:.1f}MB")
             print(f"  End Memory: {end_memory:.1f}MB")
             print(f"  Growth: {memory_growth:.1%}")
@@ -534,7 +535,7 @@ class TestReliabilityAndStress:
         # Even with errors, some requests should succeed
         assert result.performance_metrics.success_rate >= 0.5, f"Success rate too low: {result.performance_metrics.success_rate:.1%}"
 
-        print(f"\nError Recovery Results:")
+        print("\nError Recovery Results:")
         print(f"  Error Rate: {error_rate:.1%}")
         print(f"  Success Rate: {result.performance_metrics.success_rate:.1%}")
         print(f"  Total Errors: {result.performance_metrics.error_count}")
@@ -562,7 +563,7 @@ class TestReliabilityAndStress:
         # Latency may be higher but should be reasonable
         assert result.performance_metrics.avg_latency_ms < 8000, f"Burst latency too high: {result.performance_metrics.avg_latency_ms:.1f}ms"
 
-        print(f"\nBurst Load Results:")
+        print("\nBurst Load Results:")
         print(f"  Success Rate: {result.performance_metrics.success_rate:.1%}")
         print(f"  Peak Latency: {result.performance_metrics.p99_latency_ms:.1f}ms")
         print(f"  Throughput: {result.performance_metrics.throughput_rps:.1f} req/s")
@@ -592,7 +593,7 @@ class TestReliabilityAndStress:
         # System should maintain some level of service
         assert result.performance_metrics.success_rate >= 0.3, f"System completely failed under load: {result.performance_metrics.success_rate:.1%}"
 
-        print(f"\nResource Exhaustion Protection:")
+        print("\nResource Exhaustion Protection:")
         print(f"  Success Rate: {result.performance_metrics.success_rate:.1%}")
         print(f"  Max Memory: {max_memory:.1f}MB")
         print(f"  Error Count: {result.performance_metrics.error_count}")
@@ -629,7 +630,7 @@ class TestLongRunningPerformance:
         assert result.performance_metrics.avg_latency_ms < 3000, f"Production latency too high: {result.performance_metrics.avg_latency_ms:.1f}ms"
         assert result.performance_metrics.p95_latency_ms < 5000, f"Production P95 latency too high: {result.performance_metrics.p95_latency_ms:.1f}ms"
 
-        print(f"\nProduction Simulation Results:")
+        print("\nProduction Simulation Results:")
         print(f"  Duration: {result.performance_metrics.duration:.1f}s")
         print(f"  Total Requests: {result.performance_metrics.request_count}")
         print(f"  Success Rate: {result.performance_metrics.success_rate:.1%}")

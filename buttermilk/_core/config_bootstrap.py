@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
@@ -20,11 +19,11 @@ from buttermilk._core.log import logger
 
 class ConfigurationBootstrapper:
     """Single point of entry for all configuration management.
-    
-    This class eliminates scattered environment variable access and configuration 
+
+    This class eliminates scattered environment variable access and configuration
     initialization by providing centralized bootstrapping of all infrastructure
     components and execution contexts.
-    
+
     Key responsibilities:
     1. Single Hydra initialization
     2. Environment variable management
@@ -32,10 +31,10 @@ class ConfigurationBootstrapper:
     4. Infrastructure configuration
     5. Session context setup
     """
-    
+
     def __init__(self, config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None):
         """Initialize the configuration bootstrapper.
-        
+
         Args:
             config_path: Path to Hydra configuration directory
             overrides: List of configuration overrides
@@ -46,10 +45,10 @@ class ConfigurationBootstrapper:
         self._config: DictConfig | None = config
         self._infrastructure: InfrastructureManager | None = None
         self._execution_context: ExecutionContext | None = None
-        
+
     def _load_configuration(self) -> DictConfig:
         """Load configuration via Hydra (single initialization).
-        
+
         Returns:
             Loaded and resolved configuration
         """
@@ -57,18 +56,20 @@ class ConfigurationBootstrapper:
             try:
                 # Check if we're already in a Hydra context (like CLI)
                 from hydra.core.global_hydra import GlobalHydra
-                
+
                 if GlobalHydra.instance().is_initialized():
                     # We're already in a Hydra context, get the existing config
                     from hydra import compose
+
                     self._config = compose(config_name="config", overrides=self.overrides)
                     OmegaConf.resolve(self._config)
                     logger.info("Configuration loaded from existing Hydra context")
                 else:
                     # Load configuration using Hydra compose API
-                    from hydra import compose, initialize_config_dir
                     from pathlib import Path
-                    
+
+                    from hydra import compose, initialize_config_dir
+
                     # Get absolute path to config directory
                     config_dir = Path(__file__).parent.parent / self.config_path
                     config_dir = config_dir.resolve()
@@ -96,26 +97,28 @@ class ConfigurationBootstrapper:
         env_vars = {}
         
         # OpenTelemetry configuration (previously in otel.py)
-        if hasattr(config, 'observability') and config.observability:
-            otel_config = config.observability.get('opentelemetry', {})
-            if otel_config.get('enabled', False):
-                env_vars.update({
-                    'OTEL_SERVICE_NAME': otel_config.get('service_name', 'buttermilk'),
-                    'OTEL_RESOURCE_ATTRIBUTES': f"service.name={otel_config.get('service_name', 'buttermilk')}",
-                })
-                
-                if otel_config.get('endpoint'):
-                    env_vars['OTEL_EXPORTER_OTLP_ENDPOINT'] = otel_config['endpoint']
+        if hasattr(config, "observability") and config.observability:
+            otel_config = config.observability.get("opentelemetry", {})
+            if otel_config.get("enabled", False):
+                env_vars.update(
+                    {
+                        "OTEL_SERVICE_NAME": otel_config.get("service_name", "buttermilk"),
+                        "OTEL_RESOURCE_ATTRIBUTES": f"service.name={otel_config.get('service_name', 'buttermilk')}",
+                    }
+                )
+
+                if otel_config.get("endpoint"):
+                    env_vars["OTEL_EXPORTER_OTLP_ENDPOINT"] = otel_config["endpoint"]
         
         # Cloud provider environment setup (previously scattered in cloud.py)
-        if hasattr(config, 'infrastructure') and config.infrastructure.get('clouds'):
+        if hasattr(config, "infrastructure") and config.infrastructure.get("clouds"):
             for cloud_config in config.infrastructure.clouds:
-                if cloud_config.get('type') == 'gcp':
+                if cloud_config.get("type") == "gcp":
                     # Set GCP-specific environment variables
-                    if cloud_config.get('project_id'):
-                        env_vars['GOOGLE_CLOUD_PROJECT'] = cloud_config['project_id']
-                    if cloud_config.get('credentials_path'):
-                        env_vars['GOOGLE_APPLICATION_CREDENTIALS'] = cloud_config['credentials_path']
+                    if cloud_config.get("project_id"):
+                        env_vars["GOOGLE_CLOUD_PROJECT"] = cloud_config["project_id"]
+                    if cloud_config.get("credentials_path"):
+                        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config["credentials_path"]
         
         # Apply all environment variables
         for key, value in env_vars.items():
@@ -134,9 +137,9 @@ class ConfigurationBootstrapper:
         config = self._load_configuration()
         
         # Extract infrastructure configuration as DictConfig to preserve _target_ keys
-        if hasattr(config, 'infrastructure'):
+        if hasattr(config, "infrastructure"):
             return config.infrastructure
-        elif hasattr(config, 'bm'):
+        elif hasattr(config, "bm"):
             # Fallback: migrate old BM configuration to infrastructure format
             logger.warning("Using legacy 'bm' configuration - consider migrating to 'infrastructure'")
             return config.bm
@@ -181,17 +184,17 @@ class ConfigurationBootstrapper:
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
             config = self._load_configuration()
-            infrastructure_config = config.get('infrastructure', {})
+            infrastructure_config = config.get("infrastructure", {})
             
             # Pass the FULL infrastructure configuration to ExecutionContext
             # This ensures ExecutionContext has its own CloudManager, SecretManager, etc.
             self._execution_context = get_or_create_execution_context(
-                clouds=infrastructure_config.get('clouds', []),
-                secret_provider=infrastructure_config.get('secret_provider'),
-                logging=infrastructure_config.get('logging'),
-                pubsub=infrastructure_config.get('pubsub'),
-                tracing=infrastructure_config.get('tracing', {}),
-                datasets=infrastructure_config.get('datasets', {})
+                clouds=infrastructure_config.get("clouds", []),
+                secret_provider=infrastructure_config.get("secret_provider"),
+                logging=infrastructure_config.get("logging"),
+                pubsub=infrastructure_config.get("pubsub"),
+                tracing=infrastructure_config.get("tracing", {}),
+                datasets=infrastructure_config.get("datasets", {}),
             )
             await self._execution_context.ensure_initialized()
             logger.info("ExecutionContext created with full infrastructure configuration")
@@ -236,7 +239,7 @@ class ConfigurationBootstrapper:
             infrastructure = self._create_infrastructure_manager()
         
         # Create session-scoped BM instance
-        platform = kwargs.pop('platform', 'local')  # Extract platform to avoid duplicate
+        platform = kwargs.pop("platform", "local")  # Extract platform to avoid duplicate
         session_bm = infrastructure.create_session_bm(
             name=name,
             job=job,
@@ -268,9 +271,7 @@ class ConfigurationBootstrapper:
 
 
 def create_configuration_bootstrapper(
-    config_path: str = "conf", 
-    overrides: list[str] | None = None,
-    config: DictConfig | None = None
+    config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None
 ) -> ConfigurationBootstrapper:
     """Factory function to create a ConfigurationBootstrapper instance.
     

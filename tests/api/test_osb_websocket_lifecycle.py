@@ -15,17 +15,15 @@ of WebSocket infrastructure supporting OSB interactive flows.
 
 import asyncio
 import json
+import time
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 import websockets
-from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
-from fastapi.websockets import WebSocketState
-import time
-from contextlib import asynccontextmanager
 
-from buttermilk.runner.flowrunner import FlowRunner, FlowRunContext, SessionStatus
 from buttermilk.api.flow import create_app
-from buttermilk._core.bm_init import BM
+from buttermilk.runner.flowrunner import FlowRunContext
 
 
 class WebSocketTestClient:
@@ -63,10 +61,7 @@ class WebSocketTestClient:
         """Receive message from WebSocket with timeout."""
         if self.websocket:
             try:
-                message_str = await asyncio.wait_for(
-                    self.websocket.recv(), 
-                    timeout=timeout
-                )
+                message_str = await asyncio.wait_for(self.websocket.recv(), timeout=timeout)
                 message = json.loads(message_str)
                 self.messages_received.append(message)
                 self.connection_events.append(("message_received", time.time(), message["type"]))
@@ -78,61 +73,15 @@ class WebSocketTestClient:
     
     async def send_osb_query(self, query: str, **kwargs):
         """Send OSB query message."""
-        osb_message = {
-            "type": "run_flow",
-            "flow": "osb", 
-            "query": query,
-            **kwargs
-        }
+        osb_message = {"type": "run_flow", "flow": "osb", "query": query, **kwargs}
         await self.send_message(osb_message)
         return osb_message
 
 
 @pytest.fixture
-def mock_bm():
-    """Mock BM instance for testing."""
-    mock_bm = MagicMock(spec=BM)
-    mock_bm.llms = MagicMock()
-    return mock_bm
-
-
-@pytest.fixture  
-def mock_flow_runner():
-    """Mock FlowRunner for WebSocket testing."""
-    mock_runner = MagicMock(spec=FlowRunner)
-    mock_runner.flows = {"osb": {"name": "OSB Interactive Flow"}}
-    mock_runner.session_manager = MagicMock()
-    
-    # Mock session creation
-    async def mock_get_session(session_id, websocket=None):
-        session = MagicMock(spec=FlowRunContext)
-        session.session_id = session_id
-        session.flow_name = "osb"
-        session.status = SessionStatus.ACTIVE
-        session.websocket = websocket
-        session.monitor_ui = AsyncMock()
-        session.send_message_to_ui = AsyncMock()
-        
-        # Mock monitor_ui to yield run requests
-        async def mock_monitor():
-            while True:
-                await asyncio.sleep(0.1)
-                # Simulate receiving messages from UI
-                yield MagicMock()
-        
-        session.monitor_ui.return_value = mock_monitor()
-        return session
-    
-    mock_runner.get_websocket_session_async = AsyncMock(side_effect=mock_get_session)
-    mock_runner.run_flow = AsyncMock()
-    
-    return mock_runner
-
-
-@pytest.fixture
-async def test_app(mock_bm, mock_flow_runner):
+async def test_app(mock_bm, real_flow_runner):
     """Create test FastAPI app with WebSocket support."""
-    app = create_app(mock_bm, mock_flow_runner)
+    app = create_app(mock_bm, real_flow_runner)
     return app
 
 
@@ -158,15 +107,15 @@ class TestOSBWebSocketConnection:
                 assert True  # If we get here, connection was stable
 
     @pytest.mark.anyio
-    async def test_osb_session_initialization(self, test_app, mock_flow_runner):
+    async def test_osb_session_initialization(self, test_app, real_flow_runner):
         """Test OSB session initialization via WebSocket."""
         session_id = "test-osb-init-session"
 
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Verify session was created
-                mock_flow_runner.get_websocket_session_async.assert_called_once()
-                call_args = mock_flow_runner.get_websocket_session_async.call_args
+                real_flow_runner.get_websocket_session_async.assert_called_once()
+                call_args = real_flow_runner.get_websocket_session_async.call_args
                 assert call_args[1]["session_id"] == session_id
                 assert call_args[1]["websocket"] is not None
 
@@ -261,8 +210,8 @@ class TestOSBWebSocketSessionIsolation:
                     unique_message = {
                         "type": "run_flow",
                         "flow": "osb",
-                        "query": f"Unique query for session {i+1}",
-                        "case_number": f"OSB-SESSION-{i+1}"
+                        "query": f"Unique query for session {i + 1}",
+                        "case_number": f"OSB-SESSION-{i + 1}",
                     }
                     websocket.send_json(unique_message)
 
@@ -278,7 +227,7 @@ class TestOSBWebSocketSessionIsolation:
                         pass
 
     @pytest.mark.anyio
-    async def test_session_data_isolation(self, test_app, mock_flow_runner):
+    async def test_session_data_isolation(self, test_app, real_flow_runner):
         """Test that session data doesn't leak between OSB sessions."""
         session_1_id = "osb-isolated-session-1"
         session_2_id = "osb-isolated-session-2"
@@ -303,7 +252,7 @@ class TestOSBWebSocketSessionIsolation:
             session.monitor_ui.return_value = mock_monitor()
             return session
 
-        mock_flow_runner.get_websocket_session_async.side_effect = track_session_creation
+        real_flow_runner.get_websocket_session_async.side_effect = track_session_creation
 
         with TestClient(test_app) as client:
             # Create first session
@@ -311,11 +260,7 @@ class TestOSBWebSocketSessionIsolation:
                 # Create second session
                 with client.websocket_connect(f"/ws/{session_2_id}") as ws2:
                     # Send messages to both sessions
-                    ws1.send_json({
-                        "type": "run_flow",
-                        "flow": "osb", 
-                        "query": "Session 1 query"
-                    })
+                    ws1.send_json({"type": "run_flow", "flow": "osb", "query": "Session 1 query"})
 
                     ws2.send_json({
                         "type": "run_flow",
@@ -328,12 +273,12 @@ class TestOSBWebSocketSessionIsolation:
                     assert session_2_id in session_calls
 
     @pytest.mark.anyio
-    async def test_session_cleanup_on_disconnect(self, test_app, mock_flow_runner):
+    async def test_session_cleanup_on_disconnect(self, test_app, real_flow_runner):
         """Test proper session cleanup when WebSocket disconnects."""
         session_id = "osb-cleanup-test-session"
 
         # Mock session manager cleanup
-        mock_flow_runner.session_manager.cleanup_session = AsyncMock(return_value=True)
+        real_flow_runner.session_manager.cleanup_session = AsyncMock(return_value=True)
 
         with TestClient(test_app) as client:
             # Create connection and then close it
@@ -406,22 +351,17 @@ class TestOSBWebSocketErrorHandling:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send multiple messages rapidly
                 for i in range(5):
-                    rapid_message = {
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Rapid query {i+1}",
-                        "case_number": f"OSB-RAPID-{i+1:03d}"
-                    }
+                    rapid_message = {"type": "run_flow", "flow": "osb", "query": f"Rapid query {i + 1}", "case_number": f"OSB-RAPID-{i + 1:03d}"}
                     websocket.send_json(rapid_message)
 
                 # Connection should remain stable under rapid messaging
                 assert True
 
     @pytest.mark.anyio
-    async def test_websocket_session_not_found_handling(self, test_app, mock_flow_runner):
+    async def test_websocket_session_not_found_handling(self, test_app, real_flow_runner):
         """Test WebSocket handling when session is not found."""
         # Mock session not found scenario
-        mock_flow_runner.get_websocket_session_async.return_value = None
+        real_flow_runner.get_websocket_session_async.return_value = None
 
         session_id = "osb-nonexistent-session"
 
@@ -453,11 +393,7 @@ class TestOSBWebSocketPerformance:
                     connection_times.append(connection_time)
 
                     # Send test message to verify connection works
-                    websocket.send_json({
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Performance test {i+1}"
-                    })
+                    websocket.send_json({"type": "run_flow", "flow": "osb", "query": f"Performance test {i + 1}"})
 
         # Basic performance validation
         avg_connection_time = sum(connection_times) / len(connection_times)
@@ -475,12 +411,7 @@ class TestOSBWebSocketPerformance:
                 start_time = time.time()
 
                 for i in range(message_count):
-                    message = {
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Throughput test message {i+1}",
-                        "case_number": f"OSB-THRU-{i+1:03d}"
-                    }
+                    message = {"type": "run_flow", "flow": "osb", "query": f"Throughput test message {i + 1}", "case_number": f"OSB-THRU-{i + 1:03d}"}
                     websocket.send_json(message)
 
                 total_time = time.time() - start_time
@@ -508,11 +439,7 @@ class TestOSBWebSocketPerformance:
 
                 # Send test message to each connection
                 for i, websocket in enumerate(session_connections):
-                    websocket.send_json({
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Concurrent test {i+1}"
-                    })
+                    websocket.send_json({"type": "run_flow", "flow": "osb", "query": f"Concurrent test {i + 1}"})
 
             finally:
                 # Cleanup all connections
@@ -527,12 +454,12 @@ class TestOSBWebSocketMessageFlow:
     """Test OSB-specific message flow patterns through WebSocket."""
 
     @pytest.mark.anyio
-    async def test_osb_query_message_flow(self, test_app, mock_flow_runner):
+    async def test_osb_query_message_flow(self, test_app, real_flow_runner):
         """Test complete OSB query message flow."""
         session_id = "osb-message-flow-session"
 
         # Mock flow execution
-        mock_flow_runner.run_flow.return_value = None
+        real_flow_runner.run_flow.return_value = None
 
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
@@ -553,7 +480,7 @@ class TestOSBWebSocketMessageFlow:
                 websocket.send_json(osb_query)
 
                 # Verify flow was triggered
-                mock_flow_runner.run_flow.assert_called()
+                real_flow_runner.run_flow.assert_called()
 
     @pytest.mark.anyio
     async def test_osb_status_message_flow(self, test_app):
@@ -580,12 +507,12 @@ class TestOSBWebSocketMessageFlow:
                 assert True
 
     @pytest.mark.anyio
-    async def test_osb_error_message_flow(self, test_app, mock_flow_runner):
+    async def test_osb_error_message_flow(self, test_app, real_flow_runner):
         """Test OSB error message flow patterns."""
         session_id = "osb-error-flow-session"
 
         # Mock flow execution to raise error
-        mock_flow_runner.run_flow.side_effect = Exception("Test OSB error")
+        real_flow_runner.run_flow.side_effect = Exception("Test OSB error")
 
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
@@ -603,14 +530,14 @@ class TestOSBWebSocketMessageFlow:
 
 
 @pytest.mark.anyio
-async def test_websocket_integration_with_flow_runner(test_app, mock_flow_runner):
+async def test_websocket_integration_with_flow_runner(test_app, real_flow_runner):
     """Integration test for WebSocket and FlowRunner interaction."""
     session_id = "osb-integration-session"
     
     with TestClient(test_app) as client:
         with client.websocket_connect(f"/ws/{session_id}") as websocket:
             # Verify session creation integration
-            mock_flow_runner.get_websocket_session_async.assert_called_once()
+            real_flow_runner.get_websocket_session_async.assert_called_once()
             
             # Send OSB flow request
             osb_request = {

@@ -15,88 +15,19 @@ for any flow configuration from user input to final output.
 """
 
 import asyncio
-import pytest
 import time
-import json
-from typing import Dict, Any, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any, Dict, List
 
+import pytest
 from fastapi.testclient import TestClient
+
 from buttermilk.api.flow import create_app
-from buttermilk._core.bm_init import BM
-from buttermilk.runner.flowrunner import FlowRunner
-from tests.utils.websocket_test_utils import (
-    WebSocketTestSession,
-    websocket_test_context,
-    simulate_osb_workflow,
-    WebSocketMessageValidator
-)
-
-
-# Test flow configurations (matching real YAML configurations)
-TEST_FLOWS = {
-    "osb": {
-        "name": "OSB Interactive Flow",
-        "agents": ["researcher", "policy_analyst", "fact_checker", "explorer"],
-        "expected_workflow_time": 45.0,  # seconds
-        "sample_queries": [
-            "Analyze this social media post for policy violations: 'This is offensive content targeting a specific group'",
-            "Review this comment for hate speech: 'Derogatory language about ethnic minorities'",
-            "Moderate this content: 'Coordinated harassment campaign against users'"
-        ]
-    },
-    "content_moderation": {
-        "name": "Content Moderation Flow",
-        "agents": ["classifier", "reviewer"],
-        "expected_workflow_time": 20.0,  # seconds
-        "sample_queries": [
-            "Classify this content: 'User uploaded video with potential violations'",
-            "Review this post: 'Spam content with multiple links'",
-            "Moderate this message: 'Inappropriate content reported by community'"
-        ]
-    },
-    "research": {
-        "name": "Research Flow",
-        "agents": ["researcher", "analyst", "synthesizer"],
-        "expected_workflow_time": 35.0,  # seconds
-        "sample_queries": [
-            "Research topic: 'Impact of social media on mental health'",
-            "Analyze trends: 'Climate change adaptation strategies'",
-            "Investigate: 'Effectiveness of remote work policies'"
-        ]
-    }
-}
 
 
 @pytest.fixture
-def mock_bm():
-    """Mock BM instance for E2E testing."""
-    mock_bm = MagicMock(spec=BM)
-    mock_bm.llms = MagicMock()
-    return mock_bm
-
-
-@pytest.fixture
-def mock_flow_runner():
-    """Mock FlowRunner with realistic flow configurations."""
-    mock_runner = MagicMock(spec=FlowRunner)
-    
-    # Configure flows matching TEST_FLOWS
-    mock_runner.flows = {
-        flow_name: {
-            "name": config["name"],
-            "agents": {agent: {"type": f"{agent}_agent"} for agent in config["agents"]}
-        }
-        for flow_name, config in TEST_FLOWS.items()
-    }
-    
-    return mock_runner
-
-
-@pytest.fixture
-def e2e_app(mock_bm, mock_flow_runner):
+def e2e_app(mock_bm, real_flow_runner):
     """Create E2E test app with full configuration."""
-    app = create_app(mock_bm, mock_flow_runner)
+    app = create_app(mock_bm, real_flow_runner)
     return app
 
 
@@ -134,9 +65,7 @@ class TestCompleteUserJourneys:
 
                 # Step 4: Monitor workflow progression
                 workflow_progression = await self._monitor_workflow_progression(
-                    websocket, 
-                    flow_config["agents"],
-                    timeout=flow_config["expected_workflow_time"]
+                    websocket, flow_config["agents"], timeout=flow_config["expected_workflow_time"]
                 )
 
                 total_time = time.time() - start_time
@@ -156,8 +85,7 @@ class TestCompleteUserJourneys:
             cleanup_response = client.delete(f"/api/session/{session_id}")
             assert cleanup_response.status_code == 200
 
-    async def _monitor_workflow_progression(self, websocket, expected_agents: List[str], 
-                                          timeout: float) -> Dict[str, Any]:
+    async def _monitor_workflow_progression(self, websocket, expected_agents: List[str], timeout: float) -> Dict[str, Any]:
         """Monitor workflow progression through WebSocket messages."""
         progression = {
             "workflow_started": False,
@@ -378,8 +306,7 @@ class TestEndToEndIntegration:
                 except:
                     pass
 
-    async def _simulate_realistic_user_behavior(self, client: TestClient, 
-                                              session_id: str, duration: float):
+    async def _simulate_realistic_user_behavior(self, client: TestClient, session_id: str, duration: float):
         """Simulate realistic user behavior pattern."""
         end_time = time.time() + duration
         queries_sent = 0
@@ -502,10 +429,7 @@ class TestRealWorldScenarios:
             assert scenario_results["queries_processed"] == len(scenario["queries"])
 
             # All responses should be within timeout
-            responses_within_timeout = sum(
-                1 for r in scenario_results["responses_quality"] 
-                if r["within_timeout"]
-            )
+            responses_within_timeout = sum(1 for r in scenario_results["responses_quality"] if r["within_timeout"])
             assert responses_within_timeout == len(scenario["queries"])
 
             # Cleanup

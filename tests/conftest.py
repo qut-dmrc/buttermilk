@@ -3,14 +3,15 @@ import inspect
 from unittest.mock import MagicMock
 
 import pytest
-from pytest import MarkDecorator
 from hydra import compose, initialize
+from pytest import MarkDecorator
 
-from buttermilk import get_bm, set_bm
+from buttermilk import set_bm
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
+from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
@@ -31,14 +32,14 @@ def anyio_backend():
 
 # =============================================================================
 # REAL CONFIGURATION FIXTURES (Preferred for new tests)
-# 
+#
 # These fixtures provide real BM instances using testing.yaml configuration.
 # Use these instead of creating manual mock configurations:
 #
 # def test_example(real_bm, real_conf):
 #     # Uses actual testing.yaml configuration
 #     assert real_bm.session_info.job == "testing"
-#     
+#
 # def test_with_override(real_conf, config_override):
 #     # Override specific config values for test
 #     custom_config = config_override(real_conf, {
@@ -70,11 +71,7 @@ def real_infrastructure(real_conf):
 def real_bm(real_infrastructure):
     """Real BM instance using testing.yaml configuration."""
     # Create a session-scoped BM using real infrastructure
-    test_bm = real_infrastructure.create_session_bm(
-        name="buttermilk", 
-        job="testing", 
-        platform="local"
-    )
+    test_bm = real_infrastructure.create_session_bm(name="buttermilk", job="testing", platform="local")
     set_bm(test_bm)
     return test_bm
 
@@ -109,56 +106,10 @@ def real_llm_expensive(request, real_bm: BM):
     return real_bm.llms[request.param]
 
 
-# =============================================================================
-# LEGACY MOCK FIXTURES (Maintained for backward compatibility)
-# =============================================================================
-
-@pytest.fixture(scope="session", autouse=True)
-def conf():
-    """Mock Hydra config fixture for unit tests."""
-    # Return a minimal mock config instead of loading real Hydra config
-    mock_config = {
-        "bm": {
-            "name": "test_buttermilk",
-            "job": "testing"
-        },
-        "run": {
-            "mode": "test",
-            "ui": "console"
-        }
-    }
-    return mock_config
-
-
-@pytest.fixture(scope="session", autouse=True)
-def bm(conf):
-    """Mock BM fixture for unit tests that don't need real infrastructure."""
-    mock_bm = MagicMock()
-    
-    # Set up session info for session isolation tests
-    mock_bm.session_info.session_id = "test-session-mock"
-    mock_bm.session_info.job = "testing"
-    mock_bm.session_info.platform = "test"
-    
-    # Mock common BM methods
-    mock_bm.get_storage = MagicMock(return_value=MagicMock())
-    mock_bm.get_tracer = MagicMock(return_value=MagicMock())
-    mock_bm.llms = MagicMock()
-    
-    # Mock LLM collections for backward compatibility with existing tests
-    mock_bm.llms.__getitem__ = MagicMock(return_value=MagicMock())  # For bm.llms["model_name"]
-    mock_bm.llms.__contains__ = MagicMock(return_value=True)  # For "model_name" in bm.llms
-    
-    async def async_magic_mock():
-        pass
-
-    mock_bm.ensure_initialized = MagicMock(side_effect=async_magic_mock)
-
-    # Set as global singleton for backward compatibility
-    from buttermilk import set_bm
-    set_bm(mock_bm)
-    
-    return mock_bm
+@pytest.fixture(scope="session")
+def real_flow_runner(real_conf, real_infrastructure) -> FlowRunner:
+    # Create FlowRunner instance
+    return FlowRunner.model_validate(real_conf.run)
 
 
 # =============================================================================
@@ -184,17 +135,20 @@ def config_override():
     return _override_config
 
 
+
 @pytest.fixture(scope="session")
 def logger():
-    """Mock logger fixture."""
     from buttermilk import logger
     return logger
 
+@pytest.fixture(scope="session")
+def mock_bm():
+    return None
 
 @pytest.fixture(scope="session")
-def llms(bm):
+def llms(mock_bm):
     """Mock LLMs fixture."""
-    return bm.llms
+    return mock_bm.llms
 
 
 @pytest.fixture
@@ -204,21 +158,21 @@ def model_name():
 
 
 @pytest.fixture
-def llm_multimodal(bm):
+def llm_multimodal(mock_bm):
     """Mock multimodal LLM fixture."""
-    return bm.llms["mock-multimodal-model"]
+    return mock_bm.llms["mock-multimodal-model"]
 
 
 @pytest.fixture
-def llm(bm):
+def llm(mock_bm):
     """Mock LLM fixture."""
-    return bm.llms["mock-model"]
+    return mock_bm.llms["mock-model"]
 
 
 @pytest.fixture
-def llm_expensive(bm):
+def llm_expensive(mock_bm):
     """Mock expensive LLM fixture."""
-    return bm.llms["mock-expensive-model"]
+    return mock_bm.llms["mock-expensive-model"]
 
 
 @pytest.fixture(scope="session")

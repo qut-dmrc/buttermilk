@@ -1,20 +1,11 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, mock_open
+from unittest.mock import AsyncMock, mock_open
 
 import pytest
 
 from buttermilk.data.vector import InputDocument
 from buttermilk.libs.zotero import ZotDownloader
 from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
-
-
-# Mock bm object and credentials if ZotDownloader relies on them during init
-# This avoids needing actual credentials for testing.
-@pytest.fixture(autouse=True)
-def mock_bm_credentials(mocker):
-    mock_bm = MagicMock()
-    mock_bm.credentials.get.side_effect = lambda key: f"dummy_{key}"
-    mocker.patch("buttermilk.libs.zotero.bm", mock_bm)
 
 
 @pytest.fixture
