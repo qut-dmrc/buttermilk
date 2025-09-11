@@ -283,11 +283,11 @@ class BM(BaseModel):
     )
 
     # Shared infrastructure - injected during creation
-    _cloud_manager = None  # Will be injected
-    _secret_manager = None  # Will be injected
-    _llms_instance = None  # Will be injected
-    _query_runner = None  # Will be injected
-    _logger_cfg = None  # Will be injected from ExecutionContext
+    _cloud_manager: Any = PrivateAttr(default=None)  # Will be injected
+    _secret_manager: Any = PrivateAttr(default=None)  # Will be injected
+    _llms_instance: Any = PrivateAttr(default=None)  # Will be injected
+    _query_runner: Any = PrivateAttr(default=None)  # Will be injected
+    _logger_cfg: Any = PrivateAttr(default=None)  # Will be injected from ExecutionContext
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -339,7 +339,6 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
-
     def __init__(self, logger_cfg=None, cloud_manager=None, secret_manager=None, llms_instance=None, query_runner=None, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 
@@ -355,6 +354,8 @@ class BM(BaseModel):
             **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
+        super().__init__(**data)
+        
         # Inject shared infrastructure before model initialization
         self._logger_cfg = logger_cfg
         self._cloud_manager = cloud_manager
@@ -362,7 +363,6 @@ class BM(BaseModel):
         self._llms_instance = llms_instance
         self._query_runner = query_runner
         
-        super().__init__(**data)
         self._initialization_error = None
         self._post_init_setup()
 
@@ -784,6 +784,7 @@ def create_session_bm(
     cloud_manager=None,
     secret_manager=None,
     llms_instance=None,
+    query_runner=None,
     logger_cfg=None,
     **kwargs
 ) -> BM:
@@ -798,6 +799,7 @@ def create_session_bm(
         cloud_manager: Shared cloud manager instance (optional).
         secret_manager: Shared secret manager instance (optional).
         llms_instance: Shared LLMs instance (optional).
+        query_runner: Shared query runner instance (optional).
         logger_cfg: Logger configuration for cloud logging (optional).
         **kwargs: Additional arguments for SessionInfo.
         
@@ -816,9 +818,8 @@ def create_session_bm(
     # Create SessionInfo instance to get auto-generated session_id
     session_info = SessionInfo(**session_info_data)
     
-    # Create query_runner if cloud_manager is available
-    query_runner = None
-    if cloud_manager is not None:
+    # Use provided query_runner or create one if cloud_manager is available
+    if query_runner is None and cloud_manager is not None:
         from buttermilk._core.query import QueryRunner
         query_runner = QueryRunner(bq_client=cloud_manager.bq)
     

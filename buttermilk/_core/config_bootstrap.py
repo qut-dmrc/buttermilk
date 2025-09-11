@@ -239,11 +239,9 @@ class ConfigurationBootstrapper:
             infrastructure = self._create_infrastructure_manager()
         
         # Create session-scoped BM instance
-        platform = kwargs.pop("platform", "local")  # Extract platform to avoid duplicate
         session_bm = infrastructure.create_session_bm(
             name=name,
             job=job,
-            platform=platform,
             **kwargs
         )
         

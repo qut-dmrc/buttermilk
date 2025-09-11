@@ -22,7 +22,7 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
-async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput):
+async def test_llm_agent_direct_call(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using ._process()."""
     agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "best"})
 
@@ -43,7 +43,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHAT_MODELS)  
-async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
+async def test_judge_agent_process(real_bm, model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
     judge_params = {
@@ -79,7 +79,7 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
-async def test_scorer(model_name: str, request_paris: AgentInput):
+async def test_scorer(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using __call__."""
     LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "simple"})
 
@@ -100,7 +100,7 @@ async def test_scorer(model_name: str, request_paris: AgentInput):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)
-async def test_llm_agent_template_metadata(model_name: str, request_paris: AgentInput):
+async def test_llm_agent_template_metadata(real_bm, model_name: str, request_paris: AgentInput):
     """Test that LLMAgent includes template metadata in AgentOutput."""
     agent = LLMAgent(
         role="tester", 

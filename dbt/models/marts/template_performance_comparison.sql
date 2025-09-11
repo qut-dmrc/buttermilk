@@ -1,164 +1,218 @@
 {{ config(
     materialized='table',
-    description='Template A/B testing performance comparison with accuracy metrics'
+    description='Template hash-based performance comparison - filter by template_hash to define experiments'
 ) }}
 
--- Get predictions with their accuracy scores from SCORER evaluations
+-- This model compares performance between different template hashes
+-- Use dashboard filters to select which template hashes to compare for your experiment
+
 WITH predictions_with_scores AS (
   SELECT DISTINCT
-    p.call_id,
     p.template_hash,
-    p.model,
-    JSON_EXTRACT_SCALAR(p.metadata, '$.criteria') as criteria,
-    JSON_EXTRACT_SCALAR(p.metadata, '$.record_hash') as record_hash,
-    p.agent_name,
+    p.template_name,
+    p.call_id,
+    p.agent_model as model,
+    p.judge_criteria as criteria,
+    p.record_id as record_hash,
+    p.agent_role,
+    p.session_id,
     p.timestamp,
     
-    -- Extract accuracy from SCORER evaluations
-    AVG(CAST(JSON_EXTRACT_SCALAR(s.output, '$.accuracy') AS FLOAT64)) as accuracy_score,
-    AVG(CAST(JSON_EXTRACT_SCALAR(s.output, '$.score') AS FLOAT64)) as overall_score,
+    -- Extract accuracy from SCORER evaluations  
+    AVG(s.correctness) as accuracy_score,
     COUNT(DISTINCT s.call_id) as num_scorers
     
   FROM {{ ref('stg_flows') }} p
-  LEFT JOIN {{ ref('stg_flows') }} s ON p.call_id = s.parent_call_id AND s.agent_name = 'SCORER'
-  WHERE p.agent_name IN ('JUDGE', 'SYNTH')
+  LEFT JOIN {{ ref('stg_flows') }} s ON p.call_id = s.parent_call_id AND s.agent_role = 'SCORERS'
+  WHERE p.agent_role IN ('JUDGE', 'SYNTHESISER')
     AND p.template_hash IS NOT NULL
-    AND JSON_EXTRACT_SCALAR(p.metadata, '$.record_hash') IS NOT NULL
-    AND JSON_EXTRACT_SCALAR(p.metadata, '$.criteria') IS NOT NULL
-  GROUP BY 1, 2, 3, 4, 5, 6, 7
+    AND p.record_id IS NOT NULL
+    AND p.judge_criteria IS NOT NULL
+  GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
 ),
 
--- Add template labels
-predictions_labeled AS (
-  SELECT *,
-    ROW_NUMBER() OVER (ORDER BY template_hash) as template_rank,
-    CASE 
-      WHEN template_hash = (SELECT MIN(template_hash) FROM predictions_with_scores) THEN 'Template A'
-      ELSE 'Template B'
-    END as template_label
-  FROM predictions_with_scores
-),
-
--- Calculate performance by template and dimensions
+-- Calculate performance metrics for each template hash
 template_performance AS (
   SELECT
     template_hash,
-    template_label,
+    template_name,
+    SUBSTR(template_hash, 8, 12) as template_short_hash,
     model,
     criteria,
-    agent_name,
+    agent_role,
     
-    -- Core metrics
+    -- Core performance metrics
     COUNT(DISTINCT call_id) as total_predictions,
+    COUNT(DISTINCT session_id) as session_count,
     COUNT(DISTINCT record_hash) as records_tested,
     AVG(accuracy_score) as avg_accuracy,
     STDDEV(accuracy_score) as accuracy_stddev,
     MIN(accuracy_score) as min_accuracy,
     MAX(accuracy_score) as max_accuracy,
-    PERCENTILE_CONT(accuracy_score, 0.5) as median_accuracy,
-    
-    -- Overall score metrics
-    AVG(overall_score) as avg_overall_score,
-    STDDEV(overall_score) as overall_score_stddev,
+    APPROX_QUANTILES(accuracy_score, 2)[OFFSET(1)] as median_accuracy,
     
     -- Data quality indicators
     AVG(num_scorers) as avg_scorers_per_prediction,
     MIN(timestamp) as first_prediction,
-    MAX(timestamp) as last_prediction
+    MAX(timestamp) as last_prediction,
     
-  FROM predictions_labeled
+    -- Template usage metadata
+    ARRAY_AGG(DISTINCT session_id LIMIT 10) as sample_sessions
+    
+  FROM predictions_with_scores
   WHERE accuracy_score IS NOT NULL
-  GROUP BY 1, 2, 3, 4, 5
+  GROUP BY 1, 2, 3, 4, 5, 6
 ),
 
--- Calculate lift between templates
-template_comparison AS (
-  SELECT
-    model,
-    criteria,
-    agent_name,
-    
-    -- Template A metrics
-    MAX(CASE WHEN template_label = 'Template A' THEN avg_accuracy END) as template_a_accuracy,
-    MAX(CASE WHEN template_label = 'Template A' THEN total_predictions END) as template_a_predictions,
-    MAX(CASE WHEN template_label = 'Template A' THEN accuracy_stddev END) as template_a_stddev,
-    
-    -- Template B metrics  
-    MAX(CASE WHEN template_label = 'Template B' THEN avg_accuracy END) as template_b_accuracy,
-    MAX(CASE WHEN template_label = 'Template B' THEN total_predictions END) as template_b_predictions,
-    MAX(CASE WHEN template_label = 'Template B' THEN accuracy_stddev END) as template_b_stddev,
-    
-    -- Calculate lift and significance
-    (MAX(CASE WHEN template_label = 'Template B' THEN avg_accuracy END) - 
-     MAX(CASE WHEN template_label = 'Template A' THEN avg_accuracy END)) as absolute_lift,
-    
+-- Add dynamic template labeling within each experiment group
+labeled_performance AS (
+  SELECT *,
+    -- Label templates by usage frequency within each experiment group
     CASE 
-      WHEN MAX(CASE WHEN template_label = 'Template A' THEN avg_accuracy END) > 0 THEN
-        ((MAX(CASE WHEN template_label = 'Template B' THEN avg_accuracy END) - 
-          MAX(CASE WHEN template_label = 'Template A' THEN avg_accuracy END)) / 
-         MAX(CASE WHEN template_label = 'Template A' THEN avg_accuracy END)) * 100
+      WHEN ROW_NUMBER() OVER (
+        PARTITION BY agent_role, criteria 
+        ORDER BY total_predictions DESC
+      ) = 1 THEN 'Template A (Primary)'
+      WHEN ROW_NUMBER() OVER (
+        PARTITION BY agent_role, criteria 
+        ORDER BY total_predictions DESC
+      ) = 2 THEN 'Template B (Secondary)'
+      ELSE CONCAT('Template ', ROW_NUMBER() OVER (
+        PARTITION BY agent_role, criteria 
+        ORDER BY total_predictions DESC
+      ))
+    END as template_label,
+    
+    -- Create experiment group identifier
+    CONCAT(agent_role, ' - ', criteria) as experiment_group,
+    
+    -- Data sufficiency flag
+    CASE 
+      WHEN total_predictions >= 10 THEN 'SUFFICIENT'
+      ELSE 'INSUFFICIENT'
+    END as data_sufficiency,
+    
+    -- Confidence level based on variance
+    CASE 
+      WHEN accuracy_stddev < 0.1 THEN 'HIGH'
+      WHEN accuracy_stddev < 0.2 THEN 'MEDIUM' 
+      ELSE 'LOW'
+    END as confidence_level
+    
+  FROM template_performance
+),
+
+-- Calculate pairwise comparisons (lift) between templates
+template_comparisons AS (
+  SELECT 
+    a.experiment_group,
+    a.model,
+    a.criteria,
+    a.agent_role,
+    
+    -- Template A (Primary) metrics
+    a.template_hash as template_a_hash,
+    a.template_short_hash as template_a_short,
+    a.template_label as template_a_label,
+    a.avg_accuracy as template_a_accuracy,
+    a.total_predictions as template_a_predictions,
+    a.data_sufficiency as template_a_sufficiency,
+    
+    -- Template B (Secondary) metrics  
+    b.template_hash as template_b_hash,
+    b.template_short_hash as template_b_short,
+    b.template_label as template_b_label,
+    b.avg_accuracy as template_b_accuracy,
+    b.total_predictions as template_b_predictions,
+    b.data_sufficiency as template_b_sufficiency,
+    
+    -- Lift calculations
+    (b.avg_accuracy - a.avg_accuracy) as absolute_lift,
+    CASE 
+      WHEN a.avg_accuracy > 0 THEN
+        ((b.avg_accuracy - a.avg_accuracy) / a.avg_accuracy) * 100
       ELSE NULL
     END as relative_lift_percent,
     
-    -- Data completeness check
+    -- Statistical confidence
     CASE 
-      WHEN MAX(CASE WHEN template_label = 'Template A' THEN total_predictions END) >= 10 
-       AND MAX(CASE WHEN template_label = 'Template B' THEN total_predictions END) >= 10 
-      THEN 'SUFFICIENT'
-      ELSE 'INSUFFICIENT'
-    END as data_sufficiency
+      WHEN a.total_predictions >= 30 AND b.total_predictions >= 30 THEN 'HIGH_CONFIDENCE'
+      WHEN a.total_predictions >= 10 AND b.total_predictions >= 10 THEN 'MEDIUM_CONFIDENCE'
+      ELSE 'LOW_CONFIDENCE'
+    END as statistical_confidence,
     
-  FROM template_performance
-  GROUP BY 1, 2, 3
+    -- Effect size
+    CASE 
+      WHEN ABS(b.avg_accuracy - a.avg_accuracy) >= 0.1 THEN 'LARGE_EFFECT'
+      WHEN ABS(b.avg_accuracy - a.avg_accuracy) >= 0.05 THEN 'MEDIUM_EFFECT'
+      WHEN ABS(b.avg_accuracy - a.avg_accuracy) >= 0.01 THEN 'SMALL_EFFECT'
+      ELSE 'NEGLIGIBLE_EFFECT'
+    END as effect_size
+    
+  FROM labeled_performance a
+  LEFT JOIN labeled_performance b ON (
+    a.experiment_group = b.experiment_group
+    AND a.model = b.model
+    AND a.template_label = 'Template A (Primary)'
+    AND b.template_label = 'Template B (Secondary)'
+  )
+  WHERE a.template_label = 'Template A (Primary)'
 )
 
--- Final output combining both views
+-- Final output: Individual template performance + comparison metrics
 SELECT
-  -- Dimensions
-  tp.template_hash,
-  tp.template_label,
-  tp.model,
-  tp.criteria,
-  tp.agent_name,
+  -- Template identification
+  lp.template_hash,
+  lp.template_name,
+  lp.template_short_hash,
+  lp.template_label,
+  lp.experiment_group,
+  
+  -- Experiment dimensions
+  lp.model,
+  lp.criteria,
+  lp.agent_role,
   
   -- Performance metrics
-  tp.total_predictions,
-  tp.records_tested,
-  tp.avg_accuracy,
-  tp.accuracy_stddev,
-  tp.median_accuracy,
-  tp.min_accuracy,
-  tp.max_accuracy,
-  tp.avg_overall_score,
-  tp.overall_score_stddev,
+  lp.total_predictions,
+  lp.session_count,
+  lp.records_tested,
+  lp.avg_accuracy,
+  lp.accuracy_stddev,
+  lp.median_accuracy,
+  lp.min_accuracy,
+  lp.max_accuracy,
+  lp.data_sufficiency,
+  lp.confidence_level,
   
-  -- Comparison metrics (from template_comparison)
+  -- Comparison metrics (null for templates without pairs)
   tc.absolute_lift,
   tc.relative_lift_percent,
-  tc.data_sufficiency,
+  tc.statistical_confidence,
+  tc.effect_size,
   
-  -- Confidence indicators
-  CASE 
-    WHEN tp.accuracy_stddev < 0.1 THEN 'HIGH'
-    WHEN tp.accuracy_stddev < 0.2 THEN 'MEDIUM' 
-    ELSE 'LOW'
-  END as confidence_level,
+  -- Comparison context
+  tc.template_a_hash,
+  tc.template_b_hash,
+  tc.template_a_accuracy,
+  tc.template_b_accuracy,
   
   -- Data quality
-  tp.avg_scorers_per_prediction,
-  tp.first_prediction,
-  tp.last_prediction,
+  lp.avg_scorers_per_prediction,
+  lp.first_prediction,
+  lp.last_prediction,
+  lp.sample_sessions,
   
-  -- Rankings within criteria/model
+  -- Rankings
   ROW_NUMBER() OVER (
-    PARTITION BY tp.model, tp.criteria, tp.agent_name 
-    ORDER BY tp.avg_accuracy DESC
-  ) as accuracy_rank
+    PARTITION BY lp.experiment_group, lp.model 
+    ORDER BY lp.avg_accuracy DESC
+  ) as accuracy_rank_in_group
 
-FROM template_performance tp
-LEFT JOIN template_comparison tc ON (
-  tp.model = tc.model 
-  AND tp.criteria = tc.criteria 
-  AND tp.agent_name = tc.agent_name
+FROM labeled_performance lp
+LEFT JOIN template_comparisons tc ON (
+  lp.experiment_group = tc.experiment_group
+  AND lp.model = tc.model
+  AND lp.template_hash IN (tc.template_a_hash, tc.template_b_hash)
 )
-ORDER BY tp.model, tp.criteria, tp.agent_name, tp.template_label
+ORDER BY lp.experiment_group, lp.model, lp.total_predictions DESC, lp.template_hash

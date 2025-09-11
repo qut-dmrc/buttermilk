@@ -9,7 +9,7 @@ WITH base_performance AS (
     template_label,
     model,
     criteria,
-    agent_name,
+    agent_role,
     avg_accuracy,
     total_predictions,
     data_sufficiency,
@@ -67,7 +67,7 @@ criteria_performance AS (
 agent_performance AS (
   SELECT
     'AGENT_TYPE' as dimension_type,
-    agent_name as dimension_value,
+    agent_role as dimension_value,
     template_label as secondary_dimension,
     AVG(avg_accuracy) as avg_accuracy,
     SUM(total_predictions) as total_predictions,
@@ -75,7 +75,7 @@ agent_performance AS (
     COUNT(*) as dimension_combinations
   FROM base_performance
   WHERE data_sufficiency = 'SUFFICIENT'
-  GROUP BY agent_name, template_label
+  GROUP BY agent_role, template_label
 ),
 
 -- 5. Model-Criteria interaction effects

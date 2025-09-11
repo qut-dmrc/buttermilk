@@ -99,60 +99,9 @@ Each experimental run is uniquely defined by:
 - **Google Sheets**: https://docs.google.com/spreadsheets/d/1N98c28IZE9xjvAUp2vLE8cIR6E7qoq7aFUyi0dLrSMU
 
 ### Key Metrics
-1. **Accuracy**: Agreement with golden set answers
+1. **Accuracy**: Agreement of prediction (bool) with golden set expected (bool)
 2. **Inter-rater Reliability**: Consistency between JUDGE agents
 3. **Synthesis Quality**: Improvement from JUDGE to SYNTH
-4. **Model Rankings**: Comparative performance across LLMs
-5. **Criteria Difficulty**: Which guidelines are hardest to apply
+4. **Correctness**: average of boolean LLM-based SCORER assessment on qualitative criteria
 
-## DBT Model Structure
-
-### Recommended DBT Models
-
-#### Staging Layer (`stg_`)
-- `stg_flows.sql`: Clean and type-cast raw flow data
-- `stg_predictions.sql`: Extract JUDGE/SYNTH predictions
-- `stg_scores.sql`: Extract SCORER evaluations
-
-#### Intermediate Layer (`int_`)
-- `int_predictions.sql`: Deduplicated predictions with basic metrics
-- `int_scores_aggregated.sql`: Aggregated scores per prediction
-
-#### Marts Layer
-- `judge_scores.sql`: Final analysis-ready JUDGE performance data
-- `synth_quality.sql`: SYNTH improvement metrics
-- `model_comparison.sql`: Cross-model performance analysis
-- `criteria_analysis.sql`: Guideline-specific insights
-
-### DBT Best Practices
-1. **Use CTEs**: Structure queries with clear Common Table Expressions
-2. **Document Models**: Add schema.yml with descriptions and tests
-3. **Test Assumptions**: Validate unique keys, not-null constraints
-4. **Version Control**: Track all DBT changes in git
-5. **Incremental Models**: Consider for large-scale production runs
-
-## Common Pitfalls to Avoid
-
-1. **Forgetting Deduplication**: Multiple rows per prediction due to SCORER joins
-2. **Ignoring Test Runs**: Include proper filters for production analysis
-3. **Mishandling JSON**: Nested fields need proper extraction functions
-4. **Incorrect Aggregation**: Not accounting for hierarchical data structure
-5. **Missing Null Checks**: Handle cases where agents fail or timeout
-
-## Validation Workflow
-
-### Step 1: Data Completeness Check
-Verify all expected components of a flow are present
-
-### Step 2: Score Validation
-Ensure SCORER agents are properly evaluating predictions
-
-### Step 3: Statistical Analysis
-Check for sufficient runs and acceptable variance
-
-### Step 4: Performance Metrics
-Calculate accuracy, consistency, and improvement metrics
-
-### Step 5: Comparative Analysis
-Compare across models, criteria, and experimental conditions
 

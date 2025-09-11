@@ -273,7 +273,7 @@ class TestMemoryEfficiency:
                 clouds=[{"type": "gcp", "project": "test-project"}]
             )
             
-            # These should all be None initially (not created)
+            # These should all be None initially (not created) since no infrastructure is injected
             assert bm._llms_instance is None
             assert bm._secret_manager is None
             assert bm._query_runner is None

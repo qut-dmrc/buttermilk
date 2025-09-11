@@ -253,6 +253,7 @@ class InfrastructureManager(BaseModel):
             cloud_manager=self.cloud_manager if self.clouds else None,
             secret_manager=self.secret_manager if self._find_cloud_with_service("secrets") else None,
             llms_instance=self.llms_instance if self.llms else None,
+            query_runner=self.query_runner if self.clouds else None,
             logger_cfg=logger_cfg,
             **kwargs
         )
