@@ -38,7 +38,6 @@ models:
         tests:
           - accepted_values:
               values: ['gpt-4', 'claude-3-sonnet', 'gemini-pro', 'claude-3-haiku', 'gpt-4o']
-              quote: false
       
       - name: agent_role
         description: "Role of the agent in the evaluation pipeline"
@@ -46,14 +45,12 @@ models:
           - not_null
           - accepted_values:
               values: ['JUDGE', 'SYNTHESISER', 'SCORERS', 'FETCH']
-              quote: false
       
       - name: judge_criteria
         description: "Evaluation criteria used (TJA, GLAAD, Australian, Simplified)"
         tests:
           - accepted_values:
               values: ['TJA', 'GLAAD', 'Australian', 'Simplified']
-              quote: false
       
       - name: template_name
         description: "Name of the prompt template used"

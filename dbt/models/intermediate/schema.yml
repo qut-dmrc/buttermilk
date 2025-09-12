@@ -20,7 +20,6 @@ models:
         tests:
           - accepted_values:
               values: ['JUDGE', 'SYNTHESISER']
-              quote: false
       
       - name: predicted_violating
         description: "Prediction outcome"
@@ -60,28 +59,29 @@ models:
   - name: int_experiment_completeness
     description: "Tracks completeness of experimental runs"
     columns:
-      - name: session_id
-        description: "Experimental session identifier"
+      - name: template_hash
+        description: "Template identifier"
         tests:
           - not_null
       
-      - name: record_id
+      - name: record_hash
         description: "Content identifier"
         tests:
           - not_null
       
-      - name: has_judge
-        description: "Whether session has judge prediction"
+      - name: completeness_status
+        description: "Status of experimental completeness"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['MISSING', 'INSUFFICIENT', 'COMPLETE']
+      
+      - name: actual_predictions
+        description: "Number of actual predictions made"
         tests:
           - not_null
       
-      - name: has_synth
-        description: "Whether session has synthesis"
-      
-      - name: has_scorer
-        description: "Whether session has scorer evaluation"
-      
-      - name: is_complete
-        description: "Whether session has all required components"
+      - name: session_count
+        description: "Number of sessions for this combination"
         tests:
           - not_null
