@@ -64,24 +64,47 @@ template_performance AS (
   GROUP BY 1, 2, 3, 4, 5, 6
 ),
 
+-- Join with experiment metadata and add template labeling
+experiment_labels AS (
+  SELECT 
+    template_hash,
+    experiment_name,
+    experiment_date,
+    problem,
+    change_link,
+    description,
+    success_metric
+  FROM {{ ref('experiment_metadata') }}
+),
+
 -- Add dynamic template labeling within each experiment group
 labeled_performance AS (
-  SELECT *,
-    -- Label templates by usage frequency within each experiment group
-    CASE 
-      WHEN ROW_NUMBER() OVER (
-        PARTITION BY agent_role, criteria 
-        ORDER BY total_predictions DESC
-      ) = 1 THEN 'Template A (Primary)'
-      WHEN ROW_NUMBER() OVER (
-        PARTITION BY agent_role, criteria 
-        ORDER BY total_predictions DESC
-      ) = 2 THEN 'Template B (Secondary)'
-      ELSE CONCAT('Template ', ROW_NUMBER() OVER (
-        PARTITION BY agent_role, criteria 
-        ORDER BY total_predictions DESC
-      ))
-    END as template_label,
+  SELECT tp.*,
+    -- Use experiment name if available, otherwise fall back to dynamic labeling
+    COALESCE(el.experiment_name, 
+      CASE 
+        WHEN ROW_NUMBER() OVER (
+          PARTITION BY tp.agent_role, tp.criteria 
+          ORDER BY tp.total_predictions DESC
+        ) = 1 THEN 'Template A (Primary)'
+        WHEN ROW_NUMBER() OVER (
+          PARTITION BY tp.agent_role, tp.criteria 
+          ORDER BY tp.total_predictions DESC
+        ) = 2 THEN 'Template B (Secondary)'
+        ELSE CONCAT('Template ', ROW_NUMBER() OVER (
+          PARTITION BY tp.agent_role, tp.criteria 
+          ORDER BY tp.total_predictions DESC
+        ))
+      END
+    ) as template_label,
+    
+    -- Add experiment metadata
+    el.experiment_name,
+    el.experiment_date,
+    el.problem as experiment_problem,
+    el.change_link,
+    el.description as experiment_description,
+    el.success_metric,
     
     -- Create experiment group identifier
     CONCAT(agent_role, ' - ', criteria) as experiment_group,
@@ -94,12 +117,13 @@ labeled_performance AS (
     
     -- Confidence level based on variance
     CASE 
-      WHEN accuracy_stddev < 0.1 THEN 'HIGH'
-      WHEN accuracy_stddev < 0.2 THEN 'MEDIUM' 
+      WHEN tp.accuracy_stddev < 0.1 THEN 'HIGH'
+      WHEN tp.accuracy_stddev < 0.2 THEN 'MEDIUM' 
       ELSE 'LOW'
     END as confidence_level
     
-  FROM template_performance
+  FROM template_performance tp
+  LEFT JOIN experiment_labels el ON tp.template_hash = el.template_hash
 ),
 
 -- Calculate pairwise comparisons (lift) between templates
@@ -167,6 +191,14 @@ SELECT
   lp.template_short_hash,
   lp.template_label,
   lp.experiment_group,
+  
+  -- Experiment metadata
+  lp.experiment_name,
+  lp.experiment_date,
+  lp.experiment_problem,
+  lp.change_link,
+  lp.experiment_description,
+  lp.success_metric,
   
   -- Experiment dimensions
   lp.model,

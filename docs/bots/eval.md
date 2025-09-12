@@ -52,6 +52,29 @@ Each flow run assesses a record according to one set of criteria:
 - **Test Configuration:** An experimental run is defined by: Language Model, System Prompt (hashed), Evaluation Criteria, Prompting Strategy (`JUDGE`/`SYNTH`), and the Example from the golden set.
 -   **Experiment Tracking**: To manage A/B testing, we use hashes of the `config`, `template`, and `record` for each run. This allows for precise aggregation of results from identical setups and helps filter out test/debug runs.
 
+### Agent Relationship Architecture
+
+#### JUDGE Agents (1:n with SCORERs)
+- Multiple JUDGE agents (3-5, different models) evaluate each record independently in zero-shot fashion
+- Each JUDGE prediction is evaluated by 3-5 SCORER agents using different models
+- **Join Pattern**: `scorer.parent_call_id = judge.call_id`
+
+#### SYNTH Agents (m:n with JUDGEs via session, 1:n with SCORERs)  
+- SYNTH agents are full groupchat participants, not simple pipeline steps
+- Context includes ALL JUDGE results from the session (not limited to single JUDGE)
+- Multiple SYNTH agents (3-5, different models) run per session after all JUDGEs complete
+- Each SYNTH prediction is evaluated by 3-5 SCORER agents
+- **Join Patterns**: 
+  - SYNTH to JUDGEs: `synth.session_id = judge.session_id`
+  - SYNTH to SCORERs: `scorer.parent_call_id = synth.call_id`
+
+#### SCORER Evaluation Process
+- **Scoring Method**: Each SCORER provides T/F ratings for 1-5 key points from golden answer
+- **Non-deterministic**: Number of assessment points varies per scorer evaluation
+- **Correctness Calculation**: `correctness = AVG(int(assessment))` per scorer evaluation
+- **Multiple Scores**: Each JUDGE/SYNTH prediction gets multiple `correctness` values (one per SCORER)
+- **Model Diversity**: Different SCORER models (GPT-4, Claude, Gemini) evaluate same prediction
+
 ### Data Normalization Challenges
 - **CRITICAL**: Raw data is highly normalized with nested structures
 - **Multiple Rows Per Prediction**: Due to joins with SCORER evaluations, a single JUDGE/SYNTH prediction appears in multiple rows
@@ -102,6 +125,26 @@ These principles ensure rigorous, reproducible research while minimizing mainten
 - Parameterize, Don't Duplicate: One flexible model > many static views
 - Metrics Layer: Define calculations once, query with different dimensions
 - Shared Base Queries: Dashboard variations call common validated functions
+
+#### Critical Data Analysis Implications
+
+##### For Performance Comparison (JUDGE vs SYNTH):
+- **Cannot use parent_call_id** to link SYNTH to specific JUDGE - SYNTH sees all JUDGEs
+- **Must use session_id** to group JUDGE and SYNTH predictions from same session/record
+- **Multiple agents per session**: Need aggregation strategy for multiple JUDGEs and SYNTHs per session
+- **Session-level analysis**: Comparisons must be within-session, not cross-session
+
+##### For SCORER Analysis:
+- **Multiple correctness values** per prediction (one per SCORER model)
+- **Deduplication critical**: Use `DISTINCT call_id` when aggregating predictions
+- **SCORER diversity**: Different models (GPT-4, Claude, Gemini) provide different correctness scores
+- **Non-deterministic assessments**: Number of T/F ratings varies per scorer evaluation
+
+##### For Synth Lift Analysis:
+- **Session-based comparison**: Compare aggregated SYNTH vs aggregated JUDGE performance within sessions
+- **Aggregation strategy required**: How to handle multiple JUDGEs and SYNTHs per session (AVG, MAX, etc.)
+- **SCORER consistency**: Ensure same SCORER models evaluate both JUDGE and SYNTH for fair comparison
+- **Temporal ordering**: SYNTH always runs after all JUDGEs complete, provides synthesis not iteration
 
 #### Operational Excellence
 
