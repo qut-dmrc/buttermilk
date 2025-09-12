@@ -67,15 +67,47 @@ Each experimental run is uniquely defined by:
 - **Record**: Specific example from golden set
 - **Iteration**: Run number (minimum 10 for stochastic testing)
 
-## DBT Query Development Guidelines
+### Key Metrics
+1. **Accuracy**: Agreement of prediction (bool) with golden set expected (bool)
+2. **Inter-rater Reliability**: Consistency between JUDGE agents
+3. **Synthesis Quality**: Improvement from JUDGE to SYNTH
+4. **Correctness**: average of boolean LLM-based SCORER assessment on qualitative criteria
 
-### Core Principles
+## DBT & Analytics Core Principles
 1. **Always Handle Deduplication**: Use `DISTINCT call_id` or appropriate window functions
 2. **Unnest Nested Fields**: JSON fields need proper extraction
 3. **Filter Test Runs**: Exclude debug/test runs using config hashes
 4. **Aggregate Correctly**: Account for multiple SCORER evaluations per prediction
 5. **Maintain Traceability**: Preserve flow_id and call_id for audit trails
+6. Separation of Concerns: DBT handles transformations (calculation engine), dashboards handle display only
+7. Single Source of Truth: Each calculation defined once in DBT, parameterized for variations
+8. Fail Fast: Tests block bad data from reaching analysis
 
+These principles ensure rigorous, reproducible research while minimizing maintenance overhead.
+
+#### Data Pipeline Design
+
+- Incremental Layers: Raw → Staging → Marts, each layer adds validation
+- Modular Transformations: Use Jinja templating for flexible GROUP BY combinations
+- Version Everything: SQL transformations in git for reproducibility
+
+#### Validation Strategy
+
+- Test Assumptions Explicitly: Every data assumption becomes an automated test
+- Two-Level Testing: Schema tests (structure) + Data tests (business logic)
+- Pre-Analysis Gates: CI/CD blocks analysis if tests fail
+
+#### DRY Implementation
+
+- Parameterize, Don't Duplicate: One flexible model > many static views
+- Metrics Layer: Define calculations once, query with different dimensions
+- Shared Base Queries: Dashboard variations call common validated functions
+
+#### Operational Excellence
+
+- Automated Refresh: Trigger on events (new data) or schedule
+- Audit Trail: Test results stored and queryable
+- Loud Failures: Errors surface immediately in CI and monitoring
 
 ## Key Validation Requirements
 
@@ -95,13 +127,6 @@ Each experimental run is uniquely defined by:
 ## Analysis Tools
 
 ### Primary Dashboards
+- **Streamlit**: ./examples/tja/
 - **Looker Studio**: https://lookerstudio.google.com/u/0/reporting/ce580cdd-794a-455d-a4c3-891b6f6b3305/page/p_cgf1sgewvd
 - **Google Sheets**: https://docs.google.com/spreadsheets/d/1N98c28IZE9xjvAUp2vLE8cIR6E7qoq7aFUyi0dLrSMU
-
-### Key Metrics
-1. **Accuracy**: Agreement of prediction (bool) with golden set expected (bool)
-2. **Inter-rater Reliability**: Consistency between JUDGE agents
-3. **Synthesis Quality**: Improvement from JUDGE to SYNTH
-4. **Correctness**: average of boolean LLM-based SCORER assessment on qualitative criteria
-
-

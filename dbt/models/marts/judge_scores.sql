@@ -2,8 +2,17 @@ WITH predictions AS (
     SELECT * FROM {{ ref('int_predictions') }}
 ),
 scores AS (
-    SELECT * FROM {{ ref('int_scores_aggregated') }}
+    SELECT * FROM {{ ref('int_scores_deduped') }}
 )
+
+{{
+  config(
+    materialized='incremental',
+    unique_key='call_id',
+    on_schema_change='sync_all_columns'
+  )
+}}
+
 SELECT
   predictions.session_id,
   predictions.call_id,
@@ -30,6 +39,7 @@ SELECT
   predictions.expected_violating,
   CAST((predictions.predicted_violating = predictions.expected_violating) AS BOOLEAN) as correct,
   scores.correctness,
+  scores.score_quality,
   ARRAY_AGG(CAST(JSON_VALUE(assessment, '$.correct') AS BOOLEAN) IGNORE NULLS) AS assessment_correct,
   ARRAY_AGG(JSON_VALUE(assessment, '$.feedback') IGNORE NULLS) AS assessment_feedback,
 FROM
@@ -40,11 +50,16 @@ LEFT JOIN
   UNNEST(scores.assessments) AS assessment
 WHERE
   TRUE
-  -- Filter for data after a specific date to exclude bad data
-  AND predictions.timestamp >= '2025-05-01' 
-  AND scores.timestamp >= '2025-05-01'
+  -- Filter for data after configurable cutoff date
+  AND predictions.timestamp >= '{{ var("cutoff_date") }}'
+  AND scores.timestamp >= '{{ var("cutoff_date") }}'
   -- This join condition can improve performance
   AND scores.timestamp >= predictions.timestamp
+  
+  -- Incremental logic: only process new/updated data
+  {% if is_incremental() %}
+    AND predictions.timestamp > (SELECT MAX(timestamp) FROM {{ this }})
+  {% endif %}
 GROUP BY
   predictions.session_id,
   predictions.call_id,
@@ -66,6 +81,7 @@ GROUP BY
   scores.scorer_template,
   scores.scorer_hash,
   scores.role,
+  scores.score_quality,
   scores.correctness,
   predictions.predicted_violating,
   predictions.expected_violating

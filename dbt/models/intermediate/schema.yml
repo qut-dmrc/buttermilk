@@ -1,0 +1,87 @@
+version: 2
+
+models:
+  - name: int_predictions
+    description: "Judge and synthesizer predictions with metadata"
+    columns:
+      - name: call_id
+        description: "Unique identifier for prediction"
+        tests:
+          - unique
+          - not_null
+      
+      - name: record_id
+        description: "Content being evaluated"
+        tests:
+          - not_null
+      
+      - name: judge_role
+        description: "JUDGE or SYNTHESISER"
+        tests:
+          - accepted_values:
+              values: ['JUDGE', 'SYNTHESISER']
+              quote: false
+      
+      - name: predicted_violating
+        description: "Prediction outcome"
+        tests:
+          - not_null
+      
+      - name: expected_violating
+        description: "Ground truth outcome"
+        tests:
+          - not_null
+
+  - name: int_scores_aggregated
+    description: "SCORER evaluations of predictions"
+    columns:
+      - name: scorer_call_id
+        description: "Unique identifier for scorer evaluation"
+        tests:
+          - unique
+          - not_null
+      
+      - name: parent_call_id
+        description: "Links to the prediction being scored"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('int_predictions')
+              field: call_id
+      
+      - name: correctness
+        description: "Overall correctness score from SCORER"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+
+  - name: int_experiment_completeness
+    description: "Tracks completeness of experimental runs"
+    columns:
+      - name: session_id
+        description: "Experimental session identifier"
+        tests:
+          - not_null
+      
+      - name: record_id
+        description: "Content identifier"
+        tests:
+          - not_null
+      
+      - name: has_judge
+        description: "Whether session has judge prediction"
+        tests:
+          - not_null
+      
+      - name: has_synth
+        description: "Whether session has synthesis"
+      
+      - name: has_scorer
+        description: "Whether session has scorer evaluation"
+      
+      - name: is_complete
+        description: "Whether session has all required components"
+        tests:
+          - not_null

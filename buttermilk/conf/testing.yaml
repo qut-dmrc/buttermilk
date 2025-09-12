@@ -5,7 +5,7 @@ defaults:
     - zot
     - trans
     - osb
-  - llms: lite
+  - llms: debug
 
 verbose: true
 
@@ -23,6 +23,27 @@ infrastructure:
       region: us-central1
       location: us-central1
       storage_bucket: prosocial-dev
+    
+      project_id: prosocial-443205
+      region: us-central1
+      location: us-central1
+      storage_bucket: prosocial-dev
+      bigquery_dataset: buttermilk
+      secrets:
+        _target_: buttermilk._core.cloud_config.SecretsServiceConfig
+        models_secret: dev__llm__connections
+        credentials_secret: dev__shared_credentials
+      logging:
+        _target_: buttermilk._core.cloud_config.LoggingServiceConfig
+        verbose: true
+      pubsub:
+        _target_: buttermilk._core.cloud_config.PubSubServiceConfig
+        jobs_topic: jobs
+        jobs_subscription: jobs-sub
+        status_topic: flow
+        status_subscription: flow-sub
+      vertex:
+        enabled: true
       
   # Unified tracing configuration for all tracing providers
   tracing:

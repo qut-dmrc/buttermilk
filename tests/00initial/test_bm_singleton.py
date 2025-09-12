@@ -19,14 +19,14 @@ def test_conf(real_bm):
     assert real_bm.session_info.name == "buttermilk"
 
 
-def test_singleton_instance(real_bm, real_conf):
+def test_singleton_instance(real_bm):
     """Test that singleton access returns the same instance, but new sessions create new instances."""
     # Get singleton instance should return the same BM
     bm_direct = get_bm()  # Use get_bm() to access the singleton
     assert bm_direct is real_bm, "get_bm() should return the same singleton instance"
 
     # But hydra.utils.instantiate creates new session-scoped instances (new architecture)
-    bm_new_session = hydra.utils.instantiate(real_conf.real_bm)
+    bm_new_session = hydra.utils.instantiate(real_bm)
     assert bm_new_session is not None, "New BM instance should not be None"
     assert bm_new_session.session_info.job == "testing", "New BM instance job should be 'testing'"
 
@@ -35,10 +35,10 @@ def test_singleton_instance(real_bm, real_conf):
     assert bm_new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # But both should have the same basic configuration
-    assert bm_new_session.session_info.name == real_conf.real_bm.session_info.name, "New session should match config"
-    assert bm_new_session.session_info.job == real_conf.real_bm.session_info.job, "New session should match config"
-    assert bm_direct.session_info.name == real_conf.real_bm.session_info.name, "Singleton should match config"
-    assert bm_direct.session_info.job == real_conf.real_bm.session_info.job, "Singleton should match config"
+    assert bm_new_session.session_info.name == real_bm.session_info.name, "New session should match config"
+    assert bm_new_session.session_info.job == real_bm.session_info.job, "New session should match config"
+    assert bm_direct.session_info.name == real_bm.session_info.name, "Singleton should match config"
+    assert bm_direct.session_info.job == real_bm.session_info.job, "Singleton should match config"
 
 
 def test_session_scoped_instances(real_bm):

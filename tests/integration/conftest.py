@@ -55,7 +55,7 @@ def bm(infrastructure, conf):
 
 
 @pytest.fixture(scope="session")
-def logger_fixture(bm):
+def real_logger(bm: BM):
     """Provide the logger from the real BM instance."""
     return logger
 

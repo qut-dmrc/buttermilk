@@ -35,9 +35,9 @@ EXPECTED_NUMERIC_FIELD = 42
 
 
 @pytest.fixture(scope="session")
-def gcp_project_id(bm) -> str:
+def gcp_project_id(real_bm) -> str:
     """Get GCP project ID for testing."""
-    return bm.cloud_manager.clouds[0].project_id
+    return real_bm.cloud_manager.clouds[0].project_id
 
 
 @pytest.fixture(scope="session")

@@ -121,15 +121,15 @@ async def test_rag_zotero_with_structured_output(model_name, bm):
 
 
 @pytest.mark.anyio
-async def test_rag_zotero_llama4_specific(bm):
+async def test_rag_zotero_llama4_specific(real_bm):
     """Specific test for llama4maverick to debug the 500 error."""
     model_name = "llama4maverick"
 
-    if model_name not in bm.llms.connections:
+    if model_name not in real_bm.llms.connections:
         pytest.skip(f"Model {model_name} not configured")
 
     # Get the LLM client directly
-    llm_client = bm.llms.get_autogen_chat_client(model_name)
+    llm_client = real_bm.llms.get_autogen_chat_client(model_name)
 
     # First test: Simple tool calling
     print(f"\n1. Testing simple tool calling with {model_name}...")
@@ -256,22 +256,3 @@ async def test_rag_zotero_llama4_specific(bm):
         print(f"❌ Complex structured output WITH tools failed: {e}")
         if "Error code: 500" in str(e):
             print("   Confirmed: llama4maverick cannot handle tools + complex structured output together")
-
-
-if __name__ == "__main__":
-    # Allow running specific tests manually
-    import asyncio
-
-    from buttermilk import set_bm
-    from buttermilk._core.bm_init import BM
-
-    async def main():
-        # Initialize BM singleton
-        bm = BM(name="buttermilk", job="testing")
-        await bm.setup()
-        set_bm(bm)
-
-        # Run test
-        await test_rag_zotero_llama4_specific(bm)
-
-    asyncio.run(main())

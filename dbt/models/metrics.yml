@@ -1,0 +1,80 @@
+version: 2
+
+metrics:
+  - name: accuracy
+    label: Model Accuracy
+    model: ref('judge_scores')
+    description: "Percentage of predictions that match ground truth"
+    calculation_method: average
+    expression: CAST(correct AS INT64)
+    
+    dimensions:
+      - judge_model
+      - judge_criteria
+      - judge_template
+      - judge_role
+      - record_id
+    
+    filters:
+      - field: score_quality
+        operator: '='
+        value: 'valid'
+    
+    meta:
+      team: research
+      primary_use: dashboard
+
+  - name: scorer_agreement
+    label: SCORER Agreement with Ground Truth
+    model: ref('judge_scores')
+    description: "Average correctness score from SCORER agents"
+    calculation_method: average
+    expression: correctness
+    
+    dimensions:
+      - judge_model
+      - judge_criteria
+      - scorer_model
+      - judge_template
+    
+    filters:
+      - field: score_quality
+        operator: '='
+        value: 'valid'
+      - field: correctness
+        operator: 'is not'
+        value: 'null'
+
+  - name: prediction_count
+    label: Total Predictions
+    model: ref('judge_scores')
+    description: "Count of predictions made"
+    calculation_method: count
+    expression: call_id
+    
+    dimensions:
+      - judge_model
+      - judge_criteria
+      - judge_template
+      - judge_role
+    
+    filters:
+      - field: call_id
+        operator: 'is not'
+        value: 'null'
+
+  - name: coverage_rate
+    label: Scoring Coverage Rate
+    model: ref('judge_scores')
+    description: "Percentage of predictions that have valid scores"
+    calculation_method: average
+    expression: CASE WHEN score_quality = 'valid' THEN 1 ELSE 0 END
+    
+    dimensions:
+      - judge_model
+      - judge_criteria
+      - judge_template
+      
+    meta:
+      team: research
+      primary_use: monitoring

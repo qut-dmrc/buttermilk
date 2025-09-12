@@ -24,28 +24,28 @@ class TestBMInjectionMechanism:
         """Test that FlowRunner can store and retrieve session-scoped BM."""
         # Create FlowRunner without BM
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.bm is None
+        assert runner.real_bm is None
         
         # Create mock session BM
         session_bm = MockBM("test-session-123")
         
         # Inject session BM
         runner.set_session_bm(session_bm)
-        assert runner.bm is session_bm
+        assert runner.real_bm is session_bm
         
         # Verify get_effective_bm returns session BM
         effective_bm = runner.get_effective_bm()
         assert effective_bm is session_bm
         assert effective_bm.session_info.session_id == "test-session-123"
     
-    def test_flowrunner_fallback_to_global(self, bm):
+    def test_flowrunner_fallback_to_global(self, real_bm):
         """Test that FlowRunner falls back to global BM when no session BM is set."""
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.bm is None
+        assert runner.real_bm is None
         
         # get_effective_bm should return the global BM (mock from fixture)
         effective_bm = runner.get_effective_bm()
-        assert effective_bm is bm  # Should be the mock BM from fixture
+        assert effective_bm is real_bm  # Should be the mock BM from fixture
         assert effective_bm.session_info.session_id == "test-session-mock"
     
     def test_session_isolation_between_runners(self):
@@ -68,35 +68,35 @@ class TestBMInjectionMechanism:
 class TestRealBMIntegration:
     """Test BM injection with real BM instances from conftest.py."""
     
-    def test_flowrunner_with_real_bm(self, bm):
+    def test_flowrunner_with_real_bm(self, real_bm):
         """Test FlowRunner injection with real BM from test fixtures."""
         # This test uses the real BM from conftest.py
         runner = FlowRunner(flows={}, mode="test")
         
         # Inject the real test BM
-        runner.set_session_bm(bm)
+        runner.set_session_bm(real_bm)
         
         # Verify injection worked
         effective_bm = runner.get_effective_bm()
-        assert effective_bm is bm
+        assert effective_bm is real_bm
         assert hasattr(effective_bm, 'session_info')
         assert effective_bm.session_info.session_id  # Should have a session ID
     
-    def test_backward_compatibility_with_global_bm(self, bm):
+    def test_backward_compatibility_with_global_bm(self, real_bm):
         """Test that existing get_bm() pattern still works with test infrastructure."""
         from buttermilk import get_bm
         
         # The global BM should be the same as our fixture
         global_bm = get_bm()
-        assert global_bm is bm
+        assert global_bm is real_bm
         
         # FlowRunner without session BM should fall back to this global one
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.bm is None
+        assert runner.real_bm is None
         
         effective_bm = runner.get_effective_bm()
         assert effective_bm is global_bm
-        assert effective_bm is bm
+        assert effective_bm is real_bm
 
 
 class TestDocumentedBehavior:

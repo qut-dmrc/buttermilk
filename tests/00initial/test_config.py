@@ -1,35 +1,33 @@
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from cloudpathlib import AnyPath
-from omegaconf import DictConfig
 
 from buttermilk import BM
 
 
-def test_has_test_info(bm: BM):
-    assert bm.session_info.name == "buttermilk"
-    assert bm.session_info.job == "testing"
-    assert bm.session_info.save_dir is not None
-    assert bm.session_info.save_dir != ""
+def test_has_test_info(real_bm: BM):
+    assert real_bm.session_info.name == "buttermilk"
+    assert real_bm.session_info.job == "testing"
+    assert real_bm.session_info.save_dir is not None
+    assert real_bm.session_info.save_dir != ""
 
 
-def test_save_dir(bm: BM):
-    assert "runs/buttermilk/testing/" in bm.session_info.save_dir
-    assert AnyPath(bm.session_info.save_dir)
+def test_save_dir(real_bm: BM):
+    assert "runs/buttermilk/testing/" in real_bm.session_info.save_dir
+    assert AnyPath(real_bm.session_info.save_dir)
 
 
-def test_singleton(bm: BM):
-    obj1 = bm
-    obj2 = bm
+def test_singleton(real_bm: BM):
+    obj1 = real_bm
+    obj2 = real_bm
 
     assert id(obj1) == id(obj2), "variables contain different instances."
 
 
-def test_singleton_from_fixture(bm):
-    obj2 = bm
+def test_singleton_from_fixture(real_bm):
+    obj2 = real_bm
 
-    assert id(bm) == id(obj2), "variables contain different instances."
+    assert id(real_bm) == id(obj2), "variables contain different instances."
 
 
 def test_time_to_instantiate():
@@ -45,7 +43,7 @@ def test_time_to_instantiate():
 # Use relative import for the module under test
 
 @pytest.mark.anyio
-async def test_get_ip_updates_ip(bm):
+async def test_get_ip_updates_ip(real_bm):
     """Test that start_fetch_ip_task fetches and updates the _ip attribute."""
     # Skip this test due to IP fetching inconsistency bug
     # See: https://github.com/qut-dmrc/buttermilk/issues/229
@@ -53,7 +51,7 @@ async def test_get_ip_updates_ip(bm):
 
 
 @pytest.mark.anyio
-async def test_get_ip_caches_ip(bm):
+async def test_get_ip_caches_ip(real_bm):
     """Test that start_fetch_ip_task caches the result and doesn't refetch."""
     # Skip this test due to IP fetching inconsistency bug
     # See: https://github.com/qut-dmrc/buttermilk/issues/229
