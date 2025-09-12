@@ -14,11 +14,6 @@ def test_has_test_info(bm: BM):
     assert bm.session_info.save_dir != ""
 
 
-def test_config_llms():
-    """Test moved to tests/integration/test_llms_infrastructure.py"""
-    pytest.skip("Moved to integration tests - see test_llms_infrastructure.py")
-
-
 def test_save_dir(bm: BM):
     assert "runs/buttermilk/testing/" in bm.session_info.save_dir
     assert AnyPath(bm.session_info.save_dir)

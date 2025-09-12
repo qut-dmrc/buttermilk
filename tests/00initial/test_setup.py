@@ -26,14 +26,5 @@ class Test00Setup:
         """Check that the JSON key is not set."""
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
 
-    def test_bigquery(self):
-        """Test moved to tests/integration/test_setup_infrastructure.py"""
-        pytest.skip("Moved to integration tests - see test_setup_infrastructure.py")
 
-    def test_database(self):
-        """Test moved to tests/integration/test_setup_infrastructure.py"""
-        pytest.skip("Moved to integration tests - see test_setup_infrastructure.py")
 
-    def test_hf_login(self):
-        """Test moved to tests/integration/test_setup_infrastructure.py"""
-        pytest.skip("Moved to integration tests - see test_setup_infrastructure.py")

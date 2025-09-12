@@ -27,17 +27,16 @@ infrastructure:
   # Unified tracing configuration for all tracing providers
   tracing:
     weave: 
-      enabled: true
+      enabled: false
       # project_id is WANDB_ENTITY for weave
       project_id: dmrc
-      api_key: 14b169c3bc7460cf21789b8144a39a166504d0ec
+      api_key: 
     traceloop:
       enabled: false
-      api_key: tl_b198e9224e6b4bfb801a1eff1a35addf
+      api_key: 
       endpoint: https://api.traceloop.com
     otel:
       enabled: true
-      # OpenTelemetry tracing (formerly under GCP cloud config)
       endpoint: https://telemetry.googleapis.com
       otlp_headers: {}
       

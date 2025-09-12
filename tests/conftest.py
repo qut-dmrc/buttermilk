@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-from unittest.mock import MagicMock
 
 import pytest
 from hydra import compose, initialize
@@ -112,41 +111,44 @@ def real_flow_runner(real_conf, real_infrastructure) -> FlowRunner:
     return FlowRunner.model_validate(real_conf.run)
 
 
+@pytest.fixture(scope="session")
+def real_logger(real_bm):
+    from buttermilk import logger
+
+    return logger
+
+
 # =============================================================================
 # CONFIGURATION OVERRIDE UTILITIES
 # =============================================================================
 
+
 @pytest.fixture
 def config_override():
     """Utility fixture for creating configuration overrides in tests."""
+
     def _override_config(base_config, overrides):
         """Apply overrides to base configuration for test-specific needs."""
         from omegaconf import OmegaConf
-        
+
         if isinstance(base_config, dict):
             config = OmegaConf.create(base_config)
         else:
             config = base_config.copy()
-            
+
         for key, value in overrides.items():
             OmegaConf.set(config, key, value)
         return config
-    
+
     return _override_config
 
-
-
-@pytest.fixture(scope="session")
-def logger():
-    from buttermilk import logger
-    return logger
 
 # =============================================================================
 # DEPRECATED MOCK FIXTURES (Removed)
 #
 # The mock fixtures below have been removed in favor of real fixtures:
 # - mock_bm → real_bm
-# - llms → real_llms  
+# - llms → real_llms
 # - model_name → real_model_name
 # - llm_multimodal → real_llm_multimodal
 # - llm → real_llm

@@ -17,7 +17,7 @@ def conf():
     """Hydra config fixture."""
 
     with initialize(version_base=None, config_path="../../buttermilk/conf"):
-        cfg = compose(config_name="testing")
+        cfg = compose(config_name="config")
 
     # Keep as DictConfig for infrastructure, but resolve for other uses
     return cfg
