@@ -199,13 +199,13 @@ class FlowRunContext(BaseModel):
     def cancel_monitor_ui_task(self) -> None:
         """Cancel the active monitor_ui task if it exists."""
         if self.monitor_ui_task and not self.monitor_ui_task.done():
-            logger.debug(f"Cancelling monitor_ui task for session {self.session_id}")
+            logger.debug("Cancelling monitor_ui task for session", session_id=self.session_id)
             self.monitor_ui_task.cancel()
             self.monitor_ui_task = None
 
     async def cleanup(self) -> None:
         """Clean up session resources with timeout and verification."""
-        logger.debug(f"Starting cleanup for session {self.session_id}")
+        logger.debug("Starting cleanup for session", session_id=self.session_id)
 
         try:
             # Set status to terminating (Phase 2 enhancement)
@@ -232,25 +232,25 @@ class FlowRunContext(BaseModel):
                 self.resources.add_custom_resource("orchestrator", self.orchestrator)
 
             # Perform comprehensive resource cleanup
-            logger.debug(f"Cleaning up resources for session {self.session_id}")
+            logger.debug("Cleaning up resources for session", session_id=self.session_id)
             cleanup_report = await self.resources.cleanup()
 
             # Log cleanup report
             if cleanup_report.get("errors"):
-                logger.warning(f"Session {self.session_id} cleanup completed with errors: {cleanup_report}")
+                logger.warning("Session cleanup completed with errors", session_id=self.session_id, cleanup_report=cleanup_report)
                 self.status = SessionStatus.ERROR
             else:
-                logger.info(f"Session {self.session_id} cleaned up successfully: {cleanup_report}")
+                logger.info("Session cleaned up successfully", session_id=self.session_id, cleanup_report=cleanup_report)
                 self.status = SessionStatus.TERMINATED
 
         except Exception as e:
-            logger.error(f"Error during session cleanup for {self.session_id}: {e}")
+            logger.error("Error during session cleanup", session_id=self.session_id, error=str(e))
             # Ensure status is set even if cleanup fails
             self.status = SessionStatus.ERROR
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
-        logger.debug(f"[MONITOR_UI] Starting monitor_ui for session {self.session_id}")
+        logger.debug("[MONITOR_UI] Starting monitor_ui for session", session_id=self.session_id)
         while True:
             await asyncio.sleep(0.1)
 
@@ -260,35 +260,37 @@ class FlowRunContext(BaseModel):
 
             try:
                 data = await self.websocket.receive_json()
-                logger.debug(f"[MONITOR_UI] Received {data.get('type', 'unknown')} message from WebSocket  for session {self.session_id}")
+                logger.debug(
+                    "[MONITOR_UI] Received message from WebSocket for session", message_type=data.get("type", "unknown"), session_id=self.session_id
+                )
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
-                    logger.debug(f"[MONITOR_UI] No message returned from process_message_from_ui for data: {data}")
+                    logger.debug("[MONITOR_UI] No message returned from process_message_from_ui", data=data)
                     continue
 
                 if isinstance(message, RunRequest):
                     # Generate a request to run the flow with the new parameters
                     message.callback_to_ui = self.send_message_to_ui
                     message.session_id = self.session_id
-                    logger.info(f"Yielding RunRequest for flow '{message.flow}' in session {self.session_id}")
+                    logger.info("Yielding RunRequest for flow in session", flow=message.flow, session_id=self.session_id)
 
                     yield message
                 elif not self.callback_to_groupchat:
                     # Group chat has not started yet
-                    logger.debug(f"Group chat not yet started for session {self.session_id}")
+                    logger.debug("Group chat not yet started for session", session_id=self.session_id)
                     continue
                 else:
                     await self.callback_to_groupchat(message)
 
             except WebSocketDisconnect:
-                logger.debug(f"Client {self.session_id} disconnected.")
+                logger.debug("Client disconnected", session_id=self.session_id)
                 self.websocket = None
                 # Don't break immediately - let the session manager handle reconnection
                 break
             except Exception as e:
-                logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
+                logger.error("Error receiving/processing client message", session_id=self.session_id, error=str(e))
                 self.websocket = None
                 break
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
@@ -302,7 +304,7 @@ class FlowRunContext(BaseModel):
         """
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug(f"Unhandled message type: {type(message)}, not forwarding to UI.")
+            logger.debug("Unhandled message type, not forwarding to UI", message_type=type(message).__name__)
             return
 
         # Persist message to session storage
@@ -310,13 +312,13 @@ class FlowRunContext(BaseModel):
             storage_service = SessionStorageService()
             if storage_service.should_persist_message(formatted_message):
                 storage_service.save_message(self.session_id, formatted_message)
-                logger.debug(f"Persisted message {formatted_message.message_id} for session {self.session_id}")
+                logger.debug("Persisted message for session", message_id=formatted_message.message_id, session_id=self.session_id)
         except Exception as e:
-            logger.warning(f"Failed to persist message for session {self.session_id}: {e}")
+            logger.warning("Failed to persist message for session", session_id=self.session_id, error=str(e))
             # Continue even if persistence fails
 
         if self.websocket is None:
-            logger.debug(f"WebSocket not connected for session {self.session_id}, cannot send message.")
+            logger.debug("WebSocket not connected for session, cannot send message", session_id=self.session_id)
             return
 
         try:
@@ -325,8 +327,11 @@ class FlowRunContext(BaseModel):
 
             # Consolidate debug info into a single log entry
             logger.debug(
-                f"[FlowRunner.send_message_to_ui] Sending {message_type} to session {self.session_id} "
-                f"(ws_state={self.websocket.client_state}: {json.dumps(message_data_to_send)[:100]}... ",
+                "Flowrunner sending message to ui",
+                message_type=message_type,
+                session_id=self.session_id,
+                ws_state=self.websocket.client_state,
+                message_data=json.dumps(message_data_to_send)[:100],
             )
 
             async def _send_with_retry_internal():
@@ -335,9 +340,7 @@ class FlowRunContext(BaseModel):
                     raise RuntimeError(f"WebSocket is None for session {self.session_id} during send attempt.")
 
                 if self.websocket.client_state != WebSocketState.CONNECTED:
-                    logger.debug(
-                        f"WebSocket not connected (state: {self.websocket.client_state}) for session {self.session_id}. Retrying send.",
-                    )
+                    logger.debug("WebSocket not connected", state=self.websocket.client_state, session_id=self.session_id)
                     # Proceed to send; if it fails due to state, tenacity will catch and retry.
 
                 await self.websocket.send_json(message_data_to_send)
@@ -351,11 +354,14 @@ class FlowRunContext(BaseModel):
                     error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
                     error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
                     await self.websocket.send_json(error_message_data)
-                except Exception:
+                except Exception as err2:
+                    logger.warning("Failed to send error notification to UI", session_id=self.session_id, error=e, error2=err2)
                     pass
 
             websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
-            logger.warning(f"Cannot send error notification to UI for session {self.session_id} (websocket state: {websocket_state}). {e}")
+            logger.warning(
+                "Cannot send error notification to UI for session", session_id=self.session_id, websocket_state=websocket_state, error=str(e)
+            )
 
 
 class OrchestratorFactory:
@@ -394,7 +400,7 @@ class OrchestratorFactory:
             # Create and return a fresh instance
             orchestrator = orchestrator_cls(**config)
 
-            logger.debug(f"Created fresh orchestrator for flow '{flow_name}': {orchestrator_cls.__name__}")
+            logger.debug("Created fresh orchestrator for flow", flow_name=flow_name, orchestrator_class=orchestrator_cls.__name__)
             return orchestrator
 
         except Exception as e:
@@ -414,9 +420,9 @@ class OrchestratorFactory:
                 result = cleanup_method()
                 if asyncio.iscoroutine(result):
                     await result
-                logger.debug(f"Orchestrator cleanup completed: {orchestrator.__class__.__name__}")
+                logger.debug("Orchestrator cleanup completed", orchestrator_class=orchestrator.__class__.__name__)
             except Exception as e:
-                logger.warning(f"Error during orchestrator cleanup: {e}")
+                logger.warning("Error during orchestrator cleanup", error=str(e))
 
 
 class SessionManager:
@@ -480,7 +486,7 @@ class SessionManager:
                     self.active_connections[session_id].add(websocket)
                     session.websocket = websocket
                     session.update_activity()
-                    logger.debug(f"Added WebSocket to existing session {session_id}")
+                    logger.debug("Added WebSocket to existing session", session_id=session_id)
                 return session
 
             # Create new session with INITIALIZING status
@@ -501,7 +507,7 @@ class SessionManager:
                 self.active_connections[session_id].add(websocket)
                 session.add_websocket(websocket)
 
-            logger.info(f"Created new session {session_id} with INITIALIZING status")
+            logger.info("Created new session with INITIALIZING status", session_id=session_id)
 
             # Transition to ACTIVE after initialization
             await self._transition_session_status(session_id, SessionStatus.ACTIVE)
@@ -520,7 +526,7 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning(f"Attempted to transition status for non-existent session {session_id}")
+            logger.warning("Attempted to transition status for non-existent session", session_id=session_id)
             return False
 
         session = self.sessions[session_id]
@@ -541,11 +547,11 @@ class SessionManager:
         }
 
         if old_status in valid_transitions and new_status not in valid_transitions[old_status]:
-            logger.warning(f"Invalid status transition for session {session_id}: {old_status} -> {new_status}")
+            logger.warning("Invalid status transition for session", session_id=session_id, old_status=old_status.value, new_status=new_status.value)
             return False
 
         session.status = new_status
-        logger.debug(f"Session {session_id} status: {old_status} -> {new_status}")
+        logger.debug("Session status transition", session_id=session_id, old_status=old_status.value, new_status=new_status.value)
         
         # Update session storage flow status
         try:
@@ -561,7 +567,7 @@ class SessionManager:
                 storage_service.update_flow_status(session_id, "running")
                 
         except Exception as e:
-            logger.warning(f"Failed to update session storage for {session_id}: {e}")
+            logger.warning("Failed to update session storage", session_id=session_id, error=str(e))
         
         return True
 
@@ -581,7 +587,7 @@ class SessionManager:
                 try:
                     await self.shutdown_handlers[session_id]()
                 except Exception as e:
-                    logger.warning(f"Error in custom shutdown handler for session {session_id}: {e}")
+                    logger.warning("Error in custom shutdown handler for session", session_id=session_id, error=str(e))
                 finally:
                     del self.shutdown_handlers[session_id]
 
@@ -600,7 +606,7 @@ class SessionManager:
 
             # Remove session and transition to TERMINATED
             del self.sessions[session_id]
-            logger.info(f"Session {session_id} removed and cleaned up (TERMINATED)")
+            logger.info("Session removed and cleaned up (TERMINATED)", session_id=session_id)
             return True
 
     async def register_shutdown_handler(self, session_id: str, handler: Callable) -> None:
@@ -612,7 +618,7 @@ class SessionManager:
 
         """
         self.shutdown_handlers[session_id] = handler
-        logger.debug(f"Registered shutdown handler for session {session_id}")
+        logger.debug("Registered shutdown handler for session", session_id=session_id)
 
     async def validate_session(self, session_id: str) -> bool:
         """Validate that a session is in a good state.
@@ -635,7 +641,7 @@ class SessionManager:
 
         # Check if session has expired
         if session.is_expired():
-            logger.info(f"Session {session_id} has expired")
+            logger.info("Session has expired", session_id=session_id)
             await self._transition_session_status(session_id, SessionStatus.EXPIRED)
             return False
 
@@ -688,14 +694,14 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning(f"Attempted to handle disconnect for non-existent session {session_id}")
+            logger.warning("Attempted to handle disconnect for non-existent session", session_id=session_id)
             return False
 
         session = self.sessions[session_id]
 
         # Only allow reconnection for ACTIVE sessions
         if session.status != SessionStatus.ACTIVE:
-            logger.debug(f"Session {session_id} in status {session.status.value} - cleaning up instead of allowing reconnection")
+            logger.debug("Session in status - cleaning up instead of allowing reconnection", session_id=session_id, status=session.status.value)
             await self.cleanup_session(session_id)
             return False
 
@@ -708,7 +714,11 @@ class SessionManager:
             if session_id in self.active_connections:
                 self.active_connections[session_id].clear()
 
-            logger.debug(f"Session {session_id} transitioned to RECONNECTING - client can reconnect within {session.session_timeout}s")
+            logger.debug(
+                "Session transitioned to RECONNECTING - client can reconnect within timeout",
+                session_id=session_id,
+                timeout_seconds=session.session_timeout,
+            )
             return True
         # Transition failed, clean up the session
         await self.cleanup_session(session_id)
@@ -726,19 +736,19 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning(f"Attempted to reconnect to non-existent session {session_id}")
+            logger.warning("Attempted to reconnect to non-existent session", session_id=session_id)
             return None
 
         session = self.sessions[session_id]
 
         # Only allow reconnection to sessions in RECONNECTING status
         if session.status != SessionStatus.RECONNECTING:
-            logger.warning(f"Attempted to reconnect to session {session_id} in status {session.status.value}")
+            logger.warning("Attempted to reconnect to session in status", session_id=session_id, status=session.status.value)
             return None
 
         # Check if session has expired
         if session.is_expired():
-            logger.info(f"Session {session_id} has expired - cleaning up instead of reconnecting")
+            logger.info("Session has expired - cleaning up instead of reconnecting", session_id=session_id)
             await self.cleanup_session(session_id)
             return None
 
@@ -755,9 +765,9 @@ class SessionManager:
         # Transition back to ACTIVE status
         success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
         if success:
-            logger.debug(f"Successfully reconnected session {session_id}")
+            logger.debug("Successfully reconnected session", session_id=session_id)
             return session
-        logger.error(f"Failed to transition session {session_id} back to ACTIVE after reconnection")
+        logger.error("Failed to transition session back to ACTIVE after reconnection", session_id=session_id)
         return None
 
     async def _periodic_cleanup(self) -> None:
@@ -794,13 +804,13 @@ class SessionManager:
 
                 # Perform cleanup
                 for session_id, reason in cleanup_candidates:
-                    logger.info(f"Cleaning up session {session_id} (reason: {reason})")
+                    logger.info("Cleaning up session", session_id=session_id, reason=reason)
                     await self.cleanup_session(session_id)
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in session cleanup task: {e}")
+                logger.error("Error in session cleanup task", error=str(e))
 
 
 class FlowRunner(BaseModel):
@@ -860,7 +870,7 @@ class FlowRunner(BaseModel):
             >>> # All flows will now use session-scoped observability
         """
         self.bm = bm
-        logger.debug(f"Set session-scoped BM with session_id: {bm.session_info.session_id}")
+        logger.debug("Set session-scoped BM", session_id=bm.session_info.session_id)
     
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
@@ -906,15 +916,15 @@ class FlowRunner(BaseModel):
 
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
-                logger.debug(f"Attempting to reconnect to session {session_id}")
+                logger.debug("Attempting to reconnect to session", session_id=session_id)
                 reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
                 if reconnected_session:
                     return reconnected_session
                 # Reconnection failed, fall through to create new session
-                logger.warning(f"Failed to reconnect to session {session_id}, creating new session")
+                logger.warning("Failed to reconnect to session, creating new session", session_id=session_id)
             elif existing_session.status == SessionStatus.TERMINATED:
                 # Session has been terminated, don't allow new connections
-                logger.info(f"WebSocket connection attempt to terminated session {session_id}, rejecting")
+                logger.info("WebSocket connection attempt to terminated session, rejecting", session_id=session_id)
                 return None
             elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
                 # Session is already active, replace the websocket connection
@@ -925,15 +935,15 @@ class FlowRunner(BaseModel):
                     # Close existing websocket if any
                     if existing_session.websocket and existing_session.websocket != websocket:
                         try:
-                            logger.debug(f"Closing previous WebSocket connection for session {session_id}")
+                            logger.debug("Closing previous WebSocket connection for session", session_id=session_id)
                             await existing_session.websocket.close()
                         except Exception as e:
-                            logger.warning(f"Error closing previous WebSocket for session {session_id}: {e}")
+                            logger.warning("Error closing previous WebSocket for session", session_id=session_id, error=str(e))
                     
                     # Replace with new websocket
                     existing_session.websocket = websocket
                     existing_session.add_websocket(websocket)
-                    logger.debug(f"Replaced WebSocket connection for active session {session_id}")
+                    logger.debug("Replaced WebSocket connection for active session", session_id=session_id)
                 return existing_session
 
         # Create new session if no websocket provided or reconnection failed
@@ -1001,75 +1011,75 @@ class FlowRunner(BaseModel):
             config_yaml = config_dir / "config.yaml"
             if not config_yaml.exists():
                 raise ValueError(f"Main config file not found: {config_yaml}")
-            
-            logger.info(f"Reloading configuration from: {config_dir}")
-            
+
+            logger.info("Reloading configuration from directory", config_dir=config_dir)
+
             # Clear Hydra's global state to ensure fresh load
             hydra.core.global_hydra.GlobalHydra.instance().clear()
-            
+
             # Initialize Hydra with the config directory
             with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
                 # Compose the configuration using the same pattern as CLI
                 conf = compose(config_name="config")
                 OmegaConf.resolve(conf)
-                
+
                 # Extract flows from the reloaded configuration
                 if hasattr(conf, "run") and hasattr(conf.run, "flows"):
                     new_flows = conf.run.flows
-                    logger.info(f"Found {len(new_flows)} flows in reloaded config")
-                    
+                    logger.info("Found flows in reloaded config", flow_count=len(new_flows))
+
                     # Update flows dictionary
                     old_flows = self.flows.copy()
                     self.flows = new_flows
-                    
+
                     # Determine what changed
                     new_flow_names = set(new_flows.keys())
-                    
+
                     result["flows_loaded"] = list(new_flow_names)
                     result["flows_updated"] = list(current_flows.intersection(new_flow_names))
                     result["flows_removed"] = list(current_flows - new_flow_names)
-                    
+
                     # Log the changes
                     if result["flows_updated"]:
-                        logger.info(f"Updated flows: {result['flows_updated']}")
+                        logger.info("Updated flows", flows_updated=result["flows_updated"])
                     if new_flow_names - current_flows:
-                        logger.info(f"New flows: {list(new_flow_names - current_flows)}")
+                        logger.info("New flows", new_flows=list(new_flow_names - current_flows))
                     if result["flows_removed"]:
-                        logger.info(f"Removed flows: {result['flows_removed']}")
-                    
+                        logger.info("Removed flows", flows_removed=result["flows_removed"])
+
                     result["success"] = True
                     logger.info("Configuration reload completed successfully")
-                    
+
                 else:
                     raise ValueError("No flows found in reloaded configuration")
-                    
+
         except Exception as e:
             error_msg = f"Configuration reload failed: {str(e)}"
             logger.error(error_msg, exc_info=True)
             result["errors"].append(error_msg)
             result["errors"].append(traceback.format_exc())
-            
+
             # Don't leave flows in broken state - keep old flows on error
             if old_flows is not None:
                 self.flows = old_flows
                 logger.info("Restored previous flow configuration due to reload error")
-        
+
         finally:
             # Clean up Hydra state
             try:
                 hydra.core.global_hydra.GlobalHydra.instance().clear()
             except Exception as cleanup_error:
-                logger.warning(f"Error cleaning up Hydra state: {cleanup_error}")
-        
+                logger.warning("Error cleaning up Hydra state", error=str(cleanup_error))
+
         return result
 
     def _save_config_snapshot(self, run_request: "RunRequest") -> None:
         """Save a snapshot of the current configuration for reproducibility.
-        
+
         Saves the current flow configuration to the run directory to ensure
         experiment reproducibility. This captures the exact configuration
         used for each flow execution.
-        
+
         Args:
             run_request: The run request containing flow and session information
         """
@@ -1079,23 +1089,23 @@ class FlowRunner(BaseModel):
             from pathlib import Path
 
             from omegaconf import OmegaConf
-            
+
             # Create run directory for config snapshots
             if hasattr(run_request, "session_id") and run_request.session_id:
                 session_dir = Path(f"/tmp/runs/{run_request.session_id}")
             else:
                 session_dir = Path("/tmp/runs/default")
-                
+
             config_snapshot_dir = session_dir / "config_snapshot"
             config_snapshot_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Get current timestamp
             timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-            
+
             # Save flow configuration
             if run_request.flow in self.flows:
                 flow_config = self.flows[run_request.flow]
-                
+
                 # Convert OmegaConf to serializable dict
                 if hasattr(flow_config, "_content"):
                     # OmegaConf object
@@ -1103,7 +1113,7 @@ class FlowRunner(BaseModel):
                 else:
                     # Regular dict or other object
                     config_dict = dict(flow_config) if hasattr(flow_config, "__dict__") else str(flow_config)
-                
+
                 # Save flow-specific config
                 flow_config_file = config_snapshot_dir / f"{run_request.flow}_{timestamp}.json"
                 with open(flow_config_file, "w") as f:
@@ -1121,8 +1131,8 @@ class FlowRunner(BaseModel):
                         indent=2,
                         default=str,
                     )
-                
-                logger.debug(f"Saved config snapshot for flow '{run_request.flow}' to {flow_config_file}")
+
+                logger.debug("Saved config snapshot for flow", flow=run_request.flow, config_file=flow_config_file)
                 
                 # Also save a latest.json for easy access
                 latest_file = config_snapshot_dir / "latest.json"
@@ -1142,7 +1152,7 @@ class FlowRunner(BaseModel):
                 
         except Exception as e:
             # Don't fail the flow execution if config snapshot fails
-            logger.warning(f"Failed to save config snapshot for flow '{run_request.flow}': {e}")
+            logger.warning("Failed to save config snapshot for flow", flow=run_request.flow, error=str(e))
 
     async def pull_and_run_task(self) -> None:
         """Pull tasks from the queue and run them."""
@@ -1157,7 +1167,7 @@ class FlowRunner(BaseModel):
         raise FatalError("Need to create the sssion object first")
         if request:
             # Run the task with a fresh orchestrator
-            logger.info(f"Running task from queue: {request.flow} (Task ID: {request.job_id})")  # Updated message
+            logger.info("Running task from queue", flow=request.flow, task_id=request.job_id)  # Updated message
             await self.run_flow(request, wait_for_completion=True)
         else:
             logger.debug("No tasks available in the queue")
@@ -1186,9 +1196,9 @@ class FlowRunner(BaseModel):
         # (session_id, job, platform) instead of sharing global singleton state
         if self.bm is not None:
             orchestrator.set_bm(self.bm)
-            logger.debug(f"Injected session-scoped BM into orchestrator for flow '{flow_name}' (session_id: {self.bm.session_info.session_id})")
+            logger.debug("Injected session-scoped BM into orchestrator for flow", flow_name=flow_name, session_id=self.bm.session_info.session_id)
         else:
-            logger.debug(f"Using global singleton BM for orchestrator '{flow_name}' (legacy mode)")
+            logger.debug("Using global singleton BM for orchestrator (legacy mode)", flow_name=flow_name)
         
         return orchestrator
 
@@ -1247,7 +1257,7 @@ class FlowRunner(BaseModel):
             from buttermilk.monitoring import get_metrics_collector
             metrics_collector = get_metrics_collector()
         except Exception as e:
-            logger.debug(f"Failed to initialize metrics collector: {e}")
+            logger.debug("Failed to initialize metrics collector", error=str(e))
             metrics_collector = None
 
         # Ensure session manager is started
@@ -1273,7 +1283,7 @@ class FlowRunner(BaseModel):
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
-        logger.debug(f"[FlowRunner.run_flow] Callback configured for session {_session.session_id}")
+        logger.debug("[FlowRunner.run_flow] Callback configured for session", session_id=_session.session_id)
 
         # Create the task and register it with the session
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
@@ -1291,7 +1301,7 @@ class FlowRunner(BaseModel):
         try:
             storage_service = SessionStorageService()
             storage_service.update_flow_status(run_request.session_id, "running")
-            logger.debug(f"Updated flow status to 'running' for session {run_request.session_id}")
+            logger.debug("Updated flow status to 'running' for session", session_id=run_request.session_id)
             
             # Save flow parameters for demo mode functionality
             parameters = {
@@ -1311,10 +1321,10 @@ class FlowRunner(BaseModel):
                     parameters["criteria"] = run_request.parameters["criteria"]
             
             storage_service.save_parameters(run_request.session_id, parameters)
-            logger.debug(f"Saved flow parameters {parameters} for session {run_request.session_id}")
+            logger.debug("Saved flow parameters for session", parameters=parameters, session_id=run_request.session_id)
             
         except Exception as e:
-            logger.warning(f"Failed to update session storage flow status for {run_request.session_id}: {e}")
+            logger.warning("Failed to update session storage flow status", session_id=run_request.session_id, error=str(e))
 
         try:
             if wait_for_completion:
@@ -1325,7 +1335,7 @@ class FlowRunner(BaseModel):
                 return
         except Exception as e:
             await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.ERROR)
-            logger.error(f"Error running flow '{run_request.flow}': {e}")
+            logger.error("Error running flow", flow=run_request.flow, error=str(e))
             raise
         finally:
             # Record flow execution metrics
@@ -1338,7 +1348,7 @@ class FlowRunner(BaseModel):
                         success=success,
                     )
                 except Exception as e:
-                    logger.debug(f"Failed to record flow execution metrics: {e}")
+                    logger.debug("Failed to record flow execution metrics", error=str(e))
 
             if wait_for_completion:
                 # Clean up after completion if we were waiting
@@ -1360,13 +1370,13 @@ class FlowRunner(BaseModel):
         """
         # Extract record IDs from the flow's data source
         records = await DataService.get_records_for_flow(flow_name=flow_name, flow_runner=self, dataset_key=dataset_key)
-        logger.info(f"Extracted {len(records)} records for flow '{flow_name}'")
+        logger.info("Extracted records for flow", record_count=len(records), flow_name=flow_name)
 
         flow = self.flows[flow_name]
 
         # Create multiple iterations by multiplying the parameters
         iteration_values = expand_dict(flow.parameters) or [{}]
-        logger.debug(f"Expanded {len(flow.parameters)} parameters for batch into {len(iteration_values)} variants")
+        logger.debug("Expanded parameters for batch into variants", parameter_count=len(flow.parameters), variant_count=len(iteration_values))
 
         #
         # Shuffle records
@@ -1396,9 +1406,14 @@ class FlowRunner(BaseModel):
                     break
 
         if max_records is not None and max_records > 0:
-            logger.info(f"Limited to {max_records} record IDs, returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
+            logger.info(
+                "Limited record IDs, returning iterations for jobs",
+                max_records=max_records,
+                iteration_count=len(iteration_values),
+                job_count=len(job_definitions),
+            )
         else:
-            logger.info(f"Returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
+            logger.info("Returning iterations for jobs", iteration_count=len(iteration_values), job_count=len(job_definitions))
 
         random.shuffle(job_definitions)
 
@@ -1444,25 +1459,27 @@ class FlowRunner(BaseModel):
 
                 run_request.callback_to_ui = callback_to_ui
 
-                logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
+                logger.info(
+                    "Processing batch job", job_number=jobs_processed + 1, max_jobs=max_jobs, flow=run_request.flow, job_id=run_request.job_id
+                )
                 try:
                     await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
                     if wait_for_completion:
-                        logger.info(f"Successfully completed job {run_request.job_id}")
+                        logger.info("Successfully completed job", job_id=run_request.job_id)
                     else:
-                        logger.info(f"Job {run_request.job_id} started in the background")
+                        logger.info("Job started in the background", job_id=run_request.job_id)
                     worker.ack_message(ack_id)  # Acknowledge the job after successful processing
                 except Exception as job_error:
-                    logger.error(f"Error running job {run_request.job_id}: {job_error}")
+                    logger.error("Error running job", job_id=run_request.job_id, error=str(job_error))
                     # Continue processing other jobs even if one fails
 
                 jobs_processed += 1
 
-            logger.info(f"Batch processing complete. Processed {jobs_processed} jobs.")
+            logger.info("Batch processing complete", jobs_processed=jobs_processed)
 
         except FatalError:
             # Re-raise FatalError to be handled by the caller
             raise
         except Exception as e:
-            logger.error(f"Fatal error during batch processing: {e}")
+            logger.error("Fatal error during batch processing", error=str(e))
             raise

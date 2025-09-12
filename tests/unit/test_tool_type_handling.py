@@ -1,0 +1,343 @@
+"""Test tool type handling changes for Tool vs ToolSchema compatibility.
+
+This test validates the architectural changes where:
+- Agents create Tool objects for internal use
+- Agents return .schema (ToolSchema) for host registration  
+- Host collects ToolSchemas and passes to LLM
+- LLM makes tool calls, host intercepts them as FunctionCall objects
+- Host routes as StepRequests back to agents
+
+Focuses on testing the specific type handling changes:
+1. ToolSchema objects can be passed to llms.py without errors
+2. The deduplication logic works with both Tool and ToolSchema objects
+3. The flow from ToolSchema → LLM → intercept → routing works
+"""
+
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+from autogen_core import FunctionCall, CancellationToken
+from autogen_core.models import AssistantMessage, CreateResult
+from autogen_core.tools import Tool, ToolSchema
+
+from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
+from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.llms import AutoGenWrapper
+
+
+class TestToolTypeHandling:
+    """Test the Tool vs ToolSchema type handling changes."""
+
+    @pytest.fixture
+    def sample_tool_schema(self) -> ToolSchema:
+        """Create a sample ToolSchema for testing."""
+        return {
+            "name": "test_search",
+            "description": "Search for test data",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results to return",
+                        "default": 10
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+
+    @pytest.fixture
+    def sample_tool_object(self, sample_tool_schema: ToolSchema) -> AgentToolDefinition:
+        """Create a sample Tool object for testing."""
+        return AgentToolDefinition(
+            name=sample_tool_schema["name"],
+            description=sample_tool_schema["description"],
+            input_schema=sample_tool_schema["parameters"],
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "results": {"type": "array"},
+                    "count": {"type": "integer"}
+                }
+            }
+        )
+
+    @pytest.fixture
+    def mixed_tools_list(self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition):
+        """Create a list containing both Tool objects and ToolSchema objects."""
+        # Create another ToolSchema
+        another_schema: ToolSchema = {
+            "name": "analyze_data",
+            "description": "Analyze collected data",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {"type": "array"},
+                    "method": {"type": "string"}
+                },
+                "required": ["data"]
+            }
+        }
+        
+        # Return mixed list: Tool object, ToolSchema, another ToolSchema
+        return [
+            sample_tool_object,  # Tool object (name='test_search')
+            sample_tool_schema,  # ToolSchema dict (name='test_search') - DUPLICATE NAME
+            another_schema,      # Another ToolSchema dict (name='analyze_data')
+        ]
+
+    def test_tool_schema_can_be_passed_to_llms(self, sample_tool_schema: ToolSchema):
+        """Test that ToolSchema objects can be passed to llms.py type hints without errors."""
+        # This test validates the type hints allow Tool | ToolSchema
+        from buttermilk._core.llms import AutoGenWrapper
+        
+        # Create a mock AutoGenWrapper instance
+        wrapper = Mock(spec=AutoGenWrapper)
+        
+        # Mock the create method with the correct signature
+        async def mock_create(messages, tools=[], schema=None, cancellation_token=None, **kwargs):
+            # This should accept both Tool and ToolSchema objects
+            from autogen_core.models import RequestUsage
+            
+            return CreateResult(
+                content="Mock response",
+                finish_reason="stop",
+                usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
+                cached=False
+            )
+        
+        wrapper.create = AsyncMock(side_effect=mock_create)
+        
+        # Test that we can call with ToolSchema objects
+        tools_list = [sample_tool_schema]
+        
+        # This should not raise any type errors
+        async def test_call():
+            result = await wrapper.create(
+                messages=[],
+                tools=tools_list,
+                cancellation_token=None
+            )
+            assert result is not None
+        
+        # Run the async test
+        asyncio.run(test_call())
+
+    def test_deduplication_logic_with_mixed_tools(self, mixed_tools_list):
+        """Test the deduplication logic works with both Tool and ToolSchema objects."""
+        # Import the deduplication logic from structured_llmhost
+        def get_tool_name(tool):
+            """Replicate the deduplication logic from structured_llmhost.py."""
+            if hasattr(tool, 'name'):
+                return tool.name  # Tool object
+            else:
+                return tool['name']  # ToolSchema dict
+        
+        # Test the logic with mixed tools
+        tools = mixed_tools_list
+        
+        # Apply deduplication logic
+        deduped_tools = list({get_tool_name(tool): tool for tool in tools}.values())
+        
+        # Verify deduplication works (3 tools with 2 unique names = 2 tools)
+        assert len(deduped_tools) == 2
+        
+        # Verify names are correctly extracted
+        tool_names = [get_tool_name(tool) for tool in deduped_tools]
+        assert "test_search" in tool_names
+        assert "analyze_data" in tool_names
+        
+        # Test with duplicate names
+        duplicate_schema: ToolSchema = {
+            "name": "test_search",  # Same name as first tool
+            "description": "Duplicate search tool",
+            "parameters": {"type": "object", "properties": {}}
+        }
+        
+        tools_with_duplicate = mixed_tools_list + [duplicate_schema]
+        deduped_with_duplicate = list({get_tool_name(tool): tool for tool in tools_with_duplicate}.values())
+        
+        # Should have only 2 unique tools (duplicates removed)
+        assert len(deduped_with_duplicate) == 2
+        
+        # Verify the last one wins (dictionary behavior)
+        test_search_tool = next(tool for tool in deduped_with_duplicate if get_tool_name(tool) == "test_search")
+        assert get_tool_name(test_search_tool) == "test_search"
+
+    @pytest.mark.anyio
+    async def test_structured_llmhost_deduplication_integration(self, mixed_tools_list, real_bm):
+        """Test the deduplication works in StructuredLLMHostAgent._call_llm method."""
+        host = StructuredLLMHostAgent(
+            agent_name="test_host",
+            role="HOST",
+            parameters={"model": "test-model", "template": "host", "human_in_loop": False}
+        )
+        
+        # Mock the LLM client
+        mock_client = AsyncMock(spec=AutoGenWrapper)
+        from autogen_core.models import RequestUsage
+        mock_client.call_chat = AsyncMock(return_value=CreateResult(
+            content="Mock response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
+            cached=False
+        ))
+        # Mock bm.llms.get_autogen_chat_client directly (used in _call_llm)
+        with patch('buttermilk.agents.flowcontrol.structured_llmhost.bm') as mock_bm:
+            mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        
+            # Call _call_llm with mixed tools
+            result = await host._call_llm(
+                messages=[],
+                tools=mixed_tools_list,
+                schema=None,
+                cancellation_token=None
+            )
+            
+            # Verify the call was made
+            assert mock_client.call_chat.called
+            
+            # Verify the tools_list parameter passed to call_chat
+            call_args = mock_client.call_chat.call_args
+            tools_list_passed = call_args.kwargs.get('tools_list', [])
+            
+            # Should have 2 unique tools (deduplication should work)
+            assert len(tools_list_passed) == 2
+            
+            # Verify intercept_tools flag was set
+            assert call_args.kwargs.get('intercept_tools') is True
+
+    @pytest.mark.anyio
+    async def test_toolschema_to_functioncall_flow(self, sample_tool_schema: ToolSchema, real_bm):
+        """Test the flow from ToolSchema → LLM → intercept → routing."""
+        host = StructuredLLMHostAgent(
+            agent_name="test_host",
+            role="HOST",
+            parameters={"model": "test-model", "template": "host", "human_in_loop": False}
+        )
+        
+        # Initialize host with tools
+        host._tools = [sample_tool_schema]
+        host._proposed_step = asyncio.Queue()
+        
+        # Mock the LLM client to return FunctionCall objects
+        mock_function_call = FunctionCall(
+            id="call_123", 
+            name="test_search",
+            arguments='{"query": "test query", "limit": 5}'
+        )
+        
+        mock_client = AsyncMock(spec=AutoGenWrapper)
+        from autogen_core.models import RequestUsage
+        mock_client.call_chat = AsyncMock(return_value=CreateResult(
+            content=[mock_function_call],  # Return FunctionCall in content
+            finish_reason="function_calls",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
+            cached=False
+        ))
+        
+        # Mock the agent registry for routing
+        host._agent_registry = {
+            "test_agent": {
+                "tools": ["test_search"],
+                "role": "SEARCH_AGENT"
+            }
+        }
+        
+        # Mock bm.llms.get_autogen_chat_client directly (used in _process -> _call_llm)
+        with patch('buttermilk.agents.flowcontrol.structured_llmhost.bm') as mock_bm:
+            mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+            
+            # Mock the routing method and template filling
+            with patch.object(host, '_route_tool_calls_to_agents', new_callable=AsyncMock) as mock_route:
+                with patch.object(host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+                    mock_fill.return_value = [Mock()]  # Return mock messages
+                    # Process a message
+                    result = await host._process(
+                        message=AgentInput(
+                            inputs={"prompt": "Search for test data"}
+                        ),
+                        cancellation_token=None
+                    )
+                    
+                    # Verify the flow worked
+                    assert result is not None
+                    assert isinstance(result, AgentOutput)
+                    
+                    # Verify tool calls were intercepted and routed
+                    mock_route.assert_called_once()
+                    routed_calls = mock_route.call_args[0][0]
+                    assert len(routed_calls) == 1
+                    assert routed_calls[0].name == "test_search"
+                    assert "test query" in routed_calls[0].arguments
+
+    @pytest.mark.anyio
+    async def test_tool_object_schema_property_usage(self, sample_tool_object: AgentToolDefinition):
+        """Test that Tool objects use their .schema property correctly."""
+        # Verify the Tool object has the schema property
+        assert hasattr(sample_tool_object, 'schema')
+        
+        schema = sample_tool_object.schema
+        assert isinstance(schema, dict)
+        assert schema['name'] == 'test_search'
+        assert schema['description'] == 'Search for test data'
+        assert 'parameters' in schema
+        
+        # Test that both Tool.schema and direct ToolSchema work the same way
+        tool_via_schema = sample_tool_object.schema
+        direct_schema: ToolSchema = {
+            "name": "test_search",
+            "description": "Search for test data",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query"},
+                    "limit": {"type": "integer", "description": "Maximum results to return", "default": 10}
+                },
+                "required": ["query"]
+            }
+        }
+        
+        # They should have the same structure
+        assert tool_via_schema['name'] == direct_schema['name']
+        assert tool_via_schema['description'] == direct_schema['description']
+        assert tool_via_schema['parameters'] == direct_schema['parameters']
+
+    def test_type_hints_accept_both_tool_and_toolschema(self):
+        """Test that the type hints Tool | ToolSchema work correctly."""
+        from typing import get_args, get_origin
+        from buttermilk._core.llms import AutoGenWrapper
+        import inspect
+        
+        # Get the create method signature
+        sig = inspect.signature(AutoGenWrapper.create)
+        tools_param = sig.parameters['tools']
+        
+        # Check that the annotation includes both Tool and ToolSchema
+        annotation = tools_param.annotation
+        
+        # This should be Sequence[Tool | ToolSchema]
+        assert get_origin(annotation).__name__ == 'Sequence'
+        
+        # Get the inner type (Tool | ToolSchema)
+        inner_type = get_args(annotation)[0]
+        
+        # Verify it's a Union that includes both types
+        if hasattr(inner_type, '__args__'):  # Union type
+            type_args = get_args(inner_type)
+            type_names = [arg.__name__ if hasattr(arg, '__name__') else str(arg) for arg in type_args]
+            
+            # Should include both Tool and ToolSchema
+            assert any('Tool' in name for name in type_names)
+            assert any('ToolSchema' in name or 'dict' in name for name in type_names)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

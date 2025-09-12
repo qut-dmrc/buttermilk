@@ -35,7 +35,7 @@ from autogen_core.models import (
     LLMMessage,
     ModelInfo,
 )
-from autogen_core.tools import BaseTool, Tool  # Autogen tool handling
+from autogen_core.tools import BaseTool, Tool, ToolSchema  # Autogen tool handling
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
@@ -274,7 +274,7 @@ class AutoGenWrapper(RetryWrapper):
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
         self,
         messages: Sequence[LLMMessage],
-        tools: Sequence[Tool] = [],
+        tools: Sequence[Tool | ToolSchema] = [],
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
@@ -473,7 +473,7 @@ class AutoGenWrapper(RetryWrapper):
         messages: list[LLMMessage],  # Made mutable for extending with tool results
         cancellation_token: CancellationToken | None,
         *,
-        tools_list: Sequence[Tool] = [],
+        tools_list: Sequence[Tool | ToolSchema] = [],
         schema: type[BaseModel] | None = None,
         intercept_tools: bool = False,
     ) -> CreateResult | ModelOutput:
@@ -488,7 +488,7 @@ class AutoGenWrapper(RetryWrapper):
             messages: A list of `LLMMessage` objects forming the conversation.
                 This list will be mutated if tool calls occur.
             cancellation_token: A `CancellationToken` for the operation.
-            tools_list: An optional sequence of `Tool` objects
+            tools_list: An optional sequence of `Tool` or `ToolSchema` objects
                 available for the LLM to call.
             schema: An optional Pydantic `BaseModel` subclass for structured output.
             intercept_tools: If True, return FunctionCall objects without executing them.
@@ -603,7 +603,7 @@ class AutoGenWrapper(RetryWrapper):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[Tool],
+        tools_list: Sequence[ToolSchema],
         cancellation_token: CancellationToken | None,
     ) -> list[FunctionExecutionResult]:
         """Executes a list of tool calls concurrently.

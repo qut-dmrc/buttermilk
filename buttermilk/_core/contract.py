@@ -23,7 +23,7 @@ from autogen_core.models import (
     FunctionExecutionResult,
     LLMMessage,
 )
-from autogen_core.tools import Tool  # Importing the Tool protocol from autogen_core
+from autogen_core.tools import Tool, ToolSchema  # Importing the Tool protocol from autogen_core
 from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -979,7 +979,7 @@ class AgentAnnouncement(FlowEvent):
         description="List of tool names/endpoints this agent can respond to",
     )
 
-    tool_definitions: list[Tool] = Field(default_factory=list, description="Tool objects for calling this agent (AgentToolDefinition or Tool)")
+    tool_definitions: list[ToolSchema] = Field(default_factory=list, description="Tool objects for calling this agent (AgentToolDefinition or Tool)")
 
     # Status
     status: Literal["joining", "active", "leaving"] = Field(

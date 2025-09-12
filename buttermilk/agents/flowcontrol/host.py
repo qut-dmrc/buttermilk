@@ -5,9 +5,7 @@ from typing import Any  # Import Dict
 
 from autogen_core import DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import (
-    Tool,
-)
+from autogen_core.tools import Tool
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent

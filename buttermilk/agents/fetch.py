@@ -10,7 +10,7 @@ from typing import Any
 from autogen_core import (
     message_handler,
 )
-from autogen_core.tools import FunctionTool, Tool
+from autogen_core.tools import FunctionTool, ToolSchema
 
 from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
@@ -91,12 +91,6 @@ class FetchAgent(Agent):
 
     @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
     async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | AgentTrace | None:
-        if message.role != self.role:
-            logger.debug(
-                f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}"
-            )
-            return None
-
         return await self.invoke(message=message)
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
@@ -110,7 +104,9 @@ class FetchAgent(Agent):
             or message.parameters.get("url")
             or message.parameters.get("uri")
         )
-        record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
+        record_id = (
+            message.inputs.get("record_id") or message.parameters.get("record_id") or message.inputs.get("record") or message.parameters.get("record")
+        )
 
         if uri and record_id:
             raise ProcessingError("Cannot provide both uri and record_id.")
@@ -137,15 +133,17 @@ class FetchAgent(Agent):
         # No result found
         raise ProcessingError("No result found in _process")
 
-    def get_tool_definitions(self) -> list[Tool]:
-        """Generate structured tool definitions for this agent."""
+    def get_tool_definitions(self) -> list[ToolSchema]:
+        """Generate structured tool definitions for this agent.
+
+        Returns list of tool definitions as ToolSchema objects."""
         internal_tools = [
             FunctionTool(
                 name="fetch_uri",
                 description=("Get a record from a given URI."),
                 func=self.fetch_uri,
                 strict=True,
-            )
+            ).schema
         ]
 
         datasets = list(self._data_sources.keys())
@@ -156,7 +154,7 @@ class FetchAgent(Agent):
                     description=f"Get a record from a dataset (literal: {', '.join(datasets)}) by record ID.",
                     func=self.fetch_record,
                     strict=True,
-                )
+                ).schema
             )
 
         return internal_tools
