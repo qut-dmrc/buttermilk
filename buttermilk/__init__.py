@@ -8,9 +8,7 @@
 #     def silence_task_logs():
 #         pass
 
-from ._core.bm_init import BM, tracer, create_session_bm, create_batch_session_bm
-from ._core.infrastructure import InfrastructureManager, create_infrastructure_manager, create_infrastructure_from_config
-from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
+from ._core.bm_init import BM, create_batch_session_bm, create_session_bm, tracer
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
@@ -29,7 +27,10 @@ from ._core.contract import (
     ToolOutput as ToolOutput,
     UserResponseMessage as UserResponseMessage,
 )
-from ._core.dmrc import get_bm, set_bm, initialize_session_bm
+from ._core.dmrc import get_bm, initialize_session_bm, set_bm
+from ._core.exceptions import FatalError, ProcessingError
+from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
+from ._core.infrastructure import InfrastructureManager, create_infrastructure_from_config, create_infrastructure_manager
 from ._core.log import logger
 
 get_buttermilk_instance = get_bm
@@ -94,4 +95,7 @@ __all__ = [
     "ConductorRequest",
     "HeartBeat",
     "tracer",
+    # Exceptions
+    "FatalError",
+    "ProcessingError",
 ]
