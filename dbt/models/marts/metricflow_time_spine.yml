@@ -1,0 +1,21 @@
+version: 2
+
+semantic_models:
+  - name: metricflow_time_spine
+    model: ref('stg_timespine')
+    description: "Time spine for MetricFlow queries"
+    
+    defaults:
+      agg_time_dimension: date_day
+    
+    entities:
+      - name: time_spine
+        type: primary
+        expr: date_day
+    
+    dimensions:
+      - name: date_day
+        type: time
+        type_params:
+          time_granularity: day
+        description: "Calendar date"

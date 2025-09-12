@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 
 from buttermilk import set_bm
 from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+from streamlit_config import DashboardConfig
 
 # Constants
 MIN_TEMPLATES_FOR_COMPARISON = 2
@@ -42,6 +43,7 @@ def init_bm():
 
 
 bm = init_bm()
+config = DashboardConfig(bm)
 
 
 # --- Page Configuration ---
@@ -77,13 +79,64 @@ def load_data():
     sql_multidimensional = """SELECT * FROM `prosocial-443205.bmdev.multidimensional_analysis`"""
     multidimensional_analysis = bm.run_query(sql_multidimensional)
     
-    sql_judge_scores = """SELECT * FROM `prosocial-443205.bmdev.judge_scores`"""
+    # Enhanced judge_scores query with data quality indicators
+    sql_judge_scores = """
+    SELECT *,
+           -- Add data freshness indicator
+           TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), timestamp, HOUR) as hours_since_run
+    FROM `prosocial-443205.bmdev.judge_scores`
+    WHERE score_quality IS NOT NULL  -- Only include records with quality assessment
+    """
     judge_scores = bm.run_query(sql_judge_scores)
 
     return template_performance_comparison, int_experiment_completeness, multidimensional_analysis, judge_scores
 
+@st.cache_data
+def load_dbt_quality_data():
+    """
+    Loads DBT data quality test results and configuration.
+    """
+    # Load data sufficiency results
+    sql_sufficiency = """
+    SELECT * FROM (
+        SELECT 
+            judge_criteria,
+            judge_model,
+            insufficiency_reason,
+            records_evaluated,
+            score_coverage,
+            avg_runs_per_record
+        FROM `prosocial-443205.bmdev.assert_data_sufficiency`
+        WHERE insufficiency_reason IS NOT NULL
+    )
+    """
+    data_sufficiency_issues = bm.run_query(sql_sufficiency)
+    
+    # Load experiment integrity results  
+    sql_integrity = """
+    SELECT * FROM `prosocial-443205.bmdev.assert_experiment_integrity`
+    """
+    experiment_integrity_issues = bm.run_query(sql_integrity)
+    
+    # Load pipeline completeness results
+    sql_pipeline = """
+    SELECT * FROM `prosocial-443205.bmdev.assert_complete_pipeline`
+    """
+    pipeline_completeness_issues = bm.run_query(sql_pipeline)
+    
+    return data_sufficiency_issues, experiment_integrity_issues, pipeline_completeness_issues
+
 
 template_performance_df, completeness_df, multidimensional_df, judge_scores_df = load_data()
+
+# Load DBT quality data
+try:
+    sufficiency_issues_df, integrity_issues_df, pipeline_issues_df = load_dbt_quality_data()
+except Exception as e:
+    st.warning(f"Could not load DBT quality data: {e}")
+    sufficiency_issues_df = pd.DataFrame()
+    integrity_issues_df = pd.DataFrame()
+    pipeline_issues_df = pd.DataFrame()
 
 
 # --- Sidebar Filters ---
@@ -119,6 +172,22 @@ data_sufficiency_filter = st.sidebar.selectbox(
     index=1  # Default to SUFFICIENT
 )
 
+# Add score quality filter
+score_quality_filter = st.sidebar.multiselect(
+    "Score Quality",
+    ["valid", "duplicate_resolved", "missing_score"],
+    default=["valid", "duplicate_resolved"]  # Exclude missing scores by default
+)
+
+# Data freshness filter
+max_hours_old = st.sidebar.slider(
+    "Max Hours Since Run",
+    min_value=1,
+    max_value=168,  # 1 week
+    value=72,  # 3 days default
+    help="Filter out data older than this many hours"
+)
+
 # Apply filters
 filtered_df = template_performance_df.copy()
 if selected_criteria:
@@ -130,7 +199,15 @@ if selected_roles:
 if data_sufficiency_filter != "All":
     filtered_df = filtered_df[filtered_df["data_sufficiency"] == data_sufficiency_filter]
 
-st.sidebar.markdown(f"**Showing {len(filtered_df)} records**")
+# Apply score quality and freshness filters to judge_scores_df
+filtered_judge_scores = judge_scores_df.copy()
+if score_quality_filter:
+    filtered_judge_scores = filtered_judge_scores[filtered_judge_scores["score_quality"].isin(score_quality_filter)]
+if max_hours_old:
+    filtered_judge_scores = filtered_judge_scores[filtered_judge_scores["hours_since_run"] <= max_hours_old]
+
+st.sidebar.markdown(f"**Showing {len(filtered_df)} template records**")
+st.sidebar.markdown(f"**Showing {len(filtered_judge_scores)} judge scores**")
 
 # --- Main Dashboard ---
 
@@ -232,8 +309,10 @@ if not completeness_df.empty:
                 title="Data Sufficiency by Dimension",
                 color_discrete_map={"SUFFICIENT": "green", "INSUFFICIENT": "red"}
             )
-            fig_sufficiency.add_hline(y=10, line_dash="dash",
-                                    annotation_text="Minimum threshold (10)",
+            # Get DBT configuration values
+            min_runs_threshold = config.min_stochastic_runs
+            fig_sufficiency.add_hline(y=min_runs_threshold, line_dash="dash",
+                                    annotation_text=f"Minimum threshold ({min_runs_threshold})",
                                     annotation_position="bottom right")
             fig_sufficiency.update_xaxes(tickangle=45)
             st.plotly_chart(fig_sufficiency, use_container_width=True)
@@ -454,7 +533,100 @@ if not filtered_df.empty:
         else:
             st.info("No sufficient data for radar chart.")
 
-# === 6. Actionable Insights ===
+# === 6. Data Quality Dashboard ===
+st.header("🔍 Data Quality Dashboard")
+
+# Show data quality alerts first
+if not sufficiency_issues_df.empty or not integrity_issues_df.empty or not pipeline_issues_df.empty:
+    st.warning("⚠️ Data quality issues detected. Review the tabs below.")
+    
+    tab1, tab2, tab3 = st.tabs(["Data Sufficiency", "Experiment Integrity", "Pipeline Completeness"])
+    
+    with tab1:
+        if not sufficiency_issues_df.empty:
+            st.subheader("🔻 Data Sufficiency Issues")
+            st.dataframe(sufficiency_issues_df, use_container_width=True)
+            
+            # Visualize sufficiency issues
+            if "score_coverage" in sufficiency_issues_df.columns:
+                fig_coverage = px.bar(
+                    sufficiency_issues_df,
+                    x="judge_criteria",
+                    y="score_coverage",
+                    color="judge_model",
+                    title="Score Coverage by Criteria and Model",
+                    labels={"score_coverage": "Score Coverage Rate"}
+                )
+                fig_coverage.add_hline(y=config.min_coverage_threshold, line_dash="dash",
+                                      annotation_text=f"Target: {config.min_coverage_threshold:.0%}")
+                st.plotly_chart(fig_coverage, use_container_width=True)
+        else:
+            st.success("✅ No data sufficiency issues detected.")
+    
+    with tab2:
+        if not integrity_issues_df.empty:
+            st.subheader("⚠️ Experiment Integrity Issues")
+            st.dataframe(integrity_issues_df, use_container_width=True)
+            
+            # Visualize integrity issues by type
+            if "issue_type" in integrity_issues_df.columns:
+                issue_counts = integrity_issues_df["issue_type"].value_counts()
+                fig_integrity = px.pie(
+                    values=issue_counts.values,
+                    names=issue_counts.index,
+                    title="Distribution of Integrity Issues"
+                )
+                st.plotly_chart(fig_integrity, use_container_width=True)
+        else:
+            st.success("✅ No experiment integrity issues detected.")
+    
+    with tab3:
+        if not pipeline_issues_df.empty:
+            st.subheader("🔧 Pipeline Completeness Issues")
+            st.dataframe(pipeline_issues_df, use_container_width=True)
+            
+            # Show pipeline stage completion rates
+            if "details" in pipeline_issues_df.columns:
+                st.markdown("**Common Pipeline Issues:**")
+                issue_summary = pipeline_issues_df["description"].value_counts().head(5)
+                for issue, count in issue_summary.items():
+                    st.markdown(f"- {issue}: {count} sessions")
+        else:
+            st.success("✅ No pipeline completeness issues detected.")
+else:
+    st.success("✅ All data quality checks passed!")
+
+# Score Quality Distribution
+if not filtered_judge_scores.empty and "score_quality" in filtered_judge_scores.columns:
+    st.subheader("📊 Score Quality Distribution")
+    
+    quality_counts = filtered_judge_scores["score_quality"].value_counts()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig_quality = px.pie(
+            values=quality_counts.values,
+            names=quality_counts.index,
+            title="Distribution of Score Quality",
+            color_discrete_map={
+                "valid": "green",
+                "duplicate_resolved": "orange",
+                "missing_score": "red"
+            }
+        )
+        st.plotly_chart(fig_quality, use_container_width=True)
+    
+    with col2:
+        st.subheader("Quality Metrics")
+        total_scores = len(filtered_judge_scores)
+        valid_scores = len(filtered_judge_scores[filtered_judge_scores["score_quality"] == "valid"])
+        coverage_rate = valid_scores / total_scores if total_scores > 0 else 0
+        
+        st.metric("Total Predictions", total_scores)
+        st.metric("Valid Score Rate", f"{coverage_rate:.1%}")
+        st.metric("Data Freshness", f"{filtered_judge_scores['hours_since_run'].median():.1f}h median age")
+
+# === 7. Actionable Insights ===
 st.header("💡 Actionable Insights")
 
 if not filtered_df.empty:
