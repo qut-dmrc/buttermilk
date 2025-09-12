@@ -18,11 +18,17 @@ kill_chat:
 	@sleep 5
 	@pkill -SIGKILL -f "node.*frontend/chat.*vite dev" || true
 
+
 kill_api:
 	@echo "Killing API (buttermilk) process..."
-	@pkill -SIGTERM -f "python.*buttermilk.runner.cli" || true
-	@sleep 5
-	@pkill -SIGKILL -f "buttermilk.runner.cli" || true
+	@# Kill uv parent process first
+	@ps -eo pid,cmd | grep "^[[:space:]]*[0-9]*[[:space:]]*uv run python -m buttermilk.runner.cli" | awk '{print $$1}' | xargs -r kill -TERM || true
+	@sleep 2
+	@# Kill python child process
+	@ps -eo pid,cmd | grep "python.*buttermilk.runner.cli" | grep -v grep | awk '{print $$1}' | xargs -r kill -TERM || true
+	@sleep 2
+	@# Force kill any remaining
+	@ps -eo pid,cmd | grep "buttermilk.runner.cli" | grep -v grep | awk '{print $$1}' | xargs -r kill -KILL || true
 
 # For production API server ONLY.
 api:
