@@ -92,8 +92,8 @@ def setup_console_logging(verbose: bool = False) -> None:
     console_level = logging.INFO  # logging.DEBUG if verbose else logging.INFO
     rich_handler.setLevel(console_level)
 
-    # Add the handler to the root logger so all structlog messages go through it
-    logging.getLogger().addHandler(rich_handler)
+    # Add handler only to buttermilk logger for structured output
+    logging.getLogger(_LOGGER_NAME).addHandler(rich_handler)
 
     # Also ensure structlog is configured for proper integration
     struct_level = logging.DEBUG if verbose else logging.INFO
@@ -150,32 +150,21 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
     log_path = Path(f"/tmp/buttermilk_{execution_context_id}.jsonl")
     file_handler = logging.FileHandler(log_path, mode="w")
     file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
-    # Use structlog formatter for JSON output with full processing pipeline
-    structlog_formatter = structlog.stdlib.ProcessorFormatter(
-        processors=[
-            # Add context variables automatically
-            structlog.contextvars.merge_contextvars,
-            # Add log level
-            structlog.processors.add_log_level,
-            # Add timestamp
-            structlog.processors.TimeStamper(fmt="iso"),
-            # Output as JSON
-            structlog.processors.JSONRenderer(),
-        ],
-    )
-    file_handler.setFormatter(structlog_formatter)
+    # Since all logs come through structlog's stdlib bridge, they're already processed
+    # Just extract the pre-formatted message from the LogRecord
+    file_handler.setFormatter(logging.Formatter('%(message)s'))
 
-    # Add to both standard logger and structlog
-    logging.getLogger().addHandler(file_handler)
+    # Add handler only to buttermilk logger, not root logger
+    # This ensures we only get structured logs from our code
+    logging.getLogger(_LOGGER_NAME).addHandler(file_handler)
     log_files.append(str(log_path))
 
-    logging.info(f"Log file: {log_path}")
+    logger.info("Log file created", log_path=str(log_path), verbose=verbose)
     if verbose:
-        logging.debug("Verbose logging enabled.")
+        logger.debug("Verbose logging enabled.")
     
     # Mark file logging as configured
     _file_logging_configured = True
-    logger.debug(f"File logging configured with verbose={verbose}, log_path={log_path}")
 
     return log_files
 
@@ -227,20 +216,9 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             )
             cloud_handler.setLevel(logging.INFO)
 
-            # Use structlog JSON formatter for consistency with file logging
-            structlog_formatter = structlog.stdlib.ProcessorFormatter(
-                processors=[
-                    # Add context variables automatically
-                    structlog.contextvars.merge_contextvars,
-                    # Add log level
-                    structlog.processors.add_log_level,
-                    # Add timestamp
-                    structlog.processors.TimeStamper(fmt="iso"),
-                    # Output as JSON
-                    structlog.processors.JSONRenderer(),
-                ],
-            )
-            cloud_handler.setFormatter(structlog_formatter)
+            # Since all logs come through structlog's stdlib bridge, they're already processed
+            # Just extract the pre-formatted message from the LogRecord
+            cloud_handler.setFormatter(logging.Formatter('%(message)s'))
 
             # Bind session context for automatic inclusion (simplified architecture)
             context_vars = {
@@ -261,9 +239,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Check for existing cloud handlers to prevent duplicates
             root_logger = logging.getLogger()
             existing_cloud_handlers = [
-                h for h in root_logger.handlers 
-                if isinstance(h, CloudLoggingHandler) and 
-                   getattr(h, 'name', '') == session_info.name
+                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.name
             ]
             
             if existing_cloud_handlers:
@@ -273,8 +249,8 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
                     existing_handlers=len(existing_cloud_handlers)
                 )
             else:
-                # Add to root logger so all log messages go to cloud
-                root_logger.addHandler(cloud_handler)
+                # Add handler only to buttermilk logger for structured logs
+                logging.getLogger(_LOGGER_NAME).addHandler(cloud_handler)
                 logger.info(
                     "Cloud logging handler added",
                     session_id=session_info.session_id,
@@ -396,3 +372,28 @@ def ensure_logging_properly_initialized() -> None:
             "could break verbose logging functionality."
         )
         raise RuntimeError(error_msg)
+
+
+def reset_logging_configuration() -> None:
+    """Reset logging configuration state for testing.
+    
+    This function resets all global logging state and removes handlers,
+    allowing tests to call setup functions multiple times without conflicts.
+    
+    WARNING: This is intended for testing only and should not be used in
+    production code as it can break the fail-fast logging protection.
+    """
+    global _console_logging_configured, _file_logging_configured, _cloud_logging_sessions
+    
+    # Reset global state flags
+    _console_logging_configured = False
+    _file_logging_configured = False
+    _cloud_logging_sessions.clear()
+    
+    # Remove all handlers from buttermilk logger
+    buttermilk_logger = logging.getLogger(_LOGGER_NAME)
+    for handler in buttermilk_logger.handlers[:]:
+        buttermilk_logger.removeHandler(handler)
+    
+    # Reset structlog configuration to default state
+    structlog.reset_defaults()

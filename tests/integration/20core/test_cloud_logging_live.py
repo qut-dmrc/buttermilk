@@ -14,8 +14,6 @@ Requires:
 """
 
 import asyncio
-import json
-import os
 import time
 import uuid
 from typing import Any
@@ -23,8 +21,9 @@ from unittest.mock import patch
 
 import pytest
 from google.cloud import logging as gcp_logging
+from google.cloud.logging_v2 import DESCENDING
 
-from buttermilk._core.bm_init import BM
+from buttermilk._core.bm_init import BM  # Modified import
 from buttermilk._core.infrastructure import InfrastructureManager
 from buttermilk._core.log import logger
 
@@ -32,6 +31,26 @@ from buttermilk._core.log import logger
 EXPECTED_NUMERIC_FIELD = 42
 
 # Helper functions
+
+DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
+LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
+
+
+@pytest.mark.anyio
+async def test_warning(real_logger, real_bm: BM):
+    log_text_warning = f"{LOG_TEXT}_warning_{uuid.uuid4()}"
+    real_logger.warning(log_text_warning)
+
+    await asyncio.sleep(5)
+
+    entries = real_bm.gcs_log_client.list_entries(  # This would fail if gcs_log_client is not set up
+        order_by=DESCENDING,
+        max_results=100,
+    )
+    for entry in entries:
+        if log_text_warning in str(entry.payload):
+            return True
+    raise OSError(f"Warning message not found in log: {log_text_warning}")
 
 
 @pytest.fixture(scope="session")

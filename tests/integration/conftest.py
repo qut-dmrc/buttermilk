@@ -49,20 +49,20 @@ def infrastructure(conf):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def bm(infrastructure, conf):
+def real_bm(infrastructure, conf):
     """Provide the real BM instance for integration tests."""
     return get_bm()
 
 
 @pytest.fixture(scope="session")
-def real_logger(bm: BM):
+def real_logger(real_bm: BM):
     """Provide the logger from the real BM instance."""
     return logger
 
 
 @pytest.fixture(scope="session")
-def llms(bm: BM) -> LLMs:
-    return bm.llms
+def llms(real_bm: BM) -> LLMs:
+    return real_bm.llms
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
@@ -71,15 +71,15 @@ def model_name(request) -> str:
 
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def llm_multimodal(request, bm: BM):
-    return bm.llms[request.param]
+def llm_multimodal(request, real_bm: BM):
+    return real_bm.llms[request.param]
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
-def llm(request, bm: BM):
-    return bm.llms[request.param]
+def llm(request, real_bm: BM):
+    return real_bm.llms[request.param]
 
 
 @pytest.fixture(params=CHAT_MODELS)
-def llm_expensive(request, bm: BM):
-    return bm.llms[request.param]
+def llm_expensive(request, real_bm: BM):
+    return real_bm.llms[request.param]
