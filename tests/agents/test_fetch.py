@@ -86,7 +86,7 @@ class TestFetch:
 
         uri_to_test = "http://example.com/nonexistentpage"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {uri_to_test}"):
-            await fetch.fetch(uri=uri_to_test)
+            await fetch.fetch_uri(uri=uri_to_test)
 
         mock_download_and_convert.assert_called_once_with(uri_to_test)
 
@@ -98,7 +98,7 @@ class TestFetch:
 
         specific_uri = "https://www.abc.net.au/religion/catherine-llewellyn-gender-affirming-healthcare-for-trans-youth"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {specific_uri}"):
-            await fetch.fetch(uri=specific_uri)
+            await fetch.fetch_uri(uri=specific_uri)
 
         mock_download_and_convert.assert_called_once_with(specific_uri)
 
@@ -123,7 +123,7 @@ class TestFetch:
         ids=[x[0] for x in NEWS_RECORDS],
     )
     async def test_ingest_news(self, fetch: FetchAgent, id, uri, expected_mimetype, expected_size):
-        media_obj = await fetch.fetch(uri=uri)
+        media_obj = await fetch.fetch_uri(uri=uri)
         assert len(media_obj.content) == expected_size
         assert media_obj.metadata["fetch_source_uri"] == uri
 

@@ -1,14 +1,9 @@
-import asyncio
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from hydra import compose, initialize
 from plotly.subplots import make_subplots
 
-from buttermilk import set_bm
-from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 from streamlit_config import DashboardConfig
 
 # Constants
@@ -18,27 +13,15 @@ MIN_TEMPLATES_FOR_COMPARISON = 2
 @st.cache_resource
 def init_bm():
     """Initializes the Buttermilk instance."""
-    # Load configuration
-    with initialize(version_base=None, config_path="../../buttermilk/conf"):
-        cfg = compose(config_name="config")
-
-    # Create bootstrapper
-    bootstrapper = ConfigurationBootstrapper(config=cfg)
-
-    # Step 1: Bootstrap full context (ExecutionContext + Infrastructure)
-    _, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
-
-    # Step 2: Bootstrap session context using existing infrastructure
-    bm = asyncio.run(
-        bootstrapper.bootstrap_session_context(
-            name="streamlit_dashboard",
-            job="tja_template_analysis",
-            infrastructure=infrastructure,  # Use existing infrastructure
-        )
+    from buttermilk.utils import cli
+    
+    # Simple one-liner initialization using the CLI utility
+    # Path points to the buttermilk conf directory from this example location
+    bm = cli.init(
+        job="tja_template_analysis",
+        name="streamlit_dashboard", 
+        path="../../buttermilk/conf"
     )
-
-    # Step 3: Set as global singleton (if needed)
-    set_bm(bm)
     return bm
 
 

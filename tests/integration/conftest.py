@@ -31,7 +31,7 @@ def bootstrapper(conf):
 
 # Create infrastructure manager from test configuration with proper ExecutionContext
 @pytest.fixture(scope="session", autouse=True)
-def infrastructure(conf):
+def infrastructure(bootstrapper, conf):
     """Provide the Infrastructure instance created from config with ExecutionContext."""
 
     # Create infrastructure manager first

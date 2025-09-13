@@ -12,6 +12,23 @@ from buttermilk import set_bm
 from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 
 
+def test_short_form_cli():
+    from buttermilk.utils import cli
+
+    bm = cli.init(job="testing", name="test_cli")
+    assert bm is not None
+    assert bm.cloud_manager is not None
+
+
+def test_short_form_nb():
+    from buttermilk.utils import nb
+
+    bm = nb.init(job="testing", name="test_nb")
+    logger = bm.logger
+    logger.debug("logging seems to work")
+    assert bm.cloud_manager is not None
+
+
 def test_init():
     # Load configuration
     with initialize(version_base=None, config_path="../../buttermilk/conf"):
