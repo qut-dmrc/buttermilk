@@ -7,11 +7,10 @@ simplified RagAgent base class and adds only Zotero-specific output formatting.
 from typing import Any
 
 import pydantic
-from autogen_core.tools import FunctionTool, Tool
+from autogen_core.tools import Tool
 from pydantic import Field
 
-from buttermilk._core.contract import AgentTrace
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
@@ -58,29 +57,26 @@ class RagZotero(RagAgent):
             output_model = ZoteroResearchResult
         super().__init__(output_model=ZoteroResearchResult, **kwargs)
 
-    @staticmethod
-    async def review_literature(prompt: str) -> AgentTrace:
-        """Independently search, review, and synthesise the scholarly literature.
-        Inputs:
-            prompt (str): An extended description in natural language of
-                a research question or task that can be answered by reviewing existing
-                scholarly materials. This agent will independently develop an efficient
-                and effective search strategy from this description. It will benefit
-                from any additional context or guidance that you can provide.
-        """
-        raise ProcessingError(
-            "These are fake tools; they shouldn't actually be getting called. The host usually calls the agent's .invoke() method instead."
-        )
-
     def get_tool_definitions(self) -> list[Tool]:
         """Generate structured tool definitions for this agent."""
-        internal_tools = [
-            FunctionTool(
-                name="review_literature",
-                description="Independently search, review, and synthesise the scholarly literature. Provide an extended description in natural language of a research question or task that can be answered by reviewing existing scholarly materials. This agent will independently develop an efficient and effective search strategy from this description. It will benefit from any additional context or guidance that you can provide.",
-                func=self.review_literature,
-                strict=True,
-            )
-        ]
+        # Create a tool definition for this agent's main capability
+        tool_def = AgentToolDefinition(
+            name="review_literature",
+            description="Independently search, review, and synthesise the scholarly literature. Provide an extended description in natural language of a research question or task that can be answered by reviewing existing scholarly materials. This agent will independently develop an efficient and effective search strategy from this description. It will benefit from any additional context or guidance that you can provide.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "An extended description in natural language of a research question or task that can be answered by reviewing existing scholarly materials."
+                    }
+                },
+                "required": ["prompt"]
+            },
+            output_schema={
+                "type": "object",
+                "description": "Research result with Zotero academic literature references",
+            }
+        )
 
-        return internal_tools
+        return [tool_def]

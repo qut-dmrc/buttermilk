@@ -17,14 +17,14 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from autogen_core import FunctionCall, CancellationToken
-from autogen_core.models import AssistantMessage, CreateResult
-from autogen_core.tools import Tool, ToolSchema
+from autogen_core import FunctionCall
+from autogen_core.models import CreateResult
+from autogen_core.tools import ToolSchema
 
-from buttermilk._core.tool_definition import AgentToolDefinition
-from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.llms import AutoGenWrapper
+from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 
 class TestToolTypeHandling:
@@ -135,11 +135,11 @@ class TestToolTypeHandling:
         # Import the deduplication logic from structured_llmhost
         def get_tool_name(tool):
             """Replicate the deduplication logic from structured_llmhost.py."""
-            if hasattr(tool, 'name'):
+            if hasattr(tool, "name"):
                 return tool.name  # Tool object
             else:
-                return tool['name']  # ToolSchema dict
-        
+                return tool["name"]  # ToolSchema dict
+
         # Test the logic with mixed tools
         tools = mixed_tools_list
         
@@ -190,7 +190,7 @@ class TestToolTypeHandling:
             cached=False
         ))
         # Mock bm.llms.get_autogen_chat_client directly (used in _call_llm)
-        with patch('buttermilk.agents.flowcontrol.structured_llmhost.bm') as mock_bm:
+        with patch("buttermilk.agents.flowcontrol.structured_llmhost.bm") as mock_bm:
             mock_bm.llms.get_autogen_chat_client.return_value = mock_client
         
             # Call _call_llm with mixed tools
@@ -206,13 +206,13 @@ class TestToolTypeHandling:
             
             # Verify the tools_list parameter passed to call_chat
             call_args = mock_client.call_chat.call_args
-            tools_list_passed = call_args.kwargs.get('tools_list', [])
+            tools_list_passed = call_args.kwargs.get("tools_list", [])
             
             # Should have 2 unique tools (deduplication should work)
             assert len(tools_list_passed) == 2
             
             # Verify intercept_tools flag was set
-            assert call_args.kwargs.get('intercept_tools') is True
+            assert call_args.kwargs.get("intercept_tools") is True
 
     @pytest.mark.anyio
     async def test_toolschema_to_functioncall_flow(self, sample_tool_schema: ToolSchema, real_bm):
@@ -228,11 +228,7 @@ class TestToolTypeHandling:
         host._proposed_step = asyncio.Queue()
         
         # Mock the LLM client to return FunctionCall objects
-        mock_function_call = FunctionCall(
-            id="call_123", 
-            name="test_search",
-            arguments='{"query": "test query", "limit": 5}'
-        )
+        mock_function_call = FunctionCall(id="call_123", name="test_search", arguments='{"query": "test query", "limit": 5}')
         
         mock_client = AsyncMock(spec=AutoGenWrapper)
         from autogen_core.models import RequestUsage
@@ -252,12 +248,12 @@ class TestToolTypeHandling:
         }
         
         # Mock bm.llms.get_autogen_chat_client directly (used in _process -> _call_llm)
-        with patch('buttermilk.agents.flowcontrol.structured_llmhost.bm') as mock_bm:
+        with patch("buttermilk.agents.flowcontrol.structured_llmhost.bm") as mock_bm:
             mock_bm.llms.get_autogen_chat_client.return_value = mock_client
             
             # Mock the routing method and template filling
-            with patch.object(host, '_route_tool_calls_to_agents', new_callable=AsyncMock) as mock_route:
-                with patch.object(host, '_fill_template', new_callable=AsyncMock) as mock_fill:
+            with patch.object(host, "_route_tool_calls_to_agents", new_callable=AsyncMock) as mock_route:
+                with patch.object(host, "_fill_template", new_callable=AsyncMock) as mock_fill:
                     mock_fill.return_value = [Mock()]  # Return mock messages
                     # Process a message
                     result = await host._process(
@@ -282,13 +278,13 @@ class TestToolTypeHandling:
     async def test_tool_object_schema_property_usage(self, sample_tool_object: AgentToolDefinition):
         """Test that Tool objects use their .schema property correctly."""
         # Verify the Tool object has the schema property
-        assert hasattr(sample_tool_object, 'schema')
+        assert hasattr(sample_tool_object, "schema")
         
         schema = sample_tool_object.schema
         assert isinstance(schema, dict)
-        assert schema['name'] == 'test_search'
-        assert schema['description'] == 'Search for test data'
-        assert 'parameters' in schema
+        assert schema["name"] == "test_search"
+        assert schema["description"] == "Search for test data"
+        assert "parameters" in schema
         
         # Test that both Tool.schema and direct ToolSchema work the same way
         tool_via_schema = sample_tool_object.schema
@@ -306,37 +302,38 @@ class TestToolTypeHandling:
         }
         
         # They should have the same structure
-        assert tool_via_schema['name'] == direct_schema['name']
-        assert tool_via_schema['description'] == direct_schema['description']
-        assert tool_via_schema['parameters'] == direct_schema['parameters']
+        assert tool_via_schema["name"] == direct_schema["name"]
+        assert tool_via_schema["description"] == direct_schema["description"]
+        assert tool_via_schema["parameters"] == direct_schema["parameters"]
 
     def test_type_hints_accept_both_tool_and_toolschema(self):
         """Test that the type hints Tool | ToolSchema work correctly."""
-        from typing import get_args, get_origin
-        from buttermilk._core.llms import AutoGenWrapper
         import inspect
+        from typing import get_args, get_origin
+
+        from buttermilk._core.llms import AutoGenWrapper
         
         # Get the create method signature
         sig = inspect.signature(AutoGenWrapper.create)
-        tools_param = sig.parameters['tools']
+        tools_param = sig.parameters["tools"]
         
         # Check that the annotation includes both Tool and ToolSchema
         annotation = tools_param.annotation
         
         # This should be Sequence[Tool | ToolSchema]
-        assert get_origin(annotation).__name__ == 'Sequence'
+        assert get_origin(annotation).__name__ == "Sequence"
         
         # Get the inner type (Tool | ToolSchema)
         inner_type = get_args(annotation)[0]
         
         # Verify it's a Union that includes both types
-        if hasattr(inner_type, '__args__'):  # Union type
+        if hasattr(inner_type, "__args__"):  # Union type
             type_args = get_args(inner_type)
-            type_names = [arg.__name__ if hasattr(arg, '__name__') else str(arg) for arg in type_args]
+            type_names = [arg.__name__ if hasattr(arg, "__name__") else str(arg) for arg in type_args]
             
             # Should include both Tool and ToolSchema
-            assert any('Tool' in name for name in type_names)
-            assert any('ToolSchema' in name or 'dict' in name for name in type_names)
+            assert any("Tool" in name for name in type_names)
+            assert any("ToolSchema" in name or "dict" in name for name in type_names)
 
 
 if __name__ == "__main__":

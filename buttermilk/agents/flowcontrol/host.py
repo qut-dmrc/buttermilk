@@ -1,7 +1,7 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import AsyncGenerator
-from typing import Any  # Import Dict
+from typing import Any, Mapping  # Import Dict
 
 from autogen_core import DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
@@ -279,7 +279,13 @@ class HostAgent(Agent):
                 tool_names = []
                 for tool in message.tool_definitions:
                     # Extract tool name from either name attribute or schema.name
-                    tool_name = getattr(tool, "name", None) or getattr(tool.schema, "name", None)
+                    tool_name = None
+                    if isinstance(tool, Tool):
+                        tool_name = getattr(tool, "name", None)
+                    elif hasattr(tool, "schema"):
+                        tool_name = getattr(tool.schema, "name", None)
+                    elif isinstance(tool, Mapping):
+                        tool_name = tool.get("name") or tool.get("schema", {}).get("name")
                     if tool_name:
                         self._tool_to_agent_map[tool_name] = agent_id
                         tool_names.append(tool_name)
