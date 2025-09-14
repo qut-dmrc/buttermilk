@@ -13,9 +13,7 @@ from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 
 
 def test_short_form_cli():
-    from buttermilk.utils import cli
-
-    bm = cli.init(job="testing", name="test_cli")
+    bm = init(job="testing", name="test_cli")
     assert bm is not None
     assert bm.cloud_manager is not None
 

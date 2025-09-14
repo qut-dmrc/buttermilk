@@ -30,7 +30,7 @@ from buttermilk._core.cloud import CloudManager
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
-from buttermilk._core.log import logger, setup_cloud_logging, setup_console_logging, setup_file_logging
+from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk.utils.utils import load_json_flexi
@@ -248,8 +248,7 @@ class ExecutionContext(BaseModel):
             # First session - project is required
             if project is None:
                 raise RuntimeError(
-                    "project parameter is required for the first session in an execution context. "
-                    "Example: cli.init(job='my_job', project='my_project')"
+                    "project parameter is required for the first session in an execution context. Example: init(job='my_job', project='my_project')"
                 )
             self.project_name = project
             logger.debug(f"Set project name for execution context: {project}")
@@ -406,7 +405,6 @@ class ExecutionContext(BaseModel):
 
         self._tracing_instrumented.set()
 
-
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client."""
         # Ensure tracing is set up (this will be deferred initialization)
@@ -454,8 +452,8 @@ class ExecutionContext(BaseModel):
         # Initialize Weave if enabled
         if self.tracing.get("weave") and self.tracing["weave"].enabled:
             await self._initialize_weave()
-            
-        # Initialize Traceloop if enabled  
+
+        # Initialize Traceloop if enabled
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
             await self._initialize_traceloop()
             
@@ -472,8 +470,8 @@ class ExecutionContext(BaseModel):
         weave_config = self.tracing["weave"]
         
         # Extract credentials from configuration (fail-fast if missing)
-        wandb_entity = getattr(weave_config, 'project_id', None)
-        wandb_api_key = getattr(weave_config, 'api_key', None)
+        wandb_entity = getattr(weave_config, "project_id", None)
+        wandb_api_key = getattr(weave_config, "api_key", None)
         
         if not wandb_entity:
             raise RuntimeError("Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config.")
@@ -510,7 +508,7 @@ class ExecutionContext(BaseModel):
     async def _initialize_traceloop(self) -> None:
         """Initialize Traceloop tracing."""
         traceloop_config = self.tracing["traceloop"]
-        api_key = getattr(traceloop_config, 'api_key', None)
+        api_key = getattr(traceloop_config, "api_key", None)
         
         if not api_key:
             raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")

@@ -20,7 +20,7 @@ def init_bm():
     
     # Simple one-liner initialization using the CLI utility
     # Custom config directory for this example
-    bm = cli.init(
+    bm = init(
         job="detailed_performance_analysis",
         name="detailed_performance_dashboard", 
         config_dir="../../buttermilk/conf"

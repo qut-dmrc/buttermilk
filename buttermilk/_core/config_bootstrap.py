@@ -272,13 +272,134 @@ def create_configuration_bootstrapper(
     config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None
 ) -> ConfigurationBootstrapper:
     """Factory function to create a ConfigurationBootstrapper instance.
-    
+
     Args:
         config_path: Path to Hydra configuration directory
         overrides: List of configuration overrides
         config: Pre-loaded configuration (if already available from Hydra context)
-        
+
     Returns:
         ConfigurationBootstrapper instance
     """
     return ConfigurationBootstrapper(config_path=config_path, overrides=overrides, config=config)
+
+
+# Configuration files are stored in the local directory, and
+# options can be passed in at initialization.
+def init(
+    job: str,
+    project: str | None = None,
+    *,
+    run_type: str = "cli",
+    config_dir: str | None = None,
+    overrides: list[str] | None = None,
+    config: DictConfig | None = None,
+):
+    """Unified session bootstrap function for all entry points.
+
+    Simple one-liner initialization for Buttermilk.
+
+    Args:
+        job: Name for the specific job or task
+        project: Project name (required for first session, optional for subsequent sessions)
+        run_type: Type of run ("cli", "notebook", etc.) for override management
+        config_dir: Path to configuration directory (defaults to packaged config)
+        overrides: List of Hydra override strings for customization
+        config: Pre-loaded configuration (if already available from Hydra context)
+
+    Returns:
+        bm: the Buttermilk instance
+
+    Raises:
+        RuntimeError: If project is required but not provided, or if project
+                     mismatches existing execution context project.
+
+
+    Args:
+        job: Name for the specific job or task
+        project: Project name (required for first session, optional for subsequent sessions)
+        run_type: Type of run ("cli", "notebook", etc.) for override management
+        config_dir: Path to configuration directory (defaults to packaged config)
+        overrides: List of Hydra override strings for customization
+        config: Pre-loaded configuration (if already available from Hydra context)
+
+    Returns:
+        Buttermilk instance ready to use
+
+    Raises:
+        RuntimeError: If project is required but not provided, or if project
+                     mismatches existing execution context project.
+    """
+    bm, config = bootstrap_session_with_config(job=job, project=project, run_type=run_type, config_dir=config_dir, overrides=overrides, config=config)
+    return bm
+
+
+def bootstrap_session_with_config(
+    job: str,
+    project: str | None = None,
+    run_type: str = "cli",
+    config_dir: str | None = None,
+    overrides: list[str] | None = None,
+    config: DictConfig | None = None,
+):
+    """Unified session bootstrap function that also returns configuration.
+
+    This variant returns both the BM instance and the full configuration object
+    for scripts that need access to additional configuration.
+
+    Args:
+        job: Name for the specific job or task
+        project: Project name (required for first session, optional for subsequent sessions)
+        run_type: Type of run ("cli", "notebook", etc.) for override management
+        config_dir: Path to configuration directory (defaults to packaged config)
+        overrides: List of Hydra override strings for customization
+        config: Pre-loaded configuration (if already available from Hydra context)
+
+    Returns:
+        Tuple of (Buttermilk instance, configuration object)
+
+    Raises:
+        RuntimeError: If project is required but not provided, or if project
+                     mismatches existing execution context project.
+    """
+    import asyncio
+    from pathlib import Path
+
+    from buttermilk import set_bm
+
+    # Resolve config directory - default to packaged config if not provided
+    if not config_dir:
+        config_dir = Path(__file__).parent.parent.resolve() / "conf"
+        config_dir = config_dir.as_posix()
+
+    # Prepare overrides with run-specific settings
+    bootstrap_overrides = (overrides or []).copy()
+    bootstrap_overrides.append(f"+run={run_type}")
+    bootstrap_overrides.append(f"++run.job={job}")
+
+    # Create bootstrapper with configuration
+    bootstrapper = ConfigurationBootstrapper(config_path=config_dir, overrides=bootstrap_overrides, config=config)
+
+    try:
+        # Bootstrap full context and session
+        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+
+        # Validate and set project name using ExecutionContext
+        validated_project = execution_context.validate_and_set_project(project)
+
+        # Create session BM instance with validated project
+        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=job, infrastructure=infrastructure))
+
+        # Set the singleton BM instance
+        set_bm(bm)
+
+        logger.info(f"Starting {run_type} run for {bm.session_info.project_name} job {bm.session_info.job}")
+
+        # Get the configuration
+        config = bootstrapper.get_configuration()
+
+        return bm, config
+
+    except Exception as e:
+        logger.error(f"Failed to initialize Buttermilk: {e}")
+        raise

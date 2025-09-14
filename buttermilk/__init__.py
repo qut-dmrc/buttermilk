@@ -10,6 +10,7 @@
 
 from ._core.bm_init import BM, create_batch_session_bm, create_session_bm, tracer
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
+from ._core.config_bootstrap import init
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
     AgentInput as AgentInput,
@@ -60,6 +61,7 @@ __all__ = [
     "BQ_SCHEMA_DIR",
     "COL_PREDICTION",
     "TEMPLATES_PATH",
+    "init",
     "bm",  # Export the singleton accessor (deprecated)
     "get_bm",  # Export the getter function (deprecated)
     "get_buttermilk_instance",  # Export the alias for get_bm (deprecated)

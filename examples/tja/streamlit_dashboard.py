@@ -13,11 +13,11 @@ MIN_TEMPLATES_FOR_COMPARISON = 2
 @st.cache_resource
 def init_bm():
     """Initializes the Buttermilk instance."""
-    from buttermilk.utils import cli
+    from buttermilk.utils import init
     
     # Simple one-liner initialization using the CLI utility
     # Custom config directory for this example
-    bm = cli.init(
+    bm = init(
         job="tja_template_analysis",
         name="streamlit_dashboard", 
         config_dir="../../buttermilk/conf"

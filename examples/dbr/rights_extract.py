@@ -21,14 +21,10 @@ def init() -> Any:
     Returns:
         Any: The fully instantiated configuration object from Hydra.
     """
-    from buttermilk.utils import cli
+    from buttermilk import init
     
     # Simple initialization using the CLI utility with custom overrides
-    bm, cfg = cli.init_with_config(
-        job=JOB,
-        name="dbr_rights_extract",
-        overrides=["llms=full"]
-    )
+    bm = init(job=JOB, name="dbr_rights_extract", overrides=["llms=full"])
     
     logger.info("Initialized Buttermilk", session_info=bm.session_info)
     
