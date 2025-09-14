@@ -18,10 +18,10 @@ bm:
 
 infrastructure:
   llms: {}
-  
+
   # Default tracing configuration for non-cloud tracing providers
   tracing:
-    weave: 
+    weave:
       enabled: true
     traceloop:
       enabled: false

@@ -39,9 +39,13 @@ def test_startup(flow, timeout, output, verbose):
 
     # Build command
     cmd = [
-        "uv", "run", "python", "-m", "buttermilk.runner.cli",
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "buttermilk.runner.cli",
         f"+flows=[{flows_str}]",
-        "+run=api",
+        "run=api",
         "+llms=full",
     ]
 
@@ -438,9 +442,13 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     click.echo("\n🚀 Attempting to start daemon...")
     try:
         start_cmd = [
-            "uv", "run", "python", "-m", "buttermilk.runner.cli",
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "buttermilk.runner.cli",
             f"+flows=[{flow}]",
-            "+run=api",
+            "run=api",
             "+llms=full",
         ]
 

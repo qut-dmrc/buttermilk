@@ -42,8 +42,8 @@ Test Coverage Summary:
    - Absolute path conversion
 
 7. **Context-Specific Behavior**:
-   - Notebook functions add "+run=notebook" override
-   - CLI functions add "+run=cli" override
+   - Notebook functions add "run=notebook" override
+   - CLI functions add "run=cli" override
    - Script name auto-detection for CLI functions
    - Fallback naming strategies
 

@@ -33,29 +33,29 @@ The main configuration file is `conf/run/vectorise_zotero.yaml`. You can overrid
 
 ### Limit documents (for testing)
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero max_docs=50
+python -m buttermilk.data.vector run=vectorise_zotero max_docs=50
 ```
 
 ### Resume from a specific offset
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero start_from=1000
+python -m buttermilk.data.vector run=vectorise_zotero start_from=1000
 ```
 
 ### Use different storage location
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero vectoriser.persist_directory=/path/to/chromadb
+python -m buttermilk.data.vector run=vectorise_zotero vectoriser.persist_directory=/path/to/chromadb
 ```
 
 ### Adjust batch processing
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero \
+python -m buttermilk.data.vector run=vectorise_zotero \
   vectoriser.sync_batch_size=100 \
   vectoriser.concurrency=10
 ```
 
 ### Quiet mode (no progress bar)
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero quiet=true
+python -m buttermilk.data.vector run=vectorise_zotero quiet=true
 ```
 
 ## Features
@@ -144,7 +144,7 @@ The enhanced pipeline provides detailed progress information:
 ### Memory Issues
 Reduce batch size and concurrency:
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero \
+python -m buttermilk.data.vector run=vectorise_zotero \
   vectoriser.sync_batch_size=25 \
   vectoriser.concurrency=5
 ```
@@ -152,7 +152,7 @@ python -m buttermilk.data.vector +run=vectorise_zotero \
 ### API Rate Limits
 Add delays between batches:
 ```bash
-python -m buttermilk.data.vector +run=vectorise_zotero \
+python -m buttermilk.data.vector run=vectorise_zotero \
   vectoriser.embedding_cooldown_seconds=1.0
 ```
 
@@ -160,7 +160,7 @@ python -m buttermilk.data.vector +run=vectorise_zotero \
 Enable debug logging:
 ```bash
 export BUTTERMILK_LOG_LEVEL=DEBUG
-python -m buttermilk.data.vector +run=vectorise_zotero
+python -m buttermilk.data.vector run=vectorise_zotero
 ```
 
 ## Using the Vector Database
@@ -178,5 +178,5 @@ orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 
 Then start the chat:
 ```bash
-python -m buttermilk.runner.cli +flow=zotero_rag +run=api
+python -m buttermilk.runner.cli +flow=zotero_rag run=api
 ```

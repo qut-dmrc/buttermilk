@@ -85,7 +85,7 @@ uv run pytest
 uv run python -m buttermilk.runner.cli -c job
 
 # Run API server
-uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=full
+uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" run=api llms=full
 
 # Debug flows
 uv run python -m buttermilk.debug.ws_debug_cli test-connection

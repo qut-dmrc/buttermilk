@@ -374,7 +374,7 @@ def bootstrap_session_with_config(
 
     # Prepare overrides with run-specific settings
     bootstrap_overrides = (overrides or []).copy()
-    bootstrap_overrides.append(f"+run={run_type}")
+    bootstrap_overrides.append(f"run={run_type}")
     bootstrap_overrides.append(f"++run.job={job}")
 
     # Create bootstrapper with configuration

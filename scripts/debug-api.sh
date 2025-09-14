@@ -5,7 +5,7 @@ ACTION="${1:-status}"
 case "$ACTION" in
     "start")
         echo "Starting Buttermilk API server..."
-        nohup uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=full > /tmp/buttermilk_api.log 2>&1 &
+        nohup uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" run=api llms=full > /tmp/buttermilk_api.log 2>&1 &
         echo "Server starting in background, check /tmp/buttermilk_api.log for details"
         sleep 3
         curl -s http://localhost:8000/health | jq .
@@ -19,7 +19,7 @@ case "$ACTION" in
         echo "Restarting Buttermilk API server..."
         pkill -f "buttermilk.runner.cli.*api"
         sleep 2
-        nohup uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" +run=api llms=full > /tmp/buttermilk_api.log 2>&1 &
+        nohup uv run python -m buttermilk.runner.cli "+flows=[zot,osb,trans]" run=api llms=full > /tmp/buttermilk_api.log 2>&1 &
         echo "Server restarting, checking status in 5 seconds..."
         sleep 5
         curl -s http://localhost:8000/health | jq .

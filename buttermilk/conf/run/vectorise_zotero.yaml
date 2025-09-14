@@ -1,7 +1,7 @@
 # @package _global_
 
 # Enhanced Zotero vectorization configuration
-# Usage: python -m buttermilk.data.vector +run=vectorise_zotero +storage=zot
+# Usage: python -m buttermilk.data.vector run=vectorise_zotero +storage=zot
 
 
 defaults:

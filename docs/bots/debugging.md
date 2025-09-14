@@ -96,7 +96,7 @@ This command handles killing any old processes and starts a new one, logging out
 Agents capable of running background processes (like Claude Code) should launch the server directly to monitor stdio in real-time:
 
 ```bash
-uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=debug verbose=true
+uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=debug verbose=true
 ```
 
 **⚠️ WARNING**: This command does not time out. Only use if your agent can manage background processes. Other agents should use `make debug` instead.

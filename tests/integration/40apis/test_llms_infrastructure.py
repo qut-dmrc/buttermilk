@@ -3,13 +3,12 @@
 These tests verify that LLMs are properly configured and accessible.
 """
 
-import pytest
 from buttermilk import BM
 
 
-def test_config_llms(bm: BM):
+def test_config_llms(real_bm: BM):
     """Test that LLMs are properly configured and accessible."""
-    models = bm.llms
+    models = real_bm.llms
     assert models
     # Verify we can access at least one model
     assert len(models) > 0

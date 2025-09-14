@@ -978,6 +978,9 @@ class LLMs(BaseModel):
                 "Please use the Gemini API or OpenAIChatCompletionClient with Vertex parameters.",
             )
 
+            url = (
+                f"https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?key={client_params['api_key']}"
+            )
         elif config.client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
             bm_instance = get_bm()

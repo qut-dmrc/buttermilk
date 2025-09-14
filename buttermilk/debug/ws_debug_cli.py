@@ -387,7 +387,7 @@ def start_debug(ctx, flow_name: str, query: str, wait: int, record: str, criteri
         except requests.RequestException:
             console.print("[red]✗[/red] Server is not running. Please start it with:")
             console.print(
-                f'[cyan]uv run python -m buttermilk.runner.cli "+flows=[{flow_name}]" +run=api llms=debug trans.parameters.criteria="[{criteria}]"[/cyan]',
+                f'[cyan]uv run python -m buttermilk.runner.cli "+flows=[{flow_name}]" run=api llms=debug trans.parameters.criteria="[{criteria}]"[/cyan]',
             )
             return
 
@@ -434,7 +434,7 @@ def start_server(flow_name: str, criteria: str, host: str, port: int):
             "-m",
             "buttermilk.runner.cli",
             f"+flows=[{flow_name}]",
-            "+run=api",
+            "run=api",
             "llms=debug",
             f"trans.parameters.criteria=[{criteria}]",
         ]
@@ -444,7 +444,7 @@ def start_server(flow_name: str, criteria: str, host: str, port: int):
             "-m",
             "buttermilk.runner.cli",
             f"+flows=[{flow_name}]",
-            "+run=api",
+            "run=api",
             "llms=debug",
         ]
 

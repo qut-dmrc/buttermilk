@@ -23,7 +23,7 @@ def conf():
     return cfg
 
 
-@pytest.fixture
+@pytest.fixture(scope="session", autouse=True)
 def bootstrapper(conf):
     """ConfigurationBootstrapper fixture."""
     return ConfigurationBootstrapper(config=conf)

@@ -23,6 +23,7 @@ bm1 = init(job="first_analysis", project="project_alpha")
 logger.info("First session started")
 logger.info(f"   Session 1: {bm1.session_info.session_id}")
 logger.info(f"   Project: {bm1.session_info.project_name}, Job: {bm1.session_info.job}")
+logger.info(f"   LLMs configured: {bm1.llms}")
 
 # Second session - same project, different job (explicit project)
 logger.info("2. Creating second session...")

@@ -54,7 +54,7 @@ class TestCliInit:
         call_kwargs = mock_bootstrapper_class.call_args[1]
         assert "config_path" in call_kwargs
         assert "overrides" in call_kwargs
-        assert "+run=cli" in call_kwargs["overrides"]
+        assert "run=cli" in call_kwargs["overrides"]
 
         # Verify bootstrap methods were called
         mock_bootstrapper.bootstrap_full_context.assert_called_once()
@@ -189,7 +189,7 @@ class TestCliInit:
                 final_overrides = call_kwargs["overrides"]
                 assert "key=value" in final_overrides
                 assert "other=setting" in final_overrides
-                assert "+run=cli" in final_overrides
+                assert "run=cli" in final_overrides
 
                 # Verify original list was not modified
                 assert custom_overrides == ["key=value", "other=setting"]
@@ -514,7 +514,7 @@ class TestCliUtilsComparison:
                         cli_overrides = mock_cli_bootstrap.call_args[1]["overrides"]
                         nb_overrides = mock_nb_bootstrap.call_args[1]["overrides"]
 
-                        assert "+run=cli" in cli_overrides
-                        assert "+run=notebook" in nb_overrides
-                        assert "+run=cli" not in nb_overrides
-                        assert "+run=notebook" not in cli_overrides
+                        assert "run=cli" in cli_overrides
+                        assert "run=notebook" in nb_overrides
+                        assert "run=cli" not in nb_overrides
+                        assert "run=notebook" not in cli_overrides
