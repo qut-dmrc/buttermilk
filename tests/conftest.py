@@ -143,21 +143,6 @@ def config_override():
     return _override_config
 
 
-# =============================================================================
-# DEPRECATED MOCK FIXTURES (Removed)
-#
-# The mock fixtures below have been removed in favor of real fixtures:
-# - mock_bm → real_bm
-# - llms → real_llms
-# - model_name → real_model_name
-# - llm_multimodal → real_llm_multimodal
-# - llm → real_llm
-# - llm_expensive → real_llm_expensive
-#
-# If you have tests using the old fixtures, update them to use the real_ versions.
-# =============================================================================
-
-
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
     return read_file("tests/data/Rijksmuseum_(25621972346).jpg")

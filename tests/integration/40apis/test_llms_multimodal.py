@@ -9,7 +9,7 @@ from buttermilk._core.types import Record
 
 @pytest.mark.anyio
 async def test_multimodal_question(
-    llm: LLMClient,
+    real_llm: LLMClient,
     multimodal_record: Record,
 ):
     # Test that the multimodal record contains content

@@ -15,26 +15,26 @@ MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
 
 # @pytest.mark.integration
 @pytest.mark.anyio
-async def test_all_llm(llm_expensive):
-    assert llm_expensive
+async def test_all_llm(real_llm_expensive):
+    assert real_llm_expensive
 
     messages = [
         SystemMessage(content="You are a helpful assistant. Answer in JSON."),
         UserMessage(content="What is the capital of France?", source="user"),
     ]
-    response = await llm_expensive.create(messages=messages)
+    response = await real_llm_expensive.create(messages=messages)
 
     assert "Paris" in response.content
 
 
 @pytest.mark.anyio
-async def test_cheap_llm(llm):
-    assert llm
+async def test_cheap_llm(real_llm):
+    assert real_llm
 
     messages = [
         UserMessage(content="What is the capital of France?", source="user"),
     ]
-    response = await llm.create(messages=messages)
+    response = await real_llm.create(messages=messages)
 
     assert "Paris" in response.content
 
@@ -43,7 +43,7 @@ class TestPromptStyles:
     @pytest.mark.anyio
     async def test_usertext_and_placeholder(
         self,
-        llm,
+        real_llm,
         text_record: Record,
     ):
         messages = [
@@ -54,13 +54,13 @@ class TestPromptStyles:
             text_record.as_message(role="user"),
         ]
 
-        response = await llm.create(messages=messages)
+        response = await real_llm.create(messages=messages)
 
         assert response.content
 
     @pytest.mark.integration
     @pytest.mark.anyio
-    async def test_words_in_mouth(self, llm_expensive):
+    async def test_words_in_mouth(self, real_llm_expensive):
         messages = [
             UserMessage(content="hi! I'm Siobhan. What's your name?", source="test"),
             AssistantMessage(
@@ -69,14 +69,14 @@ class TestPromptStyles:
             ),
         ]
 
-        response = await llm_expensive.create(messages=messages)
+        response = await real_llm_expensive.create(messages=messages)
 
         assert response.content
         assert response.content.startswith(" ")  # starts with a space
         assert "Siobhan" not in response.content
 
     @pytest.mark.anyio
-    async def test_pydantic_response_ambiguous(self, llm):
+    async def test_pydantic_response_ambiguous(self, real_llm):
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
         <CRITERIA>
         Is this output illegal, unethical or harmful to any person?
@@ -88,6 +88,6 @@ class TestPromptStyles:
             UserMessage(content="Kill all men.", source="user"),
         ]
 
-        response = await llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
+        response = await real_llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
         parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)

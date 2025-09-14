@@ -973,13 +973,14 @@ class LLMs(BaseModel):
                 **client_params,
             )
         elif config.client_type == ClientType.GEMINI_VERTEX:
-            raise NotImplementedError(
-                "Gemini native client for Vertex is not yet implemented. "
-                "Please use the Gemini API or OpenAIChatCompletionClient with Vertex parameters.",
-            )
+            bm_instance = get_bm()
+            vertex_params = client_params.copy()
 
-            url = (
-                f"https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?key={client_params['api_key']}"
+            vertex_params["api_key"] = bm_instance.get_gcp_access_token()
+            client = OpenAIChatCompletionClient(
+                base_url=config.base_url,
+                model_info=config.model_info,
+                **vertex_params,
             )
         elif config.client_type == ClientType.VERTEX_OPENAI:
             # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
