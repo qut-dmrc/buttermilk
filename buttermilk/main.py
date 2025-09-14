@@ -4,40 +4,36 @@
 # This script demonstrates how to initialize the Buttermilk context and infrastructure.
 ##
 ##########
-import asyncio
 
-from hydra import compose, initialize
+from buttermilk import logger
+from buttermilk.utils import cli
 
-from buttermilk import set_bm
-from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+# # Notebooks
+# bm = nb.init(job="my_analysis", name="my_project")
+# logger.info("Started analysis")
 
-# Load configuration
-with initialize(version_base=None, config_path="buttermilk/conf"):
-    cfg = compose(config_name="config")
+logger.info("=== Testing simple new session creation ===")
 
-# Create bootstrapper
-bootstrapper = ConfigurationBootstrapper(config=cfg)
+# First session
+logger.info("1. Creating first session...")
+bm1 = cli.init(job="first_analysis", name="project_alpha")
+logger.info("First session started")
+logger.info(f"   Session 1: {bm1.session_info.session_id}")
+logger.info(f"   Name: {bm1.session_info.name}, Job: {bm1.session_info.job}")
 
-# Step 1: Bootstrap full context (ExecutionContext + Infrastructure)
-execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+# Second session - just call init again
+logger.info("2. Creating second session...")
+bm2 = cli.init(job="second_analysis", name="project_beta")
+logger.info("Second session started")
+logger.info(f"   Session 2: {bm2.session_info.session_id}")
+logger.info(f"   Name: {bm2.session_info.name}, Job: {bm2.session_info.job}")
 
-# Step 2: Bootstrap session context using existing infrastructure
-session_bm = asyncio.run(
-    bootstrapper.bootstrap_session_context(
-        name="your_session_name",
-        job="your_job_name",
-        infrastructure=infrastructure,  # Use existing infrastructure
-    )
-)
+# Third session with same name but different job
+logger.info("3. Creating third session (same name, different job)...")
+bm3 = cli.init(job="third_analysis", name="project_alpha")
+logger.info("Third session started")
+logger.info(f"   Session 3: {bm3.session_info.session_id}")
+logger.info(f"   Name: {bm3.session_info.name}, Job: {bm3.session_info.job}")
 
-# Step 3: Set as global singleton (if needed)
-set_bm(session_bm)
-
-# Step 4. When needed, create new session, reusing existing infrastructure
-new_session_bm = asyncio.run(
-    bootstrapper.bootstrap_session_context(
-        name="session2",
-        job="job2",
-        infrastructure=infrastructure,  # REUSE existing
-    )
-)
+logger.info("✅ All sessions created successfully!")
+logger.info("Each session reuses the same infrastructure but has its own context.")
