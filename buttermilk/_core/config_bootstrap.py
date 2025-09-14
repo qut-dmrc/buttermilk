@@ -185,9 +185,22 @@ class ConfigurationBootstrapper:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
             config = self._load_configuration()
             infrastructure_config = config.get("infrastructure", {})
+
+            # Debug: Log top-level configuration keys for troubleshooting
+            config_keys = list(config.keys()) if config else []
+            logger.debug("Configuration loaded", config_keys=config_keys)
             
             # Pass the FULL infrastructure configuration to ExecutionContext
             # This ensures ExecutionContext has its own CloudManager, SecretManager, etc.
+
+            # Debug: Log infrastructure configuration for troubleshooting
+            logger.debug("Infrastructure configuration loaded",
+                        clouds_count=len(infrastructure_config.get("clouds", [])),
+                        has_secret_provider=bool(infrastructure_config.get("secret_provider")),
+                        has_logging=bool(infrastructure_config.get("logging")),
+                        has_tracing=bool(infrastructure_config.get("tracing")),
+                        has_datasets=bool(infrastructure_config.get("datasets")))
+
             self._execution_context = get_or_create_execution_context(
                 clouds=infrastructure_config.get("clouds", []),
                 secret_provider=infrastructure_config.get("secret_provider"),

@@ -105,21 +105,27 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     # Set up the tracer provider
     provider = TracerProvider()
 
-    # Instrument libraries
-    OpenAIInstrumentor().instrument(tracer_provider=provider)
-    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
-    ChromaInstrumentor().instrument(tracer_provider=provider)
-    VertexAIInstrumentor().instrument(tracer_provider=provider)
-    AnthropicInstrumentor().instrument(tracer_provider=provider)
+    # Instrument libraries (only if not already instrumented)
+    if not OpenAIInstrumentor().is_instrumented_by_opentelemetry:
+        OpenAIInstrumentor().instrument(tracer_provider=provider)
+    if not GoogleGenerativeAiInstrumentor().is_instrumented_by_opentelemetry:
+        GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
+    if not ChromaInstrumentor().is_instrumented_by_opentelemetry:
+        ChromaInstrumentor().instrument(tracer_provider=provider)
+    if not VertexAIInstrumentor().is_instrumented_by_opentelemetry:
+        VertexAIInstrumentor().instrument(tracer_provider=provider)
+    if not AnthropicInstrumentor().is_instrumented_by_opentelemetry:
+        AnthropicInstrumentor().instrument(tracer_provider=provider)
 
     # Configure LoggingInstrumentor to exclude debug logs from traces
     # NOTE: set_logging_format=False prevents calling logging.basicConfig()
     # which would add unwanted StreamHandler to root logger, conflicting with our console setup
-    LoggingInstrumentor().instrument(
-        tracer_provider=provider,
-        set_logging_format=False,  # Don't override our logging setup
-        log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
-    )
+    if not LoggingInstrumentor().is_instrumented_by_opentelemetry:
+        LoggingInstrumentor().instrument(
+            tracer_provider=provider,
+            set_logging_format=False,  # Don't override our logging setup
+            log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
+        )
 
     provider.add_span_processor(BatchSpanProcessor(otlp_grpc_exporter))
 
@@ -158,21 +164,27 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     # Set up the tracer provider
     provider = TracerProvider()
 
-    # Instrument libraries
-    OpenAIInstrumentor().instrument(tracer_provider=provider)
-    GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
-    ChromaInstrumentor().instrument(tracer_provider=provider)
-    VertexAIInstrumentor().instrument(tracer_provider=provider)
-    AnthropicInstrumentor().instrument(tracer_provider=provider)
+    # Instrument libraries (only if not already instrumented)
+    if not OpenAIInstrumentor().is_instrumented_by_opentelemetry:
+        OpenAIInstrumentor().instrument(tracer_provider=provider)
+    if not GoogleGenerativeAiInstrumentor().is_instrumented_by_opentelemetry:
+        GoogleGenerativeAiInstrumentor().instrument(tracer_provider=provider)
+    if not ChromaInstrumentor().is_instrumented_by_opentelemetry:
+        ChromaInstrumentor().instrument(tracer_provider=provider)
+    if not VertexAIInstrumentor().is_instrumented_by_opentelemetry:
+        VertexAIInstrumentor().instrument(tracer_provider=provider)
+    if not AnthropicInstrumentor().is_instrumented_by_opentelemetry:
+        AnthropicInstrumentor().instrument(tracer_provider=provider)
 
     # Configure LoggingInstrumentor to exclude debug logs from traces
     # NOTE: set_logging_format=False prevents calling logging.basicConfig()
     # which would add unwanted StreamHandler to root logger, conflicting with our console setup
-    LoggingInstrumentor().instrument(
-        tracer_provider=provider,
-        set_logging_format=False,  # Don't override our logging setup
-        log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
-    )
+    if not LoggingInstrumentor().is_instrumented_by_opentelemetry:
+        LoggingInstrumentor().instrument(
+            tracer_provider=provider,
+            set_logging_format=False,  # Don't override our logging setup
+            log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
+        )
 
     provider.add_span_processor(BatchSpanProcessor(otlp_grpc_exporter))
 

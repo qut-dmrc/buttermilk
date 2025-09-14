@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
 from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing
+from buttermilk._core.constants import CONFIG_CACHE_PATH, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
@@ -36,9 +37,6 @@ from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk.utils.utils import load_json_flexi
 
 # Constants for configuration keys
-CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
-_MODELS_CFG_KEY = "models_secret"
-_SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # Global variable to store the execution context ID
 _global_execution_context_id = ""
@@ -166,7 +164,7 @@ class ExecutionContext(BaseModel):
         # Set up structured JSON file logging
         log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose)
         for log_file in log_files:
-            logger.info(f"ExecutionContext logging enabled - writing to: {log_file}")
+            logger.info("ExecutionContext logging enabled", log_file=log_file)
 
         # Log initialization message
         logger.info(
@@ -214,7 +212,7 @@ class ExecutionContext(BaseModel):
             logger.info("ExecutionContext synchronous initialization completed")
             self._initialization_complete.set()
         except Exception as e:
-            logger.error(f"Error during ExecutionContext initialization: {e}")
+            logger.error("Error during ExecutionContext initialization", error=str(e))
             self._initialization_error = e
             self._initialization_complete.set()
 
@@ -251,7 +249,7 @@ class ExecutionContext(BaseModel):
                     "project parameter is required for the first session in an execution context. Example: init(job='my_job', project='my_project')"
                 )
             self.project_name = project
-            logger.debug(f"Set project name for execution context: {project}")
+            logger.debug("Set project name for execution context", project=project)
             return project
         else:
             # Subsequent sessions - validate consistency
@@ -311,23 +309,23 @@ class ExecutionContext(BaseModel):
                         )
                         connections_data = None
                     else:
-                        logger.info(f"Loaded LLM connections from cache: {cache_path}")
+                        logger.info("Loaded LLM connections from cache", cache_path=str(cache_path))
                 except Exception as e:
-                    logger.warning(f"Failed to load LLM connections from cache: {e}. Will try secrets.")
+                    logger.warning("Failed to load LLM connections from cache, will try secrets", error=str(e))
                     connections_data = None
 
             # If not loaded from cache, get from secret manager
             if connections_data is None:
                 try:
-                    connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
+                    connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
                     if not isinstance(connections_data, dict):
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
-                    logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
+                    logger.info("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
                     
                     # Cache the connections data
                     self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
-                    logger.error(f"Failed to load LLM connections from secret manager: {e}")
+                    logger.error("Failed to load LLM connections from secret manager", error=str(e))
                     raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
 
             self._llms_instance = LLMs(connections=connections_data)
@@ -337,7 +335,7 @@ class ExecutionContext(BaseModel):
         """Synchronous cache writing helper."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
-        logger.info(f"Caching LLM connections to {cache_path}")
+        logger.info("Caching LLM connections", cache_path=str(cache_path))
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property
@@ -376,7 +374,7 @@ class ExecutionContext(BaseModel):
         """Retrieves shared system credentials from the secret manager."""
         if self._credentials_cached is None:
             logger.debug("Fetching shared credentials from secret manager...")
-            creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
+            creds = self.secret_manager.get_secret(cfg_key=SHARED_CREDENTIALS_KEY)
             if not isinstance(creds, dict):
                 raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
             self._credentials_cached = creds
@@ -399,7 +397,7 @@ class ExecutionContext(BaseModel):
             enabled_providers.append("otel")
             
         if enabled_providers:
-            logger.debug(f"Tracing providers configured (deferred initialization): {', '.join(enabled_providers)}")
+            logger.debug("Tracing providers configured (deferred initialization)", providers=enabled_providers)
         else:
             logger.debug("No tracing providers enabled")
 
@@ -494,15 +492,15 @@ class ExecutionContext(BaseModel):
                 logger.warning("Weave initialized before project name was set, using execution context ID")
 
             autopatch = {"autogen": {"enabled": False}}
-            logger.debug(f"Starting weave client initialization. Entity: {wandb_entity}, Collection: {collection_name}")
+            logger.debug("Starting weave client initialization", entity=wandb_entity, collection=collection_name)
 
             client = weave.init(
                 project_name=f"{wandb_entity}/{collection_name}",
                 autopatch_settings=autopatch
             )
-            logger.info(f"Weave initialized successfully for {wandb_entity}/{collection_name}")
+            logger.info("Weave initialized successfully", entity=wandb_entity, collection=collection_name)
         except Exception as e:
-            logger.error(f"Failed to initialize Weave tracing: {e}")
+            logger.error("Failed to initialize Weave tracing", error=str(e))
             raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
 
     async def _initialize_traceloop(self) -> None:
@@ -521,7 +519,7 @@ class ExecutionContext(BaseModel):
             )
             logger.info("Traceloop initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Traceloop tracing: {e}")
+            logger.error("Failed to initialize Traceloop tracing", error=str(e))
             raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
 
     async def _initialize_otel(self) -> None:
@@ -531,7 +529,7 @@ class ExecutionContext(BaseModel):
             setup_tracing_otel_with_execution_context(self.tracing["otel"], self)
             logger.info("OTEL Tracing has been set up successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize OTEL tracing: {e}")
+            logger.error("Failed to initialize OTEL tracing", error=str(e))
             raise RuntimeError(f"OTEL tracing initialization failed: {e}") from e
 
 
