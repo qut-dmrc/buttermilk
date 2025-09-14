@@ -418,7 +418,20 @@ class BM(BaseModel):
                     session_id=self.session_info.session_id,
                     error=str(e)
                 )
-        
+
+        # Set up structlog context variables for automatic injection into all log messages
+        # This ensures all subsequent log messages include session context
+        import structlog
+
+        structlog.contextvars.clear_contextvars()  # Clear any previous context
+        structlog.contextvars.bind_contextvars(
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
+            platform=self.session_info.platform,
+            project_name=self.session_info.name,
+            job=self.session_info.job,
+        )
+
         logger.info(
             "Session logging context established",
             session_id=self.session_info.session_id,
@@ -428,11 +441,9 @@ class BM(BaseModel):
             job=self.session_info.job
         )
 
-
-
     def _finalize_save_dir(self) -> None:
         """Construct the final save_dir path for this session.
-        
+
         Constructs the full save directory path and stores it in session_info.save_dir.
         """
         # Construct full save directory path using session_id for uniqueness
@@ -473,8 +484,6 @@ class BM(BaseModel):
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
         return self._cloud_manager
 
-
-
     @property
     def secret_manager(self):
         """Provides access to the SecretsManager instance."""
@@ -488,8 +497,6 @@ class BM(BaseModel):
         if self._llms_instance is None:
             raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
         return self._llms_instance
-
-
 
     @property
     def query_runner(self):
@@ -521,7 +528,6 @@ class BM(BaseModel):
     def genai(self) -> Any:
         """Provides access to the GenAI client."""
         return self.cloud_manager.genai
-
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.
@@ -622,12 +628,9 @@ class BM(BaseModel):
                 extension=effective_extension,
                 **kwargs,
             )
-            logger.debug(  # Log as a dictionary for structured logging if supported
-                {
-                    "message": f"Successfully saved data to: {saved_file_path}",
-                    "uri": str(saved_file_path),  # Ensure URI is a string
-                    "session_id": self.session_info.session_id,  # Include session_id for context
-                },
+            logger.debug(
+                f"Successfully saved data to: {saved_file_path}",
+                uri=str(saved_file_path),  # Ensure URI is a string
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:

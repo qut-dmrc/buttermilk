@@ -25,12 +25,17 @@ def init(job: str, name: str = None, overrides: list[str] = [], config_dir: str 
         
     Example:
         >>> from buttermilk.utils import cli
-        >>> from buttermilk import logger
+        >>> from buttermilk import logger  # Always use global logger import
         >>> bm = cli.init(job="data_processing", name="my_project")
-        >>> logger.info("Processing started")
+        >>> logger.info("Processing started")  # Session context automatically included
         
         # To use your own config directory:
         >>> bm = cli.init(job="data_processing", config_dir="./conf")
+        
+    Note:
+        Always use `from buttermilk import logger` for logging. The logger is 
+        a global singleton that automatically includes session context (session_id,
+        job, project_name) in all log messages once a session is initialized.
     """
     from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
     
@@ -105,11 +110,17 @@ def init_with_config(job: str, name: str = None, overrides: list[str] = [], conf
         
     Example:
         >>> from buttermilk.utils import cli
+        >>> from buttermilk import logger  # Always use global logger import
         >>> bm, config = cli.init_with_config(job="data_processing")
+        >>> logger.info("Processing started")  # Session context automatically included
         >>> # Access additional config: config.my_custom_settings
         
         # To use your own config directory:
         >>> bm, config = cli.init_with_config(job="data_processing", config_dir="./conf")
+        
+    Note:
+        Always use `from buttermilk import logger` for logging. The logger is 
+        a global singleton that automatically includes session context.
     """
     from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
     

@@ -131,12 +131,17 @@ def init(job: str, name: str = "notebook_session", config_dir: str = None, **kwa
         
     Example:
         >>> from buttermilk.utils import nb
-        >>> from buttermilk import logger
+        >>> from buttermilk import logger  # Always use global logger import
         >>> bm = nb.init(job="my_analysis", name="my_project")
-        >>> logger.info("Analysis started")
+        >>> logger.info("Analysis started")  # Session context automatically included
         
         # To use your own config directory:
         >>> bm = nb.init(job="my_analysis", config_dir="./conf")
+        
+    Note:
+        Always use `from buttermilk import logger` for logging. The logger is 
+        a global singleton that automatically includes session context (session_id,
+        job, project_name) in all log messages once a session is initialized.
     """
     objs = nb_init(job=job, name=name, config_dir=config_dir, **kwargs)
     return objs.bm

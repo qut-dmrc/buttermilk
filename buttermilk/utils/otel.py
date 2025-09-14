@@ -113,9 +113,11 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     AnthropicInstrumentor().instrument(tracer_provider=provider)
 
     # Configure LoggingInstrumentor to exclude debug logs from traces
+    # NOTE: set_logging_format=False prevents calling logging.basicConfig()
+    # which would add unwanted StreamHandler to root logger, conflicting with our console setup
     LoggingInstrumentor().instrument(
         tracer_provider=provider,
-        set_logging_format=True,
+        set_logging_format=False,  # Don't override our logging setup
         log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
     )
 
@@ -164,9 +166,11 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     AnthropicInstrumentor().instrument(tracer_provider=provider)
 
     # Configure LoggingInstrumentor to exclude debug logs from traces
+    # NOTE: set_logging_format=False prevents calling logging.basicConfig()
+    # which would add unwanted StreamHandler to root logger, conflicting with our console setup
     LoggingInstrumentor().instrument(
         tracer_provider=provider,
-        set_logging_format=True,
+        set_logging_format=False,  # Don't override our logging setup
         log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
     )
 
