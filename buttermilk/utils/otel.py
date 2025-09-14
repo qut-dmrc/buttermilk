@@ -131,7 +131,7 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
 
     # Configure OpenTelemetry tracing API with the initialized tracer provider
     trace.set_tracer_provider(provider)
-    logger.info("Initialized tracing with Google Cloud using ExecutionContext infrastructure")
+    logger.info("Initialized tracing with Google Cloud using ExecutionContext infrastructure", project_id=project_id)
     
     # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
     project_id = tracing_cfg.project_id
@@ -190,7 +190,7 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
 
     # Configure OpenTelemetry tracing API with the initialized tracer provider
     trace.set_tracer_provider(provider)
-    logger.info("Initialized tracing with Google Cloud")
+    logger.info("Initialized tracing with Google Cloud", project_id=project_id)
 
 
 # --- OpenTelemetry Tracing Setup for Traceloop ---

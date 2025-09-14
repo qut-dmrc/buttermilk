@@ -210,7 +210,7 @@ class ConfigurationBootstrapper:
                 datasets=infrastructure_config.get("datasets", {}),
             )
             await self._execution_context.ensure_initialized()
-            logger.info("ExecutionContext created with full infrastructure configuration")
+            logger.info("ExecutionContext created with full infrastructure configuration", execution_context_id=self._execution_context.execution_context_id)
         
         # Get infrastructure manager from ExecutionContext
         # This ensures InfrastructureManager uses the same infrastructure as ExecutionContext
@@ -222,9 +222,9 @@ class ConfigurationBootstrapper:
             logger.info("Tracing providers initialized successfully")
         except Exception as e:
             # Log but don't fail the bootstrap - tracing is important but not critical
-            logger.warning(f"Failed to initialize tracing providers: {e}")
-        
-        logger.info("Full application context bootstrap complete")
+            logger.warning("Failed to initialize tracing providers", error=str(e))
+
+        logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
         return self._execution_context, infrastructure
     
     async def bootstrap_session_context(self, name: str, job: str, infrastructure=None, **kwargs) -> Any:
@@ -239,7 +239,7 @@ class ConfigurationBootstrapper:
         Returns:
             Session-scoped BM instance
         """
-        logger.info(f"Bootstrapping session context: {name}/{job}")
+        logger.info("Bootstrapping session context", name=name, job=job)
         
         # Use existing infrastructure if provided, otherwise try to get from ExecutionContext
         if infrastructure is not None:

@@ -209,7 +209,7 @@ class ExecutionContext(BaseModel):
                 logger.debug("Initializing secret manager synchronously...")
                 _ = self.secret_manager
 
-            logger.info("ExecutionContext synchronous initialization completed")
+            logger.info("ExecutionContext synchronous initialization completed", execution_context_id=self.execution_context_id)
             self._initialization_complete.set()
         except Exception as e:
             logger.error("Error during ExecutionContext initialization", error=str(e))
@@ -325,8 +325,8 @@ class ExecutionContext(BaseModel):
                     # Cache the connections data
                     self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
-                    logger.error("Failed to load LLM connections from secret manager", error=str(e))
-                    raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
+                    logger.error("Failed to load LLM connections from secret manager", error=str(e), secret_key=MODELS_CFG_KEY)
+                    raise RuntimeError(f"Failed to load LLM connections from both cache and secrets. Could not find secret '{MODELS_CFG_KEY}' in secret manager.") from e
 
             self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
@@ -489,7 +489,7 @@ class ExecutionContext(BaseModel):
             else:
                 # Fallback for edge case where weave is initialized before first session
                 collection_name = f"execution-context-{self.execution_context_id[:8]}"
-                logger.warning("Weave initialized before project name was set, using execution context ID")
+                logger.warning("Weave initialized before project name was set, using execution context ID", execution_context_id=self.execution_context_id)
 
             autopatch = {"autogen": {"enabled": False}}
             logger.debug("Starting weave client initialization", entity=wandb_entity, collection=collection_name)
@@ -517,7 +517,7 @@ class ExecutionContext(BaseModel):
                 app_name="buttermilk",
                 api_key=api_key
             )
-            logger.info("Traceloop initialized successfully")
+            logger.info("Traceloop initialized successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
             logger.error("Failed to initialize Traceloop tracing", error=str(e))
             raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
@@ -527,7 +527,7 @@ class ExecutionContext(BaseModel):
         try:
             from buttermilk.utils.otel import setup_tracing_otel_with_execution_context
             setup_tracing_otel_with_execution_context(self.tracing["otel"], self)
-            logger.info("OTEL Tracing has been set up successfully")
+            logger.info("OTEL Tracing has been set up successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
             logger.error("Failed to initialize OTEL tracing", error=str(e))
             raise RuntimeError(f"OTEL tracing initialization failed: {e}") from e
