@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+  
+mode: cli
+ui: cli
+human_in_loop: false
+
+name: bm_cli
+job: default_job

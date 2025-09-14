@@ -31,7 +31,7 @@ nest_asyncio.apply()
 
 # Configuration files are stored in the local directory, and
 # options can be passed in at initialization.
-def nb_init(job: str, name: str = None, overrides: list[str] = [], path: str = None) -> Any:
+def nb_init(job: str, name: str = None, overrides: list[str] = [], config_dir: str = None) -> Any:
     """Initialize Buttermilk for notebook use with simple interface.
     
     This function uses the new ConfigurationBootstrapper architecture internally
@@ -41,7 +41,7 @@ def nb_init(job: str, name: str = None, overrides: list[str] = [], path: str = N
         job: Name for the specific job or task
         name: Name for the session or project (optional, extracted from overrides if not provided)
         overrides: List of Hydra override strings for customization
-        path: Path to configuration directory (defaults to ../../conf from this file)
+        config_dir: Path to configuration directory (defaults to packaged config)
         
     Returns:
         Configuration object with .bm attribute containing the Buttermilk instance
@@ -67,17 +67,19 @@ def nb_init(job: str, name: str = None, overrides: list[str] = [], path: str = N
         if name is None:
             name = "notebook_session"
     
-    if not path:
-        # Must be absolute. Get the abs path of ../../conf from the current file
-        path = Path(__file__).parent.parent.resolve() / "conf"
-        path = path.as_posix()
+    if not config_dir:
+        # Default to packaged config directory
+        config_dir = Path(__file__).parent.parent.resolve() / "conf"
+        config_dir = config_dir.as_posix()
 
     # Add notebook-specific overrides
     notebook_overrides = overrides.copy()
-    notebook_overrides.append(f"++run=notebook")
+    notebook_overrides.append("+run=notebook")
+    notebook_overrides.append(f"run.job={job}")
+    notebook_overrides.append(f"run.name={name}")
     
     # Create bootstrapper with configuration
-    bootstrapper = ConfigurationBootstrapper(config_path=path, overrides=notebook_overrides)
+    bootstrapper = ConfigurationBootstrapper(config_path=config_dir, overrides=notebook_overrides)
     
     try:
         # Bootstrap full context and session
@@ -113,7 +115,7 @@ def nb_init(job: str, name: str = None, overrides: list[str] = [], path: str = N
         raise
 
 
-def init(job: str, name: str = "notebook_session", **kwargs) -> Any:
+def init(job: str, name: str = "notebook_session", config_dir: str = None, **kwargs) -> Any:
     """Simple one-liner initialization for notebooks.
     
     This is the simplest way to initialize Buttermilk for notebook use.
@@ -121,6 +123,7 @@ def init(job: str, name: str = "notebook_session", **kwargs) -> Any:
     Args:
         job: Name for the specific job or task  
         name: Name for the session or project
+        config_dir: Path to configuration directory (defaults to packaged config)
         **kwargs: Additional arguments passed to nb_init()
         
     Returns:
@@ -128,10 +131,14 @@ def init(job: str, name: str = "notebook_session", **kwargs) -> Any:
         
     Example:
         >>> from buttermilk.utils import nb
+        >>> from buttermilk import logger
         >>> bm = nb.init(job="my_analysis", name="my_project")
-        >>> logger = bm.logger
+        >>> logger.info("Analysis started")
+        
+        # To use your own config directory:
+        >>> bm = nb.init(job="my_analysis", config_dir="./conf")
     """
-    objs = nb_init(job=job, name=name, **kwargs)
+    objs = nb_init(job=job, name=name, config_dir=config_dir, **kwargs)
     return objs.bm
 
 

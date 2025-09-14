@@ -16,11 +16,11 @@ def init_bm():
     from buttermilk.utils import cli
     
     # Simple one-liner initialization using the CLI utility
-    # Path points to the buttermilk conf directory from this example location
+    # Custom config directory for this example
     bm = cli.init(
         job="tja_template_analysis",
         name="streamlit_dashboard", 
-        path="../../buttermilk/conf"
+        config_dir="../../buttermilk/conf"
     )
     return bm
 
