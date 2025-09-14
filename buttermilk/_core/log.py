@@ -17,12 +17,22 @@ logger = structlog.get_logger(_LOGGER_NAME)
 # Global state tracking for logging initialization protection
 _console_logging_configured = False
 _file_logging_configured = False
+_structlog_configured = False
 _cloud_logging_sessions = set()  # Track which sessions have cloud logging configured
 
 
 # Configure structlog for structured JSON logging
 def configure_structlog(min_level) -> None:
-    """Configure structlog for structured JSON logging."""
+    """Configure structlog for structured JSON logging.
+
+    Ensures structlog is configured only once to prevent reconfiguration issues
+    that can cause mixed formatted output.
+    """
+    global _structlog_configured
+
+    if _structlog_configured:
+        return  # Already configured, skip to prevent breaking existing setup
+
     structlog.configure(
         processors=[
             # Add context variables automatically
@@ -36,10 +46,12 @@ def configure_structlog(min_level) -> None:
             # Output as JSON
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(min_level),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),  # Use DEBUG to support all handlers
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+    _structlog_configured = True
 
 
 class StructlogRichHandler(RichHandler):
@@ -383,11 +395,12 @@ def reset_logging_configuration() -> None:
     WARNING: This is intended for testing only and should not be used in
     production code as it can break the fail-fast logging protection.
     """
-    global _console_logging_configured, _file_logging_configured, _cloud_logging_sessions
-    
+    global _console_logging_configured, _file_logging_configured, _structlog_configured, _cloud_logging_sessions
+
     # Reset global state flags
     _console_logging_configured = False
     _file_logging_configured = False
+    _structlog_configured = False
     _cloud_logging_sessions.clear()
     
     # Remove all handlers from buttermilk logger
