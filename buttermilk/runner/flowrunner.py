@@ -302,9 +302,10 @@ class FlowRunContext(BaseModel):
             message: The message to send
 
         """
+        message_type = type(message).__name__
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug("Unhandled message type, not forwarding to UI", message_type=type(message).__name__)
+            logger.debug("Unhandled message type, not forwarding to UI", message_type=message_type)
             return
 
         # Persist message to session storage
@@ -349,18 +350,28 @@ class FlowRunContext(BaseModel):
 
         except Exception as e:
             # Attempt to send an error message back to the client if the websocket is still viable
+            websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
             if self.websocket and self.websocket.client_state == WebSocketState.CONNECTED:
                 try:
                     error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
                     error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
                     await self.websocket.send_json(error_message_data)
                 except Exception as err2:
-                    logger.warning("Failed to send error notification to UI", session_id=self.session_id, error=e, error2=err2)
-                    pass
-
-            websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
+                    logger.warning(
+                        "Failed to send message and error notification to UI",
+                        session_id=self.session_id,
+                        error=e,
+                        error2=err2,
+                        message_type=message_type,
+                        websocket_state=websocket_state,
+                    )
+                    return
             logger.warning(
-                "Cannot send error notification to UI for session", session_id=self.session_id, websocket_state=websocket_state, error=str(e)
+                "Cannot send message to UI for session",
+                session_id=self.session_id,
+                websocket_state=websocket_state,
+                message_type=message_type,
+                error=str(e),
             )
 
 

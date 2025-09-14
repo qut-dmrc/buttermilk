@@ -4,7 +4,7 @@ authors = [
     {name = "Nicolas Suzor", email = "nic@suzor.com"},
 ]
 name = "buttermilk"
-version = "0.4.1"
+version = "0.4.2"
 description = ""
 readme = "README.md"
 dependencies = [

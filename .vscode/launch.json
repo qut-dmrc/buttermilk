@@ -22,7 +22,7 @@
       "justMyCode": false,
       "args": [
         "+flows=[trans,transllm,zot,osb]",
-        "+run=api",
+        "run=api",
         "verbose=true",
         "llms=${input:llms}",
       ],
@@ -135,7 +135,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch",
+        "run=batch",
         "+max_records=30",
         "+flows=[trans,zot,osb]",
         "+flow=trans",
@@ -158,7 +158,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch_run",
+        "run=batch_run",
         "+max_jobs=30",
         "+flows=[trans,zot,osb]",
         "verbose=true",
