@@ -114,7 +114,7 @@ class SessionInfo(BaseModel):
     
     # Basic session info
     platform: str = Field(default="local", description="Platform where the session is running.")
-    name: str = Field(..., description="User-defined name for the current session or project.")
+    project_name: str = Field(..., description="Project name for this session.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
     
     # System information
@@ -210,7 +210,7 @@ class SessionInfo(BaseModel):
         return {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
-            "name": self.name,
+            "project_name": self.project_name,
             "job": self.job,
             "status": self.status,
             "platform": self.platform,
@@ -428,7 +428,7 @@ class BM(BaseModel):
             session_id=self.session_info.session_id,
             batch_id=self.session_info.batch_id,
             platform=self.session_info.platform,
-            project_name=self.session_info.name,
+            project_name=self.session_info.project_name,
             job=self.session_info.job,
         )
 
@@ -437,7 +437,7 @@ class BM(BaseModel):
             session_id=self.session_info.session_id,
             batch_id=self.session_info.batch_id,
             platform=self.session_info.platform,
-            project_name=self.session_info.name,
+            project_name=self.session_info.project_name,
             job=self.session_info.job
         )
 
@@ -447,7 +447,7 @@ class BM(BaseModel):
         Constructs the full save directory path and stores it in session_info.save_dir.
         """
         # Construct full save directory path using session_id for uniqueness
-        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.name / self.session_info.job / self.session_info.session_id
+        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.project_name / self.session_info.job / self.session_info.session_id
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
@@ -811,7 +811,7 @@ def create_session_bm(
     """
     # Create session info
     session_info_data = {
-        "name": name,
+        "project_name": name,
         "job": job,
         "platform": platform,
         "batch_id": batch_id,

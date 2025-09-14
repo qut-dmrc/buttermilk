@@ -92,6 +92,12 @@ class ExecutionContext(BaseModel):
         default_factory=_make_execution_context_id,
         description="Unique identifier for this execution context."
     )
+
+    # Project management
+    project_name: str | None = Field(
+        default=None,
+        description="Project name shared across all sessions in this execution context."
+    )
     
     # Infrastructure configuration
     clouds: list[CloudProviderCfg] = Field(
@@ -224,6 +230,41 @@ class ExecutionContext(BaseModel):
         await self._setup_tracing()
         
         logger.debug("ExecutionContext initialization verified complete")
+
+    def validate_and_set_project(self, project: str | None) -> str:
+        """Validate and set the project name for this execution context.
+
+        Args:
+            project: Project name to validate and set. If None and no project is set,
+                    raises an error. If None and project is already set, returns existing.
+
+        Returns:
+            The validated project name.
+
+        Raises:
+            RuntimeError: If project validation fails or required project is missing.
+        """
+        if self.project_name is None:
+            # First session - project is required
+            if project is None:
+                raise RuntimeError(
+                    "project parameter is required for the first session in an execution context. "
+                    "Example: cli.init(job='my_job', project='my_project')"
+                )
+            self.project_name = project
+            logger.debug(f"Set project name for execution context: {project}")
+            return project
+        else:
+            # Subsequent sessions - validate consistency
+            if project is not None and project != self.project_name:
+                raise RuntimeError(
+                    f"Project name mismatch: execution context is using project '{self.project_name}', "
+                    f"but session specified project '{project}'. All sessions in the same execution "
+                    f"context must use the same project. Either omit the project parameter to use "
+                    f"'{self.project_name}', or start a new process for project '{project}'."
+                )
+            # Return the existing project (whether user specified it or not)
+            return self.project_name
 
     @property
     def cloud_manager(self) -> CloudManager:
@@ -446,7 +487,14 @@ class ExecutionContext(BaseModel):
         
         try:
             # Setup Weave tracing
-            collection_name = f"execution-context-{self.execution_context_id[:8]}"
+            # Use project name for collection, fallback to execution context if project not set yet
+            if self.project_name:
+                collection_name = self.project_name
+            else:
+                # Fallback for edge case where weave is initialized before first session
+                collection_name = f"execution-context-{self.execution_context_id[:8]}"
+                logger.warning("Weave initialized before project name was set, using execution context ID")
+
             autopatch = {"autogen": {"enabled": False}}
             logger.debug(f"Starting weave client initialization. Entity: {wandb_entity}, Collection: {collection_name}")
 

@@ -198,20 +198,20 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
                 labels={
                     "project": logger_cfg.project_id,
                     "location": logger_cfg.location,
-                    "namespace": session_info.name,
+                    "namespace": session_info.project_name,
                     "job": session_info.job,
                     "task_id": session_info.session_id,
                 },
             )
 
             # Filter out None values from labels as protobuf doesn't accept them
-            raw_labels = session_info.model_dump(include={"session_id", "name", "job", "platform"})
+            raw_labels = session_info.model_dump(include={"session_id", "project_name", "job", "platform"})
             labels = {k: str(v) for k, v in raw_labels.items() if v is not None}
             
             cloud_handler = CloudLoggingHandler(
                 client=cloud_manager.gcs_log_client(logger_cfg),
                 resource=cloud_logging_resource,
-                name=session_info.name,
+                name=session_info.project_name,
                 labels=labels,
             )
             cloud_handler.setLevel(logging.INFO)
@@ -223,7 +223,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Bind session context for automatic inclusion (simplified architecture)
             context_vars = {
                 "job": session_info.job,
-                "project": session_info.name,
+                "project": session_info.project_name,
                 "session_id": "unknown",
                 "batch_id": "unknown",
             }
