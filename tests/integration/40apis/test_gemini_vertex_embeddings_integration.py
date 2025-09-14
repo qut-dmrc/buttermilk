@@ -23,7 +23,7 @@ BM_TEST_GEMINI_EMBED_MODELS = [
 
 
 @pytest.mark.parametrize("embedding_model", BM_TEST_GEMINI_EMBED_MODELS)
-def test_gemini_embedding_function(bm: BM, embedding_model: str) -> None:
+def test_gemini_embedding_function(real_bm: BM, embedding_model: str) -> None:
     """Use GeminiEmbeddingFunction to vectorise; verify basic shape."""
     # Keep it tiny to save quota and latency
     texts = [
@@ -42,7 +42,7 @@ def test_gemini_embedding_function(bm: BM, embedding_model: str) -> None:
 
 
 @pytest.mark.parametrize("embedding_model", BM_TEST_GEMINI_EMBED_MODELS)
-def test_vertex_embedding_minimal_compare(bm: BM, embedding_model: str) -> None:
+def test_vertex_embedding_minimal_compare(real_bm: BM, embedding_model: str) -> None:
     """Call Vertex AI TextEmbeddingModel using aiplatform and verify it returns vectors.
     """
     texts = [

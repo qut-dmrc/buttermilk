@@ -68,11 +68,11 @@ def test_issue_14_job(joblist):
     assert joblist[2].outputs["reasons"][4].startswith("The response demonstrates")
 
 
-def test_issue_14_rows(joblist, bm, flow):
+def test_issue_14_rows(joblist,real_bm, flow):
     schema = flow.agents[0].save.db_schema
 
     if isinstance(schema, str):
-        schema = bm.bq.schema_from_json(schema)
+        schema = real_bm.bq.schema_from_json(schema)
 
     bq_rows = [x for job in joblist for x in data_to_export_rows(job, schema=schema)]
 
@@ -84,13 +84,13 @@ def test_issue_14_rows(joblist, bm, flow):
     assert bq_rows[2]["outputs"]["reasons"][4].startswith("The response demonstrates")
 
 
-def test_issue_14_df(joblist, bm, flow):
+def test_issue_14_df(joblist, real_bm, flow):
     df = pd.DataFrame([job.model_dump() for job in joblist])
 
     schema = flow.agents[0].save.db_schema
 
     if isinstance(schema, str):
-        schema = bm.bq.schema_from_json(schema)
+        schema = real_bm.bq.schema_from_json(schema)
 
     bq_rows = data_to_export_rows(df, schema=schema)
 
@@ -102,7 +102,7 @@ def test_issue_14_df(joblist, bm, flow):
     assert bq_rows[2]["outputs"]["reasons"][4].startswith("The response demonstrates")
 
 
-def test_issue_14_upload(joblist, flow, bm):
+def test_issue_14_upload(joblist, flow, real_bm):
     save_info = flow.agents[0].save
     job_ids = ", ".join([f"'{job.job_id}'" for job in joblist])
 
@@ -111,7 +111,7 @@ def test_issue_14_upload(joblist, flow, bm):
         assert destination == save_info.dataset
 
     sql = f"SELECT outputs.score, outputs.reasons, outputs.labels FROM {save_info.dataset} WHERE job_id IN ({job_ids}) AND timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 300 SECOND)"
-    df = bm.run_query(sql)
+    df = real_bm.run_query(sql)
     assert np.allclose(
         df["score"].to_numpy().astype(float),
         np.array([0.85, 0.5, 0.85]),

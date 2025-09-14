@@ -8,7 +8,7 @@ weave = importlib.import_module("weave")
 
 
 @pytest.mark.anyio
-async def test_weave_tracing_initialised_and_creates_calls(bm: BM):
+async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
     """Simple integration check for Weave tracing.
 
     - If Weave is not configured in this environment, skip the test.
@@ -18,7 +18,7 @@ async def test_weave_tracing_initialised_and_creates_calls(bm: BM):
         pytest.skip("Weave library is not installed in this environment.")
 
     try:
-        client = await bm.get_weave_client()
+        client = await real_bm.get_weave_client()
     except Exception:
         pytest.skip("Weave client is not available or not configured in this environment.")
 
@@ -52,7 +52,7 @@ async def test_weave_tracing_initialised_and_creates_calls(bm: BM):
 
 
 @pytest.mark.anyio
-async def test_unified_tracing_config_integration(bm: BM):
+async def test_unified_tracing_config_integration(real_bm: BM):
     """Verify that unified tracing configuration works with existing BM infrastructure.
     
     This test validates that the recent changes to unified tracing configuration
@@ -63,7 +63,7 @@ async def test_unified_tracing_config_integration(bm: BM):
         pytest.skip("Weave library is not installed in this environment.")
     
     try:
-        client = await bm.get_weave_client()
+        client = await real_bm.get_weave_client()
     except Exception as e:
         pytest.skip(f"Weave client is not available or not configured: {e}")
     

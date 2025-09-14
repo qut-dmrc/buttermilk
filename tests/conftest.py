@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from unittest.mock import AsyncMock, MagicMock, patch  # Import patch
 
 import pytest
 from hydra import compose, initialize
@@ -141,6 +142,23 @@ def config_override():
         return config
 
     return _override_config
+
+
+# =============================================================================
+# MOCK EXTERNAL THIRD PARTY SERVICES
+# =============================================================================
+
+
+# Mock weave globally for all tests
+@pytest.fixture(autouse=True)
+def mock_global_weave():
+    with patch("weave", new_callable=MagicMock) as mock_weave:
+        mock_call = MagicMock()
+        mock_call.id = "mock_call_id_global"
+        mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")
+
+        mock_weave.get_call.return_value = mock_call
+        yield mock_weave
 
 
 @pytest.fixture(scope="session")

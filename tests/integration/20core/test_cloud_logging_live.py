@@ -68,18 +68,18 @@ def log_client(gcp_project_id: str) -> gcp_logging.Client:
 # Test functions using integration fixtures
 
 
-def test_session_cloud_logging_end_to_end(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_session_cloud_logging_end_to_end(real_bm, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test complete end-to-end cloud logging flow with real session context."""
 
     # Integration test must fail if cloud logging not properly configured
-    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
-    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
+    assert real_bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert real_bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     # Create a unique test identifier for log verification
     test_run_id = f"test-{uuid.uuid4().hex[:8]}"
 
     # Create additional BM session for testing (using the same infrastructure)
-    test_session = infrastructure.create_session_bm(
+    test_session = real_infrastructure.create_session_bm(
         name=f"cloud-logging-test-{test_run_id}",
         job="integration-testing",
         batch_id=f"batch-{test_run_id}",
@@ -110,12 +110,12 @@ def test_session_cloud_logging_end_to_end(bm: BM, infrastructure: Infrastructure
     _verify_logs_in_gcp(log_client, test_run_id, test_session.session_info.session_id, test_session.session_info.batch_id, test_messages)
 
 
-def test_multiple_sessions_isolated_logging(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_multiple_sessions_isolated_logging(real_bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that multiple BM sessions have isolated but proper cloud logging."""
 
     # Integration test must fail if cloud logging not properly configured
-    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
-    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
+    assert real_bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert real_bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"multi-test-{uuid.uuid4().hex[:8]}"
 
@@ -149,12 +149,12 @@ def test_multiple_sessions_isolated_logging(bm: BM, infrastructure: Infrastructu
     assert len(session2_entries) > 0, "Session 2 logs not found"
 
 
-def test_structured_json_format_consistency(bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_structured_json_format_consistency(real_bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that cloud logs use consistent structured JSON format."""
 
     # Integration test must fail if cloud logging not properly configured
-    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
-    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
+    assert real_bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert real_bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"json-test-{uuid.uuid4().hex[:8]}"
 
@@ -191,12 +191,12 @@ def test_structured_json_format_consistency(bm: BM, infrastructure: Infrastructu
                 assert payload.get("boolean_field") is True
 
 
-def test_cloud_logging_error_handling(bm: BM, infrastructure: InfrastructureManager, tmp_path):
+def test_cloud_logging_error_handling(real_bm: BM, infrastructure: InfrastructureManager, tmp_path):
     """Test that cloud logging setup failures are handled gracefully."""
 
     # Integration test must fail if cloud logging not properly configured
-    assert bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
-    assert bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
+    assert real_bm._logger_cfg is not None, "Logger configuration must be available for integration tests"
+    assert real_bm._logger_cfg.type == "gcp", "GCP cloud logging must be configured for integration tests"
 
     test_run_id = f"error-test-{uuid.uuid4().hex[:8]}"
 

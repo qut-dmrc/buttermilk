@@ -12,9 +12,9 @@ from buttermilk import BM
 from buttermilk.utils.utils import read_yaml
 
 
-def test_bigquery(bm: BM):
+def test_bigquery(real_bm: BM):
     """Test BigQuery connectivity and basic query execution."""
-    df = bm.run_query("SELECT True")
+    df = real_bm.run_query("SELECT True")
     assert df.iloc[0, 0]
 
 
@@ -22,7 +22,7 @@ def test_bigquery(bm: BM):
     ["table", "schema"],
     [("prosocial-443205.testing.flow", "schemas/flow.json")],
 )
-def test_database(bm: BM, table, schema):
+def test_database(real_bm: BM, table, schema):
     """Delete and recreate the test table."""
     from google.cloud.bigquery.table import Table, TableReference
 
@@ -30,7 +30,7 @@ def test_database(bm: BM, table, schema):
     ref = TableReference.from_string(table_id=table)
     new_table = Table(table_ref=ref, schema=test_schema)
 
-    assert bm.bq.create_table(table=new_table, exists_ok=True)
+    assert real_bm.bq.create_table(table=new_table, exists_ok=True)
 
 
 def test_hf_login():

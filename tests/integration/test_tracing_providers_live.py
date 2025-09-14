@@ -18,10 +18,10 @@ class TestTracingProvidersLive:
     """Live integration tests for tracing providers."""
 
     @pytest.mark.anyio
-    async def test_weave_live_submission(self, bm: BM) -> None:
+    async def test_weave_live_submission(self, real_bm: BM) -> None:
         """Send a live trace to Weave."""
         try:
-            client = await bm.get_weave_client()
+            client = await real_bm.get_weave_client()
             if client is None:
                 pytest.skip("Weave not configured")
 
@@ -48,7 +48,7 @@ class TestTracingProvidersLive:
                 raise
 
     @pytest.mark.anyio
-    async def test_traceloop_live_submission(self, bm: BM) -> None:
+    async def test_traceloop_live_submission(self) -> None:
         """Send a live trace to Traceloop via OTEL."""
         try:
             from buttermilk.utils.otel import setup_traceloop_otel
@@ -75,7 +75,7 @@ class TestTracingProvidersLive:
                 raise
 
     @pytest.mark.anyio
-    async def test_otel_live_submission(self, bm: BM) -> None:
+    async def test_otel_live_submission(self) -> None:
         """Send a live trace to OTEL/GCP."""
         try:
             tracer_provider = trace.get_tracer_provider()

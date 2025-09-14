@@ -32,7 +32,7 @@ def framer():
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-async def test_frames_text(framer, text_record, bm: BM, model):
+async def test_frames_text(framer, text_record, real_bm: BM, model):
     framer.parameters["model"] = model
     agent_variants = AgentVariants(
         agent_obj="buttermilk.agents.llm.LLMAgent",
@@ -54,7 +54,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
         ui_type="testing",
         flow="testframer",
         parameters={"records": [text_record]},
-        session_info=bm.session_info,
+        session_info=real_bm.session_info,
         session_id="test_session",
         callback_to_ui=result_callback,
     )
@@ -67,7 +67,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-async def test_frames_article(framer, news_record, bm: BM, model):
+async def test_frames_article(framer, news_record, real_bm: BM, model):
     framer.parameters["model"] = model
     agent_variants = AgentVariants(
         agent_obj="buttermilk.agents.llm.LLMAgent",
@@ -89,7 +89,7 @@ async def test_frames_article(framer, news_record, bm: BM, model):
         ui_type="testing",
         flow="testframer",
         parameters={"records": [news_record]},
-        session_info=bm.session_info,
+        session_info=real_bm.session_info,
         session_id="test_session",
         callback_to_ui=result_callback,
     )
@@ -100,7 +100,7 @@ async def test_frames_article(framer, news_record, bm: BM, model):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
-async def test_framing_video(framer, model, bm, link_to_video_gcp):
+async def test_framing_video(framer, model, real_bm, link_to_video_gcp):
     framer.parameters["model"] = model
     agent_variants = AgentVariants(
         agent_obj="buttermilk.agents.llm.LLMAgent",
@@ -124,7 +124,7 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
         ui_type="testing",
         flow="testframer",
         parameters={"records": [record]},
-        session_info=bm.session_info,
+        session_info=real_bm.session_info,
         session_id="test_session",
         callback_to_ui=result_callback,
     )

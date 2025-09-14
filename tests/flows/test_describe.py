@@ -25,14 +25,14 @@ def flow_describer(request):
 
 
 @pytest.mark.anyio
-async def test_run_flow_describe_only(flow_describer, image_bytes, bm):
+async def test_run_flow_describe_only(flow_describer, image_bytes, real_bm):
     record = await download_and_convert(image_bytes, "image/jpeg")
     # Create a RunRequest instance
     run_request = RunRequest(
         ui_type="testing",
         flow="testflow",  # Assuming a flow_id like "testflow"
         records=[record],
-        session_info=bm.session_info,
+        session_info=real_bm.session_info,
         session_id="test_session",  # Add required session_id
     )
     async for result in flow_describer.run_flows(run_request=run_request):  # Pass run_request

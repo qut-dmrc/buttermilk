@@ -54,14 +54,14 @@ def test_run_flow(client, flow_request_data: dict[str, Any]):
     assert "agent_info" in json_response
 
 
-def test_run_flow_html(client, bm: Any, flow_request_data: dict[str, Any]):
+def test_run_flow_html(client,flow_request_data: dict[str, Any]):
     response = client.post("/html/flow/test_flow", json=flow_request_data)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Sample text" in response.text  # Check if the response contains the expected text
 
 
-def test_get_runs(client, bm: Any):
+def test_get_runs(client):
     response = client.get("/runs")
     assert response.status_code == 200
     assert "text/html" not in response.headers["content-type"]

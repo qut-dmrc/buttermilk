@@ -37,7 +37,7 @@ async def mock_vector_search(query: str, k: int = 5) -> list[dict]:
 
 @pytest.mark.parametrize("model_name", CHAT_MODELS)
 @pytest.mark.anyio
-async def test_rag_zotero_with_structured_output(model_name, bm):
+async def test_rag_zotero_with_structured_output(model_name, real_bm):
     """Test RagZotero agent with each LLM model for structured output generation."""
     # Create the agent with the specific model
     # Include tools to simulate the actual flow configuration
