@@ -529,6 +529,22 @@ class BM(BaseModel):
         """Provides access to the GenAI client."""
         return self.cloud_manager.genai
 
+    @property
+    def pubsub(self):
+        """Provides access to Pub/Sub configuration from the cloud manager's GCP config."""
+        if self._cloud_manager is None:
+            raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
+
+        # Access the GCP config from cloud manager
+        if not self._cloud_manager.gcp_cloud_cfg:
+            raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
+
+        if not self._cloud_manager.gcp_cloud_cfg.pubsub:
+            raise RuntimeError("No Pub/Sub configuration found in GCP cloud config. "
+                              "Ensure pubsub is configured in your cloud configuration.")
+
+        return self._cloud_manager.gcp_cloud_cfg.pubsub
+
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.
         
