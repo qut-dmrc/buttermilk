@@ -11,6 +11,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -97,10 +98,46 @@ class NonInteractiveDebugClient:
         try:
             await self.client.start_flow(flow_name, query, record, criteria)
 
-            # Wait for initial responses
-            await asyncio.sleep(wait_time)
+            # Stream messages in real-time
+            start_time = time.time()
+            last_message_count = 0
+            flow_completed = False
 
-            # Collect results
+            print(f"Started flow '{flow_name}' with session: {self.client.session_id}")
+            if record:
+                print(f"Record: {record}")
+            if criteria:
+                print(f"Criteria: {criteria}")
+            print()
+
+            while time.time() - start_time < wait_time and not flow_completed:
+                current_messages = self.client.collector.all_messages
+
+                # Print only new messages since last check
+                new_messages = current_messages[last_message_count:]
+                for msg in new_messages:
+                    timestamp_str = msg.timestamp.strftime("%H:%M:%S")
+                    content = msg.content
+
+                    # Truncate very long content for readability
+                    if len(content) > 200:
+                        content = content[:200] + "..."
+
+                    print(f"{timestamp_str}  {msg.type}: {content}")
+
+                    # Check for flow completion
+                    if msg.type in ["flow_complete", "system_update"] and "complet" in content.lower():
+                        flow_completed = True
+
+                last_message_count = len(current_messages)
+                await asyncio.sleep(0.1)  # Check every 100ms
+
+            if flow_completed:
+                print(f"\n✅ Flow completed after {time.time() - start_time:.1f}s")
+            else:
+                print(f"\n⏱️  Timeout reached after {wait_time}s")
+
+            # Collect final results for return
             result = {
                 "session_id": self.client.session_id,
                 "flow": flow_name,
@@ -108,6 +145,8 @@ class NonInteractiveDebugClient:
                 "record": record,
                 "criteria": criteria,
                 "messages": [],
+                "completed": flow_completed,
+                "duration": time.time() - start_time,
             }
 
             for msg in self.client.collector.all_messages:

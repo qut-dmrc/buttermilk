@@ -324,7 +324,7 @@ def init(
 
 
 def bootstrap_session_with_config(
-    job: str,
+    job: str | None = None,
     project: str | None = None,
     run_type: str = "cli",
     config_dir: str | None = None,
@@ -364,7 +364,10 @@ def bootstrap_session_with_config(
     # Prepare overrides with run-specific settings
     bootstrap_overrides = (overrides or []).copy()
     bootstrap_overrides.append(f"run={run_type}")
-    bootstrap_overrides.append(f"++run.job={job}")
+
+    # Only override job if explicitly provided (otherwise use config default)
+    if job is not None:
+        bootstrap_overrides.append(f"++run.job={job}")
 
     # Create bootstrapper with configuration
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, overrides=bootstrap_overrides, config=config)
@@ -373,21 +376,25 @@ def bootstrap_session_with_config(
         # Bootstrap full context and session
         execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
 
+        # Get the final resolved configuration
+        final_config = bootstrapper.get_configuration()
+
+        # Extract job and project from config if not provided as parameters
+        resolved_job = job if job is not None else final_config.run.job
+        resolved_project = project if project is not None else final_config.run.name
+
         # Validate and set project name using ExecutionContext
-        validated_project = execution_context.validate_and_set_project(project)
+        validated_project = execution_context.validate_and_set_project(resolved_project)
 
         # Create session BM instance with validated project
-        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=job))
+        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job))
 
         # Set the singleton BM instance
         set_bm(bm)
 
         logger.info(f"Starting {run_type} run for {bm.session_info.project_name} job {bm.session_info.job}")
 
-        # Get the configuration
-        config = bootstrapper.get_configuration()
-
-        return bm, config
+        return bm, final_config
 
     except Exception as e:
         logger.error(f"Failed to initialize Buttermilk: {e}")

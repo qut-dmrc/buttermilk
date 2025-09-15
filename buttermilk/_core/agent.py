@@ -242,8 +242,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         from buttermilk.utils._tools import create_tool_functions
 
-        logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
-
         tools = {}
         for tool_name, tool in self._config.tools.items():
             if OmegaConf.is_config(tool):
