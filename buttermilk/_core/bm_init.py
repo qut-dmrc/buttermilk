@@ -531,19 +531,20 @@ class BM(BaseModel):
 
     @property
     def pubsub(self):
-        """Provides access to Pub/Sub configuration from the cloud manager's GCP config."""
+        """Provides access to complete Pub/Sub configuration including project_id."""
         if self._cloud_manager is None:
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
 
-        # Access the GCP config from cloud manager
-        if not self._cloud_manager.gcp_cloud_cfg:
+        gcp_config = self._cloud_manager.gcp_cloud_cfg
+        if not gcp_config:
             raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
 
-        if not self._cloud_manager.gcp_cloud_cfg.pubsub:
+        if not gcp_config.pubsub:
             raise RuntimeError("No Pub/Sub configuration found in GCP cloud config. "
                               "Ensure pubsub is configured in your cloud configuration.")
 
-        return self._cloud_manager.gcp_cloud_cfg.pubsub
+        # Return the actual PubSubServiceConfig object
+        return gcp_config.pubsub
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.

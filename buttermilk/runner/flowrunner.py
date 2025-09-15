@@ -1413,7 +1413,7 @@ class FlowRunner(BaseModel):
                     callback_to_ui=None,
                 )
                 job_definitions.append(job)
-                logger.info("Batch job created", job.model_dump())
+                logger.info("Batch job created", flow=flow_name, record_id=record.record_id, job_id=job.job_id)
                 # Apply max_records limit if specified
                 if max_records is not None and max_records > 0 and i >= max_records:
                     break

@@ -72,7 +72,18 @@ class LoggingServiceConfig(BaseModel):
 
 class PubSubServiceConfig(BaseModel):
     """Configuration for pub/sub messaging service."""
-    
+
+    # Base GCP fields needed by consumers
+    project_id: Optional[str] = Field(
+        default=None,
+        description="GCP Project ID for Pub/Sub resources"
+    )
+    location: Optional[str] = Field(
+        default=None,
+        description="GCP location/region for Pub/Sub resources"
+    )
+
+    # Service-specific fields
     jobs_topic: str = Field(
         default="jobs",
         description="Topic name for job messages"
@@ -161,7 +172,7 @@ class GCPConfig(CloudProviderConfig):
 
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "GCPConfig":
-        """Set defaults from environment variables."""
+        """Set defaults from environment variables and populate service configs."""
         if not self.project_id:
             self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
 
@@ -170,6 +181,13 @@ class GCPConfig(CloudProviderConfig):
 
         if not self.location:
             self.location = self.region
+
+        # Populate nested service configs with parent project_id and location
+        if self.pubsub:
+            if not self.pubsub.project_id:
+                self.pubsub.project_id = self.project_id
+            if not self.pubsub.location:
+                self.pubsub.location = self.location
 
         return self
 
