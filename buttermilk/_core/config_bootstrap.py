@@ -13,7 +13,6 @@ from typing import Any
 from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
-from buttermilk._core.infrastructure import InfrastructureManager
 from buttermilk._core.log import logger
 
 
@@ -43,7 +42,6 @@ class ConfigurationBootstrapper:
         self.config_path = config_path
         self.overrides = overrides or []
         self._config: DictConfig | None = config
-        self._infrastructure: InfrastructureManager | None = None
         self._execution_context: ExecutionContext | None = None
 
     def _load_configuration(self) -> DictConfig:
@@ -146,37 +144,14 @@ class ConfigurationBootstrapper:
         else:
             raise RuntimeError("No infrastructure configuration found in config")
     
-    def _create_infrastructure_manager(self) -> InfrastructureManager:
-        """Create and initialize the infrastructure manager.
-        
-        Returns:
-            Configured InfrastructureManager instance
-        """
-        if self._infrastructure is None:
-            # Set up environment variables first
-            self.setup_environment_variables()
-            
-            # Get infrastructure configuration
-            infrastructure_config = self.get_infrastructure_config()
-            
-            # Create infrastructure manager from configuration
-            from buttermilk import create_infrastructure_from_config
-            self._infrastructure = create_infrastructure_from_config(infrastructure_config)
-            
-            # Initialize infrastructure components
-            self._infrastructure.initialize_components()
-            logger.info("Infrastructure manager created and initialized")
-            
-        return self._infrastructure
-    
-    async def bootstrap_full_context(self) -> tuple[ExecutionContext, InfrastructureManager]:
+    async def bootstrap_full_context(self) -> ExecutionContext:
         """Bootstrap complete execution context with all infrastructure.
-        
+
         This method creates a baseline execution context for the application
-        (e.g., API server) along with the infrastructure manager.
-        
+        (e.g., API server) with all required infrastructure.
+
         Returns:
-            Tuple of (ExecutionContext, InfrastructureManager)
+            ExecutionContext: The configured execution context
         """
         logger.info("Bootstrapping full application context...")
         
@@ -201,22 +176,30 @@ class ConfigurationBootstrapper:
                         has_tracing=bool(infrastructure_config.get("tracing")),
                         has_datasets=bool(infrastructure_config.get("datasets")))
 
+            # Instantiate cloud configurations using Hydra
+            hydrated_clouds = []
+            for cloud_config in infrastructure_config.get("clouds", []):
+                try:
+                    if isinstance(cloud_config, DictConfig):
+                        import hydra
+                        hydrated_cloud = hydra.utils.instantiate(cloud_config)
+                        hydrated_clouds.append(hydrated_cloud)
+                    else:
+                        hydrated_clouds.append(cloud_config)
+                except Exception as e:
+                    logger.error(f"Failed to instantiate cloud config {cloud_config}: {e}")
+                    raise RuntimeError(f"Cannot instantiate cloud provider: {e}") from e
+
             self._execution_context = get_or_create_execution_context(
-                clouds=infrastructure_config.get("clouds", []),
-                secret_provider=infrastructure_config.get("secret_provider"),
+                clouds=hydrated_clouds,
                 logging=infrastructure_config.get("logging"),
-                pubsub=infrastructure_config.get("pubsub"),
                 tracing=infrastructure_config.get("tracing", {}),
                 datasets=infrastructure_config.get("datasets", {}),
             )
             await self._execution_context.ensure_initialized()
             logger.info("ExecutionContext created with full infrastructure configuration", execution_context_id=self._execution_context.execution_context_id)
         
-        # Get infrastructure manager from ExecutionContext
-        # This ensures InfrastructureManager uses the same infrastructure as ExecutionContext
-        infrastructure = self._execution_context.get_infrastructure_manager()
-        
-        # Initialize tracing now that infrastructure is ready and BM singleton should be available
+        # Initialize tracing now that infrastructure is ready
         try:
             await self._execution_context._initialize_all_tracing_providers()
             logger.info("Tracing providers initialized successfully")
@@ -225,36 +208,36 @@ class ConfigurationBootstrapper:
             logger.warning("Failed to initialize tracing providers", error=str(e))
 
         logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
-        return self._execution_context, infrastructure
+        return self._execution_context
     
-    async def bootstrap_session_context(self, name: str, job: str, infrastructure=None, **kwargs) -> Any:
+    async def bootstrap_session_context(self, name: str, job: str, **kwargs) -> Any:
         """Bootstrap session-specific BM instance.
-        
+
         Args:
             name: User-defined name for the current session or project
             job: User-defined name for the specific job or task
-            infrastructure: Optional existing InfrastructureManager to use (preferred)
             **kwargs: Additional arguments for session creation
-            
+
         Returns:
             Session-scoped BM instance
         """
         logger.info("Bootstrapping session context", name=name, job=job)
-        
-        # Use existing infrastructure if provided, otherwise try to get from ExecutionContext
-        if infrastructure is not None:
-            logger.debug("Using existing infrastructure from ExecutionContext")
-        elif self._execution_context is not None:
-            logger.debug("Getting infrastructure from ExecutionContext")
-            infrastructure = self._execution_context.get_infrastructure_manager()
-        else:
-            logger.debug("Creating new infrastructure for session (legacy mode)")
-            infrastructure = self._create_infrastructure_manager()
-        
-        # Create session-scoped BM instance
-        session_bm = infrastructure.create_session_bm(
+
+        if self._execution_context is None:
+            raise RuntimeError("ExecutionContext not initialized. Call bootstrap_full_context() first.")
+
+        # Extract infrastructure components from ExecutionContext
+        from buttermilk._core.bm_init import create_session_bm
+
+        # Create session-scoped BM instance using ExecutionContext's infrastructure
+        session_bm = create_session_bm(
             name=name,
             job=job,
+            cloud_manager=self._execution_context.cloud_manager if self._execution_context.clouds else None,
+            secret_manager=self._execution_context.secret_manager if self._execution_context._find_cloud_with_service("secrets") else None,
+            llms_instance=self._execution_context.llms,
+            query_runner=self._execution_context.query_runner if self._execution_context.clouds else None,
+            logger_cfg=self._execution_context.logging,
             **kwargs
         )
         
@@ -272,13 +255,6 @@ class ConfigurationBootstrapper:
         """
         return self._load_configuration()
     
-    def get_infrastructure_manager(self) -> InfrastructureManager:
-        """Get the infrastructure manager instance.
-        
-        Returns:
-            InfrastructureManager instance
-        """
-        return self._create_infrastructure_manager()
 
 
 def create_configuration_bootstrapper(
@@ -395,13 +371,13 @@ def bootstrap_session_with_config(
 
     try:
         # Bootstrap full context and session
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
 
         # Validate and set project name using ExecutionContext
         validated_project = execution_context.validate_and_set_project(project)
 
         # Create session BM instance with validated project
-        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=job, infrastructure=infrastructure))
+        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=job))
 
         # Set the singleton BM instance
         set_bm(bm)

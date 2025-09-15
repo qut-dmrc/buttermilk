@@ -27,7 +27,8 @@ import weave
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
-from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing
+from buttermilk._core.config import LoggerConfig, Tracing
+from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.constants import CONFIG_CACHE_PATH, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
@@ -78,11 +79,9 @@ class ExecutionContext(BaseModel):
 
     Attributes:
         execution_context_id (str): Unique identifier for this execution context.
-        clouds (list[CloudProviderCfg]): List of cloud provider configurations.
-        secret_provider (CloudProviderCfg | None): Secret provider configuration.
-        logging (LoggerConfig | None): Logging configuration.
-        pubsub (CloudProviderCfg | None): Pub/Sub configuration.
-        tracing (dict[str, Tracing] | None): Tracing configurations.
+        clouds (list[CloudProvider]): List of cloud provider configurations.
+        logging (LoggerConfig | None): Global logging configuration.
+        tracing (dict[str, Tracing] | None): Global tracing configurations.
         datasets (dict[str, BaseStorageConfig]): Shared dataset configurations.
     """
 
@@ -98,19 +97,11 @@ class ExecutionContext(BaseModel):
     )
     
     # Infrastructure configuration
-    clouds: list[CloudProviderCfg] = Field(
+    clouds: list[CloudProvider] = Field(
         default_factory=list,
         description="List of cloud provider configurations."
     )
-    secret_provider: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for the secret provider."
-    )
     logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
-    pubsub: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for Pub/Sub system."
-    )
     tracing: dict[str, Tracing] | None = Field(
         default_factory=dict,
         description="Configuration for tracing systems."
@@ -126,7 +117,6 @@ class ExecutionContext(BaseModel):
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
-    _infrastructure_manager: Any | None = PrivateAttr(default=None)
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
     _tracing_instrumented: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -149,11 +139,15 @@ class ExecutionContext(BaseModel):
         # Run initialization synchronously
         self._sync_background_init()
         
+        # Check for secrets cloud using service-aware pattern
+        secrets_cloud = self._find_cloud_with_service("secrets")
+        secret_provider_type = secrets_cloud.type if secrets_cloud else None
+
         logger.info(
             "Initialized ExecutionContext",
             execution_context_id=self.execution_context_id,
             cloud_providers=len(self.clouds),
-            secret_provider=self.secret_provider.type if self.secret_provider else None
+            secret_provider=secret_provider_type
         )
 
     def _setup_logging(self) -> None:
@@ -204,8 +198,8 @@ class ExecutionContext(BaseModel):
                 logger.debug("Performing synchronous cloud authentication...")
                 _ = self.cloud_manager
 
-            # Initialize secret manager
-            if self.secret_provider:
+            # Initialize secret manager if secrets cloud is available
+            if self._find_cloud_with_service("secrets"):
                 logger.debug("Initializing secret manager synchronously...")
                 _ = self.secret_manager
 
@@ -282,14 +276,35 @@ class ExecutionContext(BaseModel):
 
             logger.debug("Cloud authentication completed")
 
+    def _find_cloud_with_service(self, service: str) -> Any | None:
+        """Find the first cloud provider that has a specific service configured.
+
+        Args:
+            service: Service name to look for (e.g., "secrets", "logging", "pubsub", "tracing")
+
+        Returns:
+            Cloud provider configuration with the service, or None if not found.
+        """
+        for cloud in self.clouds:
+            if hasattr(cloud, "has_service") and cloud.has_service(service):
+                return cloud
+        return None
+
     @property
     def secret_manager(self) -> SecretsManager:
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
-            if not self.secret_provider:
-                raise RuntimeError("Secret provider configuration is missing.")
-            self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
-            logger.debug("SecretsManager initialized successfully")
+            # Use service-aware cloud provider pattern
+            secrets_cloud = self._find_cloud_with_service("secrets")
+            if not secrets_cloud:
+                raise RuntimeError("No cloud provider with secrets service configured.")
+
+            from buttermilk._core.keys import SecretsManager
+
+            # Get secrets configuration from cloud provider
+            secrets_config = secrets_cloud.get_client_config("secretmanager")
+            self._secret_manager = SecretsManager(**secrets_config)
+            logger.debug(f"SecretsManager initialized with {secrets_cloud.type} provider")
         return self._secret_manager
 
     @property
@@ -417,29 +432,6 @@ class ExecutionContext(BaseModel):
         # Now perform actual tracing initialization for all enabled providers
         await self._initialize_all_tracing_providers()
 
-    def get_infrastructure_manager(self) -> Any:
-        """Get InfrastructureManager that uses this ExecutionContext's infrastructure.
-        
-        Creates InfrastructureManager on first access that shares infrastructure
-        with this ExecutionContext, ensuring single source of truth for infrastructure.
-        
-        Returns:
-            InfrastructureManager instance that uses ExecutionContext's infrastructure
-        """
-        if self._infrastructure_manager is None:
-            from buttermilk._core.infrastructure import InfrastructureManager
-            
-            # Create InfrastructureManager using this ExecutionContext's infrastructure
-            self._infrastructure_manager = InfrastructureManager(
-                clouds=self.clouds,
-                secret_provider=self.secret_provider,
-                datasets=self.datasets,
-                execution_context=self  # Pass reference to this ExecutionContext
-            )
-            
-            logger.debug("Created InfrastructureManager using ExecutionContext's infrastructure")
-            
-        return self._infrastructure_manager
 
     async def _initialize_all_tracing_providers(self) -> None:
         """Initialize all configured tracing providers."""

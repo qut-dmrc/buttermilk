@@ -289,32 +289,6 @@ class AzureConfig(CloudProviderConfig):
         }
 
 
-class SecretProviderConfig(BaseModel):
-    """Configuration for secret management providers."""
-
-    type: Literal["gcp", "aws", "azure", "local"] = Field(
-        description="Secret provider type"
-    )
-    project_id: Optional[str] = Field(
-        default=None,
-        description="Cloud project/account ID for secrets"
-    )
-    models_secret: Optional[str] = Field(
-        default=None,
-        description="Secret name for LLM API keys"
-    )
-    credentials_secret: Optional[str] = Field(
-        default=None,
-        description="Secret name for shared credentials"
-    )
-
-    @model_validator(mode="after")
-    def set_project_from_env(self) -> "SecretProviderConfig":
-        """Set project from environment if not specified."""
-        if not self.project_id and self.type == "gcp":
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        return self
-
 
 class LoggerConfig(BaseModel):
     """Configuration for cloud logging providers."""
@@ -343,39 +317,6 @@ class LoggerConfig(BaseModel):
         return self
 
 
-class PubSubConfig(BaseModel):
-    """Configuration for pub/sub messaging providers."""
-
-    type: Literal["gcp", "aws", "azure"] = Field(
-        description="Pub/Sub provider type"
-    )
-    project_id: Optional[str] = Field(
-        default=None,
-        description="Cloud project ID for pub/sub"
-    )
-    jobs_topic: str = Field(
-        default="jobs",
-        description="Topic name for job messages"
-    )
-    jobs_subscription: str = Field(
-        default="jobs-sub",
-        description="Subscription name for job messages"
-    )
-    status_topic: str = Field(
-        default="flow",
-        description="Topic name for status messages"
-    )
-    status_subscription: str = Field(
-        default="flow-sub",
-        description="Subscription name for status messages"
-    )
-
-    @model_validator(mode="after")
-    def set_project_from_env(self) -> "PubSubConfig":
-        """Set project from environment if not specified."""
-        if not self.project_id and self.type == "gcp":
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        return self
 
 
 class RunInfoConfig(BaseModel):
@@ -412,47 +353,3 @@ class TracingConfig(BaseModel):
 CloudProvider = Union[GCPConfig, AWSConfig, AzureConfig]
 
 
-class InfrastructureConfig(BaseModel):
-    """Complete infrastructure configuration for Buttermilk.
-    
-    This replaces the current scattered cloud configuration approach
-    with a unified, composable system.
-    """
-
-    # Core cloud providers
-    clouds: List[CloudProvider] = Field(
-        default_factory=list,
-        description="List of configured cloud providers"
-    )
-
-    # Service configurations
-    secret_provider: Optional[SecretProviderConfig] = Field(
-        default=None,
-        description="Secret management configuration"
-    )
-    logger_cfg: Optional[LoggerConfig] = Field(
-        default=None,
-        description="Logging configuration"
-    )
-    pubsub: Optional[PubSubConfig] = Field(
-        default=None,
-        description="Pub/Sub messaging configuration"
-    )
-
-    # Execution configuration
-    session_info: RunInfoConfig = Field(default_factory=RunInfoConfig, description="Run execution configuration")
-    tracing: TracingConfig = Field(
-        default_factory=TracingConfig,
-        description="Experiment tracing configuration"
-    )
-
-    def get_cloud_config(self, provider_type: str) -> Optional[CloudProvider]:
-        """Get configuration for a specific cloud provider."""
-        for cloud in self.clouds:
-            if cloud.type == provider_type:
-                return cloud
-        return None
-
-    def get_primary_cloud(self) -> Optional[CloudProvider]:
-        """Get the primary (first) cloud provider configuration."""
-        return self.clouds[0] if self.clouds else None

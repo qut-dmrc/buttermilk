@@ -31,7 +31,6 @@ from ._core.contract import (
 from ._core.dmrc import get_bm, initialize_session_bm, set_bm
 from ._core.exceptions import FatalError, ProcessingError
 from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
-from ._core.infrastructure import InfrastructureManager, create_infrastructure_from_config, create_infrastructure_manager
 from ._core.log import logger
 
 get_buttermilk_instance = get_bm
@@ -74,10 +73,6 @@ __all__ = [
     "ExecutionContext",  # Execution context class
     "create_execution_context",  # Factory for execution context
     "get_or_create_execution_context",  # Safe factory for execution context
-    # Infrastructure management
-    "InfrastructureManager",  # Infrastructure manager class
-    "create_infrastructure_manager",  # Factory for infrastructure manager
-    "create_infrastructure_from_config",  # Migration helper for infrastructure manager
     # Agent contracts
     "AgentConfig",
     "AgentVariants",
