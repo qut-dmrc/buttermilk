@@ -1,4 +1,0 @@
-experiment_date,experiment_name,agent_role,template_hash,problem,change_link,description,success_metric
-2025-09-02,orig,JUDGE,a559f852,Baseline experiment,,,Baseline measurement for comparison
-2025-09-02,exceptions,JUDGE,8c956434,Judge wasn't applying exceptions for relevance etc -- false positives,https://github.com/qut-dmrc/buttermilk/commit/04fe8630b9dd5ff277531480f3d32affaef2d77e,"Made judge more technical / legal, included explicit direction to apply exceptions","Changes resulted in scores of 75-100% for paralympian Daily Mail article"
-2025-09-02,only_major_violations,SCORERS,3bdc930805,Scorer not penalising answers that found too many violations,https://github.com/qut-dmrc/buttermilk/commit/04fe8630b9dd5ff277531480f3d32affaef2d77e,Made scorer mark answers incorrect if they rely on points that are not in our expected answer (unless marked as optional),
