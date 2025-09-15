@@ -34,6 +34,7 @@ def graph_defaults():
     sns.set_context("notebook")
     sns.set_style("darkgrid")
     plt.rcParams["font.size"] = 14
+    print("Notebook graphing defaults applied")
 
 
 def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None) -> BM:
