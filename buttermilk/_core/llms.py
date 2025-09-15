@@ -247,11 +247,11 @@ class ModelOutput(CreateResult):
     metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata including pricing information")
 
 
-class AutoGenWrapper(RetryWrapper):
+class AutoGenWrapper(BaseModel):
     """Wraps an Autogen `ChatCompletionClient` to add rate limiting and robust retry logic.
 
     This class enhances Autogen clients by:
-    1.  Implementing retry mechanisms (via inheritance from `RetryWrapper`) to
+    1.  Implementing retry mechanisms (via composition with `RetryWrapper`) to
         handle transient API failures, rate limit errors, etc.
     2.  Potentially adding rate limiting capabilities (though semaphore usage is
         commented out in the provided code, it's a common pattern for such wrappers).
@@ -267,15 +267,34 @@ class AutoGenWrapper(RetryWrapper):
 
     """
 
-    # Override parent's client field with None to disable it
-    client: Any = Field(default=None, description="Deprecated - use client_factory instead")
     client_factory: Callable[[], ChatCompletionClient] = Field(..., description="Factory function for creating fresh client instances.")
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     litellm_model_name: str = Field(default=None, description="Resolved litellm model name for pricing")
 
+    # Retry configuration (copied from RetryWrapper)
+    cooldown_seconds: float = 0.5
+    max_retries: int = 3
+    min_wait_seconds: float = 5.0
+    max_wait_seconds: float = 60.0
+    jitter_seconds: float = 5.0
+
+    model_config = {"arbitrary_types_allowed": True}
+
     def _get_fresh_client(self) -> ChatCompletionClient:
         """Get a fresh client instance with current credentials/tokens."""
         return self.client_factory()
+
+    def _get_retry_wrapper(self) -> RetryWrapper:
+        """Create RetryWrapper with fresh client instance."""
+        fresh_client = self._get_fresh_client()
+        return RetryWrapper(
+            client=fresh_client,
+            cooldown_seconds=self.cooldown_seconds,
+            max_retries=self.max_retries,
+            min_wait_seconds=self.min_wait_seconds,
+            max_wait_seconds=self.max_wait_seconds,
+            jitter_seconds=self.jitter_seconds,
+        )
 
     @weave.op
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
@@ -366,10 +385,10 @@ class AutoGenWrapper(RetryWrapper):
                 used_fake_schema_tool = True
 
         try:
-            # Get fresh client with current credentials/tokens
-            client = self._get_fresh_client()
-            create_result = await self._execute_with_retry(
-                client.create,  # The method to call
+            # Get retry wrapper with fresh client and current credentials/tokens
+            retry_wrapper = self._get_retry_wrapper()
+            create_result = await retry_wrapper._execute_with_retry(
+                retry_wrapper.client.create,  # The method to call
                 messages,  # Positional arguments for client.create
                 **create_call_kwargs,  # Keyword arguments for client.create
             )
