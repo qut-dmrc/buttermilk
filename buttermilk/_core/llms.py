@@ -267,6 +267,8 @@ class AutoGenWrapper(RetryWrapper):
 
     """
 
+    # Override parent's client field with None to disable it
+    client: Any = Field(default=None, description="Deprecated - use client_factory instead")
     client_factory: Callable[[], ChatCompletionClient] = Field(..., description="Factory function for creating fresh client instances.")
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     litellm_model_name: str = Field(default=None, description="Resolved litellm model name for pricing")
