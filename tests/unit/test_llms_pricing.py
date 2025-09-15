@@ -204,12 +204,12 @@ class TestLiteLLMModelNameResolution:
 
     def test_gemini_vertex_openai_resolution(self):
         """Test that Gemini models with vertex_openai client resolve correctly."""
-        # This is the key test case that was failing before the fix
+        # This is the key test case - should strip google/ prefix for litellm compatibility
         result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
-        assert result == "vertex_ai/google/gemini-2.5-flash"
+        assert result == "vertex_ai/gemini-2.5-flash"
 
         result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
-        assert result == "vertex_ai/google/gemini-2.5-pro"
+        assert result == "vertex_ai/gemini-2.5-pro"
 
     def test_gemini_direct_api_resolution(self):
         """Test that Gemini models with direct API client stay as-is."""
@@ -289,9 +289,9 @@ class TestLiteLLMModelNameResolution:
 
     def test_base_model_name_extraction(self):
         """Test that _extract_base_model_name handles various patterns."""
-        # For vertex_openai with google/ models, preserve the google/ prefix
+        # For vertex_openai with google/ models, strip the google/ prefix for litellm compatibility
         result = LLMs._extract_base_model_name("google/gemini-2.5-flash", "vertex_openai")
-        assert result == "google/gemini-2.5-flash"
+        assert result == "gemini-2.5-flash"
 
         # For other cases, strip mismatched prefixes
         result = LLMs._extract_base_model_name("azure/gpt-4", "openai")
@@ -303,14 +303,14 @@ class TestLiteLLMModelNameResolution:
 
     def test_real_world_model_registry_examples(self):
         """Test with real model names from the model registry."""
-        # Test current gemini models that were causing issues
+        # Test current gemini models that were causing issues - should strip google/ prefix
         result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
-        assert result == "vertex_ai/google/gemini-2.5-flash"
+        assert result == "vertex_ai/gemini-2.5-flash"
 
         result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
-        assert result == "vertex_ai/google/gemini-2.5-pro"
+        assert result == "vertex_ai/gemini-2.5-pro"
 
-        # Test Llama model
+        # Test Llama model - should preserve meta/ prefix for vertex_openai
         result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai")
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
@@ -321,3 +321,85 @@ class TestLiteLLMModelNameResolution:
         # Test Anthropic on Vertex
         result = LLMs.lookup_litellm_model_name("claude-sonnet-4@20250514", "anthropic_vertex")
         assert result == "vertex_ai/claude-sonnet-4@20250514"
+
+
+class TestLiteLLMIntegration:
+    """Test that generated model names actually work with litellm cost_per_token."""
+
+    @pytest.mark.skipif(
+        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        reason="litellm not available"
+    )
+    def test_gemini_vertex_openai_litellm_compatibility(self):
+        """Test that generated model names work with actual litellm cost_per_token."""
+        from litellm.cost_calculator import cost_per_token
+
+        # Test the key case that was failing - google/gemini-2.5-flash with vertex_openai
+        resolved_name = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        assert resolved_name == "vertex_ai/gemini-2.5-flash"
+
+        # Test that this model name actually works with litellm
+        try:
+            prompt_cost, completion_cost = cost_per_token(
+                model=resolved_name,
+                prompt_tokens=100,
+                completion_tokens=50,
+            )
+            # Should return valid costs without raising an exception
+            assert isinstance(prompt_cost, (int, float))
+            assert isinstance(completion_cost, (int, float))
+            assert prompt_cost >= 0
+            assert completion_cost >= 0
+        except Exception as e:
+            pytest.fail(f"litellm cost_per_token failed for {resolved_name}: {e}")
+
+    @pytest.mark.skipif(
+        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        reason="litellm not available"
+    )
+    def test_gemini_models_litellm_compatibility(self):
+        """Test multiple gemini model variations with litellm."""
+        from litellm.cost_calculator import cost_per_token
+
+        test_cases = [
+            ("google/gemini-2.5-flash", "vertex_openai", "vertex_ai/gemini-2.5-flash"),
+            ("google/gemini-2.5-pro", "vertex_openai", "vertex_ai/gemini-2.5-pro"),
+            ("gemini-2.5-flash", "gemini", "gemini-2.5-flash"),
+        ]
+
+        for model_name, client_type, expected_litellm_name in test_cases:
+            resolved_name = LLMs.lookup_litellm_model_name(model_name, client_type)
+            assert resolved_name == expected_litellm_name
+
+            try:
+                prompt_cost, completion_cost = cost_per_token(
+                    model=resolved_name,
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                )
+                assert isinstance(prompt_cost, (int, float))
+                assert isinstance(completion_cost, (int, float))
+            except Exception as e:
+                pytest.fail(f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}")
+
+    @pytest.mark.skipif(
+        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        reason="litellm not available"
+    )
+    def test_bad_model_names_should_fail(self):
+        """Test that malformed model names properly fail with litellm."""
+        from litellm.cost_calculator import cost_per_token
+
+        # Test that the old malformed names would fail
+        bad_names = [
+            "vertex_ai/google/gemini-2.5-flash",  # This is what was generated before the fix
+            "google/gemini-2.5-flash",  # This should also fail with litellm
+        ]
+
+        for bad_name in bad_names:
+            with pytest.raises(Exception):  # Should raise ValueError or similar
+                cost_per_token(
+                    model=bad_name,
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                )

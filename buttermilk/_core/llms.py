@@ -898,18 +898,18 @@ class LLMs(BaseModel):
         """Extract the base model name, handling various prefix patterns.
 
         Examples:
-        - "google/gemini-2.5-flash" -> "google/gemini-2.5-flash" (keep for vertex_ai)
+        - "google/gemini-2.5-flash" -> "gemini-2.5-flash" (strip google/ for litellm compatibility)
         - "gemini-2.5-flash" -> "gemini-2.5-flash"
         - "claude-sonnet-4@20250514" -> "claude-sonnet-4@20250514"
         """
         # Handle known model name patterns and client type combinations
 
-        # For vertex_openai client with google/ models, preserve the google/ prefix
+        # For vertex_openai client with google/ models, strip the google/ prefix for litellm compatibility
         if client_type == "vertex_openai" and model_name.startswith("google/"):
-            return model_name
+            return model_name[7:]  # Strip "google/" prefix
 
-        # For vertex clients with provider-specific models, preserve format
-        if client_type in {"vertex_openai", "anthropic_vertex"} and "/" in model_name:
+        # For anthropic_vertex clients with provider-specific models, preserve format
+        if client_type == "anthropic_vertex" and "/" in model_name:
             return model_name
 
         # For other cases, strip common provider prefixes if they don't match client type
