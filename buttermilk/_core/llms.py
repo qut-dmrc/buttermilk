@@ -16,7 +16,7 @@ import json
 from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 
 # Core LLM library imports - these are required dependencies
 import weave
@@ -260,15 +260,20 @@ class AutoGenWrapper(RetryWrapper):
         tool/function calling.
 
     Attributes:
-        client (ChatCompletionClient): The underlying Autogen chat completion client instance.
+        client_factory (Callable[[], ChatCompletionClient]): Factory function that creates
+            fresh client instances with current credentials/tokens.
         model_info (ModelInfo): Metadata about the model being wrapped, used to
             determine capabilities like structured output support.
 
     """
 
-    client: ChatCompletionClient = Field(..., description="The underlying Autogen client instance.")
+    client_factory: Callable[[], ChatCompletionClient] = Field(..., description="Factory function for creating fresh client instances.")
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     litellm_model_name: str = Field(default=None, description="Resolved litellm model name for pricing")
+
+    def _get_fresh_client(self) -> ChatCompletionClient:
+        """Get a fresh client instance with current credentials/tokens."""
+        return self.client_factory()
 
     @weave.op
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
@@ -359,10 +364,12 @@ class AutoGenWrapper(RetryWrapper):
                 used_fake_schema_tool = True
 
         try:
+            # Get fresh client with current credentials/tokens
+            client = self._get_fresh_client()
             create_result = await self._execute_with_retry(
-                self.client.create,  # The method to call
-                messages,  # Positional arguments for self.client.create
-                **create_call_kwargs,  # Keyword arguments for self.client.create
+                client.create,  # The method to call
+                messages,  # Positional arguments for client.create
+                **create_call_kwargs,  # Keyword arguments for client.create
             )
 
         except Exception as e:  # Wrap other exceptions
@@ -969,103 +976,128 @@ class LLMs(BaseModel):
         # Resolve litellm model name using internal method
         resolved_litellm = self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
 
-        # Create client based on config.client_type - clean single branch per type
-        if config.client_type == ClientType.OPENAI:
-            client = OpenAIChatCompletionClient(
-                base_url=config.base_url or "",  # Provide default empty string if None
-                model_info=config.model_info,
-                **client_params,
-            )
+        # Create client factory function based on config.client_type
+        def create_client_factory() -> Callable[[], ChatCompletionClient]:
+            """Create a factory function that returns fresh clients with current credentials."""
 
-        elif config.client_type == ClientType.AZURE:
-            if not config.base_url:
-                raise ValueError("Azure endpoint URL is required for Azure client")
-            client = AzureOpenAIChatCompletionClient(
-                azure_endpoint=config.base_url,
-                model_info=config.model_info,
-                **client_params,
-            )
+            if config.client_type == ClientType.OPENAI:
+                def factory() -> ChatCompletionClient:
+                    return OpenAIChatCompletionClient(
+                        base_url=config.base_url or "",  # Provide default empty string if None
+                        model_info=config.model_info,
+                        **client_params,
+                    )
+                return factory
 
-        elif config.client_type == ClientType.ANTHROPIC:
-            # Direct Anthropic API
-            client = AnthropicChatCompletionClient(**client_params)
+            elif config.client_type == ClientType.AZURE:
+                if not config.base_url:
+                    raise ValueError("Azure endpoint URL is required for Azure client")
 
-        elif config.client_type == ClientType.ANTHROPIC_VERTEX:
-            # Anthropic via Vertex AI
-            bm_instance = get_bm()
-            if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
+                def factory() -> ChatCompletionClient:
+                    return AzureOpenAIChatCompletionClient(
+                        azure_endpoint=config.base_url,
+                        model_info=config.model_info,
+                        **client_params,
+                    )
+                return factory
 
-            vertex_params = {
-                "region": config.configs.get("region"),
-                "project_id": config.configs.get("project_id"),
-                "credentials": bm_instance.gcp_credentials,
-            }
-            vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
+            elif config.client_type == ClientType.ANTHROPIC:
+                # Direct Anthropic API
+                def factory() -> ChatCompletionClient:
+                    return AnthropicChatCompletionClient(**client_params)
+                return factory
 
-            try:
-                vertex_client = AsyncAnthropicVertex(**vertex_params)
-                # Remove api_key for Vertex auth
-                vertex_client_params = client_params.copy()
-                vertex_client_params.pop("api_key", None)
+            elif config.client_type == ClientType.ANTHROPIC_VERTEX:
+                # Anthropic via Vertex AI
+                bm_instance = get_bm()
+                if not bm_instance.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
 
-                client = AnthropicChatCompletionClient(**vertex_client_params)
-                client._client = vertex_client  # type: ignore[attr-defined]
-            except Exception as e:
-                logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
-                raise
+                vertex_params = {
+                    "region": config.configs.get("region"),
+                    "project_id": config.configs.get("project_id"),
+                    "credentials": bm_instance.gcp_credentials,
+                }
+                vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
 
-        elif config.client_type == ClientType.GEMINI:
-            # Google Generative AI (Gemini) API
-            bm_instance = get_bm()
-            if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available for Gemini API.")
-            client = OpenAIChatCompletionClient(
-                model_info=config.model_info,
-                **client_params,
-            )
-        elif config.client_type == ClientType.GEMINI_VERTEX:
-            bm_instance = get_bm()
-            vertex_params = client_params.copy()
+                def factory() -> ChatCompletionClient:
+                    try:
+                        vertex_client = AsyncAnthropicVertex(**vertex_params)
+                        # Remove api_key for Vertex auth
+                        vertex_client_params = client_params.copy()
+                        vertex_client_params.pop("api_key", None)
 
-            vertex_params["api_key"] = bm_instance.get_gcp_access_token()
-            client = OpenAIChatCompletionClient(
-                base_url=config.base_url,
-                model_info=config.model_info,
-                **vertex_params,
-            )
-        elif config.client_type == ClientType.VERTEX_OPENAI:
-            # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
-            bm_instance = get_bm()
-            if not bm_instance.gcp_credentials:
-                raise ValueError("GCP credentials not available for Vertex AI.")
+                        client = AnthropicChatCompletionClient(**vertex_client_params)
+                        client._client = vertex_client  # type: ignore[attr-defined]
+                        return client
+                    except Exception as e:
+                        logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
+                        raise
+                return factory
 
-            vertex_params = client_params.copy()
+            elif config.client_type == ClientType.GEMINI:
+                # Google Generative AI (Gemini) API
+                bm_instance = get_bm()
+                if not bm_instance.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Gemini API.")
 
-            # Set up OAuth2 bearer token authentication
-            headers = {
-                "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
-            }
+                def factory() -> ChatCompletionClient:
+                    return OpenAIChatCompletionClient(
+                        model_info=config.model_info,
+                        **client_params,
+                    )
+                return factory
 
-            # Dummy API key for OpenAI client validation
-            if vertex_params.get("api_key") is None:
-                vertex_params["api_key"] = "dummy-key-for-vertex"
+            elif config.client_type == ClientType.GEMINI_VERTEX:
+                bm_instance = get_bm()
 
-            vertex_params["default_headers"] = headers
+                def factory() -> ChatCompletionClient:
+                    vertex_params = client_params.copy()
+                    # Get fresh token on each client creation
+                    vertex_params["api_key"] = bm_instance.get_gcp_access_token()
+                    return OpenAIChatCompletionClient(
+                        base_url=config.base_url,
+                        model_info=config.model_info,
+                        **vertex_params,
+                    )
+                return factory
 
-            if not config.base_url:
-                raise ValueError("Base URL is required for Vertex OpenAI endpoint")
-            client = OpenAIChatCompletionClient(
-                base_url=config.base_url,
-                model_info=config.model_info,
-                **vertex_params,
-            )
-        else:
-            raise ProcessingError(f"Unsupported client_type: {config.client_type}")
+            elif config.client_type == ClientType.VERTEX_OPENAI:
+                # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
+                bm_instance = get_bm()
+                if not bm_instance.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Vertex AI.")
 
-        # Wrap with AutoGenWrapper and cache
+                def factory() -> ChatCompletionClient:
+                    vertex_params = client_params.copy()
+
+                    # Set up OAuth2 bearer token authentication with fresh token
+                    headers = {
+                        "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
+                    }
+
+                    # Dummy API key for OpenAI client validation
+                    if vertex_params.get("api_key") is None:
+                        vertex_params["api_key"] = "dummy-key-for-vertex"
+
+                    vertex_params["default_headers"] = headers
+
+                    if not config.base_url:
+                        raise ValueError("Base URL is required for Vertex OpenAI endpoint")
+                    return OpenAIChatCompletionClient(
+                        base_url=config.base_url,
+                        model_info=config.model_info,
+                        **vertex_params,
+                    )
+                return factory
+            else:
+                raise ProcessingError(f"Unsupported client_type: {config.client_type}")
+
+        client_factory = create_client_factory()
+
+        # Wrap with AutoGenWrapper using client factory and cache
         wrapped_client = AutoGenWrapper(
-            client=client,
+            client_factory=client_factory,
             model_info=config.model_info,
             litellm_model_name=resolved_litellm
         )
