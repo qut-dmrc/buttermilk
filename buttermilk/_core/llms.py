@@ -859,21 +859,73 @@ class LLMs(BaseModel):
     def lookup_litellm_model_name(model_name: str, client_type: str = "") -> str | None:
         """Resolve an internal model key to a litellm-compatible identifier.
 
-        Order:
-          1. If already a provider-qualified litellm id -> return unchanged.
-          2. Lookup internal_name in registry; if missing -> return as-is.
-          3. If litellm_model present -> return it (assumed fully-qualified or accepted by litellm).
-          4. Base id = configs.model or model_info.family
-          5. Prefix with normalized provider prefix derived from client_type.
-          6. Fallback: original internal_name.
+        This function provides robust model name resolution by:
+        1. Determining the correct provider prefix for the client_type
+        2. Extracting the base model name (stripping any existing prefixes if needed)
+        3. Applying intelligent mapping for known model variations
+        4. Constructing the final litellm-compatible identifier
 
-        Safe for absent / partial entries.
+        Args:
+            model_name: The model name from config (e.g., "google/gemini-2.5-flash")
+            client_type: The client type (e.g., "vertex_openai", "gemini_vertex")
+
+        Returns:
+            Properly formatted litellm model identifier
         """
-        if LLMs._is_already_litellm_identifier(model_name):
+        if not model_name:
             return model_name
 
-        prefix = LLMs._provider_prefix_for_client_type(client_type)
-        return f"{prefix}/{model_name}"
+        # Get the correct provider prefix for this client type
+        expected_prefix = LLMs._provider_prefix_for_client_type(client_type)
+
+        # Handle special cases and extract base model name
+        base_model = LLMs._extract_base_model_name(model_name, client_type)
+
+        # For certain client types, we need the model name as-is (already has correct prefix)
+        if client_type in {"gemini", "openai", "anthropic"} and not model_name.startswith(expected_prefix + "/"):
+            # These often use bare model names without provider prefix
+            return model_name
+
+        # If the model name already has the correct prefix, return as-is
+        if model_name.startswith(expected_prefix + "/"):
+            return model_name
+
+        # Construct the final litellm identifier
+        return f"{expected_prefix}/{base_model}"
+
+    @staticmethod
+    def _extract_base_model_name(model_name: str, client_type: str) -> str:
+        """Extract the base model name, handling various prefix patterns.
+
+        Examples:
+        - "google/gemini-2.5-flash" -> "google/gemini-2.5-flash" (keep for vertex_ai)
+        - "gemini-2.5-flash" -> "gemini-2.5-flash"
+        - "claude-sonnet-4@20250514" -> "claude-sonnet-4@20250514"
+        """
+        # Handle known model name patterns and client type combinations
+
+        # For vertex_openai client with google/ models, preserve the google/ prefix
+        if client_type == "vertex_openai" and model_name.startswith("google/"):
+            return model_name
+
+        # For vertex clients with provider-specific models, preserve format
+        if client_type in {"vertex_openai", "anthropic_vertex"} and "/" in model_name:
+            return model_name
+
+        # For other cases, strip common provider prefixes if they don't match client type
+        if "/" in model_name:
+            prefix, base = model_name.split("/", 1)
+
+            # If the existing prefix matches what we expect, keep the base
+            expected_prefix = LLMs._provider_prefix_for_client_type(client_type)
+            if prefix == expected_prefix:
+                return base
+            else:
+                # Keep the full name as-is for cross-provider compatibility
+                return model_name
+
+        # No prefix found, return as-is
+        return model_name
 
     def get_autogen_chat_client(self, name: str) -> AutoGenWrapper:  # noqa: PLR0912 - branching per client type
         """Gets or creates an `AutoGenWrapper` for the LLM configuration specified by `name`.

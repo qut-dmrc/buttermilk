@@ -77,7 +77,7 @@ def calculate_token_cost(
         return prompt_tokens, completion_tokens, total_cost
     except Exception as e:
         logger.warning(
-            f"Could not calculate token cost for model {model} (cost model: {cost_model}): {e}",
+            f"Could not calculate token cost for model {model} (cost model: {cost_model}): {e}", model=model, cost_model=cost_model, error=str(e)
         )
         return prompt_tokens, completion_tokens, 0.0
 

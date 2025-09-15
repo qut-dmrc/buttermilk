@@ -1,4 +1,3 @@
-import asyncio
 import inspect
 
 import pytest
@@ -8,7 +7,7 @@ from pytest import MarkDecorator
 
 from buttermilk import set_bm
 from buttermilk._core.bm_init import BM
-from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
+from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
@@ -47,8 +46,9 @@ def anyio_backend():
 #     })
 # =============================================================================
 
+
 @pytest.fixture(scope="session")
-def real_conf():
+def init_conf():
     """Real Hydra config fixture loaded from testing.yaml."""
     with initialize(version_base=None, config_path="../buttermilk/conf"):
         cfg = compose(config_name="testing")
@@ -56,26 +56,27 @@ def real_conf():
 
 
 @pytest.fixture(scope="session")
-def real_execution_context(real_conf):
+def real_execution_context(init_conf):
     """Real ExecutionContext created from testing.yaml configuration."""
-    bootstrapper = create_configuration_bootstrapper(config=real_conf)
-
-    # Bootstrap full context to ensure ExecutionContext is properly initialized
-    execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
-
-    return execution_context
+    bm, resolved_conf = bootstrap_session_with_config(
+        config=init_conf  # Pass the existing Hydra configuration, use run.job and run.name from config
+    )
+    set_bm(bm)  # Set global BM for modules that rely on it
+    return bm, resolved_conf
 
 
 @pytest.fixture(scope="session")
-def real_bm(real_conf):
-    """Real BM instance using testing.yaml configuration."""
-    # Create a session-scoped BM using the bootstrap pattern
-    bootstrapper = create_configuration_bootstrapper(config=real_conf)
-    test_bm = asyncio.run(bootstrapper.bootstrap_session_context(
-        name="buttermilk", job="testing", platform="local"
-    ))
-    set_bm(test_bm)
-    return test_bm
+def real_conf(real_execution_context):
+    """Real configuration dictionary from testing.yaml."""
+    _, resolved_conf = real_execution_context
+    return resolved_conf
+
+
+@pytest.fixture(scope="session")
+def real_bm(real_execution_context):
+    """Real BM instance created from testing.yaml configuration."""
+    bm, _ = real_execution_context
+    return bm
 
 
 @pytest.fixture(scope="session")
