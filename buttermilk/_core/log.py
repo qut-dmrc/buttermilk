@@ -164,16 +164,16 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
     file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     # Since all logs come through structlog's stdlib bridge, they're already processed
     # Just extract the pre-formatted message from the LogRecord
-    file_handler.setFormatter(logging.Formatter('%(message)s'))
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
 
     # Add handler only to buttermilk logger, not root logger
     # This ensures we only get structured logs from our code
     logging.getLogger(_LOGGER_NAME).addHandler(file_handler)
     log_files.append(str(log_path))
 
-    logger.info("Log file created", log_path=str(log_path), verbose=verbose)
+    logger.info(f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose)
     if verbose:
-        logger.debug("Verbose logging enabled.")
+        logger.debug("Verbose logging enabled for {log_path}.")
     
     # Mark file logging as configured
     _file_logging_configured = True
@@ -230,7 +230,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
 
             # Since all logs come through structlog's stdlib bridge, they're already processed
             # Just extract the pre-formatted message from the LogRecord
-            cloud_handler.setFormatter(logging.Formatter('%(message)s'))
+            cloud_handler.setFormatter(logging.Formatter("%(message)s"))
 
             # Bind session context for automatic inclusion (simplified architecture)
             context_vars = {

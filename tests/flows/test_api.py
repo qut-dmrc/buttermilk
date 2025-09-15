@@ -7,10 +7,10 @@ from buttermilk.api.flow import create_app
 
 
 @pytest.fixture(scope="session")
-def client(flow_runner, real_infrastructure) -> TestClient:
+def client(real_flow_runner, real_infrastructure) -> TestClient:
     # Initialize with minimal configuration for testing
 
-    app = create_app(infrastructure=real_infrastructure, flows=flow_runner)
+    app = create_app(infrastructure=real_infrastructure, flows=real_flow_runner)
     return TestClient(app)
 
 
@@ -54,7 +54,7 @@ def test_run_flow(client, flow_request_data: dict[str, Any]):
     assert "agent_info" in json_response
 
 
-def test_run_flow_html(client,flow_request_data: dict[str, Any]):
+def test_run_flow_html(client, flow_request_data: dict[str, Any]):
     response = client.post("/html/flow/test_flow", json=flow_request_data)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]

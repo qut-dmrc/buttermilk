@@ -110,7 +110,7 @@ def test_session_cloud_logging_end_to_end(real_bm, real_infrastructure: Infrastr
     _verify_logs_in_gcp(log_client, test_run_id, test_session.session_info.session_id, test_session.session_info.batch_id, test_messages)
 
 
-def test_multiple_sessions_isolated_logging(real_bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_multiple_sessions_isolated_logging(real_bm: BM, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that multiple BM sessions have isolated but proper cloud logging."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -120,11 +120,11 @@ def test_multiple_sessions_isolated_logging(real_bm: BM, infrastructure: Infrast
     test_run_id = f"multi-test-{uuid.uuid4().hex[:8]}"
 
     # Create two separate BM sessions
-    session1 = infrastructure.create_session_bm(
+    session1 = real_infrastructure.create_session_bm(
         name=f"session1-{test_run_id}", job="multi-session-test", platform="pytest", save_dir_base=str(tmp_path / "session1")
     )
 
-    session2 = infrastructure.create_session_bm(
+    session2 = real_infrastructure.create_session_bm(
         name=f"session2-{test_run_id}", job="multi-session-test", platform="pytest", save_dir_base=str(tmp_path / "session2")
     )
 
@@ -149,7 +149,7 @@ def test_multiple_sessions_isolated_logging(real_bm: BM, infrastructure: Infrast
     assert len(session2_entries) > 0, "Session 2 logs not found"
 
 
-def test_structured_json_format_consistency(real_bm: BM, infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_structured_json_format_consistency(real_bm: BM, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
     """Test that cloud logs use consistent structured JSON format."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -159,7 +159,7 @@ def test_structured_json_format_consistency(real_bm: BM, infrastructure: Infrast
     test_run_id = f"json-test-{uuid.uuid4().hex[:8]}"
 
     # Create a test session to enable proper cloud logging context
-    infrastructure.create_session_bm(
+    real_infrastructure.create_session_bm(
         name=f"json-format-test-{test_run_id}", job="json-format-testing", platform="pytest", save_dir_base=str(tmp_path)
     )
 
@@ -191,7 +191,7 @@ def test_structured_json_format_consistency(real_bm: BM, infrastructure: Infrast
                 assert payload.get("boolean_field") is True
 
 
-def test_cloud_logging_error_handling(real_bm: BM, infrastructure: InfrastructureManager, tmp_path):
+def test_cloud_logging_error_handling(real_bm: BM, real_infrastructure: InfrastructureManager, tmp_path):
     """Test that cloud logging setup failures are handled gracefully."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -205,7 +205,7 @@ def test_cloud_logging_error_handling(real_bm: BM, infrastructure: Infrastructur
         mock_handler.side_effect = Exception("Simulated GCP failure")
 
         # BM session creation should still succeed
-        test_session = infrastructure.create_session_bm(
+        test_session = real_infrastructure.create_session_bm(
             name=f"error-test-{test_run_id}", job="error-handling-test", platform="pytest", save_dir_base=str(tmp_path)
         )
 
@@ -274,7 +274,7 @@ def _verify_logs_in_gcp(log_client: gcp_logging.Client, test_run_id: str, sessio
 
 @pytest.mark.integration
 @pytest.mark.anyio
-async def test_async_cloud_logging_performance(infrastructure: InfrastructureManager):
+async def test_async_cloud_logging_performance(real_infrastructure: InfrastructureManager):
     """Test cloud logging performance under concurrent session creation."""
 
     # This test ensures cloud logging doesn't become a bottleneck
@@ -284,7 +284,9 @@ async def test_async_cloud_logging_performance(infrastructure: InfrastructureMan
 
     async def create_and_log_session(session_num: int):
         """Create a session and log a message."""
-        test_session = infrastructure.create_session_bm(name=f"perf-session-{session_num}", job=f"perf-test-{test_run_id}", platform="pytest-async")
+        test_session = real_infrastructure.create_session_bm(
+            name=f"perf-session-{session_num}", job=f"perf-test-{test_run_id}", platform="pytest-async"
+        )
 
         logger.info(f"Performance test message from session {session_num}: {test_run_id}")
         return test_session.session_info.session_id

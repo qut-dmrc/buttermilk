@@ -4,7 +4,7 @@ authors = [
     {name = "Nicolas Suzor", email = "nic@suzor.com"},
 ]
 name = "buttermilk"
-version = "0.4.2"
+version = "0.4.4"
 description = ""
 readme = "README.md"
 dependencies = [
@@ -118,6 +118,9 @@ dev = [
     "fsspec<2025.0.0,>=2024.6.1",
     "gcsfs<2025.0.0,>=2024.6.1",
     "pytest>=8.3.2,<9.0.0",
+    "dbt>=1.0.0.40.6",
+    "dbt-bigquery>=1.10.2",
+    "dbt-core>=1.10.8",
     "cmap<1.0.0,>=0.3.0",
     "seaborn<1.0.0,>=0.13.2",
     "scikit-learn<2.0.0,>=1.5.1",
@@ -225,10 +228,10 @@ addopts = [
     "-v", # show name of tests 
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",
-    "--tb=auto",
+    "--tb=short",
     # "--show-capture=no",
     # "--disable-warnings",
-    "-m not integration",
+    # "-m not integration",
 ]
 
 #  "--timeout_method=thread", 
@@ -239,11 +242,4 @@ filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
     "ignore:Passing field metadata as keyword arguments is deprecated",
     "ignore:.*grpc_wait_for_shutdown_with_timeout.*:Warning",
-]
-
-[dependency-groups]
-dev = [
-    "dbt>=1.0.0.40.6",
-    "dbt-bigquery>=1.10.2",
-    "dbt-core>=1.10.8",
 ]
