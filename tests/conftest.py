@@ -8,8 +8,7 @@ from pytest import MarkDecorator
 
 from buttermilk import set_bm
 from buttermilk._core.bm_init import BM
-from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
-from buttermilk._core.infrastructure import InfrastructureManager
+from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
@@ -57,22 +56,24 @@ def real_conf():
 
 
 @pytest.fixture(scope="session")
-def real_infrastructure(real_conf):
-    """Real infrastructure manager created from testing.yaml configuration."""
-    bootstrapper = ConfigurationBootstrapper(config=real_conf)
-    infrastructure = bootstrapper.get_infrastructure_manager()
-    
+def real_execution_context(real_conf):
+    """Real ExecutionContext created from testing.yaml configuration."""
+    bootstrapper = create_configuration_bootstrapper(config=real_conf)
+
     # Bootstrap full context to ensure ExecutionContext is properly initialized
-    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
-    
-    return infrastructure
+    execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
+
+    return execution_context
 
 
 @pytest.fixture(scope="session")
-def real_bm(real_infrastructure: InfrastructureManager):
+def real_bm(real_conf):
     """Real BM instance using testing.yaml configuration."""
-    # Create a session-scoped BM using real infrastructure
-    test_bm = real_infrastructure.create_session_bm(name="buttermilk", job="testing", platform="local")
+    # Create a session-scoped BM using the bootstrap pattern
+    bootstrapper = create_configuration_bootstrapper(config=real_conf)
+    test_bm = asyncio.run(bootstrapper.bootstrap_session_context(
+        name="buttermilk", job="testing", platform="local"
+    ))
     set_bm(test_bm)
     return test_bm
 

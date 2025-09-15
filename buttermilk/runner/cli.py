@@ -66,16 +66,15 @@ def main(conf: DictConfig) -> None:
         config=conf  # Pass the existing configuration from Hydra
     )
     
-    # Bootstrap full context FIRST (ExecutionContext + Infrastructure) to ensure proper architecture
-    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+    # Bootstrap full context FIRST (ExecutionContext) to ensure proper architecture
+    execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
     logger.info("Full context initialization complete via ConfigurationBootstrapper")
-    
+
     # Create a session-scoped BM that uses the existing ExecutionContext infrastructure
     bm = asyncio.run(bootstrapper.bootstrap_session_context(
         name=conf.get('run', {}).get('name', 'cli_session'),
         job=conf.get('run', {}).get('job', 'cli_operation'),
-        platform='local',
-        infrastructure=infrastructure  # Pass the infrastructure from ExecutionContext
+        platform='local'
     ))
     
     # Set as global singleton AFTER ExecutionContext initialization
@@ -150,10 +149,10 @@ def main(conf: DictConfig) -> None:
         case "api":
             # Starts a FastAPI web server.
             logger.info("Starting FastAPI API server...")
-            # The FastAPI app needs access to infrastructure and flow_runner to handle API requests.
-            # Pass the bootstrapper-managed infrastructure to ensure consistent configuration
+            # The FastAPI app needs access to execution_context and flow_runner to handle API requests.
+            # Pass the bootstrapper-managed execution_context to ensure consistent configuration
             fastapi_app = create_fastapi_app(
-                infrastructure=infrastructure,  # Pass the bootstrapper-managed infrastructure
+                execution_context=execution_context,  # Pass the bootstrapper-managed execution_context
                 flows=flow_runner,  # Pass the FlowRunner
             )
 
@@ -161,8 +160,8 @@ def main(conf: DictConfig) -> None:
             logger.debug("Verifying FastAPI app readiness...")
             if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
                 raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
-            if not hasattr(fastapi_app.state, "infrastructure") or not fastapi_app.state.infrastructure:
-                raise RuntimeError("Infrastructure manager not properly initialized in FastAPI app state")
+            if not hasattr(fastapi_app.state, "execution_context") or not fastapi_app.state.execution_context:
+                raise RuntimeError("ExecutionContext not properly initialized in FastAPI app state")
             logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")

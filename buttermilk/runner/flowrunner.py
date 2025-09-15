@@ -873,10 +873,12 @@ class FlowRunner(BaseModel):
                 Must have session_info.session_id for proper isolation.
                 
         Example:
-            >>> infrastructure = InfrastructureManager()
-            >>> session_bm = infrastructure.create_session_bm(
-            ...     name="api_session", job="analysis", session_id="unique-123"
-            ... )
+            >>> from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
+            >>> import asyncio
+            >>> bootstrapper = create_configuration_bootstrapper()
+            >>> session_bm = asyncio.run(bootstrapper.bootstrap_session_context(
+            ...     name="api_session", job="analysis", platform="local"
+            ... ))
             >>> flow_runner.set_session_bm(session_bm)
             >>> # All flows will now use session-scoped observability
         """

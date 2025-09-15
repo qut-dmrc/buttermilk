@@ -28,36 +28,35 @@ STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
 
 
-def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
+def create_app(execution_context: Any, flows: FlowRunner) -> FastAPI:
     """Create and configure the FastAPI application.
-    
+
     Args:
-        infrastructure: InfrastructureManager instance for creating session-scoped BMs.
+        execution_context: ExecutionContext instance providing shared infrastructure.
         flows: FlowRunner instance for executing flows.
-        
+
     Returns:
         FastAPI: Configured FastAPI application.
     """
     logger.info("Starting create_app function...")
     
-    # Initialize API server's own execution context for logging and infrastructure
+    # Initialize API server's own session-scoped BM for infrastructure operations
     # This ensures the API server itself has proper context for generating structured logs
-    from buttermilk._core.execution_context import get_execution_context
     from buttermilk._core.dmrc import set_bm
-    
-    # Use existing ExecutionContext from ConfigurationBootstrapper (preserves logging config)
-    api_execution_context = get_execution_context()
-    
-    # Create API server's own session-scoped BM for infrastructure operations
-    api_bm = infrastructure.create_session_bm(
+    from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
+
+    # Create a session-scoped BM for the API server using the bootstrap pattern
+    # This ensures consistency with the single golden path architecture
+    api_bootstrapper = create_configuration_bootstrapper()
+    api_bm = asyncio.run(api_bootstrapper.bootstrap_session_context(
         name="api_server",
-        job="api_infrastructure", 
+        job="api_infrastructure",
         platform="local"
-    )
-    
+    ))
+
     # Set as global singleton for API server operations
     set_bm(api_bm)
-    logger.info("API server execution context and BM initialized")
+    logger.info("API server session BM initialized")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -68,16 +67,9 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
             # API functions might take a few more seconds
             asyncio.get_event_loop().slow_callback_duration = 2
 
-            # Ensure API server's execution context is fully initialized
-            await api_execution_context.ensure_initialized()
-            
             # Ensure API server's BM is fully initialized
             await api_bm.ensure_initialized()
-            logger.info("API server context fully initialized")
-
-            # Initialize infrastructure components
-            if hasattr(app.state, "infrastructure"):
-                app.state.infrastructure.initialize_components()
+            logger.info("API server session context fully initialized")
 
             # Initialize and start monitoring infrastructure
             from buttermilk.monitoring import get_observability_manager
@@ -116,8 +108,8 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
 
     logger.info("FastAPI() instance created.")
 
-    # Set up state - store infrastructure manager instead of global BM
-    app.state.infrastructure = infrastructure
+    # Set up state - store execution context for shared infrastructure access
+    app.state.execution_context = execution_context
     app.state.flow_runner = flows
 
     # Initialize batch runner
@@ -265,15 +257,20 @@ def create_app(infrastructure: Any, flows: FlowRunner) -> FastAPI:
                     logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
                     
                     # Create session-scoped BM for this flow execution
-                    if hasattr(websocket.app.state, "infrastructure"):
-                        session_bm = websocket.app.state.infrastructure.create_session_bm(
-                            name=f"api_session_{run_request.flow}", job=run_request.flow, batch_id=getattr(run_request, "batch_id", None)
+                    if hasattr(websocket.app.state, "execution_context"):
+                        # Use the bootstrap pattern to create session-scoped BM
+                        session_bootstrapper = create_configuration_bootstrapper()
+                        session_bm = await session_bootstrapper.bootstrap_session_context(
+                            name=f"api_session_{run_request.flow}",
+                            job=run_request.flow,
+                            batch_id=getattr(run_request, "batch_id", None),
+                            platform="api"
                         )
                         # Set the session-scoped BM for this flow execution
                         flow_runner.set_session_bm(session_bm)
                         logger.debug(f"Created session-scoped BM for session {session_id} with session_id: {session_bm.session_info.session_id}")
                     else:
-                        logger.debug(f"No infrastructure manager available, using global singleton BM for session {session_id}")
+                        logger.debug(f"No execution context available, using global singleton BM for session {session_id}")
                     
                     task = asyncio.create_task(flow_runner.run_flow(
                         run_request=run_request,

@@ -24,7 +24,7 @@ from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2 import DESCENDING
 
 from buttermilk._core.bm_init import BM  # Modified import
-from buttermilk._core.infrastructure import InfrastructureManager
+from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
 from buttermilk._core.log import logger
 
 # Test constant
@@ -68,7 +68,7 @@ def log_client(gcp_project_id: str) -> gcp_logging.Client:
 # Test functions using integration fixtures
 
 
-def test_session_cloud_logging_end_to_end(real_bm, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_session_cloud_logging_end_to_end(real_bm, real_conf, log_client: gcp_logging.Client, tmp_path):
     """Test complete end-to-end cloud logging flow with real session context."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -78,14 +78,15 @@ def test_session_cloud_logging_end_to_end(real_bm, real_infrastructure: Infrastr
     # Create a unique test identifier for log verification
     test_run_id = f"test-{uuid.uuid4().hex[:8]}"
 
-    # Create additional BM session for testing (using the same infrastructure)
-    test_session = real_infrastructure.create_session_bm(
+    # Create additional BM session for testing using the bootstrap pattern
+    bootstrapper = create_configuration_bootstrapper(config=real_conf)
+    test_session = asyncio.run(bootstrapper.bootstrap_session_context(
         name=f"cloud-logging-test-{test_run_id}",
         job="integration-testing",
         batch_id=f"batch-{test_run_id}",
         platform="pytest",
         save_dir_base=str(tmp_path),
-    )
+    ))
 
     # Verify BM session has cloud logging configured
     assert test_session._logger_cfg is not None
@@ -110,7 +111,7 @@ def test_session_cloud_logging_end_to_end(real_bm, real_infrastructure: Infrastr
     _verify_logs_in_gcp(log_client, test_run_id, test_session.session_info.session_id, test_session.session_info.batch_id, test_messages)
 
 
-def test_multiple_sessions_isolated_logging(real_bm: BM, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_multiple_sessions_isolated_logging(real_bm: BM, real_conf, log_client: gcp_logging.Client, tmp_path):
     """Test that multiple BM sessions have isolated but proper cloud logging."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -119,14 +120,15 @@ def test_multiple_sessions_isolated_logging(real_bm: BM, real_infrastructure: In
 
     test_run_id = f"multi-test-{uuid.uuid4().hex[:8]}"
 
-    # Create two separate BM sessions
-    session1 = real_infrastructure.create_session_bm(
+    # Create two separate BM sessions using bootstrap pattern
+    bootstrapper = create_configuration_bootstrapper(config=real_conf)
+    session1 = asyncio.run(bootstrapper.bootstrap_session_context(
         name=f"session1-{test_run_id}", job="multi-session-test", platform="pytest", save_dir_base=str(tmp_path / "session1")
-    )
+    ))
 
-    session2 = real_infrastructure.create_session_bm(
+    session2 = asyncio.run(bootstrapper.bootstrap_session_context(
         name=f"session2-{test_run_id}", job="multi-session-test", platform="pytest", save_dir_base=str(tmp_path / "session2")
-    )
+    ))
 
     # Both should have cloud logging configured
     assert session1._logger_cfg is not None
@@ -149,7 +151,7 @@ def test_multiple_sessions_isolated_logging(real_bm: BM, real_infrastructure: In
     assert len(session2_entries) > 0, "Session 2 logs not found"
 
 
-def test_structured_json_format_consistency(real_bm: BM, real_infrastructure: InfrastructureManager, log_client: gcp_logging.Client, tmp_path):
+def test_structured_json_format_consistency(real_bm: BM, real_conf, log_client: gcp_logging.Client, tmp_path):
     """Test that cloud logs use consistent structured JSON format."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -159,9 +161,10 @@ def test_structured_json_format_consistency(real_bm: BM, real_infrastructure: In
     test_run_id = f"json-test-{uuid.uuid4().hex[:8]}"
 
     # Create a test session to enable proper cloud logging context
-    real_infrastructure.create_session_bm(
+    bootstrapper = create_configuration_bootstrapper(config=real_conf)
+    asyncio.run(bootstrapper.bootstrap_session_context(
         name=f"json-format-test-{test_run_id}", job="json-format-testing", platform="pytest", save_dir_base=str(tmp_path)
-    )
+    ))
 
     # Log structured data
     logger.info(
@@ -191,7 +194,7 @@ def test_structured_json_format_consistency(real_bm: BM, real_infrastructure: In
                 assert payload.get("boolean_field") is True
 
 
-def test_cloud_logging_error_handling(real_bm: BM, real_infrastructure: InfrastructureManager, tmp_path):
+def test_cloud_logging_error_handling(real_bm: BM, real_conf, tmp_path):
     """Test that cloud logging setup failures are handled gracefully."""
 
     # Integration test must fail if cloud logging not properly configured
@@ -205,9 +208,10 @@ def test_cloud_logging_error_handling(real_bm: BM, real_infrastructure: Infrastr
         mock_handler.side_effect = Exception("Simulated GCP failure")
 
         # BM session creation should still succeed
-        test_session = real_infrastructure.create_session_bm(
+        bootstrapper = create_configuration_bootstrapper(config=real_conf)
+        test_session = asyncio.run(bootstrapper.bootstrap_session_context(
             name=f"error-test-{test_run_id}", job="error-handling-test", platform="pytest", save_dir_base=str(tmp_path)
-        )
+        ))
 
         # Session should still be functional
         assert test_session.session_info.session_id is not None
@@ -274,7 +278,7 @@ def _verify_logs_in_gcp(log_client: gcp_logging.Client, test_run_id: str, sessio
 
 @pytest.mark.integration
 @pytest.mark.anyio
-async def test_async_cloud_logging_performance(real_infrastructure: InfrastructureManager):
+async def test_async_cloud_logging_performance(real_conf):
     """Test cloud logging performance under concurrent session creation."""
 
     # This test ensures cloud logging doesn't become a bottleneck
@@ -284,7 +288,8 @@ async def test_async_cloud_logging_performance(real_infrastructure: Infrastructu
 
     async def create_and_log_session(session_num: int):
         """Create a session and log a message."""
-        test_session = real_infrastructure.create_session_bm(
+        bootstrapper = create_configuration_bootstrapper(config=real_conf)
+        test_session = await bootstrapper.bootstrap_session_context(
             name=f"perf-session-{session_num}", job=f"perf-test-{test_run_id}", platform="pytest-async"
         )
 
