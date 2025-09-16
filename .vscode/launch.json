@@ -161,7 +161,7 @@
         "run=batch_run",
         "+max_jobs=30",
         "+flows=[trans,zot,osb]",
-        "verbose=true",
+        "verbose=false",
         "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
