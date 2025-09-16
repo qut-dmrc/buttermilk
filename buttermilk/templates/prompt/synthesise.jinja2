@@ -52,6 +52,6 @@ Your response should be written for an external audience. Do not mention our int
 {# Raise an error if answers do not exist: #}{%- if not answers -%}{{ answers }}{% endif -%}
 {# Loop through each provided draft answer, using simplified formatting. #}
 {% for answer in answers %}
-{{ answer['result'] }}
+{{ answer }}
 
 {% endfor %}

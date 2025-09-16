@@ -11,11 +11,8 @@ from vertexai.generative_models._generative_models import (
     ResponseValidationError,
 )
 
+from buttermilk import logger
 from buttermilk._core.exceptions import RateLimit
-
-from .._core.log import getLogger
-
-logger = getLogger()
 
 
 ########

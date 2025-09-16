@@ -563,25 +563,10 @@ class AgentTrace(AgentOutput):
     )
 
     def model_dump(self, *args, **kwargs) -> dict[str, Any]:
-        """Override model_dump to exclude empty collections and add template-friendly fields."""
+        """Override model_dump to exclude empty collections."""
         raw_dump = super().model_dump(*args, **kwargs)
         # Apply the cleaning function to the result
-        cleaned = clean_empty_values(raw_dump)
-        
-        # Add template-friendly fields for backward compatibility
-        # Templates expect 'answer_id' and 'result' fields
-        if 'call_id' in cleaned:
-            cleaned['answer_id'] = cleaned.get('call_id', '')
-        
-        # Add 'result' field that contains the formatted markdown output
-        if self.outputs and hasattr(self.outputs, 'as_markdown'):
-            cleaned['result'] = self.outputs.as_markdown(self.agent_id, self.call_id)
-        elif self.outputs:
-            cleaned['result'] = str(self.outputs)
-        else:
-            cleaned['result'] = ''
-        
-        return cleaned
+        return clean_empty_values(raw_dump)
 
     @computed_field
     @property
@@ -626,16 +611,7 @@ class AgentTrace(AgentOutput):
     
     def __str__(self) -> str:
         """Returns the `content` (string representation of `outputs`) of the agent trace."""
-        # If outputs have as_markdown, use that for better formatting
-        if self.outputs and hasattr(self.outputs, 'as_markdown'):
-            # Set context attributes on the output object for __str__ to use
-            if not hasattr(self.outputs, '_agent_id'):
-                self.outputs._agent_id = self.agent_id
-            if not hasattr(self.outputs, '_call_id'):
-                self.outputs._call_id = self.call_id
-            return str(self.outputs)
-        # Otherwise use inherited content property from AgentOutput
-        return super().content
+        return self.as_markdown()
 
     @classmethod
     def from_output(

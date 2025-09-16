@@ -1,6 +1,6 @@
 import asyncio
-import logging
 from collections.abc import Callable
+from logging import DEBUG
 from typing import Any
 
 import requests
@@ -86,7 +86,7 @@ class RetryWrapper(BaseModel):
                 max=self.max_wait_seconds,
                 jitter=self.jitter_seconds,
             ),
-            "before_sleep": before_sleep_log(logger, logging.DEBUG, exc_info=False),
+            "before_sleep": before_sleep_log(logger, DEBUG, exc_info=False),
             "reraise": True,
         }
 
