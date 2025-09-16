@@ -107,7 +107,4 @@ def extract_message_data(
     # However, keeping it provides an additional layer of cleanup.
     final_cleaned_data = clean_empty_values(extracted_data)
 
-    if final_cleaned_data:
-        logger.debug(f"Finished extracting data. Keys extracted: {list(final_cleaned_data.keys())}")
-
     return final_cleaned_data

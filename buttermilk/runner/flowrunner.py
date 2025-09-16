@@ -313,13 +313,11 @@ class FlowRunContext(BaseModel):
             storage_service = SessionStorageService()
             if storage_service.should_persist_message(formatted_message):
                 storage_service.save_message(self.session_id, formatted_message)
-                logger.debug("Persisted message for session", message_id=formatted_message.message_id, session_id=self.session_id)
         except Exception as e:
             logger.warning("Failed to persist message for session", session_id=self.session_id, error=str(e))
             # Continue even if persistence fails
 
         if self.websocket is None:
-            logger.debug("WebSocket not connected for session, cannot send message", session_id=self.session_id)
             return
 
         try:
