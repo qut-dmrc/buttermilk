@@ -91,12 +91,6 @@ class FetchAgent(Agent):
 
     @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
     async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | AgentTrace | None:
-        if message.role != self.role:
-            logger.debug(
-                f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}"
-            )
-            return None
-
         return await self.invoke(message=message)
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
@@ -110,7 +104,9 @@ class FetchAgent(Agent):
             or message.parameters.get("url")
             or message.parameters.get("uri")
         )
-        record_id = message.inputs.get("record_id") or message.parameters.get("record_id")
+        record_id = (
+            message.inputs.get("record_id") or message.parameters.get("record_id") or message.inputs.get("record") or message.parameters.get("record")
+        )
 
         if uri and record_id:
             raise ProcessingError("Cannot provide both uri and record_id.")
@@ -138,7 +134,9 @@ class FetchAgent(Agent):
         raise ProcessingError("No result found in _process")
 
     def get_tool_definitions(self) -> list[Tool]:
-        """Generate structured tool definitions for this agent."""
+        """Generate structured tool definitions for this agent.
+
+        Returns list of tool definitions as Tool objects."""
         internal_tools = [
             FunctionTool(
                 name="fetch_uri",

@@ -33,8 +33,8 @@ def test_template_synth():
     # Test template hash is returned and has correct format
     assert template_hash is not None
     assert isinstance(template_hash, str)
-    assert template_hash.startswith("sha256:")
-    assert len(template_hash) == 71  # "sha256:" (7 chars) + 64 hex chars
+    assert len(template_hash) == 64  # 64 hex chars (no prefix)
+    assert all(c in "0123456789abcdef" for c in template_hash)
 
 
 def test_calculate_template_hash():
@@ -43,8 +43,8 @@ def test_calculate_template_hash():
     
     # Test hash format
     assert isinstance(template_hash, str)
-    assert template_hash.startswith("sha256:")
-    assert len(template_hash) == 71  # "sha256:" + 64 hex chars
+    assert len(template_hash) == 64  # 64 hex chars (no prefix)
+    assert all(c in "0123456789abcdef" for c in template_hash)
     
     # Test path is returned
     assert isinstance(template_path, str)
@@ -87,8 +87,10 @@ def test_different_templates_different_hashes():
     
     # Different templates should have different hashes
     assert hash1 != hash2
-    assert hash1.startswith("sha256:")
-    assert hash2.startswith("sha256:")
+    assert len(hash1) == 64  # 64 hex chars (no prefix)
+    assert len(hash2) == 64  # 64 hex chars (no prefix)
+    assert all(c in "0123456789abcdef" for c in hash1)
+    assert all(c in "0123456789abcdef" for c in hash2)
 
 
 def test_parse_valid_json():

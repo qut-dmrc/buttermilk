@@ -166,7 +166,7 @@ find /tmp -name "buttermilk_*.log" -mtime -1  # Modified in last 24 hours
 If no debug log exists:
 1. Stop current server: `pkill -f buttermilk.runner.cli`
 2. Start in debug mode: `make debug`
-3. Or run with verbose: `uv run python -m buttermilk.runner.cli +run=api verbose=true`
+3. Or run with verbose: `uv run python -m buttermilk.runner.cli run=api verbose=true`
 
 ### Log File Too Large
 For very large logs:

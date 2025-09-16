@@ -27,18 +27,17 @@ import weave
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
-from buttermilk._core.config import CloudProviderCfg, LoggerConfig, Tracing
+from buttermilk._core.config import LoggerConfig, Tracing
+from buttermilk._core.cloud_config import CloudProvider
+from buttermilk._core.constants import CONFIG_CACHE_PATH, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
-from buttermilk._core.log import logger, setup_cloud_logging, setup_console_logging, setup_file_logging
+from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
 from buttermilk.utils.utils import load_json_flexi
 
 # Constants for configuration keys
-CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
-_MODELS_CFG_KEY = "models_secret"
-_SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # Global variable to store the execution context ID
 _global_execution_context_id = ""
@@ -80,11 +79,9 @@ class ExecutionContext(BaseModel):
 
     Attributes:
         execution_context_id (str): Unique identifier for this execution context.
-        clouds (list[CloudProviderCfg]): List of cloud provider configurations.
-        secret_provider (CloudProviderCfg | None): Secret provider configuration.
-        logger_cfg (LoggerConfig | None): Logging configuration.
-        pubsub (CloudProviderCfg | None): Pub/Sub configuration.
-        tracing (dict[str, Tracing] | None): Tracing configurations.
+        clouds (list[CloudProvider]): List of cloud provider configurations.
+        logging (LoggerConfig | None): Global logging configuration.
+        tracing (dict[str, Tracing] | None): Global tracing configurations.
         datasets (dict[str, BaseStorageConfig]): Shared dataset configurations.
     """
 
@@ -92,24 +89,19 @@ class ExecutionContext(BaseModel):
         default_factory=_make_execution_context_id,
         description="Unique identifier for this execution context."
     )
+
+    # Project management
+    project_name: str | None = Field(
+        default=None,
+        description="Project name shared across all sessions in this execution context."
+    )
     
     # Infrastructure configuration
-    clouds: list[CloudProviderCfg] = Field(
+    clouds: list[CloudProvider] = Field(
         default_factory=list,
         description="List of cloud provider configurations."
     )
-    secret_provider: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for the secret provider."
-    )
-    logger_cfg: LoggerConfig | None = Field(
-        default=None,
-        description="Configuration for cloud-based logging."
-    )
-    pubsub: CloudProviderCfg | None = Field(
-        default=None,
-        description="Configuration for Pub/Sub system."
-    )
+    logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
     tracing: dict[str, Tracing] | None = Field(
         default_factory=dict,
         description="Configuration for tracing systems."
@@ -147,22 +139,26 @@ class ExecutionContext(BaseModel):
         # Run initialization synchronously
         self._sync_background_init()
         
+        # Check for secrets cloud using service-aware pattern
+        secrets_cloud = self._find_cloud_with_service("secrets")
+        secret_provider_type = secrets_cloud.type if secrets_cloud else None
+
         logger.info(
             "Initialized ExecutionContext",
             execution_context_id=self.execution_context_id,
             cloud_providers=len(self.clouds),
-            secret_provider=self.secret_provider.type if self.secret_provider else None
+            secret_provider=secret_provider_type
         )
 
     def _setup_logging(self) -> None:
         """Set up modern logging for the execution context."""
-        verbose = getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False
+        verbose = getattr(self.logging, "verbose", False) if self.logging else False
         setup_console_logging(verbose=verbose)
 
         # Set up structured JSON file logging
         log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose)
         for log_file in log_files:
-            logger.info(f"ExecutionContext logging enabled - writing to: {log_file}")
+            logger.info("ExecutionContext logging enabled", log_file=log_file)
 
         # Log initialization message
         logger.info(
@@ -202,15 +198,15 @@ class ExecutionContext(BaseModel):
                 logger.debug("Performing synchronous cloud authentication...")
                 _ = self.cloud_manager
 
-            # Initialize secret manager
-            if self.secret_provider:
+            # Initialize secret manager if secrets cloud is available
+            if self._find_cloud_with_service("secrets"):
                 logger.debug("Initializing secret manager synchronously...")
                 _ = self.secret_manager
 
-            logger.info("ExecutionContext synchronous initialization completed")
+            logger.info("ExecutionContext synchronous initialization completed", execution_context_id=self.execution_context_id)
             self._initialization_complete.set()
         except Exception as e:
-            logger.error(f"Error during ExecutionContext initialization: {e}")
+            logger.error("Error during ExecutionContext initialization", error=str(e))
             self._initialization_error = e
             self._initialization_complete.set()
 
@@ -226,6 +222,40 @@ class ExecutionContext(BaseModel):
         await self._setup_tracing()
         
         logger.debug("ExecutionContext initialization verified complete")
+
+    def validate_and_set_project(self, project: str | None) -> str:
+        """Validate and set the project name for this execution context.
+
+        Args:
+            project: Project name to validate and set. If None and no project is set,
+                    raises an error. If None and project is already set, returns existing.
+
+        Returns:
+            The validated project name.
+
+        Raises:
+            RuntimeError: If project validation fails or required project is missing.
+        """
+        if self.project_name is None:
+            # First session - project is required
+            if project is None:
+                raise RuntimeError(
+                    "project parameter is required for the first session in an execution context. Example: init(job='my_job', project='my_project')"
+                )
+            self.project_name = project
+            logger.debug("Set project name for execution context", project=project)
+            return project
+        else:
+            # Subsequent sessions - validate consistency
+            if project is not None and project != self.project_name:
+                raise RuntimeError(
+                    f"Project name mismatch: execution context is using project '{self.project_name}', "
+                    f"but session specified project '{project}'. All sessions in the same execution "
+                    f"context must use the same project. Either omit the project parameter to use "
+                    f"'{self.project_name}', or start a new process for project '{project}'."
+                )
+            # Return the existing project (whether user specified it or not)
+            return self.project_name
 
     @property
     def cloud_manager(self) -> CloudManager:
@@ -246,14 +276,35 @@ class ExecutionContext(BaseModel):
 
             logger.debug("Cloud authentication completed")
 
+    def _find_cloud_with_service(self, service: str) -> Any | None:
+        """Find the first cloud provider that has a specific service configured.
+
+        Args:
+            service: Service name to look for (e.g., "secrets", "logging", "pubsub", "tracing")
+
+        Returns:
+            Cloud provider configuration with the service, or None if not found.
+        """
+        for cloud in self.clouds:
+            if hasattr(cloud, "has_service") and cloud.has_service(service):
+                return cloud
+        return None
+
     @property
     def secret_manager(self) -> SecretsManager:
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
-            if not self.secret_provider:
-                raise RuntimeError("Secret provider configuration is missing.")
-            self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
-            logger.debug("SecretsManager initialized successfully")
+            # Use service-aware cloud provider pattern
+            secrets_cloud = self._find_cloud_with_service("secrets")
+            if not secrets_cloud:
+                raise RuntimeError("No cloud provider with secrets service configured.")
+
+            from buttermilk._core.keys import SecretsManager
+
+            # Get secrets configuration from cloud provider
+            secrets_config = secrets_cloud.get_client_config("secretmanager")
+            self._secret_manager = SecretsManager(**secrets_config)
+            logger.debug(f"SecretsManager initialized with {secrets_cloud.type} provider")
         return self._secret_manager
 
     @property
@@ -273,24 +324,24 @@ class ExecutionContext(BaseModel):
                         )
                         connections_data = None
                     else:
-                        logger.info(f"Loaded LLM connections from cache: {cache_path}")
+                        logger.info("Loaded LLM connections from cache", cache_path=str(cache_path))
                 except Exception as e:
-                    logger.warning(f"Failed to load LLM connections from cache: {e}. Will try secrets.")
+                    logger.warning("Failed to load LLM connections from cache, will try secrets", error=str(e))
                     connections_data = None
 
             # If not loaded from cache, get from secret manager
             if connections_data is None:
                 try:
-                    connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
+                    connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
                     if not isinstance(connections_data, dict):
                         raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
-                    logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
+                    logger.info("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
                     
                     # Cache the connections data
                     self._write_cache_sync(connections_data, cache_path)
                 except Exception as e:
-                    logger.error(f"Failed to load LLM connections from secret manager: {e}")
-                    raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
+                    logger.error("Failed to load LLM connections from secret manager", error=str(e), secret_key=MODELS_CFG_KEY)
+                    raise RuntimeError(f"Failed to load LLM connections from both cache and secrets. Could not find secret '{MODELS_CFG_KEY}' in secret manager.") from e
 
             self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
@@ -299,7 +350,7 @@ class ExecutionContext(BaseModel):
         """Synchronous cache writing helper."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
-        logger.info(f"Caching LLM connections to {cache_path}")
+        logger.info("Caching LLM connections", cache_path=str(cache_path))
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property
@@ -338,7 +389,7 @@ class ExecutionContext(BaseModel):
         """Retrieves shared system credentials from the secret manager."""
         if self._credentials_cached is None:
             logger.debug("Fetching shared credentials from secret manager...")
-            creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
+            creds = self.secret_manager.get_secret(cfg_key=SHARED_CREDENTIALS_KEY)
             if not isinstance(creds, dict):
                 raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
             self._credentials_cached = creds
@@ -361,12 +412,11 @@ class ExecutionContext(BaseModel):
             enabled_providers.append("otel")
             
         if enabled_providers:
-            logger.debug(f"Tracing providers configured (deferred initialization): {', '.join(enabled_providers)}")
+            logger.debug("Tracing providers configured (deferred initialization)", providers=enabled_providers)
         else:
             logger.debug("No tracing providers enabled")
 
         self._tracing_instrumented.set()
-
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client."""
@@ -382,6 +432,7 @@ class ExecutionContext(BaseModel):
         # Now perform actual tracing initialization for all enabled providers
         await self._initialize_all_tracing_providers()
 
+
     async def _initialize_all_tracing_providers(self) -> None:
         """Initialize all configured tracing providers."""
         # Skip if already initialized to prevent duplicate setup
@@ -391,8 +442,8 @@ class ExecutionContext(BaseModel):
         # Initialize Weave if enabled
         if self.tracing.get("weave") and self.tracing["weave"].enabled:
             await self._initialize_weave()
-            
-        # Initialize Traceloop if enabled  
+
+        # Initialize Traceloop if enabled
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
             await self._initialize_traceloop()
             
@@ -409,8 +460,8 @@ class ExecutionContext(BaseModel):
         weave_config = self.tracing["weave"]
         
         # Extract credentials from configuration (fail-fast if missing)
-        wandb_entity = getattr(weave_config, 'project_id', None)
-        wandb_api_key = getattr(weave_config, 'api_key', None)
+        wandb_entity = getattr(weave_config, "project_id", None)
+        wandb_api_key = getattr(weave_config, "api_key", None)
         
         if not wandb_entity:
             raise RuntimeError("Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config.")
@@ -424,23 +475,30 @@ class ExecutionContext(BaseModel):
         
         try:
             # Setup Weave tracing
-            collection_name = f"execution-context-{self.execution_context_id[:8]}"
+            # Use project name for collection, fallback to execution context if project not set yet
+            if self.project_name:
+                collection_name = self.project_name
+            else:
+                # Fallback for edge case where weave is initialized before first session
+                collection_name = f"execution-context-{self.execution_context_id[:8]}"
+                logger.warning("Weave initialized before project name was set, using execution context ID", execution_context_id=self.execution_context_id)
+
             autopatch = {"autogen": {"enabled": False}}
-            logger.debug(f"Starting weave client initialization. Entity: {wandb_entity}, Collection: {collection_name}")
+            logger.debug("Starting weave client initialization", entity=wandb_entity, collection=collection_name)
 
             client = weave.init(
                 project_name=f"{wandb_entity}/{collection_name}",
                 autopatch_settings=autopatch
             )
-            logger.info(f"Weave initialized successfully for {wandb_entity}/{collection_name}")
+            logger.info("Weave initialized successfully", entity=wandb_entity, collection=collection_name)
         except Exception as e:
-            logger.error(f"Failed to initialize Weave tracing: {e}")
+            logger.error("Failed to initialize Weave tracing", error=str(e))
             raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
 
     async def _initialize_traceloop(self) -> None:
         """Initialize Traceloop tracing."""
         traceloop_config = self.tracing["traceloop"]
-        api_key = getattr(traceloop_config, 'api_key', None)
+        api_key = getattr(traceloop_config, "api_key", None)
         
         if not api_key:
             raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")
@@ -451,24 +509,25 @@ class ExecutionContext(BaseModel):
                 app_name="buttermilk",
                 api_key=api_key
             )
-            logger.info("Traceloop initialized successfully")
+            logger.info("Traceloop initialized successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
-            logger.error(f"Failed to initialize Traceloop tracing: {e}")
+            logger.error("Failed to initialize Traceloop tracing", error=str(e))
             raise RuntimeError(f"Traceloop tracing initialization failed: {e}") from e
 
     async def _initialize_otel(self) -> None:
-        """Initialize OTEL tracing."""
+        """Initialize OTEL tracing using ExecutionContext's infrastructure."""
         try:
-            from buttermilk.utils.otel import setup_tracing_otel
-            setup_tracing_otel(self.tracing["otel"])
-            logger.info("OTEL Tracing has been set up successfully")
+            from buttermilk.utils.otel import setup_tracing_otel_with_execution_context
+            setup_tracing_otel_with_execution_context(self.tracing["otel"], self)
+            logger.info("OTEL Tracing has been set up successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
-            logger.error(f"Failed to initialize OTEL tracing: {e}")
+            logger.error("Failed to initialize OTEL tracing", error=str(e))
             raise RuntimeError(f"OTEL tracing initialization failed: {e}") from e
 
 
 # Global execution context instance
 _global_execution_context: ExecutionContext | None = None
+_execution_context_initialized: bool = False
 
 
 def get_execution_context() -> ExecutionContext:
@@ -481,12 +540,54 @@ def get_execution_context() -> ExecutionContext:
 
 def set_execution_context(context: ExecutionContext) -> None:
     """Set the global ExecutionContext instance."""
-    global _global_execution_context
+    global _global_execution_context, _execution_context_initialized
     _global_execution_context = context
+    _execution_context_initialized = True
 
 
 def create_execution_context(**kwargs) -> ExecutionContext:
-    """Create and set a new ExecutionContext."""
+    """Create and set a new ExecutionContext.
+    
+    Raises:
+        RuntimeError: If an ExecutionContext has already been initialized.
+                     This prevents accidental reinitialization that would
+                     break logging configuration and lose execution context state.
+    """
+    global _execution_context_initialized
+    
+    if _execution_context_initialized:
+        raise RuntimeError(
+            "ExecutionContext has already been initialized. "
+            "Creating multiple ExecutionContext instances will break logging configuration, "
+            "reset verbose logging settings, and cause loss of execution context state. "
+            "Use get_execution_context() to access the existing context, or "
+            "get_or_create_execution_context() for safe initialization."
+        )
+    
     context = ExecutionContext(**kwargs)
     set_execution_context(context)
+    _execution_context_initialized = True
     return context
+
+
+def get_or_create_execution_context(**kwargs) -> ExecutionContext:
+    """Get existing ExecutionContext or create a new one if none exists.
+    
+    This is the safe way to initialize ExecutionContext that won't break
+    if called multiple times. Use this instead of create_execution_context()
+    in scenarios where you're unsure if context has been initialized.
+    
+    Args:
+        **kwargs: Arguments passed to ExecutionContext constructor if creating new
+        
+    Returns:
+        ExecutionContext: The existing or newly created ExecutionContext
+    """
+    global _execution_context_initialized
+    
+    if _execution_context_initialized:
+        logger.debug("ExecutionContext already initialized, returning existing context")
+        return get_execution_context()
+    
+    logger.debug("No ExecutionContext found, creating new one")
+    return create_execution_context(**kwargs)

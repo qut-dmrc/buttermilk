@@ -5,15 +5,16 @@ Start, stop, and manage the Buttermilk API server.
 This script is used by MCP tools to control the server.
 """
 
-import sys
-import subprocess
-import time
+import json
 import os
 import signal
-import json
+import subprocess
+import sys
+import time
+from typing import Optional
+
 import psutil
 import requests
-from typing import Optional, List
 
 
 class ButtermilkServer:
@@ -22,11 +23,11 @@ class ButtermilkServer:
         
     def find_process(self) -> Optional[int]:
         """Find the Buttermilk server process."""
-        for proc in psutil.process_iter(['pid', 'cmdline']):
+        for proc in psutil.process_iter(["pid", "cmdline"]):
             try:
-                cmdline = proc.info['cmdline']
-                if cmdline and self.process_name in ' '.join(cmdline):
-                    return proc.info['pid']
+                cmdline = proc.info["cmdline"]
+                if cmdline and self.process_name in " ".join(cmdline):
+                    return proc.info["pid"]
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return None
@@ -42,20 +43,15 @@ class ButtermilkServer:
         flows_json = json.dumps(flows_list)
         
         # Build command
-        cmd = [
-            "uv", "run", "python", "-m", "buttermilk.runner.cli",
-            f"+flows={flows_json}",
-            "+run=api",
-            "llms=debug"
-        ]
+        cmd = ["uv", "run", "python", "-m", "buttermilk.runner.cli", f"+flows={flows_json}", "run=api", "llms=debug"]
         
         if debug:
             cmd.append("verbose=true")
-            print(f"Starting server in debug mode...")
+            print("Starting server in debug mode...")
             print(f"Flows: {flows}")
-            print(f"Log location: /tmp/buttermilk_*.log")
+            print("Log location: /tmp/buttermilk_*.log")
         else:
-            print(f"Starting server...")
+            print("Starting server...")
             print(f"Flows: {flows}")
             
         # Start the process
@@ -121,7 +117,7 @@ class ButtermilkServer:
         pid = self.find_process()
         
         if pid:
-            print(f"Status: Running")
+            print("Status: Running")
             print(f"PID: {pid}")
             
             # Check if listening

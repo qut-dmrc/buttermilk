@@ -1,13 +1,11 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import AsyncGenerator
-from typing import Any  # Import Dict
+from typing import Any, Mapping  # Import Dict
 
 from autogen_core import DefaultTopicId, MessageContext, message_handler
 from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import (
-    Tool,
-)
+from autogen_core.tools import Tool
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -281,7 +279,13 @@ class HostAgent(Agent):
                 tool_names = []
                 for tool in message.tool_definitions:
                     # Extract tool name from either name attribute or schema.name
-                    tool_name = getattr(tool, "name", None) or getattr(tool.schema, "name", None)
+                    tool_name = None
+                    if isinstance(tool, Tool):
+                        tool_name = getattr(tool, "name", None)
+                    elif hasattr(tool, "schema"):
+                        tool_name = getattr(tool.schema, "name", None)
+                    elif isinstance(tool, Mapping):
+                        tool_name = tool.get("name") or tool.get("schema", {}).get("name")
                     if tool_name:
                         self._tool_to_agent_map[tool_name] = agent_id
                         tool_names.append(tool_name)
@@ -557,14 +561,6 @@ class HostAgent(Agent):
             async for next_step in self._step_generator:
                 logger.info("Host processing step", agent_name=self.agent_name, step_role=next_step.role)
 
-                # Don't seek confirmation from the manager to send a request to the manager
-                logger.debug(
-                    "Host checking human_in_loop",
-                    agent_name=self.agent_name,
-                    human_in_loop=self.human_in_loop,
-                    next_step_role=next_step.role,
-                    manager_role=MANAGER,
-                )
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
                     logger.info("User rejected step or timed out, stopping flow", agent_name=self.agent_name)

@@ -13,14 +13,10 @@ and document the expected behavior for Phase 1 implementation.
 """
 
 import asyncio
-import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi.testclient import TestClient
-from fastapi.websockets import WebSocketState
+from unittest.mock import AsyncMock, MagicMock
 
-from buttermilk._core.contract import FlowMessage, SystemPromptMessage
-from buttermilk.runner.flowrunner import FlowRunContext, SessionStatus
+import pytest
+from fastapi.websockets import WebSocketState
 
 
 class TestOSBWebSocketIntegration:
@@ -36,14 +32,6 @@ class TestOSBWebSocketIntegration:
         mock_ws.receive_json = AsyncMock()
         mock_ws.close = AsyncMock()
         return mock_ws
-
-    @pytest.fixture
-    def mock_flow_runner(self):
-        """Mock FlowRunner with OSB session support."""
-        mock_runner = MagicMock()
-        mock_runner.get_websocket_session_async = AsyncMock()
-        mock_runner.run_flow = AsyncMock()
-        return mock_runner
 
     @pytest.fixture
     def osb_query_message(self):
@@ -93,7 +81,7 @@ class TestOSBWebSocketIntegration:
         assert "missing required fields" in error_msg.lower()
 
     @pytest.mark.anyio
-    async def test_osb_session_creation_via_websocket(self, mock_websocket, mock_flow_runner):
+    async def test_osb_session_creation_via_websocket(self, mock_websocket, real_flow_runner):
         """
         FAILING TEST: OSB sessions should be created with specific configuration.
         
@@ -133,7 +121,7 @@ class TestOSBWebSocketIntegration:
             assert session.parameters["osb_features"]["enable_case_tracking"] is True
 
     @pytest.mark.anyio
-    async def test_osb_multi_agent_query_routing(self, osb_query_message, mock_flow_runner):
+    async def test_osb_multi_agent_query_routing(self, osb_query_message, real_flow_runner):
         """
         FAILING TEST: OSB queries should route to appropriate agents in sequence.
         
@@ -173,7 +161,7 @@ class TestOSBWebSocketIntegration:
         from buttermilk.api.websocket.osb_processor import process_osb_query  # TO BE IMPLEMENTED
         
         with pytest.raises(NotImplementedError, match="OSB multi-agent processing not implemented"):
-            result = await process_osb_query(osb_query_message, mock_flow_runner)
+            result = await process_osb_query(osb_query_message, real_flow_runner)
             
             # Validate multi-agent processing
             assert "agent_responses" in result

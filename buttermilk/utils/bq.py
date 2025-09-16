@@ -104,7 +104,6 @@ def construct_dict_from_schema(
 
     for key, value in data_dict.items():
         if remove_extra_fields and key not in schema_field_names:
-            logger.debug(f"Field '{key}' not in schema, removing (remove_extra_fields=True).")
             continue  # Skip fields not in schema if remove_extra_fields is True
 
         # Find the corresponding schema field definition for the current key

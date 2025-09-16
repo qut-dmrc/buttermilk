@@ -18,28 +18,10 @@ from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 pytestmark = pytest.mark.anyio
 
 
-@pytest.fixture
-def mock_bm():
-    """Mock the BM singleton."""
-    # Create mock BM instance
-    mock_bm = Mock()
-    mock_bm.llms = Mock()
-    mock_bm.llms.get_autogen_chat_client = Mock(return_value=Mock())
-    mock_bm.databases = {}
-    mock_bm.storage = {}
-    
-    # Mock weave
-    mock_bm.get_weave_client = Mock()
-    
-    # Use MagicMock to prevent AttributeError
-    with patch("buttermilk.buttermilk", mock_bm):
-        yield mock_bm
-
-
 class TestOSBFlowIntegration:
     """Test OSB flow with structured tool definitions."""
     
-    async def test_osb_flow_with_structured_host(self, mock_bm):
+    async def test_osb_flow_with_structured_host(self, real_bm):
         """Test OSB flow with StructuredLLMHostAgent replacing the sequencer."""
         # Create mock agents with tool definitions
         class MockResearcherAgent(Agent):
@@ -147,7 +129,7 @@ class TestOSBFlowIntegration:
 class TestTransFlowIntegration:
     """Test trans flow with structured tool definitions."""
     
-    async def test_trans_flow_with_structured_tools(self, mock_bm):
+    async def test_trans_flow_with_structured_tools(self, real_bm):
         """Test trans flow with agents using tool definitions."""
         # Create mock judge agent with tools
         class MockJudgeAgent(Agent):
@@ -221,7 +203,7 @@ class TestTransFlowIntegration:
 class TestToxFlowIntegration:
     """Test tox flow with structured tool definitions."""
     
-    async def test_tox_flow_tool_coordination(self, mock_bm):
+    async def test_tox_flow_tool_coordination(self, real_bm):
         """Test tox flow with tool-based agent coordination."""
         # Create scorer agent with tools
         class MockScorerAgent(Agent):

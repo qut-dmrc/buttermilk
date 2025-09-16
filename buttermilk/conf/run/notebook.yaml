@@ -6,3 +6,4 @@ ui: notebook
 human_in_loop: true
 
 name: bm_notebook
+job: default_job

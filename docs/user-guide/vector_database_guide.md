@@ -80,7 +80,7 @@ input_docs:
 ### 3. Run Vectorization
 
 ```bash
-uv run python -m buttermilk.data.vector +run=my_vectorize
+uv run python -m buttermilk.data.vector run=my_vectorize
 ```
 
 ### 4. Create RAG Flow
@@ -102,7 +102,7 @@ parameters: {}
 ### 5. Start Interactive Chat
 
 ```bash
-uv run python -m buttermilk.runner.cli +flow=my_rag +run=api
+uv run python -m buttermilk.runner.cli +flow=my_rag run=api
 ```
 
 ## Architecture

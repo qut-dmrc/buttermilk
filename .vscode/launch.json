@@ -4,6 +4,7 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+  
     {
       "name": "Buttermilk API daemon",
       "type": "debugpy",
@@ -21,7 +22,7 @@
       "justMyCode": false,
       "args": [
         "+flows=[trans,transllm,zot,osb]",
-        "+run=api",
+        "run=api",
         "verbose=true",
         "llms=${input:llms}",
       ],
@@ -58,6 +59,30 @@
       "justMyCode": false,
       "console": "integratedTerminal",
       "args": []
+    },
+    {
+      "name": "Python: Streamlit",
+      "type": "debugpy", // or "python" for older versions
+      "request": "launch",
+      "consoleName": "streamlit",
+      "cwd": "${workspaceFolder}",
+      "module": "streamlit",
+      "pythonArgs": [
+        "run",
+        "python",
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "python": "uv",
+      "args": [
+        "run",
+        "${file}",
+        "--server.port",
+        "8501" // Optional: Specify a port
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true // Set to false to debug into Streamlit's source code
     },
     {
       "name": "Test Config",
@@ -110,7 +135,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch",
+        "run=batch",
         "+max_records=30",
         "+flows=[trans,zot,osb]",
         "+flow=trans",
@@ -133,10 +158,10 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch_run",
+        "run=batch_run",
         "+max_jobs=30",
         "+flows=[trans,zot,osb]",
-        "verbose=true",
+        "verbose=false",
         "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",

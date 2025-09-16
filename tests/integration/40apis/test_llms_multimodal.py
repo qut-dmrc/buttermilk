@@ -3,13 +3,11 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from buttermilk._core.llms import MULTIMODAL_MODELS, LLMClient, LLMs
 from buttermilk._core.types import Record
 
 
 @pytest.mark.anyio
 async def test_multimodal_question(
-    llm: LLMClient,
     multimodal_record: Record,
 ):
     # Test that the multimodal record contains content
@@ -23,8 +21,7 @@ async def test_multimodal_question(
     assert True  # placeholder until we implement LLM calls
 
 
-@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
-def test_multimodal_input_pil_image(llms: LLMs, model, image_bytes):
+def test_multimodal_input_pil_image(image_bytes):
     """Test creating a Record with PIL Image directly in content."""
     # Create PIL Image from bytes
     pil_image = Image.open(BytesIO(image_bytes))
@@ -54,8 +51,7 @@ def test_multimodal_input_pil_image(llms: LLMs, model, image_bytes):
     assert message is not None
 
 
-@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
-def test_multimodal_input_with_message_conversion(llms: LLMs, model, image_bytes):
+def test_multimodal_input_with_message_conversion(image_bytes):
     """Test creating a Record with PIL image and converting to message format."""
     # Create PIL Image from bytes
     pil_image = Image.open(BytesIO(image_bytes))
@@ -83,7 +79,7 @@ def test_multimodal_input_with_message_conversion(llms: LLMs, model, image_bytes
     # Test conversion to message format (this should work with utility functions)
     message = record.as_message(role="user")
     assert message is not None
-    assert hasattr(message, 'content')
+    assert hasattr(message, "content")
     # The content should be a list with image content part and text
     assert isinstance(message.content, list)
     assert len(message.content) == 2

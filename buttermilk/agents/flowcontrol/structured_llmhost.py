@@ -149,10 +149,16 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Get the appropriate AutoGenWrapper instance
         model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
-        # Deduplicate tools by name
-        tools_list = list({tool.name: tool for tool in tools}.values())
+        # Deduplicate tools by name (handle both Tool objects and ToolSchema dicts)
+        def get_tool_name(tool):
+            if hasattr(tool, 'name'):
+                return tool.name  # Tool object
+            else:
+                return tool['name']  # ToolSchema dict
+        
+        tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 
-        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[tool.name for tool in tools_list]}")
+        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}")
 
         # Use intercept_tools=True to get FunctionCall objects without execution
         return await model_client.call_chat(

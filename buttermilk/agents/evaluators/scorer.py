@@ -227,10 +227,7 @@ class LLMScorer(LLMAgent):
 
         """
         # Validate the incoming message type and content
-        if not isinstance(message, AgentTrace) or \
-           not hasattr(message, "outputs") or \
-           not isinstance(message.outputs, JudgeReasons) or \
-           not hasattr(message, "inputs") or not message.inputs:  # Ensure inputs exist
+        if not isinstance(message, AgentTrace) or not isinstance(message.outputs, JudgeReasons) or not message.inputs:  # Ensure inputs exist
             logger.debug(
                 "Scorer received message that is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
                 agent_id=self.agent_id,
@@ -354,7 +351,7 @@ class LLMScorer(LLMAgent):
                 logger.warning(
                     "Scorer could not extract assessed agent/call ID from message.inputs to create QualResults.",
                     scorer_agent_id=self.agent_id,
-                    answers_data=message.inputs.get('answers'),
+                    answers_data=message.inputs.get("answers"),
                 )
                 # llm_output_base.outputs remains QualScore in this case
         elif llm_output_base:

@@ -31,6 +31,39 @@ This is the only debugging guide you need - all commands have been validated and
 - Functional API health monitoring
 - End-to-end flow execution with visible message generation
 
+## Valid System Configuration Parameters
+
+**⚠️ CRITICAL: Use Only Valid Parameters**
+
+**Available Flows**: 
+- `trans` - Transgender journalist ethics research flow
+- `transllm` - LLM-based trans journalism analysis 
+- `zot` - Zotero integration flow
+- `osb` - Online Safety Benchmark flow
+
+**Valid Criteria Templates**:
+- `tja` - Trans Journalists Association stylebook criteria
+- `glaad` - GLAAD media reference criteria
+- Other criteria from `/buttermilk/conf/flows/criteria/` and template files
+
+**Record ID Requirements**:
+- **MUST** use actual record IDs from your data sources
+- **NEVER** use placeholder values like 'demo_record', 'demo', 'test_record'
+- **Recommended valid records**: 'betoota_snape_trans'
+- Check your data files or storage configurations for valid record IDs
+
+**❌ CRITICAL**: Flows WILL NOT run with arbitrary parameters. All parameters (record_id, criteria, flow) MUST match live data configuration.
+
+**❌ INVALID EXAMPLES** (DO NOT USE):
+- Flows: 'simple', 'test hashing', 'demo_flow' 
+- Records: 'demo_record', 'demo', 'test_record'
+- Criteria: 'test', 'demo_criteria'
+
+**✅ VALID EXAMPLES** (CONFIRMED WORKING):
+- Flow: 'trans'
+- Records:  'betoota_snape_trans'
+- Criteria: 'tja', 'glaad'
+
 ## The Simplified Golden Path Workflow
 
 **Two Core Tools, Validated Workflow:**
@@ -50,13 +83,23 @@ This is the only debugging guide you need - all commands have been validated and
 
 ## 1. Start the Server
 
-Use the `make debug` command to start the Buttermilk API server in the background. This is the standard way to launch the backend for development.
+### For Standard Debugging (Most Agents)
+Use the `make debug` command to start the Buttermilk API server in the background:
 
 ```bash
 make debug
 ```
 
 This command handles killing any old processes and starts a new one, logging output to a file in `/tmp/`.
+
+### For Advanced Debugging (Agents with Background Process Capability)
+Agents capable of running background processes (like Claude Code) should launch the server directly to monitor stdio in real-time:
+
+```bash
+uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=debug verbose=true
+```
+
+**⚠️ WARNING**: This command does not time out. Only use if your agent can manage background processes. Other agents should use `make debug` instead.
 
 ---
 
@@ -182,9 +225,14 @@ await debug_agent.stop_puppet_mode()
 
 *   **Start a Flow (VALIDATED):**
     ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "demo_record" --criteria "test" --wait 10
+    # CRITICAL: Use ONLY validated record IDs and criteria combinations
+    # These examples use confirmed working live data:
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "kerri_colby_children_transitioning" --criteria "tja" --wait 10
+    uv run python -m buttermilk.debug.ws_debug_cli start trans --record "betoota_snape_trans" --criteria "glaad" --wait 10
     ```
     **Expected Evidence**: Message count increases from 0 to 20+ messages in logs
+    
+    **❌ CRITICAL**: Flows WILL FAIL with arbitrary parameters. Do NOT use placeholder values - parameters must match existing live data configuration.
 
 *   **View Recent Logs (VALIDATED):**
     ```bash
@@ -308,8 +356,11 @@ curl -s http://localhost:8000/health
 uv run python -m buttermilk.debug.ws_debug_cli test-connection
 # Expected: "Successfully connected to WebSocket at ws://localhost:8000/ws"
 
-uv run python -m buttermilk.debug.ws_debug_cli start trans --record "demo" --criteria "test" --wait 10
+uv run python -m buttermilk.debug.ws_debug_cli start trans --record "kerri_colby_children_transitioning" --criteria "tja" --wait 10
 # Expected: Flow execution with message count increase from 0 to 20+ messages
+# NOTE: Use only validated record IDs like 'kerri_colby_children_transitioning' or 'betoota_snape_trans'
 ```
 
 **Integration Test**: All evidence is validated by `/tests/integration/test_debugging_workflow.py`
+
+**⚠️ NOTE**: The integration test currently uses placeholder values ('demo_record', 'test') which should be updated to use valid configurations. This test file needs updating to align with the corrected documentation.

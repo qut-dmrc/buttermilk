@@ -25,7 +25,7 @@ Launch the API server to access flows via HTTP:
 uv run python -m buttermilk.runner.cli run=api +flow=trans
 
 # Or with multiple flows
-uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
+uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=full
 ```
 
 > **📚 Learn More**: See [Running Flows](../user-guide/flows.md) for all run modes and advanced options.

@@ -6,6 +6,7 @@ from typing import Any
 from google import genai
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials
+from google.auth.credentials import TokenState
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
 
@@ -99,7 +100,7 @@ class CloudManager:
         creds = self.gcp_credentials
 
         # Refresh if needed
-        if not creds.valid:
+        if creds.token_state != TokenState.FRESH:
             from google.auth.transport.requests import Request
 
             request = Request()

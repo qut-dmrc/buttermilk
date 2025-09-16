@@ -1,12 +1,12 @@
 """End-to-end tests for Buttermilk flows."""
 
-import pytest
 import asyncio
-import subprocess
 import logging
+import subprocess
 
-import pytest_asyncio
 import anyio
+import pytest
+import pytest_asyncio
 
 from tests.integration.flow_test_client import FlowTestClient
 
@@ -22,7 +22,7 @@ async def backend_process():
     # Kill any process already listening on port 8000
     try:
         logger.info("[backend_fixture] Attempting to kill processes on port 8000...")
-        result = subprocess.run(["fuser", "-k", "8000/tcp"], capture_output=True, text=True)
+        result = subprocess.run(["fuser", "-k", "8000/tcp"], check=False, capture_output=True, text=True)
         logger.info("[backend_fixture] fuser stdout", stdout=result.stdout)
         logger.info("[backend_fixture] fuser stderr", stderr=result.stderr)
         if result.returncode == 0:
@@ -41,7 +41,7 @@ async def backend_process():
         "-m",
         "buttermilk.runner.cli",
         "+flows=[trans,zot,osb]",
-        "+run=api",
+        "run=api",
         "+llms=full",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -133,7 +133,9 @@ class TestFlowE2E:
                     # Check what messages we received
                     logger.info("Total messages received", num_messages=len(client.collector.all_messages))
                     for i, msg in enumerate(client.collector.all_messages):
-                        logger.info("Message received", message_num=i, message_type=msg.type, content_preview=msg.content[:100] if msg.content else 'N/A')
+                        logger.info(
+                            "Message received", message_num=i, message_type=msg.type, content_preview=msg.content[:100] if msg.content else "N/A"
+                        )
 
                     # Look for agent outputs or research results
                     agent_responses = client.collector.agent_traces + client.collector.ui_messages
@@ -236,7 +238,7 @@ class TestFlowE2E:
                     logger.info("Test completed successfully")
                     final_summary = client.get_message_summary()
                     logger.info("Final message summary", summary=final_summary)
-                    logger.info("Active agents", active_agents=final_summary['agents_active'])
+                    logger.info("Active agents", active_agents=final_summary["agents_active"])
 
         except TimeoutError:
             pytest.fail("Test timed out - flow may be stuck")

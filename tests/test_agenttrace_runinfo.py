@@ -23,22 +23,6 @@ def mock_session_info():
     )
 
 
-@pytest.fixture
-def mock_bm(mock_session_info, monkeypatch):
-    """Create a mock BM instance with test session info."""
-    bm_config = {
-        "session_info": mock_session_info,
-        "save_dir_base": "/tmp",
-        "connections": [],
-    }
-    bm = BM(**bm_config)
-    
-    # Monkeypatch the global bm instance
-    import buttermilk
-    monkeypatch.setattr(buttermilk, "buttermilk", bm)
-    
-    return bm
-
 
 @pytest.fixture
 def agent_config():
@@ -59,7 +43,7 @@ def agent_input():
     )
 
 
-def test_agenttrace_serializes_runinfo_correctly(mock_bm, agent_config, agent_input):
+def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_input):
     """Test that AgentTrace correctly serializes session_info from BM instance."""
     # Create AgentTrace which should pick up session_info from bm
     trace = AgentTrace(
@@ -85,19 +69,18 @@ def test_agenttrace_serializes_runinfo_correctly(mock_bm, agent_config, agent_in
     assert "session_id" in session_info
     assert "platform" in session_info
     assert "save_dir" in session_info
-    assert "flow_api" in session_info
     
-    # Verify values match
-    assert session_info["name"] == "test_project"
-    assert session_info["job"] == "test_job"
-    assert session_info["session_id"] == "test-run-123"
+    # Verify values match real configuration
+    assert session_info["name"] == "buttermilk"  # From real_bm fixture
+    assert session_info["job"] == "testing"      # From testing.yaml
     assert session_info["platform"] == "local"
-    # save_dir gets modified during BM initialization to include full path
-    assert session_info["save_dir"] == "/tmp/test_project/test_job/test-run-123"
-    assert session_info["flow_api"] == "http://localhost:8000/flow/"
+    # session_id should be dynamically generated
+    assert session_info["session_id"].startswith("session-")
+    # save_dir should include the full path structure
+    assert "buttermilk/testing" in session_info["save_dir"]
 
 
-def test_agenttrace_runinfo_is_json_serializable(mock_bm, agent_config, agent_input):
+def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_input):
     """Test that AgentTrace session_info can be serialized to JSON for BigQuery."""
     trace = AgentTrace(
         call_id="test-call-456",

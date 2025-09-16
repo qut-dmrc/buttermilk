@@ -18,12 +18,11 @@ class TestZoteroIncrementalSync:
     """Test suite for Zotero incremental sync functionality."""
 
     @pytest.fixture
-    def mock_get_bm(self):
+    def mock_get_bm(self, real_bm):
         """Mock the get_bm function to provide test credentials."""
         with patch("buttermilk.libs.zotero.get_bm") as mock:
-            mock_bm = MagicMock()
-            mock_bm.credentials.get.return_value = "test_api_key"
-            mock.return_value = mock_bm
+            real_bm.credentials.get.return_value = "test_api_key"
+            mock.return_value = real_bm
             yield mock
 
     @pytest.fixture

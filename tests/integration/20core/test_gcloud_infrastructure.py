@@ -15,14 +15,14 @@ from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
 
-def test_save_binary(bm):
+def test_save_binary(real_bm):
     """Test binary file upload to cloud storage."""
     # Integration test must fail if cloud manager not properly configured
-    assert bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
-    assert bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
+    assert real_bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
+    assert real_bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
 
     # Get the first cloud provider and ensure storage bucket exists
-    cloud = bm.cloud_manager.clouds[0]
+    cloud = real_bm.cloud_manager.clouds[0]
     assert hasattr(cloud, "storage_bucket"), "Cloud must have storage_bucket attribute"
     assert cloud.storage_bucket, "Storage bucket must be configured for integration tests"
 
@@ -42,14 +42,14 @@ def test_save_binary(bm):
         CloudPath(uri).unlink()
 
 
-def test_upload_text(bm):
+def test_upload_text(real_bm):
     """Test text upload to cloud storage."""
     # Integration test must fail if cloud manager not properly configured
-    assert bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
-    assert bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
+    assert real_bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
+    assert real_bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
 
     # Get the first cloud provider and ensure storage bucket exists
-    cloud = bm.cloud_manager.clouds[0]
+    cloud = real_bm.cloud_manager.clouds[0]
     assert hasattr(cloud, "storage_bucket"), "Cloud must have storage_bucket attribute"
     assert cloud.storage_bucket, "Storage bucket must be configured for integration tests"
 
@@ -70,10 +70,10 @@ def test_vertex_setup():
     assert models is not None
 
 
-def test_genai_sync_client(bm):
+def test_genai_sync_client(real_bm):
     """Test GenAI synchronous client functionality."""
     # Ensure the GenAI client is set up correctly
-    client = bm.genai
+    client = real_bm.genai
     assert client is not None
     assert hasattr(client, "models")
     assert hasattr(client.models, "list")
@@ -85,18 +85,18 @@ def test_genai_sync_client(bm):
     assert "publishers/google/models/imagen-4.0-ultra-generate-001" in model_names
 
 
-def test_genai_location(bm):
+def test_genai_location(real_bm):
     """Test GenAI client location configuration."""
     # Ensure the GenAI client is set up correctly
-    client = bm.genai
+    client = real_bm.genai
     assert client is not None
 
 
 @pytest.mark.anyio
-async def test_genai_async_client(bm):
+async def test_genai_async_client(real_bm):
     """Test GenAI asynchronous client functionality."""
     # Ensure the GenAI client is set up correctly
-    client = bm.genai.aio
+    client = real_bm.genai.aio
 
     # List models to verify the client works
     models = await client.models.list()

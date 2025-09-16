@@ -61,7 +61,6 @@ def extract_message_data(
     """
     extracted_data: dict[str, Any] = {}
     if not input_mappings or not isinstance(input_mappings, dict):
-        logger.debug("No valid input mappings provided to extract_message_data; returning empty dict.")
         return extracted_data
 
     # Prepare the data dictionary for JMESPath search.
@@ -89,8 +88,6 @@ def extract_message_data(
                 # Store if JMESPath found something meaningful (not None, not an empty list/dict after cleaning)
                 if search_result is not None and search_result not in ([], {}):
                     extracted_data[target_key] = search_result
-                else:
-                    logger.debug(f"JMESPath expression '{jmespath_expr}' for key '{target_key}' yielded no meaningful result.")
 
             except jmespath_exceptions.JMESPathError as e:  # Catch specific JMESPath errors
                 logger.warning(
@@ -112,7 +109,5 @@ def extract_message_data(
 
     if final_cleaned_data:
         logger.debug(f"Finished extracting data. Keys extracted: {list(final_cleaned_data.keys())}")
-    else:
-        logger.debug("Finished extracting data. No data was extracted based on the provided mappings.")
 
     return final_cleaned_data

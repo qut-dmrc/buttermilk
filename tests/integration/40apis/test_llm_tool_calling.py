@@ -1,6 +1,5 @@
 """Test tool calling functionality across all LLM models."""
 
-
 from typing import Literal
 
 import pytest
@@ -80,13 +79,13 @@ async def calculate_sum(a: float, b: float) -> float:
 
 
 @pytest.mark.anyio
-async def test_structured_output_without_tools(llm_expensive):
+async def test_structured_output_without_tools(real_llm_expensive):
     system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
     <CRITERIA>
     Is this output illegal, unethical or harmful to any person?
     </CRITERIA>
     """
-    llm = llm_expensive
+    llm = real_llm_expensive
 
     messages = [
         SystemMessage(content=system),
@@ -102,9 +101,9 @@ async def test_structured_output_without_tools(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_single_tool_call(llm_expensive):
+async def test_single_tool_call(real_llm_expensive):
     """Test that each LLM can make a single tool call."""
-    llm = llm_expensive
+    llm = real_llm_expensive
 
     model_name = getattr(llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
@@ -135,10 +134,10 @@ async def test_single_tool_call(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_multiple_tool_calls(llm):
+async def test_multiple_tool_calls(real_llm):
     """Test that LLMs can handle multiple tools and select the right one."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm, "_model_name", None)
+    model_name = getattr(real_llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
@@ -157,7 +156,7 @@ async def test_multiple_tool_calls(llm):
 
     try:
         # Test with multiple tools available
-        response = await llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await real_llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
 
         # Verify response contains the correct sum
         assert response.content
@@ -166,13 +165,12 @@ async def test_multiple_tool_calls(llm):
         # For models with tool quirks, be more lenient
         if model_name in MODELS_WITH_TOOL_QUIRKS:
             # Just check if they attempted to do math or mentioned the numbers
-            assert any(
-                term in response.content.lower() for term in ["8", "eight", "5", "3", "calculate", "sum"]
-            ), f"Response should relate to the calculation, got: {response.content}"
+            assert any(term in response.content.lower() for term in ["8", "eight", "5", "3", "calculate", "sum"]), (
+                f"Response should relate to the calculation, got: {response.content}"
+            )
         else:
             # Check for both digit "8" and word "eight"
-            assert any(term in response.content.lower() for term in ["8", "eight"]), \
-                f"Response should contain the sum 8, got: {response.content}"
+            assert any(term in response.content.lower() for term in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -180,10 +178,10 @@ async def test_multiple_tool_calls(llm):
 
 
 @pytest.mark.anyio
-async def test_no_tool_needed(llm):
+async def test_no_tool_needed(real_llm):
     """Test that LLMs don't use tools when not needed."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm, "_model_name", None)
+    model_name = getattr(real_llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
@@ -199,7 +197,7 @@ async def test_no_tool_needed(llm):
 
     try:
         # Test with tools available but not needed
-        response = await llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await real_llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
 
         # Verify response contains Paris without using tools
         assert response.content
@@ -222,10 +220,10 @@ async def test_no_tool_needed(llm):
 
 
 @pytest.mark.anyio
-async def test_call_chat_intercept_tools_returns_function_calls(llm):
+async def test_call_chat_intercept_tools_returns_function_calls(real_llm):
     """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
     # Skip if model doesn't support tools
-    model_name = getattr(llm, "_model_name", None)
+    model_name = getattr(real_llm, "_model_name", None)
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
@@ -243,7 +241,7 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm):
     ]
 
     try:
-        result = await llm.call_chat(
+        result = await real_llm.call_chat(
             messages=messages,
             tools_list=[calc_tool],
             cancellation_token=CancellationToken(),
@@ -261,7 +259,7 @@ async def test_call_chat_intercept_tools_returns_function_calls(llm):
 
 
 @pytest.mark.anyio
-async def test_structured_output_with_incorrect_tools(llm_expensive):
+async def test_structured_output_with_incorrect_tools(real_llm_expensive):
     """Test that models handle requests for structured output with irrelevant tools passed."""
 
     class Answer(BaseModel):
@@ -274,12 +272,15 @@ async def test_structured_output_with_incorrect_tools(llm_expensive):
     calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
 
     messages = [
-        SystemMessage(content="You are a helpful assistant. Always structure your responses using the provided schema. Answer questions using your general knowledge even if tools are available but not relevant.", source="system"),
+        SystemMessage(
+            content="You are a helpful assistant. Always structure your responses using the provided schema. Answer questions using your general knowledge even if tools are available but not relevant.",
+            source="system",
+        ),
         UserMessage(content="What is the capital of Japan?", source="user"),
     ]
 
     # Test with structured output (tools should not be passed with structured output for certain models)
-    response = await llm_expensive.call_chat(
+    response = await real_llm_expensive.call_chat(
         messages=messages,
         tools_list=[calc_tool],
         schema=Answer,
@@ -297,7 +298,7 @@ async def test_structured_output_with_incorrect_tools(llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
+async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive):
     """Cover the full flow: initial tool call -> tool execution -> synthesis call with schema.
 
     This test helps surface issues where the synthesis call incorrectly sets a structured
@@ -323,7 +324,7 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(llm_expensive):
         ),
     ]
 
-    response = await llm_expensive.call_chat(
+    response = await real_llm_expensive.call_chat(
         messages=messages,
         tools_list=[calc_tool],
         schema=Answer,

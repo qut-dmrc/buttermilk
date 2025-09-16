@@ -5,39 +5,67 @@ defaults:
     - zot
     - trans
     - osb
-  - llms: lite
+  - llms: debug
 
 verbose: true
 
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: buttermilk
-    job: testing
+    name: ${run.name}
+    job: ${run.job}
 
 infrastructure:
   clouds:
     - type: gcp
-      _target_: buttermilk._core.cloud_config.GCPConfig
+      _target_: buttermilk._core.cloud_config.GCPConfig    
       project_id: prosocial-443205
       region: us-central1
       location: us-central1
       storage_bucket: prosocial-dev
+      bigquery_dataset: buttermilk
+      secrets:
+        _target_: buttermilk._core.cloud_config.SecretsServiceConfig
+        models_secret: dev__llm__connections
+        credentials_secret: dev__shared_credentials
+      logging:
+        _target_: buttermilk._core.cloud_config.LoggingServiceConfig
+        verbose: true
+      pubsub:
+        _target_: buttermilk._core.cloud_config.PubSubServiceConfig
+        jobs_topic: jobs
+        jobs_subscription: jobs-sub
+        status_topic: flow
+        status_subscription: flow-sub
+      vertex:
+        enabled: true
       
   # Unified tracing configuration for all tracing providers
   tracing:
     weave: 
-      enabled: true
+      enabled: false
       # project_id is WANDB_ENTITY for weave
       project_id: dmrc
-      api_key: 14b169c3bc7460cf21789b8144a39a166504d0ec
+      api_key: 
     traceloop:
       enabled: false
-      api_key: tl_b198e9224e6b4bfb801a1eff1a35addf
+      api_key: 
       endpoint: https://api.traceloop.com
     otel:
       enabled: true
-      # OpenTelemetry tracing (formerly under GCP cloud config)
       endpoint: https://telemetry.googleapis.com
       otlp_headers: {}
       
+  logging:
+    type: local
+    verbose: ${verbose}
+
+run:
+  mode: pytest
+  ui: console
+  human_in_loop: false
+
+  name: testing
+  job: tests
+
+  flows: ${flows}

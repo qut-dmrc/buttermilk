@@ -144,6 +144,43 @@ class Record(BaseModel):
             return self.alt_text
         return str(self.content)
 
+    @computed_field
+    @property 
+    def record_hash(self) -> str:
+        """Computes SHA256 hash of the record's as_markdown() output.
+        
+        This enables detection of record changes by comparing hash values.
+        The hash is automatically accessible via metadata['record_hash'].
+        
+        Returns:
+            str: SHA256 hexdigest of the record's markdown representation.
+        """
+        from buttermilk._core.hashing import compute_record_hash
+        
+        markdown_content = self.as_markdown()
+        hash_value = compute_record_hash(markdown_content)
+        # Store in metadata for easy access
+        self.metadata["record_hash"] = hash_value
+        return hash_value
+
+    @computed_field
+    @property
+    def ground_truth_hash(self) -> str | None:
+        """Computes SHA256 hash of the ground_truth values if they exist.
+        
+        This enables detection of ground truth changes by comparing hash values.
+        The hash is automatically accessible via metadata['ground_truth_hash'].
+        
+        Returns:
+            str | None: SHA256 hexdigest of ground_truth data, or None if no ground_truth.
+        """
+        from buttermilk._core.hashing import compute_ground_truth_hash
+        
+        hash_value = compute_ground_truth_hash(self.ground_truth)
+        # Store in metadata for easy access
+        self.metadata["ground_truth_hash"] = hash_value
+        return hash_value
+
     def model_dump(self, **kwargs) -> dict[str, Any]:
         """Custom model_dump that excludes computed fields by default.
 
@@ -163,7 +200,7 @@ class Record(BaseModel):
         # Add computed fields to exclusion for simple text content
         if isinstance(self.content, str):
             # For simple string content, text_content is redundant
-            current_exclude.update({"text_content", "title", "images"})
+            current_exclude.update({"text_content", "title", "images", "record_hash", "ground_truth_hash"})
 
         kwargs["exclude"] = current_exclude
         return super().model_dump(**kwargs)
@@ -229,7 +266,7 @@ class Record(BaseModel):
         populate_by_name=True,  # Allow population by field name or alias
         exclude_unset=True,  # Exclude fields not explicitly set during serialization
         exclude_none=True,  # Exclude fields with None values during serialization
-        exclude={"title", "images", "text_content"},  # Exclude computed properties from model_dump
+        exclude={"title", "images", "text_content", "record_hash", "ground_truth_hash"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 
@@ -327,7 +364,7 @@ class Record(BaseModel):
 
         if role == "assistant":
             # Assistant message content should likely be string representation
-            return AssistantMessage(content=self.as_markdown, source=self.record_id)
+            return AssistantMessage(content=self.as_markdown(), source=self.record_id)
 
         # For user messages, content can be str or List[Union[str, Dict]] (for multimodal)
         message_content: str | list[Any]  # Use Any for list items to match Autogen's expectation for multimodal

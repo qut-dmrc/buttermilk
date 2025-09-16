@@ -48,7 +48,28 @@ class CollectedMessage:
     def content(self) -> str:
         """Extract content from various message formats."""
         if isinstance(self.data, dict):
-            # Try common content locations
+            # Try outputs field (main content from MessageService)
+            if "outputs" in self.data:
+                outputs = self.data["outputs"]
+                if isinstance(outputs, dict):
+                    # For complex objects, try to extract meaningful content
+                    if "content" in outputs:
+                        return str(outputs["content"])
+                    elif "source" in outputs:
+                        return f"[{outputs['source']}]"
+                    elif "record_id" in outputs:
+                        return f"Record: {outputs['record_id']}"
+                    else:
+                        # Return a summary of the object
+                        return f"{type(outputs).__name__}: {str(outputs)[:100]}..."
+                else:
+                    return str(outputs)
+
+            # Try preview field (summary from MessageService)
+            if "preview" in self.data:
+                return str(self.data["preview"])
+
+            # Try legacy content locations
             if "content" in self.data:
                 return str(self.data["content"])
             if "data" in self.data and isinstance(self.data["data"], dict):

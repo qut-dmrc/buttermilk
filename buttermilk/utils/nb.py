@@ -28,44 +28,48 @@ import nest_asyncio
 # Apply nest_asyncio to handle potential event loop issues in notebooks
 nest_asyncio.apply()
 
-
-# Configuration files are stored in the local directory, and
-# options can be passed in at initialization.
-def nb_init(job: str, overrides: list[str] = [], path: str = None) -> Any:
-    if not path:
-        # Must be absolute.Get the abs path of ../../conf from the current file
-        path = Path(__file__).parent.parent.resolve() / "conf"
-        path = path.as_posix()
-
-    overrides.append(f"+run=notebook")
-    overrides.append(f"bm.session_info.job={job}")
-
-    with initialize_config_dir(version_base=None, config_dir=path):
-        cfg = compose(config_name="config", overrides=overrides)
-
-    objs = hydra.utils.instantiate(cfg)
-
-    bm = BM.model_validate(objs.bm)
-
-    # Set the singleton BM instance
-    from buttermilk import set_bm
-
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
-
-
-    logger.info(
-        f"Starting interactive run for {bm.session_info.name} job {bm.session_info.job} in notebook",
-    )
-
-    return objs
-
-
 def graph_defaults():
     plt.rcParams["figure.dpi"] = 300
     plt.rcParams["figure.figsize"] = (10, 8)
     sns.set_context("notebook")
     sns.set_style("darkgrid")
     plt.rcParams["font.size"] = 14
+    print("Notebook graphing defaults applied")
 
 
-graph_defaults()
+def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None) -> BM:
+    """Simple one-liner initialization for Buttermilk.
+
+    Args:
+        job: Name for the specific job or task
+        project: Project name (required for first session, optional for subsequent sessions)
+        overrides: List of Hydra override strings for customization
+        config_dir: Path to configuration directory (defaults to packaged config)
+
+    Returns:
+        bm: the Buttermilk instance
+
+    Raises:
+        RuntimeError: If project is required but not provided, or if project
+                     mismatches existing execution context project.
+
+    Example:
+        >>> from buttermilk import init, nb_init, logger  # Always use global logger import
+        >>> # First session - project required
+        >>> bm = nb_init(job="my_analysis_notebook", project="my_project")
+        >>> logger.info("Analysis started")  # Session context automatically included
+        >>>
+        >>> # Subsequent sessions - project optional (inherits from execution context)
+        >>> bm2 = nb_init(job="data_visualization")  # Uses "my_project"
+
+        # To use your own config directory:
+        >>> bm = nb_init(job="my_analysis", project="my_project", config_dir="./conf")
+    """
+    # Use unified bootstrap function with config return
+    from buttermilk._core.config_bootstrap import bootstrap_session_with_config
+
+    bm, config = bootstrap_session_with_config(job=job, project=project, run_type="notebook", config_dir=config_dir, overrides=overrides)
+
+    graph_defaults()
+
+    return bm

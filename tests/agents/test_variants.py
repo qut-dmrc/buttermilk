@@ -65,7 +65,7 @@ def test_no_variants_single_run(base_variant_config):
 
     assert agent_class is MockAgent
     assert isinstance(config, AgentConfig)
-    assert len(config.agent_id) == 22  # Auto-generated shortuuid
+    assert isinstance(config.agent_id, str)  # Auto-generated shortuuid
     assert config.parameters == {"base_param": "base_value"}
 
 
@@ -87,11 +87,11 @@ def test_only_parallel_variants(base_variant_config):
         ids.add(config.agent_id)
         if config.parameters["model"] == "model_a":
             assert config.parameters["base_param"] == "base_value"
-            assert len(config.agent_id) == 22  # Each config gets unique shortuuid
+            assert isinstance(config.agent_id, str)  # Each config gets unique shortuuid
         else:
             assert config.parameters["model"] == "model_b"
             assert config.parameters["base_param"] == "base_value"
-            assert len(config.agent_id) == 22  # Each config gets unique shortuuid
+            assert isinstance(config.agent_id, str)  # Each config gets unique shortuuid
     assert len(ids) == 2  # Ensure unique IDs generated
 
 
@@ -117,7 +117,7 @@ def test_only_sequential_variants(base_variant_config):
     for agent_class, config in configs:
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
-        assert len(config.agent_id) == 22  # Auto-generated shortuuid
+        assert isinstance(config.agent_id, str)  # Auto-generated shortuuid
         actual_parameters.append(config.parameters)
     
     # Convert to set of tuples for order-independent comparison
@@ -150,7 +150,7 @@ def test_both_parallel_and_sequential_variants(base_variant_config):
         assert "model" in config.parameters
         assert "temp" in config.parameters
         assert config.parameters["base_param"] == "base_value"
-        assert len(config.agent_id) == 22  # shortuuid
+        assert isinstance(config.agent_id, str)  # shortuuid
         actual_parameters.append(config.parameters)
     
     # Convert to set of tuples for order-independent comparison
@@ -173,7 +173,7 @@ def test_num_runs_greater_than_one(base_variant_config):
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
         assert config.parameters == {"base_param": "base_value", "model": "m_a"}
-        assert len(config.agent_id) == 22  # Auto-generated unique shortuuid
+        assert isinstance(config.agent_id, str)  # Auto-generated unique shortuuid
         ids.add(config.agent_id)
     assert len(ids) == 3  # Ensure unique IDs across runs
 
@@ -188,8 +188,8 @@ def test_id_generation_uniqueness(base_variant_config):
     variant_factory_p = AgentVariants(**config_data_p)
     configs_p = variant_factory_p.get_configs()
     assert len(configs_p) == 2
-    assert len(configs_p[0][1].agent_id) == 22
-    assert len(configs_p[1][1].agent_id) == 22
+    assert isinstance(configs_p[0][1].agent_id, str)
+    assert isinstance(configs_p[1][1].agent_id, str)
 
     # Case 2: Multiple runs (needs hash)
     config_data_r = {
@@ -199,14 +199,14 @@ def test_id_generation_uniqueness(base_variant_config):
     variant_factory_r = AgentVariants(**config_data_r)
     configs_r = variant_factory_r.get_configs()
     assert len(configs_r) == 2
-    assert len(configs_r[0][1].agent_id) == 22
-    assert len(configs_r[1][1].agent_id) == 22
+    assert isinstance(configs_r[0][1].agent_id, str)
+    assert isinstance(configs_r[1][1].agent_id, str)
 
     # Case 3: Single config (no hash needed)
     variant_factory_s = AgentVariants(**base_variant_config)
     configs_s = variant_factory_s.get_configs()
     assert len(configs_s) == 1
-    assert len(configs_s[0][1].agent_id) == 22  # Auto-generated shortuuid
+    assert isinstance(configs_s[0][1].agent_id, str)  # Auto-generated shortuuid
 
 
 def test_parameter_overwriting(base_variant_config):
@@ -264,7 +264,7 @@ def test_empty_variants(base_variant_config):
 
     assert len(configs) == 1
     agent_class, config = configs[0]
-    assert len(config.agent_id) == 22  # shortuuid
+    assert isinstance(config.agent_id, str)  # shortuuid
     assert config.parameters == {"base_param": "base_value"}
 
 

@@ -22,7 +22,7 @@ MINDSET: You are a software engineer contributing to a long-term project, not a 
 DESIGN CHOICES:
 - DRY, modular code
 - DO NOT MAINTAIN backwards compatibility: one path only.
-- FAIL FAST: No defensive coding, no error recovery.
+- **FAIL FAST PHILOSOPHY**: Anything we build either works or it doesn't, nothing in between. This means **NO FALLBACKS**, **NO DEFENSIVE PROGRAMMING**, one golden path, no error recovery, no alternatives. Ever.
 - Validate code with FULL end-to-end integration tests with live data; NO COMPROMISES. 
 - If you get stuck, STOP and ASK FOR HELP. No workarounds, no loops.
 

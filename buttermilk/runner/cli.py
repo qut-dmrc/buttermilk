@@ -56,31 +56,18 @@ def main(conf: DictConfig) -> None:
     """
     OmegaConf.resolve(conf)
     
-    # Use ConfigurationBootstrapper as single entry point for all configuration
-    from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
-    
-    # Create and use ConfigurationBootstrapper with the existing Hydra configuration
-    # This avoids double initialization of Hydra
-    bootstrapper = create_configuration_bootstrapper(
-        config_path="../conf",
-        config=conf  # Pass the existing configuration from Hydra
+    # Use the unified bootstrap function for single golden path
+    from buttermilk._core.config_bootstrap import bootstrap_session_with_config
+
+    # Single unified initialization - gets both BM and config
+    # Don't override job/project - let Hydra configuration be used as-is
+    bm, resolved_conf = bootstrap_session_with_config(
+        config=conf  # Pass the existing Hydra configuration, use run.job and run.name from config
     )
-    
-    # Create a session-scoped BM first to set singleton before ExecutionContext tracing setup
-    bm = asyncio.run(bootstrapper.bootstrap_session_context(
-        name=conf.get('run', {}).get('name', 'cli_session'),
-        job=conf.get('run', {}).get('job', 'cli_operation'),
-        platform='local'
-    ))
-    
-    # Set as global singleton BEFORE ExecutionContext initialization to enable OTEL tracing
-    from buttermilk import set_bm
-    set_bm(bm)
-    logger.info("Session BM singleton initialization complete - OTEL tracing can now access BM")
-    
-    # Bootstrap full context (ExecutionContext + Infrastructure) to ensure structured logging
-    execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
-    logger.info("Full context initialization complete via ConfigurationBootstrapper")
+
+    # Use the resolved config for consistency (in case overrides were applied)
+    conf = resolved_conf
+    logger.info("Unified bootstrap complete - BM and config ready")
 
     # Initialize FlowRunner with its configuration section (e.g., conf.run)
     flow_runner = FlowRunner.model_validate(conf.run)
@@ -149,19 +136,16 @@ def main(conf: DictConfig) -> None:
         case "api":
             # Starts a FastAPI web server.
             logger.info("Starting FastAPI API server...")
-            # The FastAPI app needs access to infrastructure and flow_runner to handle API requests.
-            # Pass the bootstrapper-managed infrastructure to ensure consistent configuration
+            # Pass both FlowRunner and the already-initialized BM to avoid re-bootstrapping
             fastapi_app = create_fastapi_app(
-                infrastructure=infrastructure,  # Pass the bootstrapper-managed infrastructure
                 flows=flow_runner,  # Pass the FlowRunner
+                bm=bm,  # Pass the already-initialized BM from CLI bootstrap
             )
 
             # Verify app is ready instead of sleeping
             logger.debug("Verifying FastAPI app readiness...")
             if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
                 raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
-            if not hasattr(fastapi_app.state, "infrastructure") or not fastapi_app.state.infrastructure:
-                raise RuntimeError("Infrastructure manager not properly initialized in FastAPI app state")
             logger.debug("FastAPI app readiness verified")
 
             logger.info("Configuring Uvicorn server for FastAPI app...")

@@ -69,10 +69,10 @@ def test_safetysettings(
     input_text,
     safety_on,
     expected_to_work,
-    llms,
+    real_llms,
     model,
 ):
-    llm = llms[model[1]] if safety_on else llms[model[0]]
+    llm = real_llms[model[1]] if safety_on else real_llms[model[0]]
 
     # note: this was autocompleted by GPT-4 copilot...)]
     chain = ChatPromptTemplate.from_messages([("human", input_text)]) | llm.client

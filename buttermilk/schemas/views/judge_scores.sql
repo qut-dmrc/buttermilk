@@ -7,9 +7,9 @@ WITH SCORES_AGGREGATED AS (
     tracing_link,
     IFNULL(parent_call_id, JSON_VALUE(inputs, "$.inputs.answers[0].answer_id")) as parent_call_id,
     JSON_VALUE(agent_info, "$.name") AS scorer,
-    JSON_VALUE(agent_info, "$.parameters.model") AS scoring_model,
-    JSON_VALUE(metadata, "$.template_name") AS scoring_template,
-    JSON_VALUE(metadata, "$.template_hash") AS scoring_hash,
+    JSON_VALUE(agent_info, "$.parameters.model") AS scorer_model,
+    JSON_VALUE(metadata, "$.template_name") AS scorer_template,
+    JSON_VALUE(metadata, "$.template_hash") AS scorer_hash,
     JSON_VALUE(agent_info, "$.role") AS role,
     CAST(JSON_VALUE(outputs, "$.correctness") AS FLOAT64) AS correctness,
     JSON_EXTRACT_ARRAY(outputs, '$.assessments') AS assessments
@@ -33,13 +33,16 @@ PREDICTIONS AS (
     JSON_VALUE(metadata, "$.template_hash") AS judge_hash,
     JSON_VALUE(agent_info, "$.parameters.criteria") AS judge_criteria,
     JSON_VALUE(agent_info, "$.role") AS judge_role,
+    -- Predicted Label
+    CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS predicted_violating,
+    -- True Label (extracted from the ground_truth field)
+    CAST(JSON_VALUE(records, '$.ground_truth.violating') AS BOOLEAN) AS expected_violating,
     -- Calculate full_prediction_summary within this CTE
     CONCAT(
       IFNULL(JSON_VALUE(outputs, "$.conclusion"), ''),
       ' ', -- Add a space separator
       ARRAY_TO_STRING(JSON_EXTRACT_STRING_ARRAY(outputs, "$.reasons"), '. ', '') -- Join reasons with '. ' and an empty string for nulls
-    ) AS full_prediction_summary,
-    CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS violating,
+    ) AS full_reasons,
     JSON_VALUE(outputs, "$.confidence") AS confidence
   FROM
     `prosocial-443205.testing.flow`
@@ -60,16 +63,18 @@ SELECT
   SUBSTR(PREDICTIONS.judge_hash, 8, 8) as judge_hash, -- remove 'SHA256:' prefix and return first eight digits of hash (4 billion unique ids)
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.full_prediction_summary,
-  PREDICTIONS.violating,
+  PREDICTIONS.full_reasons, -- Use the pre-calculated summary
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
   SCORES_AGGREGATED.scorer,
-  SCORES_AGGREGATED.scoring_model,
-  SCORES_AGGREGATED.scoring_template,
-  SUBSTR(SCORES_AGGREGATED.scoring_hash, 8, 8) as scoring_hash,
+  SCORES_AGGREGATED.scorer_model,
+  SCORES_AGGREGATED.scorer_template,
+  SUBSTR(SCORES_AGGREGATED.scorer_hash, 8, 8) as scorer_hash,
   SCORES_AGGREGATED.role,
   SCORES_AGGREGATED.tracing_link as scorer_tracing_link,
+  predicted_violating,
+  expected_violating,
+  CAST((PREDICTIONS.predicted_violating = PREDICTIONS.expected_violating) AS BOOLEAN) as correct,
   SCORES_AGGREGATED.correctness,
   ARRAY_AGG(CAST(JSON_VALUE(assessment, '$.correct') AS BOOLEAN) IGNORE NULLS) AS assessment_correct,
   ARRAY_AGG(JSON_VALUE(assessment, '$.feedback') IGNORE NULLS) AS assessment_feedback,
@@ -102,16 +107,17 @@ GROUP BY
   PREDICTIONS.judge_hash,
   PREDICTIONS.judge_criteria,
   PREDICTIONS.judge_role,
-  PREDICTIONS.full_prediction_summary, 
-  PREDICTIONS.violating,
+  PREDICTIONS.full_reasons,
   PREDICTIONS.confidence,
   PREDICTIONS.tracing_link,
   SCORES_AGGREGATED.tracing_link ,
   SCORES_AGGREGATED.scorer,
-  SCORES_AGGREGATED.scoring_model,
-  SCORES_AGGREGATED.scoring_template,
-  SCORES_AGGREGATED.scoring_hash,
+  SCORES_AGGREGATED.scorer_model,
+  SCORES_AGGREGATED.scorer_template,
+  SCORES_AGGREGATED.scorer_hash,
   SCORES_AGGREGATED.role,
-  SCORES_AGGREGATED.correctness
+  SCORES_AGGREGATED.correctness,
+  predicted_violating,
+  expected_violating
 ORDER BY
   PREDICTIONS.timestamp DESC;

@@ -54,7 +54,7 @@ class TestFetch:
         return FetchAgent(description="test only")
 
     @pytest.mark.anyio
-    async def test_load_data(self, fetch):
+    async def test_load_data(self, fetch, real_bm):
         """Test the load_data method with unified storage API."""
         from buttermilk._core.storage_config import StorageConfig
 
@@ -66,19 +66,17 @@ class TestFetch:
         )
         fetch.data = {"test_data": test_config}
 
-        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
-            mock_bm = MagicMock()
-            mock_bm.get_storage.return_value = mock_storage
-            mock_get_bm.return_value = mock_bm
-            
-            await fetch.load_data()
+        # Mock the get_storage method on real_bm
+        real_bm.get_storage = MagicMock(return_value=mock_storage)
+        
+        await fetch.load_data()
 
-            # Assert get_storage was called with the right config
-            mock_bm.get_storage.assert_called_once_with(test_config)
-            # Assert data sources were assigned correctly
-            assert isinstance(fetch._data_sources, dict)
-            assert "test_data" in fetch._data_sources
-            assert fetch._data_sources["test_data"] == mock_storage
+        # Assert get_storage was called with the right config
+        real_bm.get_storage.assert_called_once_with(test_config)
+        # Assert data sources were assigned correctly
+        assert isinstance(fetch._data_sources, dict)
+        assert "test_data" in fetch._data_sources
+        assert fetch._data_sources["test_data"] == mock_storage
 
     @pytest.mark.anyio
     @patch("buttermilk.agents.fetch.download_and_convert")
@@ -88,7 +86,7 @@ class TestFetch:
 
         uri_to_test = "http://example.com/nonexistentpage"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {uri_to_test}"):
-            await fetch.fetch(uri=uri_to_test)
+            await fetch.fetch_uri(uri=uri_to_test)
 
         mock_download_and_convert.assert_called_once_with(uri_to_test)
 
@@ -100,7 +98,7 @@ class TestFetch:
 
         specific_uri = "https://www.abc.net.au/religion/catherine-llewellyn-gender-affirming-healthcare-for-trans-youth"
         with pytest.raises(ProcessingError, match=f"Record not found for URI: {specific_uri}"):
-            await fetch.fetch(uri=specific_uri)
+            await fetch.fetch_uri(uri=specific_uri)
 
         mock_download_and_convert.assert_called_once_with(specific_uri)
 
@@ -125,7 +123,7 @@ class TestFetch:
         ids=[x[0] for x in NEWS_RECORDS],
     )
     async def test_ingest_news(self, fetch: FetchAgent, id, uri, expected_mimetype, expected_size):
-        media_obj = await fetch.fetch(uri=uri)
+        media_obj = await fetch.fetch_uri(uri=uri)
         assert len(media_obj.content) == expected_size
         assert media_obj.metadata["fetch_source_uri"] == uri
 

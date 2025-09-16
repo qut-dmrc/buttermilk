@@ -33,7 +33,7 @@ def _is_nontrivial_image(img: Image.Image) -> bool:
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_generated_image_is_valid_and_nontrivial(bm, client):
+async def test_generated_image_is_valid_and_nontrivial(, client):
     image_client = client()
     result = await image_client.generate_image(
         text=TEST_PROMPT,
@@ -61,8 +61,8 @@ async def test_generated_image_is_valid_and_nontrivial(bm, client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_image_can_roundtrip_to_bytes_and_reopen(bm, client):
-    image_client = client(bm)
+async def test_image_can_roundtrip_to_bytes_and_reopen(real_bm, client):
+    image_client = client(real_bm)
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
@@ -83,8 +83,8 @@ async def test_image_can_roundtrip_to_bytes_and_reopen(bm, client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_cloud_artifact_matches_in_memory_dimensions(bm, client):
-    image_client = client(bm)
+async def test_cloud_artifact_matches_in_memory_dimensions(real_bm, client):
+    image_client = client(real_bm)
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
@@ -106,8 +106,8 @@ async def test_cloud_artifact_matches_in_memory_dimensions(bm, client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_allows_none_negative_prompt_and_still_produces_image(bm, client):
-    image_client = client(bm)
+async def test_allows_none_negative_prompt_and_still_produces_image(real_bm, client):
+    image_client = client(real_bm)
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=None,
@@ -119,9 +119,9 @@ async def test_allows_none_negative_prompt_and_still_produces_image(bm, client):
     assert CloudPath(result.uri).exists()
 
 
-async def test_generate_in_parallel_all_clients(bm):
+async def test_generate_in_parallel_all_clients(real_bm):
     # Exercise concurrency across clients
-    instances = [c(bm) for c in CLIENTS]
+    instances = [c(real_bm) for c in CLIENTS]
 
     async def _gen(ic):
         return await ic.generate_image(prompt=TEST_PROMPT, negative_prompt=TEST_NEGATIVE_PROMPT)
@@ -140,9 +140,9 @@ async def test_generate_in_parallel_all_clients(bm):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_cloud_artifact_content_hash_is_stable_for_single_download(bm, client):
+async def test_cloud_artifact_content_hash_is_stable_for_single_download(real_bm, client):
     # Ensures the stored object is readable consistently (not necessarily deterministic generation)
-    image_client = client(bm)
+    image_client = client(real_bm)
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,

@@ -1,3 +1,5 @@
+from typing import Any
+
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
@@ -16,11 +18,6 @@ allowing us to filter or modify traces before they are uploaded to the W&B backe
 
 See: https://weave-docs.wandb.ai/guides/tracking/tracing/#post-process-inputs-and-outputs
 """
-
-import logging
-from typing import Any
-
-logger = logging.getLogger(__name__)
 
 
 class NoOpFormatter:

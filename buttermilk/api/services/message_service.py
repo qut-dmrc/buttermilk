@@ -90,7 +90,7 @@ class MessageService:
             
             # Convert UserResponseMessage to user_response for display
             if isinstance(message, UserResponseMessage):
-                logger.debug(f"[MessageService] UserResponseMessage received, converting to user_response for UI")
+                logger.debug("UserResponseMessage received, converting to user_response for UI")
                 return ChatMessage(
                     type="user_response",
                     preview=str(message.content)[:PREVIEW_LENGTH] if message.content else "",

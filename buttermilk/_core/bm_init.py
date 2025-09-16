@@ -114,7 +114,7 @@ class SessionInfo(BaseModel):
     
     # Basic session info
     platform: str = Field(default="local", description="Platform where the session is running.")
-    name: str = Field(..., description="User-defined name for the current session or project.")
+    project_name: str = Field(..., description="Project name for this session.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
     
     # System information
@@ -136,6 +136,7 @@ class SessionInfo(BaseModel):
     # Configuration tracking
     agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
+    flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -209,7 +210,7 @@ class SessionInfo(BaseModel):
         return {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
-            "name": self.name,
+            "project_name": self.project_name,
             "job": self.job,
             "status": self.status,
             "platform": self.platform,
@@ -282,11 +283,11 @@ class BM(BaseModel):
     )
 
     # Shared infrastructure - injected during creation
-    _cloud_manager = None  # Will be injected
-    _secret_manager = None  # Will be injected
-    _llms_instance = None  # Will be injected
-    _query_runner = None  # Will be injected
-    _logger_cfg = None  # Will be injected from ExecutionContext
+    _cloud_manager: Any = PrivateAttr(default=None)  # Will be injected
+    _secret_manager: Any = PrivateAttr(default=None)  # Will be injected
+    _llms_instance: Any = PrivateAttr(default=None)  # Will be injected
+    _query_runner: Any = PrivateAttr(default=None)  # Will be injected
+    _logger_cfg: Any = PrivateAttr(default=None)  # Will be injected from ExecutionContext
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -338,18 +339,30 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
-
-    def __init__(self, **data: Any) -> None:
+    def __init__(self, logger_cfg=None, cloud_manager=None, secret_manager=None, llms_instance=None, query_runner=None, **data: Any) -> None:
         """Initializes the BM instance with provided configuration data.
 
         After standard Pydantic model initialization, it calls `_post_init_setup`
         to perform session-specific setup tasks.
 
         Args:
+            logger_cfg: Logger configuration for cloud logging (optional).
+            cloud_manager: Shared cloud manager instance (optional).
+            secret_manager: Shared secret manager instance (optional).
+            llms_instance: Shared LLMs instance (optional).
+            query_runner: Shared query runner instance (optional).
             **data: Keyword arguments representing the BM-specific configuration fields.
 
         """
         super().__init__(**data)
+        
+        # Inject shared infrastructure before model initialization
+        self._logger_cfg = logger_cfg
+        self._cloud_manager = cloud_manager
+        self._secret_manager = secret_manager
+        self._llms_instance = llms_instance
+        self._query_runner = query_runner
+        
         self._initialization_error = None
         self._post_init_setup()
 
@@ -405,25 +418,36 @@ class BM(BaseModel):
                     session_id=self.session_info.session_id,
                     error=str(e)
                 )
-        
+
+        # Set up structlog context variables for automatic injection into all log messages
+        # This ensures all subsequent log messages include session context
+        import structlog
+
+        structlog.contextvars.clear_contextvars()  # Clear any previous context
+        structlog.contextvars.bind_contextvars(
+            session_id=self.session_info.session_id,
+            batch_id=self.session_info.batch_id,
+            platform=self.session_info.platform,
+            project_name=self.session_info.project_name,
+            job=self.session_info.job,
+        )
+
         logger.info(
             "Session logging context established",
             session_id=self.session_info.session_id,
             batch_id=self.session_info.batch_id,
             platform=self.session_info.platform,
-            project_name=self.session_info.name,
+            project_name=self.session_info.project_name,
             job=self.session_info.job
         )
 
-
-
     def _finalize_save_dir(self) -> None:
         """Construct the final save_dir path for this session.
-        
+
         Constructs the full save directory path and stores it in session_info.save_dir.
         """
         # Construct full save directory path using session_id for uniqueness
-        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.name / self.session_info.job / self.session_info.session_id
+        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.project_name / self.session_info.job / self.session_info.session_id
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
@@ -460,8 +484,6 @@ class BM(BaseModel):
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
         return self._cloud_manager
 
-
-
     @property
     def secret_manager(self):
         """Provides access to the SecretsManager instance."""
@@ -475,8 +497,6 @@ class BM(BaseModel):
         if self._llms_instance is None:
             raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
         return self._llms_instance
-
-
 
     @property
     def query_runner(self):
@@ -509,6 +529,22 @@ class BM(BaseModel):
         """Provides access to the GenAI client."""
         return self.cloud_manager.genai
 
+    @property
+    def pubsub(self):
+        """Provides access to complete Pub/Sub configuration including project_id."""
+        if self._cloud_manager is None:
+            raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
+
+        gcp_config = self._cloud_manager.gcp_cloud_cfg
+        if not gcp_config:
+            raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
+
+        if not gcp_config.pubsub:
+            raise RuntimeError("No Pub/Sub configuration found in GCP cloud config. "
+                              "Ensure pubsub is configured in your cloud configuration.")
+
+        # Return the actual PubSubServiceConfig object
+        return gcp_config.pubsub
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.
@@ -609,12 +645,9 @@ class BM(BaseModel):
                 extension=effective_extension,
                 **kwargs,
             )
-            logger.debug(  # Log as a dictionary for structured logging if supported
-                {
-                    "message": f"Successfully saved data to: {saved_file_path}",
-                    "uri": str(saved_file_path),  # Ensure URI is a string
-                    "session_id": self.session_info.session_id,  # Include session_id for context
-                },
+            logger.debug(
+                f"Successfully saved data to: {saved_file_path}",
+                uri=str(saved_file_path),  # Ensure URI is a string
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
@@ -771,6 +804,7 @@ def create_session_bm(
     cloud_manager=None,
     secret_manager=None,
     llms_instance=None,
+    query_runner=None,
     logger_cfg=None,
     **kwargs
 ) -> BM:
@@ -785,6 +819,7 @@ def create_session_bm(
         cloud_manager: Shared cloud manager instance (optional).
         secret_manager: Shared secret manager instance (optional).
         llms_instance: Shared LLMs instance (optional).
+        query_runner: Shared query runner instance (optional).
         logger_cfg: Logger configuration for cloud logging (optional).
         **kwargs: Additional arguments for SessionInfo.
         
@@ -793,7 +828,7 @@ def create_session_bm(
     """
     # Create session info
     session_info_data = {
-        "name": name,
+        "project_name": name,
         "job": job,
         "platform": platform,
         "batch_id": batch_id,
@@ -803,28 +838,25 @@ def create_session_bm(
     # Create SessionInfo instance to get auto-generated session_id
     session_info = SessionInfo(**session_info_data)
     
-    # Create BM instance
+    # Use provided query_runner or create one if cloud_manager is available
+    if query_runner is None and cloud_manager is not None:
+        from buttermilk._core.query import QueryRunner
+        query_runner = QueryRunner(bq_client=cloud_manager.bq)
+    
+    # Create BM instance with all dependencies passed to constructor
     bm_data = {
         "session_info": session_info,
+        "logger_cfg": logger_cfg,
+        "cloud_manager": cloud_manager,
+        "secret_manager": secret_manager,
+        "llms_instance": llms_instance,
+        "query_runner": query_runner,
     }
     
     if save_dir_base is not None:
         bm_data["save_dir_base"] = save_dir_base
         
     bm = BM(**bm_data)
-    
-    # Inject shared infrastructure if provided
-    if cloud_manager is not None:
-        bm._cloud_manager = cloud_manager
-        # Auto-inject query_runner if cloud_manager is available
-        from buttermilk._core.query import QueryRunner
-        bm._query_runner = QueryRunner(bq_client=cloud_manager.bq)
-    if secret_manager is not None:
-        bm._secret_manager = secret_manager
-    if llms_instance is not None:
-        bm._llms_instance = llms_instance
-    if logger_cfg is not None:
-        bm._logger_cfg = logger_cfg
         
     return bm
 

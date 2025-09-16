@@ -22,8 +22,6 @@ from opentelemetry import trace
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-    from buttermilk._core.tool_definition import AgentToolDefinition
-
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import (
     AgentId,
@@ -243,8 +241,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         from omegaconf import OmegaConf
 
         from buttermilk.utils._tools import create_tool_functions
-
-        logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self._config.tools.keys())}")
 
         tools = {}
         for tool_name, tool in self._config.tools.items():
@@ -577,12 +573,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
+        
+        # Convert AgentToolDefinition objects to ToolSchema for serialization
+        tool_schemas = [tool_def.schema for tool_def in tool_definitions]
 
         announcement = AgentAnnouncement(
             content=f"Agent {self.agent_name} active and available",
             agent_config=self._config,
             available_tools=[],
-            tool_definitions=tool_definitions,
+            tool_definitions=tool_schemas,
             status="active",
             announcement_type="initial",
             responding_to=message.message_id if hasattr(message, "message_id") else None,
@@ -802,15 +801,24 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         return updated_inputs
 
-    def get_tool_definitions(self) -> list["AgentToolDefinition"]:
+    def get_tool_definitions(self) -> list[Tool]:
         """Generate structured tool definitions for this agent.
 
-        This method creates a tool definition for the agent's primary
-        processing capability, allowing it to be invoked as a tool
-        in the Autogen groupchat.
+        This method creates tool definitions representing what this agent can do,
+        allowing it to be invoked as a tool in the Autogen groupchat and
+        enabling proper routing by host agents.
 
         Returns:
-            List of AgentToolDefinition objects representing this agent's tools.
+            List of Tool objects (FunctionTool, AgentToolDefinition, etc.)
+            representing this agent's capabilities. All returned objects must
+            implement the Tool protocol with a .schema property for serialization
+            in announcements.
+
+        Note:
+            - For executable tools: return FunctionTool objects
+            - For capability advertisements: return AgentToolDefinition objects
+            - Host agents automatically extract .schema for serialization
+            - LLM agents can pass these directly to autogen for tool calling
 
         """
         from buttermilk._core.tool_definition import AgentToolDefinition

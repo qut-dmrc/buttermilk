@@ -1,10 +1,16 @@
 import inspect
-from unittest.mock import MagicMock
 
 import pytest
+import weave  # noqa
+from hydra import compose, initialize
 from pytest import MarkDecorator
 
+from buttermilk import set_bm
+from buttermilk._core.bm_init import BM
+from buttermilk._core.config_bootstrap import bootstrap_session_with_config
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
+from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
@@ -23,84 +29,139 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def conf():
-    """Mock Hydra config fixture for unit tests."""
-    # Return a minimal mock config instead of loading real Hydra config
-    mock_config = {
-        "bm": {
-            "name": "test_buttermilk",
-            "job": "testing"
-        },
-        "run": {
-            "mode": "test",
-            "ui": "console"
-        }
-    }
-    return mock_config
-
-
-@pytest.fixture(scope="session", autouse=True)
-def bm(conf):
-    """Mock BM fixture for unit tests that don't need real infrastructure."""
-    mock_bm = MagicMock()
-    
-    # Set up session info for session isolation tests
-    mock_bm.session_info.session_id = "test-session-mock"
-    mock_bm.session_info.job = "testing"
-    mock_bm.session_info.platform = "test"
-    
-    # Mock common BM methods
-    mock_bm.get_storage = MagicMock(return_value=MagicMock())
-    mock_bm.get_tracer = MagicMock(return_value=MagicMock())
-    mock_bm.llms = MagicMock()
-    
-    # Mock LLM collections for backward compatibility with existing tests
-    mock_bm.llms.__getitem__ = MagicMock(return_value=MagicMock())  # For bm.llms["model_name"]
-    mock_bm.llms.__contains__ = MagicMock(return_value=True)  # For "model_name" in bm.llms
-    
-    # Set as global singleton for backward compatibility
-    from buttermilk import set_bm
-    set_bm(mock_bm)
-    
-    return mock_bm
+# =============================================================================
+# REAL CONFIGURATION FIXTURES (Preferred for new tests)
+#
+# These fixtures provide real BM instances using testing.yaml configuration.
+# Use these instead of creating manual mock configurations:
+#
+# def test_example(real_bm, real_conf):
+#     # Uses actual testing.yaml configuration
+#     assert real_bm.session_info.job == "testing"
+#
+# def test_with_override(real_conf, config_override):
+#     # Override specific config values for test
+#     custom_config = config_override(real_conf, {
+#         "infrastructure.logging.verbose": True
+#     })
+# =============================================================================
 
 
 @pytest.fixture(scope="session")
-def logger():
-    """Mock logger fixture."""
+def init_conf():
+    """Real Hydra config fixture loaded from testing.yaml."""
+    with initialize(version_base=None, config_path="../buttermilk/conf"):
+        cfg = compose(config_name="testing")
+    return cfg
+
+
+@pytest.fixture(scope="session")
+def real_execution_context(init_conf):
+    """Real ExecutionContext created from testing.yaml configuration."""
+    bm, resolved_conf = bootstrap_session_with_config(
+        config=init_conf  # Pass the existing Hydra configuration, use run.job and run.name from config
+    )
+    set_bm(bm)  # Set global BM for modules that rely on it
+    return bm, resolved_conf
+
+
+@pytest.fixture(scope="session")
+def real_conf(real_execution_context):
+    """Real configuration dictionary from testing.yaml."""
+    _, resolved_conf = real_execution_context
+    return resolved_conf
+
+
+@pytest.fixture(scope="session")
+def real_bm(real_execution_context):
+    """Real BM instance created from testing.yaml configuration."""
+    bm, _ = real_execution_context
+    return bm
+
+
+@pytest.fixture(scope="session")
+def real_llms(real_bm: BM) -> LLMs:
+    """Real LLMs instance from testing configuration."""
+    return real_bm.llms
+
+
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def real_model_name(request) -> str:
+    """Real model name for testing with actual models."""
+    return request.param
+
+
+@pytest.fixture(params=MULTIMODAL_MODELS)
+def real_llm_multimodal(request, real_bm: BM):
+    """Real multimodal LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def real_llm(request, real_bm: BM):
+    """Real LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+@pytest.fixture(params=CHAT_MODELS)
+def real_llm_expensive(request, real_bm: BM):
+    """Real expensive LLM instance for testing."""
+    return real_bm.llms[request.param]
+
+
+@pytest.fixture(scope="session")
+def real_flow_runner(real_conf, real_infrastructure) -> FlowRunner:
+    # Create FlowRunner instance
+    return FlowRunner.model_validate(real_conf.run)
+
+
+@pytest.fixture(scope="session")
+def real_logger(real_bm):
     from buttermilk import logger
+
     return logger
 
 
-@pytest.fixture(scope="session")
-def llms(bm):
-    """Mock LLMs fixture."""
-    return bm.llms
+# =============================================================================
+# CONFIGURATION OVERRIDE UTILITIES
+# =============================================================================
 
 
 @pytest.fixture
-def model_name():
-    """Mock model name for tests that don't need real models."""
-    return "mock-model"
+def config_override():
+    """Utility fixture for creating configuration overrides in tests."""
+
+    def _override_config(base_config, overrides):
+        """Apply overrides to base configuration for test-specific needs."""
+        from omegaconf import OmegaConf
+
+        if isinstance(base_config, dict):
+            config = OmegaConf.create(base_config)
+        else:
+            config = base_config.copy()
+
+        for key, value in overrides.items():
+            OmegaConf.set(config, key, value)
+        return config
+
+    return _override_config
 
 
-@pytest.fixture
-def llm_multimodal(bm):
-    """Mock multimodal LLM fixture."""
-    return bm.llms["mock-multimodal-model"]
+# =============================================================================
+# MOCK EXTERNAL THIRD PARTY SERVICES
+# =============================================================================
 
 
-@pytest.fixture
-def llm(bm):
-    """Mock LLM fixture."""
-    return bm.llms["mock-model"]
+# # Mock weave globally for all tests
+# @pytest.fixture(autouse=True)
+# def mock_global_weave():
+#     with patch("weave", new_callable=MagicMock) as mock_weave:
+#         mock_call = MagicMock()
+#         mock_call.id = "mock_call_id_global"
+#         mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")
 
-
-@pytest.fixture
-def llm_expensive(bm):
-    """Mock expensive LLM fixture."""
-    return bm.llms["mock-expensive-model"]
+#         mock_weave.get_call.return_value = mock_call
+#         yield mock_weave
 
 
 @pytest.fixture(scope="session")

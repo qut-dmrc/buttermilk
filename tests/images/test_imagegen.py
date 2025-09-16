@@ -36,7 +36,7 @@ async def test_model(client, prompt):
 
 
 @pytest.mark.anyio
-async def test_batch(bm):
+async def test_batch(real_bm):
     prompt = prompts[0][1]
     runner = BatchImageGenerator(generators=ImageClients)
     images = []

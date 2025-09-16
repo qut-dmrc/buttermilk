@@ -17,21 +17,6 @@ from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreC
 from buttermilk.agents.judge import JudgeReasons  # Judge output model
 
 
-# Mock weave globally for all tests in this module
-# We patch the actual location where 'weave' is imported and used within the codebase (buttermilk.buttermilk)
-@pytest.fixture(autouse=True)
-def mock_global_weave():
-    with patch("buttermilk.buttermilk.weave", new_callable=MagicMock) as mock_weave:
-        mock_call = MagicMock()
-        mock_call.id = "mock_call_id_global"
-        mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")
-
-        mock_weave.get_call.return_value = mock_call
-        # Also mock the standalone `weave.apply_scorer` if it's used directly
-        with patch("weave.apply_scorer", new_callable=AsyncMock) as mock_apply_scorer:
-            yield mock_weave, mock_apply_scorer  # Yield both mocks if needed
-
-
 @pytest.mark.anyio
 class TestLLMScorerListen:
     """Tests focused on the LLMScorer._listen method."""

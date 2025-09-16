@@ -7,7 +7,7 @@ all: test
 
 # Print default configurations
 config:
-	uv run python -m buttermilk.runner.cli -c job +flows=[trans,transllm,zot,osb] +run=api verbose=true llms=full
+	uv run python -m buttermilk.runner.cli -c job +flows=[trans,transllm,zot,osb] run=api verbose=true llms=full
 
 kill: kill_api kill_chat
 	@echo "All Buttermilk processes terminated."
@@ -18,15 +18,21 @@ kill_chat:
 	@sleep 5
 	@pkill -SIGKILL -f "node.*frontend/chat.*vite dev" || true
 
+
 kill_api:
 	@echo "Killing API (buttermilk) process..."
-	@pkill -SIGTERM -f "python.*buttermilk.runner.cli" || true
-	@sleep 5
-	@pkill -SIGKILL -f "python.*buttermilk.runner.cli" || true
+	@# Kill uv parent process first
+	@ps -eo pid,cmd | grep "^[[:space:]]*[0-9]*[[:space:]]*uv run python -m buttermilk.runner.cli" | awk '{print $$1}' | xargs -r kill -TERM || true
+	@sleep 2
+	@# Kill python child process
+	@ps -eo pid,cmd | grep "python.*buttermilk.runner.cli" | grep -v grep | awk '{print $$1}' | xargs -r kill -TERM || true
+	@sleep 2
+	@# Force kill any remaining
+	@ps -eo pid,cmd | grep "buttermilk.runner.cli" | grep -v grep | awk '{print $$1}' | xargs -r kill -KILL || true
 
 # For production API server ONLY.
 api:
-	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=full
+	uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=full
 
 # Run API server in debug mode. Use this one for development.
 debug: 
@@ -34,7 +40,7 @@ debug:
 	@echo "Structured logs are written to: /tmp/buttermilk_<run_id>.jsonl"
 	@echo "To view logs: uv run python -m buttermilk.debug.ws_debug_cli logs -n 50"
 	@echo "Starting server in background..."
-	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" +run=api llms=debug verbose=true > /dev/null 2>&1 &
+	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=debug verbose=true > /dev/null 2>&1 &
 	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs." 
 
 build:
@@ -43,7 +49,7 @@ build:
 	
 # Run unit tests and generate a coverage report.
 coverage:
-	poetry run pytest --cov \
+	uv run pytest --cov \
 		--cov-config=.coveragerc \
 		--cov-report xml \
 		--cov-report term-missing:skip-covered \
