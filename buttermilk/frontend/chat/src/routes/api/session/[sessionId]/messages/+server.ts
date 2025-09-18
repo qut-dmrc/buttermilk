@@ -47,7 +47,8 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
   try {
     // Get configured sessions directory from environment variable
     const configuredSessionsDir = getSessionsDir();
-    const sessionsDir = join(process.cwd(), '../../..', configuredSessionsDir);
+    // Sessions directory is relative to project root
+    const sessionsDir = join(process.cwd(), configuredSessionsDir);
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
     
     const fileContent = await readFile(sessionFile, 'utf-8');

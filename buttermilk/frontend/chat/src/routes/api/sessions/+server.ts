@@ -1,13 +1,45 @@
 import { json } from '@sveltejs/kit';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { getSessionsDir } from '$lib/utils/backendUtils';
+import { getSessionsDir, checkBackendHealth, logBackendStatus } from '$lib/utils/backendUtils';
+import { env } from '$env/dynamic/private';
 
 export async function GET({ fetch }) {
+	// Get backend URL from environment
+	const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
+	
+	// Check if backend is available
+	const isBackendHealthy = await checkBackendHealth(true, fetch);
+	logBackendStatus('API sessions endpoint', isBackendHealthy);
+	
+	// Try to get sessions from backend first
+	if (isBackendHealthy) {
+		try {
+			const backendResponse = await fetch(`${backendUrl}/api/sessions`, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				signal: AbortSignal.timeout(3000) // 3 second timeout
+			});
+			
+			if (backendResponse.ok) {
+				const data = await backendResponse.json();
+				return json(data);
+			}
+			
+			console.log(`Backend unavailable (${backendResponse.status}), falling back to file system`);
+		} catch (error) {
+			console.log('Backend unavailable, falling back to file system:', error);
+		}
+	}
+	
+	// Fallback: Read directly from file system (demo mode)
 	try {
 		// Get configured sessions directory from environment variable
 		const configuredSessionsDir = getSessionsDir();
-		const sessionsDir = join(process.cwd(), '../../..', configuredSessionsDir);
+		// Sessions directory is relative to project root
+		const sessionsDir = join(process.cwd(), configuredSessionsDir);
 		
 		// Read all JSON files from the sessions directory
 		const files = await readdir(sessionsDir);

@@ -17,3 +17,6 @@ session:
   timeout_minutes: 60
   cleanup_interval_minutes: 15
   max_concurrent_sessions: 50
+  
+# Session storage configuration
+sessions_dir: "data/sessions"
