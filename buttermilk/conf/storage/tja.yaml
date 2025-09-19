@@ -3,7 +3,8 @@ randomize: false
 #path: gs://prosocial-dev/data/tja_train.parquet
 # path: gs://prosocial-dev/data/tja_train-20250901.parquet
 full_table_id: prosocial-443205.testing.records_tja
-dataset_name: tja_train
+dataset_name: tja
+split_type: train
 #full_table_id: prosocial-443205.bmdev_testing.records_tja
 schema_path: record.schema.json
 

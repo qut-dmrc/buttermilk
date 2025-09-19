@@ -1,7 +1,7 @@
 """BigQuery storage implementation for unified storage operations."""
 
 import json
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from google.cloud import bigquery
@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
 from .base import Storage, StorageClient, StorageError
@@ -160,9 +161,6 @@ class BigQueryStorage(Storage, StorageClient):
                     row = record.model_dump(mode="json")
                 rows_to_insert.append(row)
 
-            # Use the existing upload_rows function which handles proper serialization
-            from buttermilk.utils.save import upload_rows
-
             # Get the schema for proper data transformation
             schema = self.get_schema()
             if not schema:
@@ -187,26 +185,70 @@ class BigQueryStorage(Storage, StorageClient):
             raise StorageError(f"Failed to save to BigQuery: {e}") from e
 
     def get_record_by_id(self, record_id: str) -> Record | None:
-        """Get a single record by ID.
-        
-        BigQuery is optimized for large datasets and should use SQL queries for efficiency.
-        The default iteration approach would be too slow for typical BigQuery usage.
-        
-        TODO: Implement SQL-based query: SELECT * FROM table WHERE record_id = @record_id
-        
+        """Get a single record by ID using a parameterized BigQuery query.
+
         Args:
-            record_id: The unique identifier of the record to retrieve
-            
+            record_id: The unique identifier of the record to retrieve.
+
         Returns:
-            The record if found, None otherwise
-            
+            Record if found, otherwise None.
+
         Raises:
-            NotImplementedError: SQL-based implementation needed for BigQuery efficiency
+            StorageError: If query fails or essential columns are missing.
         """
-        raise NotImplementedError(
-            "BigQuery get_record_by_id requires SQL implementation for efficiency. "
-            "For small datasets, use FileStorage with the default iteration approach."
-        )
+        if not record_id:
+            raise ValueError("record_id must be a non-empty string")
+
+        # Resolve columns and check availability
+        record_col = self._resolve_column("record_id")
+        dataset_col = self._resolve_column("dataset_name")
+        split_col = self._resolve_column("split_type")
+        available_cols = self._available_columns()
+
+        if available_cols and record_col not in available_cols:
+            raise StorageError(f"BigQuery table {self.get_table_ref()} has no column '{record_col}' required for record lookup.")
+
+        # Compose query
+        where_parts = [f"{record_col} = @record_id"]
+        use_dataset = (dataset_col in available_cols) or (not available_cols)
+        use_split = bool(self.config.split_type) and ((split_col in available_cols) or (not available_cols))
+
+        if use_dataset:
+            where_parts.append(f"{dataset_col} = @dataset_name")
+        else:
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in get_record_by_id().")
+
+        if use_split:
+            where_parts.append(f"{split_col} = @split_type")
+        elif self.config.split_type and available_cols:
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in get_record_by_id().")
+
+        query = f"""
+        SELECT *
+        FROM `{self.get_table_ref()}`
+        WHERE {" AND ".join(where_parts)}
+        LIMIT 1
+        """
+
+        # Build parameters
+        params: list[bigquery.ScalarQueryParameter] = [
+            bigquery.ScalarQueryParameter("record_id", "STRING", record_id),
+        ]
+        if use_dataset:
+            params.append(bigquery.ScalarQueryParameter("dataset_name", "STRING", self.config.dataset_name))
+        if use_split:
+            params.append(bigquery.ScalarQueryParameter("split_type", "STRING", self.config.split_type))
+
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+
+        try:
+            query_job = self.client.query(query, job_config=job_config)
+            for row in query_job:  # At most one due to LIMIT 1
+                return self._parse_record(row)
+            return None
+        except Exception as e:
+            logger.error(f"Error querying BigQuery for record_id {record_id}: {e}")
+            raise StorageError(f"Failed to fetch record by id: {e}") from e
 
     def count(self) -> int:
         """Count total records matching the criteria.
@@ -216,14 +258,43 @@ class BigQueryStorage(Storage, StorageClient):
 
         """
         try:
+            # Resolve logical->physical columns
+            def _resolve_column(logical: str) -> str:
+                return self.config.columns.get(logical, logical)
+
+            dataset_col = _resolve_column("dataset_name")
+            split_col = _resolve_column("split_type")
+
+            try:
+                available_cols = {field.name for field in self.table.schema}
+            except Exception:
+                available_cols = set()
+
             query = f"""
             SELECT COUNT(*) as total
             FROM `{self.get_table_ref()}`
-            WHERE dataset_name = @dataset_name
             """
 
+            where_clauses: list[str] = []
+            if dataset_col in available_cols or not available_cols:
+                where_clauses.append(f"{dataset_col} = @dataset_name")
+            else:
+                logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in count().")
+
             if self.config.split_type:
-                query += " AND split_type = @split_type"
+                if split_col in available_cols or not available_cols:
+                    where_clauses.append(f"{split_col} = @split_type")
+                else:
+                    logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in count().")
+
+            for key, value in self.config.filter.items():
+                if isinstance(value, str):
+                    where_clauses.append(f"{key} = '{value}'")
+                else:
+                    where_clauses.append(f"{key} = {value}")
+
+            if where_clauses:
+                query += "\nWHERE " + " AND ".join(where_clauses)
 
             job_config = self._build_query_job_config()
             query_job = self.client.query(query, job_config=job_config)
@@ -290,36 +361,74 @@ class BigQueryStorage(Storage, StorageClient):
 
     def _build_select_query(self) -> str:
         """Build SQL query for selecting records."""
-        # TODO: Improve this to dynamically build SELECT based on schema and column mappings
-        # Currently using SELECT * to avoid hardcoding column names that may not exist
-        # or may be mapped differently by the user
-        base_query = f"""
+        order_col = self._resolve_column("record_id")
+        available_cols = self._available_columns()
+
+        query = f"""
         SELECT *
         FROM `{self.get_table_ref()}`
-        WHERE dataset_name = @dataset_name
         """
 
-        if self.config.split_type:
-            base_query += " AND split_type = @split_type"
-
-        # Apply additional filters
-        for key, value in self.config.filter.items():
-            if isinstance(value, str):
-                base_query += f" AND {key} = '{value}'"
-            else:
-                base_query += f" AND {key} = {value}"
+        where_sql = self._compose_where_clause(available_cols)
+        if where_sql:
+            query += "\nWHERE " + where_sql + "\n"
 
         # Ordering
         if self.config.randomize:
-            base_query += " ORDER BY RAND()"
+            query += " ORDER BY RAND()"
+        elif order_col in available_cols or not available_cols:
+            query += f" ORDER BY {order_col}"
         else:
-            base_query += " ORDER BY record_id"
+            logger.debug(f"BigQuery table {self.get_table_ref()} has no column '{order_col}'. Skipping ORDER BY.")
 
         # Limit
         if self.config.limit:
-            base_query += f" LIMIT {self.config.limit}"
+            query += f" LIMIT {self.config.limit}"
 
-        return base_query
+        return query
+
+    def _resolve_column(self, logical: str) -> str:
+        """Resolve logical Record field to physical column name using config.columns mapping."""
+        return self.config.columns.get(logical, logical)
+
+    def _available_columns(self) -> set[str]:
+        """Return available BQ column names for the target table, or empty set if unknown."""
+        try:
+            return {field.name for field in self.table.schema}
+        except Exception:
+            return set()
+
+    def _compose_where_clause(self, available_cols: set[str]) -> str:
+        """Build WHERE clause (without the 'WHERE' keyword). Returns empty string if none.
+
+        Avoids referencing columns that don't exist. Uses named parameters @dataset_name and @split_type.
+        """
+        clauses: list[str] = []
+
+        dataset_col = self._resolve_column("dataset_name")
+        split_col = self._resolve_column("split_type")
+
+        # Dataset filter only if column exists
+        if dataset_col in available_cols or not available_cols:
+            clauses.append(f"{dataset_col} = @dataset_name")
+        else:
+            logger.warning(
+                f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. "
+                "Skipping dataset filter; results may include multiple datasets. "
+                "Configure columns mapping in storage config if your dataset column is named differently."
+            )
+
+        # Split filter only if requested and column exists
+        if self.config.split_type and (split_col in available_cols or not available_cols):
+            clauses.append(f"{split_col} = @split_type")
+        elif self.config.split_type and available_cols:
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter.")
+
+        # Additional literal filters (assumed to be physical column names)
+        for key, value in self.config.filter.items():
+            clauses.append(f"{key} = '{value}'" if isinstance(value, str) else f"{key} = {value}")
+
+        return " AND ".join(clauses)
 
     def _build_query_job_config(self) -> bigquery.QueryJobConfig:
         """Build BigQuery job configuration."""

@@ -22,9 +22,9 @@
       "justMyCode": false,
       "args": [
         "+flows=[trans,transllm,zot,osb]",
-        "run=api",
+        "+run=api",
         "verbose=true",
-        "llms=${input:llms}",
+        "+llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
