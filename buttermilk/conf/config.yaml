@@ -1,8 +1,6 @@
 defaults:
   - _self_
   - local
-  - run: cli
-  - llms: lite
 
 # reduce path-induced surprises
 hydra.job.chdir: false
