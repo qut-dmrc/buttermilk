@@ -135,13 +135,12 @@
       ],
       "justMyCode": false,
       "args": [
-        "run=batch",
+        "+run=batch",
         "+max_records=50",
         "+flows=[trans]",
         "+flow=trans",
         "+dataset_key=tja",
         "verbose=true",
-        "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -158,11 +157,11 @@
       ],
       "justMyCode": false,
       "args": [
-        "run=batch_run",
+        "+run=batch_run",
         "+max_jobs=50",
         "+flows=[trans,zot,osb]",
         "verbose=true",
-        "llms=${input:llms}",
+        "+llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

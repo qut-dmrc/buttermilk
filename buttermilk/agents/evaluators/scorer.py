@@ -190,7 +190,7 @@ class LLMScorer(LLMAgent):
         # Set the expected output model for the LLM's response
         self.output_model = QualScore  # Expected Pydantic model for LLM output
 
-    @message_handler
+    @message_handler(match=lambda msg, ctx: isinstance(msg.outputs, JudgeReasons))
     async def _score_judge(
         self,
         message: AgentTrace,

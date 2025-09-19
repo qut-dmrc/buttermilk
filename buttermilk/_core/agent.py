@@ -592,7 +592,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Mark as announced
         self._announced = True
-
+    
     @message_handler  # Invoke on StepRequest
     async def handle_request(
         self,
