@@ -1,14 +1,15 @@
 import asyncio
 import datetime
 import uuid
+from pathlib import Path
 from typing import Annotated, Any
 
-from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.log import logger
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.session_storage import SessionStorageService
 
@@ -352,15 +353,56 @@ async def get_flowinfo_endpoint(
 async def pull_task_endpoint(request: Request) -> StreamingResponse:
     logger.debug(f"Request received for /api/pull_task (Accept: {request.headers.get('accept', '')})")
     try:
-        from buttermilk.api.job_queue import JobQueueClient
+        flow_runner = request.app.state.flow_runner
+        job_queue = JobQueueClient()
+        run_request, ack_id = await job_queue.pull_single_task()
 
-        run_request, ack_id = await JobQueueClient().pull_single_task()
+        if not run_request:
+            raise HTTPException(status_code=404, detail="No job available")
 
+        # Ensure session exists. If run_request contains a session_id, reuse it; otherwise use the one embedded.
+        session_id = getattr(run_request, "session_id", None)
+        if not session_id:
+            from uuid import uuid4
+
+            session_id = uuid4().hex
+            run_request.session_id = session_id
+
+        # Pre-create a session without websocket; UI can attach later using /api/session and /ws
+        session = await flow_runner.get_websocket_session_async(session_id=session_id, websocket=None)
+        if not session:
+            # Fallback to session manager direct create
+            await flow_runner.session_manager.get_or_create_session(session_id=session_id, websocket=None)
+
+        # Configure UI callback to route messages to session storage/websocket when attached
+        # Using the FlowRunContext's send method ensures persistence even if no WebSocket is attached yet
+        if session and hasattr(session, "send_message_to_ui"):
+            run_request.callback_to_ui = session.send_message_to_ui
+        else:
+            run_request.callback_to_ui = None  # Orchestrator will set via run_flow as fallback
+
+        # Kick off the flow in background
         asyncio.create_task(
-            request.app.state.flow_runner.run_flow(
+            flow_runner.run_flow(
                 run_request=run_request,
                 wait_for_completion=False,
             )
+        )
+
+        # Defer Pub/Sub ack until the background task completes successfully
+        try:
+            flow_runner.schedule_ack_on_completion(session_id=session_id, ack_id=ack_id, worker=job_queue)
+        except Exception as e:
+            logger.warning(f"Failed to schedule ack on completion for session {session_id}: {e}")
+
+        # Respond with session info so a UI can connect over websocket to monitor
+        return JSONResponse(
+            content={
+                "sessionId": session_id,
+                "job_id": run_request.job_id,
+                "flow": run_request.flow,
+                "status": "started",
+            }
         )
 
     except Exception as e:

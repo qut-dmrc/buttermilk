@@ -2,13 +2,13 @@ import asyncio
 import importlib
 import json
 import random
+import time
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 import shortuuid
-import time
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
@@ -1453,9 +1453,14 @@ class FlowRunner(BaseModel):
                     await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
                     if wait_for_completion:
                         logger.info("Successfully completed job", job_id=run_request.job_id)
+                        worker.ack_message(ack_id)  # Acknowledge only after successful processing
                     else:
                         logger.info("Job started in the background", job_id=run_request.job_id)
-                    worker.ack_message(ack_id)  # Acknowledge the job after successful processing
+                        # Defer ack until the background task completes successfully
+                        try:
+                            self.schedule_ack_on_completion(session_id=run_request.session_id, ack_id=ack_id, worker=worker)
+                        except Exception as e:
+                            logger.warning("Failed to schedule ack on completion", job_id=run_request.job_id, error=str(e))
                 except Exception as job_error:
                     logger.error("Error running job", job_id=run_request.job_id, error=str(job_error))
                     # Continue processing other jobs even if one fails
@@ -1470,3 +1475,42 @@ class FlowRunner(BaseModel):
         except Exception as e:
             logger.error("Fatal error during batch processing", error=str(e))
             raise
+
+    def schedule_ack_on_completion(self, session_id: str, ack_id: str, worker: JobQueueClient) -> None:
+        """Schedule Pub/Sub ack once the flow task completes successfully.
+
+        This ensures messages are only acknowledged after the background flow
+        finishes without raising an exception. If the task fails, no ack is sent
+        so Pub/Sub can redeliver according to its settings.
+
+        Args:
+            session_id: The FlowRunContext session id housing the flow task
+            ack_id: The Pub/Sub ack id to acknowledge
+            worker: The JobQueueClient used to perform the ack
+        """
+        session = self.session_manager.sessions.get(session_id)
+        if not session:
+            logger.warning("Cannot schedule ack: session not found", session_id=session_id)
+            return
+
+        task = session.flow_task
+        if not task or not isinstance(task, asyncio.Task):
+            logger.warning("Cannot schedule ack: flow task not available", session_id=session_id)
+            return
+
+        def _on_done(t: asyncio.Task) -> None:
+            try:
+                exc = t.exception()
+            except asyncio.CancelledError:
+                exc = asyncio.CancelledError()
+
+            if exc is None:
+                try:
+                    worker.ack_message(ack_id)
+                    logger.debug("Acknowledged Pub/Sub message after task completion", session_id=session_id)
+                except Exception as e:
+                    logger.warning("Failed to acknowledge Pub/Sub message on completion", session_id=session_id, error=str(e))
+            else:
+                logger.error("Flow task completed with error; not acknowledging message", session_id=session_id, error=str(exc))
+
+        task.add_done_callback(_on_done)
