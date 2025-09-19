@@ -291,9 +291,10 @@ class HostAgent(Agent):
                         tool_names.append(tool_name)
                     else:
                         tool_names.append("unknown")
-                
-                logger.info("Host registered agent", agent_name=self.agent_name, agent_id=agent_id, tools=tool_names)
-                logger.debug("Tool-to-agent mapping", mapping=dict(self._tool_to_agent_map))
+
+                logger.debug("Host registered agent", agent_name=self.agent_name, agent_id=agent_id, tools=tool_names)
+
+            logger.debug("Tool-to-agent mapping", mapping=dict(self._tool_to_agent_map))
 
             # Invalidate cache
             self._registry_summary_cache = None

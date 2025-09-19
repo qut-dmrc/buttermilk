@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 
 import shortuuid
+import time
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
@@ -1245,14 +1246,8 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
-        # Use injected BM if available, otherwise fall back to global singleton
-        if self.bm is not None:
-            bm = self.bm
-            logger.debug("Using injected session-scoped BM for flow execution")
-        else:
-            from buttermilk import get_bm
-            bm = get_bm()
-            logger.debug("Using global singleton BM for flow execution (legacy mode)")
+        # Use injected BM
+        bm = self.bm
         
         # Ensure BM is fully initialized before running flow
         if hasattr(bm, "ensure_initialized"):
@@ -1260,7 +1255,6 @@ class FlowRunner(BaseModel):
             logger.debug("BM initialization verified before flow execution")
 
         # Initialize metrics tracking
-        import time
         start_time = time.time()
         success = False
 
@@ -1411,7 +1405,7 @@ class FlowRunner(BaseModel):
                     callback_to_ui=None,
                 )
                 job_definitions.append(job)
-                logger.info("Batch job created", flow=flow_name, record_id=record.record_id, job_id=job.job_id)
+                logger.debug("Batch job created", flow=flow_name, record_id=record.record_id, job_id=job.job_id)
                 # Apply max_records limit if specified
                 if max_records is not None and max_records > 0 and i >= max_records:
                     break
