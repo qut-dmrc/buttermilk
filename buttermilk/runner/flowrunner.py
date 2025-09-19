@@ -1166,24 +1166,6 @@ class FlowRunner(BaseModel):
             # Don't fail the flow execution if config snapshot fails
             logger.warning("Failed to save config snapshot for flow", flow=run_request.flow, error=str(e))
 
-    async def pull_and_run_task(self) -> None:
-        """Pull tasks from the queue and run them."""
-        # Initialize the queue_manager if needed
-        queue_manager = getattr(self, "queue_manager", None)
-        if queue_manager is None:
-            self.queue_manager = JobQueueClient()
-
-        # Pull task from the queue
-        request = await self.queue_manager.pull_single_task()
-
-        raise FatalError("Need to create the sssion object first")
-        if request:
-            # Run the task with a fresh orchestrator
-            logger.info("Running task from queue", flow=request.flow, task_id=request.job_id)  # Updated message
-            await self.run_flow(request, wait_for_completion=True)
-        else:
-            logger.debug("No tasks available in the queue")
-
     def _create_fresh_orchestrator(self, flow_name: str) -> Orchestrator:
         """Create a completely fresh orchestrator instance using the factory.
 

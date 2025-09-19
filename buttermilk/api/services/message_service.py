@@ -226,7 +226,8 @@ class MessageService:
                 case "pull_task":
                     from buttermilk.api.job_queue import JobQueueClient
 
-                    return await JobQueueClient().pull_single_task()
+                    task, ack_id = await JobQueueClient().pull_single_task()
+                    return task
                 case "pull_tox":
                     from buttermilk.api.job_queue import JobQueueClient
 

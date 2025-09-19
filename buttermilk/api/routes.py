@@ -354,7 +354,7 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
     try:
         from buttermilk.api.job_queue import JobQueueClient
 
-        run_request = await JobQueueClient().pull_single_task()
+        run_request, ack_id = await JobQueueClient().pull_single_task()
 
         asyncio.create_task(
             request.app.state.flow_runner.run_flow(

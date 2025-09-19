@@ -12,7 +12,7 @@
       "consoleName": "Buttermilk Daemon",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
-      "python": "uv",
+      "python": "./.venv/bin/uv",
       "pythonArgs": [
         "run",
         "python",
