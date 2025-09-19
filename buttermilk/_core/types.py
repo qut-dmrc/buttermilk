@@ -46,6 +46,9 @@ class Record(BaseModel):
     Attributes:
         record_id (str): A unique identifier for the record. Defaults to a
             new short UUID.
+        dataset_name (str): The name of the dataset this record belongs to.
+        split_type (str | None): The dataset split this record belongs to, e.g., "train",
+            "test", or "validation".
         metadata (dict[str, Any]): A dictionary for storing arbitrary metadata
             associated with the record (e.g., source, title, creation date, tags, uri).
         alt_text (str | None): A textual description or transcript of the media
@@ -71,6 +74,8 @@ class Record(BaseModel):
         default_factory=lambda: str(shortuuid.ShortUUID().uuid()),
         description="Unique identifier for the record.",
     )
+    dataset_name: str = Field(default="default", description="Name of the dataset this record belongs to.")
+    split_type: str = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
     metadata: dict[str, Any] = Field(
         default_factory=dict,  # Use factory for mutable default
         description="Arbitrary metadata associated with the record.",
@@ -144,7 +149,7 @@ class Record(BaseModel):
         return str(self.content)
 
     @computed_field
-    @property 
+    @property
     def record_hash(self) -> str:
         """Computes SHA256 hash of the record's as_markdown() output.
         
