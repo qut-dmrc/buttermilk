@@ -1,7 +1,7 @@
 defaults:
   - _self_
   
-mode: cli
+mode: console
 ui: cli
 human_in_loop: false
 

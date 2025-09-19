@@ -47,7 +47,7 @@ class Record(BaseModel):
         record_id (str): A unique identifier for the record. Defaults to a
             new short UUID.
         metadata (dict[str, Any]): A dictionary for storing arbitrary metadata
-            associated with the record (e.g., source, creation date, tags, uri).
+            associated with the record (e.g., source, title, creation date, tags, uri).
         alt_text (str | None): A textual description or transcript of the media
             objects contained in this record, especially useful for non-text content.
         ground_truth (dict | None): Optional dictionary containing ground truth
@@ -64,7 +64,6 @@ class Record(BaseModel):
             and either the string `content` or `alt_text`.
         title (str | None): A computed property that retrieves the 'title' from
             `metadata`, if present.
-        model_config (ConfigDict): Pydantic model configuration.
 
     """
 

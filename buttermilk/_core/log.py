@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 from pathlib import Path
@@ -57,14 +58,17 @@ def configure_structlog(min_level) -> None:
 class StructlogRichHandler(RichHandler):
     def format(self, record):
         # Convert structlog JSON back to rich format
-        if hasattr(record, "msg") and isinstance(record.msg, str):
+        # CRITICAL: Create a copy to avoid modifying original record for other handlers
+        display_record = copy.copy(record)
+
+        if hasattr(display_record, "msg") and isinstance(display_record.msg, str):
             try:
-                data = json.loads(record.msg)
-                record.msg = data.get("event", "")
+                data = json.loads(display_record.msg)
+                display_record.msg = data.get("event", "")
                 # Add structured data as extra context
             except json.JSONDecodeError:
                 pass
-        return super().format(record)
+        return super().format(display_record)
 
 
 def setup_console_logging(verbose: bool = False) -> None:

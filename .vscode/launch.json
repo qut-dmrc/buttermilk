@@ -12,7 +12,7 @@
       "consoleName": "Buttermilk Daemon",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
-      "python": "uv",
+      "python": "./.venv/bin/uv",
       "pythonArgs": [
         "run",
         "python",
@@ -136,8 +136,8 @@
       "justMyCode": false,
       "args": [
         "run=batch",
-        "+max_records=30",
-        "+flows=[trans,zot,osb]",
+        "+max_records=50",
+        "+flows=[trans]",
         "+flow=trans",
         "+dataset_key=tja",
         "verbose=true",
@@ -159,9 +159,9 @@
       "justMyCode": false,
       "args": [
         "run=batch_run",
-        "+max_jobs=30",
+        "+max_jobs=50",
         "+flows=[trans,zot,osb]",
-        "verbose=false",
+        "verbose=true",
         "llms=${input:llms}",
       ],
       "envFile": "${workspaceFolder}/.env",

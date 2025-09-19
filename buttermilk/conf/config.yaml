@@ -1,8 +1,6 @@
 defaults:
   - _self_
   - local
-  - run: cli
-  - llms: lite
 
 # reduce path-induced surprises
 hydra.job.chdir: false
@@ -15,6 +13,13 @@ bm:
   session_info:
     name: ${run.name}
     job: ${run.job}
+    # Session storage configuration
+    sessions_dir: "data/sessions"
+    # These defaults are currently not loaded properly.
+    session:
+      timeout_minutes: 60
+      cleanup_interval_minutes: 15
+      max_concurrent_sessions: 50
 
 infrastructure:
   llms: {}
