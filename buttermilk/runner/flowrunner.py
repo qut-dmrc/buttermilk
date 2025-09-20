@@ -28,6 +28,13 @@ from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
+from buttermilk.utils.otel import (
+    attach_session_baggage,
+    detach_session_baggage,
+    end_session_root_span,
+    span_with_session,
+    start_session_root_span,
+)
 from buttermilk.utils.utils import expand_dict
 
 
@@ -163,6 +170,9 @@ class FlowRunContext(BaseModel):
 
     websocket: Any = None
     monitor_ui_task: asyncio.Task | None = None  # Track active monitor_ui task
+    # Telemetry baggage token for session-level context propagation
+    _otel_baggage_token: Any | None = None
+    _otel_session_root: tuple[Any, Any] | None = None  # (span, token)
 
     def update_activity(self) -> None:
         """Update the last activity timestamp."""
@@ -235,6 +245,23 @@ class FlowRunContext(BaseModel):
             # Perform comprehensive resource cleanup
             logger.debug("Cleaning up resources for session", session_id=self.session_id)
             cleanup_report = await self.resources.cleanup()
+
+            # Detach OTEL baggage if attached
+            try:
+                if self._otel_baggage_token is not None:
+                    detach_session_baggage(self._otel_baggage_token)
+                    self._otel_baggage_token = None
+            except Exception:
+                pass
+
+            # End session-root span if active
+            try:
+                if self._otel_session_root is not None:
+                    span, token = self._otel_session_root
+                    end_session_root_span(span, token)
+                    self._otel_session_root = None
+            except Exception:
+                pass
 
             # Log cleanup report
             if cleanup_report.get("errors"):
@@ -496,6 +523,12 @@ class SessionManager:
                     self.active_connections[session_id].add(websocket)
                     session.websocket = websocket
                     session.update_activity()
+                    # Ensure OTEL baggage is attached for this session context
+                    try:
+                        if getattr(session, "_otel_baggage_token", None) is None:
+                            session._otel_baggage_token = attach_session_baggage(session_id)
+                    except Exception:
+                        pass
                     logger.debug("Added WebSocket to existing session", session_id=session_id)
                 return session
 
@@ -516,6 +549,19 @@ class SessionManager:
             if websocket:
                 self.active_connections[session_id].add(websocket)
                 session.add_websocket(websocket)
+            # Attach OTEL baggage for this new session
+            try:
+                session._otel_baggage_token = attach_session_baggage(session_id)
+            except Exception:
+                pass
+
+            # Start a session root span and store it
+            try:
+                session._otel_session_root = start_session_root_span(
+                    session_id, attributes={"buttermilk.session.status": SessionStatus.INITIALIZING.value}
+                )
+            except Exception:
+                session._otel_session_root = None
 
             logger.info("Created new session with INITIALIZING status", session_id=session_id)
 
@@ -562,6 +608,14 @@ class SessionManager:
 
         session.status = new_status
         logger.debug("Session status transition", session_id=session_id, old_status=old_status.value, new_status=new_status.value)
+        # Update session-root span attribute to reflect status change
+        try:
+            if session._otel_session_root is not None:
+                span, _ = session._otel_session_root
+                if span is not None:
+                    span.set_attribute("buttermilk.session.status", new_status.value)
+        except Exception:
+            pass
         
         # Update session storage flow status
         try:
@@ -1230,7 +1284,7 @@ class FlowRunner(BaseModel):
         """
         # Use injected BM
         bm = self.bm
-        
+
         # Ensure BM is fully initialized before running flow
         if hasattr(bm, "ensure_initialized"):
             await bm.ensure_initialized()
@@ -1247,26 +1301,41 @@ class FlowRunner(BaseModel):
             logger.debug("Failed to initialize metrics collector", error=str(e))
             metrics_collector = None
 
-        # Ensure session manager is started
-        await self._ensure_session_manager_started()
+        # Wrap the flow execution in a tracing span using session-aware helper
+        with span_with_session(
+            getattr(run_request, "session_id", None),
+            name="buttermilk.flow.run",
+            attributes={
+                "buttermilk.flow.name": getattr(run_request, "flow", None),
+                "buttermilk.job.id": getattr(run_request, "job_id", None),
+                "buttermilk.source": ", ".join(run_request.source) if getattr(run_request, "source", None) else "direct",
+                "buttermilk.mode": self.mode,
+            },
+            kind="internal",
+        ) as span:
+            if span is not None:
+                span.add_event("flow_start")
 
-        # Create a fresh orchestrator instance
-        fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
+            # Ensure session manager is started
+            await self._ensure_session_manager_started()
 
-        # set a high max callback duration when dealing with LLMs
-        asyncio.get_event_loop().slow_callback_duration = 120
+            # Create a fresh orchestrator instance
+            fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
 
-        # Get or create session using the session manager
-        _session = await self.session_manager.get_or_create_session(run_request.session_id)
+            # set a high max callback duration when dealing with LLMs
+            asyncio.get_event_loop().slow_callback_duration = 120
 
-        set_logging_context(run_request.session_id)
-        _session.flow_name = run_request.flow
-        _session.orchestrator = fresh_orchestrator
-        _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
-        _session.update_activity()  # Update activity timestamp
+            # Get or create session using the session manager
+            _session = await self.session_manager.get_or_create_session(run_request.session_id)
 
-        # Save configuration snapshot for reproducibility
-        self._save_config_snapshot(run_request)
+            set_logging_context(run_request.session_id)
+            _session.flow_name = run_request.flow
+            _session.orchestrator = fresh_orchestrator
+            _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
+            _session.update_activity()  # Update activity timestamp
+
+            # Save configuration snapshot for reproducibility
+            self._save_config_snapshot(run_request)
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
