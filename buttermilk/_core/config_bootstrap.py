@@ -256,7 +256,6 @@ class ConfigurationBootstrapper:
         return self._load_configuration()
     
 
-
 def create_configuration_bootstrapper(
     config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None
 ) -> ConfigurationBootstrapper:
@@ -360,6 +359,9 @@ def bootstrap_session_with_config(
     if not config_dir:
         config_dir = Path(__file__).parent.parent.resolve() / "conf"
         config_dir = config_dir.as_posix()
+    else:
+        # If config_dir is provided, ensure it's an absolute path
+        config_dir = Path(config_dir).resolve().as_posix()
 
     # Prepare overrides with run-specific settings
     bootstrap_overrides = (overrides or []).copy()
