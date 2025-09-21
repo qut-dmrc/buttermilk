@@ -360,8 +360,13 @@ def bootstrap_session_with_config(
         config_dir = Path(__file__).parent.parent.resolve() / "conf"
         config_dir = config_dir.as_posix()
     else:
-        # If config_dir is provided, ensure it's an absolute path
-        config_dir = Path(config_dir).resolve().as_posix()
+        # If config_dir is provided, resolve it relative to the calling app's CWD
+        # Also expand user (~) and environment variables for convenience
+        expanded = os.path.expandvars(os.path.expanduser(config_dir))
+        cfg_path = Path(expanded)
+        if not cfg_path.is_absolute():
+            cfg_path = Path(os.getcwd()) / cfg_path
+        config_dir = cfg_path.resolve().as_posix()
 
     # Prepare overrides with run-specific settings
     bootstrap_overrides = (overrides or []).copy()
