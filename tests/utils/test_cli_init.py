@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.bm_init import BM, init
+from buttermilk import BM, init
 
 
 class TestCliInit:

@@ -4,9 +4,7 @@ from asyncio import Semaphore
 
 from humanfriendly import format_timespan
 
-from buttermilk import logger
-from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
+from buttermilk import FatalError, logger
 
 """
 A wrapper for the main execution loop, handling errors and interrupts (hopefully gracefully)

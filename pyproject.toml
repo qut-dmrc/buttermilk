@@ -111,6 +111,7 @@ dependencies = [
     "opentelemetry-instrumentation-logging>=0.56",
     "gql<4.0.0",
     "autogen-gemini>=0.0.1",
+    "themoviedb>=1.0.2",
 ]
 
 [project.optional-dependencies]
@@ -241,6 +242,5 @@ addopts = [
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
     "ignore:Passing field metadata as keyword arguments is deprecated",
-    "ignore:.*grpc_wait_for_shutdown_with_timeout.*:Warning",
-    "ignore::DeprecationWarning:.*weave\.trace_server\.trace_server_interface.*"
+    "ignore:.*grpc_wait_for_shutdown_with_timeout.*:Warning"
 ]
