@@ -13,27 +13,18 @@ and storage in ChromaDB, including:
 """
 
 import asyncio
-import json
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from pydantic import BaseModel
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.data.vector import (
     ChromaDBEmbeddings,
-    ChunkedDocument,
-    InputDocument,
-    MultiFieldEmbeddingConfig,
-    ProcessingResult,
-    BatchProcessingResult,
 )
 from buttermilk.libs.zotero import ZotDownloader
-
 
 # Test fixtures and data
 MOCK_ZOTERO_ITEM = {
@@ -124,9 +115,7 @@ class TestZoteroVectorIntegration:
             instance = mock_model.from_pretrained.return_value
             # Mock embedding results
             mock_embedding = [0.1] * 768  # 768-dimensional embedding
-            instance.get_embeddings_async = AsyncMock(
-                return_value=[Mock(values=mock_embedding)]
-            )
+            instance.get_embeddings_async = AsyncMock(return_value=[Mock(values=mock_embedding)])
             yield instance
 
     @pytest.fixture
@@ -224,9 +213,7 @@ class TestZoteroVectorIntegration:
         assert "annotations" not in record.metadata
 
     @pytest.mark.anyio
-    async def test_chromadb_collections_creation(
-        self, temp_dirs, mock_zotero_api, mock_embeddings, mock_chromadb
-    ):
+    async def test_chromadb_collections_creation(self, temp_dirs, mock_zotero_api, mock_embeddings, mock_chromadb):
         """Test 5: ChromaDB collection creation for different record types."""
         save_dir, vector_dir = temp_dirs
         _, mock_collection = mock_chromadb
@@ -243,10 +230,7 @@ class TestZoteroVectorIntegration:
         )
 
         vector_store = ChromaDBEmbeddings(
-            persist_directory=vector_dir,
-            collection_name="test_zotero",
-            embedding_model="text-embedding-005",
-            dimensionality=768
+            persist_directory=vector_dir, collection_name="test_zotero", embedding_model="text-embedding-005", dimensionality=768
         )
 
         # Ensure cache is initialized
@@ -276,18 +260,16 @@ class TestZoteroVectorIntegration:
         assert "abstract" in chunk_types  # Abstract as separate chunk
 
     @pytest.mark.anyio
-    async def test_vectorization_different_chunk_sizes(
-        self, temp_dirs, mock_embeddings, mock_chromadb
-    ):
+    async def test_vectorization_different_chunk_sizes(self, temp_dirs, mock_embeddings, mock_chromadb):
         """Test 6: Vectorization with different chunk sizes."""
         _, vector_dir = temp_dirs
         _, mock_collection = mock_chromadb
 
         # Test different chunk size configurations
         chunk_configs = [
-            (500, 100),   # Small chunks
+            (500, 100),  # Small chunks
             (2000, 500),  # Medium chunks
-            (8000, 1000), # Large chunks
+            (8000, 1000),  # Large chunks
         ]
 
         for chunk_size, chunk_overlap in chunk_configs:
@@ -363,9 +345,7 @@ class TestZoteroVectorIntegration:
         assert mock_collection.upsert.call_count > 0
 
     @pytest.mark.anyio
-    async def test_interruption_and_resume(
-        self, temp_dirs, mock_zotero_api, mock_embeddings, mock_chromadb
-    ):
+    async def test_interruption_and_resume(self, temp_dirs, mock_zotero_api, mock_embeddings, mock_chromadb):
         """Test 8: Interruption handling and resume functionality."""
         save_dir, vector_dir = temp_dirs
         _, mock_collection = mock_chromadb
@@ -387,9 +367,7 @@ class TestZoteroVectorIntegration:
         downloader.set_vector_store(vector_store)
 
         # First run - process some items
-        mock_zotero_api.items.return_value = [
-            {**MOCK_ZOTERO_ITEM, "key": f"ITEM{i}"} for i in range(5)
-        ]
+        mock_zotero_api.items.return_value = [{**MOCK_ZOTERO_ITEM, "key": f"ITEM{i}"} for i in range(5)]
 
         processed_first_run = 0
         async for record in downloader.get_all_records():
@@ -446,7 +424,7 @@ class TestZoteroVectorIntegration:
 
         # TODO: Implement version tracking in ZotDownloader
         # Currently not implemented - this documents expected behavior
-        
+
         # Expected future behavior:
         # 1. Store Last-Modified-Version from response
         # 2. Use If-Modified-Since-Version in subsequent requests

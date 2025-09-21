@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -56,14 +57,22 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_successful_search_with_availability(self, tmdb_tool, mock_tmdb_api_response, mock_availability_response):
         """Test successful movie search with availability results."""
-        with patch("httpx.AsyncClient.get") as mock_get:
-            # Mock the API calls
-            mock_get.side_effect = [
-                # First call: search response
-                AsyncMock(json=AsyncMock(return_value=mock_tmdb_api_response), status_code=200),
-                # Second call: availability response
-                AsyncMock(json=AsyncMock(return_value=mock_availability_response), status_code=200),
-            ]
+        # Patch the entire aioTMDb instance to prevent real API calls
+        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+            # Mock movie object
+            mock_movie = AsyncMock()
+            mock_movie.id = 550
+            mock_movie.title = "Fight Club"
+            
+            # Mock search response
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(return_value=[mock_movie])
+            mock_tmdb.search.return_value = mock_search
+            
+            # Mock watch providers response
+            mock_movies_resource = AsyncMock()
+            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability_response)
+            mock_tmdb.movies.return_value = mock_movies_resource
 
             results = await tmdb_tool.search_movie_availability(title="Fight Club", year=1999, region="US")
 
@@ -84,8 +93,11 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_search_no_results(self, tmdb_tool, mock_empty_response):
         """Test search with no results returns null observation."""
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_get.return_value = AsyncMock(json=AsyncMock(return_value=mock_empty_response), status_code=200)
+        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+            # Mock empty search response
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(return_value=[])  # No search results
+            mock_tmdb.search.return_value = mock_search
 
             results = await tmdb_tool.search_movie_availability(title="Nonexistent Movie", year=2023, region="US")
 
@@ -105,8 +117,11 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_api_error_handling(self, tmdb_tool):
         """Test error handling when API fails."""
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_get.side_effect = Exception("API connection failed")
+        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+            # Mock search failure
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(side_effect=Exception("API connection failed"))
+            mock_tmdb.search.return_value = mock_search
 
             results = await tmdb_tool.search_movie_availability(title="Any Movie", region="US")
 
@@ -125,10 +140,23 @@ class TestTMDBTool:
             assert "API connection failed" in str(result.error)
 
     @pytest.mark.anyio
-    async def test_http_error_status(self, tmdb_tool):
-        """Test handling of HTTP error status codes."""
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_get.return_value = AsyncMock(status_code=404, json=AsyncMock(return_value={"status_message": "Not found"}))
+    async def test_watch_provider_error(self, tmdb_tool):
+        """Test handling of watch provider lookup errors."""
+        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+            # Mock successful search but failed watch provider lookup
+            mock_movie = AsyncMock()
+            mock_movie.id = 550
+            mock_movie.title = "Fight Club"
+            
+            # Mock search response
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(return_value=[mock_movie])
+            mock_tmdb.search.return_value = mock_search
+            
+            # Mock watch providers failure
+            mock_movies_resource = AsyncMock()
+            mock_movies_resource.watch_providers = AsyncMock(side_effect=Exception("Watch provider API failed"))
+            mock_tmdb.movies.return_value = mock_movies_resource
 
             results = await tmdb_tool.search_movie_availability(title="Movie Title", region="US")
 
@@ -139,43 +167,37 @@ class TestTMDBTool:
             result = results[0]
             assert isinstance(result, Observation)
             assert result.available is False
+            assert result.match_title == "Fight Club"
             assert len(result.error) > 0
             error_str = str(result.error)
-            assert "404" in error_str or "Not found" in error_str
+            assert "Watch provider lookup failed" in error_str
 
     @pytest.mark.anyio
-    async def test_invalid_api_key(self, tmdb_tool):
-        """Test handling of invalid API key."""
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_get.return_value = AsyncMock(status_code=401, json=AsyncMock(return_value={"status_message": "Invalid API key", "status_code": 7}))
-
-            results = await tmdb_tool.search_movie_availability(title="Movie Title", region="US")
-
-            # Verify authentication error handling
-            assert isinstance(results, list)
-            assert len(results) == 1
-
-            result = results[0]
-            assert isinstance(result, Observation)
-            assert result.available is False
-            assert len(result.error) > 0
-            error_str = str(result.error)
-            assert "Invalid API key" in error_str or "401" in error_str
-
-    @pytest.mark.anyio
-    async def test_no_availability_in_region(self, tmdb_tool, mock_tmdb_api_response):
+    async def test_no_availability_in_region(self, tmdb_tool):
         """Test movie found but no availability in specified region."""
-        mock_availability_empty = {
-            "results": {
-                "AU": {}  # Empty availability for Australia
+        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+            # Mock successful search but no availability in specified region
+            mock_movie = AsyncMock()
+            mock_movie.id = 550
+            mock_movie.title = "Fight Club"
+            
+            mock_availability_empty = {
+                "results": {
+                    "US": {  # Has availability in US but not AU
+                        "flatrate": [{"provider_id": 8, "provider_name": "Netflix"}]
+                    }
+                }
             }
-        }
 
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_get.side_effect = [
-                AsyncMock(json=AsyncMock(return_value=mock_tmdb_api_response), status_code=200),
-                AsyncMock(json=AsyncMock(return_value=mock_availability_empty), status_code=200),
-            ]
+            # Mock search response
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(return_value=[mock_movie])
+            mock_tmdb.search.return_value = mock_search
+            
+            # Mock watch providers response
+            mock_movies_resource = AsyncMock()
+            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability_empty)
+            mock_tmdb.movies.return_value = mock_movies_resource
 
             results = await tmdb_tool.search_movie_availability(title="Fight Club", region="AU")
 
@@ -204,7 +226,22 @@ class TestTMDBTool:
         """Test tool configuration and initialization."""
         assert tmdb_tool.api_key == "fake-tmdb-api-key-test-only"
         assert tmdb_tool.base_url == "https://api.themoviedb.org/3"
+        assert tmdb_tool.language == "en-US"
+        assert tmdb_tool.region == "AU"
 
         # Test with custom configuration
-        custom_tool = TMDBTool(api_key="another-fake-key", base_url="https://custom.tmdb.api/v3")
+        custom_tool = TMDBTool(
+            api_key="another-fake-key", 
+            base_url="https://custom.tmdb.api/v3",
+            language="fr-FR",
+            region="FR"
+        )
         assert custom_tool.base_url == "https://custom.tmdb.api/v3"
+        assert custom_tool.language == "fr-FR"
+        assert custom_tool.region == "FR"
+
+    def test_missing_api_key_raises_error(self):
+        """Test that missing API key raises ValueError."""
+        with patch.dict(os.environ, {}, clear=True):  # Clear TMDB_API_KEY env var
+            with pytest.raises(ValueError, match="TMDB API key is required"):
+                TMDBTool()

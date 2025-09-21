@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, mock_open
 
 import pytest
 
-from buttermilk.data.vector import InputDocument
 from buttermilk.libs.zotero import ZotDownloader
 from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
 

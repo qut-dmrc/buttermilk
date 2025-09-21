@@ -5,7 +5,6 @@ import json
 
 import pytest
 
-from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
 from buttermilk.data.loaders import (

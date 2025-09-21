@@ -1,11 +1,10 @@
 defaults:
-  - _self_
-  - local
   - flows:
     - zot
     - trans
     - osb
   - llms: debug
+  - _self_
 
 verbose: true
 

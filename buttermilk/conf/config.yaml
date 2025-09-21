@@ -1,6 +1,5 @@
 defaults:
   - _self_
-  - local
 
 # reduce path-induced surprises
 hydra.job.chdir: false

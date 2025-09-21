@@ -3,14 +3,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from buttermilk import BM
 from buttermilk.api.flow import create_app
 
 
 @pytest.fixture(scope="session")
-def client(real_flow_runner, real_infrastructure) -> TestClient:
+def client(real_flow_runner, bm: BM) -> TestClient:
     # Initialize with minimal configuration for testing
 
-    app = create_app(infrastructure=real_infrastructure, flows=real_flow_runner)
+    app = create_app(flows=real_flow_runner, bm=bm)
     return TestClient(app)
 
 

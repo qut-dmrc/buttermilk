@@ -8,19 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from buttermilk import init
 from buttermilk._core.bm_init import BM
-from buttermilk._core.config_bootstrap import bootstrap_session, bootstrap_session_with_config
+from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.infrastructure import InfrastructureManager
-from buttermilk.utils import init
 
 
 class TestUnifiedBootstrapAPI:
     """Test the unified bootstrap API functions."""
-
-    def test_bootstrap_session_function_exists_and_callable(self):
-        """Test that the bootstrap_session function exists and is callable."""
-        assert callable(bootstrap_session)
 
     def test_bootstrap_session_with_config_function_exists_and_callable(self):
         """Test that the bootstrap_session_with_config function exists and is callable."""
@@ -575,19 +571,18 @@ class TestBootstrapBugDetection:
 
         # Create real objects that will expose the bug
         real_execution_context = ExecutionContext()
-        real_infrastructure = InfrastructureManager()
 
         # Mock the bootstrap_full_context to return real objects
-        mock_bootstrapper.bootstrap_full_context = AsyncMock(return_value=(real_execution_context, real_infrastructure))
+        mock_bootstrapper.bootstrap_full_context = AsyncMock(return_value=(real_execution_context))
 
         with patch("buttermilk._core.config_bootstrap.asyncio.run") as mock_asyncio_run:
             # First call returns real objects, second call is irrelevant since we'll fail first
-            mock_asyncio_run.return_value = (real_execution_context, real_infrastructure)
+            mock_asyncio_run.return_value = real_execution_context
 
             # This should fail with AttributeError because InfrastructureManager
             # doesn't have validate_and_set_project method
             with pytest.raises(AttributeError) as exc_info:
-                bootstrap_session(job="test_job", project="test_project")
+                bootstrap_session_with_config(job="test_job", project="test_project")
 
             # Verify it's the expected error
             assert "validate_and_set_project" in str(exc_info.value)

@@ -8,7 +8,6 @@ from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 
-from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import ErrorEvent
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
 
@@ -70,10 +69,18 @@ class TMDBTool:
     Returns null observations when no results are found.
     """
 
-    def __init__(self, api_key: str, base_url: str = "https://api.themoviedb.org/3"):
+    def __init__(self, api_key: str | None = None, base_url: str = "https://api.themoviedb.org/3", language: str = "en-US", region: str = "AU"):
         self.api_key = api_key or os.getenv("TMDB_API_KEY")
         self.base_url = base_url
-        self.tmdb = aioTMDb(key=self.api_key, language="en-US", region="AU")
+        self.language = language
+        self.region = region
+        
+        if not self.api_key:
+            raise ValueError(
+                "TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter."
+            )
+        
+        self.tmdb = aioTMDb(key=self.api_key, language=language, region=region)
 
     async def search_movie_availability(self, title: str, year: Optional[int] = None, region: str = "US") -> list[Observation]:
         """Search for a movie and return availability information.
@@ -87,141 +94,129 @@ class TMDBTool:
             List of Observations with availability data, or list with one null result if not found
         """
         try:
-            # For now, simulate different scenarios based on the title
-            # This is minimal implementation to pass TDD tests
-            observations = []
+            # Search for movies using TMDB API
+            search_results = await self.tmdb.search().movies(query=title, year=year)
+            
+            if not search_results or len(search_results) == 0:
+                # No movies found - return null observation
+                obs = Observation(
+                    record_id=f"tmdb_search_{title}_{region}",
+                    provider_name=None,
+                    provider_id=None,
+                    provider_type=None,
+                    region=region,
+                    available=False,
+                    match_title=title,
+                    source="TMDB",
+                    metadata={"search_title": title, "search_year": year, "total_results": 0}
+                )
+                return [obs]
 
-            if title == "Fight Club":
-                # Check region for availability
-                if region == "US":
-                    # Simulate successful search with multiple providers
-                    providers = [
-                        {"name": "Netflix", "id": "8", "type": "flatrate"},
-                        {"name": "Apple TV", "id": "2", "type": "rent"}
-                    ]
+            # Get the first/best match
+            movie = search_results[0]
+            movie_id = movie.id
+            match_title = movie.title
 
-                    for provider in providers:
-                        obs = Observation(
-                            record_id=f"tmdb_{provider['id']}_{title}_{region}",
-                            provider_name=provider["name"],
-                            provider_id=provider["id"],
-                            provider_type=provider["type"],
-                            region=region,
-                            available=True,
-                            match_title=title,
-                            source="TMDB",
-                            metadata={"search_title": title, "search_year": year, "provider": provider}
-                        )
-                        observations.append(obs)
-                else:
-                    # Movie found but no availability in other regions (like AU)
+            # Get watch providers for this movie in the specified region
+            try:
+                watch_providers = await self.tmdb.movies(movie_id).watch_providers()
+                
+                # Check if there are providers for the specified region
+                if region not in watch_providers.get("results", {}):
+                    # Movie found but no availability in this region
                     obs = Observation(
-                        record_id=f"tmdb_search_{title}_{region}",
+                        record_id=f"tmdb_{movie_id}_{region}_unavailable",
                         provider_name=None,
                         provider_id=None,
                         provider_type=None,
                         region=region,
                         available=False,
-                        match_title=title,
+                        match_title=match_title,
                         source="TMDB",
-                        metadata={"search_title": title, "search_year": year}
+                        metadata={
+                            "search_title": title,
+                            "search_year": year,
+                            "movie_id": movie_id,
+                            "available_regions": list(watch_providers.get("results", {}).keys())
+                        }
+                    )
+                    return [obs]
+
+                region_data = watch_providers["results"][region]
+                observations = []
+
+                # Process different provider types (flatrate, rent, buy)
+                for provider_type in ["flatrate", "rent", "buy"]:
+                    if provider_type in region_data:
+                        for provider in region_data[provider_type]:
+                            obs = Observation(
+                                record_id=f"tmdb_{provider['provider_id']}_{movie_id}_{region}_{provider_type}",
+                                provider_name=provider["provider_name"],
+                                provider_id=str(provider["provider_id"]),
+                                provider_type=provider_type,
+                                region=region,
+                                available=True,
+                                match_title=match_title,
+                                source="TMDB",
+                                metadata={
+                                    "search_title": title,
+                                    "search_year": year,
+                                    "movie_id": movie_id,
+                                    "provider_display_priority": provider.get("display_priority"),
+                                    "provider_logo_path": provider.get("logo_path")
+                                }
+                            )
+                            observations.append(obs)
+
+                if not observations:
+                    # Movie found but no providers available in region
+                    obs = Observation(
+                        record_id=f"tmdb_{movie_id}_{region}_no_providers",
+                        provider_name=None,
+                        provider_id=None,
+                        provider_type=None,
+                        region=region,
+                        available=False,
+                        match_title=match_title,
+                        source="TMDB",
+                        metadata={
+                            "search_title": title,
+                            "search_year": year,
+                            "movie_id": movie_id,
+                            "region_data_available": True
+                        }
                     )
                     observations.append(obs)
 
-            elif title == "Nonexistent Movie":
-                # Simulate no results found
+                return observations
+
+            except Exception as provider_error:
+                # Error getting watch providers, but movie was found
+                error_event = ErrorEvent(content=f"Watch provider lookup failed: {str(provider_error)}", source="TMDB")
                 obs = Observation(
-                    record_id=f"tmdb_search_{title}_{region}",
+                    record_id=f"tmdb_{movie_id}_{region}_provider_error",
                     provider_name=None,
                     provider_id=None,
                     provider_type=None,
                     region=region,
                     available=False,
-                    match_title=title,
+                    match_title=match_title,
                     source="TMDB",
-                    metadata={"search_title": title, "search_year": year}
+                    metadata={
+                        "search_title": title,
+                        "search_year": year,
+                        "movie_id": movie_id,
+                        "error_type": "provider_lookup"
+                    },
+                    error=[error_event]
                 )
-                observations.append(obs)
-
-            elif title == "Any Movie":
-                # Simulate API error - this will trigger the exception below
-                raise Exception("API connection failed")
-
-            elif title == "Movie Title":
-                # This is used for HTTP error status tests - simulate various errors
-                # Since both HTTP error and invalid API key tests use this title,
-                # we'll create both types of errors for demonstration
-                # In a real implementation, this would be determined by the actual API response
-
-                # Create multiple error observations to demonstrate different error types
-                http_error = ErrorEvent(content="HTTP 404 Not found", source="TMDB")
-                auth_error = ErrorEvent(content="Invalid API key", source="TMDB")
-
-                # Create observation with HTTP error
-                obs1 = Observation(
-                    record_id=f"tmdb_error_http_{title}_{region}",
-                    provider_name=None,
-                    provider_id=None,
-                    provider_type=None,
-                    region=region,
-                    available=False,
-                    match_title=title,
-                    source="TMDB",
-                    metadata={"search_title": title, "search_year": year, "http_error": "404"},
-                    error=[http_error]
-                )
-
-                # Create observation with auth error
-                obs2 = Observation(
-                    record_id=f"tmdb_error_auth_{title}_{region}",
-                    provider_name=None,
-                    provider_id=None,
-                    provider_type=None,
-                    region=region,
-                    available=False,
-                    match_title=title,
-                    source="TMDB",
-                    metadata={"search_title": title, "search_year": year, "auth_error": "401"},
-                    error=[auth_error]
-                )
-
-                # For simplicity in TDD, return one that contains both error types
-                combined_obs = Observation(
-                    record_id=f"tmdb_error_{title}_{region}",
-                    provider_name=None,
-                    provider_id=None,
-                    provider_type=None,
-                    region=region,
-                    available=False,
-                    match_title=title,
-                    source="TMDB",
-                    metadata={"search_title": title, "search_year": year},
-                    error=[http_error, auth_error]  # Include both errors
-                )
-                observations.append(combined_obs)
-
-            else:
-                # Default case - movie found but no availability in region
-                obs = Observation(
-                    record_id=f"tmdb_search_{title}_{region}",
-                    provider_name=None,
-                    provider_id=None,
-                    provider_type=None,
-                    region=region,
-                    available=False,
-                    match_title=title,
-                    source="TMDB",
-                    metadata={"search_title": title, "search_year": year}
-                )
-                observations.append(obs)
-
-            return observations
+                return [obs]
 
         except Exception as e:
-            # Create error observation
+            # Create error observation for search failures
             error_event = ErrorEvent(content=str(e), source="TMDB")
             error_observation = Observation(
-                record_id=f"tmdb_error_{title}_{region}",
+                record_id=f"tmdb_search_error_{title}_{region}",
                 provider_name=None,
                 provider_id=None,
                 provider_type=None,
@@ -229,7 +224,11 @@ class TMDBTool:
                 available=False,
                 match_title=title,
                 source="TMDB",
-                metadata={"error": str(e)},
+                metadata={
+                    "search_title": title,
+                    "search_year": year,
+                    "error_type": "search_failure"
+                },
                 error=[error_event]
             )
             return [error_observation]
@@ -243,5 +242,5 @@ class TMDBTool:
                 "Provide movie title, optional year, and region to get availability data."
             ),
             func=self.search_movie_availability,
-            strict=True,
+            strict=False,  # Allow default parameters for better UX
         )

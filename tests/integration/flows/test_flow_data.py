@@ -1,10 +1,13 @@
 import json  # Import json
 
-from buttermilk._core.agent import Agent  # Import Agent
+import pytest
+
 from buttermilk._core.types import RunRequest  # Import RunRequest
 from buttermilk.utils.utils import read_json
 
 TEST_FLOW_ID = "test_flow"
+
+pytestmark = pytest.mark.anyio
 
 
 async def test_flow_data_source(real_flow_runner):

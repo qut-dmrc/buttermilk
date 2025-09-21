@@ -231,7 +231,7 @@ class Tracing(BaseModel):
     """
 
     enabled: bool = Field(default=False, description="Enable or disable tracing.")
-    api_key: str = Field(default="", description="API key for the tracing provider.")
+    api_key: str | None = Field(default=None, description="API key for the tracing provider.")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
     otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
         default_factory=dict,

@@ -29,24 +29,6 @@ def anyio_backend():
     return "asyncio"
 
 
-# =============================================================================
-# REAL CONFIGURATION FIXTURES (Preferred for new tests)
-#
-# These fixtures provide real BM instances using testing.yaml configuration.
-# Use these instead of creating manual mock configurations:
-#
-# def test_example(real_bm, real_conf):
-#     # Uses actual testing.yaml configuration
-#     assert real_bm.session_info.job == "testing"
-#
-# def test_with_override(real_conf, config_override):
-#     # Override specific config values for test
-#     custom_config = config_override(real_conf, {
-#         "infrastructure.logging.verbose": True
-#     })
-# =============================================================================
-
-
 @pytest.fixture(scope="session")
 def init_conf():
     """Real Hydra config fixture loaded from testing.yaml."""
@@ -110,7 +92,7 @@ def real_llm_expensive(request, real_bm: BM):
 
 
 @pytest.fixture(scope="session")
-def real_flow_runner(real_conf, real_infrastructure) -> FlowRunner:
+def real_flow_runner(real_conf) -> FlowRunner:
     # Create FlowRunner instance
     return FlowRunner.model_validate(real_conf.run)
 
@@ -141,7 +123,7 @@ def config_override():
             config = base_config.copy()
 
         for key, value in overrides.items():
-            OmegaConf.set(config, key, value)
+            config[key] = value
         return config
 
     return _override_config
@@ -398,13 +380,3 @@ def pytest_addoption(parser):
         default=False,
         help="run gpu and memory intensive tests",
     )
-
-
-def pytest_collection_modifyitems(config, items):
-    if config.getoption("--gpu"):
-        # --gpu given in cli: do not skip gpu and memory intensive tests
-        return
-    skipgpu = pytest.mark.skip(reason="need --gpu option to run")
-    for item in items:
-        if "gpu" in item.keywords:
-            item.add_marker(skipgpu)

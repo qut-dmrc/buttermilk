@@ -10,8 +10,6 @@ from fastapi.templating import Jinja2Templates
 
 from buttermilk.api import stream
 
-from .testdata.jobs_summarise import jobs
-
 app = FastAPI()
 flows = ["summarise_osb"]
 
