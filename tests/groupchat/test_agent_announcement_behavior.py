@@ -218,7 +218,7 @@ class TestAgentAnnouncementBehavior:
         )
 
         # Invoke the agent
-        result = await mock_agent.invoke(
+        await mock_agent.invoke(
             message=test_input,
             public_callback=public_callback
         )

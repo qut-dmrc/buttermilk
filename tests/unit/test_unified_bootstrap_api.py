@@ -190,7 +190,7 @@ class TestCLIInitWithProjectValidation:
         custom_overrides = ["key=value", "other=setting"]
 
         # Test CLI init with overrides
-        result = init(job="test_job", project="my_project", overrides=custom_overrides)
+        init(job="test_job", project="my_project", overrides=custom_overrides)
 
         # Verify overrides were passed through
         mock_bootstrap_session.assert_called_once_with(
@@ -204,7 +204,7 @@ class TestCLIInitWithProjectValidation:
         mock_bootstrap_session.return_value = mock_bm
 
         # Test CLI init with config_dir
-        result = init(job="test_job", project="my_project", config_dir="./my_conf")
+        init(job="test_job", project="my_project", config_dir="./my_conf")
 
         # Verify config_dir was passed through
         mock_bootstrap_session.assert_called_once_with(job="test_job", project="my_project", run_type="cli", config_dir="./my_conf", overrides=[])
@@ -339,7 +339,7 @@ class TestBootstrapInfrastructureIntegration:
         # The current code calls infrastructure.validate_and_set_project()
         # but infrastructure is an InfrastructureManager that doesn't have this method
         try:
-            result = bootstrap_session(job="test_job", project="test_project")
+            bootstrap_session(job="test_job", project="test_project")
 
             # If we get here, the method call succeeded
             # Verify that validate_and_set_project was called on ExecutionContext

@@ -6,7 +6,7 @@ with the new config-based initialization approach.
 
 The tests ensure that:
 - ExecutionContext initializes tracing providers from unified config
-- Config-based credentials work properly (no environment variable dependencies) 
+- Config-based credentials work properly (no environment variable dependencies)
 - Fail-fast behavior occurs when credentials are missing
 - All three providers can create and submit traces successfully
 - The recent fix for "'NoneType' object has no attribute 'create_call'" works
@@ -114,7 +114,7 @@ class TestUnifiedTracingConfig:
     async def test_weave_trace_creation_and_submission(self, weave_config):
         """Test actual trace creation and submission with Weave."""
         with patch.dict(os.environ, {}, clear=True):
-            with patch("weave.init") as mock_weave_init, patch("weave.get_client") as mock_get_client:
+            with patch("weave.init"), patch("weave.get_client") as mock_get_client:
                 # Mock weave client with trace creation capabilities
                 mock_client = Mock(spec=weave.trace.weave_client.WeaveClient)
                 mock_client.project_name = "test-dmrc"
@@ -210,7 +210,7 @@ class TestUnifiedTracingConfig:
             patch("buttermilk.utils.otel.CloudTraceSpanExporter") as mock_gcp_exporter,
             patch("buttermilk.utils.otel.BatchSpanProcessor") as mock_processor,
             patch("buttermilk.utils.otel.TracerProvider") as mock_tracer_provider,
-            patch("buttermilk.utils.otel.trace") as mock_trace,
+            patch("buttermilk.utils.otel.trace"),
         ):
             mock_processor_instance = Mock()
             mock_processor.return_value = mock_processor_instance
@@ -295,7 +295,7 @@ class TestUnifiedTracingConfig:
         
         # Verify weave client is None when disabled
         with patch("weave.init") as mock_weave_init:
-            client = await ctx.get_weave_client()
+            await ctx.get_weave_client()
             
             # Should not call weave.init when disabled
             mock_weave_init.assert_not_called()

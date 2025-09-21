@@ -85,7 +85,7 @@ class TestBootstrapSequenceE2E:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
 
         # Bootstrap full context
-        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
+        asyncio.run(bootstrapper.bootstrap_full_context())
 
         # Create session using existing infrastructure
         session_bm = asyncio.run(
@@ -128,7 +128,7 @@ class TestBootstrapSequenceE2E:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
 
         # Bootstrap full context first
-        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
+        asyncio.run(bootstrapper.bootstrap_full_context())
 
         # Create multiple sessions using the same infrastructure
         session_bm1 = asyncio.run(

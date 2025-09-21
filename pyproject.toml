@@ -188,6 +188,8 @@ python_version = "3.11"  # Specify your target Python version
 strict = false
 annotations = true      # delayed typing annotations
 warn_unused_configs = true # Warn about unused mypy settings
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 plugins = ["pydantic.mypy"]
 
 [tool.pydantic-mypy]

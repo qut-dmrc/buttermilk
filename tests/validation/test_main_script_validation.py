@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+from buttermilk import init
+
 
 class TestMainScriptValidation:
     """Test the main.py example script execution."""

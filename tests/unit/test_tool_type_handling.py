@@ -2,7 +2,7 @@
 
 This test validates the architectural changes where:
 - Agents create Tool objects for internal use
-- Agents return .schema (ToolSchema) for host registration  
+- Agents return .schema (ToolSchema) for host registration
 - Host collects ToolSchemas and passes to LLM
 - LLM makes tool calls, host intercepts them as FunctionCall objects
 - Host routes as StepRequests back to agents
@@ -194,7 +194,7 @@ class TestToolTypeHandling:
             mock_bm.llms.get_autogen_chat_client.return_value = mock_client
         
             # Call _call_llm with mixed tools
-            result = await host._call_llm(
+            await host._call_llm(
                 messages=[],
                 tools=mixed_tools_list,
                 schema=None,

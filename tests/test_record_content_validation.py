@@ -140,7 +140,7 @@ class TestRecordFieldCounts:
     
     def test_record_has_reasonable_field_count(self):
         """Test that Record doesn't have too many fields."""
-        record = Record(content="test")
+        Record(content="test")
         
         # Get all actual fields (not computed properties)
         actual_fields = set(Record.model_fields.keys())

@@ -3,7 +3,7 @@
 These tests validate the bootstrap sequence architecture fix using real configuration
 from testing.yaml to ensure:
 1. Single ExecutionContext creation per process
-2. ExecutionContext created before sessions  
+2. ExecutionContext created before sessions
 3. Sessions use existing ExecutionContext infrastructure
 4. Proper infrastructure sharing without duplication
 

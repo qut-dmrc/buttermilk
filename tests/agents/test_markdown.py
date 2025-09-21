@@ -29,7 +29,7 @@ class TestJudgeReasonsMarkdown:
             uncertainty="low"
         )
         
-        expected = (
+        (
             f"**{agent_id} #{call_id[:8]}**\n"
             f"The content violates policy due to harmful content\n"
             f"Conclusion: violating\n"
@@ -227,7 +227,7 @@ class TestAgentTraceMarkdown:
         trace.error = []
         
         # The trace should use the output's as_markdown method
-        formatted = trace.as_markdown()
+        trace.as_markdown()
         
         # We'll need to implement this on AgentTrace
         # For now, check that the method would exist

@@ -10,7 +10,7 @@ Tests cover:
 4. Edge cases and error conditions
 5. Real OSB data structure validation
 
-These tests ensure that the column mapping bug fix works correctly while 
+These tests ensure that the column mapping bug fix works correctly while
 maintaining backward compatibility with existing configurations.
 """
 

@@ -499,7 +499,7 @@ class TestConfigurableSessionsDirectory:
         new_dir = temp_storage_dir / "new_sessions"
         assert not new_dir.exists()
 
-        service = SessionStorageService(sessions_dir=new_dir)
+        SessionStorageService(sessions_dir=new_dir)
         assert new_dir.exists()
         assert new_dir.is_dir()
 

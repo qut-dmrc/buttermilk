@@ -219,7 +219,7 @@ class TestOTELSetupFunction:
         mock_execution_context = Mock()
         
         # Should not raise exception for correct signature
-        with patch("buttermilk.utils.otel.setup_tracing_otel") as mock_setup:
+        with patch("buttermilk.utils.otel.setup_tracing_otel"):
             try:
                 setup_tracing_otel_with_execution_context(mock_otel_config, mock_execution_context)
                 # Function exists and accepts the expected parameters

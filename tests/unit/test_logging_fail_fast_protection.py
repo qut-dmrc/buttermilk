@@ -558,7 +558,7 @@ class TestIntegrationScenarios:
         mock_setup_file.return_value = ["/tmp/test.log"]
         
         # First ExecutionContext creation should succeed
-        context1 = create_execution_context()
+        create_execution_context()
         
         # Verify logging was set up once
         assert mock_setup_console.call_count == 1
@@ -580,7 +580,7 @@ class TestIntegrationScenarios:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_test_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Verify verbose logging is properly configured
         validation = validate_logging_state(verbose_expected=True)
@@ -690,7 +690,7 @@ class TestFailFastProtectionExamples:
         
         # Step 2: Set up file logging once
         execution_context_id = f"correct_usage_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Step 3: Validate the setup is correct
         validation = validate_logging_state(verbose_expected=True)

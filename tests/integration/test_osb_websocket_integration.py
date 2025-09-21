@@ -3,7 +3,7 @@ OSB WebSocket Integration Tests
 
 Test suite for OSB WebSocket query processing and session management.
 These tests validate the integration between:
-- WebSocket API endpoints 
+- WebSocket API endpoints
 - OSB flow configuration
 - Session management
 - Multi-agent query processing
@@ -134,28 +134,6 @@ class TestOSBWebSocketIntegration:
         expected_agent_sequence = ["researcher", "policy_analyst", "fact_checker", "explorer"]
         
         # Mock agent responses
-        mock_agent_responses = {
-            "researcher": {
-                "findings": "Content contains potential policy violations",
-                "sources": ["policy_doc_1.pdf", "precedent_case_123"],
-                "confidence": 0.85
-            },
-            "policy_analyst": {
-                "analysis": "Violates community standards section 4.2",
-                "recommendations": ["Content warning", "User notification"],
-                "severity": "moderate"
-            },
-            "fact_checker": {
-                "validation": "Claims verified against official sources",
-                "accuracy_score": 0.92,
-                "cross_references": ["official_policy.pdf"]
-            },
-            "explorer": {
-                "related_themes": ["hate_speech", "community_guidelines"],
-                "similar_cases": ["OSB-2024-089", "OSB-2024-156"],
-                "contextual_factors": ["public_interest", "precedent_setting"]
-            }
-        }
         
         # This should process query through all OSB agents but currently fails
         from buttermilk.api.websocket.osb_processor import process_osb_query  # TO BE IMPLEMENTED
@@ -184,18 +162,6 @@ class TestOSBWebSocketIntegration:
         3. No partial response formatting for OSB queries
         """
         # Expected streaming messages during OSB query processing
-        expected_stream_sequence = [
-            {"type": "osb_status", "status": "query_received", "timestamp": "2025-01-17T10:30:00Z"},
-            {"type": "osb_status", "status": "routing_to_researcher", "agent": "researcher"},
-            {"type": "osb_partial", "agent": "researcher", "partial_response": "Analyzing content..."},
-            {"type": "osb_status", "status": "routing_to_policy_analyst", "agent": "policy_analyst"},
-            {"type": "osb_partial", "agent": "policy_analyst", "partial_response": "Reviewing policies..."},
-            {"type": "osb_status", "status": "routing_to_fact_checker", "agent": "fact_checker"},
-            {"type": "osb_partial", "agent": "fact_checker", "partial_response": "Validating claims..."},
-            {"type": "osb_status", "status": "routing_to_explorer", "agent": "explorer"},
-            {"type": "osb_partial", "agent": "explorer", "partial_response": "Finding related themes..."},
-            {"type": "osb_complete", "status": "synthesis_ready", "total_processing_time": 45.2}
-        ]
         
         # This should stream responses but currently fails
         from buttermilk.api.websocket.osb_streamer import stream_osb_response  # TO BE IMPLEMENTED

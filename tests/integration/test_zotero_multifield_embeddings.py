@@ -67,9 +67,9 @@ class TestZoteroMultiFieldEmbeddings:
             file_path="/tmp/test.pdf",
             metadata={
                 "title": "Advanced Machine Learning Techniques for Natural Language Processing",
-                "abstract": """This paper presents novel approaches to natural language 
-                processing using advanced machine learning techniques. We introduce 
-                a new architecture that combines transformer models with graph neural 
+                "abstract": """This paper presents novel approaches to natural language
+                processing using advanced machine learning techniques. We introduce
+                a new architecture that combines transformer models with graph neural
                 networks to achieve state-of-the-art results on multiple benchmarks.""",
                 "authors": ["Smith, J.", "Doe, A.", "Johnson, B."],
                 "keywords": ["machine learning", "NLP", "transformers", "graph neural networks"],
@@ -108,7 +108,7 @@ class TestZoteroMultiFieldEmbeddings:
     @pytest.mark.anyio
     async def test_multifield_chunk_creation(self, zotero_record_with_rich_metadata):
         """Test creation of chunks from different fields."""
-        config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,
@@ -188,7 +188,7 @@ class TestZoteroMultiFieldEmbeddings:
         """Test that different field types generate different embeddings."""
         _, mock_collection = mock_chromadb
 
-        config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,
@@ -285,7 +285,7 @@ class TestZoteroMultiFieldEmbeddings:
             },
         )
 
-        config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,
@@ -336,7 +336,7 @@ class TestZoteroMultiFieldEmbeddings:
                 in the field of machine learning with over 50 publications between them.
                 Their work focuses on practical applications of AI in healthcare.""",
                 "research_impact": """This research has been cited over 500 times and
-                has led to three commercial applications in medical diagnosis. The 
+                has led to three commercial applications in medical diagnosis. The
                 methodology has been adopted by several major hospitals.""",
                 "key_contributions": [
                     "Novel algorithm for early disease detection",
@@ -352,7 +352,7 @@ class TestZoteroMultiFieldEmbeddings:
             },
         )
 
-        config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,
@@ -419,7 +419,7 @@ class TestZoteroMultiFieldEmbeddings:
     @pytest.mark.anyio
     async def test_empty_fields_handling(self):
         """Test that empty or missing fields are handled gracefully."""
-        record = Record(
+        Record(
             record_id="EMPTY_TEST_001",
             content="Main content exists",
             metadata={
@@ -431,7 +431,7 @@ class TestZoteroMultiFieldEmbeddings:
             },
         )
 
-        config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,
@@ -460,7 +460,7 @@ class TestZoteroMultiFieldEmbeddings:
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            vector_store = ChromaDBEmbeddings(
+            ChromaDBEmbeddings(
                 persist_directory=temp_dir,
                 collection_name="test_empty_fields",
                 embedding_model="text-embedding-005",

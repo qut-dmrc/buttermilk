@@ -174,7 +174,7 @@ async def test_osb_flow_with_followup(test_server):
         await client.start_flow("osb", "Tell me about content moderation")
         
         # Handle initial confirmation
-        prompt = await client.wait_for_prompt(timeout=60)
+        await client.wait_for_prompt(timeout=60)
         await client.send_manager_response("yes")
         
         # Wait for initial results
@@ -207,7 +207,7 @@ async def test_osb_flow_with_followup(test_server):
             logger.info("No follow-up prompt received, continuing...")
         
         # Complete the flow
-        all_messages = await client.wait_for_completion(timeout=300)
+        await client.wait_for_completion(timeout=300)
         
         # Verify the conversation included moderation topics
         moderation_mentioned = any(
@@ -227,7 +227,7 @@ async def test_osb_error_handling(test_server):
         await client.start_flow("osb", "")
         
         # The flow should still handle this gracefully
-        prompt = await client.wait_for_prompt(timeout=60)
+        await client.wait_for_prompt(timeout=60)
         
         # Send a very long response to test limits
         long_response = "x" * 10000

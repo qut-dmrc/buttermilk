@@ -220,7 +220,7 @@ class TestFailFastProtectionValidation:
         assert validation_correct["valid"]
         
         # Should detect mismatch when expectations don't match
-        validation_mismatch = validate_logging_state(verbose_expected=False)
+        validate_logging_state(verbose_expected=False)
         # Note: This should still be valid because the logging is properly configured,
         # just not matching the expected verbose level
         

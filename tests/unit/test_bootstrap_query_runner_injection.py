@@ -71,7 +71,7 @@ class TestBootstrapQueryRunnerInjection:
         """
         # Step 1: Create ConfigurationBootstrapper and bootstrap contexts
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_contex = await bootstrapper.bootstrap_full_context()
+        await bootstrapper.bootstrap_full_context()
 
         # Step 2: Create session BM with infrastructure injection
         session_bm = await bootstrapper.bootstrap_session_context(
@@ -108,7 +108,7 @@ class TestBootstrapQueryRunnerInjection:
         """
         # Step 1: Bootstrap BM instance
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context = await bootstrapper.bootstrap_full_context()
+        await bootstrapper.bootstrap_full_context()
         session_bm = await bootstrapper.bootstrap_session_context(name="test_error_handling", job="invalid_sql_test")
 
         # Step 2: Execute invalid SQL that should fail
@@ -133,7 +133,7 @@ class TestBootstrapQueryRunnerInjection:
         """
         # Step 1: Bootstrap session BM following dashboard pattern
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context = await bootstrapper.bootstrap_full_context()
+        await bootstrapper.bootstrap_full_context()
         session_bm = await bootstrapper.bootstrap_session_context(name="streamlit_dashboard_pattern", job="tja_template_analysis_pattern")
 
         # Step 2: Verify BM has run_query method (used by dashboard)
@@ -164,7 +164,7 @@ class TestBootstrapQueryRunnerInjection:
         """
         # Step 1: Bootstrap shared infrastructure once
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context = await bootstrapper.bootstrap_full_context()
+        await bootstrapper.bootstrap_full_context()
 
         # Step 2: Create multiple session BM instances sharing infrastructure
         session_bm_1 = await bootstrapper.bootstrap_session_context(name="shared_infra_test_1", job="session_1")

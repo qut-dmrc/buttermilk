@@ -57,7 +57,7 @@ class TestBMSessionLoggingProtection:
         mock_setup_file.return_value = ["/tmp/test.log"]
         
         # Create ExecutionContext first (simulates real BM initialization)
-        context = create_execution_context()
+        create_execution_context()
         
         # Create BM session
         bm = create_session_bm(
@@ -88,7 +88,7 @@ class TestBMSessionLoggingProtection:
         mock_setup_file.return_value = ["/tmp/test.log"]
         
         # Create first ExecutionContext and BM session
-        context = create_execution_context()
+        create_execution_context()
         
         bm1 = create_session_bm(
             name="test_session_1",
@@ -197,7 +197,7 @@ class TestVerboseLoggingPreservation:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_preserve_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Verify verbose logging is configured
         validation_initial = validate_logging_state(verbose_expected=True)
@@ -236,7 +236,7 @@ class TestVerboseLoggingPreservation:
         # Set up non-verbose logging
         setup_console_logging(verbose=False)
         execution_context_id = f"non_verbose_preserve_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
         
         # Verify non-verbose logging is configured
         validation_initial = validate_logging_state(verbose_expected=False)
@@ -552,7 +552,7 @@ class TestFailFastIntegrationExamples:
         # Step 1: Set up verbose logging at application start
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_workflow_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Step 2: Validate logging is properly configured
         validation = validate_logging_state(verbose_expected=True)

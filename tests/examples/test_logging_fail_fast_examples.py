@@ -71,7 +71,7 @@ class TestBasicUsageExamples:
         
         # Step 2: Set up file logging (first call succeeds)
         execution_context_id = f"basic_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Step 3: Verify logging is working
         logger.debug("This debug message will be logged")
@@ -107,7 +107,7 @@ class TestBasicUsageExamples:
         # Example A: Verbose logging setup
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Verify DEBUG level is configured
         buttermilk_logger = logging.getLogger("buttermilk")
@@ -139,7 +139,7 @@ class TestBasicUsageExamples:
         # Set up non-verbose logging
         setup_console_logging(verbose=False)
         execution_context_id = f"non_verbose_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
         
         # Verify INFO level is configured
         buttermilk_logger = logging.getLogger("buttermilk")

@@ -1,6 +1,5 @@
 """Test dynamic timeout calculation in HostAgent."""
 
-import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -51,7 +50,6 @@ async def test_dynamic_timeout_calculation_in_wait_method(mock_host_agent, caplo
         assert total_pending == 6
     
     # Patch asyncio.wait_for to capture the timeout value
-    original_wait_for = asyncio.wait_for
     captured_timeout = None
     
     async def mock_wait_for(coro, timeout):

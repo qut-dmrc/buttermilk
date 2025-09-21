@@ -184,7 +184,7 @@ class TestBMAsyncInitialization:
         original_quota = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT")
 
         try:
-            bm = BM(
+            BM(
                 platform="test",
                 name="test",
                 job="test-job",

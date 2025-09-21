@@ -171,8 +171,6 @@ async def test_agent_registry_population_and_get_config():
         # The `type_id_from_register_call` is `variant_config.agent_id`.
         # We can find the corresponding variant_config from orchestrator.agents.
 
-        found_variant_config = None
-        found_agent_cls = None
 
         # This is a bit complex because we need to find which variant_config led to this call.
         # _register_agents iterates through self.agents.items(), then step_config.get_configs()
@@ -189,7 +187,6 @@ async def test_agent_registry_population_and_get_config():
         # We can use this `type` to find the correct `agent_cls` and `variant_config`.
 
         processed_agent_cls = None
-        processed_variant_config = None
 
         for role_name_loop, step_config_loop in orchestrator.agents.items():
             # params already includes session_id from the main call

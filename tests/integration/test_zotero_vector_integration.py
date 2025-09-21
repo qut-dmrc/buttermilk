@@ -219,7 +219,7 @@ class TestZoteroVectorIntegration:
         _, mock_collection = mock_chromadb
 
         # Create vector store with multi-field config for different content types
-        multi_config = MultiFieldEmbeddingConfig(
+        MultiFieldEmbeddingConfig(
             content_field="text_content",
             chunk_size=1000,
             chunk_overlap=200,

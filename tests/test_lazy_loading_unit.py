@@ -105,13 +105,12 @@ class TestCloudManagerLazyLoading:
             from buttermilk._core.cloud import CloudManager
             
             # Create CloudManager
-            cm = CloudManager(clouds=[{"type": "gcp", "project": "test-project"}])
+            CloudManager(clouds=[{"type": "gcp", "project": "test-project"}])
             
             # Credentials should not be fetched yet
             mock_auth.assert_not_called()
             
             # Access credentials to trigger lazy loading
-            creds = cm.gcp_credentials
             
             # Now credentials should be fetched
             mock_auth.assert_called_once()
@@ -122,19 +121,17 @@ class TestCloudManagerLazyLoading:
             
             from buttermilk._core.cloud import CloudManager
             
-            cm = CloudManager(clouds=[{"type": "gcp", "project": "test-project"}])
+            CloudManager(clouds=[{"type": "gcp", "project": "test-project"}])
             
             # Clients should not be created yet
             mock_storage.assert_not_called()
             mock_bq.assert_not_called()
             
             # Access storage client
-            storage_client = cm.gcs
             mock_storage.assert_called_once()
             mock_bq.assert_not_called()
             
             # Access BigQuery client
-            bq_client = cm.bq
             mock_bq.assert_called_once()
 
     def test_cloud_manager_credentials_cached(self):
@@ -182,7 +179,7 @@ class TestLLMManagerLazyLoading:
         }
 
         with patch("google.generativeai.configure") as mock_configure:
-            llms = LLMs(connections=test_connections)
+            LLMs(connections=test_connections)
             
             # Configuration should not happen during LLMs creation
             mock_configure.assert_not_called()
@@ -193,7 +190,7 @@ class TestQueryRunnerLazyLoading:
 
     def test_query_runner_client_dependency(self):
         """Test that QueryRunner depends on lazy-loaded BigQuery client."""
-        with patch("google.cloud.bigquery.Client") as mock_bq_client:
+        with patch("google.cloud.bigquery.Client"):
             from buttermilk._core.query import QueryRunner
             
             # Create mock BigQuery client

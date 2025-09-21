@@ -5,7 +5,7 @@ Comprehensive integration testing for OSB (Oversight Board) multi-agent workflow
 including:
 
 - Complete policy analysis workflow testing
-- Agent coordination and handoff testing  
+- Agent coordination and handoff testing
 - Cross-agent validation and synthesis testing
 - Error handling and recovery across agents
 - Performance and timing validation
@@ -248,7 +248,6 @@ class TestOSBMultiAgentCoordination:
     @pytest.mark.anyio
     async def test_agent_coordination_timing(self, osb_flow_runner):
         """Test timing and coordination between OSB agents."""
-        test_query = "Test query for timing validation"
 
         # Track agent execution order and timing
         execution_log = []
@@ -288,7 +287,6 @@ class TestOSBMultiAgentCoordination:
     @pytest.mark.anyio
     async def test_agent_error_handling_and_recovery(self, osb_flow_runner):
         """Test error handling when individual agents fail."""
-        test_query = "Error recovery test query"
 
         # Simulate scenario where one agent fails
         async def failing_agent():

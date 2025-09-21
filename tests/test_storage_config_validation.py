@@ -214,7 +214,7 @@ class TestStorageConfigValidation:
         assert "auto_detect" in orchestrator_config.storage
         config = orchestrator_config.storage["auto_detect"]
         assert isinstance(config, FileStorageConfig)
-        assert config.auto_create == True
+        assert config.auto_create
 
 
 class ConcreteOrchestrator(Orchestrator):

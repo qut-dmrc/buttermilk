@@ -25,7 +25,7 @@ def test_actual_judge_reasons_direct_dump():
         dumped_reasons = reasons_obj.model_dump()
         # Check that key fields are present
         assert dumped_reasons["conclusion"] == "Test conclusion."
-        assert dumped_reasons["prediction"] == False
+        assert not dumped_reasons["prediction"]
         assert dumped_reasons["reasons"] == ["Reason 1", "Reason 2"]
         assert dumped_reasons["uncertainty"] == "low"
         # Check that a preview field is generated

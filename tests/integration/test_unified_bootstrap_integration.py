@@ -104,7 +104,7 @@ llms:
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
                 # First session sets the project
-                bm1 = init(job="first_job", project="original_project", config_dir=temp_config_dir)
+                init(job="first_job", project="original_project", config_dir=temp_config_dir)
 
                 # Second session with different project should fail
                 with pytest.raises(RuntimeError, match="Project name mismatch"):

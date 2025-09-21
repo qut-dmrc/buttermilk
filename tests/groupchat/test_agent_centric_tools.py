@@ -12,6 +12,7 @@ Run with: uv run python test_agent_centric_tools.py
 """
 
 import asyncio
+import sys
 from unittest.mock import MagicMock
 
 from buttermilk._core.agent import Agent
@@ -254,4 +255,4 @@ async def main():
 
 if __name__ == "__main__":
     success = asyncio.run(main())
-    exit(0 if success else 1)
+    sys.exit(0 if success else 1)
