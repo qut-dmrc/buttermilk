@@ -27,8 +27,8 @@ import weave
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
-from buttermilk._core.config import LoggerConfig, Tracing
 from buttermilk._core.cloud_config import CloudProvider
+from buttermilk._core.config import LoggerConfig, Tracing
 from buttermilk._core.constants import CONFIG_CACHE_PATH, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs

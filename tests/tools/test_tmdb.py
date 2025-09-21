@@ -58,7 +58,7 @@ class TestTMDBTool:
     async def test_successful_search_with_availability(self, tmdb_tool, mock_tmdb_api_response, mock_availability_response):
         """Test successful movie search with availability results."""
         # Patch the entire aioTMDb instance to prevent real API calls
-        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
             # Mock movie object
             mock_movie = AsyncMock()
             mock_movie.id = 550
@@ -93,7 +93,7 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_search_no_results(self, tmdb_tool, mock_empty_response):
         """Test search with no results returns null observation."""
-        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
             # Mock empty search response
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[])  # No search results
@@ -117,7 +117,7 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_api_error_handling(self, tmdb_tool):
         """Test error handling when API fails."""
-        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
             # Mock search failure
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(side_effect=Exception("API connection failed"))
@@ -142,7 +142,7 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_watch_provider_error(self, tmdb_tool):
         """Test handling of watch provider lookup errors."""
-        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
             # Mock successful search but failed watch provider lookup
             mock_movie = AsyncMock()
             mock_movie.id = 550
@@ -175,7 +175,7 @@ class TestTMDBTool:
     @pytest.mark.anyio
     async def test_no_availability_in_region(self, tmdb_tool):
         """Test movie found but no availability in specified region."""
-        with patch.object(tmdb_tool, 'tmdb') as mock_tmdb:
+        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
             # Mock successful search but no availability in specified region
             mock_movie = AsyncMock()
             mock_movie.id = 550
@@ -231,7 +231,7 @@ class TestTMDBTool:
 
         # Test with custom configuration
         custom_tool = TMDBTool(
-            api_key="another-fake-key", 
+            api_key="another-fake-key",
             base_url="https://custom.tmdb.api/v3",
             language="fr-FR",
             region="FR"

@@ -2,6 +2,7 @@
 """Test the clean_empty_values function to ensure it doesn't modify original data."""
 
 import copy
+
 from buttermilk.utils.utils import clean_empty_values
 
 

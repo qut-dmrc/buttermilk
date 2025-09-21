@@ -1,15 +1,13 @@
 """Test timeout resilience in HostAgent."""
 
 import asyncio
-from collections import defaultdict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core import CancellationToken, AgentId, DefaultTopicId
+
 from buttermilk._core.contract import (
-    TaskProcessingStarted,
     TaskProcessingComplete,
-    StepRequest,
+    TaskProcessingStarted,
 )
 from buttermilk.agents.flowcontrol.host import HostAgent
 
@@ -62,7 +60,7 @@ async def test_timeout_treated_as_error_below_threshold(mock_host_agent):
     
     # 3 tasks will timeout (30% failure rate, below 50% threshold)
     # Mock the timeout to happen quickly
-    with patch('asyncio.wait_for', side_effect=asyncio.TimeoutError):
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         result = await mock_host_agent.wait_check_current_step_completions()
     
     # Flow should continue despite timeouts
@@ -102,7 +100,7 @@ async def test_timeout_exceeds_error_threshold(mock_host_agent):
         )
     
     # 7 tasks will timeout (70% failure rate, above 50% threshold)
-    with patch('asyncio.wait_for', side_effect=asyncio.TimeoutError):
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         result = await mock_host_agent.wait_check_current_step_completions()
     
     # Flow should stop due to high error rate
@@ -168,7 +166,7 @@ async def test_mixed_errors_and_timeouts(mock_host_agent):
     
     mock_host_agent.wait_check_current_step_completions = wrapped_method
     
-    with patch('asyncio.wait_for', side_effect=asyncio.TimeoutError):
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         result = await mock_host_agent.wait_check_current_step_completions()
     
     # Flow should continue (at threshold, not above)
@@ -208,7 +206,7 @@ async def test_timeout_resilience_logging(mock_host_agent, caplog):
         )
     
     # 1 task will timeout (25% failure rate)
-    with patch('asyncio.wait_for', side_effect=asyncio.TimeoutError):
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         result = await mock_host_agent.wait_check_current_step_completions()
     
     assert result is True

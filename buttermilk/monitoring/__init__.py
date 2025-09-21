@@ -18,7 +18,7 @@ from .observability import HealthStatus as SimpleHealthStatus, SimpleHealthMonit
 
 __all__ = [
     "MetricsCollector",
-    "FlowMetrics", 
+    "FlowMetrics",
     "AgentMetrics",
     "SessionMetrics",
     "get_metrics_collector",
@@ -26,7 +26,7 @@ __all__ = [
     "HealthStatus",
     "ComponentHealth",
     "SimpleHealthMonitor",
-    "SimpleHealthStatus", 
+    "SimpleHealthStatus",
     "SystemStatus",
     "get_observability_manager",
     "get_simple_health_monitor"

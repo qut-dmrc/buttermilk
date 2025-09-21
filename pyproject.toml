@@ -233,7 +233,7 @@ addopts = [
     "--tb=short",
     # "--show-capture=no",
     # "--disable-warnings",
-    "-m not integration",
+    #"-m not integration",
 ]
 
 #  "--timeout_method=thread", 

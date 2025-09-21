@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from buttermilk._core.bm_init import BM, SessionInfo
+from buttermilk._core.bm_init import SessionInfo
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput, AgentTrace
 

@@ -2,8 +2,6 @@
 Basic tests for score pages API - focusing on imports and structure
 """
 
-import pytest
-from unittest.mock import Mock
 
 from buttermilk.api.services.data_service import DataService
 
@@ -23,10 +21,10 @@ class TestScoreAPIBasics:
     def test_data_service_exists(self):
         """Test DataService class has expected methods"""
         expected_methods = [
-            'get_record_by_id',
-            'get_scores_for_record', 
-            'get_responses_for_record',
-            'get_records_for_flow'
+            "get_record_by_id",
+            "get_scores_for_record",
+            "get_responses_for_record",
+            "get_records_for_flow"
         ]
         
         for method_name in expected_methods:
@@ -43,7 +41,7 @@ class TestScoreAPIBasics:
         
         expected_routes = [
             "/api/flows/{flow}/records/{record_id}",
-            "/api/flows/{flow}/records/{record_id}/scores", 
+            "/api/flows/{flow}/records/{record_id}/scores",
             "/api/flows/{flow}/records/{record_id}/responses",
             "/api/flows/{flow}/records"
         ]
@@ -56,7 +54,7 @@ class TestScoreAPIBasics:
         # Test record response structure
         mock_record_response = {
             "id": "test_record",
-            "name": "Test Record", 
+            "name": "Test Record",
             "content": "Test content",
             "metadata": {
                 "created_at": None,
@@ -86,7 +84,7 @@ class TestScoreAPIBasics:
             }
         }
         
-        # Verify structure matches spec  
+        # Verify structure matches spec
         assert "record_id" in mock_scores_response
         assert "off_shelf_results" in mock_scores_response
         assert "custom_results" in mock_scores_response
@@ -111,7 +109,7 @@ class TestScoreAPIBasics:
         }
         
         assert "error" in expected_404
-        assert "detail" in expected_404  
+        assert "detail" in expected_404
         assert "code" in expected_404
 
 
@@ -124,7 +122,7 @@ class TestAPISpecCompliance:
         
         spec_endpoints = {
             "/api/flows/{flow}/records/{record_id}": "GET",
-            "/api/flows/{flow}/records/{record_id}/scores": "GET", 
+            "/api/flows/{flow}/records/{record_id}/scores": "GET",
             "/api/flows/{flow}/records/{record_id}/responses": "GET",
             "/api/flows/{flow}/records": "GET"
         }
@@ -146,12 +144,12 @@ class TestAPISpecCompliance:
         params = list(sig.parameters.keys())
         assert "include_scores" in params
         
-        # Check get_scores_for_record accepts session_id  
+        # Check get_scores_for_record accepts session_id
         sig = inspect.signature(DataService.get_scores_for_record)
         params = list(sig.parameters.keys())
         assert "session_id" in params
         
         # Check get_responses_for_record accepts include_reasoning
-        sig = inspect.signature(DataService.get_responses_for_record) 
+        sig = inspect.signature(DataService.get_responses_for_record)
         params = list(sig.parameters.keys())
         assert "include_reasoning" in params

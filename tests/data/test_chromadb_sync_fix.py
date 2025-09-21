@@ -5,7 +5,7 @@ import pytest
 pytestmark = pytest.mark.anyio  # Enable async test support
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from buttermilk.data.vector import ChromaDBEmbeddings
 
@@ -16,7 +16,7 @@ class TestChromaDBSyncFix:
     def test_original_remote_path_field_exists(self):
         """Test that _original_remote_path field was added."""
         # Should not raise AttributeError
-        assert hasattr(ChromaDBEmbeddings, '_original_remote_path')
+        assert hasattr(ChromaDBEmbeddings, "_original_remote_path")
 
     def test_sync_method_has_fixes(self):
         """Test that sync method contains the critical fixes."""
@@ -32,8 +32,8 @@ class TestChromaDBSyncFix:
 
     def test_manual_sync_method_exists(self):
         """Test that manual sync method was added."""
-        assert hasattr(ChromaDBEmbeddings, 'sync_to_remote')
-        assert callable(getattr(ChromaDBEmbeddings, 'sync_to_remote'))
+        assert hasattr(ChromaDBEmbeddings, "sync_to_remote")
+        assert callable(getattr(ChromaDBEmbeddings, "sync_to_remote"))
 
     def test_ensure_cache_saves_original_path(self):
         """Test that ensure_cache_initialized saves original remote path."""
@@ -42,9 +42,9 @@ class TestChromaDBSyncFix:
         init_source = inspect.getsource(ChromaDBEmbeddings.ensure_cache_initialized)
         assert "_original_remote_path = self.persist_directory" in init_source
 
-    @patch('buttermilk.data.vector.TextEmbeddingModel')
-    @patch('buttermilk.data.vector.VertexAIEmbeddingFunction')
-    @patch('buttermilk.data.vector.chromadb')
+    @patch("buttermilk.data.vector.TextEmbeddingModel")
+    @patch("buttermilk.data.vector.VertexAIEmbeddingFunction")
+    @patch("buttermilk.data.vector.chromadb")
     def test_path_preservation_logic(self, mock_chromadb, mock_embedding_func, mock_text_model):
         """Test the path preservation logic without actual model loading."""
         # Mock the model loading to avoid API calls
@@ -54,7 +54,7 @@ class TestChromaDBSyncFix:
         
         remote_path = "gs://test-bucket/chromadb"
         
-        with patch('buttermilk.data.vector.ensure_chromadb_cache') as mock_ensure:
+        with patch("buttermilk.data.vector.ensure_chromadb_cache") as mock_ensure:
             with tempfile.TemporaryDirectory() as temp_dir:
                 mock_ensure.return_value = Path(temp_dir)
                 

@@ -7,7 +7,7 @@ configuration patterns.
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 

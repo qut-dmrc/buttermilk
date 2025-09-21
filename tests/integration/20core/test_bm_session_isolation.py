@@ -5,12 +5,14 @@ across the FlowRunner -> Orchestrator -> Agent chain, providing proper observabi
 isolation while maintaining backward compatibility.
 """
 
-import pytest
 from unittest.mock import Mock
-from buttermilk.runner.flowrunner import FlowRunner
-from buttermilk._core.orchestrator import Orchestrator
+
+import pytest
+
 from buttermilk._core.agent import Agent
+from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
+from buttermilk.runner.flowrunner import FlowRunner
 
 
 class MockBM:

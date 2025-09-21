@@ -9,9 +9,8 @@ Usage:
 import argparse
 import subprocess
 import sys
-from pathlib import Path
-import json
 import time
+from pathlib import Path
 
 
 def check_local_chromadb(local_path: Path) -> bool:
@@ -29,7 +28,7 @@ def check_local_chromadb(local_path: Path) -> bool:
     size_mb = sqlite_file.stat().st_size / (1024 * 1024)
     mtime = time.ctime(sqlite_file.stat().st_mtime)
     
-    print(f"✅ Found ChromaDB database:")
+    print("✅ Found ChromaDB database:")
     print(f"   Path: {sqlite_file}")
     print(f"   Size: {size_mb:.2f} MB")
     print(f"   Modified: {mtime}")
@@ -42,7 +41,7 @@ def check_remote_exists(remote_path: str) -> bool:
     try:
         result = subprocess.run(
             ["gsutil", "ls", remote_path],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True
         )
         
@@ -52,7 +51,7 @@ def check_remote_exists(remote_path: str) -> bool:
             # Check for sqlite file
             sqlite_check = subprocess.run(
                 ["gsutil", "ls", f"{remote_path}/chroma.sqlite3"],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             
@@ -69,7 +68,7 @@ def check_remote_exists(remote_path: str) -> bool:
 
 def sync_to_remote(local_path: Path, remote_path: str, dry_run: bool = False) -> bool:
     """Sync local ChromaDB to remote storage."""
-    print(f"\n🔄 Syncing ChromaDB to remote storage...")
+    print("\n🔄 Syncing ChromaDB to remote storage...")
     print(f"   From: {local_path}")
     print(f"   To:   {remote_path}")
     
@@ -89,7 +88,7 @@ def sync_to_remote(local_path: Path, remote_path: str, dry_run: bool = False) ->
     print(f"\n📡 Running: {' '.join(cmd)}")
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
         
         if result.returncode == 0:
             print("\n✅ Sync completed successfully!")
@@ -109,7 +108,7 @@ def sync_to_remote(local_path: Path, remote_path: str, dry_run: bool = False) ->
 
 def verify_remote(remote_path: str) -> bool:
     """Verify remote upload succeeded."""
-    print(f"\n🔍 Verifying remote upload...")
+    print("\n🔍 Verifying remote upload...")
     
     try:
         # Check for key files
@@ -122,7 +121,7 @@ def verify_remote(remote_path: str) -> bool:
         for file in files_to_check:
             result = subprocess.run(
                 ["gsutil", "ls", "-l", f"{remote_path}/{file}"],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             
@@ -147,7 +146,7 @@ def create_backup(local_path: Path) -> bool:
     """Create local backup before sync."""
     backup_path = local_path.parent / f"{local_path.name}_backup_{int(time.time())}"
     
-    print(f"\n💾 Creating local backup...")
+    print("\n💾 Creating local backup...")
     print(f"   From: {local_path}")
     print(f"   To:   {backup_path}")
     
@@ -210,7 +209,7 @@ def main():
         if not create_backup(args.local):
             if not args.force:
                 print("\n⚠️  Backup failed. Continue anyway? (y/N)")
-                if input().lower() != 'y':
+                if input().lower() != "y":
                     print("Aborted.")
                     sys.exit(1)
     

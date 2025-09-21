@@ -402,7 +402,7 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
             seen.add(msg_key)
             deduplicated.append(msg)
         else:
-            logger.debug("Removing duplicate message", message_type=type(msg).__name__, content=getattr(msg, 'content', '')[:50])
+            logger.debug("Removing duplicate message", message_type=type(msg).__name__, content=getattr(msg, "content", "")[:50])
 
     if len(deduplicated) < len(messages):
         logger.info("Removed duplicate messages", count=len(messages) - len(deduplicated))

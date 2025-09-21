@@ -18,12 +18,10 @@ Usage:
 """
 
 import os
-from typing import Any
 
 import pytest
 
 from buttermilk.tools.catalog_test import Observation, TMDBTool
-
 
 # Pytest markers for conditional test execution
 pytestmark = [pytest.mark.integration, pytest.mark.live_api]
@@ -103,7 +101,7 @@ class TestTMDBLiveAPI:
             title=movie_title, year=year, region="US"
         )
 
-        # Test UK availability  
+        # Test UK availability
         uk_results = await tmdb_tool_live.search_movie_availability(
             title=movie_title, year=year, region="GB"
         )
@@ -171,7 +169,7 @@ class TestTMDBLiveAPI:
             # Should have clear indication why not available
             assert result.provider_name is None
 
-    @pytest.mark.anyio 
+    @pytest.mark.anyio
     async def test_live_api_response_structure(self, tmdb_tool_live: TMDBTool) -> None:
         """Test that live API responses match our expected data structure."""
         results = await tmdb_tool_live.search_movie_availability(
@@ -214,7 +212,7 @@ class TestTMDBLiveAPI:
         """Test that multiple rapid requests work within API rate limits."""
         movies = [
             ("The Shawshank Redemption", 1994),
-            ("The Godfather", 1972), 
+            ("The Godfather", 1972),
             ("The Dark Knight", 2008),
         ]
 

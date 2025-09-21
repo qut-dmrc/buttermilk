@@ -1,8 +1,7 @@
 """Tests for agent announcement behavior in the base Agent class."""
 
-import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,12 +11,7 @@ from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
     AgentOutput,
-    AgentTrace,
-    ErrorEvent,
-    HeartBeat,
 )
-from buttermilk._core.types import Record
-from buttermilk._core.exceptions import ProcessingError
 
 
 class MockAgent(Agent):
@@ -33,7 +27,7 @@ class MockAgent(Agent):
     
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return empty list by default, can be overridden in tests."""
-        return getattr(self, '_mock_tools', [])
+        return getattr(self, "_mock_tools", [])
 
 
 class TestAgentAnnouncementBehavior:

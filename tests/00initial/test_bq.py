@@ -1,8 +1,6 @@
 import datetime
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from google.cloud import bigquery_storage
 
 from buttermilk.utils.bq import TableWriter
 

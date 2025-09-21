@@ -3,7 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -468,8 +468,8 @@ class TestConfigurableSessionsDirectory:
         from buttermilk.api.services.session_storage import SESSIONS_DIR, get_sessions_dir
 
         # Remove sessions_dir attribute from real_bm
-        if hasattr(real_bm.session_info, 'sessions_dir'):
-            delattr(real_bm.session_info, 'sessions_dir')
+        if hasattr(real_bm.session_info, "sessions_dir"):
+            delattr(real_bm.session_info, "sessions_dir")
 
         result = get_sessions_dir()
         assert result == SESSIONS_DIR

@@ -12,8 +12,7 @@ Run with: uv run python test_agent_centric_tools.py
 """
 
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import AgentConfig
@@ -86,12 +85,12 @@ async def test_agent_tool_definition():
     print(f"✅ Tool definition: {tool_def}")
     
     # Validate structure
-    assert tool_def['name'] == "call_researcher"
-    assert "Use this tool when you need to" in tool_def['description']  # Enhanced description
-    assert "researches topics" in tool_def['description'].lower()  # Contains original description
-    assert 'input_schema' in tool_def
-    assert tool_def['input_schema']['type'] == "object"
-    assert 'prompt' in tool_def['input_schema']['properties']
+    assert tool_def["name"] == "call_researcher"
+    assert "Use this tool when you need to" in tool_def["description"]  # Enhanced description
+    assert "researches topics" in tool_def["description"].lower()  # Contains original description
+    assert "input_schema" in tool_def
+    assert tool_def["input_schema"]["type"] == "object"
+    assert "prompt" in tool_def["input_schema"]["properties"]
     
     print("✅ Agent tool definition generation works!")
 
@@ -114,7 +113,7 @@ async def test_agent_announcement():
     # Validate announcement has tool definition
     assert isinstance(announcement, AgentAnnouncement)
     assert announcement.tool_definition
-    assert announcement.tool_definition['name'] == "call_analyzer"
+    assert announcement.tool_definition["name"] == "call_analyzer"
     assert announcement.agent_config.role == "ANALYZER"
     
     print("✅ Agent announcements include tool definitions!")
@@ -133,7 +132,7 @@ async def test_host_tool_collection():
     
     # Create announcements
     ann1 = agent1.create_announcement("initial", "joining")
-    ann2 = agent2.create_announcement("initial", "joining") 
+    ann2 = agent2.create_announcement("initial", "joining")
     
     # Add to host registry
     host._agent_registry[agent1.agent_id] = ann1

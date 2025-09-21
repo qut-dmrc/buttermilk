@@ -7,13 +7,14 @@ test implementation.
 """
 
 import sys
+
 import pytest
 
 if __name__ == "__main__":
     # Run specific bootstrap tests
     test_args = [
         "tests/unit/test_bootstrap_sequence_architecture.py::TestExecutionContextCreation::test_execution_context_singleton_behavior",
-        "tests/unit/test_bootstrap_sequence_architecture.py::TestInfrastructureSharing::test_execution_context_has_own_infrastructure", 
+        "tests/unit/test_bootstrap_sequence_architecture.py::TestInfrastructureSharing::test_execution_context_has_own_infrastructure",
         "tests/unit/test_cli_bootstrap_order.py::TestCLIBootstrapOrder::test_cli_main_bootstrap_order",
         "tests/unit/test_bootstrap_logging_consistency.py::TestBootstrapLoggingConsistency::test_execution_context_logging_initialization",
         "-v"

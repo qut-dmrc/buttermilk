@@ -1,10 +1,10 @@
 import pytest
 
 # Buttermilk core imports
-from buttermilk._core.contract import AgentInput, AgentTrace, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentOutput, AgentTrace
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk.agents.judge import Judge, Reasons, JudgeReasons # Import Judge and its output model
+from buttermilk.agents.judge import Judge, JudgeReasons  # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
@@ -26,7 +26,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
     """Test direct invocation of a basic LLMAgent using ._process()."""
     agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "best"})
 
-    response = await agent._process(message=request_paris) 
+    response = await agent._process(message=request_paris)
 
     assert isinstance(response, AgentTrace)
     assert not response.is_error, f"Agent returned error: {response.error}"
@@ -42,7 +42,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHAT_MODELS)  
+@pytest.mark.parametrize("model_name", CHAT_MODELS)
 async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
@@ -103,9 +103,9 @@ async def test_scorer(real_bm, model_name: str, request_paris: AgentInput):
 async def test_llm_agent_template_metadata(model_name: str, request_paris: AgentInput):
     """Test that LLMAgent includes template metadata in AgentOutput."""
     agent = LLMAgent(
-        role="tester", 
-        name="Template Test Agent", 
-        description="Test template metadata tracking", 
+        role="tester",
+        name="Template Test Agent",
+        description="Test template metadata tracking",
         parameters={"model": model_name, "template": "best"}
     )
 

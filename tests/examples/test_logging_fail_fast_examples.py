@@ -17,20 +17,21 @@ Usage examples cover:
 """
 
 import logging
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
+
+from buttermilk._core.execution_context import (
+    create_execution_context,
+    get_or_create_execution_context,
+)
 from buttermilk._core.log import (
+    ensure_logging_properly_initialized,
     logger,
     setup_console_logging,
     setup_file_logging,
     validate_logging_state,
-    ensure_logging_properly_initialized,
-)
-from buttermilk._core.execution_context import (
-    create_execution_context,
-    get_or_create_execution_context,
 )
 
 
@@ -179,8 +180,8 @@ class TestExecutionContextExamples:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_example_safe_execution_context_pattern(self, mock_setup_file, mock_setup_console):
         """
         Example of the safe ExecutionContext usage pattern.
@@ -212,8 +213,8 @@ class TestExecutionContextExamples:
             safe_context = get_or_create_execution_context()
             assert safe_context is context1
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_example_dangerous_execution_context_pattern(self, mock_setup_file, mock_setup_console):
         """
         Example of the dangerous ExecutionContext pattern that fails fast.

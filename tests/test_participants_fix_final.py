@@ -1,6 +1,5 @@
 """Final test to verify participants fix works correctly."""
 
-import pytest
 from buttermilk._core.config import AgentVariants
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator
 
@@ -19,7 +18,7 @@ def test_participants_includes_both_agents_and_observers():
     }
     
     agent2_config = {
-        "name": "Agent2", 
+        "name": "Agent2",
         "role": "ANALYZER",
         "unique_identifier": "002",
         "description": "Analyzer agent that processes results",
@@ -39,7 +38,7 @@ def test_participants_includes_both_agents_and_observers():
     
     monitor_config = {
         "name": "MonitorAgent",
-        "role": "MONITOR", 
+        "role": "MONITOR",
         "unique_identifier": "004",
         "description": "Monitor agent that tracks progress",
         "parameters": {"model": "test"},
@@ -93,7 +92,7 @@ def test_participants_includes_both_agents_and_observers():
     }
     
     assert observers_only == {
-        "HOST": "Host agent that coordinates the workflow", 
+        "HOST": "Host agent that coordinates the workflow",
         "MONITOR": "Monitor agent that tracks progress",
     }
     

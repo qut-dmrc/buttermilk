@@ -3,7 +3,7 @@
 import pytest
 
 from buttermilk._core.contract import AgentTrace, StepRequest
-from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA  
+from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA
 from buttermilk.agents.judge import Reasons
 from buttermilk.utils.uploader import AsyncDataUploader
 
@@ -75,7 +75,7 @@ class TestAsyncDataUploader:
         assert uploader.save_dest is storage
         assert uploader._buffer == []
     
-    @pytest.mark.anyio 
+    @pytest.mark.anyio
     async def test_uploader_buffer_management(self, real_bm, sample_outputs):
         """Test uploader buffer management with real storage."""
         storage = real_bm.get_storage()
@@ -130,7 +130,7 @@ class TestAsyncDataUploader:
         uploader = AsyncDataUploader(buffer_size=1, save_dest=storage)
         
         # Verify storage has expected interface
-        assert hasattr(storage, 'save')  # or whatever method is expected
+        assert hasattr(storage, "save")  # or whatever method is expected
         
         # Create a simple test object that can be saved
         test_data = {
@@ -199,7 +199,7 @@ class TestAsyncDataUploaderIntegration:
         storage = real_bm.get_storage()
         session_id = real_bm.session_info.session_id
         
-        # Create uploader 
+        # Create uploader
         uploader = AsyncDataUploader(buffer_size=1, save_dest=storage)
         
         # Add session-specific metadata to outputs

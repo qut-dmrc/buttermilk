@@ -1,11 +1,11 @@
 """Test dynamic timeout calculation in HostAgent."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 import logging
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core import MessageContext, CancellationToken, AgentId, DefaultTopicId
+
 from buttermilk._core.contract import (
     TaskProcessingStarted,
 )
@@ -58,12 +58,11 @@ async def test_dynamic_timeout_calculation_in_wait_method(mock_host_agent, caplo
         nonlocal captured_timeout
         captured_timeout = timeout
         # Complete immediately to avoid actual waiting
-        return None
     
     # Clear the starting flag to make the condition satisfiable
     mock_host_agent._step_starting.clear()
     
-    with patch('asyncio.wait_for', side_effect=mock_wait_for):
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
         # Call the method WITHOUT clearing pending tasks first
         result = await mock_host_agent._wait_for_all_tasks_complete()
         
@@ -76,7 +75,7 @@ async def test_dynamic_timeout_calculation_in_wait_method(mock_host_agent, caplo
         assert "Using dynamic timeout of 300s for 6 pending tasks" in caplog.text
 
 
-@pytest.mark.anyio 
+@pytest.mark.anyio
 async def test_dynamic_timeout_with_zero_tasks(mock_host_agent, caplog):
     """Test that base timeout is used when no tasks are pending."""
     caplog.set_level(logging.INFO)
@@ -90,9 +89,8 @@ async def test_dynamic_timeout_with_zero_tasks(mock_host_agent, caplog):
     async def mock_wait_for(coro, timeout):
         nonlocal captured_timeout
         captured_timeout = timeout
-        return None
     
-    with patch('asyncio.wait_for', side_effect=mock_wait_for):
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
         mock_host_agent._step_starting.clear()
         
         result = await mock_host_agent._wait_for_all_tasks_complete()
@@ -138,12 +136,11 @@ async def test_dynamic_timeout_with_varying_task_counts(mock_host_agent):
         async def mock_wait_for(coro, timeout):
             nonlocal captured_timeout
             captured_timeout = timeout
-            return None
         
         # Clear the starting flag before calling the method
         mock_host_agent._step_starting.clear()
         
-        with patch('asyncio.wait_for', side_effect=mock_wait_for):
+        with patch("asyncio.wait_for", side_effect=mock_wait_for):
             # Call WITHOUT clearing pending tasks to test timeout calculation
             await mock_host_agent._wait_for_all_tasks_complete()
             
@@ -170,11 +167,10 @@ async def test_dynamic_timeout_respects_limits(mock_host_agent):
     async def mock_wait_for(coro, timeout):
         nonlocal captured_timeout
         captured_timeout = timeout
-        return None
     
     mock_host_agent._step_starting.clear()
     
-    with patch('asyncio.wait_for', side_effect=mock_wait_for):
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
         await mock_host_agent._wait_for_all_tasks_complete()
         
         # Should still use minimum of 300s even with low base timeout
@@ -194,7 +190,7 @@ async def test_dynamic_timeout_respects_limits(mock_host_agent):
             MagicMock(),
         )
     
-    with patch('asyncio.wait_for', side_effect=mock_wait_for):
+    with patch("asyncio.wait_for", side_effect=mock_wait_for):
         await mock_host_agent._wait_for_all_tasks_complete()
         
         # Should be capped at 1200s (20 minutes)

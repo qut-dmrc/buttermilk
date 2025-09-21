@@ -3,9 +3,8 @@ import sys
 
 import google.auth
 import google.auth.credentials
-import pytest
 
-from buttermilk import BM, logger
+from buttermilk import logger
 from buttermilk._core.log import logger  # noqa
 
 

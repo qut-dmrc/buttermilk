@@ -4,15 +4,16 @@ Tests the complete workflow of GCS-mounted configuration reloading
 without disrupting active sessions.
 """
 
-import pytest
-import tempfile
+import json
 import shutil
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
-import json
 
-from buttermilk.runner.flowrunner import FlowRunner
+import pytest
+
 from buttermilk._core.types import RunRequest
+from buttermilk.runner.flowrunner import FlowRunner
 
 
 class TestConfigurationReload:
@@ -108,9 +109,9 @@ flows: ${flows}
         assert config_data["run_inputs"] == {"input1": "data1"}
         assert "flow_config" in config_data
 
-    @patch('buttermilk.runner.flowrunner.hydra')
-    @patch('buttermilk.runner.flowrunner.initialize_config_dir')
-    def test_reload_configurations_success(self, mock_initialize, mock_hydra, temp_config_dir):
+    @patch("buttermilk.runner.flowrunner.hydra")
+    @patch("buttermilk.runner.flowrunner.initialize_config_dir")
+    async def test_reload_configurations_success(self, mock_initialize, mock_hydra, temp_config_dir):
         """Test successful configuration reload."""
         # Mock Hydra configuration loading
         mock_conf = Mock()
@@ -129,7 +130,7 @@ flows: ${flows}
         )
         
         # Mock the config directory path
-        with patch('pathlib.Path.resolve', return_value=temp_config_dir):
+        with patch("pathlib.Path.resolve", return_value=temp_config_dir):
             # Test reload
             result = await flow_runner.reload_configurations()
         
@@ -145,8 +146,8 @@ flows: ${flows}
         assert "new_flow" in flow_runner.flows
         assert flow_runner.flows["test_flow"]["updated"] is True
 
-    @patch('buttermilk.runner.flowrunner.hydra')
-    def test_reload_configurations_failure(self, mock_hydra):
+    @patch("buttermilk.runner.flowrunner.hydra")
+    async def test_reload_configurations_failure(self, mock_hydra):
         """Test configuration reload failure handling."""
         # Mock Hydra to raise an exception
         mock_hydra.core.global_hydra.GlobalHydra.instance.return_value.clear.side_effect = Exception("Config error")
@@ -220,7 +221,7 @@ class TestConfigReloadIntegration:
         import subprocess
         
         # Test gcsfuse help command
-        result = subprocess.run(["gcsfuse", "--help"], capture_output=True, text=True)
+        result = subprocess.run(["gcsfuse", "--help"], check=False, capture_output=True, text=True)
         assert result.returncode == 0, "gcsfuse should be available and working"
         assert "gcsfuse" in result.stdout.lower(), "gcsfuse help should mention gcsfuse"
 

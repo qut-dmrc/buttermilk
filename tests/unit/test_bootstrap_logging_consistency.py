@@ -5,14 +5,8 @@ Simple tests using real configuration from testing.yaml.
 
 import asyncio
 
-import pytest
-
-from buttermilk._core.execution_context import (
-    get_execution_context,
-    _global_execution_context,
-    _execution_context_initialized
-)
 from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+from buttermilk._core.execution_context import get_execution_context
 from buttermilk._core.log import logger
 
 

@@ -6,14 +6,11 @@ criteria or a policy. It uses Pydantic models like `Reasons` and `JudgeReasons`
 to structure the LLM's output, ensuring a consistent and parsable evaluation format.
 """
 
-import random  # For random emoji selection in preview
 from typing import Literal  # For type hinting
 
-from pydantic import BaseModel, Field, computed_field  # Pydantic components
+from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentTrace  # Base types
-from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
 # --- Pydantic Models for Evaluation Output ---
@@ -136,8 +133,8 @@ class JudgeReasons(Reasons):
         includes the full header. Otherwise returns a simpler format.
         """
         # Check if agent context is available (set by AgentTrace)
-        agent_id = getattr(self, '_agent_id', None)
-        call_id = getattr(self, '_call_id', None)
+        agent_id = getattr(self, "_agent_id", None)
+        call_id = getattr(self, "_call_id", None)
         
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)

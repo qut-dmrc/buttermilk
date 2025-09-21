@@ -33,7 +33,7 @@ def _is_nontrivial_image(img: Image.Image) -> bool:
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_generated_image_is_valid_and_nontrivial(, client):
+async def test_generated_image_is_valid_and_nontrivial(client):
     image_client = client()
     result = await image_client.generate_image(
         text=TEST_PROMPT,

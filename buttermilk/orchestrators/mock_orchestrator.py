@@ -22,10 +22,10 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
     FlowProgressUpdate,
-    UserResponseMessage,
+    SystemPromptMessage,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    SystemPromptMessage,
+    UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger

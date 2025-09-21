@@ -1,6 +1,5 @@
 """Tests for the unified hashing system."""
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -155,7 +154,7 @@ class TestTemplateHashing:
         """Test template hashing from file."""
         template_content = "Test template with {{ variable }}"
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jinja2', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jinja2", delete=False) as f:
             f.write(template_content)
             temp_path = f.name
         
@@ -203,7 +202,7 @@ class TestFlowHashing:
             "agents": {
                 "fetch": {
                     "name": "Fetch Agent",
-                    "role": "FETCHER", 
+                    "role": "FETCHER",
                     "template": "fetch_template",
                     "runtime_param": "should_be_excluded"
                 },

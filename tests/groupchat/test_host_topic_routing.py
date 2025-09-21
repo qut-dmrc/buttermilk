@@ -1,13 +1,11 @@
 """Tests for HostAgent topic routing functionality."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from autogen_core import DefaultTopicId
 
 from buttermilk._core.contract import (
-    ConductorRequest,
     FlowEvent,
     StepRequest,
     SystemPromptMessage,
@@ -160,7 +158,6 @@ class TestHostTopicRouting:
     @pytest.mark.anyio
     async def test_base_agent_publish_with_topic_parameter(self, mock_host_agent):
         """Test that base Agent._publish method accepts topic_id parameter."""
-        from buttermilk._core.agent import Agent
         
         # Create a test message
         test_message = FlowEvent(content="Test message", source="test")

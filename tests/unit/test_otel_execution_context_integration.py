@@ -11,9 +11,11 @@ Tests cover:
 4. OTEL configuration with ExecutionContext infrastructure
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from buttermilk._core.execution_context import ExecutionContext, create_execution_context
+
+from buttermilk._core.execution_context import create_execution_context
 
 
 class TestOTELExecutionContextIntegration:
@@ -21,11 +23,10 @@ class TestOTELExecutionContextIntegration:
     
     def setup_method(self):
         """Reset global state before each test."""
-        from buttermilk._core.execution_context import _global_execution_context, _execution_context_initialized
-        globals()['_global_execution_context'] = None
-        globals()['_execution_context_initialized'] = False
+        globals()["_global_execution_context"] = None
+        globals()["_execution_context_initialized"] = False
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context')
+    @patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context")
     def test_otel_initialization_with_execution_context(self, mock_setup_otel):
         """Test that OTEL initialization receives ExecutionContext."""
         otel_config = {
@@ -41,7 +42,7 @@ class TestOTELExecutionContextIntegration:
         )
         
         # Mock CloudManager to avoid real authentication
-        with patch.object(context, 'cloud_manager') as mock_cloud_mgr:
+        with patch.object(context, "cloud_manager") as mock_cloud_mgr:
             mock_cloud_instance = Mock()
             mock_cloud_mgr.return_value = mock_cloud_instance
             
@@ -52,7 +53,7 @@ class TestOTELExecutionContextIntegration:
             # Verify OTEL setup was called with ExecutionContext
             mock_setup_otel.assert_called_once_with(otel_config, context)
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context')
+    @patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context")
     def test_otel_cloudmanager_access_through_execution_context(self, mock_setup_otel):
         """Test that OTEL can access CloudManager through ExecutionContext."""
         otel_config = {"enabled": True, "endpoint": "http://test"}
@@ -67,7 +68,7 @@ class TestOTELExecutionContextIntegration:
         mock_cloud_manager.get_access_token.return_value = "test-access-token"
         mock_cloud_manager.gcp_credentials = Mock()
         
-        with patch.object(context, 'cloud_manager', mock_cloud_manager):
+        with patch.object(context, "cloud_manager", mock_cloud_manager):
             import asyncio
             asyncio.run(context._initialize_otel())
             
@@ -101,7 +102,7 @@ class TestOTELExecutionContextIntegration:
         
         assert context_disabled.tracing["otel"]["enabled"] is False
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context')
+    @patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context")
     def test_otel_failure_handling_in_execution_context(self, mock_setup_otel):
         """Test OTEL initialization failure handling in ExecutionContext."""
         mock_setup_otel.side_effect = Exception("OTEL endpoint unreachable")
@@ -123,7 +124,7 @@ class TestOTELExecutionContextIntegration:
         except RuntimeError as e:
             assert "OTEL endpoint unreachable" in str(e.__cause__)
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context')
+    @patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context")
     def test_otel_deferred_initialization_pattern(self, mock_setup_otel):
         """Test that OTEL initialization is deferred until first access."""
         otel_config = {"enabled": True, "endpoint": "http://test"}
@@ -161,8 +162,8 @@ class TestOTELExecutionContextIntegration:
         assert context.tracing["weave"]["enabled"] is True
         assert context.tracing["traceloop"]["enabled"] is False
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context')
-    @patch('buttermilk._core.execution_context.weave')
+    @patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context")
+    @patch("buttermilk._core.execution_context.weave")
     def test_tracing_providers_initialization_order(self, mock_weave, mock_setup_otel):
         """Test that tracing providers are initialized in correct order."""
         tracing_config = {
@@ -202,9 +203,8 @@ class TestOTELSetupFunction:
     
     def setup_method(self):
         """Reset global state before each test."""
-        from buttermilk._core.execution_context import _global_execution_context, _execution_context_initialized
-        globals()['_global_execution_context'] = None
-        globals()['_execution_context_initialized'] = False
+        globals()["_global_execution_context"] = None
+        globals()["_execution_context_initialized"] = False
     
     def test_otel_setup_function_signature(self):
         """Test that the OTEL setup function has correct signature."""
@@ -219,7 +219,7 @@ class TestOTELSetupFunction:
         mock_execution_context = Mock()
         
         # Should not raise exception for correct signature
-        with patch('buttermilk.utils.otel.setup_tracing_otel') as mock_setup:
+        with patch("buttermilk.utils.otel.setup_tracing_otel") as mock_setup:
             try:
                 setup_tracing_otel_with_execution_context(mock_otel_config, mock_execution_context)
                 # Function exists and accepts the expected parameters
@@ -228,7 +228,7 @@ class TestOTELSetupFunction:
                 # Function doesn't exist yet - this is expected during development
                 pytest.skip("setup_tracing_otel_with_execution_context not yet implemented")
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel')
+    @patch("buttermilk.utils.otel.setup_tracing_otel")
     def test_otel_setup_with_execution_context_cloudmanager_access(self, mock_setup_otel):
         """Test OTEL setup function can access CloudManager from ExecutionContext."""
         try:
@@ -245,7 +245,7 @@ class TestOTELSetupFunction:
         mock_cloud_manager = Mock()
         mock_cloud_manager.get_access_token.return_value = "test-token"
         
-        with patch.object(context, 'cloud_manager', mock_cloud_manager):
+        with patch.object(context, "cloud_manager", mock_cloud_manager):
             otel_config = {"enabled": True, "endpoint": "http://test"}
             
             # Call the setup function
@@ -269,7 +269,7 @@ class TestOTELSetupFunction:
         with pytest.raises((ValueError, RuntimeError, AttributeError)):
             setup_tracing_otel_with_execution_context(otel_config, None)
     
-    @patch('buttermilk.utils.otel.setup_tracing_otel')
+    @patch("buttermilk.utils.otel.setup_tracing_otel")
     def test_otel_setup_function_delegates_to_existing_setup(self, mock_setup_otel):
         """Test that new function properly delegates to existing OTEL setup."""
         try:
@@ -293,9 +293,8 @@ class TestOTELExecutionContextArchitecture:
     
     def setup_method(self):
         """Reset global state before each test."""
-        from buttermilk._core.execution_context import _global_execution_context, _execution_context_initialized
-        globals()['_global_execution_context'] = None
-        globals()['_execution_context_initialized'] = False
+        globals()["_global_execution_context"] = None
+        globals()["_execution_context_initialized"] = False
     
     def test_otel_no_bm_singleton_dependency(self):
         """Test that OTEL setup doesn't depend on BM singleton."""
@@ -313,11 +312,11 @@ class TestOTELExecutionContextArchitecture:
         _global_bm = None
         
         # Mock CloudManager to avoid real authentication
-        with patch.object(context, 'cloud_manager') as mock_cloud_mgr:
+        with patch.object(context, "cloud_manager") as mock_cloud_mgr:
             mock_cloud_mgr.return_value = Mock()
             
             # OTEL initialization should succeed without BM singleton
-            with patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context') as mock_setup:
+            with patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context") as mock_setup:
                 import asyncio
                 asyncio.run(context._initialize_otel())
                 
@@ -337,9 +336,9 @@ class TestOTELExecutionContextArchitecture:
         mock_secret_manager = Mock()
         mock_credentials = {"otel_api_key": "test-key"}
         
-        with patch.object(context, 'cloud_manager', mock_cloud_manager), \
-             patch.object(context, 'secret_manager', mock_secret_manager), \
-             patch.object(context, 'credentials', mock_credentials):
+        with patch.object(context, "cloud_manager", mock_cloud_manager), \
+             patch.object(context, "secret_manager", mock_secret_manager), \
+             patch.object(context, "credentials", mock_credentials):
             
             # Verify ExecutionContext provides all infrastructure OTEL might need
             assert context.cloud_manager is mock_cloud_manager
@@ -347,7 +346,7 @@ class TestOTELExecutionContextArchitecture:
             assert context.credentials is mock_credentials
             
             # OTEL setup should have access to all infrastructure
-            with patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context') as mock_setup:
+            with patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context") as mock_setup:
                 import asyncio
                 asyncio.run(context._initialize_otel())
                 
@@ -370,9 +369,9 @@ class TestOTELExecutionContextArchitecture:
         mock_cloud_manager = Mock()
         mock_cloud_manager.get_access_token.return_value = "valid-token"
         
-        with patch.object(context, 'cloud_manager', mock_cloud_manager):
+        with patch.object(context, "cloud_manager", mock_cloud_manager):
             # OTEL initialization should not raise "CloudManager not available"
-            with patch('buttermilk.utils.otel.setup_tracing_otel_with_execution_context') as mock_setup:
+            with patch("buttermilk.utils.otel.setup_tracing_otel_with_execution_context") as mock_setup:
                 import asyncio
                 
                 # This should not raise any "CloudManager not available" error

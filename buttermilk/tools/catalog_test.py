@@ -21,24 +21,24 @@ class Observation(BaseModel):
         default_factory=lambda: str(shortuuid.uuid()),  # Use shortuuid for brevity
         description="A unique ID for this specific agent execution/response. Attempts to use Weave call ID if available.",
     )
-    test_date: Optional[datetime.datetime] = Field(
+    test_date: datetime.datetime | None = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc),
         description="Timestamp when the observation was made",
     )
 
-    provider_id: Optional[str] = Field(..., description="Unique ID of the streaming/availability provider")
-    provider_name: Optional[str] = Field(..., description="Name of the streaming/availability provider")
-    provider_type: Optional[str] = Field(..., description="Type of availability (flatrate, rent, buy)")
+    provider_id: str | None = Field(default=None, description="Unique ID of the streaming/availability provider")
+    provider_name: str | None = Field(default=None, description="Name of the streaming/availability provider")
+    provider_type: str | None = Field(default=None, description="Type of availability (flatrate, rent, buy)")
     region: str = Field(..., description="Geographical region of the observation (e.g., US, UK)")
-    price: Optional[float] = Field(None, description="Price for renting or buying, if applicable")
-    currency: Optional[str] = Field(None, description="Currency of the price, if applicable")
-    format: Optional[str] = Field(None, description="Format of the content (e.g., HD, SD, 4K)")
-    season: Optional[str] = Field(None, description="Season number if applicable")
-    episode: Optional[str] = Field(None, description="Episode number if applicable")
-    match_title: Optional[str] = Field(None, description="Matched title from the provider")
-    match_author: Optional[str] = Field(None, description="Matched author/director from the provider")
+    price: float | None = Field(None, description="Price for renting or buying, if applicable")
+    currency: str | None = Field(None, description="Currency of the price, if applicable")
+    format: str | None = Field(None, description="Format of the content (e.g., HD, SD, 4K)")
+    season: str | None = Field(None, description="Season number if applicable")
+    episode: str | None = Field(None, description="Episode number if applicable")
+    match_title: str | None = Field(None, description="Matched title from the provider")
+    match_author: str | None = Field(None, description="Matched author/director from the provider")
     available: bool = Field(..., description="Whether the title is available")
-    source: Optional[str] = Field(None, description="Source of the observation data")
+    source: str = Field(..., description="Source of the observation data")
     metadata: dict = Field(..., description="Metadata about the title availability")
 
     error: list[ErrorEvent] = Field(

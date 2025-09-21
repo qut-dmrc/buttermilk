@@ -1,14 +1,15 @@
 """Tests for the refactored LLM configuration schema."""
 
 import pytest
-from buttermilk._core.llms import ClientType, LLMConfig, LLMs
 from autogen_core.models import ModelInfo
+
+from buttermilk._core.llms import ClientType, LLMConfig, LLMs
 
 
 def test_client_type_enum():
     """Test that ClientType enum has all expected values."""
     expected_types = [
-        "openai", "azure", "anthropic", "anthropic_vertex", 
+        "openai", "azure", "anthropic", "anthropic_vertex",
         "gemini", "gemini_vertex", "vertex_openai"
     ]
     actual_types = [ct.value for ct in ClientType]
@@ -58,7 +59,6 @@ def test_clean_branching_logic():
     # each client_type has exactly one branch in the implementation
     
     import inspect
-    from buttermilk._core.llms import LLMs
     
     # Get the source code of get_autogen_chat_client
     source = inspect.getsource(LLMs.get_autogen_chat_client)

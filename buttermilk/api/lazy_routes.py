@@ -56,9 +56,9 @@ class LazyRouteManager:
                     prefix=router_config["prefix"],
                     **router_config["kwargs"],
                 )
-                logger.info("Loaded deferred router", prefix=router_config['prefix'])
+                logger.info("Loaded deferred router", prefix=router_config["prefix"])
             except Exception as e:
-                logger.error("Failed to load deferred router", prefix=router_config['prefix'], error=e)
+                logger.error("Failed to load deferred router", prefix=router_config["prefix"], error=e)
 
         self._heavy_routes_registered = True
         logger.info("All deferred routes loaded successfully")

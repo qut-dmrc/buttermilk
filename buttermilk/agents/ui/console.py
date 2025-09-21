@@ -23,12 +23,12 @@ from buttermilk._core.contract import (
     AgentOutput,
     AgentTrace,
     FlowMessage,  # Base type for messages
-    UserResponseMessage,  # Responses sent *from* the manager (this agent)
     OOBMessages,
+    SystemPromptMessage,  # Requests sent *to* the manager (this agent)
     TaskProcessingComplete,  # Status updates
     TaskProcessingStarted,  # Task start notifications (to be filtered)
     ToolOutput,  # Potentially displayable tool output
-    SystemPromptMessage,  # Requests sent *to* the manager (this agent)
+    UserResponseMessage,  # Responses sent *from* the manager (this agent)
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
@@ -247,7 +247,6 @@ class CLIUserAgent(UIAgent):
             self._console.print(fallback_text)
 
         # This method primarily triggers output; input is handled by _poll_input.
-        return None
 
     def _fmt_msg(self, message: FormattableMessages, source: str) -> Text | None:
         """Formats various message types into IRC-style console display.
@@ -513,13 +512,12 @@ class CLIUserAgent(UIAgent):
                     result.append(content_preview, style="white")
                     if len(str(message.content)) > 200:
                         result.append("...", style="dim")
+                # Show confirmation type for non-content messages
+                elif hasattr(message, "confirm") and message.confirm is not None:
+                    confirm_text = "✓ CONFIRM" if message.confirm else "✗ REJECT"
+                    result.append(confirm_text, style="green" if message.confirm else "red")
                 else:
-                    # Show confirmation type for non-content messages
-                    if hasattr(message, "confirm") and message.confirm is not None:
-                        confirm_text = "✓ CONFIRM" if message.confirm else "✗ REJECT"
-                        result.append(confirm_text, style="green" if message.confirm else "red")
-                    else:
-                        result.append("(empty)", style="dim")
+                    result.append("(empty)", style="dim")
                 content_added = True
 
             elif hasattr(message, "content") and message.content:

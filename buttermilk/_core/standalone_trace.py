@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 import weave
 from weave.trace.weave_client import Call
 
-from buttermilk import bm, logger, get_bm
+from buttermilk import get_bm, logger
 from buttermilk._core.log import logger
 from buttermilk._core.message_data import clean_empty_values
 

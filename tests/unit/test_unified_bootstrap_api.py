@@ -12,7 +12,6 @@ from buttermilk import init
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.execution_context import ExecutionContext
-from buttermilk._core.infrastructure import InfrastructureManager
 
 
 class TestUnifiedBootstrapAPI:
@@ -38,24 +37,10 @@ class TestUnifiedBootstrapAPI:
 
         # Mock ExecutionContext and InfrastructureManager
         mock_execution_context = MagicMock(spec=ExecutionContext)
-        mock_infrastructure = MagicMock(spec=InfrastructureManager)
         mock_execution_context.validate_and_set_project.return_value = "test_project"
 
-        # Setup asyncio.run side effects
-        def asyncio_run_side_effect(coro):
-            if not hasattr(asyncio_run_side_effect, "call_count"):
-                asyncio_run_side_effect.call_count = 0
-            asyncio_run_side_effect.call_count += 1
-
-            if asyncio_run_side_effect.call_count == 1:
-                return (mock_execution_context, mock_infrastructure)  # bootstrap_full_context
-            else:
-                return mock_bm  # bootstrap_session_context
-
-        mock_asyncio_run.side_effect = asyncio_run_side_effect
-
         # Test bootstrap_session
-        result = bootstrap_session(job="test_job", project="test_project", run_type="cli")
+        result = bootstrap_session_with_config(job="test_job", project="test_project", run_type="cli")
 
         # Verify bootstrap methods were called
         mock_bootstrapper.bootstrap_full_context.assert_called_once()
@@ -87,20 +72,7 @@ class TestUnifiedBootstrapAPI:
         mock_bootstrapper.get_configuration.return_value = mock_config
 
         mock_execution_context = MagicMock(spec=ExecutionContext)
-        mock_infrastructure = MagicMock(spec=InfrastructureManager)
         mock_execution_context.validate_and_set_project.return_value = "test_project"
-
-        def asyncio_run_side_effect(coro):
-            if not hasattr(asyncio_run_side_effect, "call_count"):
-                asyncio_run_side_effect.call_count = 0
-            asyncio_run_side_effect.call_count += 1
-
-            if asyncio_run_side_effect.call_count == 1:
-                return (mock_execution_context, mock_infrastructure)
-            else:
-                return mock_bm
-
-        mock_asyncio_run.side_effect = asyncio_run_side_effect
 
         # Test bootstrap_session_with_config
         bm_result, config_result = bootstrap_session_with_config(job="test_job", project="test_project", run_type="cli")
@@ -277,7 +249,7 @@ class TestCLIInitWithConfigProjectValidation:
         mock_sys_modules.get.return_value = mock_main
 
         # Test CLI bootstrap_session_with_config without project (should use script name)
-        bm_result, config_result = cli.bootstrap_session_with_config(job="test_job")
+        bm_result, config_result = bootstrap_session_with_config(job="test_job")
 
         # Verify bootstrap_session_with_config was called with script name as project
         mock_bootstrap_session_with_config.assert_called_once_with(

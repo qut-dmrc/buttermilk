@@ -101,20 +101,6 @@
 - **StructuredLLMHostAgent**: Tool-based coordination
 - **Custom Agents**: Domain-specific processors
 
-### Tool Definition System (Issue #83)
-
-#### Components
-- **@tool decorator**: Define callable tools
-- **@MCPRoute**: Expose via MCP protocol
-- **AgentToolDefinition**: Structured tool metadata
-- **UnifiedRequest**: Consolidated request format
-
-#### Benefits
-- Type-safe tool calling
-- Automatic schema generation
-- MCP protocol support
-- Backward compatibility
-
 ### Configuration Architecture
 
 #### Hydra Composition

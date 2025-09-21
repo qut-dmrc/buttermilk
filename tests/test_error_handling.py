@@ -7,9 +7,10 @@ properly tracks errors and stops flow execution when too many tasks fail.
 import asyncio
 from unittest.mock import MagicMock
 
-from buttermilk.agents.flowcontrol.host import HostAgent
-from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
 from autogen_core import MessageContext
+
+from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
+from buttermilk.agents.flowcontrol.host import HostAgent
 
 
 async def test_error_handling():

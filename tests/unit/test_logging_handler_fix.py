@@ -5,8 +5,6 @@ was outputting plain text to file while logger.debug() was outputting structured
 """
 
 import json
-import logging
-import tempfile
 import uuid
 from pathlib import Path
 
@@ -14,9 +12,9 @@ import pytest
 
 from buttermilk._core.log import (
     logger,
+    reset_logging_configuration,
     setup_console_logging,
     setup_file_logging,
-    reset_logging_configuration,
 )
 
 
@@ -54,7 +52,7 @@ class TestStructlogRichHandlerFix:
         assert log_content, "Log file should not be empty"
 
         # Parse each line as JSON (JSONL format)
-        log_lines = [line.strip() for line in log_content.split('\n') if line.strip()]
+        log_lines = [line.strip() for line in log_content.split("\n") if line.strip()]
         assert len(log_lines) >= 1, "Should have at least one log entry"
 
         # Find our test message
@@ -101,7 +99,7 @@ class TestStructlogRichHandlerFix:
         assert log_content, "Log file should not be empty"
 
         # Parse each line as JSON (JSONL format)
-        log_lines = [line.strip() for line in log_content.split('\n') if line.strip()]
+        log_lines = [line.strip() for line in log_content.split("\n") if line.strip()]
         assert len(log_lines) >= 1, "Should have at least one log entry"
 
         # Find our test message
@@ -148,7 +146,7 @@ class TestStructlogRichHandlerFix:
         log_content = log_file_path.read_text().strip()
 
         # Parse all log entries
-        log_lines = [line for line in log_content.split('\n') if line.strip()]
+        log_lines = [line for line in log_content.split("\n") if line.strip()]
 
         info_entry = None
         debug_entry = None

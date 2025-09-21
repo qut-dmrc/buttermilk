@@ -5,7 +5,6 @@ the autogen agent system, including tool announcements, function calling,
 and observability integration.
 """
 
-import asyncio
 import os
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -14,7 +13,7 @@ import pytest
 from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
 
-from buttermilk.tools.catalog_test import TMDBTool, Observation
+from buttermilk.tools.catalog_test import Observation, TMDBTool
 
 
 async def run_function_tool(function_tool: FunctionTool, **kwargs) -> Any:

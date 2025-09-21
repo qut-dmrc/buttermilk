@@ -1,8 +1,8 @@
 """Unit tests for configuration models and validation."""
 
+
 import pytest
 from pydantic import ValidationError
-from pathlib import Path
 
 pytestmark = pytest.mark.anyio
 
@@ -49,7 +49,7 @@ class TestStorageConfigValidation:
         complete_config = StorageConfig(
             type="bigquery",
             project_id="proj",
-            dataset_id="dataset", 
+            dataset_id="dataset",
             table_id="table"
         )
         assert complete_config.full_table_id == "proj.dataset.table"
@@ -68,7 +68,7 @@ class TestStorageConfigValidation:
         
         columns = {
             "content": "text_field",
-            "metadata": "meta_field", 
+            "metadata": "meta_field",
             "record_id": "id_field"
         }
         
@@ -173,7 +173,7 @@ class TestCloudProviderConfigValidation:
         assert config.vault == "https://test-vault.vault.azure.net/"
 
     def test_gcp_provider_config(self):
-        """Test GCP CloudProviderCfg validation.""" 
+        """Test GCP CloudProviderCfg validation."""
         from buttermilk._core.config import CloudProviderCfg
         
         config = CloudProviderCfg(
@@ -268,14 +268,14 @@ class TestRecordTypeValidation:
         )
         
         record2 = Record(
-            content="Same content", 
+            content="Same content",
             mime="text/plain",
             record_id="same_id"
         )
         
         record3 = Record(
             content="Different content",
-            mime="text/plain", 
+            mime="text/plain",
             record_id="same_id"
         )
         
@@ -318,6 +318,7 @@ class TestConfigurationCaching:
     def test_config_model_creation_performance(self):
         """Test that config model creation is reasonably fast."""
         import time
+
         from buttermilk._core.storage_config import StorageConfig
         
         start_time = time.time()

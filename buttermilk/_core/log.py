@@ -10,6 +10,7 @@ from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
 
 from buttermilk._core.context import get_logging_context
+
 try:
     # Optional: OpenTelemetry trace context for log correlation
     from opentelemetry.trace import get_current_span

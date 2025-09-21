@@ -12,16 +12,12 @@ and sessions were creating separate infrastructure instances.
 """
 
 import asyncio
-import pytest
 
+from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 from buttermilk._core.execution_context import (
-    ExecutionContext, 
     get_execution_context,
     get_or_create_execution_context,
-    _global_execution_context,
-    _execution_context_initialized
 )
-from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 
 
 class TestExecutionContextCreation:
@@ -81,7 +77,6 @@ class TestInfrastructureSharing:
         _execution_context_initialized = False
         
         # Clear BM singleton
-        from buttermilk._core.dmrc import _bm_instance
         import buttermilk._core.dmrc as dmrc_module
         dmrc_module._bm_instance = None
     
@@ -95,7 +90,7 @@ class TestInfrastructureSharing:
         assert infrastructure is not None
         
         # Infrastructure should be functional (has required components)
-        assert hasattr(infrastructure, 'create_session_bm')
+        assert hasattr(infrastructure, "create_session_bm")
         
         # ExecutionContext should be accessible globally
         global_context = get_execution_context()
@@ -112,7 +107,7 @@ class TestInfrastructureSharing:
         # Create multiple sessions using shared infrastructure
         session1 = asyncio.run(bootstrapper.bootstrap_session_context(
             name="session1",
-            job="test1", 
+            job="test1",
             infrastructure=infrastructure
         ))
         
@@ -149,8 +144,8 @@ class TestInfrastructureSharing:
         assert infrastructure2 is not None
         
         # Both should be functional
-        assert hasattr(infrastructure1, 'create_session_bm')
-        assert hasattr(infrastructure2, 'create_session_bm')
+        assert hasattr(infrastructure1, "create_session_bm")
+        assert hasattr(infrastructure2, "create_session_bm")
 
 
 class TestBootstrapOrderValidation:
@@ -162,7 +157,6 @@ class TestBootstrapOrderValidation:
         _global_execution_context = None
         _execution_context_initialized = False
         
-        from buttermilk._core.dmrc import _bm_instance
         import buttermilk._core.dmrc as dmrc_module
         dmrc_module._bm_instance = None
     
@@ -195,7 +189,7 @@ class TestBootstrapOrderValidation:
         
         # Session should be properly created
         assert session_bm is not None
-        assert hasattr(session_bm, 'session_info')
+        assert hasattr(session_bm, "session_info")
     
     def test_multiple_bootstrap_calls_are_safe(self, real_conf):
         """Test that multiple bootstrap calls don't break the architecture."""
@@ -257,15 +251,15 @@ class TestExecutionContextInitialization:
         assert execution_context is not None
         
         # Should have configuration attributes based on real config
-        if hasattr(execution_context, 'clouds'):
-            assert hasattr(execution_context, 'clouds')
+        if hasattr(execution_context, "clouds"):
+            assert hasattr(execution_context, "clouds")
             
-        if hasattr(execution_context, 'logging'):
-            assert hasattr(execution_context, 'logging')
+        if hasattr(execution_context, "logging"):
+            assert hasattr(execution_context, "logging")
             
-        if hasattr(execution_context, 'tracing'):
-            assert hasattr(execution_context, 'tracing')
+        if hasattr(execution_context, "tracing"):
+            assert hasattr(execution_context, "tracing")
         
         # Infrastructure should be functional
         assert infrastructure is not None
-        assert hasattr(infrastructure, 'create_session_bm')
+        assert hasattr(infrastructure, "create_session_bm")

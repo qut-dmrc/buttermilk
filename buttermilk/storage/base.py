@@ -1,9 +1,9 @@
 """Base storage classes for unified storage operations."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, TypeVar
 
-from pathlib import Path
 from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
@@ -66,7 +66,7 @@ class Storage(ABC):
             The record if found, None otherwise
         """
         for record in self:
-            if hasattr(record, 'record_id') and record.record_id == record_id:
+            if hasattr(record, "record_id") and record.record_id == record_id:
                 return record
         return None
 

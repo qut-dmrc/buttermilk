@@ -8,13 +8,13 @@ event-driven testing capabilities.
 import asyncio
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncGenerator, Callable, Optional, Pattern
-import re
+from typing import AsyncGenerator, Optional, Pattern
 
 import aiohttp
 from aiohttp import ClientWebSocketResponse
@@ -141,7 +141,7 @@ class FlowEventWaiter:
         self.collector = collector
     
     async def wait_for_ui_message(
-        self, 
+        self,
         pattern: Optional[str | Pattern] = None,
         timeout: float = 30.0,
         poll_interval: float = 0.1

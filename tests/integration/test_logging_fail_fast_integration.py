@@ -11,18 +11,19 @@ The integration tests cover:
 """
 
 import logging
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from buttermilk._core.bm_init import create_session_bm
-from buttermilk._core.execution_context import get_or_create_execution_context, create_execution_context
+from buttermilk._core.execution_context import create_execution_context, get_or_create_execution_context
 from buttermilk._core.log import (
+    ensure_logging_properly_initialized,
     logger,
     setup_console_logging,
     setup_file_logging,
     validate_logging_state,
-    ensure_logging_properly_initialized,
 )
 
 
@@ -48,8 +49,8 @@ class TestBMSessionLoggingProtection:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_single_bm_session_logging_setup(self, mock_setup_file, mock_setup_console, tmp_path):
         """Test that a single BM session sets up logging correctly."""
         mock_setup_console.return_value = None
@@ -79,8 +80,8 @@ class TestBMSessionLoggingProtection:
         mock_setup_console.assert_called_once()
         mock_setup_file.assert_called_once()
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_multiple_bm_sessions_logging_protection(self, mock_setup_file, mock_setup_console, tmp_path):
         """Test that multiple BM sessions don't break logging due to protection."""
         mock_setup_console.return_value = None
@@ -130,8 +131,8 @@ class TestBMSessionLoggingProtection:
         assert mock_setup_console.call_count == 1
         assert mock_setup_file.call_count == 1
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_safe_execution_context_reuse_pattern(self, mock_setup_file, mock_setup_console, tmp_path):
         """Test the safe pattern using get_or_create_execution_context."""
         mock_setup_console.return_value = None
@@ -276,11 +277,11 @@ class TestCloudLoggingIntegration:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.log.gcp_logging')
-    @patch('buttermilk._core.log.CloudLoggingHandler')
+    @patch("buttermilk._core.log.gcp_logging")
+    @patch("buttermilk._core.log.CloudLoggingHandler")
     def test_cloud_logging_deduplication_across_sessions(self, mock_cloud_handler_cls, mock_gcp_logging):
         """Test that cloud logging is properly deduplicated across multiple sessions."""
-        from buttermilk._core.log import setup_cloud_logging, _cloud_logging_sessions
+        from buttermilk._core.log import _cloud_logging_sessions, setup_cloud_logging
         
         # Mock cloud logging components
         mock_logger_cfg = MagicMock()
@@ -463,7 +464,7 @@ class TestErrorRecoveryAndValidation:
         # Ensure all handlers are flushed
         root_logger = logging.getLogger()
         for handler in root_logger.handlers:
-            if hasattr(handler, 'flush'):
+            if hasattr(handler, "flush"):
                 handler.flush()
         
         # Validation should still pass after real logging
@@ -506,8 +507,8 @@ class TestFailFastIntegrationExamples:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_recommended_application_startup_pattern(self, mock_setup_file, mock_setup_console, tmp_path):
         """Example of recommended pattern for application startup."""
         mock_setup_console.return_value = None

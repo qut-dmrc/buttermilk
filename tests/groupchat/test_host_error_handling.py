@@ -1,6 +1,5 @@
 """Tests for HostAgent error handling functionality."""
 
-import asyncio
 from collections import defaultdict
 from unittest.mock import AsyncMock, MagicMock
 

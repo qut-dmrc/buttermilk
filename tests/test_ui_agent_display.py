@@ -1,8 +1,6 @@
 """Tests for UI display of agent announcements and summaries."""
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from rich.console import Console
@@ -139,7 +137,7 @@ class TestUIAgentDisplay:
                     "model": "gpt-4"
                 },
                 "SCORER-s456": {
-                    "role": "SCORER", 
+                    "role": "SCORER",
                     "status": "active",
                     "tools": ["calculate"],
                     "model": "claude-3-sonnet"
@@ -204,7 +202,7 @@ class TestUIAgentDisplay:
         registry_summary = {
             "HOST-h1": {
                 "role": "HOST",
-                "status": "active", 
+                "status": "active",
                 "tools": ["orchestrate"],
                 "model": "gpt-4"
             },
