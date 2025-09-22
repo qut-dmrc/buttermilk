@@ -1,6 +1,9 @@
+import asyncio
+import calendar
 import datetime
 import json
 import os
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -83,6 +86,100 @@ class Title(BaseModel):
         use_enum_values=True,
         validate_assignment=True,
     )
+
+
+@dataclass
+class DatePeriod:
+    """Represents a date period for TMDB movie fetching."""
+    start_date: datetime.date
+    end_date: datetime.date
+
+    @property
+    def api_params(self) -> dict[str, str]:
+        """Get API parameters for this date period."""
+        return {
+            "primary_release_date.gte": self.start_date.isoformat(),
+            "primary_release_date.lte": self.end_date.isoformat(),
+        }
+
+    def __str__(self) -> str:
+        """String representation as YYYY-MM format."""
+        return f"{self.start_date.year}-{self.start_date.month:02d}"
+
+    def __hash__(self) -> int:
+        """Make hashable for use in sets."""
+        return hash((self.start_date, self.end_date))
+
+
+class FetchProgress:
+    """Manages progress tracking and resume functionality for movie fetching."""
+
+    def __init__(self, backup_dir: Path):
+        self.backup_dir = backup_dir
+        self.progress_file = backup_dir / "fetch_progress.json"
+        self.completed_periods: set[str] = self._load_completed()
+
+    def _load_completed(self) -> set[str]:
+        """Load completed periods from progress file."""
+        if not self.progress_file.exists():
+            return set()
+
+        try:
+            with open(self.progress_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return set(data.get("completed_periods", []))
+        except (json.JSONDecodeError, OSError):
+            return set()
+
+    def mark_completed(self, period: DatePeriod):
+        """Mark period as completed and save progress."""
+        period_str = str(period)
+        self.completed_periods.add(period_str)
+
+        # Ensure backup directory exists
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save progress
+        progress_data = {
+            "completed_periods": list(self.completed_periods),
+            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        }
+
+        with open(self.progress_file, "w", encoding="utf-8") as f:
+            json.dump(progress_data, f, indent=2)
+
+    def is_completed(self, period: DatePeriod) -> bool:
+        """Check if period was already fetched."""
+        return str(period) in self.completed_periods
+
+    def get_period_backup_file(self, period: DatePeriod) -> Path:
+        """Get backup file path for a specific period."""
+        return self.backup_dir / f"period_{period}.json"
+
+
+def _generate_monthly_periods(start_year: int, end_year: int) -> list[DatePeriod]:
+    """Generate monthly date periods using proper month-end dates.
+
+    Args:
+        start_year: First year to include
+        end_year: Last year to include (inclusive)
+
+    Returns:
+        List of DatePeriod objects, one for each month
+    """
+    periods = []
+
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            # Get the last day of the month
+            _, last_day = calendar.monthrange(year, month)
+
+            start_date = datetime.date(year, month, 1)
+            end_date = datetime.date(year, month, last_day)
+
+            periods.append(DatePeriod(start_date, end_date))
+
+    return periods
 
 
 class TMDBTool:
@@ -389,26 +486,235 @@ class TMDBTool:
 
         return observations
 
+    async def _fetch_period_movies(
+        self,
+        period: DatePeriod,
+        include_adult: bool,
+        include_video: bool,
+        backup_dir: Path
+    ) -> list[Title]:
+        """Fetch all movies for a single date period.
+
+        Args:
+            period: Date period to fetch movies for
+            include_adult: Include adult content
+            include_video: Include video content
+            backup_dir: Directory for backup files
+
+        Returns:
+            List of Title objects for the period
+        """
+        period_movies = []
+        page = 1
+        max_page = 500  # TMDB limit per query
+
+        # Create progress tracking for this period
+        period_pbar = tqdm(desc=f"Fetching {period}", unit="page", leave=False)
+
+        try:
+            while page <= max_page:
+                # Prepare API parameters
+                api_params = {
+                    **period.api_params,
+                    "page": page,
+                    "include_adult": include_adult,
+                    "include_video": include_video,
+                    "sort_by": "primary_release_date.asc"
+                }
+
+                # Fetch movies for this page
+                async def do_discover():
+                    return await self._tmdb_client.discover().movie(**api_params)
+
+                movies_raw = await self._retry._execute_with_retry(do_discover)
+                movies = self._as_list(movies_raw)
+
+                # Update progress
+                period_pbar.update(1)
+                period_pbar.set_postfix({"movies": len(period_movies), "page": f"{page}/{max_page}"})
+
+                # If no movies returned, we've reached the end for this period
+                if not movies:
+                    break
+
+                # Process each movie on this page
+                for movie in movies:
+                    movie_id = str(self._get_value(movie, "id"))
+                    movie_title = self._get_value(movie, "title", "name", default="Unknown")
+                    release_date = self._get_value(movie, "release_date")
+
+                    # Extract year from release date
+                    year = None
+                    if release_date:
+                        try:
+                            year = int(str(release_date)[:4])
+                        except (ValueError, IndexError, TypeError):
+                            pass
+
+                    # Build metadata from all available fields except core ones
+                    metadata = {}
+                    core_fields = {"id", "title", "name", "release_date"}
+
+                    # Convert movie object to dictionary for metadata extraction
+                    if isinstance(movie, dict):
+                        movie_dict = movie
+                    else:
+                        movie_dict = getattr(movie, '__dict__', {"id": movie_id})
+
+                    for key, value in movie_dict.items():
+                        if key not in core_fields and value is not None:
+                            metadata[key] = value
+
+                    # Create Title record
+                    record = Title(
+                        record_id=movie_id,
+                        title=movie_title,
+                        year=year,
+                        type=TitleType.MOVIE,
+                        metadata=metadata
+                    )
+                    period_movies.append(record)
+
+                    # Batch save titles if uploader is configured
+                    if self.titles_uploader:
+                        await self.titles_uploader.add(record)
+
+                page += 1
+
+                # Small delay to respect rate limits
+                await asyncio.sleep(0.1)
+
+            # Save period backup
+            backup_file = backup_dir / f"period_{period}.json"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+
+            with open(backup_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    [scrub_serializable(movie.model_dump()) for movie in period_movies],
+                    f,
+                    indent=2,
+                    default=str
+                )
+
+        finally:
+            period_pbar.close()
+
+        return period_movies
+
+    async def _fetch_periods_parallel(
+        self,
+        periods: list[DatePeriod],
+        max_concurrent: int,
+        include_adult: bool,
+        include_video: bool,
+        backup_dir: Path,
+        progress: FetchProgress
+    ) -> list[Title]:
+        """Fetch multiple periods concurrently using asyncio.Semaphore.
+
+        Args:
+            periods: List of periods to fetch
+            max_concurrent: Maximum concurrent period fetches
+            include_adult: Include adult content
+            include_video: Include video content
+            backup_dir: Directory for backup files
+            progress: Progress tracker for marking completed periods
+
+        Returns:
+            List of all Title objects from all periods
+        """
+        semaphore = asyncio.Semaphore(max_concurrent)
+        all_movies = []
+
+        # Create overall progress bar
+        overall_pbar = tqdm(total=len(periods), desc="Processing periods", unit="period")
+
+        async def fetch_single_period(period: DatePeriod) -> list[Title]:
+            """Fetch a single period with semaphore control."""
+            async with semaphore:
+                try:
+                    # Check if already completed
+                    if progress.is_completed(period):
+                        overall_pbar.set_postfix({"status": f"Skipping {period} (completed)"})
+                        overall_pbar.update(1)
+                        # Load from backup file
+                        backup_file = progress.get_period_backup_file(period)
+                        if backup_file.exists():
+                            try:
+                                with open(backup_file, "r", encoding="utf-8") as f:
+                                    movie_data = json.load(f)
+                                    return [Title(**movie) for movie in movie_data]
+                            except (json.JSONDecodeError, OSError):
+                                pass
+                        return []
+
+                    # Fetch the period
+                    overall_pbar.set_postfix({"status": f"Fetching {period}"})
+                    period_movies = await self._fetch_period_movies(
+                        period, include_adult, include_video, backup_dir
+                    )
+
+                    # Mark as completed
+                    progress.mark_completed(period)
+                    overall_pbar.set_postfix({
+                        "status": f"Completed {period}",
+                        "movies": len(period_movies)
+                    })
+                    overall_pbar.update(1)
+
+                    return period_movies
+
+                except Exception as e:
+                    overall_pbar.set_postfix({"status": f"Error in {period}: {e}"})
+                    overall_pbar.update(1)
+                    print(f"Error fetching period {period}: {e}")
+                    return []
+
+        # Create tasks for all periods
+        tasks = [fetch_single_period(period) for period in periods]
+
+        # Execute all tasks and collect results
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results
+            for result in results:
+                if isinstance(result, Exception):
+                    print(f"Period fetch failed: {result}")
+                    continue
+                if isinstance(result, list):
+                    all_movies.extend(result)
+
+        finally:
+            overall_pbar.close()
+
+        return all_movies
+
     async def get_all_movies(
         self,
+        start_year: int = 1900,
+        end_year: int = 2025,
+        max_concurrent: int = 5,
         backup_dir: Optional[Path] = None,
         max_results: Optional[int] = None,
         include_adult: bool = True,
         include_video: bool = False,
-        sort_by: str = "primary_release_date.asc",
-        page: int = 1,
-        **kwargs,
+        resume: bool = True
     ) -> list[Title]:
-        """Get all movies from TMDB discover endpoint with pagination support.
+        """Get all movies from TMDB using parallel month-based queries.
+
+        This method fetches movies by breaking the search into monthly periods
+        and processing multiple periods concurrently to avoid TMDB's 500-page limit.
 
         Args:
-            backup_dir: Optional directory to save JSON backups of each movie.
-                       Defaults to ~/.cache/buttermilk/tmdb
-            max_results: Optional limit on number of results to return
+            start_year: First year to include (inclusive)
+            end_year: Last year to include (inclusive)
+            max_concurrent: Maximum number of concurrent period fetches
+            backup_dir: Directory to save progress and backup files
+            max_results: Maximum number of results to return (None for all)
             include_adult: Include adult content
             include_video: Include video content
-            sort_by: Sort order for results
-            **kwargs: Additional parameters for discover.movie()
+            resume: Whether to resume from previous progress
 
         Returns:
             List of Title objects representing discovered movies
@@ -422,120 +728,63 @@ class TMDBTool:
         # Ensure backup directory exists
         backup_dir.mkdir(parents=True, exist_ok=True)
 
-        all_movies = []
-        total_fetched = 0
-        max_page = page + 500  # Enough for one batch
+        # Generate monthly periods
+        all_periods = _generate_monthly_periods(start_year, end_year)
 
-        # Create progress bar for pages (we don't know total pages upfront)
-        pbar = tqdm(desc="Fetching TMDB pages", unit="page", initial=0)
+        # Set up progress tracking
+        progress = FetchProgress(backup_dir) if resume else None
+
+        # Filter out completed periods if resuming
+        if resume and progress:
+            remaining_periods = [p for p in all_periods if not progress.is_completed(p)]
+            print(f"Total periods: {len(all_periods)}, Remaining: {len(remaining_periods)}")
+        else:
+            remaining_periods = all_periods
+            progress = FetchProgress(backup_dir)
+
+        # Limit periods if max_results is specified (rough estimate)
+        if max_results:
+            # Estimate ~500-1000 movies per month for popular periods
+            estimated_periods_needed = min(len(remaining_periods), max(1, max_results // 500))
+            remaining_periods = remaining_periods[:estimated_periods_needed]
+            print(f"Limited to {len(remaining_periods)} periods for max_results={max_results}")
 
         try:
-            while True:
-                # Get movies from discover endpoint for current page
-                async def do_discover():
-                    return await self._tmdb_client.discover().movie(
-                        page=page, include_adult=include_adult, include_video=include_video, sort_by=sort_by, **kwargs
-                    )
+            # Fetch periods in parallel
+            all_movies = await self._fetch_periods_parallel(
+                remaining_periods,
+                max_concurrent,
+                include_adult,
+                include_video,
+                backup_dir,
+                progress
+            )
 
-                movies_raw = await self._retry._execute_with_retry(do_discover)
-                movies = self._as_list(movies_raw)
-
-                # Update progress bar
-                pbar.update(1)
-                pbar.set_postfix({"movies": total_fetched, "current_page": page})
-
-                # If no movies returned, we've reached the end
-                if not movies:
-                    break
-
-                # Process each movie on this page
-                for movie in movies:
-                    # Apply max_results limit if specified
-                    if max_results and total_fetched >= max_results:
-                        pbar.close()
-                        # Ensure uploaders are flushed before early return
-                        if self.titles_uploader:
-                            self.titles_uploader.shutdown()
-                        return all_movies
-
-                    movie_dict = None
-                    total_fetched += 1
-
-                    # Update progress bar with current movie count
-                    pbar.set_postfix({"movies": total_fetched, "current_page": page})
-
-                    # First save raw JSON backup
-                    movie_id = self._get_value(movie, "id")
-                    backup_file = backup_dir / f"movie_{movie_id}.json"
-
-                    try:
-                        # Convert movie object to dictionary for JSON serialization
-                        if isinstance(movie, dict):
-                            # Already a dictionary
-                            movie_dict = movie
-                        else:
-                            # Convert from object
-                            movie_dict = movie.__dict__
-
-                        # Save raw data to disk
-                        with open(backup_file, "w", encoding="utf-8") as f:
-                            json.dump(scrub_serializable(movie_dict), f, indent=2, default=str)
-                    except Exception as e:
-                        # Log but don't fail on backup error
-                        print(f"Warning: Failed to save backup for movie {movie_id}: {e}")
-
-                    # Now convert to Title record
-                    movie_id = str(self._get_value(movie, "id"))
-                    movie_title = self._get_value(movie, "title", "name", default="Unknown")
-                    release_date = self._get_value(movie, "release_date")
-
-                    # Extract year from release date
-                    year = None
-                    if release_date:
+            # Load previously completed movies if resuming
+            if resume and progress:
+                completed_periods = [p for p in all_periods if progress.is_completed(p) and p not in remaining_periods]
+                for period in completed_periods:
+                    backup_file = progress.get_period_backup_file(period)
+                    if backup_file.exists():
                         try:
-                            year = int(str(release_date)[:4])
-                        except (ValueError, IndexError, TypeError):
+                            with open(backup_file, "r", encoding="utf-8") as f:
+                                movie_data = json.load(f)
+                                completed_movies = [Title(**movie) for movie in movie_data]
+                                all_movies.extend(completed_movies)
+                        except (json.JSONDecodeError, OSError):
                             pass
 
-                    # Build metadata from all available fields except the core ones
-                    metadata = {}
-                    core_fields = {"id", "title", "name", "release_date"}  # Core fields handled separately
+            # Apply final max_results limit
+            if max_results and len(all_movies) > max_results:
+                all_movies = all_movies[:max_results]
 
-                    # If we don't have movie_dict, create a minimal one
-                    if not movie_dict:
-                        movie_dict = {"id": movie_id}
+            print(f"Total movies collected: {len(all_movies)}")
+            return all_movies
 
-                    # Use the movie_dict we created for backup as the source of metadata
-                    for key, value in movie_dict.items():
-                        if key not in core_fields and value is not None:
-                            metadata[key] = value
-
-                    record = Title(record_id=movie_id, title=movie_title, year=year, type=TitleType.MOVIE, metadata=metadata)
-                    all_movies.append(record)
-
-                    # Batch save titles if uploader is configured
-                    if self.titles_uploader:
-                        await self.titles_uploader.add(record)
-
-                # Move to next page
-                page += 1
-
-                # Safety limit to prevent infinite loops (TMDB typically has max 500 pages)
-                if page > max_page:
-                    print(f"Reached maximum page limit for get_all_movies; stopping at page {page}.")
-                    break
-
-        except Exception as e:
-            # Return what we have so far on error
-            print(f"Error in get_all_movies: {e}")
         finally:
-            # Always close the progress bar
-            pbar.close()
             # Ensure uploaders are flushed
             if self.titles_uploader:
                 self.titles_uploader.shutdown()
-
-        return all_movies
 
     def as_tool(self) -> FunctionTool:
         """Return as autogen FunctionTool for agent integration."""

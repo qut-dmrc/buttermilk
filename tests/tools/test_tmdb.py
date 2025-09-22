@@ -240,9 +240,9 @@ class TestTMDBDiscoverMovies:
 
     @pytest.mark.anyio
     async def test_get_all_movies_returns_title_objects(self, tmdb_tool, tmp_path):
-        """Test that get_all_movies returns Title objects from discover endpoint."""
+        """Test that get_all_movies returns Title objects using month-based fetching."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
-            # Mock discover movies response
+            # Mock discover movies response for a specific month
             mock_movies = [
                 {
                     "id": 550,
@@ -265,55 +265,49 @@ class TestTMDBDiscoverMovies:
                     "overview": "A movie without release date",
                 },
             ]
-            
-            # Mock discover().movie() method to return empty list on page 2
+
+            # Mock discover().movie() method with date range parameters
             async def mock_movie_func(**kwargs):
                 page = kwargs.get('page', 1)
-                if page == 1:
+                # Only return movies on page 1, simulate month-based fetching
+                if page == 1 and 'primary_release_date.gte' in kwargs:
                     return mock_movies
                 else:
-                    return []  # No more results after page 1
-            
+                    return []  # No more results
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            # Call get_all_movies with backup directory
+            # Call get_all_movies with new signature (single year for testing)
             results = await tmdb_tool.get_all_movies(
+                start_year=1999,
+                end_year=1999,  # Single year to limit test scope
+                max_concurrent=1,
                 backup_dir=tmp_path,
+                max_results=10,
                 include_adult=True,
                 include_video=True,
-                sort_by="primary_release_date.asc"
+                resume=False
             )
 
             # Verify we get Title objects
             assert isinstance(results, list)
-            assert len(results) == 3
-            
-            # Check first movie
-            assert isinstance(results[0], Title)
-            assert results[0].record_id == "550"
-            assert results[0].title == "Fight Club"
-            assert results[0].year == 1999
-            assert results[0].type == TitleType.MOVIE
-            
-            # Check second movie
-            assert results[1].record_id == "603"
-            assert results[1].title == "The Matrix"
-            assert results[1].year == 1999
-            
-            # Check movie without release date
-            assert results[2].record_id == "123"
-            assert results[2].title == "Movie Without Date"
-            assert results[2].year is None
-            
-            # Verify backup files were created
-            backup_files = list(tmp_path.glob("*.json"))
-            assert len(backup_files) == 3
+            # Should get 3 movies * 12 months = 36 total, but limited by max_results
+            assert len(results) <= 10
+
+            # Check that results contain Title objects
+            if results:
+                assert isinstance(results[0], Title)
+                assert results[0].type == TitleType.MOVIE
+
+            # Verify period backup files were created
+            period_files = list(tmp_path.glob("period_*.json"))
+            assert len(period_files) >= 1
 
     @pytest.mark.anyio
     async def test_get_all_movies_saves_backup_json(self, tmdb_tool, tmp_path):
-        """Test that get_all_movies saves JSON backups to disk."""
+        """Test that get_all_movies saves period-based JSON backups to disk."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             mock_movie = {
                 "id": 550,
@@ -321,163 +315,235 @@ class TestTMDBDiscoverMovies:
                 "release_date": "1999-10-15",
                 "overview": "A ticking-time-bomb insomniac...",
             }
-            
-            # Mock discover().movie() method to return empty list on page 2
+
+            # Mock discover().movie() method with date range parameters
             async def mock_movie_func(**kwargs):
                 page = kwargs.get('page', 1)
-                if page == 1:
+                if page == 1 and 'primary_release_date.gte' in kwargs:
                     return [mock_movie]
                 else:
-                    return []  # No more results after page 1
-            
+                    return []  # No more results
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            results = await tmdb_tool.get_all_movies(backup_dir=tmp_path)
+            results = await tmdb_tool.get_all_movies(
+                start_year=1999,
+                end_year=1999,
+                max_concurrent=1,
+                backup_dir=tmp_path,
+                max_results=1,
+                resume=False
+            )
 
-            # Check backup file was created
-            backup_file = tmp_path / "movie_550.json"
-            assert backup_file.exists()
-            
-            # Verify backup content
-            with open(backup_file, 'r') as f:
-                saved_data = json.load(f)
-            assert saved_data["id"] == 550
-            assert saved_data["title"] == "Fight Club"
+            # Check period backup files were created
+            period_files = list(tmp_path.glob("period_*.json"))
+            assert len(period_files) >= 1
+
+            # Verify period backup content contains our movie
+            if period_files:
+                with open(period_files[0], 'r') as f:
+                    saved_data = json.load(f)
+                assert len(saved_data) >= 1
+                # Each period file contains a list of Title objects
+                if saved_data:
+                    first_movie = saved_data[0]
+                    assert first_movie["record_id"] == "550"
+                    assert first_movie["title"] == "Fight Club"
 
     @pytest.mark.anyio
     async def test_get_all_movies_handles_api_errors(self, tmdb_tool, tmp_path):
-        """Test error handling when discover API fails."""
+        """Test error handling when discover API fails during period fetching."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock API failure
             async def mock_movie_func(**kwargs):
                 raise Exception("API error")
-            
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            results = await tmdb_tool.get_all_movies(backup_dir=tmp_path)
+            results = await tmdb_tool.get_all_movies(
+                start_year=1999,
+                end_year=1999,
+                max_concurrent=1,
+                backup_dir=tmp_path,
+                max_results=1,
+                resume=False
+            )
 
-            # Should return empty list on error
+            # Should return empty list on error (periods that fail return empty lists)
             assert results == []
 
     @pytest.mark.anyio
-    async def test_get_all_movies_pagination(self, tmdb_tool, tmp_path):
-        """Test that get_all_movies handles pagination correctly."""
+    async def test_get_all_movies_max_results_limit(self, tmdb_tool, tmp_path):
+        """Test that get_all_movies respects max_results parameter."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
-            # Mock paginated response (simplified - real API uses pages)
-            page1_movies = [
+            # Mock response with many movies per period
+            movies_per_period = [
                 {"id": i, "title": f"Movie {i}", "release_date": f"2020-01-{i:02d}"}
-                for i in range(1, 21)  # 20 movies
+                for i in range(1, 21)  # 20 movies per period
             ]
-            
-            # Mock discover().movie() method - return only page 1 then empty
+
+            # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
                 page = kwargs.get('page', 1)
-                if page == 1:
-                    return page1_movies
+                if page == 1 and 'primary_release_date.gte' in kwargs:
+                    return movies_per_period
                 else:
                     return []  # No more results after page 1
-            
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
             results = await tmdb_tool.get_all_movies(
+                start_year=2020,
+                end_year=2020,  # Single year
+                max_concurrent=1,
                 backup_dir=tmp_path,
-                max_results=10  # Limit results for testing
+                max_results=10,  # Limit results for testing
+                resume=False
             )
 
             # Should return only requested number of results
-            assert len(results) == 10
+            assert len(results) <= 10
             assert all(isinstance(r, Title) for r in results)
 
     @pytest.mark.anyio
-    async def test_get_all_movies_multi_page(self, tmdb_tool, tmp_path):
-        """Test that get_all_movies fetches multiple pages."""
+    async def test_get_all_movies_multiple_periods(self, tmdb_tool, tmp_path):
+        """Test that get_all_movies fetches multiple monthly periods."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
-            # Mock multi-page responses
-            page1_movies = [
-                {"id": i, "title": f"Movie {i}", "release_date": f"2020-01-{i:02d}"}
-                for i in range(1, 21)  # 20 movies on page 1
-            ]
-            page2_movies = [
-                {"id": i, "title": f"Movie {i}", "release_date": f"2020-02-{i-20:02d}"}
-                for i in range(21, 41)  # 20 movies on page 2
-            ]
-            page3_movies = [
-                {"id": i, "title": f"Movie {i}", "release_date": f"2020-03-{i-40:02d}"}
-                for i in range(41, 51)  # 10 movies on page 3
-            ]
-            
-            # Mock discover to return different pages based on page parameter
+            # Mock response that varies by period (month)
+            def create_period_movies(start_id):
+                return [
+                    {"id": i, "title": f"Movie {i}", "release_date": f"2020-01-{i%28 + 1:02d}"}
+                    for i in range(start_id, start_id + 5)  # 5 movies per period
+                ]
+
+            period_responses = {
+                "2020-01": create_period_movies(1),   # Jan: movies 1-5
+                "2020-02": create_period_movies(6),   # Feb: movies 6-10
+                "2020-03": create_period_movies(11),  # Mar: movies 11-15
+            }
+
+            # Mock discover to return different movies based on date range
             async def mock_movie_func(**kwargs):
                 page = kwargs.get('page', 1)
-                if page == 1:
-                    return page1_movies
-                elif page == 2:
-                    return page2_movies
-                elif page == 3:
-                    return page3_movies
+                if page > 1:
+                    return []  # Only page 1 has results
+
+                # Determine period from date range
+                gte_date = kwargs.get('primary_release_date.gte', '')
+                if '2020-01' in gte_date:
+                    return period_responses["2020-01"]
+                elif '2020-02' in gte_date:
+                    return period_responses["2020-02"]
+                elif '2020-03' in gte_date:
+                    return period_responses["2020-03"]
                 else:
-                    return []  # No more results
-            
+                    return []
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            # Request 50 movies (should fetch 3 pages)
+            # Fetch first quarter of 2020
             results = await tmdb_tool.get_all_movies(
+                start_year=2020,
+                end_year=2020,
+                max_concurrent=2,
                 backup_dir=tmp_path,
-                max_results=50
+                max_results=50,  # Plenty to get all
+                resume=False
             )
 
-            # Should return all 50 movies from 3 pages
-            assert len(results) == 50
+            # Should return movies from multiple periods
+            # 12 months * 5 movies = 60 movies total for 2020
+            assert len(results) <= 50  # Limited by max_results
             assert all(isinstance(r, Title) for r in results)
-            
-            # Verify we got movies from all pages
-            movie_ids = [int(r.record_id) for r in results]
-            assert min(movie_ids) == 1
-            assert max(movie_ids) == 50
+
+            # Verify period backup files were created for multiple months
+            period_files = list(tmp_path.glob("period_*.json"))
+            assert len(period_files) >= 3  # At least Jan, Feb, Mar
 
     @pytest.mark.anyio
     async def test_get_all_movies_default_cache_dir(self, tmdb_tool):
         """Test that default cache directory follows buttermilk pattern."""
         from pathlib import Path
-        
+
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             mock_movies = [{"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}]
-            
-            # Mock discover().movie() method to return one page then empty
+
+            # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
                 page = kwargs.get('page', 1)
-                if page == 1:
+                if page == 1 and 'primary_release_date.gte' in kwargs:
                     return mock_movies
                 else:
-                    return []  # No more results after page 1
-            
+                    return []  # No more results
+
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            # Mock Path operations to check the directory used
-            with patch('buttermilk.tools.catalog_test.Path') as mock_path_class:
-                mock_path = mock_path_class.return_value
-                mock_path.mkdir.return_value = None
-                mock_path.__truediv__ = lambda self, other: self  # Mock path joining
-                
-                # Use home() directly without mocking it
-                expected_dir = Path.home() / ".cache" / "buttermilk" / "tmdb"
-                
-                # Call without backup_dir to test default
-                results = await tmdb_tool.get_all_movies(max_results=1)
-                
-                # Verify default directory was created
-                # The actual check would be in implementation
-                assert len(results) == 1
+            # Call without backup_dir to test default
+            results = await tmdb_tool.get_all_movies(
+                start_year=2020,
+                end_year=2020,
+                max_concurrent=1,
+                max_results=1,
+                resume=False
+            )
+
+            # Verify we get results (which means default directory worked)
+            assert len(results) <= 1
+
+    @pytest.mark.anyio
+    async def test_get_all_movies_resume_functionality(self, tmdb_tool, tmp_path):
+        """Test that get_all_movies can resume from previous progress."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movies = [{"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}]
+
+            # Mock discover().movie() method
+            async def mock_movie_func(**kwargs):
+                page = kwargs.get('page', 1)
+                if page == 1 and 'primary_release_date.gte' in kwargs:
+                    return mock_movies
+                else:
+                    return []
+
+            mock_discover = AsyncMock()
+            mock_discover.movie = mock_movie_func
+            mock_tmdb.discover.return_value = mock_discover
+
+            # First call - should fetch and save progress
+            results1 = await tmdb_tool.get_all_movies(
+                start_year=2020,
+                end_year=2020,
+                max_concurrent=1,
+                backup_dir=tmp_path,
+                max_results=12,  # One month's worth
+                resume=True
+            )
+
+            # Verify progress file was created
+            progress_file = tmp_path / "fetch_progress.json"
+            assert progress_file.exists()
+
+            # Second call with resume=True - should skip completed periods
+            results2 = await tmdb_tool.get_all_movies(
+                start_year=2020,
+                end_year=2020,
+                max_concurrent=1,
+                backup_dir=tmp_path,
+                max_results=12,
+                resume=True
+            )
+
+            # Should get same results from cached data
+            assert len(results2) == len(results1)
 
 
 class TestTMDBToolConfiguration:

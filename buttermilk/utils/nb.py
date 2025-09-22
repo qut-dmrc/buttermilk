@@ -65,6 +65,36 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
         # To use your own config directory:
         >>> bm = nb_init(job="my_analysis", project="my_project", config_dir="./conf")
     """
+    bm, _ = nb_init_with_config(job=job, project=project, overrides=overrides, config_dir=config_dir)
+
+    return bm
+
+
+def nb_init_with_config(job: str, project: str, overrides: list[str] = [], config_dir: str = None) -> tuple[BM, Any]:
+    """Initialization for Buttermilk that also returns the config object.
+
+    Args:
+        job: Name for the specific job or task
+        project: Project name (required for first session, optional for subsequent sessions)
+        overrides: List of Hydra override strings for customization
+        config_dir: Path to configuration directory (defaults to packaged config)
+
+    Returns:
+        Tuple of (bm, config): the Buttermilk instance and the Hydra config object
+
+    Raises:
+        RuntimeError: If project is required but not provided, or if project
+                     mismatches existing execution context project.
+
+    Example:
+        >>> from buttermilk import init, nb_init_with_config, logger  # Always use global logger import
+        >>> # First session - project required
+        >>> bm, cfg = nb_init_with_config(job="my_analysis_notebook", project="my_project")
+        >>> logger.info(f"Analysis started with config: {cfg}")  # Session context automatically included
+        >>>
+        >>> # Subsequent sessions - project optional (inherits from execution context)
+        >>> bm2, cfg2 = nb_init_with_config(job="data_visualization")  # Uses "my_project"
+    """
     # Use unified bootstrap function with config return
     from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
@@ -72,4 +102,4 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
 
     graph_defaults()
 
-    return bm
+    return bm, config
