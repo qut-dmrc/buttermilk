@@ -7,6 +7,8 @@ defaults:
     - observations
     - tmdbtitles
   - llms: debug
+  storage.observations.full_table_id: prosocial-443205.testing.observations
+  storage.tmdbtitles.full_table_id: prosocial-443205.testing.tmdbtitles
   - _self_
 
 verbose: true

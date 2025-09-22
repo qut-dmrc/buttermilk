@@ -117,36 +117,91 @@ class FetchProgress:
     def __init__(self, backup_dir: Path):
         self.backup_dir = backup_dir
         self.progress_file = backup_dir / "fetch_progress.json"
-        self.completed_periods: set[str] = self._load_completed()
+        self.completed_periods: set[str] = set()
+        self.in_progress_periods: dict[str, dict] = {}
+        self._load_progress()
 
-    def _load_completed(self) -> set[str]:
-        """Load completed periods from progress file."""
+    def _load_progress(self):
+        """Load progress from progress file."""
         if not self.progress_file.exists():
-            return set()
+            return
 
         try:
             with open(self.progress_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return set(data.get("completed_periods", []))
+                self.completed_periods = set(data.get("completed_periods", []))
+                self.in_progress_periods = data.get("in_progress_periods", {})
         except (json.JSONDecodeError, OSError):
-            return set()
+            self.completed_periods = set()
+            self.in_progress_periods = {}
 
-    def mark_completed(self, period: DatePeriod):
-        """Mark period as completed and save progress."""
-        period_str = str(period)
-        self.completed_periods.add(period_str)
-
+    def _save_progress(self):
+        """Save current progress to file."""
         # Ensure backup directory exists
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
         # Save progress
         progress_data = {
             "completed_periods": list(self.completed_periods),
+            "in_progress_periods": self.in_progress_periods,
             "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
 
         with open(self.progress_file, "w", encoding="utf-8") as f:
             json.dump(progress_data, f, indent=2)
+
+    def mark_completed(self, period: DatePeriod):
+        """Mark period as completed and save progress."""
+        period_str = str(period)
+        self.completed_periods.add(period_str)
+
+        # Remove from in-progress if it was there
+        if period_str in self.in_progress_periods:
+            del self.in_progress_periods[period_str]
+
+        self._save_progress()
+
+    def mark_page_complete(self, period: DatePeriod, page: int, movies_count: int):
+        """Track completion of a specific page within a period."""
+        period_str = str(period)
+        if period_str not in self.in_progress_periods:
+            self.in_progress_periods[period_str] = {
+                "last_completed_page": 0,
+                "total_movies": 0,
+                "checkpoint_file": f"checkpoint_{period}.json",
+                "started": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+
+        self.in_progress_periods[period_str].update({
+            "last_completed_page": page,
+            "total_movies": movies_count,
+            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        })
+        self._save_progress()
+
+    def get_resume_info(self, period: DatePeriod) -> tuple[int, Path | None]:
+        """Get resume page and checkpoint file for a period.
+
+        Returns:
+            Tuple of (next_page_to_fetch, checkpoint_file_path)
+            If period is complete, returns (0, None)
+            If starting fresh, returns (1, None)
+        """
+        period_str = str(period)
+
+        # Check if already complete
+        if period_str in self.completed_periods:
+            return (0, None)  # Already complete
+
+        # Check if in progress
+        if period_str in self.in_progress_periods:
+            info = self.in_progress_periods[period_str]
+            checkpoint = self.backup_dir / info["checkpoint_file"]
+            next_page = info["last_completed_page"] + 1
+            return (next_page, checkpoint if checkpoint.exists() else None)
+
+        # Starting fresh
+        return (1, None)
 
     def is_completed(self, period: DatePeriod) -> bool:
         """Check if period was already fetched."""
@@ -155,6 +210,10 @@ class FetchProgress:
     def get_period_backup_file(self, period: DatePeriod) -> Path:
         """Get backup file path for a specific period."""
         return self.backup_dir / f"period_{period}.json"
+
+    def get_checkpoint_file(self, period: DatePeriod) -> Path:
+        """Get checkpoint file path for a specific period."""
+        return self.backup_dir / f"checkpoint_{period}.json"
 
 
 def _generate_monthly_periods(start_year: int, end_year: int) -> list[DatePeriod]:
@@ -486,105 +545,197 @@ class TMDBTool:
 
         return observations
 
+    async def fetch_single_page(
+        self,
+        period: DatePeriod,
+        page: int,
+        include_adult: bool = True,
+        include_video: bool = False
+    ) -> tuple[list[Title], bool]:
+        """Fetch a single page of movies for a specific period.
+
+        This is the atomic unit for TMDB API operations. Returns exactly one page
+        of results from the discover endpoint.
+
+        Args:
+            period: Date period to fetch movies for
+            page: Page number to fetch (1-based)
+            include_adult: Include adult content
+            include_video: Include video content
+
+        Returns:
+            Tuple of (list of Title objects, has_more_pages boolean)
+        """
+        # Prepare API parameters
+        api_params = {
+            **period.api_params,
+            "page": page,
+            "include_adult": include_adult,
+            "include_video": include_video,
+            "sort_by": "primary_release_date.asc"
+        }
+
+        # Fetch movies for this page
+        async def do_discover():
+            return await self._tmdb_client.discover().movie(**api_params)
+
+        movies_raw = await self._retry._execute_with_retry(do_discover)
+        movies = self._as_list(movies_raw)
+
+        # Convert raw movie data to Title objects
+        title_objects = []
+        for movie in movies:
+            movie_id = str(self._get_value(movie, "id"))
+            movie_title = self._get_value(movie, "title", "name", default="Unknown")
+            release_date = self._get_value(movie, "release_date")
+
+            # Extract year from release date
+            year = None
+            if release_date:
+                try:
+                    year = int(str(release_date)[:4])
+                except (ValueError, IndexError, TypeError):
+                    pass
+
+            # Build metadata from all available fields except core ones
+            metadata = {}
+            core_fields = {"id", "title", "name", "release_date"}
+
+            # Convert movie object to dictionary for metadata extraction
+            if isinstance(movie, dict):
+                movie_dict = movie
+            else:
+                movie_dict = getattr(movie, '__dict__', {"id": movie_id})
+
+            for key, value in movie_dict.items():
+                if key not in core_fields and value is not None:
+                    metadata[key] = value
+
+            # Create Title record
+            record = Title(
+                record_id=movie_id,
+                title=movie_title,
+                year=year,
+                type=TitleType.MOVIE,
+                metadata=metadata
+            )
+            title_objects.append(record)
+
+            # Batch save titles if uploader is configured
+            if self.titles_uploader:
+                await self.titles_uploader.add(record)
+
+        # Determine if there are more pages
+        # If we got fewer movies than expected, or no movies, we're likely at the end
+        has_more_pages = len(movies) > 0 and page < 500  # TMDB limit
+
+        return title_objects, has_more_pages
+
     async def _fetch_period_movies(
         self,
         period: DatePeriod,
         include_adult: bool,
         include_video: bool,
-        backup_dir: Path
+        backup_dir: Path,
+        progress: FetchProgress | None = None
     ) -> list[Title]:
-        """Fetch all movies for a single date period.
+        """Fetch all movies for a single date period using fetch_single_page.
+
+        This method handles:
+        - Resume from partial completion using progress tracking
+        - Checkpoint saving every 10 pages
+        - Final backup to period file when complete
 
         Args:
             period: Date period to fetch movies for
             include_adult: Include adult content
             include_video: Include video content
             backup_dir: Directory for backup files
+            progress: Progress tracker (optional)
 
         Returns:
             List of Title objects for the period
         """
         period_movies = []
-        page = 1
-        max_page = 500  # TMDB limit per query
+
+        # Get resume information
+        start_page = 1
+        checkpoint_file = None
+        if progress:
+            start_page, checkpoint_file = progress.get_resume_info(period)
+            if start_page == 0:
+                # Period already completed, load from backup
+                backup_file = progress.get_period_backup_file(period)
+                if backup_file.exists():
+                    try:
+                        with open(backup_file, "r", encoding="utf-8") as f:
+                            movie_data = json.load(f)
+                            return [Title(**movie) for movie in movie_data]
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                return []
+
+        # Load any partial results from checkpoint
+        if checkpoint_file and checkpoint_file.exists():
+            try:
+                with open(checkpoint_file, "r", encoding="utf-8") as f:
+                    checkpoint_data = json.load(f)
+                    period_movies = [Title(**movie) for movie in checkpoint_data]
+            except (json.JSONDecodeError, OSError):
+                pass
 
         # Create progress tracking for this period
-        period_pbar = tqdm(desc=f"Fetching {period}", unit="page", leave=False)
+        period_pbar = tqdm(
+            desc=f"Fetching {period}",
+            unit="page",
+            leave=False,
+            initial=start_page - 1
+        )
 
         try:
-            while page <= max_page:
-                # Prepare API parameters
-                api_params = {
-                    **period.api_params,
-                    "page": page,
-                    "include_adult": include_adult,
-                    "include_video": include_video,
-                    "sort_by": "primary_release_date.asc"
-                }
+            page = start_page
+            while page <= 500:  # TMDB limit per query
+                # Fetch single page
+                page_movies, has_more = await self.fetch_single_page(
+                    period, page, include_adult, include_video
+                )
 
-                # Fetch movies for this page
-                async def do_discover():
-                    return await self._tmdb_client.discover().movie(**api_params)
-
-                movies_raw = await self._retry._execute_with_retry(do_discover)
-                movies = self._as_list(movies_raw)
+                # Add to our collection
+                period_movies.extend(page_movies)
 
                 # Update progress
                 period_pbar.update(1)
-                period_pbar.set_postfix({"movies": len(period_movies), "page": f"{page}/{max_page}"})
+                period_pbar.set_postfix({
+                    "movies": len(period_movies),
+                    "page": f"{page}/500"
+                })
 
-                # If no movies returned, we've reached the end for this period
-                if not movies:
+                # Update progress tracking
+                if progress:
+                    progress.mark_page_complete(period, page, len(period_movies))
+
+                # Save checkpoint every 10 pages
+                if page % 10 == 0 or not has_more:
+                    checkpoint_file = progress.get_checkpoint_file(period) if progress else backup_dir / f"checkpoint_{period}.json"
+                    backup_dir.mkdir(parents=True, exist_ok=True)
+                    with open(checkpoint_file, "w", encoding="utf-8") as f:
+                        json.dump(
+                            [scrub_serializable(movie.model_dump()) for movie in period_movies],
+                            f,
+                            indent=2,
+                            default=str
+                        )
+
+                # If no more pages, we're done
+                if not has_more:
                     break
-
-                # Process each movie on this page
-                for movie in movies:
-                    movie_id = str(self._get_value(movie, "id"))
-                    movie_title = self._get_value(movie, "title", "name", default="Unknown")
-                    release_date = self._get_value(movie, "release_date")
-
-                    # Extract year from release date
-                    year = None
-                    if release_date:
-                        try:
-                            year = int(str(release_date)[:4])
-                        except (ValueError, IndexError, TypeError):
-                            pass
-
-                    # Build metadata from all available fields except core ones
-                    metadata = {}
-                    core_fields = {"id", "title", "name", "release_date"}
-
-                    # Convert movie object to dictionary for metadata extraction
-                    if isinstance(movie, dict):
-                        movie_dict = movie
-                    else:
-                        movie_dict = getattr(movie, '__dict__', {"id": movie_id})
-
-                    for key, value in movie_dict.items():
-                        if key not in core_fields and value is not None:
-                            metadata[key] = value
-
-                    # Create Title record
-                    record = Title(
-                        record_id=movie_id,
-                        title=movie_title,
-                        year=year,
-                        type=TitleType.MOVIE,
-                        metadata=metadata
-                    )
-                    period_movies.append(record)
-
-                    # Batch save titles if uploader is configured
-                    if self.titles_uploader:
-                        await self.titles_uploader.add(record)
 
                 page += 1
 
                 # Small delay to respect rate limits
                 await asyncio.sleep(0.1)
 
-            # Save period backup
+            # Save final period backup
             backup_file = backup_dir / f"period_{period}.json"
             backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -595,6 +746,12 @@ class TMDBTool:
                     indent=2,
                     default=str
                 )
+
+            # Clean up checkpoint file if we completed successfully
+            if progress:
+                checkpoint_file = progress.get_checkpoint_file(period)
+                if checkpoint_file.exists():
+                    checkpoint_file.unlink()
 
         finally:
             period_pbar.close()
@@ -651,7 +808,7 @@ class TMDBTool:
                     # Fetch the period
                     overall_pbar.set_postfix({"status": f"Fetching {period}"})
                     period_movies = await self._fetch_period_movies(
-                        period, include_adult, include_video, backup_dir
+                        period, include_adult, include_video, backup_dir, progress
                     )
 
                     # Mark as completed
@@ -696,7 +853,6 @@ class TMDBTool:
         end_year: int = 2025,
         max_concurrent: int = 5,
         backup_dir: Optional[Path] = None,
-        max_results: Optional[int] = None,
         include_adult: bool = True,
         include_video: bool = False,
         resume: bool = True
@@ -711,7 +867,6 @@ class TMDBTool:
             end_year: Last year to include (inclusive)
             max_concurrent: Maximum number of concurrent period fetches
             backup_dir: Directory to save progress and backup files
-            max_results: Maximum number of results to return (None for all)
             include_adult: Include adult content
             include_video: Include video content
             resume: Whether to resume from previous progress
@@ -742,13 +897,6 @@ class TMDBTool:
             remaining_periods = all_periods
             progress = FetchProgress(backup_dir)
 
-        # Limit periods if max_results is specified (rough estimate)
-        if max_results:
-            # Estimate ~500-1000 movies per month for popular periods
-            estimated_periods_needed = min(len(remaining_periods), max(1, max_results // 500))
-            remaining_periods = remaining_periods[:estimated_periods_needed]
-            print(f"Limited to {len(remaining_periods)} periods for max_results={max_results}")
-
         try:
             # Fetch periods in parallel
             all_movies = await self._fetch_periods_parallel(
@@ -773,10 +921,6 @@ class TMDBTool:
                                 all_movies.extend(completed_movies)
                         except (json.JSONDecodeError, OSError):
                             pass
-
-            # Apply final max_results limit
-            if max_results and len(all_movies) > max_results:
-                all_movies = all_movies[:max_results]
 
             print(f"Total movies collected: {len(all_movies)}")
             return all_movies
