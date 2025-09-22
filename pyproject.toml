@@ -216,8 +216,8 @@ buttermilk-assess-journalism = "buttermilk.scripts.run_trans_flow:run"
 
 [tool.pytest.ini_options]
 markers = [
-  "integration: integration tests, don't run by default",
-  "live_api: tests that require real API calls with valid credentials",
+  "integration: integration tests (slower, mocked and faked at the edges)",
+  "endtoend: tests that require real API calls with valid credentials",
   "scheduled: mark tests to run in scheduled testing",
 ]
 
@@ -235,7 +235,7 @@ addopts = [
     "--tb=short",
     # "--show-capture=no",
     # "--disable-warnings",
-    #"-m not integration",
+    "-m not endtoend",
 ]
 
 #  "--timeout_method=thread", 
