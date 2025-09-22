@@ -1,10 +1,19 @@
-<!-- This file should be read EVERY time. Keep it CONCISE and LIMITED to strictly required information. -->
+# Agent Instructions for Buttermilk Project
+
+## Configuration Hierarchy
+This is the project-specific configuration for Buttermilk.
+
+1. **Project-Specific** (this file) - Overrides all other configurations
+2. **Global** (`/writing/docs/agent/INSTRUCTIONS.md`) - Repository-wide preferences
+3. **Base** (`/writing/bot/agents/*.md`) - Core agent definitions
+
+## Buttermilk-Specific Instructions
 
 Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
-**🚨 CRITICAL: READ [exploration-before-implementation.md](exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
+**🚨 CRITICAL: READ [../bots/exploration-before-implementation.md](../bots/exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
 
-**🚨 CRITICAL: READ [impact-analysis.md](impact-analysis.md) IMMEDIATELY IF YOU'RE ABOUT TO MODIFY SHARED INFRASTRUCTURE 🚨**
+**🚨 CRITICAL: READ [../bots/impact-analysis.md](../bots/impact-analysis.md) IMMEDIATELY IF YOU'RE ABOUT TO MODIFY SHARED INFRASTRUCTURE 🚨**
 
 # 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
 
@@ -105,8 +114,6 @@ This specialized agent handles ALL testing scenarios including:
 - Import required modules properly
 - Use pytest fixtures and assertions
 - Ensure tests integrate with CI/CD pipeline
-- **Follow testing philosophy**: Mock only at boundaries (see [../TESTING_PHILOSOPHY.md](../TESTING_PHILOSOPHY.md))
-- **For test fixing**: Use [TEST_FIXER_AGENT.md](TEST_FIXER_AGENT.md) workflow
 
 ### 📋 CONCRETE EXAMPLES:
 
@@ -358,6 +365,19 @@ def bm_no_llm():
 
 ## 📚 TESTING & VALIDATION PROTOCOL
 
+### Testing Philosophy
+**CRITICAL**: Follow our testing philosophy - see [docs/TESTING_PHILOSOPHY.md](../TESTING_PHILOSOPHY.md)
+- Mock ONLY at system boundaries (network, filesystem, time, env, randomness)
+- NEVER mock our own code (buttermilk.*)
+- Test real logic with assertions, not mock configurations
+
+### When Fixing Tests
+**For systematic test fixing, see [docs/bots/TEST_FIXER_AGENT.md](../bots/TEST_FIXER_AGENT.md)**
+- Use ruff as primary diagnostic tool
+- Fix in batches of 5-10 files
+- Follow the diagnostic-driven workflow
+
+### When Creating Tests
 **CRITICAL**: When you need ANY form of testing, validation, examples, or verification:
 
 1. **DO NOT** create standalone scripts, files, or use inline commands
