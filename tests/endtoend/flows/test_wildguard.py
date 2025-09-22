@@ -4,6 +4,7 @@ torch = pytest.importorskip("torch")
 from buttermilk.toxicity.types import EvalRecord
 from buttermilk.toxicity.wildguard import Wildguard
 
+
 response_refuse = (
     False,
     """

@@ -1,12 +1,15 @@
+import json
 from unittest.mock import patch
 
 import pytest
 from omegaconf import OmegaConf
+from pydantic import BaseModel, Field
 
 # Assuming AgentConfig and Agent are importable for type hinting/instance checks
 # Adjust imports based on your actual project structure
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import AgentConfig, AgentVariants
+from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
 
 
@@ -273,14 +276,6 @@ def test_agent_not_found(base_variant_config):
     variant_factory = AgentVariants(**config_data)
     with pytest.raises(ValueError, match="Agent class 'NonExistentAgent' not found"):
         variant_factory.get_configs()
-
-
-import json
-
-import pytest
-from pydantic import BaseModel, Field
-
-from buttermilk._core.types import RunRequest
 
 
 # --- Mocking necessary classes ---

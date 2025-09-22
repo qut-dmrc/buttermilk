@@ -35,7 +35,7 @@ def test_upload_dataframe_json_failure(mock_blob_from_string, mock_storage_clien
     with patch("buttermilk.utils.save.logger.warning") as mock_logger_warning:
         try:
             upload_dataframe_json(mock_df, mock_uri)
-        except:
+        except Exception:
             pass
         mock_logger_warning.assert_called_once()
 

@@ -6,12 +6,6 @@ import chromadb
 import pytest
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-# SKIP ENTIRE FILE: InputDocument class removed, needs refactoring
-pytest.skip("InputDocument class removed - tests need refactoring", allow_module_level=True)
-
-# Mock the logger if it's not easily accessible or configured for tests
-# Assuming your module is structured like: buttermilk/data/vector.py
-# Adjust the import path based on your project structure
 from buttermilk.data.vector import (
     MODEL_NAME,
     ChromaDBEmbeddings,
@@ -19,6 +13,13 @@ from buttermilk.data.vector import (
     # InputDocument,  # Class no longer exists - tests need refactoring
     # _batch_iterator,  # Import helper for testing if needed
 )
+
+# SKIP ENTIRE FILE: InputDocument class removed, needs refactoring
+pytest.skip("InputDocument class removed - tests need refactoring", allow_module_level=True)
+
+# Mock the logger if it's not easily accessible or configured for tests
+# Assuming your module is structured like: buttermilk/data/vector.py
+# Adjust the import path based on your project structure
 
 # --- Fixtures ---
 

@@ -3,7 +3,6 @@
 import pandas as pd
 import pytest
 
-pytest.importorskip("buttermilk.toxicity")
 torch = pytest.importorskip("torch")
 from buttermilk._core.types import Record
 from buttermilk.toxicity import TOXCLIENTS
@@ -19,6 +18,9 @@ from buttermilk.toxicity.llamaguard import (
     LlamaGuardTox,
     MDJudgeLocal,
 )
+from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
+from buttermilk.toxicity.types import EvalRecord
+
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
@@ -34,8 +36,6 @@ from buttermilk.toxicity.llamaguard import (
 #     ToxicChat,
 #     Toxigen,
 # )
-from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
-from buttermilk.toxicity.types import EvalRecord
 
 LLAMAGUARD_MODELS = [
     LlamaGuard1Together,

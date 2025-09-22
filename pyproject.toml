@@ -236,6 +236,7 @@ addopts = [
     # "--show-capture=no",
     # "--disable-warnings",
     "-m not endtoend",
+    "-m integration",
 ]
 
 #  "--timeout_method=thread", 

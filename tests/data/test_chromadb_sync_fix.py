@@ -1,13 +1,14 @@
 """Test ChromaDB remote sync fix."""
 
-import pytest
-
-pytestmark = pytest.mark.anyio  # Enable async test support
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from buttermilk.data.vector import ChromaDBEmbeddings
+
+pytestmark = pytest.mark.anyio  # Enable async test support
 
 
 class TestChromaDBSyncFix:

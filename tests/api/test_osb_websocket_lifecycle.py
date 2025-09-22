@@ -223,7 +223,7 @@ class TestOSBWebSocketSessionIsolation:
                 for _, websocket in websockets:
                     try:
                         websocket.__exit__(None, None, None)
-                    except:
+                    except Exception:
                         pass
 
     @pytest.mark.anyio
@@ -446,7 +446,7 @@ class TestOSBWebSocketPerformance:
                 for ws in session_connections:
                     try:
                         ws.__exit__(None, None, None)
-                    except:
+                    except Exception:
                         pass
 
 
