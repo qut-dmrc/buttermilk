@@ -13,11 +13,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import hydra
-from omegaconf import OmegaConf
+import hydra  # noqa: E402
+from omegaconf import OmegaConf  # noqa: E402
 
-from buttermilk import BM, logger
-from buttermilk.tools.chromadb_search import ChromaDBSearchTool
+from buttermilk import BM, logger  # noqa: E402
+from buttermilk.tools.chromadb_search import ChromaDBSearchTool  # noqa: E402
 
 
 async def main():

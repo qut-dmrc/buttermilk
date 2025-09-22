@@ -308,8 +308,8 @@ class TestOTELExecutionContextArchitecture:
         )
         
         # Clear BM singleton to ensure OTEL doesn't depend on it
-        from buttermilk import _global_bm
-        _global_bm = None
+        import buttermilk
+        buttermilk._global_bm = None
         
         # Mock CloudManager to avoid real authentication
         with patch.object(context, "cloud_manager") as mock_cloud_mgr:

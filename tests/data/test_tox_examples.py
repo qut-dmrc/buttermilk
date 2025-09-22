@@ -1,6 +1,6 @@
 import pytest
 
-# import evaluate  
+# import evaluate
 torch = pytest.importorskip("torch")
 from buttermilk.toxicity import TOXCLIENTS
 

@@ -8,12 +8,6 @@ class TestFlowVariableRouter:
     def sample_data(self):
         """Sample data for testing variable routing with multiple outputs per step"""
         # Create a router with pre-populated data
-        KeyValueCollector()
-
-    @pytest.fixture
-    def sample_data(self):
-        """Sample data for testing variable routing with multiple outputs per step"""
-        # Create a router with pre-populated data
         router = KeyValueCollector()
 
         # Add judge step data (multiple outputs)

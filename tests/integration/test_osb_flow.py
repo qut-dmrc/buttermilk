@@ -71,7 +71,7 @@ class FlowTestServer:
                         if resp.status == 200:
                             logger.info("Test server is ready")
                             return
-            except:
+            except Exception:
                 pass
             
             # Check if process died
