@@ -1,0 +1,6 @@
+type: bigquery
+randomize: false
+full_table_id: prosocial-443205.mediamarkets.tmdb_titles
+dataset_name: tmdbtitles
+split_type: train
+schema_path: tmdb_titles.schema.json

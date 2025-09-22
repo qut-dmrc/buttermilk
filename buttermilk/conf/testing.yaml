@@ -3,6 +3,9 @@ defaults:
     - zot
     - trans
     - osb
+  storage:
+    - observations
+    - tmdbtitles
   - llms: debug
   - _self_
 

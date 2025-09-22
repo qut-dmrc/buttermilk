@@ -1,0 +1,6 @@
+type: bigquery
+randomize: false
+full_table_id: prosocial-443205.mediamarkets.observations
+dataset_name: observations
+split_type: train
+schema_path: observations.schema.json

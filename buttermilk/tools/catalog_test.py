@@ -11,8 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
 
+from buttermilk import get_bm
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.retry import RetryWrapper
+from buttermilk._core.storage_config import StorageConfig, StorageFactory
+from buttermilk.utils.uploader import AsyncDataUploader
 from buttermilk.utils.utils import scrub_serializable
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
 
@@ -89,7 +92,16 @@ class TMDBTool:
     Returns null observations when no results are found.
     """
 
-    def __init__(self, api_key: str | None = None, base_url: str = "https://api.themoviedb.org/3", language: str = "en-US", region: str = "AU"):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str = "https://api.themoviedb.org/3",
+        language: str = "en-US",
+        region: str = "AU",
+        observations_storage_config: str | StorageConfig | None = None,
+        titles_storage_config: str | StorageConfig | None = None,
+        batch_size: int = 10
+    ):
         self.api_key = api_key or os.getenv("TMDB_API_KEY")
         self.base_url = base_url
         self.language = language
@@ -97,9 +109,53 @@ class TMDBTool:
 
         if not self.api_key:
             raise ValueError("TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter.")
+
         # Underlying client + retry wrapper
         self._tmdb_client = aioTMDb(key=self.api_key, language=language, region=self.region)
         self._retry = RetryWrapper(client=self._tmdb_client)
+
+        # Initialize storage uploaders if configs provided
+        self.observations_uploader = None
+        self.titles_uploader = None
+
+        if observations_storage_config:
+            self._setup_observations_storage(observations_storage_config, batch_size)
+
+        if titles_storage_config:
+            self._setup_titles_storage(titles_storage_config, batch_size)
+
+    def _setup_observations_storage(self, config: str | StorageConfig, batch_size: int):
+        """Set up storage for observations data."""
+        bm = get_bm()
+        if isinstance(config, str):
+            # Load config by name from Buttermilk's config system
+            storage_config = bm.cfg.storage[config]
+        else:
+            storage_config = config
+
+        storage_config = StorageFactory.create_config(storage_config)
+        storage = bm.get_storage(storage_config)
+        self.observations_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
+
+    def _setup_titles_storage(self, config: str | StorageConfig, batch_size: int):
+        """Set up storage for titles data."""
+        bm = get_bm()
+        if isinstance(config, str):
+            # Load config by name from Buttermilk's config system
+            storage_config = bm.cfg.storage[config]
+        else:
+            storage_config = config
+
+        storage_config = StorageFactory.create_config(storage_config)
+        storage = bm.get_storage(storage_config)
+        self.titles_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
+
+    async def cleanup(self):
+        """Gracefully shutdown uploaders and ensure all data is flushed."""
+        if self.observations_uploader:
+            self.observations_uploader.shutdown()
+        if self.titles_uploader:
+            self.titles_uploader.shutdown()
 
     # -------------------------
     # Internal helpers
@@ -326,6 +382,11 @@ class TMDBTool:
                 )
                 observations.append(error_obs)
 
+        # Batch save observations if uploader is configured
+        if self.observations_uploader and observations:
+            for obs in observations:
+                await self.observations_uploader.add(obs)
+
         return observations
 
     async def get_all_movies(
@@ -392,6 +453,9 @@ class TMDBTool:
                     # Apply max_results limit if specified
                     if max_results and total_fetched >= max_results:
                         pbar.close()
+                        # Ensure uploaders are flushed before early return
+                        if self.titles_uploader:
+                            self.titles_uploader.shutdown()
                         return all_movies
 
                     movie_dict = None
@@ -449,6 +513,10 @@ class TMDBTool:
                     record = Title(record_id=movie_id, title=movie_title, year=year, type=TitleType.MOVIE, metadata=metadata)
                     all_movies.append(record)
 
+                    # Batch save titles if uploader is configured
+                    if self.titles_uploader:
+                        await self.titles_uploader.add(record)
+
                 # Move to next page
                 page += 1
 
@@ -463,6 +531,9 @@ class TMDBTool:
         finally:
             # Always close the progress bar
             pbar.close()
+            # Ensure uploaders are flushed
+            if self.titles_uploader:
+                self.titles_uploader.shutdown()
 
         return all_movies
 
