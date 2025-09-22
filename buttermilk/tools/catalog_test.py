@@ -851,11 +851,11 @@ class TMDBTool:
         self,
         start_year: int = 1900,
         end_year: int = 2025,
-        max_concurrent: int = 5,
+        max_concurrent: int = 10,
         backup_dir: Optional[Path] = None,
         include_adult: bool = True,
         include_video: bool = False,
-        resume: bool = True
+        resume: bool = True,
     ) -> list[Title]:
         """Get all movies from TMDB using parallel month-based queries.
 
