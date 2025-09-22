@@ -1,3 +1,4 @@
+# ruff: noqa: PLR6301
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -55,45 +56,41 @@ class TestTMDBTool:
     """Test cases for TMDB tool functionality."""
 
     @pytest.mark.anyio
-    async def test_successful_search_with_availability(self, tmdb_tool, mock_tmdb_api_response, mock_availability_response):
-        """Test successful movie search with availability results."""
+    async def test_successful_search_returns_movie_metadata(self, tmdb_tool, mock_tmdb_api_response, mock_availability_response):
+        """Test successful movie search returns a result with movie metadata (no provider lookup)."""
         # Patch the entire aioTMDb instance to prevent real API calls
-        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock movie object
             mock_movie = AsyncMock()
             mock_movie.id = 550
             mock_movie.title = "Fight Club"
-            
-            # Mock search response
+
+            # Mock search response only (no provider lookup)
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
-            
-            # Mock watch providers response
-            mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability_response)
-            mock_tmdb.movies.return_value = mock_movies_resource
 
             results = await tmdb_tool.search_movie_availability(title="Fight Club", year=1999, region="US")
 
             # Verify we get a list of observations
             assert isinstance(results, list)
-            assert len(results) > 0  # Should have at least one observation
+            assert len(results) > 0
 
             # Check each observation has correct structure
             for result in results:
                 assert isinstance(result, Observation)
-                assert result.available is True
-                assert result.match_title == "Fight Club"
+                assert result.available is False  # no provider lookup performed
                 assert result.region == "US"
-                assert result.provider_name is not None
+                assert result.provider_name is None
                 assert result.source == "TMDB"
                 assert len(result.error) == 0
+                assert "tmdb_movie" in result.metadata
+                assert result.metadata["tmdb_movie"].get("title") in {"Fight Club", None}
 
     @pytest.mark.anyio
     async def test_search_no_results(self, tmdb_tool, mock_empty_response):
         """Test search with no results returns null observation."""
-        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock empty search response
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[])  # No search results
@@ -108,16 +105,16 @@ class TestTMDBTool:
             result = results[0]
             assert isinstance(result, Observation)
             assert result.available is False
-            assert result.match_title == "Nonexistent Movie"
             assert result.region == "US"
             assert result.provider_name is None
             assert result.source == "TMDB"
             assert len(result.error) == 0
+            assert result.metadata.get("search_title") == "Nonexistent Movie"
 
     @pytest.mark.anyio
     async def test_api_error_handling(self, tmdb_tool):
         """Test error handling when API fails."""
-        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock search failure
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(side_effect=Exception("API connection failed"))
@@ -132,85 +129,68 @@ class TestTMDBTool:
             result = results[0]
             assert isinstance(result, Observation)
             assert result.available is False
-            assert result.match_title == "Any Movie"
             assert result.region == "US"
             assert result.provider_name is None
             assert result.source == "TMDB"
             assert len(result.error) > 0  # Should have error information
             assert "API connection failed" in str(result.error)
+            assert result.metadata.get("search_title") == "Any Movie"
 
     @pytest.mark.anyio
-    async def test_watch_provider_error(self, tmdb_tool):
-        """Test handling of watch provider lookup errors."""
-        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
-            # Mock successful search but failed watch provider lookup
+    async def test_no_provider_lookup_performed(self, tmdb_tool):
+        """Ensure provider endpoints are not called during search-only mode."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            # Mock movie result only
             mock_movie = AsyncMock()
             mock_movie.id = 550
             mock_movie.title = "Fight Club"
-            
-            # Mock search response
+
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
-            
-            # Mock watch providers failure
+
+            # Provide a mock movies resource but ensure it's not used
             mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(side_effect=Exception("Watch provider API failed"))
+            mock_movies_resource.watch_providers = AsyncMock()
             mock_tmdb.movies.return_value = mock_movies_resource
 
             results = await tmdb_tool.search_movie_availability(title="Movie Title", region="US")
 
-            # Verify error handling
+            # Verify search-only path
+            assert isinstance(results, list)
+            assert len(results) == 1
+            result = results[0]
+            assert isinstance(result, Observation)
+            assert result.available is False
+            assert len(result.error) == 0
+            # Provider API should not be called
+            assert not mock_tmdb.movies.called
+
+    @pytest.mark.anyio
+    async def test_no_availability_in_region(self, tmdb_tool):
+        """Test movie search in specified region returns search observation (no provider lookup)."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            # Mock successful search only
+            mock_movie = AsyncMock()
+            mock_movie.id = 550
+            mock_movie.title = "Fight Club"
+
+            # Mock search response
+            mock_search = AsyncMock()
+            mock_search.movies = AsyncMock(return_value=[mock_movie])
+            mock_tmdb.search.return_value = mock_search
+
+            results = await tmdb_tool.search_movie_availability(title="Fight Club", region="AU")
+
+            # Verify movie found and returned as search observation (no availability checked)
             assert isinstance(results, list)
             assert len(results) == 1
 
             result = results[0]
             assert isinstance(result, Observation)
             assert result.available is False
-            assert result.match_title == "Fight Club"
-            assert len(result.error) > 0
-            error_str = str(result.error)
-            assert "Watch provider lookup failed" in error_str
-
-    @pytest.mark.anyio
-    async def test_no_availability_in_region(self, tmdb_tool):
-        """Test movie found but no availability in specified region."""
-        with patch.object(tmdb_tool, "tmdb") as mock_tmdb:
-            # Mock successful search but no availability in specified region
-            mock_movie = AsyncMock()
-            mock_movie.id = 550
-            mock_movie.title = "Fight Club"
-            
-            mock_availability_empty = {
-                "results": {
-                    "US": {  # Has availability in US but not AU
-                        "flatrate": [{"provider_id": 8, "provider_name": "Netflix"}]
-                    }
-                }
-            }
-
-            # Mock search response
-            mock_search = AsyncMock()
-            mock_search.movies = AsyncMock(return_value=[mock_movie])
-            mock_tmdb.search.return_value = mock_search
-            
-            # Mock watch providers response
-            mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability_empty)
-            mock_tmdb.movies.return_value = mock_movies_resource
-
-            results = await tmdb_tool.search_movie_availability(title="Fight Club", region="AU")
-
-            # Verify movie found but no availability
-            assert isinstance(results, list)
-            assert len(results) == 1  # Should have one result showing no availability
-
-            result = results[0]
-            assert isinstance(result, Observation)
-            assert result.available is False  # No availability in AU
-            assert result.match_title == "Fight Club"
             assert result.region == "AU"
-            assert result.provider_name is None  # No providers available
+            assert result.provider_name is None
             assert result.source == "TMDB"
 
     def test_as_tool_function(self, tmdb_tool):

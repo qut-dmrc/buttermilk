@@ -1,3 +1,4 @@
+# ruff: noqa: PLR6301
 """Integration tests for TMDB tool with autogen agents.
 
 These tests verify that the TMDBTool works correctly when integrated with
@@ -74,7 +75,7 @@ class TestTMDBAgentIntegration:
         function_tool = tmdb_tool_for_agent.as_tool()
         
         # Mock the underlying TMDB calls to avoid real API calls
-        with patch.object(tmdb_tool_for_agent, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool_for_agent, "_tmdb_client") as mock_tmdb:
             # Mock movie object
             mock_movie = AsyncMock()
             mock_movie.id = 550
@@ -85,18 +86,6 @@ class TestTMDBAgentIntegration:
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
             
-            # Mock availability response
-            mock_availability = {
-                "results": {
-                    "US": {
-                        "flatrate": [{"provider_id": 8, "provider_name": "Netflix", "provider_type": "flatrate"}]
-                    }
-                }
-            }
-            mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability)
-            mock_tmdb.movies.return_value = mock_movies_resource
-            
             # Execute through FunctionTool using helper
             results = await run_function_tool(function_tool, title="Fight Club", year=1999, region="US")
             
@@ -106,9 +95,11 @@ class TestTMDBAgentIntegration:
             
             result = results[0]
             assert isinstance(result, Observation)
-            assert result.available is True
-            assert result.provider_name == "Netflix"
+            # No provider lookup performed in new behavior
+            assert result.available is False
+            assert result.provider_name is None
             assert result.source == "TMDB"
+            assert "tmdb_movie" in result.metadata
 
     def test_tool_metadata_for_agent_discovery(self, tmdb_tool_for_agent: TMDBTool) -> None:
         """Test that tool metadata is suitable for agent discovery and routing."""
@@ -132,7 +123,7 @@ class TestTMDBAgentIntegration:
         function_tool = tmdb_tool_for_agent.as_tool()
         
         # Mock API failure
-        with patch.object(tmdb_tool_for_agent, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool_for_agent, "_tmdb_client") as mock_tmdb:
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(side_effect=Exception("API Error"))
             mock_tmdb.search.return_value = mock_search
@@ -178,7 +169,7 @@ class TestTMDBAgentIntegration:
         function_tool = tmdb_tool_for_agent.as_tool()
         
         # Mock the underlying TMDB calls
-        with patch.object(tmdb_tool_for_agent, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool_for_agent, "_tmdb_client") as mock_tmdb:
             mock_movie = AsyncMock()
             mock_movie.id = 550
             mock_movie.title = "Test Movie"
@@ -186,11 +177,6 @@ class TestTMDBAgentIntegration:
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
-            
-            mock_availability = {"results": {"US": {}}}
-            mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability)
-            mock_tmdb.movies.return_value = mock_movies_resource
             
             # Execute tool
             results = await run_function_tool(function_tool, title="Test Movie", region="US")
@@ -208,6 +194,7 @@ class TestTMDBAgentIntegration:
             # Metadata should include search parameters for tracing
             assert "search_title" in result.metadata
             assert result.metadata["search_title"] == "Test Movie"
+            assert "tmdb_movie" in result.metadata
 
     def test_tool_configuration_for_production_agents(self) -> None:
         """Test tool configuration patterns suitable for production agent deployment."""
@@ -234,19 +221,14 @@ class TestTMDBAgentIntegration:
         function_tool = tmdb_tool_for_agent.as_tool()
         
         # Mock the underlying calls
-        with patch.object(tmdb_tool_for_agent, "tmdb") as mock_tmdb:
+        with patch.object(tmdb_tool_for_agent, "_tmdb_client") as mock_tmdb:
             mock_movie = AsyncMock()
             mock_movie.id = 550
             mock_movie.title = "Concurrent Movie"
-            
+
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
-            
-            mock_availability = {"results": {"US": {}}}
-            mock_movies_resource = AsyncMock()
-            mock_movies_resource.watch_providers = AsyncMock(return_value=mock_availability)
-            mock_tmdb.movies.return_value = mock_movies_resource
             
             # Execute multiple concurrent calls
             import asyncio  # noqa: F401

@@ -1,14 +1,14 @@
 import datetime
 import os
-from typing import Optional
+from typing import Any, Iterable, Optional
 
-import numpy as np
 import shortuuid
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 
 from buttermilk._core.contract import ErrorEvent
+from buttermilk._core.retry import RetryWrapper
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
 
 
@@ -33,10 +33,6 @@ class Observation(BaseModel):
     price: float | None = Field(None, description="Price for renting or buying, if applicable")
     currency: str | None = Field(None, description="Currency of the price, if applicable")
     format: str | None = Field(None, description="Format of the content (e.g., HD, SD, 4K)")
-    season: str | None = Field(None, description="Season number if applicable")
-    episode: str | None = Field(None, description="Episode number if applicable")
-    match_title: str | None = Field(None, description="Matched title from the provider")
-    match_author: str | None = Field(None, description="Matched author/director from the provider")
     available: bool = Field(..., description="Whether the title is available")
     source: str = Field(..., description="Source of the observation data")
     metadata: dict = Field(..., description="Metadata about the title availability")
@@ -49,16 +45,10 @@ class Observation(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid",
-        arbitrary_types_allowed=False,  # Be strict by default
+        arbitrary_types_allowed=False,
         populate_by_name=True,
         use_enum_values=True,
-        json_encoders={
-            np.bool_: bool,  # Handle numpy bools
-            datetime.datetime: lambda v: v.isoformat(),  # Standard ISO format for datetimes
-        },
         validate_assignment=True,
-        exclude_unset=True,  # Exclude fields not explicitly set
-        exclude_none=True,  # Exclude fields with None values
     )
 
 
@@ -73,16 +63,83 @@ class TMDBTool:
         self.api_key = api_key or os.getenv("TMDB_API_KEY")
         self.base_url = base_url
         self.language = language
-        self.region = region
-        
-        if not self.api_key:
-            raise ValueError(
-                "TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter."
-            )
-        
-        self.tmdb = aioTMDb(key=self.api_key, language=language, region=region)
+        self.region = (region or "").upper() or "AU"
 
-    async def search_movie_availability(self, title: str, year: Optional[int] = None, region: str = "US") -> list[Observation]:
+        if not self.api_key:
+            raise ValueError("TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter.")
+        # Underlying client + retry wrapper
+        self._tmdb_client = aioTMDb(key=self.api_key, language=language, region=self.region)
+        self._retry = RetryWrapper(client=self._tmdb_client)
+
+    # -------------------------
+    # Internal helpers
+    # -------------------------
+    @staticmethod
+    def _normalize_region(region: Optional[str]) -> str:
+        r = (region or "").strip().upper()
+        return r if r else "US"
+
+    @staticmethod
+    def _as_list(results: Any) -> list[Any]:  # noqa: PLR0911 - explicit early returns aid clarity
+        """Coerce various SDK return shapes into a plain list of items.
+
+        Handles:
+        - list/tuple already
+        - dict with key "results"
+        - object with attribute "results"
+        - generic iterable (excluding str/bytes)
+        """
+        if results is None:
+            return []
+        if isinstance(results, (list, tuple)):
+            return list(results)
+        if isinstance(results, dict):
+            if "results" in results and isinstance(results["results"], (list, tuple)):
+                return list(results["results"])  # type: ignore[return-value]
+            # Some SDKs return pagination dicts where items are directly in 'results'
+            return []
+        # Object with .results attribute
+        items = getattr(results, "results", None)
+        if isinstance(items, (list, tuple)):
+            return list(items)
+        # Fallback: if it's iterable (but not string/bytes), iterate
+        if isinstance(results, Iterable) and not isinstance(results, (str, bytes)):
+            try:
+                return list(results)
+            except Exception:
+                return []
+        return []
+
+    @staticmethod
+    def _get_value(obj: Any, *keys: str, default: Any = None) -> Any:
+        for k in keys:
+            if isinstance(obj, dict) and k in obj:
+                return obj[k]
+            v = getattr(obj, k, None)
+            if v is not None:
+                return v
+        return default
+
+    @staticmethod
+    def _extract_title(item: Any) -> str | None:
+        # Prefer localized/common title fields
+        return TMDBTool._get_value(
+            item,
+            "title",
+            "name",
+            "original_title",
+            "original_name",
+            default=None,
+        )
+
+    @staticmethod
+    def _sanitize_rate_limit_message(msg: str) -> str:
+        lower = msg.lower()
+        if "rate limit" in lower or "too many requests" in lower or "429" in lower:
+            return "Temporary TMDB throttling encountered; retry budget exceeded"
+        return msg
+
+    async def search_movie_availability(self, title: str, year: Optional[int] = None, region: str = "US") -> list[Observation]:  # noqa: PLR0912, PLR0914
         """Search for a movie and return availability information.
 
         Args:
@@ -93,11 +150,17 @@ class TMDBTool:
         Returns:
             List of Observations with availability data, or list with one null result if not found
         """
+        region = self._normalize_region(region)
+
         try:
-            # Search for movies using TMDB API
-            search_results = await self.tmdb.search().movies(query=title, year=year)
-            
-            if not search_results or len(search_results) == 0:
+            # Search for movies using TMDB API (robust to SDK return shapes)
+            async def do_search():
+                return await self._tmdb_client.search().movies(query=title, year=year)
+
+            search_raw = await self._retry._execute_with_retry(do_search)
+            search_results = self._as_list(search_raw)
+
+            if not search_results:
                 # No movies found - return null observation
                 obs = Observation(
                     record_id=f"tmdb_search_{title}_{region}",
@@ -106,115 +169,59 @@ class TMDBTool:
                     provider_type=None,
                     region=region,
                     available=False,
-                    match_title=title,
                     source="TMDB",
-                    metadata={"search_title": title, "search_year": year, "total_results": 0}
+                    price=None,
+                    currency=None,
+                    format=None,
+                    metadata={"search_title": title, "search_year": year, "total_results": 0},
                 )
                 return [obs]
 
-            # Get the first/best match
+            # Get the first/best match and return a single observation capturing movie info
             movie = search_results[0]
-            movie_id = movie.id
-            match_title = movie.title
+            movie_id = TMDBTool._get_value(movie, "id")
 
-            # Get watch providers for this movie in the specified region
-            try:
-                watch_providers = await self.tmdb.movies(movie_id).watch_providers()
-                
-                # Check if there are providers for the specified region
-                if region not in watch_providers.get("results", {}):
-                    # Movie found but no availability in this region
-                    obs = Observation(
-                        record_id=f"tmdb_{movie_id}_{region}_unavailable",
-                        provider_name=None,
-                        provider_id=None,
-                        provider_type=None,
-                        region=region,
-                        available=False,
-                        match_title=match_title,
-                        source="TMDB",
-                        metadata={
-                            "search_title": title,
-                            "search_year": year,
-                            "movie_id": movie_id,
-                            "available_regions": list(watch_providers.get("results", {}).keys())
-                        }
-                    )
-                    return [obs]
+            # Build rich metadata from the movie result; include common fields when present
+            movie_meta: dict[str, Any] = {
+                "id": TMDBTool._get_value(movie, "id"),
+                "title": TMDBTool._get_value(movie, "title", "name", "original_title", "original_name"),
+                "original_title": TMDBTool._get_value(movie, "original_title", "original_name"),
+                "overview": TMDBTool._get_value(movie, "overview"),
+                "release_date": TMDBTool._get_value(movie, "release_date", "first_air_date"),
+                "popularity": TMDBTool._get_value(movie, "popularity"),
+                "vote_average": TMDBTool._get_value(movie, "vote_average"),
+                "vote_count": TMDBTool._get_value(movie, "vote_count"),
+                "poster_path": TMDBTool._get_value(movie, "poster_path"),
+                "backdrop_path": TMDBTool._get_value(movie, "backdrop_path"),
+                "genre_ids": TMDBTool._get_value(movie, "genre_ids"),
+            }
 
-                region_data = watch_providers["results"][region]
-                observations = []
+            metadata = {
+                "search_title": title,
+                "search_year": year,
+                "movie_id": movie_id,
+                "tmdb_movie": {k: v for k, v in movie_meta.items() if v is not None},
+            }
 
-                # Process different provider types (flatrate, rent, buy)
-                for provider_type in ["flatrate", "rent", "buy"]:
-                    if provider_type in region_data:
-                        for provider in region_data[provider_type]:
-                            obs = Observation(
-                                record_id=f"tmdb_{provider['provider_id']}_{movie_id}_{region}_{provider_type}",
-                                provider_name=provider["provider_name"],
-                                provider_id=str(provider["provider_id"]),
-                                provider_type=provider_type,
-                                region=region,
-                                available=True,
-                                match_title=match_title,
-                                source="TMDB",
-                                metadata={
-                                    "search_title": title,
-                                    "search_year": year,
-                                    "movie_id": movie_id,
-                                    "provider_display_priority": provider.get("display_priority"),
-                                    "provider_logo_path": provider.get("logo_path")
-                                }
-                            )
-                            observations.append(obs)
-
-                if not observations:
-                    # Movie found but no providers available in region
-                    obs = Observation(
-                        record_id=f"tmdb_{movie_id}_{region}_no_providers",
-                        provider_name=None,
-                        provider_id=None,
-                        provider_type=None,
-                        region=region,
-                        available=False,
-                        match_title=match_title,
-                        source="TMDB",
-                        metadata={
-                            "search_title": title,
-                            "search_year": year,
-                            "movie_id": movie_id,
-                            "region_data_available": True
-                        }
-                    )
-                    observations.append(obs)
-
-                return observations
-
-            except Exception as provider_error:
-                # Error getting watch providers, but movie was found
-                error_event = ErrorEvent(content=f"Watch provider lookup failed: {str(provider_error)}", source="TMDB")
-                obs = Observation(
-                    record_id=f"tmdb_{movie_id}_{region}_provider_error",
-                    provider_name=None,
-                    provider_id=None,
-                    provider_type=None,
-                    region=region,
-                    available=False,
-                    match_title=match_title,
-                    source="TMDB",
-                    metadata={
-                        "search_title": title,
-                        "search_year": year,
-                        "movie_id": movie_id,
-                        "error_type": "provider_lookup"
-                    },
-                    error=[error_event]
-                )
-                return [obs]
+            obs = Observation(
+                record_id=f"tmdb_{movie_id}_{region}_search_result",
+                provider_name=None,
+                provider_id=None,
+                provider_type=None,
+                region=region,
+                available=False,  # Availability unknown without providers lookup; default to False
+                source="TMDB",
+                price=None,
+                currency=None,
+                format=None,
+                metadata=metadata,
+            )
+            return [obs]
 
         except Exception as e:
             # Create error observation for search failures
-            error_event = ErrorEvent(content=str(e), source="TMDB")
+            safe_message = TMDBTool._sanitize_rate_limit_message(str(e))
+            error_event = ErrorEvent(content=safe_message, source="TMDB")
             error_observation = Observation(
                 record_id=f"tmdb_search_error_{title}_{region}",
                 provider_name=None,
@@ -222,14 +229,12 @@ class TMDBTool:
                 provider_type=None,
                 region=region,
                 available=False,
-                match_title=title,
                 source="TMDB",
-                metadata={
-                    "search_title": title,
-                    "search_year": year,
-                    "error_type": "search_failure"
-                },
-                error=[error_event]
+                price=None,
+                currency=None,
+                format=None,
+                metadata={"search_title": title, "search_year": year, "error_type": "search_failure"},
+                error=[error_event],
             )
             return [error_observation]
 

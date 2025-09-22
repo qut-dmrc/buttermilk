@@ -62,7 +62,8 @@ class TestTMDBLiveAPI:
         assert result.source == "TMDB"
         assert result.region == "US"
         assert result.match_title is not None
-        
+        assert not result.error  # No errors expected
+
         # Should either have availability or explicit unavailability
         if result.available:
             assert result.provider_name is not None
