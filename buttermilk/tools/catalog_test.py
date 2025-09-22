@@ -98,8 +98,8 @@ class DatePeriod:
     def api_params(self) -> dict[str, str]:
         """Get API parameters for this date period."""
         return {
-            "primary_release_date.gte": self.start_date.isoformat(),
-            "primary_release_date.lte": self.end_date.isoformat(),
+            "primary_release_date__gte": self.start_date.isoformat(),
+            "primary_release_date__lte": self.end_date.isoformat(),
         }
 
     def __str__(self) -> str:
@@ -605,7 +605,7 @@ class TMDBTool:
             if isinstance(movie, dict):
                 movie_dict = movie
             else:
-                movie_dict = getattr(movie, '__dict__', {"id": movie_id})
+                movie_dict = getattr(movie, "__dict__", {"id": movie_id})
 
             for key, value in movie_dict.items():
                 if key not in core_fields and value is not None:

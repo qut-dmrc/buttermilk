@@ -14,7 +14,7 @@ import pytest
 from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
 
-from buttermilk.tools.catalog_test import Observation, TMDBTool
+from buttermilk.tools.catalog_test import Title, TMDBTool
 
 
 async def run_function_tool(function_tool: FunctionTool, **kwargs) -> Any:
