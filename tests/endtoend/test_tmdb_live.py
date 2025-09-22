@@ -21,7 +21,7 @@ import os
 
 import pytest
 
-from buttermilk.tools.catalog_test import Observation, TMDBTool
+from buttermilk.tools.catalog_test import Observation, Title, TitleType, TMDBTool
 
 # Pytest markers for conditional test execution
 pytestmark = [pytest.mark.integration, pytest.mark.endtoend]
@@ -47,49 +47,48 @@ class TestTMDBLiveAPI:
 
     @pytest.mark.anyio
     async def test_live_search_popular_movie(self, tmdb_tool_live: TMDBTool) -> None:
-        """Test searching for a popular movie that should have availability."""
-        results = await tmdb_tool_live.search_movie_availability(
-            title="The Matrix", year=1999, region="US"
-        )
-
+        """Test searching for a popular movie and checking availability."""
+        # First search for the movie
+        title = await tmdb_tool_live.search_movie(title="The Matrix", year=1999)
+        
+        # Verify we got a Title object
+        assert isinstance(title, Title)
+        assert title.title is not None
+        assert title.record_id is not None
+        assert title.year == 1999
+        
+        # Now get availability for US region
+        results = await tmdb_tool_live.get_availability(title, regions=["US"])
+        
         # Verify we get results
         assert isinstance(results, list)
         assert len(results) >= 1
 
-        # Check basic structure of first result
-        result = results[0]
-        assert isinstance(result, Observation)
-        assert result.source == "TMDB"
-        assert result.region == "US"
-        assert result.match_title is not None
-        assert not result.error  # No errors expected
+        # Check basic structure of observations
+        for result in results:
+            assert isinstance(result, Observation)
+            assert result.source == "TMDB"
+            assert result.region == "US"
+            assert not result.error  # No errors expected
 
-        # Should either have availability or explicit unavailability
-        if result.available:
-            assert result.provider_name is not None
-            assert result.provider_id is not None
-            assert result.provider_type in ["flatrate", "rent", "buy"]
-        else:
-            # If not available, should have clear reason in metadata
-            assert result.provider_name is None
+            # Should either have availability or explicit unavailability
+            if result.available:
+                assert result.provider_name is not None
+                assert result.provider_id is not None
+                assert result.provider_type in ["flatrate", "rent", "buy"]
+            else:
+                # If not available, should have clear reason
+                assert result.provider_name is None
 
     @pytest.mark.anyio
     async def test_live_search_nonexistent_movie(self, tmdb_tool_live: TMDBTool) -> None:
         """Test searching for a movie that definitely doesn't exist."""
-        results = await tmdb_tool_live.search_movie_availability(
-            title="Absolutely Nonexistent Movie Title 9999", region="US"
+        title = await tmdb_tool_live.search_movie(
+            title="Absolutely Nonexistent Movie Title 9999"
         )
 
-        # Should return one null observation
-        assert isinstance(results, list)
-        assert len(results) == 1
-
-        result = results[0]
-        assert isinstance(result, Observation)
-        assert result.available is False
-        assert result.provider_name is None
-        assert result.source == "TMDB"
-        assert len(result.error) == 0
+        # Should return None when movie not found
+        assert title is None
 
     @pytest.mark.anyio
     async def test_live_regional_differences(self, tmdb_tool_live: TMDBTool) -> None:
@@ -97,29 +96,26 @@ class TestTMDBLiveAPI:
         movie_title = "Pulp Fiction"
         year = 1994
 
-        # Test US availability
-        us_results = await tmdb_tool_live.search_movie_availability(
-            title=movie_title, year=year, region="US"
-        )
-
-        # Test UK availability
-        uk_results = await tmdb_tool_live.search_movie_availability(
-            title=movie_title, year=year, region="GB"
-        )
-
-        # Both should return valid observations
-        assert isinstance(us_results, list)
-        assert isinstance(uk_results, list)
-        assert len(us_results) >= 1
-        assert len(uk_results) >= 1
-
-        # Both should find the same movie
-        us_result = us_results[0]
-        uk_result = uk_results[0]
+        # Search for the movie
+        title = await tmdb_tool_live.search_movie(title=movie_title, year=year)
         
-        assert us_result.match_title == uk_result.match_title
-        assert us_result.region == "US"
-        assert uk_result.region == "GB"
+        # Verify movie was found
+        assert title is not None
+        assert title.title is not None
+
+        # Get availability for both US and GB in one call
+        results = await tmdb_tool_live.get_availability(title, regions=["US", "GB"])
+
+        # Should return observations for both regions
+        assert isinstance(results, list)
+        
+        # Separate results by region
+        us_results = [r for r in results if r.region == "US"]
+        gb_results = [r for r in results if r.region == "GB"]
+        
+        # Should have at least one observation per region (even if null)
+        assert len(us_results) >= 1
+        assert len(gb_results) >= 1
 
         # Availability may differ between regions
         # (This is the key insight - same content, different regional licensing)
@@ -128,54 +124,59 @@ class TestTMDBLiveAPI:
     async def test_live_search_with_year_filtering(self, tmdb_tool_live: TMDBTool) -> None:
         """Test that year filtering works correctly."""
         # Search for "Batman" without year (should get recent results)
-        recent_results = await tmdb_tool_live.search_movie_availability(
-            title="Batman", region="US"
-        )
+        recent_title = await tmdb_tool_live.search_movie(title="Batman")
 
         # Search for "Batman" from 1989 (specific Tim Burton film)
-        year_filtered_results = await tmdb_tool_live.search_movie_availability(
-            title="Batman", year=1989, region="US"
-        )
+        year_filtered_title = await tmdb_tool_live.search_movie(title="Batman", year=1989)
 
-        assert isinstance(recent_results, list)
-        assert isinstance(year_filtered_results, list)
-        assert len(recent_results) >= 1
-        assert len(year_filtered_results) >= 1
-
-        # The 1989 result should specifically match that year's Batman
-        if year_filtered_results[0].available or len(year_filtered_results[0].error) == 0:
-            # Should have found the 1989 Batman
-            result = year_filtered_results[0]
-            assert "Batman" in result.match_title
-            # Metadata should include the search year
-            assert result.metadata.get("search_year") == 1989
+        # Both should find movies
+        assert recent_title is not None
+        assert year_filtered_title is not None
+        
+        # Both should have Batman in the title
+        assert "Batman" in recent_title.title
+        assert "Batman" in year_filtered_title.title
+        
+        # The 1989 result should have that year
+        assert year_filtered_title.year == 1989
+        
+        # The two results might be different movies
+        # (Recent could be The Batman 2022, while 1989 is the Tim Burton film)
 
     @pytest.mark.anyio
     async def test_live_error_handling_invalid_region(self, tmdb_tool_live: TMDBTool) -> None:
         """Test error handling with invalid region codes."""
-        results = await tmdb_tool_live.search_movie_availability(
-            title="The Matrix", region="INVALID"
-        )
+        # First search for the movie
+        title = await tmdb_tool_live.search_movie(title="The Matrix")
+        assert title is not None
+        
+        # Try to get availability for invalid region
+        results = await tmdb_tool_live.get_availability(title, regions=["INVALID"])
 
-        # Should handle gracefully - either return no availability or proper error
+        # Should handle gracefully - return null observation for invalid region
         assert isinstance(results, list)
         assert len(results) >= 1
 
         result = results[0]
         assert isinstance(result, Observation)
         assert result.region == "INVALID"
-        
-        # Either no availability (expected) or a handled error
-        if not result.available:
-            # Should have clear indication why not available
-            assert result.provider_name is None
+        assert result.available is False
+        assert result.provider_name is None
 
     @pytest.mark.anyio
     async def test_endtoend_response_structure(self, tmdb_tool_live: TMDBTool) -> None:
         """Test that live API responses match our expected data structure."""
-        results = await tmdb_tool_live.search_movie_availability(
-            title="Inception", year=2010, region="US"
-        )
+        # First search for movie
+        title = await tmdb_tool_live.search_movie(title="Inception", year=2010)
+        
+        assert isinstance(title, Title)
+        assert title.record_id is not None
+        assert title.title is not None
+        assert title.year == 2010
+        assert isinstance(title.metadata, dict)
+        
+        # Now get availability
+        results = await tmdb_tool_live.get_availability(title, regions=["US"])
 
         assert isinstance(results, list)
         assert len(results) >= 1
@@ -193,16 +194,16 @@ class TestTMDBLiveAPI:
             assert isinstance(result.metadata, dict)
             assert isinstance(result.error, list)
 
-            # Metadata should include search info
-            assert "search_title" in result.metadata
-            assert result.metadata["search_title"] == "Inception"
+            # Metadata should include movie info
+            assert "title" in result.metadata
+            assert result.metadata["title"] == "Inception"
+            assert "movie_id" in result.metadata
 
             if result.available:
                 # Available results should have provider info
                 assert result.provider_name is not None
                 assert result.provider_id is not None
                 assert result.provider_type in ["flatrate", "rent", "buy"]
-                assert result.match_title is not None
             else:
                 # Unavailable results should be explicit
                 assert result.provider_name is None
@@ -217,27 +218,68 @@ class TestTMDBLiveAPI:
             ("The Dark Knight", 2008),
         ]
 
-        all_results = []
+        titles = []
         
-        # Make multiple requests in sequence
-        for title, year in movies:
-            results = await tmdb_tool_live.search_movie_availability(
-                title=title, year=year, region="US"
-            )
-            all_results.extend(results)
+        # Make multiple search requests in sequence
+        for movie_title, year in movies:
+            title = await tmdb_tool_live.search_movie(title=movie_title, year=year)
+            if title:
+                titles.append(title)
 
-        # All requests should succeed (no rate limit errors)
-        assert len(all_results) >= len(movies)
+        # All searches should succeed (no rate limit errors)
+        assert len(titles) == len(movies)
         
-        for result in all_results:
-            assert isinstance(result, Observation)
-            assert result.source == "TMDB"
-            # No rate limiting errors
-            if result.error:
-                error_messages = [str(err) for err in result.error]
-                for msg in error_messages:
-                    assert "rate limit" not in msg.lower()
-                    assert "too many requests" not in msg.lower()
+        # Now get availability for all movies
+        for title in titles:
+            results = await tmdb_tool_live.get_availability(title, regions=["US"])
+            
+            # Should get results without rate limiting errors
+            assert isinstance(results, list)
+            for result in results:
+                assert isinstance(result, Observation)
+                assert result.source == "TMDB"
+                # No rate limiting errors
+                if result.error:
+                    error_messages = [str(err) for err in result.error]
+                    for msg in error_messages:
+                        assert "rate limit" not in msg.lower()
+                        assert "too many requests" not in msg.lower()
+
+    @pytest.mark.anyio
+    async def test_live_discover_movies_with_backup(self, tmdb_tool_live: TMDBTool, tmp_path) -> None:
+        """Test discovering movies from TMDB with JSON backup."""
+        # Get a small batch of popular movies
+        results = await tmdb_tool_live.get_all_movies(
+            backup_dir=tmp_path,
+            max_results=5,
+            sort_by="popularity.desc"
+        )
+        
+        # Should get some results
+        assert isinstance(results, list)
+        assert len(results) <= 5
+        
+        # Check each result
+        for title in results:
+            assert isinstance(title, Title)
+            assert title.record_id is not None
+            assert title.title is not None
+            assert title.type == TitleType.MOVIE
+            
+            # Year should be reasonable if present
+            if title.year:
+                assert 1900 <= title.year <= 2030  # Reasonable movie year range
+            
+            # Check backup file exists
+            backup_file = tmp_path / f"movie_{title.record_id}.json"
+            assert backup_file.exists()
+            
+            # Verify backup content
+            import json
+            with open(backup_file, 'r') as f:
+                backup_data = json.load(f)
+            assert str(backup_data["id"]) == title.record_id
+            assert backup_data["title"] == title.title
 
 
 @pytest.mark.skipif(not os.getenv("TMDB_API_KEY"), reason="No TMDB API key provided")

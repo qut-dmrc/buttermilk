@@ -1,4 +1,5 @@
 defaults:
+  - run: cli
   - _self_
 
 # reduce path-induced surprises
