@@ -63,8 +63,7 @@ class TestTMDBAgentIntegration:
         properties = parameters.get("properties", {})
         assert "title" in properties
         assert "year" in properties
-        assert "region" in properties
-        
+
         # Title should be required
         required = parameters.get("required", [])
         assert "title" in required
@@ -87,19 +86,14 @@ class TestTMDBAgentIntegration:
             mock_tmdb.search.return_value = mock_search
             
             # Execute through FunctionTool using helper
-            results = await run_function_tool(function_tool, title="Fight Club", year=1999, region="US")
-            
-            # Verify results
-            assert isinstance(results, list)
-            assert len(results) > 0
-            
-            result = results[0]
-            assert isinstance(result, Observation)
-            # No provider lookup performed in new behavior
-            assert result.available is False
-            assert result.provider_name is None
-            assert result.source == "TMDB"
-            assert "tmdb_movie" in result.metadata
+            result = await run_function_tool(function_tool, title="Fight Club", year=1999)
+
+            # Verify results - search_movie returns a Title object or None
+            assert isinstance(result, Title)
+            assert result.record_id == "550"
+            assert result.title == "Fight Club"
+            assert result.year == 1999
+            assert isinstance(result.metadata, dict)
 
     def test_tool_metadata_for_agent_discovery(self, tmdb_tool_for_agent: TMDBTool) -> None:
         """Test that tool metadata is suitable for agent discovery and routing."""
@@ -129,16 +123,10 @@ class TestTMDBAgentIntegration:
             mock_tmdb.search.return_value = mock_search
             
             # Tool should handle errors gracefully
-            results = await run_function_tool(function_tool, title="Test Movie", region="US")
-            
-            assert isinstance(results, list)
-            assert len(results) == 1
-            
-            result = results[0]
-            assert isinstance(result, Observation)
-            assert result.available is False
-            assert len(result.error) > 0
-            assert "API Error" in str(result.error)
+            result = await run_function_tool(function_tool, title="Test Movie")
+
+            # search_movie returns None on error
+            assert result is None
 
     def test_tool_parameter_validation_for_agents(self, tmdb_tool_for_agent: TMDBTool) -> None:
         """Test that tool validates parameters appropriately for agent use."""
@@ -158,10 +146,6 @@ class TestTMDBAgentIntegration:
         year_prop = properties.get("year", {})
         assert "year" not in required  # Should be optional
         assert year_prop.get("type") == "integer" or "anyOf" in year_prop
-        
-        # Region should be string with default
-        assert properties["region"]["type"] == "string"
-        assert "default" in properties["region"]
 
     @pytest.mark.anyio
     async def test_tool_observability_integration(self, tmdb_tool_for_agent: TMDBTool) -> None:
@@ -179,22 +163,15 @@ class TestTMDBAgentIntegration:
             mock_tmdb.search.return_value = mock_search
             
             # Execute tool
-            results = await run_function_tool(function_tool, title="Test Movie", region="US")
-            
+            result = await run_function_tool(function_tool, title="Test Movie")
+
             # Verify observability data
-            assert isinstance(results, list)
-            result = results[0]
-            assert isinstance(result, Observation)
-            
-            # Should have tracing metadata
-            assert result.call_id is not None
-            assert result.test_date is not None
+            assert isinstance(result, Title)
+
+            # Should have basic Title fields
             assert result.record_id is not None
-            
-            # Metadata should include search parameters for tracing
-            assert "search_title" in result.metadata
-            assert result.metadata["search_title"] == "Test Movie"
-            assert "tmdb_movie" in result.metadata
+            assert result.title == "Test Movie"
+            assert isinstance(result.metadata, dict)
 
     def test_tool_configuration_for_production_agents(self) -> None:
         """Test tool configuration patterns suitable for production agent deployment."""
@@ -233,19 +210,17 @@ class TestTMDBAgentIntegration:
             # Execute multiple concurrent calls
             import asyncio  # noqa: F401
             tasks = [
-                run_function_tool(function_tool, title=f"Movie {i}", region="US")
+                run_function_tool(function_tool, title=f"Movie {i}")
                 for i in range(3)
             ]
-            
+
             results_list = await asyncio.gather(*tasks)
-            
+
             # All calls should succeed
             expected_results = 3
             assert len(results_list) == expected_results
-            for results in results_list:
-                assert isinstance(results, list)
-                assert len(results) == 1
-                assert isinstance(results[0], Observation)
+            for result in results_list:
+                assert isinstance(result, Title)
 
     def test_tool_integration_with_strict_mode(self, tmdb_tool_for_agent: TMDBTool) -> None:
         """Test that tool works with autogen's strict mode."""
