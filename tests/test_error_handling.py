@@ -5,6 +5,7 @@ properly tracks errors and stops flow execution when too many tasks fail.
 """
 
 import asyncio
+import sys
 from unittest.mock import MagicMock
 
 from autogen_core import MessageContext

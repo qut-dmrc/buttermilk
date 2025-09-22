@@ -9,6 +9,7 @@ from autogen_core.models import (
 )
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentInput
 from buttermilk.agents.llm import LLMAgent
 
 

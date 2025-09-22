@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from buttermilk._core.log import logger
+from buttermilk._core.storage_config import MultiFieldEmbeddingConfig
 from buttermilk._core.types import Record
 from buttermilk.data.vector import (
     ChromaDBEmbeddings,
