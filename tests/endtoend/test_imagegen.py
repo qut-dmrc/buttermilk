@@ -18,6 +18,7 @@ prompts = [
 ]
 
 
+@pytest.mark.endtoend
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
 @pytest.mark.parametrize("client", ImageClients)
@@ -35,6 +36,7 @@ async def test_model(client, prompt):
     assert image
 
 
+@pytest.mark.endtoend
 @pytest.mark.anyio
 async def test_batch(real_bm):
     prompt = prompts[0][1]

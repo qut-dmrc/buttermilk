@@ -24,7 +24,7 @@ import pytest
 from buttermilk.tools.catalog_test import Observation, TMDBTool
 
 # Pytest markers for conditional test execution
-pytestmark = [pytest.mark.integration, pytest.mark.live_api]
+pytestmark = [pytest.mark.integration, pytest.mark.endtoend]
 
 
 @pytest.fixture
@@ -170,7 +170,7 @@ class TestTMDBLiveAPI:
             assert result.provider_name is None
 
     @pytest.mark.anyio
-    async def test_live_api_response_structure(self, tmdb_tool_live: TMDBTool) -> None:
+    async def test_endtoend_response_structure(self, tmdb_tool_live: TMDBTool) -> None:
         """Test that live API responses match our expected data structure."""
         results = await tmdb_tool_live.search_movie_availability(
             title="Inception", year=2010, region="US"

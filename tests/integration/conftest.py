@@ -11,7 +11,6 @@ import pytest
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.integration,
-    pytest.mark.live_api,  # Since these are more properly "live tests"
 ]
 
 
