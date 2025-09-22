@@ -86,7 +86,7 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
             try:
                 data = json.loads(result.outputs)
                 research_result = ZoteroResearchResult(**data)
-            except:
+            except Exception:
                 pytest.fail(f"{model_name}: Could not parse structured output from string: {result.outputs[:200]}")
         else:
             pytest.fail(f"{model_name}: Unexpected output type: {type(result.outputs)}")

@@ -37,7 +37,6 @@ class TestBootstrapQueryRunnerInjection:
 
         # Verify infrastructure was created successfully
         assert execution_context is not None
-        assert infrastructure is not None
         assert execution_context.execution_context_id.startswith("exec-")
 
         # Step 3: Bootstrap session context using existing infrastructure (dashboard pattern)

@@ -12,6 +12,7 @@ from buttermilk.api import stream
 
 app = FastAPI()
 flows = ["summarise_osb"]
+jobs = []  # Mock jobs data for testing
 
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
