@@ -40,11 +40,12 @@ class BaseRecord(Protocol):
 
     This protocol defines the minimal requirements for any record type
     that flows through pipelines or is stored in Buttermilk storage.
-    Any class with record_id, metadata, and error attributes can satisfy this protocol.
     """
     record_id: str
-    metadata: dict[str, Any]
+    dataset_name: str
+    split_type: str
     error: list[Any]  # List of ErrorEvent objects
+    metadata: dict[str, Any]
 
 
 class Record(BaseModel):
@@ -87,7 +88,7 @@ class Record(BaseModel):
         description="Unique identifier for the record.",
     )
     dataset_name: str = Field(default="default", description="Name of the dataset this record belongs to.")
-    split_type: str = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
+    split_type: str = Field(default="default", description="Dataset split this record belongs to, e.g., 'train', 'test'.")
     metadata: dict[str, Any] = Field(
         default_factory=dict,  # Use factory for mutable default
         description="Arbitrary metadata associated with the record.",
@@ -121,12 +122,6 @@ class Record(BaseModel):
     chunks_path: str | None = Field(
         default=None,
         description="Path to PyArrow file containing chunks and embeddings.",
-    )
-
-    # Error tracking field for pipeline processing
-    error: list[Any] = Field(
-        default_factory=list,
-        description="List of ErrorEvent objects accumulated during processing.",
     )
 
     @computed_field

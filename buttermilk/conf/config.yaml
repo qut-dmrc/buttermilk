@@ -1,4 +1,5 @@
 defaults:
+  - local
   - run: cli
   - llms: lite
   - _self_

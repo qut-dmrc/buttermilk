@@ -133,6 +133,25 @@ class BigQueryStorageConfig(BaseStorageConfig):
 
     type: Literal["bigquery"] = Field(default="bigquery", description="Storage backend type")
 
+    # Custom SQL support for complex filtering
+    custom_where: str | None = Field(
+        default=None,
+        description=(
+            "Custom SQL WHERE clause for complex filtering. "
+            "Example: 'year BETWEEN 2020 AND 2023 AND popularity > 50'. "
+            "This is appended to the standard dataset/split filters."
+        ),
+    )
+    custom_query: str | None = Field(
+        default=None,
+        description=(
+            "Complete custom SQL query to override default query generation. "
+            "Must return columns matching Record fields. "
+            "Use {table} placeholder for table reference. "
+            "Example: 'SELECT * FROM {table} WHERE complex_conditions'"
+        ),
+    )
+
     # BigQuery-specific fields
     project_id: str | None = Field(
         default=None,

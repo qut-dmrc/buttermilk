@@ -11,8 +11,28 @@ run:
   job: observations_tmdb
 
 pipeline:
-  # Storage config for input data
-  source: {}
+  # Storage config for input data with decade-based sampling
+  source:
+    # SQL query to sample n/14 random records from each decade
+    custom_query: |
+      WITH decade_samples AS (
+        SELECT *,
+          FLOOR(year / 10) * 10 AS decade,
+          ROW_NUMBER() OVER (PARTITION BY FLOOR(year / 10) * 10 ORDER BY RAND()) AS rn
+        FROM {table}
+        WHERE dataset_name = 'tmdbtitles'
+          AND year IS NOT NULL
+          AND year >= 1900
+          AND year < 2030
+      )
+      SELECT * EXCEPT(decade, rn)
+      FROM decade_samples
+      WHERE rn <= CEIL({n} / 14.0)
+      ORDER BY year, RAND()
+      LIMIT {n}
+
+  # Number of samples to collect (will be distributed across decades)
+  samples_per_run: 1000  # ~71 records per decade
 
   tmdb:
     batch_size: 10

@@ -8,7 +8,7 @@ from google.cloud import bigquery
 from pydantic import BaseModel
 
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
@@ -102,16 +102,21 @@ class BigQueryStorage(Storage, StorageClient):
             self._table = self.client.get_table(table_ref)
         return self._table
 
-    def __iter__(self) -> Iterator[Record]:
+    def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over records from BigQuery table.
 
         Yields:
-            Record objects from the table
+            BaseRecord objects from the table (Record, Title, or other subclasses)
 
         """
         try:
-            query = self._build_select_query()
-            job_config = self._build_query_job_config()
+            # Use custom query if provided
+            if self.config.custom_query:
+                query = self.config.custom_query.replace("{table}", f"`{self.get_table_ref()}`")
+                job_config = None  # Custom query handles its own parameters
+            else:
+                query = self._build_select_query()
+                job_config = self._build_query_job_config()
 
             logger.info(f"Loading records from {self.get_table_ref()} for dataset '{self.config.dataset_name}'")
 
@@ -184,14 +189,14 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error saving records to BigQuery: {e}")
             raise StorageError(f"Failed to save to BigQuery: {e}") from e
 
-    def get_record_by_id(self, record_id: str) -> Record | None:
+    def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by ID using a parameterized BigQuery query.
 
         Args:
             record_id: The unique identifier of the record to retrieve.
 
         Returns:
-            Record if found, otherwise None.
+            BaseRecord if found, otherwise None.
 
         Raises:
             StorageError: If query fails or essential columns are missing.
@@ -402,6 +407,7 @@ class BigQueryStorage(Storage, StorageClient):
         """Build WHERE clause (without the 'WHERE' keyword). Returns empty string if none.
 
         Avoids referencing columns that don't exist. Uses named parameters @dataset_name and @split_type.
+        Includes custom_where clause if provided.
         """
         clauses: list[str] = []
 
@@ -428,6 +434,11 @@ class BigQueryStorage(Storage, StorageClient):
         for key, value in self.config.filter.items():
             clauses.append(f"{key} = '{value}'" if isinstance(value, str) else f"{key} = {value}")
 
+        # Add custom WHERE clause if provided
+        if self.config.custom_where:
+            # Wrap custom clause in parentheses for safety
+            clauses.append(f"({self.config.custom_where})")
+
         return " AND ".join(clauses)
 
     def _build_query_job_config(self) -> bigquery.QueryJobConfig:
@@ -443,32 +454,65 @@ class BigQueryStorage(Storage, StorageClient):
 
         return bigquery.QueryJobConfig(query_parameters=parameters)
 
-    def _parse_record(self, row: bigquery.Row) -> Record:
-        """Parse a BigQuery row into a Record object."""
+    def _parse_record(self, row: bigquery.Row) -> BaseRecord:
+        """Parse a BigQuery row into a BaseRecord object.
+
+        Simple conversion that lets the consuming code handle type-specific logic.
+        """
         # Convert row to dictionary
         row_dict = dict(row.items())
 
         # Unwrap numpy/arrow types if present
-        # This is necessary because BigQuery can return numpy/arrow types in the row data
         row_dict = unwrap_numpy_arrow_types(row_dict)
 
         # Apply column mapping if specified
         if self.config.columns:
             for new_name, old_name in self.config.columns.items():
-                row_dict[new_name] = row_dict[old_name]
+                if old_name in row_dict:
+                    row_dict[new_name] = row_dict[old_name]
 
-        # Parse JSON fields - metadata and ground_truth are stored as JSON strings in BigQuery
-        metadata = json.loads(row_dict["metadata"]) if isinstance(row_dict["metadata"], str) else row_dict["metadata"]
+        # Parse JSON fields if they exist and are strings
+        if "metadata" in row_dict and isinstance(row_dict["metadata"], str):
+            try:
+                row_dict["metadata"] = json.loads(row_dict["metadata"])
+            except json.JSONDecodeError:
+                row_dict["metadata"] = {}
+        elif "metadata" not in row_dict:
+            row_dict["metadata"] = {}
 
-        ground_truth = None
-        if row_dict.get("ground_truth"):
-            ground_truth = json.loads(row_dict["ground_truth"]) if isinstance(row_dict["ground_truth"], str) else row_dict["ground_truth"]
+        if "ground_truth" in row_dict and isinstance(row_dict["ground_truth"], str):
+            try:
+                row_dict["ground_truth"] = json.loads(row_dict["ground_truth"])
+            except json.JSONDecodeError:
+                pass
 
-        # Create Record object from row data
-        return Record(
-            record_id=row_dict["record_id"],
-            content=row_dict["content"],
-            metadata=metadata,
-            ground_truth=ground_truth,
-            mime=row_dict.get("mime", "text/plain"),
-        )
+        if "error" in row_dict and isinstance(row_dict["error"], str):
+            try:
+                row_dict["error"] = json.loads(row_dict["error"])
+            except json.JSONDecodeError:
+                row_dict["error"] = []
+        elif "error" not in row_dict:
+            row_dict["error"] = []
+
+        # Ensure required BaseRecord fields have defaults
+        if "record_id" not in row_dict:
+            row_dict["record_id"] = "unknown"
+        if "dataset_name" not in row_dict:
+            row_dict["dataset_name"] = self.config.dataset_name or "default"
+        if "split_type" not in row_dict:
+            row_dict["split_type"] = self.config.split_type or "default"
+
+        # Create a basic Record - let consuming code handle type conversions
+        try:
+            return Record(**row_dict)
+        except Exception as e:
+            # If Record creation fails, create minimal valid record
+            logger.warning(f"Failed to create Record from row data: {e}")
+            return Record(
+                record_id=str(row_dict.get("record_id", "error")),
+                dataset_name=str(row_dict.get("dataset_name", "default")),
+                split_type=str(row_dict.get("split_type", "default")),
+                metadata=row_dict.get("metadata", {}),
+                content=str(row_dict),  # Store full data as content for debugging
+                error=row_dict.get("error", [])
+            )

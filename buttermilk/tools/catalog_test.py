@@ -41,6 +41,11 @@ class Title(BaseRecord):
     type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
     metadata: dict = Field(default_factory=dict, description="Additional movie metadata from TMDB")
 
+    # BaseRecord required fields
+    dataset_name: str = Field(default="tmdb", description="Dataset this title belongs to")
+    split_type: str = Field(default="default", description="Dataset split (e.g., train, test)")
+    error: list[Any] = Field(default_factory=list, description="List of ErrorEvent objects")
+
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=False,
@@ -73,10 +78,7 @@ class Observation(Title):
     available: bool = Field(..., description="Whether the title is available")
     source: str = Field(..., description="Source of the observation data")
 
-    error: list[ErrorEvent] = Field(
-        default_factory=list,
-        description="List of error messages accumulated during processing related to this message.",
-    )
+    # error field is inherited from Title (which inherits from BaseRecord)
     _ensure_error_list: classmethod = field_validator("error", mode="before")(make_list_validator())  # type: ignore
 
     model_config = ConfigDict(
