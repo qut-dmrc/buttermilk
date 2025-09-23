@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - /storage@pipeline.source: tmdbtitles
+  - /storage@pipeline.output: observations
+
+run:
+  mode: pipeline
+  name: mediamarkets
+  job: observations_tmdb
+
+pipeline:
+  # Storage config for input data
+  source: {}
+
+  tmdb:
+    batch_size: 10
+
+  # Storage config for output
+  output: {}
+
+  buffer_size: 10
+  flush_interval: 30
+  batch_size: 100 # For simple pipeline
+
+  # Optional: Use orchestrator for concurrency
+  use_orchestrator: true
+  concurrency: 20
+  max_records: 1000

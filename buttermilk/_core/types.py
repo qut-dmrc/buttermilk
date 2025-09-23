@@ -9,7 +9,7 @@ different components of Buttermilk.
 import datetime
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
-from typing import Any, Literal, Self  # Standard typing utilities
+from typing import Any, Literal, Protocol, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
@@ -33,6 +33,18 @@ from pydantic import (
 )
 
 # Conditional imports to avoid circular dependencies
+
+
+class BaseRecord(Protocol):
+    """Minimal interface for records in pipelines and storage.
+
+    This protocol defines the minimal requirements for any record type
+    that flows through pipelines or is stored in Buttermilk storage.
+    Any class with record_id, metadata, and error attributes can satisfy this protocol.
+    """
+    record_id: str
+    metadata: dict[str, Any]
+    error: list[Any]  # List of ErrorEvent objects
 
 
 class Record(BaseModel):
@@ -88,7 +100,8 @@ class Record(BaseModel):
         default=None,
         description="Optional ground truth data associated with this record for evaluation.",
     )
-    content: str | Sequence[str | Image] = Field(
+    content: str | Sequence[str | Image] | None = Field(
+        default=None,
         description="Main content of the record: a string, or a sequence of strings and Pillow Images.",
     )
     mime: str | None = Field(
@@ -108,6 +121,12 @@ class Record(BaseModel):
     chunks_path: str | None = Field(
         default=None,
         description="Path to PyArrow file containing chunks and embeddings.",
+    )
+
+    # Error tracking field for pipeline processing
+    error: list[Any] = Field(
+        default_factory=list,
+        description="List of ErrorEvent objects accumulated during processing.",
     )
 
     @computed_field

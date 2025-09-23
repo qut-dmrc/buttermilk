@@ -1,5 +1,0 @@
-defaults:
-  - batch
-  - _self_
-
-mode: batch_run

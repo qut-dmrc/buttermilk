@@ -2,12 +2,13 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator, TypeVar
+from typing import TYPE_CHECKING, AsyncGenerator, Iterator, Optional, TypeVar
 
 from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.types import BaseRecord
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -101,6 +102,42 @@ class Storage(ABC):
             return self.count()
         except Exception:
             return 0
+
+    async def iterate_async(self, batch_size: Optional[int] = None) -> AsyncGenerator[BaseRecord, None]:
+        """Async generator that yields records from storage with optional batch limit.
+
+        This method enables Storage objects to be used directly as DataSource
+        in simple pipelines by implementing the async generator protocol.
+
+        Args:
+            batch_size: Maximum number of records to yield (None = unlimited)
+
+        Yields:
+            Records from storage
+        """
+        count = 0
+        for record in self:
+            if batch_size is not None and count >= batch_size:
+                break
+            yield record
+            count += 1
+
+    def __call__(self, batch_size: Optional[int] = None) -> AsyncGenerator[BaseRecord, None]:
+        """Make Storage objects callable as DataSource for pipelines.
+
+        This allows Storage objects to be used directly in simple pipelines:
+        ```python
+        storage = bm.get_storage(config)
+        await run_simple_pipeline(storage(batch_size=100), processors, uploader)
+        ```
+
+        Args:
+            batch_size: Maximum number of records to yield (None = unlimited)
+
+        Returns:
+            Async generator of records
+        """
+        return self.iterate_async(batch_size)
 
 
 class StorageClient:

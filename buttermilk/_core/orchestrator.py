@@ -40,7 +40,6 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Added SaveInfo
 )
 from buttermilk._core.contract import FlowMessage
-from buttermilk._core.log import logger
 from buttermilk._core.message_data import clean_empty_values
 from buttermilk._core.storage_config import (
     StorageConfig,

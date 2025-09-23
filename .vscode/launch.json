@@ -124,6 +124,24 @@
       "remoteRoot": null
     },
     {
+      "name": "tmdb pipeline",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": false,
+      "args": [
+        "run=mmtmdb",
+        "verbose=true",
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "batch create",
       "type": "debugpy",
       "request": "launch",

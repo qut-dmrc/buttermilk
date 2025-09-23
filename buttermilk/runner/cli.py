@@ -69,14 +69,20 @@ def main(conf: DictConfig) -> None:
     conf = resolved_conf
     logger.info("Unified bootstrap complete - BM and config ready")
 
-    # Initialize FlowRunner with its configuration section (e.g., conf.run)
-    flow_runner = FlowRunner.model_validate(conf.run)
-    
-    # Set the session-scoped BM for this FlowRunner
-    flow_runner.set_session_bm(bm)
+    # Get the mode from config to determine if we need FlowRunner
+    mode = conf.run.get("mode", "console")
+
+    # Only initialize FlowRunner for modes that need it
+    flow_runner = None
+    if mode not in ["pipeline"]:
+        # Initialize FlowRunner with its configuration section (e.g., conf.run)
+        flow_runner = FlowRunner.model_validate(conf.run)
+
+        # Set the session-scoped BM for this FlowRunner
+        flow_runner.set_session_bm(bm)
 
     # Branch execution based on the configured UI mode.
-    match flow_runner.mode:
+    match mode:
         case "console":
             ui = CLIUserAgent()
             # Prepare the RunRequest with command-line parameters
@@ -252,9 +258,95 @@ def main(conf: DictConfig) -> None:
                     event_loop.close()
                 logger.info("Slackbot event loop closed.")
 
+        case "pipeline":
+            # Run a series of processors in a simple pipeline.
+            logger.info("Starting pipeline mode...")
+
+            # Import pipeline components
+            from buttermilk.pipeline import PipelineOrchestrator
+            from buttermilk.simple_pipeline import run_simple_pipeline
+            from buttermilk.tools.catalog_test import TMDBTool
+            from buttermilk.utils.uploader import AsyncDataUploader
+
+            # Get pipeline configuration
+            pipeline_conf = conf.get("pipeline", {})
+
+            # Set up data source
+            source_config = pipeline_conf.get("source")
+            if not source_config:
+                raise ValueError("Pipeline mode requires 'pipeline.source' configuration")
+
+            # Get storage for source
+            source_storage = bm.get_storage(source_config)
+
+            # Set up processors based on configuration
+            processors = []
+
+            # Add TMDB processor if configured
+            if pipeline_conf.get("tmdb"):
+                tmdb_conf = pipeline_conf.get("tmdb", {})
+                tmdb_tool = TMDBTool(**tmdb_conf)
+                processors.append(tmdb_tool)
+                logger.info(f"Added TMDB processor with region={tmdb_tool.region}")
+
+            # Add uploader
+            output_storage = bm.get_storage(pipeline_conf.get("output"))
+            uploader = AsyncDataUploader(
+                storage=output_storage, buffer_size=pipeline_conf.get("buffer_size", 10), flush_interval=pipeline_conf.get("flush_interval", 30)
+            )
+            processors.append(uploader)
+            logger.info(f"Added uploader with buffer_size={uploader.buffer_size}")
+
+            # If using orchestrator for concurrency
+            if pipeline_conf.get("use_orchestrator", False):
+                # Use PipelineOrchestrator for concurrent processing
+                concurrency = pipeline_conf.get("concurrency", 20)
+                max_records = pipeline_conf.get("max_records")
+
+                orchestrator = PipelineOrchestrator(
+                    stage_name="pipeline",
+                    concurrency=concurrency,
+                    max_records=max_records,
+                    source=source_storage(batch_size=max_records),
+                    processor=processors[0].process if processors else None,
+                )
+
+                logger.info(f"Running pipeline with orchestrator (concurrency={concurrency})...")
+
+                async def run_orchestrated():
+                    async for record in orchestrator():
+                        # Process through remaining processors
+                        current = record
+                        for proc in processors[1:]:
+                            current = await proc.process(current)
+                            if current is None:
+                                break
+
+                    # Ensure uploaders are flushed
+                    for proc in processors:
+                        if hasattr(proc, "shutdown"):
+                            proc.shutdown()
+
+                asyncio.run(run_orchestrated())
+            else:
+                # Use simple sequential pipeline
+                batch_size = pipeline_conf.get("batch_size")
+                logger.info(f"Running simple pipeline (batch_size={batch_size})...")
+
+                async def run_simple():
+                    await run_simple_pipeline(data_source=source_storage, processors=processors)
+
+                    # Ensure uploaders are flushed
+                    for proc in processors:
+                        if hasattr(proc, "shutdown"):
+                            proc.shutdown()
+
+                asyncio.run(run_simple())
+
+            logger.info("Pipeline processing complete.")
         case _:
             # Handles any unsupported modes specified in the configuration.
-            raise ValueError(f"Unsupported run mode in configuration: '{flow_runner.mode}'. Check 'run.mode' in your Hydra config.")
+            raise ValueError(f"Unsupported run mode in configuration: '{mode}'. Check 'run.mode' in your Hydra config.")
 
 
 if __name__ == "__main__":

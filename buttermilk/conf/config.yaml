@@ -1,5 +1,6 @@
 defaults:
   - run: cli
+  - llms: lite
   - _self_
 
 # reduce path-induced surprises

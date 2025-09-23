@@ -10,14 +10,15 @@ from typing import Any, Iterable, Optional
 
 import shortuuid
 from autogen_core.tools import FunctionTool
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
 
 from buttermilk import get_bm
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.retry import RetryWrapper
-from buttermilk._core.storage_config import StorageConfig, StorageFactory
+from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.uploader import AsyncDataUploader
 from buttermilk.utils.utils import scrub_serializable
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
@@ -31,7 +32,25 @@ class TitleType(str, Enum):
     TV = "tv"
 
 
-class Observation(BaseModel):
+class Title(BaseRecord):
+    """Represents a movie title with metadata from TMDB search."""
+
+    record_id: str = Field(..., description="TMDB movie ID")
+    title: str = Field(..., description="Movie title")
+    year: int | None = Field(None, description="Release year if available")
+    type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
+    metadata: dict = Field(default_factory=dict, description="Additional movie metadata from TMDB")
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        use_enum_values=True,
+        validate_assignment=True,
+    )
+
+
+class Observation(Title):
     """Represents availability information for a movie in a specific region."""
 
     record_id: str = Field(..., description="Record under test")
@@ -53,7 +72,6 @@ class Observation(BaseModel):
     format: str | None = Field(None, description="Format of the content (e.g., HD, SD, 4K)")
     available: bool = Field(..., description="Whether the title is available")
     source: str = Field(..., description="Source of the observation data")
-    metadata: dict = Field(..., description="Metadata about the title availability")
 
     error: list[ErrorEvent] = Field(
         default_factory=list,
@@ -70,27 +88,10 @@ class Observation(BaseModel):
     )
 
 
-class Title(BaseModel):
-    """Represents a movie title with metadata from TMDB search."""
-
-    record_id: str = Field(..., description="TMDB movie ID")
-    title: str = Field(..., description="Movie title")
-    year: int | None = Field(None, description="Release year if available")
-    type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
-    metadata: dict = Field(default_factory=dict, description="Additional movie metadata from TMDB")
-
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        use_enum_values=True,
-        validate_assignment=True,
-    )
-
-
 @dataclass
 class DatePeriod:
     """Represents a date period for TMDB movie fetching."""
+
     start_date: datetime.date
     end_date: datetime.date
 
@@ -144,7 +145,7 @@ class FetchProgress:
         progress_data = {
             "completed_periods": list(self.completed_periods),
             "in_progress_periods": self.in_progress_periods,
-            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
 
         with open(self.progress_file, "w", encoding="utf-8") as f:
@@ -169,14 +170,12 @@ class FetchProgress:
                 "last_completed_page": 0,
                 "total_movies": 0,
                 "checkpoint_file": f"checkpoint_{period}.json",
-                "started": datetime.datetime.now(datetime.timezone.utc).isoformat()
+                "started": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
 
-        self.in_progress_periods[period_str].update({
-            "last_completed_page": page,
-            "total_movies": movies_count,
-            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        })
+        self.in_progress_periods[period_str].update(
+            {"last_completed_page": page, "total_movies": movies_count, "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        )
         self._save_progress()
 
     def get_resume_info(self, period: DatePeriod) -> tuple[int, Path | None]:
@@ -256,7 +255,7 @@ class TMDBTool:
         region: str = "AU",
         observations_storage_config: str | StorageConfig | None = None,
         titles_storage_config: str | StorageConfig | None = None,
-        batch_size: int = 10
+        batch_size: int = 10,
     ):
         self.api_key = api_key or os.getenv("TMDB_API_KEY")
         self.base_url = base_url
@@ -280,30 +279,17 @@ class TMDBTool:
         if titles_storage_config:
             self._setup_titles_storage(titles_storage_config, batch_size)
 
-    def _setup_observations_storage(self, config: str | StorageConfig, batch_size: int):
+    def _setup_observations_storage(self, config: StorageConfig, batch_size: int):
         """Set up storage for observations data."""
         bm = get_bm()
-        if isinstance(config, str):
-            # Load config by name from Buttermilk's config system
-            storage_config = bm.cfg.storage[config]
-        else:
-            storage_config = config
 
-        storage_config = StorageFactory.create_config(storage_config)
-        storage = bm.get_storage(storage_config)
+        storage = bm.get_storage(config)
         self.observations_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 
-    def _setup_titles_storage(self, config: str | StorageConfig, batch_size: int):
+    def _setup_titles_storage(self, config: StorageConfig, batch_size: int):
         """Set up storage for titles data."""
         bm = get_bm()
-        if isinstance(config, str):
-            # Load config by name from Buttermilk's config system
-            storage_config = bm.cfg.storage[config]
-        else:
-            storage_config = config
-
-        storage_config = StorageFactory.create_config(storage_config)
-        storage = bm.get_storage(storage_config)
+        storage = bm.get_storage(config)
         self.titles_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 
     async def cleanup(self):
@@ -312,6 +298,65 @@ class TMDBTool:
             self.observations_uploader.shutdown()
         if self.titles_uploader:
             self.titles_uploader.shutdown()
+
+    # -------------------------
+    # Pipeline method: provides TMDBTool.get_availability() as a pipeline processor
+    # that accepts Title records and adds availability data to metadata.
+    # -------------------------
+    async def process(self, record: Title) -> BaseRecord | None:
+        """Process a Title record to add TMDB availability data.
+
+        Works with Title records (which are BaseRecord subclasses).
+        Adds availability observations to record.metadata["tmdb_availability"].
+
+        Args:
+            record: Title record to process
+
+        Returns:
+            Same record with enhanced metadata, or None if processing failed
+        """
+        try:
+            # Get availability data for all regions
+            observations = await self.get_availability(record, regions=None)
+
+            # Extract unique regions from observations
+            regions_found = list(set(obs.region for obs in observations if hasattr(obs, "region")))
+
+            # Enhance metadata with availability data
+            record.metadata["tmdb_availability"] = {
+                "regions_found": regions_found,
+                "observations_count": len(observations),
+                "observations": [obs.model_dump() for obs in observations],
+                "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+
+            # Store observations if uploader configured
+            if self.observations_uploader:
+                for obs in observations:
+                    await self.observations_uploader.add(obs)
+
+            return record
+
+        except Exception as e:
+            from buttermilk._core.contract import ErrorEvent
+
+            # Add error to record's error list
+            if not hasattr(record, 'error'):
+                record.error = []
+            record.error.append(ErrorEvent(
+                content=f"TMDBTool availability check failed: {e}",
+                source="TMDBTool"
+            ))
+
+            # Also track in metadata
+            record.metadata["tmdb_availability"] = {
+                "status": "failed",
+                "error": str(e),
+                "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+
+            # Return record even on error (let pipeline decide whether to filter)
+            return record
 
     # -------------------------
     # Internal helpers
@@ -391,54 +436,59 @@ class TMDBTool:
         Returns:
             Title object with movie metadata, or None if not found
         """
-        try:
-            # Search for movies using TMDB API
-            async def do_search():
-                return await self._tmdb_client.search().movies(query=title, year=year)
 
-            search_raw = await self._retry._execute_with_retry(do_search)
-            search_results = self._as_list(search_raw)
+        # Search for movies using TMDB API
+        async def do_search():
+            result = await self._tmdb_client.search().movies(query=title, year=year)
+            return result
 
-            if not search_results:
-                return None
+        search_raw = await self._retry._execute_with_retry(do_search)
+        search_results = self._as_list(search_raw)
 
-            # Get the first/best match
-            movie = search_results[0]
-            movie_id = str(self._get_value(movie, "id"))
-            movie_title = self._extract_title(movie)
-
-            # Extract year from release_date if not provided
-            release_date = self._get_value(movie, "release_date", "first_air_date")
-            if year is None and release_date:
-                try:
-                    year = int(release_date.split("-")[0])
-                except (ValueError, IndexError):
-                    pass
-
-            # Build metadata from the movie result
-            metadata = {
-                "original_title": self._get_value(movie, "original_title", "original_name"),
-                "overview": self._get_value(movie, "overview"),
-                "release_date": release_date,
-                "popularity": self._get_value(movie, "popularity"),
-                "vote_average": self._get_value(movie, "vote_average"),
-                "vote_count": self._get_value(movie, "vote_count"),
-                "poster_path": self._get_value(movie, "poster_path"),
-                "backdrop_path": self._get_value(movie, "backdrop_path"),
-                "genre_ids": self._get_value(movie, "genre_ids"),
-            }
-
-            # Remove None values from metadata
-            metadata = {k: v for k, v in metadata.items() if v is not None}
-
-            return Title(record_id=movie_id, title=movie_title, year=year, metadata=metadata)
-
-        except Exception:
-            # Return None on search failure
+        if not search_results:
             return None
+
+        # Get the first/best match
+        movie = search_results[0]
+        movie_id = str(self._get_value(movie, "id"))
+        movie_title = self._extract_title(movie)
+        if not movie_title:
+            raise ValueError("TMDB search result missing title")
+
+        # Extract year from release_date if not provided
+        release_date = self._get_value(movie, "release_date", "first_air_date")
+        if year is None and release_date:
+            try:
+                # release_date can be a string like "YYYY-MM-DD" or a datetime/date object
+                if isinstance(release_date, (datetime.date, datetime.datetime)):
+                    year = release_date.year
+                else:
+                    year = int(str(release_date).split("-")[0])
+            except (ValueError, IndexError, TypeError):
+                pass
+
+        # Build metadata from the movie result
+        metadata = {
+            "original_title": self._get_value(movie, "original_title", "original_name"),
+            "overview": self._get_value(movie, "overview"),
+            "release_date": release_date,
+            "popularity": self._get_value(movie, "popularity"),
+            "vote_average": self._get_value(movie, "vote_average"),
+            "vote_count": self._get_value(movie, "vote_count"),
+            "poster_path": self._get_value(movie, "poster_path"),
+            "backdrop_path": self._get_value(movie, "backdrop_path"),
+            "genre_ids": self._get_value(movie, "genre_ids"),
+        }
+
+        # Remove None values from metadata
+        metadata = {k: v for k, v in metadata.items() if v is not None}
+
+        return Title(record_id=movie_id, title=movie_title, year=year, metadata=metadata)
 
     async def get_availability(self, title: Title, regions: Optional[list[str]] = None) -> list[Observation]:
         """Get availability observations for a movie in specified regions.
+
+        Public wrapper that accepts a Title and delegates to the ID-based method.
 
         Args:
             title: Title object from search_movie
@@ -447,29 +497,55 @@ class TMDBTool:
         Returns:
             List of Observations with availability data, including null observations for regions without providers
         """
+        return await self.get_availability_by_id(
+            record_id=int(title.record_id),
+            regions=regions,
+            title=title.title,
+            year=title.year,
+        )
+
+    async def get_availability_by_id(
+        self,
+        record_id: int,
+        regions: Optional[list[str]] = None,
+        *,
+        title: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> list[Observation]:
+        """Get availability observations for a TMDB record_id in specified regions.
+
+        Args:
+            record_id: TMDB numeric movie ID
+            regions: List of region codes to check (e.g., ["US", "GB", "AU"])
+            title: Optional title string for metadata enrichment
+            year: Optional year for metadata enrichment
+
+        Returns:
+            List of Observations with availability data, including null observations for regions without providers
+        """
         if regions is None:
             regions = ["US"]
 
-        observations = []
+        observations: list[Observation] = []
 
         try:
             # Get watch providers for all regions
             async def do_get_providers():
-                return await self._tmdb_client.movie(int(title.record_id)).watch_providers()
+                return await self._tmdb_client.movie(int(record_id)).watch_providers()
 
             providers_raw = await self._retry._execute_with_retry(do_get_providers)
 
             # Extract results by region
-            providers_by_region = {}
+            providers_by_region: dict[str, Any] = {}
             if isinstance(providers_raw, dict) and "results" in providers_raw:
                 providers_by_region = providers_raw["results"]
 
             # Process each requested region
-            for region in regions:
-                region = self._normalize_region(region)
+            for r in regions:
+                normalized_region = self._normalize_region(r)
 
-                if region in providers_by_region:
-                    region_data = providers_by_region[region]
+                if normalized_region in providers_by_region:
+                    region_data = providers_by_region[normalized_region]
 
                     # Process each provider type (flatrate, rent, buy)
                     for provider_type in ["flatrate", "rent", "buy"]:
@@ -480,35 +556,41 @@ class TMDBTool:
 
                             for provider in providers:
                                 obs = Observation(
-                                    record_id=f"tmdb_{title.record_id}_{region}_{provider.get('provider_id')}",
-                                    provider_id=str(provider.get("provider_id")),
+                                    record_id=f"tmdb_{record_id}_{normalized_region}_{provider.get('provider_id')}",
+                                    provider_id=str(provider.get("provider_id")) if provider.get("provider_id") is not None else None,
                                     provider_name=provider.get("provider_name"),
                                     provider_type=provider_type,
-                                    region=region,
+                                    region=normalized_region,
+                                    price=None,
+                                    currency=None,
+                                    format=None,
                                     available=True,
                                     source="TMDB",
                                     metadata={
-                                        "title": title.title,
-                                        "year": title.year,
-                                        "movie_id": title.record_id,
+                                        "title": title,
+                                        "year": year,
+                                        "movie_id": str(record_id),
                                     },
                                 )
                                 observations.append(obs)
 
                 # If no providers found for this region, add a null observation
-                if not any(obs.region == region for obs in observations):
+                if not any(o.region == normalized_region for o in observations):
                     obs = Observation(
-                        record_id=f"tmdb_{title.record_id}_{region}_null",
+                        record_id=f"tmdb_{record_id}_{normalized_region}_null",
                         provider_name=None,
                         provider_id=None,
                         provider_type=None,
-                        region=region,
+                        region=normalized_region,
+                        price=None,
+                        currency=None,
+                        format=None,
                         available=False,
                         source="TMDB",
                         metadata={
-                            "title": title.title,
-                            "year": title.year,
-                            "movie_id": title.record_id,
+                            "title": title,
+                            "year": year,
+                            "movie_id": str(record_id),
                         },
                     )
                     observations.append(obs)
@@ -518,20 +600,23 @@ class TMDBTool:
             safe_message = self._sanitize_rate_limit_message(str(e))
             error_event = ErrorEvent(content=safe_message, source="TMDB")
 
-            for region in regions:
-                region = self._normalize_region(region)
+            for r in regions:
+                normalized_region = self._normalize_region(r)
                 error_obs = Observation(
-                    record_id=f"tmdb_{title.record_id}_{region}_error",
+                    record_id=f"tmdb_{record_id}_{normalized_region}_error",
                     provider_name=None,
                     provider_id=None,
                     provider_type=None,
-                    region=region,
+                    region=normalized_region,
+                    price=None,
+                    currency=None,
+                    format=None,
                     available=False,
                     source="TMDB",
                     metadata={
-                        "title": title.title,
-                        "year": title.year,
-                        "movie_id": title.record_id,
+                        "title": title,
+                        "year": year,
+                        "movie_id": str(record_id),
                         "error_type": "availability_check_failure",
                     },
                     error=[error_event],
