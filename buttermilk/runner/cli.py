@@ -277,11 +277,10 @@ def main(conf: DictConfig) -> None:
                 raise ValueError("Pipeline mode requires 'pipeline.source' configuration")
 
             # Apply sampling parameters if configured
-            if pipeline_conf.get("samples_per_run") and source_config.get("custom_query"):
-                n = pipeline_conf.get("samples_per_run", 1000)
+            if (n := pipeline_conf.get("samples_per_run")) and source_config.get("custom_query"):
                 # Replace {n} placeholder in the custom query
                 source_config["custom_query"] = source_config["custom_query"].replace("{n}", str(n))
-                logger.info(f"Configured decade-based sampling: ~{n//14} records per decade, {n} total")
+                logger.info(f"Configured decade-based sampling: ~{n // 14} records per decade, {n} total")
 
             # Get storage for source
             source_storage = bm.get_storage(source_config)

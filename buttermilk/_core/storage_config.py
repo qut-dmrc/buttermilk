@@ -57,6 +57,10 @@ class BaseStorageConfig(BaseModel):
         default=None,
         description="Logical dataset name for filtering/grouping",
     )
+    split_type: str | None = Field(
+        default=None,
+        description="Data split type for datasets (e.g., 'train', 'test', 'validation').",
+    )
     randomize: bool = Field(
         default=True,
         description="Whether to randomize query results",
@@ -166,7 +170,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
         description="Table identifier",
     )
     clustering_fields: list[str] = Field(
-        default=["record_id", "dataset_name"],
+        default=["record_id", "dataset_name", "split_type"],
         description="Fields to use for clustering",
     )
 
@@ -190,10 +194,6 @@ class BigQueryStorageConfig(BaseStorageConfig):
     last_n_days: int = Field(
         default=7,
         description="For time-series data, retrieve from the last N days.",
-    )
-    split_type: str | None = Field(
-        default=None,
-        description="Data split type for datasets (e.g., 'train', 'test', 'validation').",
     )
 
     @model_validator(mode="before")
