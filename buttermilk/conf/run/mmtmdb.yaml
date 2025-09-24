@@ -31,7 +31,7 @@ pipeline:
       LIMIT {n}
 
   # Number of samples to collect from database (will be distributed across decades)
-  sample_size: 1000  # ~71 records per decade
+  sample_size: 10000  # ~700 records per decade
 
   # TMDB processor configuration
   tmdb: {}  
