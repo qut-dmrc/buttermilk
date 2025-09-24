@@ -126,8 +126,16 @@ class BigQueryStorage(Storage, StorageClient):
                 yield self._parse_record(row)
 
         except Exception as e:
-            logger.error(f"Error loading records from BigQuery: {e}")
-            raise StorageError(f"Failed to read from BigQuery: {e}") from e
+            logger.error(
+                "Failed to load records from BigQuery",
+                extra={
+                    "table": self.get_table_ref(),
+                    "dataset_name": self.config.dataset_name,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to read from BigQuery table {self.get_table_ref()}: {e}") from e
 
     def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
         """Save Pydantic models to BigQuery table.
@@ -186,8 +194,17 @@ class BigQueryStorage(Storage, StorageClient):
                 raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
-            logger.error(f"Error saving records to BigQuery: {e}")
-            raise StorageError(f"Failed to save to BigQuery: {e}") from e
+            logger.error(
+                "Failed to save records to BigQuery",
+                extra={
+                    "table": self.get_table_ref(),
+                    "dataset_name": self.config.dataset_name,
+                    "num_records": len(records) if isinstance(records, list) else 1,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to save to BigQuery table {self.get_table_ref()}: {e}") from e
 
     def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by ID using a parameterized BigQuery query.
@@ -252,8 +269,17 @@ class BigQueryStorage(Storage, StorageClient):
                 return self._parse_record(row)
             return None
         except Exception as e:
-            logger.error(f"Error querying BigQuery for record_id {record_id}: {e}")
-            raise StorageError(f"Failed to fetch record by id: {e}") from e
+            logger.error(
+                "Failed to fetch record by ID from BigQuery",
+                extra={
+                    "table": self.get_table_ref(),
+                    "dataset_name": self.config.dataset_name,
+                    "record_id": record_id,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to fetch record {record_id} from table {self.get_table_ref()}: {e}") from e
 
     def count(self) -> int:
         """Count total records matching the criteria.
@@ -336,9 +362,9 @@ class BigQueryStorage(Storage, StorageClient):
         # Validate schema on first use
         self._validate_schema()
 
-        try:
-            table_id = self.get_table_ref()
+        table_id = self.get_table_ref()
 
+        try:
             # CRITICAL: Require explicit schema - no implicit defaults
             expected_schema = self.get_schema()
             if not expected_schema:
@@ -348,21 +374,75 @@ class BigQueryStorage(Storage, StorageClient):
 
             if self.exists():
                 # CRITICAL: Never modify existing tables
-                logger.debug(f"Table {table_id} already exists. Skipping creation. BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
+                logger.debug(
+                    "Table already exists, skipping creation",
+                    extra={
+                        "table": table_id,
+                        "dataset_name": self.config.dataset_name,
+                        "message": "BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually."
+                    }
                 )
                 return
 
             # Create new table
             table = bigquery.Table(table_id, schema=expected_schema)
-            table.clustering_fields = self.config.clustering_fields or ["dataset_name", "record_id"]
+
+            # Determine clustering fields based on what's actually in the schema
+            schema_field_names = {field.name for field in expected_schema}
+
+            # Use configured clustering fields if provided, otherwise determine based on schema
+            if self.config.clustering_fields:
+                # Validate configured clustering fields exist in schema
+                valid_clustering_fields = [
+                    field for field in self.config.clustering_fields
+                    if field in schema_field_names
+                ]
+                if valid_clustering_fields != self.config.clustering_fields:
+                    invalid_fields = set(self.config.clustering_fields) - set(valid_clustering_fields)
+                    logger.warning(
+                        "Some clustering fields not found in schema",
+                        extra={
+                            "table": table_id,
+                            "requested_fields": self.config.clustering_fields,
+                            "valid_fields": valid_clustering_fields,
+                            "invalid_fields": list(invalid_fields)
+                        }
+                    )
+                table.clustering_fields = valid_clustering_fields if valid_clustering_fields else None
+            else:
+                # Auto-determine clustering fields based on common fields in schema
+                default_clustering = []
+                for field in ["dataset_name", "record_id"]:
+                    resolved_field = self._resolve_column(field)
+                    if resolved_field in schema_field_names:
+                        default_clustering.append(resolved_field)
+
+                table.clustering_fields = default_clustering if default_clustering else None
+
             table.description = f"Buttermilk table for dataset '{self.config.dataset_name}'"
 
             table = self.client.create_table(table, exists_ok=True)
-            logger.info(f"Created BigQuery table: {table_id}")
+            logger.info(
+                "Created BigQuery table",
+                extra={
+                    "table": table_id,
+                    "dataset_name": self.config.dataset_name,
+                    "clustering_fields": table.clustering_fields,
+                    "num_fields": len(expected_schema)
+                }
+            )
 
         except Exception as e:
-            logger.error(f"Error creating/updating BigQuery table: {e}")
-            raise StorageError(f"Failed to create/update table: {e}") from e
+            logger.error(
+                "Failed to create BigQuery table",
+                extra={
+                    "table": table_id,
+                    "dataset_name": self.config.dataset_name,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to create table {table_id}: {e}") from e
 
     def _build_select_query(self) -> str:
         """Build SQL query for selecting records."""

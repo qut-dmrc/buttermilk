@@ -364,8 +364,10 @@ class Record(BaseModel):
         This runs before field validation to ensure required fields have defaults.
         """
         if isinstance(values, dict):
-            # Ensure record_id has a value
-            if not values.get("record_id"):
+            # Convert record_id to string if it's an integer
+            if "record_id" in values and values["record_id"] is not None:
+                values["record_id"] = str(values["record_id"])
+            elif not values.get("record_id"):
                 values["record_id"] = str(shortuuid.ShortUUID().uuid())
 
             # These can remain None but ensure the keys exist
