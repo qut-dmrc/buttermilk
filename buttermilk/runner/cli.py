@@ -294,7 +294,7 @@ def main(conf: DictConfig) -> None:
                 processors.append(tmdb_tool)
                 logger.info(f"Added TMDB processor with region={tmdb_tool.region}")
 
-            # Add uploader
+            # Add uploader processor
             output_storage = bm.get_storage(pipeline_conf.get("output"))
             uploader = AsyncDataUploader(
                 storage=output_storage, buffer_size=pipeline_conf.get("buffer_size", 10), flush_interval=pipeline_conf.get("flush_interval", 30)
@@ -307,34 +307,27 @@ def main(conf: DictConfig) -> None:
             max_records = pipeline_conf.get("max_records")
             batch_size = pipeline_conf.get("batch_size", max_records)
 
-            # Create orchestrator with first processor
+            # Create single orchestrator with all processors
             orchestrator = PipelineOrchestrator(
                 stage_name="pipeline",
                 concurrency=concurrency,
                 max_records=max_records,
                 source=source_storage(batch_size=batch_size) if callable(source_storage) else source_storage,
-                processor=processors[0] if processors else None,
+                processors=processors,  # Pass all processors as a list
             )
 
-            logger.info(f"Running pipeline (concurrency={concurrency})...")
+            logger.info(f"Running pipeline with {len(processors)} processors (concurrency={concurrency})...")
 
             async def run_pipeline():
-                async for record in orchestrator():
-                    # Process through remaining processors if any
-                    current_records = [record]
-                    for proc in processors[1:]:
-                        next_records = []
-                        for rec in current_records:
-                            async for output in proc.process(rec):
-                                next_records.append(output)
-                        current_records = next_records
-                        if not current_records:
-                            break
+                # Simply iterate through the orchestrator - it handles all processors internally
+                async for _ in orchestrator():
+                    pass  # All processing happens inside the orchestrator
 
-                # Ensure uploaders are flushed
-                for proc in processors:
-                    if hasattr(proc, "shutdown"):
-                        proc.shutdown()
+                # Ensure uploader is flushed
+                if processors:
+                    for proc in processors:
+                        if hasattr(proc, "shutdown"):
+                            proc.shutdown()
 
             asyncio.run(run_pipeline())
 

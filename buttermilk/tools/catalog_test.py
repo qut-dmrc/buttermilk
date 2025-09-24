@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, AsyncGenerator, Iterable, Optional
 
 import shortuuid
 from autogen_core.tools import FunctionTool
@@ -323,11 +323,8 @@ class TMDBTool:
             Observation records for each region/provider combination
         """
         try:
-            # Get availability data for all regions
-            observations = await self.get_availability(record)
-
-            # Yield each observation
-            for obs in observations:
+            # Stream availability data for all regions
+            async for obs in self.get_availability(record):
                 yield obs
 
                 # Store if uploader configured
@@ -335,24 +332,16 @@ class TMDBTool:
                     await self.observations_uploader.add(obs)
 
         except Exception as e:
-            from buttermilk._core.contract import ErrorEvent
-
             # Yield an error observation
             error_obs = Observation(
                 record_id=record.record_id,  # Foreign key to titles table
                 title=record.title,
                 year=record.year,
-                region="UNKNOWN",
+                region=None,  # Unknown region due to error
                 available=False,
                 source="TMDB",
-                metadata={
-                    "movie_id": record.record_id,
-                    "error_type": "availability_check_failure"
-                },
-                error=[ErrorEvent(
-                    content=f"TMDBTool availability check failed: {e}",
-                    source="TMDBTool"
-                )]
+                metadata={"movie_id": record.record_id, "error_type": "availability_check_failure"},
+                error=[ErrorEvent(content=f"TMDBTool availability check failed: {e}", source="TMDBTool")],
             )
             yield error_obs
 
@@ -487,7 +476,7 @@ class TMDBTool:
 
         return Title(record_id=movie_id, title=movie_title, year=year, metadata=metadata)
 
-    async def get_availability(self, title: Title) -> list[Observation]:
+    async def get_availability(self, title: Title) -> AsyncGenerator[Observation, None]:
         """Get availability observations for a movie across all available regions.
 
         Public wrapper that accepts a Title and delegates to the ID-based method.
@@ -495,14 +484,15 @@ class TMDBTool:
         Args:
             title: Title object from search_movie
 
-        Returns:
-            List of Observations with availability data for all regions returned by TMDB
+        Yields:
+            Observation records with availability data for all regions returned by TMDB
         """
-        return await self.get_availability_by_id(
+        async for obs in self.get_availability_by_id(
             record_id=int(title.record_id),
             title=title.title,
             year=title.year,
-        )
+        ):
+            yield obs
 
     async def get_availability_by_id(
         self,
@@ -510,7 +500,7 @@ class TMDBTool:
         *,
         title: Optional[str] = None,
         year: Optional[int] = None,
-    ) -> list[Observation]:
+    ) -> AsyncGenerator[Observation, None]:
         """Get availability observations for a TMDB record_id across all regions.
 
         Args:
@@ -518,10 +508,9 @@ class TMDBTool:
             title: Optional title string for metadata enrichment
             year: Optional year for metadata enrichment
 
-        Returns:
-            List of Observations with availability data for all regions returned by TMDB
+        Yields:
+            Observation records with availability data for all regions returned by TMDB
         """
-        observations: list[Observation] = []
 
         try:
             # Get watch providers for all regions (TMDB returns whatever regions it has)
@@ -534,6 +523,27 @@ class TMDBTool:
             providers_by_region: dict[str, Any] = {}
             if isinstance(providers_raw, dict) and "results" in providers_raw:
                 providers_by_region = providers_raw["results"]
+            else:
+                # No results for any regions
+                obs = Observation(
+                    record_id=str(record_id),
+                    title=title,
+                    year=year,
+                    provider_name=None,
+                    provider_id=None,
+                    provider_type=None,
+                    region=None,
+                    price=None,
+                    currency=None,
+                    format=None,
+                    available=False,
+                    source="TMDB",
+                    metadata={
+                        "movie_id": str(record_id),
+                        "note": "No region results returned by TMDB",
+                    },
+                )
+                yield obs
 
             # Process each region returned by TMDB
             for region_code, region_data in providers_by_region.items():
@@ -573,7 +583,7 @@ class TMDBTool:
                                     "movie_id": str(record_id),
                                 },
                             )
-                            observations.append(obs)
+                            yield obs
 
                     # If region exists but has no providers at all, log a null observation
                     if not has_providers:
@@ -595,7 +605,7 @@ class TMDBTool:
                                 "note": "No providers available in this region",
                             },
                         )
-                        observations.append(obs)
+                        yield obs
 
                 except Exception as e:
                     # Error processing a specific region
@@ -622,7 +632,7 @@ class TMDBTool:
                         },
                         error=[error_event],
                     )
-                    observations.append(error_obs)
+                    yield error_obs
 
         except Exception as e:
             # Error outside of region loop - couldn't get providers at all
@@ -649,14 +659,7 @@ class TMDBTool:
                 },
                 error=[error_event],
             )
-            observations.append(error_obs)
-
-        # Batch save observations if uploader is configured
-        if self.observations_uploader and observations:
-            for obs in observations:
-                await self.observations_uploader.add(obs)
-
-        return observations
+            yield error_obs
 
     async def fetch_single_page(
         self,

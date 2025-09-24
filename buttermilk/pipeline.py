@@ -6,7 +6,7 @@ records through stages, tracking metadata and errors without complex result obje
 
 import asyncio
 import time
-from typing import AsyncGenerator, AsyncIterator, Optional, Protocol, runtime_checkable
+from typing import Any, AsyncGenerator, AsyncIterator, Optional, Protocol, runtime_checkable
 
 import pydantic
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -43,7 +43,7 @@ class PipelineOrchestrator(BaseModel):
 
     # Inputs configured after instantiation
     source: Optional[AsyncIterator[BaseRecord]] = Field(default=None, exclude=True)
-    processor: Optional[Processor] = Field(default=None, exclude=True)
+    processors: list[Any] = Field(default_factory=list, exclude=True)  # List of processors to chain
 
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
@@ -61,47 +61,60 @@ class PipelineOrchestrator(BaseModel):
         return self
 
     async def _process_record(self, record: BaseRecord) -> list[BaseRecord]:
-        """Process a single record with metadata tracking.
+        """Process a single record through the chain of processors.
 
         Returns a list of output records (can be empty, one, or many).
         """
         async with self._semaphore:
             start_time = time.time()
-            output_records = []
 
             try:
-                if self.processor is None:
-                    logger.error(f"[{self.stage_name}] No processor configured")
+                if not self.processors:
+                    logger.error(f"[{self.stage_name}] No processors configured")
                     self._failed += 1
                     return []
 
-                # Process the record - processor.process() is an async generator
-                record_yielded = False
-                async for output_record in self.processor.process(record):
-                    if output_record is not None:
-                        record_yielded = True
-                        # Track success in metadata for each output
-                        processing_time_ms = int((time.time() - start_time) * 1000)
-                        output_record.metadata[self.stage_name] = {
-                            "status": "processed",
-                            "timestamp": time.time(),
-                            "processing_time_ms": processing_time_ms,
-                        }
-                        output_records.append(output_record)
+                # Start with the input record
+                current_records = [record]
 
-                if not record_yielded:
-                    # Record was filtered out (nothing yielded)
+                # Chain through each processor
+                for i, processor in enumerate(self.processors):
+                    next_records = []
+
+                    # Process each record from the previous stage
+                    for rec in current_records:
+                        async for output_record in processor.process(rec):
+                            if output_record is not None:
+                                next_records.append(output_record)
+
+                    # Update current records for next processor
+                    current_records = next_records
+
+                    # If no records produced, stop the chain
+                    if not current_records:
+                        break
+
+                # Track results
+                if not current_records:
+                    # No output from the chain
                     self._skipped += 1
-                    # Track in original record's metadata that we attempted processing
                     record.metadata[self.stage_name] = {
                         "status": "skipped",
                         "timestamp": time.time(),
                         "processing_time_ms": int((time.time() - start_time) * 1000),
                     }
                 else:
-                    self._processed += len(output_records)
+                    self._processed += len(current_records)
+                    # Track success in metadata for each output
+                    processing_time_ms = int((time.time() - start_time) * 1000)
+                    for output_record in current_records:
+                        output_record.metadata[self.stage_name] = {
+                            "status": "processed",
+                            "timestamp": time.time(),
+                            "processing_time_ms": processing_time_ms,
+                        }
 
-                return output_records
+                return current_records
 
             except Exception as e:
                 logger.error(f"Error processing record {record.record_id} in stage {self.stage_name}: {e}")

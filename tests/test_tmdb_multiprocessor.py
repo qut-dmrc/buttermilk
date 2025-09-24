@@ -51,7 +51,12 @@ class TestTMDBMultiProcessor:
             )
         ]
 
-        tool.get_availability = AsyncMock(return_value=mock_observations)
+        # Create an async generator that yields the observations
+        async def mock_get_availability(title):
+            for obs in mock_observations:
+                yield obs
+
+        tool.get_availability = mock_get_availability
 
         # Process the title and collect observations
         observations = []
@@ -78,7 +83,12 @@ class TestTMDBMultiProcessor:
         )
 
         # Mock get_availability to raise an error
-        tool.get_availability = AsyncMock(side_effect=Exception("API Error"))
+        async def mock_get_availability_error(title):
+            raise Exception("API Error")
+            # This is needed to make it an async generator
+            yield  # pragma: no cover
+
+        tool.get_availability = mock_get_availability_error
 
         # Process and collect observations
         observations = []
@@ -92,7 +102,7 @@ class TestTMDBMultiProcessor:
         assert error_obs.record_id == "tmdb_456"
         assert error_obs.title == "Error Movie"
         assert error_obs.year == 2023
-        assert error_obs.region == "UNKNOWN"
+        assert error_obs.region is None  # Changed to None for unknown errors
         assert error_obs.available is False
         assert len(error_obs.error) == 1
         assert "API Error" in error_obs.error[0].content
@@ -110,8 +120,8 @@ class TestTMDBMultiProcessor:
         )
 
         # Mock get_availability
-        tool.get_availability = AsyncMock(return_value=[
-            Observation(
+        async def mock_get_availability(title):
+            yield Observation(
                 record_id="tmdb_789",
                 title="Immutable Movie",
                 year=2024,
@@ -122,7 +132,8 @@ class TestTMDBMultiProcessor:
                 available=True,
                 source="TMDB"
             )
-        ])
+
+        tool.get_availability = mock_get_availability
 
         # Process the title
         observations = []
