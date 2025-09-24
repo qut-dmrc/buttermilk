@@ -236,12 +236,8 @@ addopts = [
     # "--show-capture=no",
     # "--disable-warnings",
     "-m not endtoend",
-    "-m integration",
 ]
 
-#  "--timeout_method=thread", 
-# "--with-integration"
-# 
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",

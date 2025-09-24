@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional
 
 import shortuuid
 from autogen_core.tools import FunctionTool
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
 
@@ -32,8 +32,11 @@ class TitleType(str, Enum):
     TV = "tv"
 
 
-class Title(BaseRecord):
-    """Represents a movie title with metadata from TMDB search."""
+class Title(BaseModel):
+    """Represents a movie title with metadata from TMDB search.
+
+    Implements the BaseRecord protocol for compatibility with storage systems.
+    """
 
     record_id: str = Field(..., description="TMDB movie ID")
     title: str = Field(..., description="Movie title")
@@ -41,7 +44,7 @@ class Title(BaseRecord):
     type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
     metadata: dict = Field(default_factory=dict, description="Additional movie metadata from TMDB")
 
-    # BaseRecord required fields
+    # BaseRecord required fields (implements the protocol)
     dataset_name: str = Field(default="tmdb", description="Dataset this title belongs to")
     split_type: str = Field(default="default", description="Dataset split (e.g., train, test)")
     error: list[Any] = Field(default_factory=list, description="List of ErrorEvent objects")
@@ -558,7 +561,9 @@ class TMDBTool:
 
                             for provider in providers:
                                 obs = Observation(
-                                    record_id=f"tmdb_{record_id}_{normalized_region}_{provider.get('provider_id')}",
+                                    record_id=str(record_id),  # Foreign key to titles table
+                                    title=title,  # Required field from Title class
+                                    year=year,    # Field from Title class
                                     provider_id=str(provider.get("provider_id")) if provider.get("provider_id") is not None else None,
                                     provider_name=provider.get("provider_name"),
                                     provider_type=provider_type,
@@ -569,8 +574,6 @@ class TMDBTool:
                                     available=True,
                                     source="TMDB",
                                     metadata={
-                                        "title": title,
-                                        "year": year,
                                         "movie_id": str(record_id),
                                     },
                                 )
@@ -579,7 +582,9 @@ class TMDBTool:
                 # If no providers found for this region, add a null observation
                 if not any(o.region == normalized_region for o in observations):
                     obs = Observation(
-                        record_id=f"tmdb_{record_id}_{normalized_region}_null",
+                        record_id=str(record_id),  # Foreign key to titles table
+                        title=title,  # Required field from Title class
+                        year=year,    # Field from Title class
                         provider_name=None,
                         provider_id=None,
                         provider_type=None,
@@ -590,8 +595,6 @@ class TMDBTool:
                         available=False,
                         source="TMDB",
                         metadata={
-                            "title": title,
-                            "year": year,
                             "movie_id": str(record_id),
                         },
                     )
@@ -605,7 +608,9 @@ class TMDBTool:
             for r in regions:
                 normalized_region = self._normalize_region(r)
                 error_obs = Observation(
-                    record_id=f"tmdb_{record_id}_{normalized_region}_error",
+                    record_id=str(record_id),  # Foreign key to titles table
+                    title=title,  # Required field from Title class
+                    year=year,    # Field from Title class
                     provider_name=None,
                     provider_id=None,
                     provider_type=None,
@@ -616,8 +621,6 @@ class TMDBTool:
                     available=False,
                     source="TMDB",
                     metadata={
-                        "title": title,
-                        "year": year,
                         "movie_id": str(record_id),
                         "error_type": "availability_check_failure",
                     },

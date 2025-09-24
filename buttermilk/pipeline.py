@@ -6,9 +6,11 @@ records through stages, tracking metadata and errors without complex result obje
 
 import asyncio
 import time
-from typing import AsyncIterator, Awaitable, Callable, Optional, Any
-from pydantic import BaseModel, Field, PrivateAttr, ConfigDict
+from typing import AsyncIterator, Awaitable, Callable, Optional
+
 import pydantic
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord
 
@@ -57,10 +59,6 @@ class PipelineOrchestrator(BaseModel):
                     self._failed += 1
                     return None
 
-                logger.info(
-                    f"🔷 [{self.stage_name}-{record.record_id}] Processing record"
-                )
-
                 # Process the record
                 result = await self.processor(record)
 
@@ -71,17 +69,13 @@ class PipelineOrchestrator(BaseModel):
                     record.metadata[self.stage_name] = {
                         "status": "skipped",
                         "timestamp": time.time(),
-                        "processing_time_ms": int((time.time() - start_time) * 1000)
+                        "processing_time_ms": int((time.time() - start_time) * 1000),
                     }
                     return None
 
                 # Success - track in metadata
                 processing_time_ms = int((time.time() - start_time) * 1000)
-                result.metadata[self.stage_name] = {
-                    "status": "processed",
-                    "timestamp": time.time(),
-                    "processing_time_ms": processing_time_ms
-                }
+                result.metadata[self.stage_name] = {"status": "processed", "timestamp": time.time(), "processing_time_ms": processing_time_ms}
 
                 self._processed += 1
                 return result
@@ -95,18 +89,16 @@ class PipelineOrchestrator(BaseModel):
                     "status": "failed",
                     "error": str(e),
                     "timestamp": time.time(),
-                    "processing_time_ms": int((time.time() - start_time) * 1000)
+                    "processing_time_ms": int((time.time() - start_time) * 1000),
                 }
 
                 # Append to error list if record has one
-                if hasattr(record, 'error'):
+                if hasattr(record, "error"):
                     if not isinstance(record.error, list):
                         record.error = []
                     from buttermilk._core.contract import ErrorEvent
-                    record.error.append(ErrorEvent(
-                        content=f"Stage {self.stage_name}: {e}",
-                        source=self.stage_name
-                    ))
+
+                    record.error.append(ErrorEvent(content=f"Stage {self.stage_name}: {e}", source=self.stage_name))
 
                 return None
 
@@ -142,9 +134,7 @@ class PipelineOrchestrator(BaseModel):
 
                 # Check if we've hit max_records
                 if self.max_records is not None and self._processed >= self.max_records:
-                    logger.info(
-                        f"🔚 Stage '{self.stage_name}' reached max_records ({self._processed}) – stopping"
-                    )
+                    logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._processed}) – stopping")
                     break
 
                 # Maintain concurrency limit
@@ -214,7 +204,7 @@ def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[BaseRecord]:
 
     # Chain stages by connecting outputs to inputs
     for i in range(1, len(stages)):
-        stages[i].source = stages[i-1]()
+        stages[i].source = stages[i - 1]()
 
     # Return the final stage's iterator
     return stages[-1]()
