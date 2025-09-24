@@ -42,6 +42,4 @@ pipeline:
   buffer_size: 500
   flush_interval: 30
 
-  # Optional: Use orchestrator for concurrency
-  use_orchestrator: true
   concurrency: 20
