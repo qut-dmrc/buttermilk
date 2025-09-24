@@ -128,10 +128,9 @@ class MetadataFilter(RecordFilter):
                 # Value must be in collection
                 if value not in condition:
                     return False
-            else:
-                # Direct equality check
-                if value != condition:
-                    return False
+            # Direct equality check
+            elif value != condition:
+                return False
 
         return True
 
@@ -159,7 +158,7 @@ class YearRangeFilter(RecordFilter):
     async def should_include(self, record: BaseRecord) -> bool:
         """Check if record has year in range."""
         # Check if record has a year attribute (like Title records)
-        if hasattr(record, 'year'):
+        if hasattr(record, "year"):
             year = record.year
             if year is None:
                 return False
@@ -170,7 +169,7 @@ class YearRangeFilter(RecordFilter):
             return True
 
         # For regular records, check metadata
-        year = record.metadata.get('year')
+        year = record.metadata.get("year")
         if year is None:
             return True  # No year to filter on
         try:

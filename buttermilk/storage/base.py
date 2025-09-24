@@ -1,13 +1,15 @@
 """Base storage classes for unified storage operations."""
 
+import importlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, AsyncGenerator, Iterator, Optional, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
 
 if TYPE_CHECKING:
@@ -54,6 +56,7 @@ class Storage(ABC):
         """
         self.config = config
         self.bm = bm
+        self._record_class: Type[BaseRecord] | None = None
 
     @abstractmethod
     def __iter__(self) -> Iterator[BaseRecord]:
@@ -180,6 +183,69 @@ class Storage(ABC):
         """
         return self.iterate_async(batch_size, filter)
 
+    def _get_record_class(self) -> Type[BaseRecord]:
+        """Get the record class to use for instantiation.
+
+        Resolves the class from the config's record_class field, with caching.
+        Falls back to Record if not specified or on error.
+
+        Returns:
+            The class to use for creating record instances
+        """
+        # Return cached class if available
+        if self._record_class is not None:
+            return self._record_class
+
+        # Default to Record class
+        if not self.config.record_class:
+            self._record_class = Record
+            return self._record_class
+
+        try:
+            # Parse the class path
+            module_path, class_name = self.config.record_class.rsplit(".", 1)
+
+            # Import the module
+            module = importlib.import_module(module_path)
+
+            # Get the class
+            cls = getattr(module, class_name)
+
+            # Verify it's a BaseRecord subclass
+            if not issubclass(cls, BaseRecord):
+                logger.warning(
+                    f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. "
+                    f"Falling back to Record."
+                )
+                self._record_class = Record
+            else:
+                self._record_class = cls
+                logger.debug(f"Using record class: {self.config.record_class}")
+
+        except (ImportError, AttributeError, ValueError) as e:
+            logger.warning(
+                f"Failed to import record_class '{self.config.record_class}': {e}. "
+                f"Falling back to Record."
+            )
+            self._record_class = Record
+
+        return self._record_class
+
+    def _create_record(self, **kwargs: Any) -> BaseRecord:
+        """Create a record instance using the configured class.
+
+        Args:
+            **kwargs: Fields to pass to the record constructor
+
+        Returns:
+            A new record instance of the configured type
+
+        Raises:
+            Exception: If record creation fails (will be caught by storage implementations)
+        """
+        record_class = self._get_record_class()
+        return record_class(**kwargs)
+
 
 class StorageClient:
     """Base utility class for managing storage clients and connections.
@@ -249,17 +315,3 @@ class StorageClient:
             raise ValueError(f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}")
         return self.config.full_table_id
 
-
-class StorageError(Exception):
-    """Base exception for storage operations."""
-    pass
-
-
-class StorageConfigError(StorageError):
-    """Exception raised for storage configuration errors."""
-    pass
-
-
-class StorageConnectionError(StorageError):
-    """Exception raised for storage connection errors."""
-    pass

@@ -114,6 +114,16 @@ class BaseStorageConfig(BaseModel):
         description="Database-specific configuration parameters",
     )
 
+    # Record class configuration
+    record_class: str | None = Field(
+        default=None,
+        description=(
+            "Fully qualified class name for record instantiation. "
+            "Example: 'buttermilk.tools.catalog_test.Title'. "
+            "If not specified, defaults to 'buttermilk._core.types.Record'."
+        ),
+    )
+
     model_config = {
         "extra": "forbid",
         "arbitrary_types_allowed": False,

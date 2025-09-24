@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional
 
 import shortuuid
 from autogen_core.tools import FunctionTool
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
 
@@ -32,22 +32,24 @@ class TitleType(str, Enum):
     TV = "tv"
 
 
-class Title(BaseModel):
+class Title(BaseRecord):
     """Represents a movie title with metadata from TMDB search.
 
-    Implements the BaseRecord protocol for compatibility with storage systems.
+    Inherits common fields from BaseRecord for storage compatibility.
     """
 
-    record_id: str = Field(..., description="TMDB movie ID")
+    # Title-specific fields
     title: str = Field(..., description="Movie title")
     year: int | None = Field(None, description="Release year if available")
     type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
-    metadata: dict = Field(default_factory=dict, description="Additional movie metadata from TMDB")
 
-    # BaseRecord required fields (implements the protocol)
-    dataset_name: str = Field(default="tmdb", description="Dataset this title belongs to")
-    split_type: str = Field(default="default", description="Dataset split (e.g., train, test)")
-    error: list[Any] = Field(default_factory=list, description="List of ErrorEvent objects")
+    def __init__(self, **data):
+        # Set default values for BaseRecord fields if not provided
+        if "dataset_name" not in data:
+            data["dataset_name"] = "tmdb"
+        if "split_type" not in data:
+            data["split_type"] = "default"
+        super().__init__(**data)
 
     model_config = ConfigDict(
         extra="forbid",
@@ -305,63 +307,58 @@ class TMDBTool:
             self.titles_uploader.shutdown()
 
     # -------------------------
-    # Pipeline method: provides TMDBTool.get_availability() as a pipeline processor
-    # that accepts Title records and adds availability data to metadata.
+    # Pipeline method: TMDBTool as a MultiProcessor that accepts Title records
+    # and yields Observation records for each region/provider combination.
     # -------------------------
-    async def process(self, record: Title) -> BaseRecord | None:
-        """Process a Title record to add TMDB availability data.
+    async def process(self, record: Title):
+        """Process a Title record and yield Observation records.
 
-        Works with Title records (which are BaseRecord subclasses).
-        Adds availability observations to record.metadata["tmdb_availability"].
+        Works with Title records and yields separate Observation records
+        for each region/provider combination found.
 
         Args:
-            record: Title record to process
+            record: Title record to check availability for
 
-        Returns:
-            Same record with enhanced metadata, or None if processing failed
+        Yields:
+            Observation records for each region/provider combination
         """
         try:
             # Get availability data for all regions
             observations = await self.get_availability(record, regions=None)
 
-            # Extract unique regions from observations
-            regions_found = list(set(obs.region for obs in observations if hasattr(obs, "region")))
+            # Yield each observation
+            for obs in observations:
+                yield obs
 
-            # Enhance metadata with availability data
-            record.metadata["tmdb_availability"] = {
-                "regions_found": regions_found,
-                "observations_count": len(observations),
-                "observations": [obs.model_dump() for obs in observations],
-                "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-            }
-
-            # Store observations if uploader configured
-            if self.observations_uploader:
-                for obs in observations:
+                # Store if uploader configured
+                if self.observations_uploader:
                     await self.observations_uploader.add(obs)
-
-            return record
 
         except Exception as e:
             from buttermilk._core.contract import ErrorEvent
 
-            # Add error to record's error list
-            if not hasattr(record, 'error'):
-                record.error = []
-            record.error.append(ErrorEvent(
-                content=f"TMDBTool availability check failed: {e}",
-                source="TMDBTool"
-            ))
+            # Yield an error observation
+            error_obs = Observation(
+                record_id=record.record_id,  # Foreign key to titles table
+                title=record.title,
+                year=record.year,
+                region="UNKNOWN",
+                available=False,
+                source="TMDB",
+                metadata={
+                    "movie_id": record.record_id,
+                    "error_type": "availability_check_failure"
+                },
+                error=[ErrorEvent(
+                    content=f"TMDBTool availability check failed: {e}",
+                    source="TMDBTool"
+                )]
+            )
+            yield error_obs
 
-            # Also track in metadata
-            record.metadata["tmdb_availability"] = {
-                "status": "failed",
-                "error": str(e),
-                "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-            }
-
-            # Return record even on error (let pipeline decide whether to filter)
-            return record
+            # Store error observation if uploader configured
+            if self.observations_uploader:
+                await self.observations_uploader.add(error_obs)
 
     # -------------------------
     # Internal helpers

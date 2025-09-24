@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 from google.cloud import bigquery
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.storage_config import StorageFactory
-from buttermilk.storage.base import StorageError
 from buttermilk.storage.bigquery import BigQueryStorage
 
 

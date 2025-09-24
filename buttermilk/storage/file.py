@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, Iterator
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
 
-from .base import Storage, StorageError
+from .base import Storage
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -300,9 +301,9 @@ class FileStorage(Storage):
             if "content" not in data and "text" in data:
                 data["content"] = data["text"]
 
-            # Create a basic Record - let consuming code handle type conversions
+            # Create a record using the configured class type
             try:
-                return Record(**data)
+                return self._create_record(**data)
             except Exception as e:
                 # If Record creation fails, create minimal valid record
                 logger.warning(f"Failed to create Record from data at index {index}: {e}")

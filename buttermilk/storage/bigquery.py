@@ -7,12 +7,13 @@ import shortuuid
 from google.cloud import bigquery
 from pydantic import BaseModel
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
-from .base import Storage, StorageClient, StorageError
+from .base import Storage, StorageClient
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -126,16 +127,8 @@ class BigQueryStorage(Storage, StorageClient):
                 yield self._parse_record(row)
 
         except Exception as e:
-            logger.error(
-                "Failed to load records from BigQuery",
-                extra={
-                    "table": self.get_table_ref(),
-                    "dataset_name": self.config.dataset_name,
-                    "error": str(e)
-                },
-                exc_info=True
-            )
-            raise StorageError(f"Failed to read from BigQuery table {self.get_table_ref()}: {e}") from e
+            logger.error(f"Error loading records from BigQuery: {e}")
+            raise StorageError(f"Failed to read from BigQuery: {e}") from e
 
     def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
         """Save Pydantic models to BigQuery table.
@@ -269,17 +262,8 @@ class BigQueryStorage(Storage, StorageClient):
                 return self._parse_record(row)
             return None
         except Exception as e:
-            logger.error(
-                "Failed to fetch record by ID from BigQuery",
-                extra={
-                    "table": self.get_table_ref(),
-                    "dataset_name": self.config.dataset_name,
-                    "record_id": record_id,
-                    "error": str(e)
-                },
-                exc_info=True
-            )
-            raise StorageError(f"Failed to fetch record {record_id} from table {self.get_table_ref()}: {e}") from e
+            logger.error(f"Error querying BigQuery for record_id {record_id}: {e}")
+            raise StorageError(f"Failed to fetch record by id: {e}") from e
 
     def count(self) -> int:
         """Count total records matching the criteria.
@@ -559,10 +543,10 @@ class BigQueryStorage(Storage, StorageClient):
 
         # Let Pydantic handle all validation, JSON parsing, and type conversion
         try:
-            return Record(**row_dict)
+            return self._create_record(**row_dict)
         except Exception as e:
-            # If Record creation fails, create minimal valid record for debugging
-            logger.warning(f"Failed to create Record from row data: {e}")
+            # If record creation fails, create minimal valid Record for debugging
+            logger.warning(f"Failed to create record from row data: {e}")
             return Record(
                 record_id=str(row_dict.get("record_id", shortuuid.uuid())),
                 dataset_name=str(row_dict.get("dataset_name", self.config.dataset_name or "default")),

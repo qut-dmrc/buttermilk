@@ -235,7 +235,8 @@ addopts = [
     "--tb=short",
     # "--show-capture=no",
     # "--disable-warnings",
-    "-m not endtoend",
+    "-m",
+    "not endtoend",
 ]
 
 

@@ -2,10 +2,10 @@
 
 from typing import Iterator
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.storage_config import StorageConfig
 from buttermilk._core.types import Record
-from buttermilk.storage.base import StorageError
 
 
 class HuggingFaceStorage:
