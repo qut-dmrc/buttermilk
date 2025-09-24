@@ -112,6 +112,7 @@ dependencies = [
     "gql<4.0.0",
     "autogen-gemini>=0.0.1",
     "themoviedb>=1.0.2",
+    "python-dotenv>=1.1.1",
 ]
 
 [project.optional-dependencies]
