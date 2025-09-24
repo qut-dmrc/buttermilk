@@ -52,7 +52,7 @@ class Title(BaseRecord):
         super().__init__(**data)
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="ignore",
         arbitrary_types_allowed=False,
         populate_by_name=True,
         use_enum_values=True,
@@ -493,6 +493,15 @@ class TMDBTool:
             year=title.year,
         ):
             yield obs
+            logger.debug(
+                f"Yielded observation: {obs}",
+                record_id=title.record_id,
+                title=title.title,
+                year=title.year,
+                region=obs.region,
+                provider=obs.provider_name,
+                available=obs.available,
+            )
 
     async def get_availability_by_id(
         self,

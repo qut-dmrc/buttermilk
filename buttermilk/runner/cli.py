@@ -276,7 +276,7 @@ def main(conf: DictConfig) -> None:
                 raise ValueError("Pipeline mode requires 'pipeline.source' configuration")
 
             # Apply sampling parameters if configured
-            if (n := pipeline_conf.get("samples_per_run")) and source_config.get("custom_query"):
+            if (n := pipeline_conf.get("sample_size")) and source_config.get("custom_query"):
                 # Replace {n} placeholder in the custom query
                 source_config["custom_query"] = source_config["custom_query"].replace("{n}", str(n))
                 logger.info(f"Configured decade-based sampling: ~{n // 14} records per decade, {n} total")
@@ -305,14 +305,13 @@ def main(conf: DictConfig) -> None:
             # Use PipelineOrchestrator for processing
             concurrency = pipeline_conf.get("concurrency", 20)
             max_records = pipeline_conf.get("max_records")
-            batch_size = pipeline_conf.get("batch_size", max_records)
 
             # Create single orchestrator with all processors
             orchestrator = PipelineOrchestrator(
                 stage_name="pipeline",
                 concurrency=concurrency,
                 max_records=max_records,
-                source=source_storage(batch_size=batch_size) if callable(source_storage) else source_storage,
+                source=source_storage() if callable(source_storage) else source_storage,
                 processors=processors,  # Pass all processors as a list
             )
 
