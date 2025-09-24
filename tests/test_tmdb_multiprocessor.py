@@ -1,11 +1,11 @@
-"""Test TMDBTool as a MultiProcessor yielding Observations."""
+"""Test TMDBTool as a processor yielding Observations."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk.simple_pipeline import run_simple_pipeline
+from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 
 
@@ -96,87 +96,6 @@ class TestTMDBMultiProcessor:
         assert error_obs.available is False
         assert len(error_obs.error) == 1
         assert "API Error" in error_obs.error[0].content
-
-    @pytest.mark.anyio
-    async def test_pipeline_with_tmdb_multiprocessor(self):
-        """Test full pipeline with TMDBTool as MultiProcessor."""
-
-        # Create mock data source
-        async def mock_data_source():
-            titles = [
-                Title(record_id="1", title="Movie 1", year=2023),
-                Title(record_id="2", title="Movie 2", year=2024)
-            ]
-            for title in titles:
-                yield title
-
-        # Create TMDBTool
-        tool = TMDBTool(api_key="fake_key")
-
-        # Mock get_availability to return different observations per title
-        async def mock_get_availability(title, regions=None):
-            if title.record_id == "1":
-                return [
-                    Observation(
-                        record_id="1",
-                        title=title.title,
-                        year=title.year,
-                        provider_name="Netflix",
-                        provider_id="8",
-                        provider_type="flatrate",
-                        region="US",
-                        available=True,
-                        source="TMDB"
-                    )
-                ]
-            else:
-                return [
-                    Observation(
-                        record_id="2",
-                        title=title.title,
-                        year=title.year,
-                        provider_name="Hulu",
-                        provider_id="15",
-                        provider_type="flatrate",
-                        region="US",
-                        available=True,
-                        source="TMDB"
-                    ),
-                    Observation(
-                        record_id="2",
-                        title=title.title,
-                        year=title.year,
-                        provider_name="Disney+",
-                        provider_id="337",
-                        provider_type="flatrate",
-                        region="US",
-                        available=True,
-                        source="TMDB"
-                    )
-                ]
-
-        tool.get_availability = mock_get_availability
-
-        # Create a mock processor to collect observations
-        collected_observations = []
-
-        class ObservationCollector:
-            async def process(self, record):
-                if isinstance(record, Observation):
-                    collected_observations.append(record)
-                return record
-
-        # Run pipeline
-        await run_simple_pipeline(
-            data_source=mock_data_source,
-            processors=[tool, ObservationCollector()]
-        )
-
-        # Verify we got all observations
-        assert len(collected_observations) == 3
-        assert collected_observations[0].provider_name == "Netflix"
-        assert collected_observations[1].provider_name == "Hulu"
-        assert collected_observations[2].provider_name == "Disney+"
 
     @pytest.mark.anyio
     async def test_title_not_mutated(self):

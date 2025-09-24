@@ -6,13 +6,27 @@ records through stages, tracking metadata and errors without complex result obje
 
 import asyncio
 import time
-from typing import AsyncIterator, Awaitable, Callable, Optional
+from typing import AsyncGenerator, AsyncIterator, Optional, Protocol, runtime_checkable
 
 import pydantic
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord
+
+
+@runtime_checkable
+class Processor(Protocol):
+    """Standard processor interface - async generator that yields records."""
+
+    async def process(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
+        """Process a record and yield zero or more output records.
+
+        Yield nothing to filter out the record.
+        Yield one record for 1:1 transformation.
+        Yield multiple records for 1:N transformation.
+        """
+        ...
 
 
 class PipelineOrchestrator(BaseModel):
@@ -29,9 +43,7 @@ class PipelineOrchestrator(BaseModel):
 
     # Inputs configured after instantiation
     source: Optional[AsyncIterator[BaseRecord]] = Field(default=None, exclude=True)
-    processor: Optional[Callable[[BaseRecord], Awaitable[Optional[BaseRecord]]]] = Field(
-        default=None, exclude=True
-    )
+    processor: Optional[Processor] = Field(default=None, exclude=True)
 
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
@@ -48,37 +60,48 @@ class PipelineOrchestrator(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
-    async def _process_record(self, record: BaseRecord) -> Optional[BaseRecord]:
-        """Process a single record with metadata tracking."""
+    async def _process_record(self, record: BaseRecord) -> list[BaseRecord]:
+        """Process a single record with metadata tracking.
+
+        Returns a list of output records (can be empty, one, or many).
+        """
         async with self._semaphore:
             start_time = time.time()
+            output_records = []
 
             try:
                 if self.processor is None:
                     logger.error(f"[{self.stage_name}] No processor configured")
                     self._failed += 1
-                    return None
+                    return []
 
-                # Process the record
-                result = await self.processor(record)
+                # Process the record - processor.process() is an async generator
+                record_yielded = False
+                async for output_record in self.processor.process(record):
+                    if output_record is not None:
+                        record_yielded = True
+                        # Track success in metadata for each output
+                        processing_time_ms = int((time.time() - start_time) * 1000)
+                        output_record.metadata[self.stage_name] = {
+                            "status": "processed",
+                            "timestamp": time.time(),
+                            "processing_time_ms": processing_time_ms,
+                        }
+                        output_records.append(output_record)
 
-                if result is None:
-                    # Record was filtered out
+                if not record_yielded:
+                    # Record was filtered out (nothing yielded)
                     self._skipped += 1
-                    # Still track in metadata that we attempted processing
+                    # Track in original record's metadata that we attempted processing
                     record.metadata[self.stage_name] = {
                         "status": "skipped",
                         "timestamp": time.time(),
                         "processing_time_ms": int((time.time() - start_time) * 1000),
                     }
-                    return None
+                else:
+                    self._processed += len(output_records)
 
-                # Success - track in metadata
-                processing_time_ms = int((time.time() - start_time) * 1000)
-                result.metadata[self.stage_name] = {"status": "processed", "timestamp": time.time(), "processing_time_ms": processing_time_ms}
-
-                self._processed += 1
-                return result
+                return output_records
 
             except Exception as e:
                 logger.error(f"Error processing record {record.record_id} in stage {self.stage_name}: {e}")
@@ -100,7 +123,7 @@ class PipelineOrchestrator(BaseModel):
 
                     record.error.append(ErrorEvent(content=f"Stage {self.stage_name}: {e}", source=self.stage_name))
 
-                return None
+                return []
 
     async def __call__(self) -> AsyncIterator[BaseRecord]:
         """Process records from source through the configured processor.
@@ -141,9 +164,10 @@ class PipelineOrchestrator(BaseModel):
                 while len(pending) >= self.concurrency:
                     done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                     for task in done:
-                        result = task.result()
+                        results = task.result()
                         await maybe_log_status()
-                        if result is not None:
+                        # Yield each output record
+                        for result in results:
                             yield result
 
                 # Schedule processing
@@ -153,9 +177,10 @@ class PipelineOrchestrator(BaseModel):
             while pending:
                 done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
-                    result = task.result()
+                    results = task.result()
                     await maybe_log_status()
-                    if result is not None:
+                    # Yield each output record
+                    for result in results:
                         yield result
 
             logger.info(

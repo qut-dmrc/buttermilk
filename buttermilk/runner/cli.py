@@ -264,7 +264,6 @@ def main(conf: DictConfig) -> None:
 
             # Import pipeline components
             from buttermilk.pipeline import PipelineOrchestrator
-            from buttermilk.simple_pipeline import run_simple_pipeline
             from buttermilk.tools.catalog_test import TMDBTool
             from buttermilk.utils.uploader import AsyncDataUploader
 
@@ -303,51 +302,41 @@ def main(conf: DictConfig) -> None:
             processors.append(uploader)
             logger.info(f"Added uploader with buffer_size={uploader.buffer_size}")
 
-            # If using orchestrator for concurrency
-            if pipeline_conf.get("use_orchestrator", False):
-                # Use PipelineOrchestrator for concurrent processing
-                concurrency = pipeline_conf.get("concurrency", 20)
-                max_records = pipeline_conf.get("max_records")
+            # Use PipelineOrchestrator for processing
+            concurrency = pipeline_conf.get("concurrency", 20)
+            max_records = pipeline_conf.get("max_records")
+            batch_size = pipeline_conf.get("batch_size", max_records)
 
-                orchestrator = PipelineOrchestrator(
-                    stage_name="pipeline",
-                    concurrency=concurrency,
-                    max_records=max_records,
-                    source=source_storage(batch_size=max_records),
-                    processor=processors[0].process if processors else None,
-                )
+            # Create orchestrator with first processor
+            orchestrator = PipelineOrchestrator(
+                stage_name="pipeline",
+                concurrency=concurrency,
+                max_records=max_records,
+                source=source_storage(batch_size=batch_size) if callable(source_storage) else source_storage,
+                processor=processors[0] if processors else None,
+            )
 
-                logger.info(f"Running pipeline with orchestrator (concurrency={concurrency})...")
+            logger.info(f"Running pipeline (concurrency={concurrency})...")
 
-                async def run_orchestrated():
-                    async for record in orchestrator():
-                        # Process through remaining processors
-                        current = record
-                        for proc in processors[1:]:
-                            current = await proc.process(current)
-                            if current is None:
-                                break
+            async def run_pipeline():
+                async for record in orchestrator():
+                    # Process through remaining processors if any
+                    current_records = [record]
+                    for proc in processors[1:]:
+                        next_records = []
+                        for rec in current_records:
+                            async for output in proc.process(rec):
+                                next_records.append(output)
+                        current_records = next_records
+                        if not current_records:
+                            break
 
-                    # Ensure uploaders are flushed
-                    for proc in processors:
-                        if hasattr(proc, "shutdown"):
-                            proc.shutdown()
+                # Ensure uploaders are flushed
+                for proc in processors:
+                    if hasattr(proc, "shutdown"):
+                        proc.shutdown()
 
-                asyncio.run(run_orchestrated())
-            else:
-                # Use simple sequential pipeline
-                batch_size = pipeline_conf.get("batch_size")
-                logger.info(f"Running simple pipeline (batch_size={batch_size})...")
-
-                async def run_simple():
-                    await run_simple_pipeline(data_source=source_storage, processors=processors)
-
-                    # Ensure uploaders are flushed
-                    for proc in processors:
-                        if hasattr(proc, "shutdown"):
-                            proc.shutdown()
-
-                asyncio.run(run_simple())
+            asyncio.run(run_pipeline())
 
             logger.info("Pipeline processing complete.")
         case _:
