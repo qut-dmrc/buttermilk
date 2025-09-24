@@ -793,6 +793,51 @@ class BM(BaseModel):
         config = StorageConfig(**config_data)
         return self.get_storage(config)
 
+    async def graceful_shutdown(self, timeout: float = 10.0) -> None:
+        """Perform graceful shutdown of all async operations.
+
+        This method waits for background tasks to complete, flushes buffers,
+        and ensures traces/logs are uploaded before the process exits.
+
+        Args:
+            timeout: Maximum time to wait for shutdown operations (seconds)
+        """
+        logger.info(f"Starting graceful shutdown (timeout={timeout}s)...")
+
+        # Collect all pending tasks
+        all_tasks = []
+
+        # Get all running tasks except the current one
+        current_task = asyncio.current_task()
+        for task in asyncio.all_tasks():
+            if task != current_task and not task.done():
+                all_tasks.append(task)
+
+        if all_tasks:
+            logger.info(f"Waiting for {len(all_tasks)} background tasks to complete...")
+
+            # Wait for tasks with timeout
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*all_tasks, return_exceptions=True),
+                    timeout=timeout
+                )
+                logger.info("All background tasks completed successfully")
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for tasks after {timeout}s")
+                # Cancel remaining tasks
+                for task in all_tasks:
+                    if not task.done():
+                        task.cancel()
+                # Wait briefly for cancellation to complete
+                await asyncio.gather(*all_tasks, return_exceptions=True)
+
+        # Additional delay for trace/log uploads that might not be tracked as tasks
+        logger.info("Waiting for traces and logs to upload...")
+        await asyncio.sleep(2.0)
+
+        logger.info("Graceful shutdown complete")
+
 
 # Factory functions for creating session-scoped BM instances
 

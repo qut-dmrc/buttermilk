@@ -103,14 +103,24 @@ def main(conf: DictConfig) -> None:
 
             # Run the flow synchronously
             logger.info(f"Running flow '{conf.flow}' in console mode...")
-            asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
+
+            async def run_with_shutdown():
+                await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
+                await bm.graceful_shutdown()
+
+            asyncio.run(run_with_shutdown())
             logger.info(f"Flow '{run_request.flow}' finished.")
 
         case "batch":
             logger.info("Creating batch jobs...")
-            asyncio.run(
-                flow_runner.create_batch(flow_name=conf.get("flow"), dataset_key=conf.get("dataset_key"), max_records=conf.get("max_records", None))
-            )
+
+            async def run_with_shutdown():
+                await flow_runner.create_batch(
+                    flow_name=conf.get("flow"), dataset_key=conf.get("dataset_key"), max_records=conf.get("max_records", None)
+                )
+                await bm.graceful_shutdown()
+
+            asyncio.run(run_with_shutdown())
 
         case "batch_run":
             # Run batch jobs from the queue
@@ -122,7 +132,12 @@ def main(conf: DictConfig) -> None:
             ui = CLIUserAgent()
 
             logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
-            asyncio.run(flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback(), wait_for_completion=True))
+
+            async def run_with_shutdown():
+                await flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                await bm.graceful_shutdown()
+
+            asyncio.run(run_with_shutdown())
 
         case "streamlit":
             # Starts the Streamlit web interface.
@@ -287,9 +302,12 @@ def main(conf: DictConfig) -> None:
             # Set up processors based on configuration
             processors = []
 
-            # Add TMDB processor if configured
-            if pipeline_conf.get("tmdb"):
-                tmdb_conf = pipeline_conf.get("tmdb", {})
+            # Add TMDB processor
+            tmdb_conf = pipeline_conf.get("tmdb", {})
+            # Handle case where tmdb is just True/False
+            if isinstance(tmdb_conf, bool):
+                tmdb_conf = {} if tmdb_conf else None
+            if tmdb_conf is not None:
                 tmdb_tool = TMDBTool(**tmdb_conf)
                 processors.append(tmdb_tool)
                 logger.info(f"Added TMDB processor with region={tmdb_tool.region}")
@@ -327,6 +345,9 @@ def main(conf: DictConfig) -> None:
                     for proc in processors:
                         if hasattr(proc, "shutdown"):
                             proc.shutdown()
+
+                # Graceful shutdown to wait for async operations
+                await bm.graceful_shutdown()
 
             asyncio.run(run_pipeline())
 

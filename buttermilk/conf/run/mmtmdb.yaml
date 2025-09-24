@@ -33,13 +33,15 @@ pipeline:
   # Number of samples to collect from database (will be distributed across decades)
   sample_size: 1000  # ~71 records per decade
 
+  # TMDB processor configuration
+  tmdb: {}  
+
   # Storage config for output
   output: {}
 
-  buffer_size: 10
+  buffer_size: 500
   flush_interval: 30
 
   # Optional: Use orchestrator for concurrency
   use_orchestrator: true
   concurrency: 20
-  max_records: 1000

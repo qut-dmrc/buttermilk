@@ -3,7 +3,7 @@ import calendar
 import datetime
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Iterable, Optional
@@ -487,21 +487,21 @@ class TMDBTool:
         Yields:
             Observation records with availability data for all regions returned by TMDB
         """
+        n_found = 0
         async for obs in self.get_availability_by_id(
             record_id=int(title.record_id),
             title=title.title,
             year=title.year,
         ):
             yield obs
-            logger.debug(
-                f"Yielded observation: {obs}",
-                record_id=title.record_id,
-                title=title.title,
-                year=title.year,
-                region=obs.region,
-                provider=obs.provider_name,
-                available=obs.available,
-            )
+            n_found += 1
+
+        logger.debug(
+            f"Yielded observation: {title.title} ({title.year}) - {n_found} availability records found",
+            record_id=title.record_id,
+            title=title.title,
+            year=title.year,
+        )
 
     async def get_availability_by_id(
         self,
@@ -526,13 +526,9 @@ class TMDBTool:
             async def do_get_providers():
                 return await self._tmdb_client.movie(int(record_id)).watch_providers()
 
-            providers_raw = await self._retry._execute_with_retry(do_get_providers)
+            response = await self._retry._execute_with_retry(do_get_providers)
 
-            # Extract results by region
-            providers_by_region: dict[str, Any] = {}
-            if isinstance(providers_raw, dict) and "results" in providers_raw:
-                providers_by_region = providers_raw["results"]
-            else:
+            if not response.results:
                 # No results for any regions
                 obs = Observation(
                     record_id=str(record_id),
@@ -555,25 +551,40 @@ class TMDBTool:
                 yield obs
 
             # Process each region returned by TMDB
-            for region_code, region_data in providers_by_region.items():
+            for region_code, region_data in response.results.items():
+                # Convert dataclass to dict for easier processing
+                providers_raw = asdict(region_data)
                 try:
                     normalized_region = self._normalize_region(region_code)
-                    has_providers = False
 
                     # Process each provider type (flatrate, rent, buy)
-                    for provider_type in ["flatrate", "rent", "buy"]:
-                        if provider_type not in region_data:
+                    for provider_type, providers in providers_raw.items():
+                        if provider_type == "link":
+                            continue  # Skip the link field
+
+                        if not providers or not isinstance(providers, list) or len(providers) == 0:
+                            # If region exists but has no providers at all, log a null observation
+                            obs = Observation(
+                                record_id=str(record_id),
+                                title=title,
+                                year=year,
+                                provider_name=None,
+                                provider_id=None,
+                                provider_type=provider_type,
+                                region=normalized_region,
+                                price=None,
+                                currency=None,
+                                format=None,
+                                available=False,
+                                source="TMDB",
+                                metadata={
+                                    "movie_id": str(record_id),
+                                    "note": "No offers for this provider type in this region",
+                                },
+                            )
+                            yield obs
                             continue
 
-                        providers = region_data[provider_type]
-                        if not isinstance(providers, list):
-                            continue
-
-                        # Empty list means no providers of this type in this region
-                        if len(providers) == 0:
-                            continue
-
-                        has_providers = True
                         for provider in providers:
                             obs = Observation(
                                 record_id=str(record_id),
@@ -593,28 +604,6 @@ class TMDBTool:
                                 },
                             )
                             yield obs
-
-                    # If region exists but has no providers at all, log a null observation
-                    if not has_providers:
-                        obs = Observation(
-                            record_id=str(record_id),
-                            title=title,
-                            year=year,
-                            provider_name=None,
-                            provider_id=None,
-                            provider_type=None,
-                            region=normalized_region,
-                            price=None,
-                            currency=None,
-                            format=None,
-                            available=False,
-                            source="TMDB",
-                            metadata={
-                                "movie_id": str(record_id),
-                                "note": "No providers available in this region",
-                            },
-                        )
-                        yield obs
 
                 except Exception as e:
                     # Error processing a specific region

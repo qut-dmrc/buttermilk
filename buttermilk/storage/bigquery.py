@@ -357,15 +357,6 @@ class BigQueryStorage(Storage, StorageClient):
                 )
 
             if self.exists():
-                # CRITICAL: Never modify existing tables
-                logger.debug(
-                    "Table already exists, skipping creation",
-                    extra={
-                        "table": table_id,
-                        "dataset_name": self.config.dataset_name,
-                        "message": "BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually."
-                    }
-                )
                 return
 
             # Create new table
