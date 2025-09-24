@@ -7,6 +7,7 @@ different components of Buttermilk.
 """
 
 import datetime
+import json  # For JSON parsing in validators
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, Self  # Standard typing utilities
@@ -41,9 +42,8 @@ class BaseRecord(Protocol):
     This protocol defines the minimal requirements for any record type
     that flows through pipelines or is stored in Buttermilk storage.
     """
+
     record_id: str
-    dataset_name: str
-    split_type: str
     error: list[Any]  # List of ErrorEvent objects
     metadata: dict[str, Any]
 
@@ -87,8 +87,8 @@ class Record(BaseModel):
         default_factory=lambda: str(shortuuid.ShortUUID().uuid()),
         description="Unique identifier for the record.",
     )
-    dataset_name: str = Field(default="default", description="Name of the dataset this record belongs to.")
-    split_type: str = Field(default="default", description="Dataset split this record belongs to, e.g., 'train', 'test'.")
+    dataset_name: str | None = Field(default=None, description="Name of the dataset this record belongs to.")
+    split_type: str | None = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
     metadata: dict[str, Any] = Field(
         default_factory=dict,  # Use factory for mutable default
         description="Arbitrary metadata associated with the record.",
@@ -97,7 +97,7 @@ class Record(BaseModel):
         default=None,
         description="Textual description or transcript of media content within this record.",
     )
-    ground_truth: dict[str, Any] | list[str | dict[str, str]] | None = Field(  # Added type hint for dict value
+    ground_truth: dict[str, Any] | list[str | dict[str, str]] | str | None = Field(  # Added type hint for dict value
         default=None,
         description="Optional ground truth data associated with this record for evaluation.",
     )
@@ -108,6 +108,10 @@ class Record(BaseModel):
     mime: str | None = Field(
         default="text/plain",
         description="Primary MIME type of the content.",
+    )
+    error: list[Any] = Field(
+        default_factory=list,
+        description="List of errors or error events associated with this record.",
     )
 
     # Vector processing fields (optional, for enhanced functionality)
@@ -288,6 +292,46 @@ class Record(BaseModel):
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def parse_metadata(cls, v):
+        """Parse metadata from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else {}
+            except json.JSONDecodeError:
+                # If it's not valid JSON, return empty dict
+                return {}
+        elif v is None:
+            return {}
+        return v
+
+    @field_validator("ground_truth", mode="before")
+    @classmethod
+    def parse_ground_truth(cls, v):
+        """Parse ground_truth from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else None
+            except json.JSONDecodeError:
+                # If it's not valid JSON, keep as string
+                return v
+        return v
+
+    @field_validator("error", mode="before")
+    @classmethod
+    def parse_error(cls, v):
+        """Parse error from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else []
+            except json.JSONDecodeError:
+                # If it's not valid JSON, return empty list
+                return []
+        elif v is None:
+            return []
+        return v
+
     @field_validator("content")
     @classmethod
     def validate_content(cls, v):
@@ -311,6 +355,30 @@ class Record(BaseModel):
                 raise ValueError("Content sequence must contain at least one meaningful item")
 
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_defaults_for_required_fields(cls, values):
+        """Set default values for required BaseRecord fields if missing.
+
+        This runs before field validation to ensure required fields have defaults.
+        """
+        if isinstance(values, dict):
+            # Ensure record_id has a value
+            if not values.get("record_id"):
+                values["record_id"] = str(shortuuid.ShortUUID().uuid())
+
+            # These can remain None but ensure the keys exist
+            if "dataset_name" not in values:
+                values["dataset_name"] = None
+            if "split_type" not in values:
+                values["split_type"] = None
+
+            # Ensure error field exists as empty list if not present
+            if "error" not in values:
+                values["error"] = []
+
+        return values
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:

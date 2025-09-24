@@ -1,9 +1,9 @@
 """BigQuery storage implementation for unified storage operations."""
 
-import json
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import shortuuid
 from google.cloud import bigquery
 from pydantic import BaseModel
 
@@ -415,7 +415,7 @@ class BigQueryStorage(Storage, StorageClient):
         split_col = self._resolve_column("split_type")
 
         # Dataset filter only if column exists
-        if dataset_col in available_cols or not available_cols:
+        if self.config.dataset_name and (dataset_col in available_cols or not available_cols):
             clauses.append(f"{dataset_col} = @dataset_name")
         else:
             logger.warning(
@@ -457,7 +457,7 @@ class BigQueryStorage(Storage, StorageClient):
     def _parse_record(self, row: bigquery.Row) -> BaseRecord:
         """Parse a BigQuery row into a BaseRecord object.
 
-        Simple conversion that lets the consuming code handle type-specific logic.
+        Leverages Pydantic's validation to handle JSON parsing and defaults.
         """
         # Convert row to dictionary
         row_dict = dict(row.items())
@@ -467,52 +467,26 @@ class BigQueryStorage(Storage, StorageClient):
 
         # Apply column mapping if specified
         if self.config.columns:
-            for new_name, old_name in self.config.columns.items():
-                if old_name in row_dict:
-                    row_dict[new_name] = row_dict[old_name]
+            for logical, physical in self.config.columns.items():
+                if physical in row_dict and physical != logical:
+                    row_dict[logical] = row_dict.pop(physical)
 
-        # Parse JSON fields if they exist and are strings
-        if "metadata" in row_dict and isinstance(row_dict["metadata"], str):
-            try:
-                row_dict["metadata"] = json.loads(row_dict["metadata"])
-            except json.JSONDecodeError:
-                row_dict["metadata"] = {}
-        elif "metadata" not in row_dict:
-            row_dict["metadata"] = {}
-
-        if "ground_truth" in row_dict and isinstance(row_dict["ground_truth"], str):
-            try:
-                row_dict["ground_truth"] = json.loads(row_dict["ground_truth"])
-            except json.JSONDecodeError:
-                pass
-
-        if "error" in row_dict and isinstance(row_dict["error"], str):
-            try:
-                row_dict["error"] = json.loads(row_dict["error"])
-            except json.JSONDecodeError:
-                row_dict["error"] = []
-        elif "error" not in row_dict:
-            row_dict["error"] = []
-
-        # Ensure required BaseRecord fields have defaults
-        if "record_id" not in row_dict:
-            row_dict["record_id"] = "unknown"
+        # Add config defaults if not present in row
         if "dataset_name" not in row_dict:
-            row_dict["dataset_name"] = self.config.dataset_name or "default"
+            row_dict["dataset_name"] = self.config.dataset_name
         if "split_type" not in row_dict:
-            row_dict["split_type"] = self.config.split_type or "default"
+            row_dict["split_type"] = self.config.split_type
 
-        # Create a basic Record - let consuming code handle type conversions
+        # Let Pydantic handle all validation, JSON parsing, and type conversion
         try:
             return Record(**row_dict)
         except Exception as e:
-            # If Record creation fails, create minimal valid record
+            # If Record creation fails, create minimal valid record for debugging
             logger.warning(f"Failed to create Record from row data: {e}")
             return Record(
-                record_id=str(row_dict.get("record_id", "error")),
-                dataset_name=str(row_dict.get("dataset_name", "default")),
-                split_type=str(row_dict.get("split_type", "default")),
-                metadata=row_dict.get("metadata", {}),
-                content=str(row_dict),  # Store full data as content for debugging
-                error=row_dict.get("error", [])
+                record_id=str(row_dict.get("record_id", shortuuid.uuid())),
+                dataset_name=str(row_dict.get("dataset_name", self.config.dataset_name or "default")),
+                split_type=str(row_dict.get("split_type", self.config.split_type or "default")),
+                metadata={"parse_error": str(e), "raw_data": str(row_dict)[:1000]},
+                content=f"Failed to parse record: {e}",
             )
