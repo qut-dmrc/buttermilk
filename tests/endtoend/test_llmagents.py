@@ -22,9 +22,9 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
-async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput):
+async def test_llm_agent_direct_call(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using ._process()."""
-    agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "best"})
+    agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "ra"})
 
     response = await agent._process(message=request_paris)
 
@@ -34,7 +34,8 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
     # Check if output is string and contains 'Paris' (case-insensitive)
     if isinstance(response.outputs, str):
         assert "paris" in response.outputs.lower()
-    elif isinstance(response.outputs, dict):  # Handle cases where output might be dict
+    elif isinstance(response.outputs, dict):
+        # Handle cases where output might be dict
         assert "paris" in str(response.outputs).lower()
     else:
         # Weaker assertion if output is neither string nor dict

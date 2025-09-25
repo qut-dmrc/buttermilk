@@ -321,7 +321,7 @@ def main(conf: DictConfig) -> None:
             logger.info(f"Added uploader with buffer_size={uploader.buffer_size}")
 
             # Use PipelineOrchestrator for processing
-            concurrency = pipeline_conf.get("concurrency", 20)
+            concurrency = pipeline_conf.get("concurrency", 1)
             max_records = pipeline_conf.get("max_records")
 
             # Create single orchestrator with all processors
