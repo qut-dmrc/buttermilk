@@ -9,8 +9,7 @@ import json
 from cloudpathlib import AnyPath
 from pydantic import BaseModel, Field
 
-from buttermilk._core.bm_init import get_bm
-from buttermilk._core.log import logger
+from buttermilk import bm, logger
 from buttermilk.utils.save import upload_rows
 
 
@@ -27,7 +26,6 @@ class RecoveryRunner(BaseModel):
         super().__init__(**data)
         if not self.backup_dir:
             # Use BM save_dir if no backup_dir specified
-            bm = get_bm()
             self.backup_dir = bm.session_info.save_dir
 
     async def run(self) -> None:

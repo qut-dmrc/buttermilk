@@ -46,8 +46,9 @@ def get_bm() -> Any:  # Return type should be 'BM' from bm_init.py if type hint 
         Any: The Buttermilk global instance (`bm`).
 
     """
-    from buttermilk._core.bm_init import get_bm as _get_bm  # Actual import of get_bm
-    return _get_bm()
+    from buttermilk import bm
+
+    return bm
 
 
 from .._core.log import logger  # Centralized logger
