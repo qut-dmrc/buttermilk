@@ -117,8 +117,8 @@ llms:
         mock_logger.info.reset_mock()
 
         # logger.info("1. Creating first session...")
-        # bm1 = init(job="first_analysis", project="project_alpha")
-        bm1 = init(job="first_analysis", project="project_alpha")
+        # bm1 = init(job="first_analysis")
+        bm1 = init(job="first_analysis")
 
         # logger.info("2. Creating second session...")
         # bm2 = init(job="second_analysis", project="project_beta")
@@ -188,7 +188,7 @@ llms:
         ]
 
         # First session should work
-        bm1 = init(job="first_analysis", project="project_alpha")
+        bm1 = init(job="first_analysis")
         assert bm1.session_info.project_name == "project_alpha"
 
         # Second session should fail

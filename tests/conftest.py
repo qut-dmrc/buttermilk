@@ -29,35 +29,27 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="session")
-def init_conf():
-    """Real Hydra config fixture loaded from testing.yaml."""
+def init():
+    """Real ExecutionContext created from testing.yaml configuration."""
     with initialize(version_base=None, config_path="../buttermilk/conf"):
         cfg = compose(config_name="testing")
-    return cfg
-
-
-@pytest.fixture(scope="session")
-def real_execution_context(init_conf):
-    """Real ExecutionContext created from testing.yaml configuration."""
-    bm, resolved_conf = bootstrap_session_with_config(
-        config=init_conf  # Pass the existing Hydra configuration, use run.job and run.name from config
-    )
+    bm, resolved_conf = bootstrap_session_with_config(config=cfg)
     set_bm(bm)  # Set global BM for modules that rely on it
     return bm, resolved_conf
 
 
+bm, resolved_conf = init()
+
+
 @pytest.fixture(scope="session")
-def real_conf(real_execution_context):
+def real_conf():
     """Real configuration dictionary from testing.yaml."""
-    _, resolved_conf = real_execution_context
     return resolved_conf
 
 
 @pytest.fixture(scope="session")
-def real_bm(real_execution_context):
+def real_bm():
     """Real BM instance created from testing.yaml configuration."""
-    bm, _ = real_execution_context
     return bm
 
 

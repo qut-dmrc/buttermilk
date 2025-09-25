@@ -269,7 +269,7 @@ llms:
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
                 # Scenario 1: First session - project required
-                bm1 = init(job="first_analysis", project="project_alpha", config_dir=main_script_config_dir)
+                bm1 = init(job="first_analysis", config_dir=main_script_config_dir)
 
                 # Scenario 2: Second session - different project
                 bm2 = init(job="second_analysis", project="project_beta", config_dir=main_script_config_dir)

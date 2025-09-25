@@ -411,11 +411,11 @@ class TestMainScriptCompatibility:
         mock_bm1.session_info.job = "first_analysis"
         mock_bootstrap_session.return_value = mock_bm1
 
-        # Simulate: bm1 = init(job="first_analysis", project="project_alpha")
-        result = init(job="first_analysis", project="project_alpha")
+        # Simulate: bm1 = init(job="first_analysis")
+        result = init(job="first_analysis")
 
         # Verify bootstrap was called correctly
-        mock_bootstrap_session.assert_called_once_with(job="first_analysis", project="project_alpha", run_type="cli", config_dir=None, overrides=[])
+        mock_bootstrap_session.assert_called_once_with(job="first_analysis", run_type="cli", config_dir=None, overrides=[])
 
         assert result.session_info.project_name == "project_alpha"
         assert result.session_info.job == "first_analysis"
@@ -435,8 +435,8 @@ class TestMainScriptCompatibility:
 
         mock_bootstrap_session.side_effect = [mock_bm1, mock_bm2]
 
-        # Simulate: bm1 = init(job="first_analysis", project="project_alpha")
-        result1 = init(job="first_analysis", project="project_alpha")
+        # Simulate: bm1 = init(job="first_analysis")
+        result1 = init(job="first_analysis")
 
         # Simulate: bm2 = init(job="second_analysis", project="project_beta")
         result2 = init(job="second_analysis", project="project_beta")

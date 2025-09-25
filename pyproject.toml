@@ -252,4 +252,5 @@ filterwarnings = [
 dev = [
     "ipywidgets>=8.1.7",
     "jupyter>=1.1.1",
+    "pytest-asyncio>=1.2.0",
 ]

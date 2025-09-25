@@ -27,17 +27,10 @@ logger.info(f"   LLMs configured: {bm1.llms}")
 
 # Second session - same project, different job (explicit project)
 logger.info("2. Creating second session...")
-bm2 = init(job="second_analysis", project="project_alpha")
+bm2 = init(job="second_analysis")
 logger.info("Second session started")
 logger.info(f"   Session 2: {bm2.session_info.session_id}")
 logger.info(f"   Project: {bm2.session_info.project_name}, Job: {bm2.session_info.job}")
-
-# Third session with same project but different job (inherits project)
-logger.info("3. Creating third session (same project, different job)...")
-bm3 = init(job="third_analysis")  # Inherits "project_alpha" from execution context
-logger.info("Third session started")
-logger.info(f"   Session 3: {bm3.session_info.session_id}")
-logger.info(f"   Project: {bm3.session_info.project_name}, Job: {bm3.session_info.job}")
 
 logger.info("✅ All sessions created successfully!")
 logger.info("Each session reuses the same infrastructure but has its own context.")

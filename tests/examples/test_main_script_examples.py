@@ -19,7 +19,7 @@ class TestMainScriptExamples:
     def test_main_script_scenario_1_first_session_with_project(self, mock_bootstrap_session):
         """Test scenario 1: First session with explicit project.
 
-        This demonstrates: bm1 = init(job="first_analysis", project="project_alpha")
+        This demonstrates: bm1 = init(job="first_analysis")
         """
         # Mock BM instance for first session
         mock_bm1 = MagicMock()
@@ -29,10 +29,10 @@ class TestMainScriptExamples:
         mock_bootstrap_session.return_value = mock_bm1
 
         # Execute the first session scenario
-        bm1 = init(job="first_analysis", project="project_alpha")
+        bm1 = init(job="first_analysis")
 
         # Verify bootstrap was called correctly
-        mock_bootstrap_session.assert_called_once_with(job="first_analysis", project="project_alpha", run_type="cli", config_dir=None, overrides=[])
+        mock_bootstrap_session.assert_called_once_with(job="first_analysis", run_type="cli", config_dir=None, overrides=[])
 
         # Verify session properties
         assert bm1.session_info.project_name == "project_alpha"
@@ -118,7 +118,7 @@ class TestMainScriptExamples:
         # Execute the complete main.py sequence
 
         # 1. First session - project required
-        bm1 = init(job="first_analysis", project="project_alpha")
+        bm1 = init(job="first_analysis")
 
         # 2. Second session - different project (new execution context)
         bm2 = init(job="second_analysis", project="project_beta")
@@ -220,7 +220,7 @@ class TestMainScriptErrorScenarios:
             mock_bootstrap_session.return_value = mock_bm
 
             # Execute scenario
-            result = init(job="data_analysis", project="project_alpha")
+            result = init(job="data_analysis")
 
             # Verify save directory includes project name
             assert "project_alpha" in result.save_dir

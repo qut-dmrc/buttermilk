@@ -28,26 +28,26 @@ from ._core.contract import (
     ToolOutput as ToolOutput,
     UserResponseMessage as UserResponseMessage,
 )
-from ._core.dmrc import get_bm, initialize_session_bm, set_bm
 from ._core.exceptions import FatalError, ProcessingError
 from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
 from ._core.log import logger
-
-get_buttermilk_instance = get_bm
 
 
 class BMAccessor:
     """Descriptor that provides access to the singleton BM instance."""
 
     def __getattr__(self, name):  # -> Any:
+        from ._core.dmrc import get_bm
         return getattr(get_bm(), name)
 
     def __get__(self, obj, objtype=None) -> BM:
+        from ._core.dmrc import get_bm
         if get_bm() is None:
             raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")
         return get_bm()
 
     def __set__(self, obj, value: BM) -> None:
+        from ._core.dmrc import set_bm
         set_bm(value)
 
 
@@ -62,10 +62,7 @@ __all__ = [
     "TEMPLATES_PATH",
     "init",
     "bm",  # Export the singleton accessor (deprecated)
-    "get_bm",  # Export the getter function (deprecated)
-    "get_buttermilk_instance",  # Export the alias for get_bm (deprecated)
     "logger",
-    "set_bm",  # Export the setter function (deprecated)
     "initialize_session_bm",  # Initialize session-scoped BM as singleton
     # New session-scoped API
     "create_session_bm",  # Factory for session-scoped BM instances
