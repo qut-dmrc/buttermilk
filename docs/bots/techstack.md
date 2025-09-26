@@ -141,7 +141,7 @@ defaults:
 1. **YAML** → **Hydra** → **OmegaConf**
 2. **OmegaConf** → **Pydantic** validation
 3. **AgentInput** → **Agent** → **AgentOutput**
-4. **AgentTrace** captures execution history
+4. **ExecutionTrace** captures execution history
 
 ### Storage Architecture
 
