@@ -15,7 +15,7 @@ from typing import Any, AsyncGenerator, Optional
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage, LLMMessage
+from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field
@@ -60,9 +60,11 @@ class LLMCore:
 
     def __init__(
         self,
+        model: str,
+        template: str,
         parameters: dict[str, Any],
         output_model: Optional[type[pydantic.BaseModel]] = None,
-        tools: Optional[list[Tool]] = None
+        tools: Optional[list[Tool]] = None,
     ):
         """Initialize the LLM core with configuration.
 
@@ -80,14 +82,9 @@ class LLMCore:
         self.tools = tools or []
 
         # Extract commonly used parameters
-        self._model = parameters.get("model")
-        self._template = parameters.get("template")
+        self._model = model
+        self._template = template
         self._fail_on_unfilled_parameters = parameters.get("fail_on_unfilled_parameters", True)
-
-        if not self._model:
-            raise ValueError("'model' is required in parameters")
-        if not self._template:
-            raise ValueError("'template' is required in parameters")
 
         # Template metadata for tracking
         self._template_metadata: dict[str, Any] = {}
@@ -136,12 +133,12 @@ class LLMCore:
         tracer = trace.get_tracer("buttermilk.llm_core")
 
         # Extract special inputs
-        context = inputs.pop('context', []) if isinstance(inputs.get('context'), list) else []
-        records = inputs.pop('records', []) if isinstance(inputs.get('records'), list) else []
+        context = inputs.pop("context", []) if isinstance(inputs.get("context"), list) else []
+        records = inputs.pop("records", []) if isinstance(inputs.get("records"), list) else []
 
         # Handle single record -> records list conversion
-        if 'record' in inputs and isinstance(inputs['record'], BaseRecord):
-            records = [inputs.pop('record')]
+        if "record" in inputs and isinstance(inputs["record"], BaseRecord):
+            records = [inputs.pop("record")]
 
         # Build span attributes
         span_attributes = {
@@ -188,7 +185,7 @@ class LLMCore:
                 )
 
                 # Emit trace if trace writer is available
-                if hasattr(self, 'trace_writer') and self.trace_writer:
+                if hasattr(self, "trace_writer") and self.trace_writer:
                     try:
                         await self.trace_writer.add(execution_trace)
                     except Exception as e:
@@ -218,7 +215,7 @@ class LLMCore:
                 )
 
                 # Emit error trace
-                if hasattr(self, 'trace_writer') and self.trace_writer:
+                if hasattr(self, "trace_writer") and self.trace_writer:
                     try:
                         await self.trace_writer.add(error_trace)
                     except Exception as te:

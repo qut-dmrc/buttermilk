@@ -1,12 +1,13 @@
 """Unit tests for LLMCore shared functionality."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from autogen_core.models import UserMessage, SystemMessage, AssistantMessage
+from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
 
@@ -29,7 +30,7 @@ class TestLLMCore:
             "fail_on_unfilled_parameters": False
         }
 
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         assert core._model == "gpt-4"
         assert core._template == "test_template"
@@ -44,7 +45,7 @@ class TestLLMCore:
         }
 
         with pytest.raises(ValueError, match="'model' is required"):
-            LLMCore(parameters=params)
+            LLMCore(**params)
 
     def test_init_missing_template(self):
         """Test LLMCore initialization fails without template."""
@@ -53,7 +54,7 @@ class TestLLMCore:
         }
 
         with pytest.raises(ValueError, match="'template' is required"):
-            LLMCore(parameters=params)
+            LLMCore(**params)
 
     def test_init_with_output_model(self):
         """Test LLMCore initialization with structured output model."""
@@ -62,7 +63,7 @@ class TestLLMCore:
             "template": "test_template"
         }
 
-        core = LLMCore(parameters=params, output_model=OutputModelForTesting)
+        core = LLMCore(**params, output_model=OutputModelForTesting)
 
         assert core.output_model == OutputModelForTesting
 
@@ -73,7 +74,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         # Mock the template loading
         with patch("buttermilk._core.llm_core.load_template") as mock_load:
@@ -84,10 +85,7 @@ class TestLLMCore:
             )
 
             with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = [
-                    SystemMessage(content="System prompt", source="test"),
-                    UserMessage(content="User prompt", source="test")
-                ]
+                mock_make.return_value = [SystemMessage(content="System prompt"), UserMessage(content="User prompt", source="test")]
 
                 messages = await core._fill_template(
                     inputs={"var": "value"},
@@ -109,7 +107,7 @@ class TestLLMCore:
             "template": "test_template",
             "fail_on_unfilled_parameters": True
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         with patch("buttermilk._core.llm_core.load_template") as mock_load:
             mock_load.return_value = (
@@ -136,7 +134,7 @@ class TestLLMCore:
             "template": "test_template",
             "fail_on_unfilled_parameters": False
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         with patch("buttermilk._core.llm_core.load_template") as mock_load:
             mock_load.return_value = (
@@ -164,7 +162,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         # Mock the BM and LLM client
         mock_bm = MagicMock()
@@ -196,7 +194,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         mock_bm = MagicMock()
         mock_client = AsyncMock()
@@ -218,14 +216,11 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         # Mock template filling
         with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.return_value = [
-                SystemMessage(content="System", source="test"),
-                UserMessage(content="User", source="test")
-            ]
+            mock_fill.return_value = [SystemMessage(content="System"), UserMessage(content="User", source="test")]
 
             # Mock LLM call
             with patch.object(core, "_call_llm_with_trace") as mock_call:
@@ -260,7 +255,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params, output_model=OutputModelForTesting)
+        core = LLMCore(**params, output_model=OutputModelForTesting)
 
         with patch.object(core, "_fill_template") as mock_fill:
             mock_fill.return_value = [UserMessage(content="Test", source="test")]
@@ -294,7 +289,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         with patch.object(core, "_fill_template") as mock_fill:
             mock_fill.side_effect = ProcessingError("Template error")
@@ -309,7 +304,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         with patch.object(core, "_fill_template") as mock_fill:
             mock_fill.side_effect = RuntimeError("Unexpected error")
@@ -324,7 +319,7 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template"
         }
-        core = LLMCore(parameters=params)
+        core = LLMCore(**params)
 
         # Create test records
         record1 = BaseRecord(

@@ -102,6 +102,7 @@ from ._core.contract import (
 )
 from ._core.exceptions import FatalError, ProcessingError
 from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
+from ._core.llm_core import LLMCore
 
 __all__ = [
     "BASE_DIR",
@@ -135,6 +136,7 @@ __all__ = [
     "ProceedToNextTaskSignal",
     "ConductorRequest",
     "HeartBeat",
+    "LLMCore",
     "tracer",
     # Exceptions
     "FatalError",
