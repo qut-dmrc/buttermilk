@@ -32,19 +32,13 @@ class TestStructuredLLMHostInitialization:
 
     def create_agent_announcement(self, agent_id: str, role: str, tool_def: ToolSchema | None = None) -> AgentAnnouncement:
         """Create a mock AgentAnnouncement."""
-        config = AgentConfig(
-            agent_id=agent_id,
-            role=role,
-            agent_name=agent_id.lower(),
-            description=f"{role} agent"
-        )
+        config = AgentConfig(agent_id=agent_id, role=role, description=f"{role} agent")
         return AgentAnnouncement(
             agent_config=config,
             available_tools=[tool_def["name"]] if tool_def else [],
-            tool_definition=tool_def,
             status="active",
             announcement_type="initial",
-            content=f"{role} agent joining the group"
+            content=f"{role} agent joining the group",
         )
 
     @pytest.mark.anyio

@@ -16,6 +16,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
 
+pytestmark = pytest.mark.anyio
 # Try to import LLMJudge, but don't fail if it doesn't exist
 try:
     from buttermilk.agents.judge import Reasons
