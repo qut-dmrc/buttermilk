@@ -97,8 +97,6 @@ class EmptyTraceFilter:
 async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
-    from buttermilk._core.dmrc import get_bm  # Local import to avoid circular dependency
-
     if await bm.get_weave_client() is None:
         logger.warning("Weave client is not initialized, cannot retrieve parent call.")
         return None
@@ -121,7 +119,6 @@ async def get_parent_call_weave(
 
     async def get_weave_call_with_retry(call_id: str) -> Call | WeaveObject:
         """Retry getting weave call to handle async upload timing."""
-        bm = get_bm()
         client = await bm.get_weave_client()
         return client.get_call(call_id)
 

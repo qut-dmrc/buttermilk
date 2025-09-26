@@ -28,6 +28,7 @@ from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag import ResearchResult
+from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
 
 PREVIEW_LENGTH = 200
 
@@ -104,22 +105,44 @@ class MessageService:
             preview = getattr(message, "preview", None)
             tracing_link = getattr(message, "tracing_link", None)
 
-            # Initialize token tracking variables
+            # Initialize token/cost tracking variables
             prompt_tokens = 0
             completion_tokens = 0
             cost_usd = 0.0
 
             if isinstance(message, ExecutionTrace) or isinstance(message, AgentOutput):
-                # Extract token/cost data from metadata
-                if hasattr(message, "metadata") and message.metadata and "pricing" in message.metadata:
-                    pricing_data = message.metadata["pricing"]
-                    prompt_tokens = pricing_data.get("prompt_tokens", 0)
-                    completion_tokens = pricing_data.get("completion_tokens", 0)
-                    cost_usd = pricing_data.get("total_cost", 0.0)
-                    logger.debug(
-                        f"[MessageService] Extracted pricing from metadata: "
-                        f"{prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
-                    )
+                # Extract tokens/cost from metadata if available
+                usage = None
+                model_for_pricing = None
+
+                if hasattr(message, "metadata") and message.metadata:
+                    # Determine model name for pricing
+                    model_for_pricing = message.metadata.get("agent_model")
+
+                    # Try to extract usage dict from heterogeneous metadata structures
+                    try:
+                        usage = extract_usage_from_metadata(message.metadata)
+                    except Exception as e:
+                        logger.debug(f"[MessageService] Failed to extract usage from metadata: {e}")
+
+                # Fall back to agent_info parameters for model name
+                if not model_for_pricing and agent_info is not None:
+                    try:
+                        params = getattr(agent_info, "parameters", {}) or {}
+                        model_for_pricing = params.get("model")
+                    except Exception:
+                        model_for_pricing = None
+
+                # Calculate cost/tokens if we have model and usage information
+                if model_for_pricing and usage:
+                    try:
+                        prompt_tokens, completion_tokens, cost_usd = calculate_token_cost(
+                            model=model_for_pricing,
+                            usage_dict=usage,
+                        )
+                        logger.debug(f"[MessageService] Pricing computed: {prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}")
+                    except Exception as e:
+                        logger.debug(f"[MessageService] Failed to calculate token cost: {e}")
                 
                 if message.outputs:
                     # Send the unwrapped message instead of the ExecutionTrace object

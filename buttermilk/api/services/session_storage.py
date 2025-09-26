@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from buttermilk import logger
+from buttermilk import bm, logger
 from buttermilk.api.services.message_service import ChatMessage
 
 # Default sessions directory - will be overridden by get_sessions_dir()
@@ -20,8 +20,6 @@ def get_sessions_dir() -> Path:
         falling back to SESSIONS_DIR if BM is not available.
     """
     try:
-        from buttermilk import get_bm
-        bm = get_bm()
         if bm and bm.session_info and hasattr(bm.session_info, "sessions_dir"):
             return Path(bm.session_info.sessions_dir)
     except Exception:
@@ -446,9 +444,6 @@ class SessionStorageService:
                 
             # Try to get BM instance to access save_dir
             try:
-                from buttermilk import get_bm
-                bm = get_bm()
-                
                 # Check if save_dir is configured and points to GCS
                 if not bm.session_info.save_dir:
                     logger.debug("No save_dir configured, skipping GCS archival for session", session_id=session_id)

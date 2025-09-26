@@ -151,8 +151,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             >>> # Storage access is now session-isolated for multi-session environments
             
         Note:
-            Agents can continue using the global `get_bm()` pattern for backward compatibility,
-            but using `self.get_effective_bm()` provides session isolation benefits in
+            Using `self.get_effective_bm()` provides session isolation benefits in
             API and orchestrated environments.
         """
         # Check if BM was injected via config
@@ -160,9 +159,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             return self._config.bm
         else:
             # Fall back to global singleton
-            from buttermilk._core.dmrc import get_bm  # Local import to avoid circular dependency
-
-            return get_bm()
+            return bm
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""
@@ -321,7 +318,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     async def invoke(
         self,
-        message: AgentInput | StepRequest,
+        message: AgentInput | StepRequest | str,
+        *,
+        context: Any | None = None,
+        **kwargs: Any,
     ) -> ExecutionTrace | None:
         """Prepare input, calls the agent's core logic, and handles callbacks.
 
@@ -359,6 +359,13 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # --- Prepare the input state for processing ---
         try:
+            # Backward compatibility: allow direct string prompt + optional context
+            if isinstance(message, str):
+                message = AgentInput(inputs={"prompt": message, "context": context or ""})
+            # Fallback: if an unexpected type is provided, coerce to AgentInput using string representation
+            elif not isinstance(message, (AgentInput, StepRequest)):
+                message = AgentInput(inputs={"prompt": str(message), "context": context or ""})
+
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")

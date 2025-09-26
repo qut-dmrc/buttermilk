@@ -1,13 +1,3 @@
-FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[llama4maverick] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
-FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[opus] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
-FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[sonnet] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
-FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_record_by_id_found - ValueError: "BM" object has no field "get_storage"
-FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_record_by_id_not_found - ValueError: "BM" object has no field "get_storage"
-FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_records_for_flow_without_scores - ValueError: "BM" object has no field "get_storage"
-FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_records_for_flow_with_scores - ValueError: "BM" object has no field "get_storage"
-FAILED tests/api/test_message_service_tokens.py::TestMessageServiceTokenExtraction::test_format_message_extracts_tokens_from_agent_output - AttributeError: <module 'buttermilk.api.services.message_service' from '/home/nic/src/writing/projects/buttermilk/buttermilk/api/services/message_service.py'> does not have the attribute 'extract_usage_from_metadata'
-FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[gemini25pro] - AttributeError: 'NoneType' object has no attribute 'run_flows'
-FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[llama4maverick] - AttributeError: 'NoneType' object has no attribute 'run_flows'
 FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[gemini25flash] - AttributeError: 'NoneType' object has no attribute 'run_flows'
 FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[gpt41] - AttributeError: 'NoneType' object has no attribute 'run_flows'
 FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[llama32_90b] - AttributeError: 'NoneType' object has no attribute 'run_flows'

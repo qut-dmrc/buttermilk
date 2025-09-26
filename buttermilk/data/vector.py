@@ -27,7 +27,7 @@ from vertexai.language_models import (
 
 from buttermilk import bm, logger
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
-from buttermilk._core.log import logger  # noqa # Import logger from Buttermilk core
+
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
@@ -841,9 +841,6 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
             try:
-                from buttermilk import get_bm
-
-                bm = get_bm()
                 session_id = bm.session_info.session_id if bm and bm.session_info else None
             except:
                 session_id = None

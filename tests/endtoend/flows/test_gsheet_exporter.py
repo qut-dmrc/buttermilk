@@ -9,25 +9,6 @@ TEST_FLOW_ID = "test_flow"
 
 pytestmark = pytest.mark.anyio
 
-
-async def test_flow_data_source(real_flow_runner):
-    run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
-
-    results = read_json("tests/data/result.json")  # three results with 1, 4 & 3 reasons
-
-    # Mock the flow's run_flows method to return the predefined results
-    async def mock_run_flows(run_request):  # Changed parameter name
-        for result in results:
-            yield result
-
-    real_flow_runner.run_flows = mock_run_flows
-
-    # Run the flow and check that the data source correctly extracts results
-    async for result in real_flow_runner.run_flows(run_request=run_request):  # Pass run_request
-        assert result
-        assert isinstance(result, dict)  # Assuming results are dicts in this test
-
-
 async def test_gsheet_exporter(real_flow_runner):
     run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
 

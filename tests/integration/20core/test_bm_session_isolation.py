@@ -35,7 +35,6 @@ class MockOrchestrator(Orchestrator):
         self.agents = {}
         self.observers = {}
         self.parameters = {}
-        self._flow_data = Mock()
         self._bm = None
     
     async def _setup(self, request: RunRequest) -> None:

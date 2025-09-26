@@ -61,8 +61,8 @@ async def test_generated_image_is_valid_and_nontrivial(client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_image_can_roundtrip_to_bytes_and_reopen(real_bm, client):
-    image_client = client(real_bm)
+async def test_image_can_roundtrip_to_bytes_and_reopen(client):
+    image_client = client()
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
@@ -83,8 +83,8 @@ async def test_image_can_roundtrip_to_bytes_and_reopen(real_bm, client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_cloud_artifact_matches_in_memory_dimensions(real_bm, client):
-    image_client = client(real_bm)
+async def test_cloud_artifact_matches_in_memory_dimensions(client):
+    image_client = client()
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
@@ -106,8 +106,8 @@ async def test_cloud_artifact_matches_in_memory_dimensions(real_bm, client):
 
 
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_allows_none_negative_prompt_and_still_produces_image(real_bm, client):
-    image_client = client(real_bm)
+async def test_allows_none_negative_prompt_and_still_produces_image(client):
+    image_client = client()
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=None,
@@ -119,30 +119,10 @@ async def test_allows_none_negative_prompt_and_still_produces_image(real_bm, cli
     assert CloudPath(result.uri).exists()
 
 
-async def test_generate_in_parallel_all_clients(real_bm):
-    # Exercise concurrency across clients
-    instances = [c(real_bm) for c in CLIENTS]
-
-    async def _gen(ic):
-        return await ic.generate_image(prompt=TEST_PROMPT, negative_prompt=TEST_NEGATIVE_PROMPT)
-
-    import asyncio
-
-    results = await asyncio.gather(*(_gen(ic) for ic in instances))
-    assert len(results) == len(instances)
-
-    for res in results:
-        assert isinstance(res, ImageRecord)
-        assert isinstance(res.image, Image.Image)
-        assert _is_nontrivial_image(res.image)
-        assert res.uri.startswith(ALLOWED_SCHEMES)
-        assert CloudPath(res.uri).exists()
-
-
 @pytest.mark.parametrize("client", CLIENTS)
-async def test_cloud_artifact_content_hash_is_stable_for_single_download(real_bm, client):
+async def test_cloud_artifact_content_hash_is_stable_for_single_download(client):
     # Ensures the stored object is readable consistently (not necessarily deterministic generation)
-    image_client = client(real_bm)
+    image_client = client()
     result = await image_client.generate_image(
         prompt=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,

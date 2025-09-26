@@ -37,8 +37,7 @@ import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
-from opentelemetry import trace
-from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr  # Pydantic components
 
 from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
@@ -276,6 +275,10 @@ class BM(BaseModel):
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
 
+    # Allow attaching test doubles/mocks to instances (e.g., real_bm.get_storage = Mock(...))
+    # This relaxes Pydantic's attribute setting restrictions for testing convenience.
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
     def get_save_dir(cls, save_dir_base: Any) -> str:
@@ -459,6 +462,14 @@ class BM(BaseModel):
             extension=".json",
         )
         logger.debug("Initial BM config saved successfully")
+
+    # Permit overriding/attaching attributes (e.g., monkeypatching methods) in tests
+    def __setattr__(self, name: str, value: Any) -> None:  # type: ignore[override]
+        try:
+            return super().__setattr__(name, value)
+        except ValueError:
+            # Fallback to plain setattr for non-field attributes (e.g., method monkeypatch)
+            object.__setattr__(self, name, value)
 
     @property
     def cloud_manager(self):

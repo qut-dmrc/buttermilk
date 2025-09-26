@@ -9,17 +9,19 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
+import time
 import uuid
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Optional
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import LLMMessage
+from autogen_core.models import AssistantMessage, LLMMessage
 from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from buttermilk import bm, logger
+from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
@@ -39,7 +41,7 @@ class LLMResult(BaseModel):
     trace_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique ID for correlation")
     template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
     messages: list[LLMMessage] = Field(default_factory=list, description="Messages exchanged with LLM")
-    error: Optional[str] = Field(None, description="Error message if processing failed")
+    error: str | ErrorEvent | None = Field(None, description="Error message if processing failed")
 
 
 class LLMCore:
@@ -90,6 +92,148 @@ class LLMCore:
         # Template metadata for tracking
         self._template_metadata: dict[str, Any] = {}
 
+        # Initialize trace writer (lazy loading)
+        self._trace_writer = None
+
+    @property
+    def trace_writer(self):
+        """Lazy load trace writer."""
+        if self._trace_writer is None:
+            from buttermilk.utils.trace_writer import get_trace_writer
+            self._trace_writer = get_trace_writer()
+        return self._trace_writer
+
+    async def process(
+        self,
+        inputs: dict[str, Any],
+        parent_trace_id: Optional[str] = None,
+        component_name: str = "LLMCore",
+        cancellation_token: Optional[CancellationToken] = None
+    ) -> AsyncGenerator[LLMResult, None]:
+        """Unified LLM processing method that handles everything.
+
+        This is the main entry point for all LLM operations - template rendering,
+        LLM calling, tracing, and observability. It yields LLMResult objects
+        and emits ExecutionTrace for observability.
+
+        Args:
+            inputs: Input data dict that can include:
+                - Any template variables
+                - 'context': list of LLMMessage objects for conversation history
+                - 'records': list of BaseRecord objects
+                - 'record': single BaseRecord (will be converted to list)
+            parent_trace_id: Optional parent trace ID for correlation
+            component_name: Name of the component using this (for tracing)
+            cancellation_token: Optional token for cancelling LLM calls
+
+        Yields:
+            LLMResult: The processed output with content and metadata
+
+        Raises:
+            ProcessingError: If processing fails (fail-fast semantics)
+        """
+        start_time = time.time()
+        tracer = trace.get_tracer("buttermilk.llm_core")
+
+        # Extract special inputs
+        context = inputs.pop('context', []) if isinstance(inputs.get('context'), list) else []
+        records = inputs.pop('records', []) if isinstance(inputs.get('records'), list) else []
+
+        # Handle single record -> records list conversion
+        if 'record' in inputs and isinstance(inputs['record'], BaseRecord):
+            records = [inputs.pop('record')]
+
+        # Build span attributes
+        span_attributes = {
+            "llm.model": self._model,
+            "llm.template": self._template,
+            "component.name": component_name,
+        }
+        if parent_trace_id:
+            span_attributes["parent_trace_id"] = parent_trace_id
+
+        with tracer.start_as_current_span(
+            "llm_core.unified_process",
+            attributes=span_attributes
+        ) as span:
+            try:
+                # Process using existing method
+                result = await self.process_with_llm(
+                    inputs=inputs,
+                    context=context,
+                    records=records,
+                    parent_trace_id=parent_trace_id,
+                    cancellation_token=cancellation_token
+                )
+
+                # Create ExecutionTrace for observability
+                duration_ms = (time.time() - start_time) * 1000
+                execution_trace = ExecutionTrace(
+                    call_id=result.trace_id,
+                    agent_info={
+                        "component_name": component_name,
+                        "execution_type": "llm_processing",
+                        "config": self.parameters,
+                    },
+                    inputs=inputs,
+                    outputs=result.content,
+                    messages=result.messages,
+                    parameters=self.parameters,
+                    metadata={
+                        **result.metadata,
+                        **result.template_metadata,
+                        "duration_ms": duration_ms,
+                    },
+                    parent_call_id=parent_trace_id,
+                )
+
+                # Emit trace if trace writer is available
+                if hasattr(self, 'trace_writer') and self.trace_writer:
+                    try:
+                        await self.trace_writer.add(execution_trace)
+                    except Exception as e:
+                        logger.warning(f"Failed to emit trace: {e}")
+
+                span.set_status(trace.Status(trace.StatusCode.OK))
+                yield result
+
+            except ProcessingError as e:
+                # Create error trace
+                duration_ms = (time.time() - start_time) * 1000
+                error_trace = ExecutionTrace(
+                    agent_info={
+                        "component_name": component_name,
+                        "execution_type": "llm_processing",
+                        "config": self.parameters,
+                    },
+                    inputs=inputs,
+                    error={
+                        "event": str(e),
+                        "details": {"error_type": type(e).__name__}
+                    },
+                    metadata={
+                        "duration_ms": duration_ms,
+                    },
+                    parent_call_id=parent_trace_id,
+                )
+
+                # Emit error trace
+                if hasattr(self, 'trace_writer') and self.trace_writer:
+                    try:
+                        await self.trace_writer.add(error_trace)
+                    except Exception as te:
+                        logger.warning(f"Failed to emit error trace: {te}")
+
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise
+
+            except Exception as e:
+                logger.error(f"Unexpected error in LLMCore.process: {e}")
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise ProcessingError(f"LLMCore processing failed: {e}") from e
+
     async def process_with_llm(
         self,
         inputs: dict[str, Any],
@@ -113,7 +257,7 @@ class LLMCore:
             LLMResult with the processed output and metadata
         """
         tracer = trace.get_tracer("buttermilk.llm_core")
-        result = LLMResult(content=None)
+        result = LLMResult(content=None, error=None)
 
         # Build span attributes, filtering out None values
         span_attributes = {
@@ -197,11 +341,7 @@ class LLMCore:
         context: list[LLMMessage],
         records: list[BaseRecord]
     ) -> list[LLMMessage]:
-        """Render the template with provided data.
-
-        Extracted from LLMAgent._fill_template with minor adaptations
-        for the more generic interface.
-        """
+        """Render the template with provided data."""
         template_name = self._template
         if not template_name:
             raise ProcessingError("'template' is required but not specified")
