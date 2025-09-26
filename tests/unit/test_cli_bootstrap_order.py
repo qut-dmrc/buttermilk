@@ -133,7 +133,7 @@ class TestCLIConfigurationBootstrap:
         assert session_bm.session_info.job == "testing"
 
         # Should be able to set as global BM
-        from buttermilk import get_bm, set_bm
+        from buttermilk._core.dmrc import get_bm, set_bm  # Local import to avoid circular dependency
 
         set_bm(session_bm)
         assert get_bm() is session_bm

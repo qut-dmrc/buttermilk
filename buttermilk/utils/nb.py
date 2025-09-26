@@ -17,7 +17,7 @@ from IPython.display import display
 from rich import print
 
 from dotenv import load_dotenv
-from buttermilk import BM, bm, get_bm, set_bm, logger  # noqa
+from buttermilk import BM, bm, logger  # noqa
 
 console = Console()
 print = console.print

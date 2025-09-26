@@ -255,9 +255,8 @@ def _get_session_info() -> Any:
 
     """
     try:
-        from buttermilk import get_bm
+        from buttermilk import bm
 
-        bm = get_bm()
         return bm.session_info
     except ImportError:
         logger.warning("Buttermilk global instance (bm) not available to get session_info.")

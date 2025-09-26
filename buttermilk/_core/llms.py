@@ -45,21 +45,14 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
 # from google import genai  # Google Generative AI library (unused in current implementation)
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
+from buttermilk import bm, logger
+
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.constants import CONFIG_CACHE_PATH  # Path to models.json cache
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.log import logger  # Buttermilk logger
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
 from .retry import RetryWrapper  # Retry logic wrapper
-
-
-# Use a function for deferred import to avoid circular references
-def get_bm():
-    """Get the BM singleton with delayed import to avoid circular references."""
-    _get_bm = importlib.import_module("buttermilk._core.dmrc").get_bm
-    return _get_bm()
-
 
 _ = "ChatCompletionClient"  # Placeholder for type checking if needed
 
@@ -1030,14 +1023,13 @@ class LLMs(BaseModel):
 
             elif config.client_type == ClientType.ANTHROPIC_VERTEX:
                 # Anthropic via Vertex AI
-                bm_instance = get_bm()
-                if not bm_instance.gcp_credentials:
+                if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
 
                 vertex_params = {
                     "region": config.configs.get("region"),
                     "project_id": config.configs.get("project_id"),
-                    "credentials": bm_instance.gcp_credentials,
+                    "credentials": bm.gcp_credentials,
                 }
                 vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
 
@@ -1058,8 +1050,7 @@ class LLMs(BaseModel):
 
             elif config.client_type == ClientType.GEMINI:
                 # Google Generative AI (Gemini) API
-                bm_instance = get_bm()
-                if not bm_instance.gcp_credentials:
+                if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Gemini API.")
 
                 def factory() -> ChatCompletionClient:
@@ -1070,12 +1061,11 @@ class LLMs(BaseModel):
                 return factory
 
             elif config.client_type == ClientType.GEMINI_VERTEX:
-                bm_instance = get_bm()
 
                 def factory() -> ChatCompletionClient:
                     vertex_params = client_params.copy()
                     # Get fresh token on each client creation
-                    vertex_params["api_key"] = bm_instance.get_gcp_access_token()
+                    vertex_params["api_key"] = bm.get_gcp_access_token()
                     return OpenAIChatCompletionClient(
                         base_url=config.base_url,
                         model_info=config.model_info,
@@ -1085,8 +1075,7 @@ class LLMs(BaseModel):
 
             elif config.client_type == ClientType.VERTEX_OPENAI:
                 # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
-                bm_instance = get_bm()
-                if not bm_instance.gcp_credentials:
+                if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Vertex AI.")
 
                 def factory() -> ChatCompletionClient:
@@ -1094,7 +1083,7 @@ class LLMs(BaseModel):
 
                     # Set up OAuth2 bearer token authentication with fresh token
                     headers = {
-                        "Authorization": f"Bearer {bm_instance.get_gcp_access_token()}",
+                        "Authorization": f"Bearer {bm.get_gcp_access_token()}",
                     }
 
                     # Dummy API key for OpenAI client validation

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 # Import the global Buttermilk instance getter
 from buttermilk import (
-    get_bm,
+    bm,
     logger,  # Buttermilk's centralized logger
 )
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
@@ -68,7 +68,6 @@ class SpyAgent(RoutedAgent):
 
         """
         super().__init__(description="Save results to storage")
-        bm = get_bm()  # Get the global Buttermilk instance
 
         save = StorageFactory.create_config(save)
         # Use unified storage system

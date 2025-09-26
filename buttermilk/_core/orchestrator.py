@@ -33,7 +33,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import get_bm, logger  # Global Buttermilk instance for framework access
+from buttermilk import logger  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
@@ -299,6 +299,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self._bm is not None:
             return self._bm
         else:
+            from buttermilk._core.dmrc import get_bm  # Local import to avoid circular dependency
             return get_bm()
 
     async def run(self, request: RunRequest) -> None:

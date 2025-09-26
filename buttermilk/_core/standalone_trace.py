@@ -14,8 +14,7 @@ from typing import Any, TypeVar
 import weave
 from weave.trace.weave_client import Call
 
-from buttermilk import get_bm, logger
-from buttermilk._core.log import logger
+from buttermilk import bm, logger
 from buttermilk._core.message_data import clean_empty_values
 
 T = TypeVar("T")
@@ -52,7 +51,6 @@ class StandaloneTraceContext:
         self._op = weave.op(_standalone_operation, call_display_name=self.name)
 
         # Create the parent trace call
-        bm = get_bm()
         self.trace_call = bm.weave.create_call(
             self._op,
             inputs=clean_empty_values({"name": self.name, **self.attributes}),
@@ -71,7 +69,6 @@ class StandaloneTraceContext:
             if exc_type:
                 output["error"] = str(exc_val)
 
-            bm = get_bm()
             bm.weave.finish_call(self.trace_call, output=output, op=self._op)
             logger.debug(f"Finished standalone trace context: {self.name}")
 

@@ -9,8 +9,8 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
-from typing import Any, Optional
 import uuid
+from typing import Any, Optional
 
 import pydantic
 from autogen_core import CancellationToken
@@ -19,7 +19,7 @@ from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
-from buttermilk import logger
+from buttermilk import bm, logger
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
@@ -271,7 +271,6 @@ class LLMCore:
         This provides the core LLM calling logic with observability
         but without agent-specific concepts.
         """
-        from buttermilk import get_bm
 
         tracer = trace.get_tracer("buttermilk.llm_core")
 
@@ -291,7 +290,6 @@ class LLMCore:
         ) as span:
             try:
                 # Get LLM client from global BM instance
-                bm = get_bm()
                 model_client = bm.llms.get_autogen_chat_client(self._model)
 
                 logger.debug(

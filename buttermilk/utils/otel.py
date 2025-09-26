@@ -50,7 +50,7 @@ from opentelemetry.sdk.trace import SpanProcessor as _SpanProcessor, TracerProvi
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import SpanKind as _SpanKind
 
-from buttermilk import get_bm, logger  # Moved import to the top
+from buttermilk import bm, logger
 from buttermilk._core.config import FatalError, Tracing
 
 """Base URL for Weights & Biases tracing services."""
@@ -61,7 +61,6 @@ def setup_tracing_otel(tracing_cfg: Tracing) -> None:
     """Legacy OTEL setup using BM singleton. Use setup_tracing_otel_with_execution_context instead."""
     # Initialize OpenTelemetry with OTLP exporters
     _ = tracing_cfg  # for signature compatibility
-    bm = get_bm()
     _ = bm.gcp_credentials
 
 
@@ -286,7 +285,6 @@ def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
     """Initialize Traceloop for OpenTelemetry tracing."""
 
     try:
-        bm = get_bm()
         creds = bm.credentials
 
         traceloop_api_key = os.getenv("TRACELOOP_API_KEY") or creds["TRACELOOP_API_KEY"]
@@ -311,9 +309,6 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
     try:
         # Retrieve necessary credentials from the global Buttermilk instance.
         # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
-        from buttermilk import get_bm
-
-        bm = get_bm()
         creds = bm.credentials
 
         wandb_api_key = os.getenv("WANDB_API_KEY") or creds["WANDB_API_KEY"]

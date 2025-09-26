@@ -46,9 +46,9 @@ from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
     AgentOutput,  # Standard input message structure
-    ExecutionTrace,
     ConductorRequest,
     ErrorEvent,
+    ExecutionTrace,
     OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
@@ -160,7 +160,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             return self._config.bm
         else:
             # Fall back to global singleton
-            from buttermilk import get_bm
+            from buttermilk._core.dmrc import get_bm  # Local import to avoid circular dependency
+
             return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
@@ -522,9 +523,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 "execution_type": "agent",
                 "agent_id": self.agent_id,
                 "role": self.role,
-                "config": self._config.model_dump() if hasattr(self._config, 'model_dump') else self._config,
+                "config": self._config.model_dump() if hasattr(self._config, "model_dump") else self._config,
             },
-            parameters=message.parameters if hasattr(message, 'parameters') else None,
+            parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,
         )
 

@@ -6,7 +6,7 @@ to efficiently batch and store ExecutionTrace objects to BigQuery.
 
 from typing import Optional
 
-from buttermilk import get_bm, logger
+from buttermilk import bm, logger
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk.storage import Storage
 from buttermilk.utils.uploader import AsyncDataUploader
@@ -19,10 +19,10 @@ class TraceWriter:
     based on the configuration in conf/storage/traces.yaml.
     """
 
-    _instance: Optional['TraceWriter'] = None
+    _instance: Optional["TraceWriter"] = None
     _initialized: bool = False
 
-    def __new__(cls) -> 'TraceWriter':
+    def __new__(cls) -> "TraceWriter":
         """Ensure single instance."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -35,14 +35,13 @@ class TraceWriter:
 
         try:
             # Get the global BM instance
-            bm = get_bm()
 
             # Look for traces storage configuration
-            if hasattr(bm, 'config') and 'storage' in bm.config:
-                storage_configs = bm.config.get('storage', {})
+            if hasattr(bm, "config") and "storage" in bm.config:
+                storage_configs = bm.config.get("storage", {})
 
                 # Check for traces storage config
-                traces_config = storage_configs.get('traces')
+                traces_config = storage_configs.get("traces")
                 if traces_config:
                     # Create storage instance
                     storage = Storage(traces_config)

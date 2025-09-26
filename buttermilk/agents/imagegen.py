@@ -38,9 +38,8 @@ from PIL import Image  # Pillow library for image manipulation
 from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
 
-from buttermilk import get_bm, logger  # Global Buttermilk instance for accessing config/credentials
+from buttermilk import bm, logger
 from buttermilk._core.image import ImageRecord, google_genai_image_to_pil, read_image  # Buttermilk ImageRecord model
-from buttermilk._core.log import logger  # Centralized logger
 from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
 
 
@@ -105,7 +104,6 @@ class TextToImageClient(RetryWrapper):
             information if generation failed.
         """
         final_save_path = save_path
-        bm = get_bm()
         if not final_save_path:
             # Ensure bm.session_info.save_dir is available and valid
             if not bm.session_info.save_dir or not Path(bm.session_info.save_dir).is_dir():  # Check if local dir, cloud paths need different check
@@ -270,7 +268,6 @@ class VertexImagegenModels(TextToImageClient):
 
         config = GenerateImagesConfig(**generation_params)
 
-        bm = get_bm()
         client = bm.genai  # Ensure that we have initialised the genai client
 
         api_response = await client.aio.models.generate_images(model=self.model, prompt=text, config=config)
@@ -336,7 +333,6 @@ class SD35Large(TextToImageClient):
             **kwargs,  # Allow overrides and additional params
         }
 
-        bm = get_bm()
         azure_url = bm.credentials.get("AZURE_STABILITY35_URL")
         azure_api_key = bm.credentials.get("AZURE_STABILITY35_API_KEY")
 
@@ -781,7 +777,6 @@ class DALLE(TextToImageClient):
             KeyError: If `OPENAI_API_KEY` is not in `bm.credentials`.
             RuntimeError: If the OpenAI API call fails or returns unexpected data.
         """
-        bm = get_bm()
         if self.client is None or not isinstance(self.client, AsyncOpenAI):
             openai_api_key = bm.credentials.get("OPENAI_API_KEY")
             if not openai_api_key:
@@ -900,7 +895,6 @@ class BatchImageGenerator(BaseModel):
             RuntimeError: If `bm.session_info.save_dir` is not available when `v` is None.
         """
         if v is None:
-            bm = get_bm()
             if bm.session_info.save_dir:
                 return (
                     CloudPath(bm.session_info.save_dir)

@@ -3,7 +3,7 @@ from typing import Any
 import weave  # For tracing - core dependency
 from weave.trace.weave_client import Call, WeaveObject
 
-from buttermilk import get_bm, logger
+from buttermilk import bm, logger
 
 # Buttermilk core imports
 from buttermilk._core.contract import (
@@ -97,7 +97,9 @@ class EmptyTraceFilter:
 async def get_parent_call_weave(
     message: AgentInput | None = None,
 ) -> Call | WeaveObject:
-    if await get_bm().get_weave_client() is None:
+    from buttermilk._core.dmrc import get_bm  # Local import to avoid circular dependency
+
+    if await bm.get_weave_client() is None:
         logger.warning("Weave client is not initialized, cannot retrieve parent call.")
         return None
     current_call = weave.get_current_call()
