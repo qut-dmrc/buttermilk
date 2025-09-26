@@ -8,7 +8,7 @@ import asyncio
 
 from hydra import compose, initialize
 
-from buttermilk import init, set_bm
+from buttermilk import init
 from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
 
 
@@ -45,10 +45,6 @@ def test_init():
             job="your_job_name",  # Use existing infrastructure
         )
     )
-
-    # Step 3: Set as global singleton (if needed)
-    set_bm(session_bm)
-
     assert session_bm is not None
     assert execution_context is not None
     assert session_bm.cloud_manager is execution_context.cloud_manager

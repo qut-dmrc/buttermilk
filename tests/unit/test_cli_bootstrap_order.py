@@ -67,7 +67,7 @@ class TestCLIBootstrapOrder:
         session_bm = asyncio.run(bootstrapper.bootstrap_session_context(name="cli_test", job="consistency_test"))
 
         # Set BM as singleton (as CLI does)
-        from buttermilk import get_bm, set_bm
+        from buttermilk._core.dmrc import get_bm, set_bm
 
         set_bm(session_bm)
 

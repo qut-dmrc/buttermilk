@@ -59,7 +59,7 @@ class TestBootstrapSequenceE2E:
         assert session_bm.session_info.session_id
 
         # Verify session BM can access ExecutionContext infrastructure
-        from buttermilk import get_bm, set_bm
+        from buttermilk._core.dmrc import get_bm, set_bm
 
         set_bm(session_bm)  # Set as global singleton
         global_bm = get_bm()

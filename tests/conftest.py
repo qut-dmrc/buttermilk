@@ -5,7 +5,6 @@ import weave  # noqa
 from hydra import compose, initialize
 from pytest import MarkDecorator
 
-from buttermilk import set_bm
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
@@ -34,7 +33,6 @@ def init():
     with initialize(version_base=None, config_path="../buttermilk/conf"):
         cfg = compose(config_name="testing")
     bm, resolved_conf = bootstrap_session_with_config(config=cfg)
-    set_bm(bm)  # Set global BM for modules that rely on it
     return bm, resolved_conf
 
 

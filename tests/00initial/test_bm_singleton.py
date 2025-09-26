@@ -5,10 +5,9 @@ import hydra
 from buttermilk import (
     BM,  # Removed logger import here
     create_session_bm,
-    get_bm,  # Import get_bm
     logger,  # noqa
-    set_bm,
 )
+from buttermilk._core.dmrc import get_bm
 
 
 def test_conf(real_bm):
@@ -95,7 +94,7 @@ def test_get_bm_after_set():
         llms_instance=None,
         logger_cfg=None,
     )
-
+    from buttermilk._core.dmrc import set_bm
     # Set it as the singleton
     set_bm(test_instance)
 
@@ -123,12 +122,13 @@ def test_import_singleton_from_different_modules():
     )
 
     # Set it as the singleton
+    from buttermilk._core.dmrc import set_bm
     set_bm(test_instance)
 
     # Define a function that simulates importing from another module
     def import_from_another_module():
         # This imports get_bm fresh in this scope
-        from buttermilk import get_bm as another_get_bm
+        from buttermilk._core.dmrc import get_bm as another_get_bm
 
         return another_get_bm()
 
@@ -155,6 +155,7 @@ def test_deferred_import_function():
     )
 
     # Set it as the singleton
+    from buttermilk._core.dmrc import set_bm
     set_bm(test_instance)
 
     # Define a function that simulates the deferred import pattern

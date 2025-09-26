@@ -49,7 +49,7 @@ def test_relative_config_dir_resolves_against_cwd(monkeypatch, tmp_path):
     # Make set_bm a no-op and replace the bootstrapper class
     monkeypatch.setattr(cb, "ConfigurationBootstrapper", DummyBootstrapper)
     # Patch import target for set_bm, since function imports it inside
-    monkeypatch.setattr("buttermilk.set_bm", lambda _: None, raising=False)
+    monkeypatch.setattr("buttermilk._core.config_bootstrap.set_bm", lambda _: None, raising=False)
 
     # Replace asyncio.run globally to avoid running async code
     monkeypatch.setattr("asyncio.run", lambda _: Dummy(), raising=False)
@@ -117,7 +117,7 @@ def test_tilde_and_env_expansion(monkeypatch, tmp_path):
             return name
 
     monkeypatch.setattr(cb, "ConfigurationBootstrapper", DummyBootstrapper)
-    monkeypatch.setattr("buttermilk.set_bm", lambda _: None, raising=False)
+    monkeypatch.setattr("buttermilk._core.config_bootstrap.set_bm", lambda _: None, raising=False)
     monkeypatch.setattr("asyncio.run", lambda _: Dummy(), raising=False)
 
     # ~ expansion
