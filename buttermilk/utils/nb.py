@@ -38,7 +38,7 @@ def graph_defaults():
     print("Notebook graphing defaults applied")
 
 
-def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None) -> BM:
+def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None, config_name: str = "config") -> BM:
     """Simple one-liner initialization for Buttermilk.
 
     Args:
@@ -46,6 +46,7 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
         project: Project name (required for first session, optional for subsequent sessions)
         overrides: List of Hydra override strings for customization
         config_dir: Path to configuration directory (defaults to packaged config)
+        config_name: Name of the configuration file to load (without .yaml extension)
 
     Returns:
         bm: the Buttermilk instance
@@ -66,12 +67,12 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
         # To use your own config directory:
         >>> bm = nb_init(job="my_analysis", project="my_project", config_dir="./conf")
     """
-    bm, _ = nb_init_with_config(job=job, project=project, overrides=overrides, config_dir=config_dir)
+    bm, _ = nb_init_with_config(job=job, project=project, overrides=overrides, config_dir=config_dir, config_name=config_name)
 
     return bm
 
 
-def nb_init_with_config(job: str, project: str, overrides: list[str] = [], config_dir: str = None) -> tuple[BM, Any]:
+def nb_init_with_config(job: str, project: str, overrides: list[str] = [], config_dir: str = None, config_name: str = "config") -> tuple[BM, Any]:
     """Initialization for Buttermilk that also returns the config object.
 
     Args:
@@ -79,6 +80,7 @@ def nb_init_with_config(job: str, project: str, overrides: list[str] = [], confi
         project: Project name (required for first session, optional for subsequent sessions)
         overrides: List of Hydra override strings for customization
         config_dir: Path to configuration directory (defaults to packaged config)
+        config_name: Name of the configuration file to load (without .yaml extension)
 
     Returns:
         Tuple of (bm, config): the Buttermilk instance and the Hydra config object
@@ -104,7 +106,7 @@ def nb_init_with_config(job: str, project: str, overrides: list[str] = [], confi
     except Exception as e:
         logger.warning(f"Could not load .env file: {e}")
 
-    bm, config = bootstrap_session_with_config(job=job, project=project, run_type="notebook", config_dir=config_dir, overrides=overrides)
+    bm, config = bootstrap_session_with_config(job=job, project=project, run_type="notebook", config_dir=config_dir, config_name=config_name, overrides=overrides)
 
     graph_defaults()
 

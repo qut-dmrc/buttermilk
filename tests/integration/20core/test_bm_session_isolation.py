@@ -114,8 +114,9 @@ class TestBMInjectionSystem:
         orchestrator = MockOrchestrator(name="test_orch")
         
         # Initially should use global singleton (mocked to raise error)
-        with pytest.raises(Exception):  # get_bm() not initialized in test
-            orchestrator.get_effective_bm()
+        from buttermilk import bm as global_bm
+        effective_bm = orchestrator.get_effective_bm()
+        assert effective_bm is global_bm
         
         # Set session BM
         orchestrator.set_bm(session_bm)
@@ -129,8 +130,9 @@ class TestBMInjectionSystem:
         """Test that Agent can access injected BM through config."""
         # Agent with no BM should try to use global singleton
         agent_no_bm = MockAgent(agent_name="test1", role="TEST")
-        with pytest.raises(Exception):  # get_bm() not initialized in test
-            agent_no_bm.get_effective_bm()
+        from buttermilk import bm as global_bm
+        effective_bm = agent_no_bm.get_effective_bm()
+        assert effective_bm is global_bm
         
         # Agent with injected BM should use it
         agent_with_bm = MockAgent(agent_name="test2", role="TEST", bm=session_bm)
@@ -207,8 +209,9 @@ class TestBackwardCompatibility:
         assert flow_runner.bm is None
         
         # get_effective_bm should try to use global singleton (will fail in test)
-        with pytest.raises(Exception):  # get_bm() not initialized
-            flow_runner.get_effective_bm()
+        from buttermilk import bm as global_bm
+        effective_bm = flow_runner.get_effective_bm()
+        assert effective_bm is global_bm
     
     def test_orchestrator_without_session_bm(self):
         """Test that Orchestrator works without session BM (legacy mode)."""
@@ -218,8 +221,9 @@ class TestBackwardCompatibility:
         assert orchestrator._bm is None
         
         # get_effective_bm should try to use global singleton (will fail in test)
-        with pytest.raises(Exception):  # get_bm() not initialized
-            orchestrator.get_effective_bm()
+        from buttermilk import bm as global_bm
+        effective_bm = orchestrator.get_effective_bm()
+        assert effective_bm is global_bm
     
     def test_agent_without_session_bm(self):
         """Test that Agent works without session BM (legacy mode)."""
@@ -229,8 +233,9 @@ class TestBackwardCompatibility:
         assert not hasattr(agent._config, "bm") or agent._config.bm is None
         
         # get_effective_bm should try to use global singleton (will fail in test)
-        with pytest.raises(Exception):  # get_bm() not initialized
-            agent.get_effective_bm()
+        from buttermilk import bm as global_bm
+        effective_bm = agent.get_effective_bm()
+        assert effective_bm is global_bm
 
 
 if __name__ == "__main__":

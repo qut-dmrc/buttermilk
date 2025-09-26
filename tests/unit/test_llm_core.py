@@ -174,10 +174,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=50, completion_tokens=50),
             cached=False
         )
-        mock_client.call_chat.return_value = mock_result
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
-
-        with patch("buttermilk.get_bm", return_value=mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core._call_llm_with_trace(
                 messages=[UserMessage(content="Test", source="test")],
                 cancellation_token=None,
@@ -201,7 +198,7 @@ class TestLLMCore:
         mock_client.call_chat.side_effect = Exception("API error")
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk.get_bm", return_value=mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
             with pytest.raises(ProcessingError, match="LLM call to 'gpt-4' failed"):
                 await core._call_llm_with_trace(
                     messages=[UserMessage(content="Test", source="test")],

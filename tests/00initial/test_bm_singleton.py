@@ -5,7 +5,6 @@ import hydra
 from buttermilk import (
     logger,  # noqa
 )
-from buttermilk._core.dmrc import get_bm
 
 from ._core.bm_init import BM, create_session_bm
 
@@ -21,8 +20,9 @@ def test_conf(real_bm):
 def test_singleton_instance(real_bm):
     """Test that singleton access returns the same instance, but new sessions create new instances."""
     # Get singleton instance should return the same BM
-    bm_direct = get_bm()  # Use get_bm() to access the singleton
-    assert bm_direct is real_bm, "get_bm() should return the same singleton instance"
+    from buttermilk import bm
+    bm_direct = bm
+    assert bm_direct is real_bm, "bm should be the same singleton instance"
 
     # But hydra.utils.instantiate creates new session-scoped instances (new architecture)
     bm_new_session = hydra.utils.instantiate(real_bm)
@@ -68,7 +68,8 @@ def test_singleton_between_modules(real_bm):
     def second_module_access():
         """Function simulating another module accessing BM."""
 
-        return get_bm()  # Use get_bm()
+        from buttermilk import bm
+        return bm
 
     bm2 = second_module_access()
 
@@ -128,9 +129,9 @@ def test_import_singleton_from_different_modules():
     # Define a function that simulates importing from another module
     def import_from_another_module():
         # This imports get_bm fresh in this scope
-        from buttermilk._core.dmrc import get_bm as another_get_bm
+        from buttermilk import bm as another_bm
 
-        return another_get_bm()
+        return another_bm
 
     # Get the instance through the simulated import
     instance_from_other_module = import_from_another_module()
@@ -160,9 +161,9 @@ def test_deferred_import_function():
 
     # Define a function that simulates the deferred import pattern
     def get_bm_deferred():
-        from buttermilk import get_bm as _get_bm
+        from buttermilk import bm as _bm
 
-        return _get_bm()
+        return _bm
 
     # Get the instance through the deferred import
     deferred_instance = get_bm_deferred()

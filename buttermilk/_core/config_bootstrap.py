@@ -31,15 +31,17 @@ class ConfigurationBootstrapper:
     5. Session context setup
     """
 
-    def __init__(self, config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None):
+    def __init__(self, config_path: str = "conf", config_name: str = "config", overrides: list[str] | None = None, config: DictConfig | None = None):
         """Initialize the configuration bootstrapper.
 
         Args:
             config_path: Path to Hydra configuration directory
+            config_name: Name of the configuration file to load (without .yaml extension)
             overrides: List of configuration overrides
             config: Pre-loaded configuration (if already available from Hydra context)
         """
         self.config_path = config_path
+        self.config_name = config_name
         self.overrides = overrides or []
         self._config: DictConfig | None = config
         self._execution_context: ExecutionContext | None = None
@@ -59,7 +61,7 @@ class ConfigurationBootstrapper:
                     # We're already in a Hydra context, get the existing config
                     from hydra import compose
 
-                    self._config = compose(config_name="config", overrides=self.overrides)
+                    self._config = compose(config_name=self.config_name, overrides=self.overrides)
                     OmegaConf.resolve(self._config)
                     logger.info("Configuration loaded from existing Hydra context")
                 else:
@@ -73,7 +75,7 @@ class ConfigurationBootstrapper:
                     config_dir = config_dir.resolve()
                     
                     with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
-                        self._config = compose(config_name="config", overrides=self.overrides)
+                        self._config = compose(config_name=self.config_name, overrides=self.overrides)
                         OmegaConf.resolve(self._config)
                         
                     logger.info("Configuration loaded via new Hydra initialization")
@@ -257,19 +259,20 @@ class ConfigurationBootstrapper:
     
 
 def create_configuration_bootstrapper(
-    config_path: str = "conf", overrides: list[str] | None = None, config: DictConfig | None = None
+    config_path: str = "conf", config_name: str = "config", overrides: list[str] | None = None, config: DictConfig | None = None
 ) -> ConfigurationBootstrapper:
     """Factory function to create a ConfigurationBootstrapper instance.
 
     Args:
         config_path: Path to Hydra configuration directory
+        config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of configuration overrides
         config: Pre-loaded configuration (if already available from Hydra context)
 
     Returns:
         ConfigurationBootstrapper instance
     """
-    return ConfigurationBootstrapper(config_path=config_path, overrides=overrides, config=config)
+    return ConfigurationBootstrapper(config_path=config_path, config_name=config_name, overrides=overrides, config=config)
 
 
 # Configuration files are stored in the local directory, and
@@ -280,6 +283,7 @@ def init(
     *,
     run_type: str = "cli",
     config_dir: str | None = None,
+    config_name: str = "config",
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
 ):
@@ -292,22 +296,7 @@ def init(
         project: Project name (required for first session, optional for subsequent sessions)
         run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (defaults to packaged config)
-        overrides: List of Hydra override strings for customization
-        config: Pre-loaded configuration (if already available from Hydra context)
-
-    Returns:
-        bm: the Buttermilk instance
-
-    Raises:
-        RuntimeError: If project is required but not provided, or if project
-                     mismatches existing execution context project.
-
-
-    Args:
-        job: Name for the specific job or task
-        project: Project name (required for first session, optional for subsequent sessions)
-        run_type: Type of run ("cli", "notebook", etc.) for override management
-        config_dir: Path to configuration directory (defaults to packaged config)
+        config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization
         config: Pre-loaded configuration (if already available from Hydra context)
 
@@ -318,7 +307,7 @@ def init(
         RuntimeError: If project is required but not provided, or if project
                      mismatches existing execution context project.
     """
-    bm, config = bootstrap_session_with_config(job=job, project=project, run_type=run_type, config_dir=config_dir, overrides=overrides, config=config)
+    bm, config = bootstrap_session_with_config(job=job, project=project, run_type=run_type, config_dir=config_dir, config_name=config_name, overrides=overrides, config=config)
     return bm
 
 
@@ -327,6 +316,7 @@ def bootstrap_session_with_config(
     project: str | None = None,
     run_type: str = "cli",
     config_dir: str | None = None,
+    config_name: str = "config",
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
 ):
@@ -340,6 +330,7 @@ def bootstrap_session_with_config(
         project: Project name (required for first session, optional for subsequent sessions)
         run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (defaults to packaged config)
+        config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization
         config: Pre-loaded configuration (if already available from Hydra context)
 
@@ -376,7 +367,7 @@ def bootstrap_session_with_config(
         bootstrap_overrides.append(f"++run.job={job}")
 
     # Create bootstrapper with configuration
-    bootstrapper = ConfigurationBootstrapper(config_path=config_dir, overrides=bootstrap_overrides, config=config)
+    bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
 
     try:
         # Bootstrap full context and session

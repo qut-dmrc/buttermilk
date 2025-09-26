@@ -351,9 +351,8 @@ class TestSessionGCSArchival:
         # Create a test session
         storage_service.save_parameters(session_id, {"flow": "test"})
 
-        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
-            mock_get_bm.side_effect = RuntimeError("BM singleton not initialized")
-
+        with patch("buttermilk.api.services.session_storage.bm") as mock_bm:
+            del mock_bm.session_info
             result = storage_service.archive_to_gcs(session_id)
             assert result is False
 
@@ -459,7 +458,8 @@ class TestConfigurableSessionsDirectory:
         """Test get_sessions_dir falls back to default when BM is unavailable."""
         from buttermilk.api.services.session_storage import SESSIONS_DIR, get_sessions_dir
 
-        with patch("buttermilk.get_bm", side_effect=Exception("BM not available")):
+        with patch("buttermilk.api.services.session_storage.bm") as mock_bm:
+            del mock_bm.session_info
             result = get_sessions_dir()
             assert result == SESSIONS_DIR
 
