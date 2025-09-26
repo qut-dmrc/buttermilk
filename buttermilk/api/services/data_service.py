@@ -1,6 +1,7 @@
 import datetime
 from typing import Any, Protocol
 
+from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig, SessionConfig
 from buttermilk._core.contract import AgentInput, ExecutionTrace
 from buttermilk._core.log import logger
@@ -100,8 +101,6 @@ class DataService:
                 raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk import get_bm
-            bm = get_bm()
             storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_key])
 
             for record in storage:
@@ -199,8 +198,6 @@ class DataService:
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk import get_bm
-            bm = get_bm()
             storage = bm.get_storage(storage_config_raw)
 
             # Use storage's get_record_by_id method (handles iteration internally)

@@ -7,33 +7,10 @@
 #     # If we can't import silence_task_logs, create a no-op function
 #     def silence_task_logs():
 #         pass
-
 from typing import TYPE_CHECKING
 
 import structlog
 from opentelemetry import trace
-
-from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
-from ._core.config_bootstrap import init
-from ._core.constants import _LOGGER_NAME, BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
-from ._core.contract import (
-    AgentInput as AgentInput,
-    AllMessages as AllMessages,
-    ConductorRequest as ConductorRequest,
-    ExecutionTrace as ExecutionTrace,
-    FlowMessage as FlowMessage,
-    GroupchatMessageTypes as GroupchatMessageTypes,
-    HeartBeat as HeartBeat,
-    OOBMessages as OOBMessages,
-    ProceedToNextTaskSignal as ProceedToNextTaskSignal,
-    StepRequest as StepRequest,
-    SystemPromptMessage as SystemPromptMessage,
-    TaskProcessingComplete as TaskProcessingComplete,
-    ToolOutput as ToolOutput,
-    UserResponseMessage as UserResponseMessage,
-)
-from ._core.exceptions import FatalError, ProcessingError
-from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
 
 # Conditional import of BM for type checking only
 if TYPE_CHECKING:
@@ -46,7 +23,7 @@ else:
         pass
 
 
-_TRACER_NAME = "buttermilk"
+from ._core.constants import _LOGGER_NAME, _TRACER_NAME, BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 
 tracer = trace.get_tracer(_TRACER_NAME)
 logger = structlog.get_logger(_LOGGER_NAME)
@@ -70,16 +47,19 @@ class BMAccessor:
 
     def __getattr__(self, name):  # -> Any:
         from ._core.dmrc import get_bm
+
         return getattr(get_bm(), name)
 
     def __get__(self, obj, objtype=None) -> "BM":
         from ._core.dmrc import get_bm
+
         if get_bm() is None:
             raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")
         return get_bm()
 
     def __set__(self, obj, value: "BM") -> None:
         from ._core.dmrc import set_bm
+
         set_bm(value)
 
 
@@ -97,8 +77,31 @@ def __getattr__(name):
         from ._core.bm_init import BM
 
         return BM
+    if name == "bm":
+        return BMAccessor()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
+from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
+from ._core.config_bootstrap import init
+from ._core.contract import (
+    AgentInput as AgentInput,
+    AllMessages as AllMessages,
+    ConductorRequest as ConductorRequest,
+    ExecutionTrace as ExecutionTrace,
+    FlowMessage as FlowMessage,
+    GroupchatMessageTypes as GroupchatMessageTypes,
+    HeartBeat as HeartBeat,
+    OOBMessages as OOBMessages,
+    ProceedToNextTaskSignal as ProceedToNextTaskSignal,
+    StepRequest as StepRequest,
+    SystemPromptMessage as SystemPromptMessage,
+    TaskProcessingComplete as TaskProcessingComplete,
+    ToolOutput as ToolOutput,
+    UserResponseMessage as UserResponseMessage,
+)
+from ._core.exceptions import FatalError, ProcessingError
+from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
 
 __all__ = [
     "BASE_DIR",
@@ -136,4 +139,11 @@ __all__ = [
     # Exceptions
     "FatalError",
     "ProcessingError",
+    "_LOGGER_NAME",
 ]
+
+# Replace the placeholder BM with the real class now that all imports are complete
+if not TYPE_CHECKING:
+    from ._core.bm_init import BM as _RealBM
+
+    BM = _RealBM
