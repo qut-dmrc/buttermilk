@@ -520,7 +520,7 @@ async def _get_record_scores_impl(
     try:
         agent_traces = await DataService.get_scores_for_record(record_id, flow, flows, session_id)
 
-        # Send native AgentTrace objects directly using Pydantic's model_dump()
+        # Send native ExecutionTrace objects directly using Pydantic's model_dump()
         scores_data = {
             "record_id": record_id,
             "agent_traces": [trace.model_dump() for trace in agent_traces],
@@ -581,7 +581,7 @@ async def _get_record_responses_impl(
     try:
         agent_traces = await DataService.get_responses_for_record(record_id, flow, flows, session_id, include_reasoning)
 
-        # Send native AgentTrace objects directly using Pydantic's model_dump()
+        # Send native ExecutionTrace objects directly using Pydantic's model_dump()
         responses_data = {
             "record_id": record_id,
             "agent_traces": [trace.model_dump() for trace in agent_traces],

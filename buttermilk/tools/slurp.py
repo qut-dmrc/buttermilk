@@ -17,7 +17,7 @@
 import httpx
 
 from buttermilk._core.agent import SingleAgent  # Import SingleAgent
-from buttermilk._core.contract import AgentInput, AgentTrace  # Import AgentInput and AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace  # Import AgentInput and ExecutionTrace
 
 
 class Slurp(SingleAgent):
@@ -52,7 +52,7 @@ class Slurp(SingleAgent):
         self,
         message: AgentInput,  # Changed parameter name and type
         **kwargs,
-    ) -> AgentTrace:  # Changed return type
+    ) -> ExecutionTrace:  # Changed return type
         url = message.inputs["url"]  # Access inputs from message
         outputs_list = []  # Use a local list to collect outputs
         async with httpx.AsyncClient() as client:
@@ -67,14 +67,14 @@ class Slurp(SingleAgent):
                 paging = data.get("paging")
                 url = paging.get("next") if paging else None
 
-        # Create an AgentTrace object to return the results
-        trace = AgentTrace(
+        # Create an ExecutionTrace object to return the results
+        trace = ExecutionTrace(
             agent_id=self.agent_id,
-            session_id=self.session_id,  # session_id is required for AgentTrace
-            agent_info=self._config,  # agent_info is required for AgentTrace
+            session_id=self.session_id,  # session_id is required for ExecutionTrace
+            agent_info=self._config,  # agent_info is required for ExecutionTrace
             inputs=message,  # Include the original input message
             outputs=outputs_list,  # Store the collected outputs
             # Add other relevant metadata if needed
         )
 
-        return trace  # Return the AgentTrace object
+        return trace  # Return the ExecutionTrace object

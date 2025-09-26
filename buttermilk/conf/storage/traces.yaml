@@ -1,0 +1,7 @@
+# BigQuery configuration for processing traces
+type: bigquery
+project_id: prosocial-443205
+dataset_id: testing
+table_id: traces
+dataset_name: traces
+schema_path: traces.schema.json

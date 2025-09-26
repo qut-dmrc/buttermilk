@@ -18,8 +18,8 @@ from pydantic import Field, PrivateAttr
 
 from buttermilk._core.contract import (
     AgentInput,
-    AgentTrace,
     ErrorEvent,
+    ExecutionTrace,
     FlowEvent,
     FlowProgressUpdate,
     SystemPromptMessage,
@@ -368,9 +368,9 @@ class MockOrchestrator(Orchestrator):
         agent_id = random.choice(self._agent_ids)
         return Expert(name=f"Expert {agent_id}", answer_id=agent_id)  # Use agent_id for answer_id for consistency
 
-    def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None, parent_call_id=None, tool_code=None) -> AgentTrace:
+    def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None, parent_call_id=None, tool_code=None) -> ExecutionTrace:
         """Generate a fake agent trace"""
-        from buttermilk._core.contract import AgentConfig, AgentTrace
+        from buttermilk._core.contract import AgentConfig, ExecutionTrace
         from buttermilk.agents.differences import (  # Corrected import and added nested models
             Differences,
             Divergence,
@@ -479,7 +479,7 @@ class MockOrchestrator(Orchestrator):
             parameters={},  # Add mock parameters if needed
         )
 
-        return AgentTrace(
+        return ExecutionTrace(
             agent_id=agent_id,
             call_id=str(uuid.uuid4()),
             outputs=outputs,

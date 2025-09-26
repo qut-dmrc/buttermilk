@@ -1,19 +1,21 @@
 """Integration tests for refactored LLMAgent using LLMCore."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from autogen_core.models import UserMessage, SystemMessage
+from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk.agents.llm import LLMAgent
 from buttermilk._core.contract import AgentInput, AgentOutput
-from buttermilk._core.llm_core import LLMResult
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llm_core import LLMResult
 from buttermilk._core.types import Record
+from buttermilk.agents.llm import LLMAgent
 
 
 class OutputForTesting(BaseModel):
     """Test structured output model."""
+
     action: str
     reason: str
 
@@ -23,15 +25,7 @@ class TestLLMAgentRefactoring:
 
     def test_llmagent_initializes_llmcore(self):
         """Test that LLMAgent properly initializes LLMCore."""
-        agent = LLMAgent(
-            agent_name="test_agent",
-            role="TESTER",
-            parameters={
-                "model": "gpt-4",
-                "template": "test_template",
-                "temperature": 0.5
-            }
-        )
+        agent = LLMAgent(agent_name="test_agent", role="TESTER", parameters={"model": "gpt-4", "template": "test_template", "temperature": 0.5})
 
         # Verify LLMCore is initialized
         assert hasattr(agent, "llm_core")
@@ -45,13 +39,7 @@ class TestLLMAgentRefactoring:
     def test_llmagent_with_output_model(self):
         """Test LLMAgent with structured output model."""
         agent = LLMAgent(
-            agent_name="structured_agent",
-            role="ANALYZER",
-            parameters={
-                "model": "claude-3",
-                "template": "analyze"
-            },
-            output_model=OutputForTesting
+            agent_name="structured_agent", role="ANALYZER", parameters={"model": "claude-3", "template": "analyze"}, output_model=OutputForTesting
         )
 
         assert agent.output_model == OutputForTesting
@@ -64,17 +52,14 @@ class TestLLMAgentRefactoring:
         # AgentConfig expects tools as a dict with ToolConfig values
         tool_config = ToolConfig(
             description="Test tool that doubles a number",
-            tool_obj="test_function"  # Reference to the function
+            tool_obj="test_function",  # Reference to the function
         )
 
         agent = LLMAgent(
             agent_name="tool_agent",
             role="TOOL_USER",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            },
-            tools={"test_tool": tool_config}  # Pass as dict with ToolConfig
+            parameters={"model": "gpt-4", "template": "test"},
+            tools={"test_tool": tool_config},  # Pass as dict with ToolConfig
         )
 
         # The agent should have tools configuration
@@ -85,36 +70,17 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_process_basic_input(self):
         """Test LLMAgent processes basic AgentInput correctly."""
-        agent = LLMAgent(
-            agent_name="basic_agent",
-            role="PROCESSOR",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            }
-        )
+        agent = LLMAgent(agent_name="basic_agent", role="PROCESSOR", parameters={"model": "gpt-4", "template": "test"})
 
         # Create test input
-        agent_input = AgentInput(
-            inputs={"text": "Process this text"},
-            parameters={"extra_param": "value"},
-            context=[],
-            records=[]
-        )
+        agent_input = AgentInput(inputs={"text": "Process this text"}, parameters={"extra_param": "value"}, context=[], records=[])
 
         # Mock LLMCore processing
         mock_result = LLMResult(
             content="Processed output",
-            metadata={
-                "model": "gpt-4",
-                "usage": {"total_tokens": 100},
-                "finish_reason": "stop"
-            },
-            template_metadata={
-                "template_name": "test",
-                "template_hash": "abc123"
-            },
-            trace_id="trace-001"
+            metadata={"model": "gpt-4", "usage": {"total_tokens": 100}, "finish_reason": "stop"},
+            template_metadata={"template_name": "test", "template_hash": "abc123"},
+            trace_id="trace-001",
         )
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
@@ -146,31 +112,14 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_process_with_context(self):
         """Test LLMAgent processes context correctly."""
-        agent = LLMAgent(
-            agent_name="context_agent",
-            role="CONTEXTUAL",
-            parameters={
-                "model": "gpt-4",
-                "template": "chat"
-            }
-        )
+        agent = LLMAgent(agent_name="context_agent", role="CONTEXTUAL", parameters={"model": "gpt-4", "template": "chat"})
 
         # Create input with context
-        context = [
-            SystemMessage(content="You are a helpful assistant", source="test"),
-            UserMessage(content="Previous message", source="test")
-        ]
+        context = [SystemMessage(content="You are a helpful assistant", source="test"), UserMessage(content="Previous message", source="test")]
 
-        agent_input = AgentInput(
-            inputs={"prompt": "Current question"},
-            context=context
-        )
+        agent_input = AgentInput(inputs={"prompt": "Current question"}, context=context)
 
-        mock_result = LLMResult(
-            content="Response with context",
-            metadata={},
-            template_metadata={}
-        )
+        mock_result = LLMResult(content="Response with context", metadata={}, template_metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -184,31 +133,14 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_process_with_records(self):
         """Test LLMAgent processes records correctly."""
-        agent = LLMAgent(
-            agent_name="record_agent",
-            role="RECORD_PROCESSOR",
-            parameters={
-                "model": "gpt-4",
-                "template": "process_records"
-            }
-        )
+        agent = LLMAgent(agent_name="record_agent", role="RECORD_PROCESSOR", parameters={"model": "gpt-4", "template": "process_records"})
 
         # Create test records
-        records = [
-            Record(content="Record 1"),
-            Record(content="Record 2")
-        ]
+        records = [Record(content="Record 1"), Record(content="Record 2")]
 
-        agent_input = AgentInput(
-            inputs={},
-            records=records
-        )
+        agent_input = AgentInput(inputs={}, records=records)
 
-        mock_result = LLMResult(
-            content="Processed records",
-            metadata={},
-            template_metadata={}
-        )
+        mock_result = LLMResult(content="Processed records", metadata={}, template_metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -223,29 +155,14 @@ class TestLLMAgentRefactoring:
     async def test_llmagent_process_structured_output(self):
         """Test LLMAgent with structured output from LLMCore."""
         agent = LLMAgent(
-            agent_name="structured_agent",
-            role="ANALYZER",
-            parameters={
-                "model": "gpt-4",
-                "template": "analyze"
-            },
-            output_model=OutputForTesting
+            agent_name="structured_agent", role="ANALYZER", parameters={"model": "gpt-4", "template": "analyze"}, output_model=OutputForTesting
         )
 
-        agent_input = AgentInput(
-            inputs={"situation": "Test scenario"}
-        )
+        agent_input = AgentInput(inputs={"situation": "Test scenario"})
 
         # Mock structured output from LLMCore
-        structured_obj = OutputForTesting(
-            action="proceed",
-            reason="All checks passed"
-        )
-        mock_result = LLMResult(
-            content=structured_obj,
-            metadata={"model": "gpt-4"},
-            template_metadata={"template_name": "analyze"}
-        )
+        structured_obj = OutputForTesting(action="proceed", reason="All checks passed")
+        mock_result = LLMResult(content=structured_obj, metadata={"model": "gpt-4"}, template_metadata={"template_name": "analyze"})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -263,27 +180,18 @@ class TestLLMAgentRefactoring:
         agent = LLMAgent(
             agent_name="param_agent",
             role="FLEXIBLE",
-            parameters={
-                "model": "gpt-4",
-                "template": "default",
-                "temperature": 0.7,
-                "custom_param": "agent_value"
-            }
+            parameters={"model": "gpt-4", "template": "default", "temperature": 0.7, "custom_param": "agent_value"},
         )
 
         agent_input = AgentInput(
             inputs={"text": "test"},
             parameters={
                 "temperature": 0.9,  # Override
-                "custom_param": "task_value"  # Override
-            }
+                "custom_param": "task_value",  # Override
+            },
         )
 
-        mock_result = LLMResult(
-            content="Result",
-            metadata={},
-            template_metadata={}
-        )
+        mock_result = LLMResult(content="Result", metadata={}, template_metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -298,14 +206,7 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_handles_processing_error(self):
         """Test LLMAgent handles ProcessingError from LLMCore."""
-        agent = LLMAgent(
-            agent_name="error_agent",
-            role="ERROR_HANDLER",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            }
-        )
+        agent = LLMAgent(agent_name="error_agent", role="ERROR_HANDLER", parameters={"model": "gpt-4", "template": "test"})
 
         agent_input = AgentInput(inputs={"text": "test"})
 
@@ -318,14 +219,7 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_handles_unexpected_error(self):
         """Test LLMAgent wraps unexpected errors from LLMCore."""
-        agent = LLMAgent(
-            agent_name="error_agent",
-            role="ERROR_HANDLER",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            }
-        )
+        agent = LLMAgent(agent_name="error_agent", role="ERROR_HANDLER", parameters={"model": "gpt-4", "template": "test"})
 
         agent_input = AgentInput(inputs={"text": "test"})
 
@@ -338,25 +232,11 @@ class TestLLMAgentRefactoring:
     @pytest.mark.asyncio
     async def test_llmagent_preserves_parent_trace_id(self):
         """Test that parent trace ID is passed through to LLMCore."""
-        agent = LLMAgent(
-            agent_name="trace_agent",
-            role="TRACER",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            }
-        )
+        agent = LLMAgent(agent_name="trace_agent", role="TRACER", parameters={"model": "gpt-4", "template": "test"})
 
-        agent_input = AgentInput(
-            inputs={"text": "test"},
-            parent_call_id="parent-trace-xyz"
-        )
+        agent_input = AgentInput(inputs={"text": "test"}, parent_call_id="parent-trace-xyz")
 
-        mock_result = LLMResult(
-            content="Result",
-            metadata={},
-            template_metadata={}
-        )
+        mock_result = LLMResult(content="Result", metadata={}, template_metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -369,26 +249,13 @@ class TestLLMAgentRefactoring:
 
     @pytest.mark.asyncio
     async def test_llmagent_template_metadata_preserved(self):
-        """Test that template metadata is preserved for AgentTrace."""
-        agent = LLMAgent(
-            agent_name="metadata_agent",
-            role="METADATA",
-            parameters={
-                "model": "gpt-4",
-                "template": "test"
-            }
-        )
+        """Test that template metadata is preserved for ExecutionTrace."""
+        agent = LLMAgent(agent_name="metadata_agent", role="METADATA", parameters={"model": "gpt-4", "template": "test"})
 
         agent_input = AgentInput(inputs={"text": "test"})
 
         mock_result = LLMResult(
-            content="Result",
-            metadata={},
-            template_metadata={
-                "template_name": "test",
-                "template_hash": "hash123",
-                "unfilled_vars": []
-            }
+            content="Result", metadata={}, template_metadata={"template_name": "test", "template_hash": "hash123", "unfilled_vars": []}
         )
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:

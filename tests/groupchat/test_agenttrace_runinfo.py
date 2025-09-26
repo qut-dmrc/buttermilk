@@ -1,4 +1,4 @@
-"""Test AgentTrace serialization with new session_info structure."""
+"""Test ExecutionTrace serialization with new session_info structure."""
 
 import json
 from datetime import datetime
@@ -7,7 +7,7 @@ import pytest
 
 from buttermilk._core.bm_init import SessionInfo
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace
 
 
 @pytest.fixture
@@ -21,7 +21,6 @@ def mock_session_info():
         save_dir="/tmp/test",
         flow_api="http://localhost:8000/flow/",
     )
-
 
 
 @pytest.fixture
@@ -44,9 +43,9 @@ def agent_input():
 
 
 def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_input):
-    """Test that AgentTrace correctly serializes session_info from BM instance."""
-    # Create AgentTrace which should pick up session_info from bm
-    trace = AgentTrace(
+    """Test that ExecutionTrace correctly serializes session_info from BM instance."""
+    # Create ExecutionTrace which should pick up session_info from bm
+    trace = ExecutionTrace(
         call_id="test-call-123",
         agent_id="test-agent",
         agent_info=agent_config,
@@ -81,8 +80,8 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
 
 
 def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_input):
-    """Test that AgentTrace session_info can be serialized to JSON for BigQuery."""
-    trace = AgentTrace(
+    """Test that ExecutionTrace session_info can be serialized to JSON for BigQuery."""
+    trace = ExecutionTrace(
         call_id="test-call-456",
         agent_id="test-agent-2",
         agent_info=agent_config,
@@ -103,13 +102,13 @@ def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_in
 
 
 def test_agenttrace_handles_missing_bm_gracefully(monkeypatch, agent_config, agent_input):
-    """Test that AgentTrace handles missing BM instance gracefully."""
+    """Test that ExecutionTrace handles missing BM instance gracefully."""
     # Remove the global bm instance
     import buttermilk
     monkeypatch.delattr(buttermilk, "buttermilk", raising=False)
-    
-    # Create AgentTrace without bm available
-    trace = AgentTrace(
+
+    # Create ExecutionTrace without bm available
+    trace = ExecutionTrace(
         call_id="test-call-789",
         agent_id="test-agent-3",
         agent_info=agent_config,

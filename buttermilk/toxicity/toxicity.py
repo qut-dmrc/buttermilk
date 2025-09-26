@@ -42,7 +42,7 @@ from transformers import (
 )
 
 from buttermilk import logger
-from buttermilk._core.contract import AgentInput, AgentTrace  # Import AgentInput and AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace  # Import AgentInput and ExecutionTrace
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from .types import EvalRecord, Score
@@ -103,7 +103,7 @@ class ToxicityModel(BaseModel):
         if self.client is None:
             raise NotImplementedError
 
-    def run(self, message: AgentInput) -> AgentTrace:  # Changed parameter name/type and return type
+    def run(self, message: AgentInput) -> ExecutionTrace:  # Changed parameter name/type and return type
         # Assuming the AgentInput contains at least one record
         if not message.records:
             raise ValueError("AgentInput must contain at least one record for ToxicityModel.")
@@ -121,17 +121,17 @@ class ToxicityModel(BaseModel):
         # response.standard = self.standard
         # response.record_id = record.record_id # Already set in add_output_info
 
-        # Create an AgentTrace object to return the results
-        trace = AgentTrace(
+        # Create an ExecutionTrace object to return the results
+        trace = ExecutionTrace(
             agent_id=self.agent_id,
-            session_id=self.session_id,  # session_id is required for AgentTrace
-            agent_info=self._config,  # agent_info is required for AgentTrace
+            session_id=self.session_id,  # session_id is required for ExecutionTrace
+            agent_info=self._config,  # agent_info is required for ExecutionTrace
             inputs=message,  # Include the original input message
             outputs=response,  # Store the EvalRecord in outputs
             # Add other relevant metadata if needed
         )
 
-        return trace  # Return the AgentTrace object
+        return trace  # Return the ExecutionTrace object
 
     @trace
     def __call__(self, prompt: str, **kwargs) -> EvalRecord:

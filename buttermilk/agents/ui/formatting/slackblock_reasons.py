@@ -1,11 +1,11 @@
 import pprint
 
 from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
-from buttermilk._core.contract import AgentTrace
+from buttermilk._core.contract import ExecutionTrace
 from buttermilk.agents.ui.formatting.slackblock import format_response
 
 
-def format_slack_reasons(result: AgentTrace) -> dict:
+def format_slack_reasons(result: ExecutionTrace) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
     blocks = []
     result_copy = result.model_copy(deep=True)

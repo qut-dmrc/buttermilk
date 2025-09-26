@@ -2,7 +2,7 @@
 
 import pytest
 
-from buttermilk._core.contract import AgentTrace, StepRequest
+from buttermilk._core.contract import ExecutionTrace, StepRequest
 from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA
 from buttermilk.agents.judge import Reasons
 from buttermilk.utils.uploader import AsyncDataUploader
@@ -10,9 +10,9 @@ from buttermilk.utils.uploader import AsyncDataUploader
 
 # Sample data based on provided examples
 @pytest.fixture
-def sample_outputs() -> list[AgentTrace]:
+def sample_outputs() -> list[ExecutionTrace]:
     return [
-        AgentTrace(
+        ExecutionTrace(
             error=[],
             metadata={},
             agent_info={
@@ -30,7 +30,7 @@ def sample_outputs() -> list[AgentTrace]:
             outputs=StepRequest(role="WAIT"),
             is_error=False,
         ),
-        AgentTrace(
+        ExecutionTrace(
             error=[],
             metadata={"finish_reason": "stop", "role": "judge", "name": "⚖️ Judge WRESDb"},
             agent_info={
@@ -47,7 +47,7 @@ def sample_outputs() -> list[AgentTrace]:
             outputs=QualResults(conclusion="The content adheres to the guidelines.", prediction=False, confidence="high"),
             is_error=False,
         ),
-        AgentTrace(
+        ExecutionTrace(
             error=[],
             metadata={"role": "scorers", "name": "📊 Scorer MyVLKi"},
             agent_info={"agent_id": "scorers-MyVLKi"},

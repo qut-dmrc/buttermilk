@@ -17,7 +17,6 @@ from typing import Any
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -103,7 +102,6 @@ class LLMAgent(Agent):
         # Keep model reference for compatibility
         self._model: str = self.parameters.get("model", "")
 
-
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Core processing logic: uses LLMCore to process and creates AgentOutput.
 
@@ -144,13 +142,10 @@ class LLMAgent(Agent):
                 context=message.context,
                 records=message.records,
                 parent_trace_id=message.parent_call_id,
-                cancellation_token=cancellation_token
+                cancellation_token=cancellation_token,
             )
 
-            logger.debug(
-                f"Agent {self.agent_name}: Received result from LLMCore. "
-                f"Content type: {type(llm_result.content).__name__}"
-            )
+            logger.debug(f"Agent {self.agent_name}: Received result from LLMCore. Content type: {type(llm_result.content).__name__}")
 
             # Build comprehensive metadata for AgentOutput
             output_metadata = {
@@ -158,22 +153,17 @@ class LLMAgent(Agent):
                 "agent_id": self.agent_id,
                 "agent_model": self.parameters["model"],
                 **llm_result.metadata,  # Include all LLM metadata (usage, pricing, etc)
-                **llm_result.template_metadata  # Include template metadata
+                **llm_result.template_metadata,  # Include template metadata
             }
 
-            # Store template metadata for AgentTrace compatibility
+            # Store template metadata for ExecutionTrace compatibility
             self._template_metadata = llm_result.template_metadata
 
             # Extract the final output
             final_output = llm_result.content
 
             logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
-            return AgentOutput(
-                agent_id=self.agent_id,
-                outputs=final_output,
-                metadata=output_metadata,
-                error=None
-            )
+            return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata, error=None)
 
         except ProcessingError as e:
             # Re-raise ProcessingError as-is
@@ -185,4 +175,3 @@ class LLMAgent(Agent):
             msg = f"Unexpected error in agent '{self.agent_id}': {e}"
             logger.error(msg, exc_info=True)
             raise ProcessingError(msg) from e
-

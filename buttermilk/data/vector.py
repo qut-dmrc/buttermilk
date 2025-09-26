@@ -3,6 +3,7 @@ import datetime
 import json
 import signal
 import time
+from tty import CFLAG
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from pathlib import Path
@@ -2009,11 +2010,9 @@ def main(cfg) -> None:
 
     OmegaConf.resolve(cfg)
 
-    bm = hydra.utils.instantiate(cfg.bm)
+    from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
-    from buttermilk import set_bm
-
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+    bm, CFLAG = bootstrap_session_with_config(config=cfg)
 
     objs = hydra.utils.instantiate(cfg)
     vectoriser: ChromaDBEmbeddings = objs.vectoriser

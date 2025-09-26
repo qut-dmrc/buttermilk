@@ -13,9 +13,9 @@ from buttermilk import (
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import (
     AgentOutput,
-    AgentTrace,
     ConductorRequest,
     ErrorEvent,
+    ExecutionTrace,
     FlowEvent,
     FlowMessage,
     FlowProgressUpdate,
@@ -65,7 +65,7 @@ class MessageService:
 
     @staticmethod
     def format_message_for_client(
-        message: AgentTrace | ChatMessage | Record | FlowEvent | FlowMessage,
+        message: ExecutionTrace | ChatMessage | Record | FlowEvent | FlowMessage,
     ) -> None | ChatMessage:
         """Format and pass the message to the client
 
@@ -108,8 +108,8 @@ class MessageService:
             prompt_tokens = 0
             completion_tokens = 0
             cost_usd = 0.0
-            
-            if isinstance(message, AgentTrace) or isinstance(message, AgentOutput):
+
+            if isinstance(message, ExecutionTrace) or isinstance(message, AgentOutput):
                 # Extract token/cost data from metadata
                 if hasattr(message, "metadata") and message.metadata and "pricing" in message.metadata:
                     pricing_data = message.metadata["pricing"]
@@ -122,7 +122,7 @@ class MessageService:
                     )
                 
                 if message.outputs:
-                    # Send the unwrapped message instead of the AgentTrace object
+                    # Send the unwrapped message instead of the ExecutionTrace object
                     message = message.outputs
                 elif message.error:
                     # Handle error - convert to ErrorEvent if it's a list
@@ -131,7 +131,7 @@ class MessageService:
                     else:
                         message = ErrorEvent(source=agent_info.name if agent_info else "unknown", content=str(message.error))
                 else:
-                    logger.warning(f"[MessageService] AgentTrace object with no outputs: {message}, returning None.")
+                    logger.warning(f"[MessageService] ExecutionTrace object with no outputs: {message}, returning None.")
                     return None
 
             message_type = None

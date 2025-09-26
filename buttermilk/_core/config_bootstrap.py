@@ -352,9 +352,8 @@ def bootstrap_session_with_config(
     """
     import asyncio
     from pathlib import Path
-
-    from buttermilk import set_bm
-
+    from buttermilk._core.dmrc import set_bm
+    
     # Resolve config directory - default to packaged config if not provided
     if not config_dir:
         config_dir = Path(__file__).parent.parent.resolve() / "conf"

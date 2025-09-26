@@ -2,7 +2,7 @@ import datetime
 from typing import Any, Protocol
 
 from buttermilk._core.config import AgentConfig, SessionConfig
-from buttermilk._core.contract import AgentInput, AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace
 from buttermilk._core.log import logger
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.types import Record
@@ -222,17 +222,17 @@ class DataService:
             return None
 
     @staticmethod
-    def _reconstruct_agent_trace_from_row(row: dict) -> AgentTrace:
-        """Convenience method to reconstruct AgentTrace from database row.
+    def _reconstruct_agent_trace_from_row(row: dict) -> ExecutionTrace:
+        """Convenience method to reconstruct ExecutionTrace from database row.
 
-        This method centralizes the logic for reconstructing AgentTrace objects
+        This method centralizes the logic for reconstructing ExecutionTrace objects
         from database query results, eliminating code duplication.
 
         Args:
-            row: Database row containing AgentTrace data
+            row: Database row containing ExecutionTrace data
 
         Returns:
-            AgentTrace object reconstructed from the row data
+            ExecutionTrace object reconstructed from the row data
 
         Raises:
             Exception: If reconstruction fails due to invalid data
@@ -261,8 +261,8 @@ class DataService:
             parent_call_id=row.get("parent_call_id"),
         )
 
-        # Create AgentTrace
-        agent_trace = AgentTrace(
+        # Create ExecutionTrace
+        agent_trace = ExecutionTrace(
             timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime) else datetime.datetime.fromisoformat(row["timestamp"]),
             call_id=row["call_id"],
             agent_id=agent_config.agent_id,
@@ -281,8 +281,8 @@ class DataService:
         return agent_trace
 
     @staticmethod
-    async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[AgentTrace]:
-        """Get toxicity scores for a specific record as AgentTrace objects
+    async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[ExecutionTrace]:
+        """Get toxicity scores for a specific record as ExecutionTrace objects
 
         Args:
             record_id: The record ID
@@ -291,7 +291,7 @@ class DataService:
             session_id: Optional session ID for filtering
 
         Returns:
-            List[AgentTrace]: List of AgentTrace objects containing the scoring results
+            List[ExecutionTrace]: List of ExecutionTrace objects containing the scoring results
 
         """
         try:
@@ -326,7 +326,7 @@ class DataService:
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
-            # Query the full AgentTrace data from the configured flows table
+            # Query the full ExecutionTrace data from the configured flows table
             sql = f"""
             SELECT
                 session_id,
@@ -359,7 +359,7 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing AgentTrace from row: {e}")
+                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
                     continue
 
             return agent_traces
@@ -369,8 +369,10 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_responses_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
-        """Get detailed AI responses for a specific record as AgentTrace objects
+    async def get_responses_for_record(
+        record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None, include_reasoning: bool = True
+    ) -> list[ExecutionTrace]:
+        """Get detailed AI responses for a specific record as ExecutionTrace objects
 
         Args:
             record_id: The record ID
@@ -380,7 +382,7 @@ class DataService:
             include_reasoning: Whether to include detailed reasoning (preserved for API compatibility)
 
         Returns:
-            List[AgentTrace]: List of AgentTrace objects containing the detailed responses
+            List[ExecutionTrace]: List of ExecutionTrace objects containing the detailed responses
 
         """
         try:
@@ -415,8 +417,8 @@ class DataService:
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
-            # Reuse the same query as get_scores_for_record since we want the full AgentTrace data
-            # The include_reasoning parameter is ignored since AgentTrace contains all data
+            # Reuse the same query as get_scores_for_record since we want the full ExecutionTrace data
+            # The include_reasoning parameter is ignored since ExecutionTrace contains all data
             sql = f"""
             SELECT
                 session_id,
@@ -449,7 +451,7 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing AgentTrace from row: {e}")
+                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
                     continue
 
             return agent_traces

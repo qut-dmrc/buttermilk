@@ -5,7 +5,7 @@ This module establishes the structure for messages exchanged between various
 components of the Buttermilk system, such as agents, orchestrators, and UI
 elements. These models ensure consistent data handling and facilitate clear
 communication patterns. Key message types include inputs to agents (`AgentInput`),
-outputs from agents (`AgentOutput`, `AgentTrace`), control flow messages
+outputs from agents (`AgentOutput`, `ExecutionTrace`), control flow messages
 (`StepRequest`, `ConductorRequest`), status updates (`TaskProgressUpdate`), and
 messages for user interaction (`UIMessage`, `ManagerMessage`).
 """
@@ -479,66 +479,90 @@ class AgentOutput(BaseModel):
         return self.content
 
 
-class AgentTrace(AgentOutput):
-    """Comprehensive record of a single agent execution, for tracing and logging.
+class ExecutionTrace(BaseModel):
+    """Universal trace for any processing operation in Buttermilk.
 
-    This model captures the full context of an agent's operation. It combines:
-    - Information from `AgentOutput` (like `call_id`, `agent_id`, `outputs`).
-    - The specific `AgentInput` that triggered the execution.
-    - Configuration of the agent (`agent_info`).
-    - Session and run information.
-    - Messages exchanged with an LLM during processing (if any).
-    - Tracing linkage (parent call ID, link to trace).
-    - Timing information (timestamp).
+    This unified format works for:
+    - Agent executions (LLM and non-LLM)
+    - Pipeline processors
+    - Data transformations
+    - Any async processing operation
 
-    Attributes:
-        timestamp (datetime.datetime): Timestamp of when the output was generated.
-            Defaults to the current UTC time.
-        session_info (Any): Information about the current run or session, typically
-            obtained from the global Buttermilk instance (`bm.session_info`).
-        agent_info (AgentConfig): The configuration of the agent that performed
-            the execution. This is a mandatory field.
-        session_id (str): Unique identifier for the client session or overall flow execution.
-        parent_call_id (str | None): ID of the parent Weave call, for tracing nested operations.
-        tracing_link (str | None): A direct URL or link to the trace information in a
-            tracing system (e.g., Langfuse, Weave UI).
-        inputs (AgentInput): The exact `AgentInput` object that was processed by the agent.
-        messages (list[LLMMessage]): A list of messages (e.g., prompts, responses)
-            exchanged with an LLM during this execution step.
-        object_type (str): A computed field that attempts to determine the Python
-            type name of the `outputs` field, useful for later rehydration or analysis.
-
+    Matches the BigQuery schema in buttermilk/schemas/traces.schema.json
     """
 
+    # Core fields (matching schema)
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
-        description="Timestamp of when the output was generated (UTC).",
+        description="Timestamp of when the execution occurred (UTC).",
+    )
+    call_id: str = Field(
+        default_factory=lambda: str(shortuuid.uuid()),
+        description="Unique identifier for this execution.",
+    )
+    parent_call_id: str | None = Field(
+        default=None,
+        description="ID of the parent call for tracing nested operations.",
+    )
+    session_id: str = Field(
+        default_factory=session_id_var.get,
+        description="Unique identifier for the client session or overall flow execution.",
     )
     session_info: Any = Field(
         default_factory=_get_session_info,
         description="Information about the current run/session, from `bm.session_info`.",
     )
-    agent_info: AgentConfig = Field(
+
+    # Component info (will be stored as JSON in agent_info field)
+    agent_info: dict[str, Any] = Field(
         ...,  # Mandatory field
-        description="Configuration of the agent that performed this execution.",
-    )
-    session_id: str = Field(
-        default_factory=session_id_var.get,  # Mandatory field
-        description="Unique identifier for the client session or overall flow execution.",
+        description="Component configuration and metadata (component_name, execution_type, config, etc.).",
     )
 
-    # Tracing information and call metadata.
-    parent_call_id: str | None = Field(
+    # Runtime parameters
+    parameters: dict[str, Any] | None = Field(
         default=None,
-        description="ID of the parent Weave call for tracing nested operations.",
+        description="Runtime parameters that override default configuration.",
     )
-    tracing_link: str | None = Field(
+
+    # Input/Output (flexible types for any component)
+    inputs: Any | None = Field(
         default=None,
-        description="Direct URL/link to the trace in a tracing system (e.g., Langfuse, Weave UI).",
+        description="The input data (AgentInput, BaseRecord, dict, etc.).",
     )
-    inputs: AgentInput = Field(
-        ...,  # Mandatory field
-        description="The exact AgentInput object that was processed by the agent for this trace.",
+    outputs: Any | None = Field(
+        default=None,
+        description="The output data (AgentOutput, processed record, etc.).",
+    )
+
+    # Messages for LLM operations
+    messages: list[LLMMessage] = Field(
+        default_factory=list,
+        description="List of messages (prompts, responses) exchanged with an LLM.",
+    )
+
+    # Record context (for pipeline processing)
+    record: dict[str, Any] | None = Field(
+        default=None,
+        description="Record context with record_id, dataset_name, split_type.",
+    )
+
+    # Error handling
+    error: dict[str, Any] | None = Field(
+        default=None,
+        description="Error information with 'event' and 'details' keys.",
+    )
+
+    # Flexible metadata (token usage, template info, processing details, etc.)
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Flexible metadata including token usage, template info, processing metrics, etc.",
+    )
+
+    # Tracing info (span_id, weave_id, tracing_link, etc.)
+    tracing: dict[str, Any] | None = Field(
+        default=None,
+        description="Tracing information including span_id, weave_id, external trace links, etc.",
     )
 
     _ensure_messages_list: classmethod = field_validator("messages", mode="before")(make_list_validator())  # type: ignore
@@ -546,7 +570,7 @@ class AgentTrace(AgentOutput):
 
     model_config = ConfigDict(
         extra="forbid",
-        arbitrary_types_allowed=False,
+        arbitrary_types_allowed=True,  # Allow any types for flexible inputs/outputs
         populate_by_name=True,
         use_enum_values=True,
         json_encoders={
@@ -558,95 +582,73 @@ class AgentTrace(AgentOutput):
         validate_assignment=True,
         exclude_unset=True,
         exclude_none=True,
-        # Exclude computed fields from FlowMessage and AgentOutput if they are also here
-        exclude={"is_error", "content", "object_type"},
     )
 
     def model_dump(self, *args, **kwargs) -> dict[str, Any]:
-        """Override model_dump to exclude empty collections."""
+        """Override model_dump to exclude empty collections and prepare for BigQuery."""
         raw_dump = super().model_dump(*args, **kwargs)
         # Apply the cleaning function to the result
         return clean_empty_values(raw_dump)
 
     @computed_field
     @property
-    def object_type(self) -> str:
-        """Attempts to determine the Python type name of the `outputs` field.
-
-        Useful for later rehydration or analysis of the output data.
-
-        Returns:
-            str: The type name of `self.outputs` if available, otherwise "null".
-
-        """
-        try:
-            if self.outputs is not None:
-                return type(self.outputs).__name__
-        except Exception:  # Broad catch as type determination can be tricky
-            pass  # Fall through to return "null"
-        return "null"  # Default if outputs is None or type cannot be determined
-
-    def as_markdown(self) -> str:
-        """Returns a Markdown formatted string for use in templates.
-        
-        If the outputs have an as_markdown method, uses that with agent context.
-        Otherwise falls back to string representation.
-        
-        Returns:
-            str: Formatted markdown string suitable for template insertion
-        """
-        if self.outputs and hasattr(self.outputs, "as_markdown"):
-            # Pass agent context to the output's as_markdown method
-            return self.outputs.as_markdown(self.agent_id, self.call_id)
-        elif self.outputs:
-            # Fallback: create simple formatted output
-            short_call_id = self.call_id[-8:] if len(self.call_id) > 8 else self.call_id
-            header = f"**{self.agent_id} #{short_call_id}**\n"
-            return f"{header}{str(self.outputs)}"
-        else:
-            # No outputs, return error or empty message
-            if self.error:
-                return f"**{self.agent_id}**\nERROR: {self.error}"
-            return f"**{self.agent_id}**\n(No output)"
-    
-    def __str__(self) -> str:
-        """Returns the `content` (string representation of `outputs`) of the agent trace."""
-        return self.as_markdown()
+    def is_error(self) -> bool:
+        """Check if this trace represents an error."""
+        return self.error is not None and bool(self.error)
 
     @classmethod
     def from_output(
         cls,
         output: AgentOutput,
-        inputs: AgentInput,
-        agent_info: AgentConfig,
+        inputs: Any = None,
+        agent_info: dict[str, Any] | None = None,
         call_id: str | None = None,
         parent_call_id: str | None = None,
-        tracing_link: str | None = None,
-    ) -> "AgentTrace":
-        """Create an AgentTrace instance from an existing AgentOutput.
+        parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        tracing: dict[str, Any] | None = None,
+    ) -> "ExecutionTrace":
+        """Create an ExecutionTrace instance from an existing AgentOutput.
 
         Args:
-            output (AgentOutput): The output from which to create the trace.
-            inputs (AgentInput): The input that was processed to produce this output.
-            agent_info (AgentConfig): The configuration of the agent that produced the output.
-            parent_call_id (str | None): ID of the parent Weave call for tracing nested operations.
-            tracing_link (str | None): Direct URL/link to the trace in a tracing system.
+            output: The output from which to create the trace.
+            inputs: The input that was processed to produce this output.
+            agent_info: Component configuration and metadata.
+            call_id: Optional override for call_id.
+            parent_call_id: ID of the parent call for tracing nested operations.
+            parameters: Runtime parameters.
+            metadata: Additional metadata to include.
+            tracing: Tracing information.
 
         Returns:
-            AgentTrace: A new instance of AgentTrace populated with data from the output and inputs.
-
+            ExecutionTrace: A new instance of ExecutionTrace populated with data from the output and inputs.
         """
+        # Build error dict if errors exist
+        error_dict = None
+        if output.error:
+            error_dict = {
+                "event": str(output.error[0]) if output.error else None,
+                "details": {"errors": [str(e) for e in output.error]} if output.error else {}
+            }
+
+        # Merge metadata
+        combined_metadata = {}
+        if output.metadata:
+            combined_metadata.update(output.metadata)
+        if metadata:
+            combined_metadata.update(metadata)
+
         return cls(
             call_id=call_id or output.call_id,
-            agent_id=output.agent_id,
+            agent_info=agent_info or {"agent_id": output.agent_id},
             outputs=output.outputs,
             messages=output.messages,
-            metadata=output.metadata,
-            error=output.error,
-            agent_info=agent_info,
-            parent_call_id=parent_call_id,
-            tracing_link=tracing_link,
             inputs=inputs,
+            parameters=parameters,
+            error=error_dict,
+            metadata=combined_metadata if combined_metadata else None,
+            parent_call_id=parent_call_id,
+            tracing=tracing,
         )
 
 
@@ -1053,9 +1055,9 @@ that occur outside the primary data flow between processing agents.
 """
 
 GroupchatMessageTypes = Union[
-    AgentTrace,
+    ExecutionTrace,
     ToolOutput,
-    AgentOutput,  # AgentOutput might be too generic here if AgentTrace is preferred for group chat
+    AgentOutput,  # AgentOutput might be too generic here if ExecutionTrace is preferred for group chat
     UserResponseMessage,  # If user responses are broadcasted
     # AgentInput, # AgentInput is usually direct, not a "group chat" message
     Record,  # If raw records are shared

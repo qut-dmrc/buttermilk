@@ -40,8 +40,6 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     logger.info("Starting create_app function...")
 
     # Use the already-initialized BM instance from CLI bootstrap
-    from buttermilk import set_bm
-    set_bm(bm)
     logger.info("API server using BM instance from CLI bootstrap")
 
     @asynccontextmanager

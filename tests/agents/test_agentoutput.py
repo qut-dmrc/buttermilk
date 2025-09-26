@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 # Buttermilk core imports
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace
 from buttermilk.agents.judge import JudgeReasons
 
 # --- Test Data ---
@@ -35,7 +35,7 @@ def test_actual_judge_reasons_direct_dump():
 
 
 def test_actual_agent_trace_full_dump_includes_nested_outputs():
-    """Test the ACTUAL AgentTrace full dump to see if it includes nested outputs.
+    """Test the ACTUAL ExecutionTrace full dump to see if it includes nested outputs.
     This directly tests the problematic scenario with your real code.
     """
     try:
@@ -46,8 +46,8 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs():
     # Create a minimal AgentConfig for testing
     minimal_agent_config = AgentConfig(role="TEST")
 
-    # Instantiate AgentTrace - provide minimal required fields
-    output_obj = AgentTrace(
+    # Instantiate ExecutionTrace - provide minimal required fields
+    output_obj = ExecutionTrace(
         agent_info=minimal_agent_config,
         session_id="test_session",
         call_id="actual_test_id",
@@ -78,11 +78,11 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs():
 
 
 def test_actual_agent_trace_full_dump_with_default_outputs():
-    """Test dumping the actual AgentTrace when 'outputs' is the default."""
+    """Test dumping the actual ExecutionTrace when 'outputs' is the default."""
     # Create a minimal AgentConfig for testing
     minimal_agent_config = AgentConfig(role="TEST")
 
-    output_obj = AgentTrace(
+    output_obj = ExecutionTrace(
         agent_info=minimal_agent_config,
         session_id="test_session",
         agent_id="test",  # agent_id is part of AgentOutput base class
@@ -93,7 +93,7 @@ def test_actual_agent_trace_full_dump_with_default_outputs():
 
     # When outputs is default/None, it may be excluded from model_dump due to exclude_none/exclude_unset config
     # Check that we can access the outputs field directly even if it's not in the dump
-    assert hasattr(output_obj, "outputs"), "AgentTrace should have outputs attribute"
+    assert hasattr(output_obj, "outputs"), "ExecutionTrace should have outputs attribute"
     
     # If outputs is excluded from dump, it should be because it's None or default
     if "outputs" in full_dump:

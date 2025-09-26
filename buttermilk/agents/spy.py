@@ -2,7 +2,7 @@
 
 The `SpyAgent` operates within a multi-agent system (specifically compatible with
 Autogen's `RoutedAgent` structure). Its primary function is to "lurk" in a
-group chat or message bus, capture `AgentTrace` messages produced by other agents,
+group chat or message bus, capture `ExecutionTrace` messages produced by other agents,
 and persist them using an asynchronous data uploader.
 """
 
@@ -27,7 +27,7 @@ from buttermilk import (
     logger,  # Buttermilk's centralized logger
 )
 from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
-from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
+from buttermilk._core.contract import ErrorEvent, ExecutionTrace  # Buttermilk message contracts
 from buttermilk.utils.uploader import AsyncDataUploader  # Utility for asynchronous data upload
 
 BATCH_SIZE = 10
@@ -36,7 +36,7 @@ BATCH_SIZE = 10
 
 class SpyAgent(RoutedAgent):
     """An agent that passively listens to a message bus (e.g., group chat)
-    and saves `AgentTrace` messages to a configured destination.
+    and saves `ExecutionTrace` messages to a configured destination.
 
     The `SpyAgent` does not typically produce messages itself but acts as a data
     collector or logger for the activities of other agents. It uses an
@@ -106,29 +106,31 @@ class SpyAgent(RoutedAgent):
         )
 
     @message_handler  # Autogen decorator to register this method as a handler
-    async def agent_output_handler(self, message: AgentTrace, ctx: MessageContext) -> ErrorEvent | None:  # Changed to Any to handle type check first
-        """Message handler that captures `AgentTrace` messages and saves them.
+    async def agent_output_handler(
+        self, message: ExecutionTrace, ctx: MessageContext
+    ) -> ErrorEvent | None:  # Changed to Any to handle type check first
+        """Message handler that captures `ExecutionTrace` messages and saves them.
 
         This method is decorated with `@message_handler`, making it the entry point
-        for `AgentTrace` messages routed to this agent within an Autogen system.
+        for `ExecutionTrace` messages routed to this agent within an Autogen system.
 
         It performs the following actions:
-        1.  Checks if the incoming `message` is an instance of `AgentTrace`.
-        2.  If it is an `AgentTrace` and has `outputs` (i.e., it's not an empty trace),
+        1.  Checks if the incoming `message` is an instance of `ExecutionTrace`.
+        2.  If it is an `ExecutionTrace` and has `outputs` (i.e., it's not an empty trace),
             it performs a data cleaning step: if any `Record` objects within
             `message.inputs.records` have both "text" and "content" attributes,
             the "text" attribute is excluded before saving (this addresses a
             potential data conflict or redundancy).
-        3.  The (potentially modified) `AgentTrace` message is then added to the
+        3.  The (potentially modified) `ExecutionTrace` message is then added to the
             `self.manager` (AsyncDataUploader) for asynchronous saving.
         4.  If the message has no `outputs`, it's logged and ignored.
-        5.  If the message is not an `AgentTrace`, an error is logged, an `ErrorEvent`
+        5.  If the message is not an `ExecutionTrace`, an error is logged, an `ErrorEvent`
             is published back to the topic from which the message came (if `publish_message`
             is available), and a `ProcessingError` is raised.
 
         Args:
-            message (AgentTrace): The incoming message object. This handler specifically
-                looks for `AgentTrace` instances.
+            message (ExecutionTrace): The incoming message object. This handler specifically
+                looks for `ExecutionTrace` instances.
             ctx (MessageContext): The context associated with the message, providing
                 information like the topic ID and a method to publish messages.
 
@@ -137,13 +139,13 @@ class SpyAgent(RoutedAgent):
             received (and `publish_message` is available). Returns `None` otherwise,
             as this agent's primary role is to save data, not to produce direct
             reply messages in the main flow.
-        
+
         Raises:
-            ProcessingError: If an incompatible message type (not `AgentTrace`)
+            ProcessingError: If an incompatible message type (not `ExecutionTrace`)
                 is received.
 
         """
-        if isinstance(message, AgentTrace):
+        if isinstance(message, ExecutionTrace):
             if message.outputs:
                 logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
                 # # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.

@@ -1,6 +1,6 @@
 <script lang="ts">
-	// Native AgentTrace interface based on Buttermilk contract.py
-	interface AgentTrace {
+	// Native ExecutionTrace interface based on Buttermilk contract.py
+	interface ExecutionTrace {
 		timestamp: string;
 		call_id: string;
 		agent_id: string;
@@ -18,7 +18,7 @@
 	}
 
 	export let scores: {
-		agent_traces: AgentTrace[];
+		agent_traces: ExecutionTrace[];
 	};
 
 	// Generate ASCII progress bar
@@ -68,10 +68,10 @@
 		return `${(score * 100).toFixed(0)}%`;
 	}
 
-	// Process native AgentTrace objects
+	// Process native ExecutionTrace objects
 	$: agentTraces = scores?.agent_traces || [];
 
-	// Extract scores from AgentTrace outputs
+	// Extract scores from ExecutionTrace outputs
 	$: processedResults = agentTraces.map((trace) => {
 		const outputs = trace.outputs || {};
 		const agentName = trace.agent_info?.agent_name || trace.agent_id;
@@ -102,7 +102,7 @@
 		};
 	});
 
-	// Calculate stats from AgentTrace data
+	// Calculate stats from ExecutionTrace data
 	$: totalTraces = processedResults.length;
 	$: avgScore =
 		totalTraces > 0 ? processedResults.reduce((sum, r) => sum + r.score, 0) / totalTraces : 0;

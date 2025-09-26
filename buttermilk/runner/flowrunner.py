@@ -13,7 +13,7 @@ from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk import AgentTrace, logger
+from buttermilk import ExecutionTrace, logger
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -323,7 +323,7 @@ class FlowRunContext(BaseModel):
                 break
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
-    async def send_message_to_ui(self, message: AgentTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage) -> None:
+    async def send_message_to_ui(self, message: ExecutionTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
 
         Args:

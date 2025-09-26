@@ -38,6 +38,7 @@ class LLMResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict, description="Usage, pricing, model info")
     trace_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique ID for correlation")
     template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
+    messages: list[LLMMessage] = Field(default_factory=list, description="Messages exchanged with LLM")
     error: Optional[str] = Field(None, description="Error message if processing failed")
 
 
@@ -149,6 +150,16 @@ class LLMCore:
                     result.content = llm_result.parsed_object
                 else:
                     result.content = llm_result.content
+
+                # Store messages (input prompts + LLM response)
+                from autogen_core.models import AssistantMessage
+                result.messages = llm_messages.copy()
+                # Add the assistant's response as a message
+                if result.content:
+                    result.messages.append(AssistantMessage(
+                        content=str(result.content) if not isinstance(result.content, str) else result.content,
+                        source=self._model
+                    ))
 
                 # Collect metadata
                 result.metadata = {

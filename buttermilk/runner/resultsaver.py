@@ -14,7 +14,7 @@ def get_bm():
     return _get_bm()
 
 
-from buttermilk._core.contract import AgentTrace  # Import AgentTrace
+from buttermilk._core.contract import ExecutionTrace  # Import ExecutionTrace
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 from buttermilk.utils.save import upload_rows
@@ -28,7 +28,7 @@ from buttermilk.utils.save import upload_rows
 class ResultsCollector(BaseModel):
     """A simple collector that receives results from a queue and collates them."""
 
-    results: asyncio.Queue[AgentTrace] = Field(default_factory=asyncio.Queue)  # Replaced Job with AgentTrace
+    results: asyncio.Queue[ExecutionTrace] = Field(default_factory=asyncio.Queue)  # Replaced Job with ExecutionTrace
     shutdown: bool = False
     n_results: int = 0
     to_save: list = []
@@ -73,9 +73,9 @@ class ResultsCollector(BaseModel):
             self.shutdown = True
             self.save_with_trace()  # Save any remaining results in the batch
 
-    # Process a result (expected to be AgentTrace) into a record dict to save
-    def process(self, response: AgentTrace) -> dict[str, Any]:  # Replaced Job with AgentTrace
-        # Assuming the response is an AgentTrace, dump it
+    # Process a result (expected to be ExecutionTrace) into a record dict to save
+    def process(self, response: ExecutionTrace) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
+        # Assuming the response is an ExecutionTrace, dump it
         return response.model_dump()
 
     @trace
@@ -106,9 +106,9 @@ class ResultSaver(ResultsCollector):
     dataset: str
     dest_schema: Any
 
-    # Process a result (expected to be AgentTrace) into a record dict to save
-    def process(self, response: AgentTrace) -> dict[str, Any]:  # Replaced Job with AgentTrace
-        # Assuming the response is an AgentTrace, dump it
+    # Process a result (expected to be ExecutionTrace) into a record dict to save
+    def process(self, response: ExecutionTrace) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
+        # Assuming the response is an ExecutionTrace, dump it
         output = response.model_dump()
         try:
             # move metadata to the record id

@@ -132,7 +132,7 @@ class Differences(BaseModel):
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns the conclusion and divergences.
         """
-        # Check if agent context is available (set by AgentTrace)
+        # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
         
@@ -191,7 +191,7 @@ class Differentiator(LLMAgent):
 
     It uses a Language Model, configured via its `LLMAgent` base class, and expects
     the LLM to generate output conforming to the `Differences` Pydantic model.
-    This structured output is then available in the `AgentTrace.outputs`.
+    This structured output is then available in the `ExecutionTrace.outputs`.
 
     Key Configuration Parameters (inherited from `LLMAgent` and used here):
         - `model` (str): **Required**. The name of the LLM to use for the analysis.
@@ -206,7 +206,7 @@ class Differentiator(LLMAgent):
         should align with what the configured prompt template expects.
 
     Output:
-        Produces an `AgentTrace` where `agent_trace.outputs` is an instance of
+        Produces an `ExecutionTrace` where `agent_trace.outputs` is an instance of
         `Differences` (or `DifferencesOutput`), providing a structured breakdown
         of the analysis.
 

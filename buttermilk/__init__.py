@@ -14,7 +14,7 @@ from ._core.config_bootstrap import init
 from ._core.constants import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.contract import (
     AgentInput as AgentInput,
-    AgentTrace as AgentTrace,
+    ExecutionTrace as ExecutionTrace,
     AllMessages as AllMessages,
     ConductorRequest as ConductorRequest,
     FlowMessage as FlowMessage,
@@ -76,7 +76,7 @@ __all__ = [
     "StepRequest",
     "FlowMessage",
     "AgentInput",
-    "AgentTrace",
+    "ExecutionTrace",
     "UserResponseMessage",
     "SystemPromptMessage",
     "TaskProcessingComplete",

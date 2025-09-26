@@ -10,13 +10,14 @@ LLMs. It processes BaseRecord objects through templates and LLM calls,
 enriching them with generated content.
 """
 
+import time
 from typing import Any, AsyncGenerator, Optional
 
 import pydantic
 from autogen_core.tools import Tool
 
 from buttermilk import logger
-from buttermilk._core.contract import ErrorEvent
+from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
@@ -91,11 +92,22 @@ class LLMProcessor:
         # Store additional config
         self.config = kwargs
 
+        # Initialize trace writer (lazy loading)
+        self._trace_writer = None
+
         logger.debug(
             f"LLMProcessor initialized: model={parameters.get('model')}, "
             f"template={parameters.get('template')}, "
             f"input_field={input_field}, output_field={output_field}"
         )
+
+    @property
+    def trace_writer(self):
+        """Lazy load trace writer."""
+        if self._trace_writer is None:
+            from buttermilk.utils.trace_writer import get_trace_writer
+            self._trace_writer = get_trace_writer()
+        return self._trace_writer
 
     async def process(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
         """Process a BaseRecord through the LLM and yield the enriched result.
@@ -111,6 +123,9 @@ class LLMProcessor:
             The same record, enriched with LLM-generated content in the output field.
             If processing fails, yields the record with error information.
         """
+        start_time = time.time()
+        trace = None
+
         try:
             # Extract input data from the record
             if hasattr(record, self.input_field):
@@ -175,6 +190,41 @@ class LLMProcessor:
                 f"Output stored in '{self.output_field}'"
             )
 
+            # Create ExecutionTrace for observability
+            duration_ms = (time.time() - start_time) * 1000
+            trace = ExecutionTrace(
+                call_id=llm_result.trace_id,
+                agent_info={
+                    "component_name": "LLMProcessor",
+                    "execution_type": "processor",
+                    "config": self.parameters,
+                },
+                inputs=llm_inputs,
+                outputs=llm_result.content,
+                messages=llm_result.messages,
+                parameters=self.parameters,
+                record={
+                    "record_id": record.record_id,
+                    "dataset_name": getattr(record, 'dataset_name', None),
+                    "split_type": getattr(record, 'split_type', None),
+                },
+                metadata={
+                    **llm_result.metadata,
+                    **llm_result.template_metadata,
+                    "duration_ms": duration_ms,
+                    "input_field": self.input_field,
+                    "output_field": self.output_field,
+                },
+                parent_call_id=parent_trace_id,
+            )
+
+            # Emit trace if trace writer is available
+            if hasattr(self, 'trace_writer') and self.trace_writer:
+                try:
+                    await self.trace_writer.add(trace)
+                except Exception as e:
+                    logger.warning(f"Failed to emit trace: {e}")
+
             yield record
 
         except ProcessingError as e:
@@ -199,6 +249,38 @@ class LLMProcessor:
                 if not isinstance(record.metadata, dict):
                     record.metadata = {}
                 record.metadata["llm_error"] = str(e)
+
+            # Create error trace
+            duration_ms = (time.time() - start_time) * 1000
+            error_trace = ExecutionTrace(
+                agent_info={
+                    "component_name": "LLMProcessor",
+                    "execution_type": "processor",
+                    "config": self.parameters,
+                },
+                inputs=llm_inputs if 'llm_inputs' in locals() else None,
+                record={
+                    "record_id": record.record_id,
+                    "dataset_name": getattr(record, 'dataset_name', None),
+                    "split_type": getattr(record, 'split_type', None),
+                },
+                error={
+                    "event": str(e),
+                    "details": {"error_type": type(e).__name__}
+                },
+                metadata={
+                    "duration_ms": duration_ms,
+                    "input_field": self.input_field,
+                    "output_field": self.output_field,
+                },
+            )
+
+            # Emit error trace if trace writer is available
+            if hasattr(self, 'trace_writer') and self.trace_writer:
+                try:
+                    await self.trace_writer.add(error_trace)
+                except Exception as te:
+                    logger.warning(f"Failed to emit error trace: {te}")
 
             # Yield the record even on error (with error information)
             yield record

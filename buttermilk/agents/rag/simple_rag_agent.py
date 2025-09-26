@@ -79,7 +79,7 @@ class ResearchResult(BaseModel):
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns the summary.
         """
-        # Check if agent context is available (set by AgentTrace)
+        # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
         
