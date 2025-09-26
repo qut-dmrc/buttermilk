@@ -2,7 +2,6 @@ import asyncio
 from typing import Any
 
 from buttermilk import (
-    get_bm,  # Buttermilk manager singleton
     logger,  # Centralized logger
 )
 from buttermilk._core.agent import AgentInput
@@ -40,7 +39,6 @@ async def run_flow(cfg):
     Args:
         cfg (Any): The configuration object containing Buttermilk settings.
     """
-    bm = get_bm()
     fetch = FetchAgent(storage=None)
     dbr = LLMAgent(
         role="DBR",

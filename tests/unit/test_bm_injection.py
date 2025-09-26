@@ -82,21 +82,6 @@ class TestRealBMIntegration:
         assert hasattr(effective_bm, "session_info")
         assert effective_bm.session_info.session_id  # Should have a session ID
     
-    def test_backward_compatibility_with_global_bm(self, real_bm):
-        """Test that existing get_bm() pattern still works with test infrastructure."""
-        from buttermilk import get_bm
-        
-        # The global BM should be the same as our fixture
-        global_bm = get_bm()
-        assert global_bm is real_bm
-        
-        # FlowRunner without session BM should fall back to this global one
-        runner = FlowRunner(flows={}, mode="test")
-        assert runner.bm is None
-        
-        effective_bm = runner.get_effective_bm()
-        assert effective_bm is global_bm
-        assert effective_bm is real_bm
 
 
 class TestDocumentedBehavior:

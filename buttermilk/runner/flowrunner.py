@@ -960,8 +960,8 @@ class FlowRunner(BaseModel):
         if self.bm is not None:
             return self.bm
         else:
-            from buttermilk import get_bm
-            return get_bm()
+            from buttermilk import bm
+            return bm
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
         """Get or create a session for the given session ID, handling reconnection scenarios.

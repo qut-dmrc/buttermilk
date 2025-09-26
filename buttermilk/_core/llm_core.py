@@ -62,9 +62,10 @@ class LLMCore:
         self,
         model: str,
         template: str,
-        parameters: dict[str, Any],
         output_model: Optional[type[pydantic.BaseModel]] = None,
         tools: Optional[list[Tool]] = None,
+        fail_on_unfilled_parameters: bool = True,
+        **kwargs: Any,
     ):
         """Initialize the LLM core with configuration.
 
@@ -77,14 +78,14 @@ class LLMCore:
             output_model: Optional Pydantic model for structured output
             tools: Optional list of tools the LLM can use
         """
-        self.parameters = parameters
+        self.parameters = kwargs
         self.output_model = output_model
         self.tools = tools or []
 
         # Extract commonly used parameters
         self._model = model
         self._template = template
-        self._fail_on_unfilled_parameters = parameters.get("fail_on_unfilled_parameters", True)
+        self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
 
         # Template metadata for tracking
         self._template_metadata: dict[str, Any] = {}

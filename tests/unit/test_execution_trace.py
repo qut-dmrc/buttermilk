@@ -169,10 +169,8 @@ class TestTraceWriter:
         TraceWriter._instance = None
         TraceWriter._initialized = False
 
-        with patch('buttermilk.utils.trace_writer.get_bm') as mock_get_bm:
-            mock_bm = MagicMock()
+        with patch('buttermilk.utils.trace_writer.bm') as mock_bm:
             mock_bm.config = {}  # No storage config
-            mock_get_bm.return_value = mock_bm
 
             writer = TraceWriter()
 
