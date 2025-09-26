@@ -8,6 +8,10 @@ standardized agent roles, and special symbols or states recognized by the framew
 
 from pathlib import Path
 
+# Single logger for the entire application
+_LOGGER_NAME = "buttermilk"
+
+
 """The absolute directory of the package."""
 BASE_DIR = Path(__file__).parent.parent.absolute()
 

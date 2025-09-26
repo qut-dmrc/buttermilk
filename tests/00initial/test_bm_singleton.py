@@ -3,11 +3,11 @@
 import hydra
 
 from buttermilk import (
-    BM,  # Removed logger import here
-    create_session_bm,
     logger,  # noqa
 )
 from buttermilk._core.dmrc import get_bm
+
+from ._core.bm_init import BM, create_session_bm
 
 
 def test_conf(real_bm):

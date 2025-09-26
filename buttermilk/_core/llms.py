@@ -45,7 +45,7 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
 # from google import genai  # Google Generative AI library (unused in current implementation)
 from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
 
-from buttermilk import bm, logger
+from buttermilk._core.log import logger
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.constants import CONFIG_CACHE_PATH  # Path to models.json cache

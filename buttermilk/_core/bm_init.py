@@ -44,10 +44,6 @@ from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk.utils import save  # Utility for saving data
 
-_TRACER_NAME = "buttermilk"
-
-tracer = trace.get_tracer(_TRACER_NAME)
-
 
 def _make_session_id() -> str:
     """Generates a unique session ID for the current session.
@@ -247,20 +243,6 @@ class BM(BaseModel):
     Each session gets its own BM instance with session-specific state while sharing
     infrastructure resources (clouds, secrets, LLMs) through dependency injection.
     This eliminates complex hierarchy while providing proper session isolation.
-
-    Typical Usage:
-    ```python
-    from buttermilk import create_session_bm
-
-    bm = create_session_bm(name="my_project", job="analysis")
-
-    # Access shared infrastructure
-    bm.gcs.upload_from_filename(...)
-    response = bm.llms.my_chat_model.create(messages=[...])
-
-    # Session-specific operations
-    bm.save(data, "results.json")
-    ```
 
     Attributes:
         session_info (SessionInfo): Session-specific information and metrics.

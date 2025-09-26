@@ -11,6 +11,8 @@ from rich.logging import RichHandler
 
 from buttermilk._core.context import get_logging_context
 
+from .constants import _LOGGER_NAME
+
 try:
     # Optional: OpenTelemetry trace context for log correlation
     from opentelemetry.trace import get_current_span
@@ -18,7 +20,6 @@ except Exception:  # pragma: no cover
     get_current_span = None  # type: ignore
 
 # Single logger for the entire application
-_LOGGER_NAME = "buttermilk"
 logger = structlog.get_logger(_LOGGER_NAME)
 
 # Global state tracking for logging initialization protection
