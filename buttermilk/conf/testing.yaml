@@ -21,8 +21,8 @@ storage:
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: ${run.name}
-    job: ${run.job}
+    name: testing
+    job: tests
 
 infrastructure:
   clouds:
@@ -70,13 +70,6 @@ infrastructure:
 
 run:
   mode: pytest
-  ui: console
-  human_in_loop: false
-
-  name: testing
-  job: tests
-
-  flows: ${flows}
 
 
 pipeline:

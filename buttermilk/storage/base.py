@@ -3,7 +3,7 @@
 import importlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, Optional, Protocol, Type, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Iterator, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -57,6 +57,7 @@ class Storage(ABC):
         self.config = config
         self.bm = bm
         self._record_class: Type[BaseRecord] | None = None
+        self._async_iterator: Optional[AsyncGenerator[BaseRecord, None]] = None
 
     @abstractmethod
     def __iter__(self) -> Iterator[BaseRecord]:
@@ -182,6 +183,34 @@ class Storage(ABC):
             Async generator of records
         """
         return self.iterate_async(batch_size, filter)
+
+    def __aiter__(self) -> AsyncIterator[BaseRecord]:
+        """Make Storage objects async iterable.
+
+        Returns:
+            Self as async iterator
+        """
+        # Reset/initialize the async iterator
+        self._async_iterator = self.iterate_async()
+        return self
+
+    async def __anext__(self) -> BaseRecord:
+        """Get next item from async iterator.
+
+        Returns:
+            Next BaseRecord from storage
+
+        Raises:
+            StopAsyncIteration: When no more records available
+        """
+        if self._async_iterator is None:
+            raise StopAsyncIteration
+
+        try:
+            return await self._async_iterator.__anext__()
+        except StopAsyncIteration:
+            self._async_iterator = None
+            raise
 
     def _get_record_class(self) -> Type[BaseRecord]:
         """Get the record class to use for instantiation.

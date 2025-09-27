@@ -329,7 +329,7 @@ def main(conf: DictConfig) -> None:
                 stage_name="pipeline",
                 concurrency=concurrency,
                 max_records=max_records,
-                source=source_storage() if callable(source_storage) else source_storage,
+                source=source_storage,
                 processors=processors,  # Pass all processors as a list
             )
 
