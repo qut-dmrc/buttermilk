@@ -15,6 +15,7 @@ storage:
     full_table_id: "prosocial-443205.testing.observations"
   titles:
     full_table_id: "prosocial-443205.testing.tmdbtitles"
+    batch_size: 2
 
 
 bm:
@@ -76,3 +77,12 @@ run:
   job: tests
 
   flows: ${flows}
+
+
+pipeline:
+  _target_: buttermilk.pipeline.PipelineOrchestrator
+  stage_name: testing_processor
+  source: ${storage.titles}
+  concurrency: 1
+  processors: {}
+

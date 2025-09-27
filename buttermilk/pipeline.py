@@ -6,7 +6,7 @@ records through stages, tracking metadata and errors without complex result obje
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, AsyncIterator, Optional, Protocol, runtime_checkable
+from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional, Protocol, runtime_checkable
 
 import hydra
 import pydantic
@@ -38,13 +38,13 @@ class PipelineOrchestrator(BaseModel):
     Each stage appends its status to record.metadata[stage_name].
     """
 
-    concurrency: int = Field(default=20, description="Max concurrent record processing")
+    concurrency: int = Field(default=1, description="Max concurrent record processing")
     max_records: Optional[int] = Field(default=None, description="Maximum records to process")
     stage_name: str = Field(..., description="Name for this processing stage")
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
 
     # Inputs configured after instantiation
-    source: Optional[AsyncIterator[BaseRecord]] = Field(default=None, exclude=True)
+    source: Optional[Any] = Field(default=None, exclude=True, description="Source config or AsyncIterator")
     processors: list[Any] = Field(default_factory=list, exclude=True)  # List of processors to chain
 
     # Internal state
@@ -54,13 +54,15 @@ class PipelineOrchestrator(BaseModel):
     _skipped: int = PrivateAttr(default=0)
     _failed: int = PrivateAttr(default=0)
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
 
     @pydantic.model_validator(mode="before")
     @classmethod
     def _instantiate_components(cls, values: dict) -> dict:
         """Automatically instantiate source and processors from config."""
-        values["source"] = bm.get_storage(values.get("source"))
+        if "source" in values and isinstance(values["source"], Mapping):
+            # Instantiate source if it's a DictConfig or dict
+            values["source"] = bm.get_storage(values.get("source"))
 
         values["processors"] = [hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p for p in values.get("processors", [])]
         return values

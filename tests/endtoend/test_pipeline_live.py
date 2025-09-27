@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Test multi-processor pipeline orchestrator."""
 
+import pytest
+
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title
@@ -59,17 +61,17 @@ class FakeUploader:
         print(f"  Uploader shutdown: {len(self.uploaded)} records uploaded")
 
 
-async def test_multi_processor_pipeline():
-    """Test pipeline with multiple processors."""
+@pytest.mark.anyio
+async def test_live_pipeline(real_bm, real_conf):
+    """Test pipeline with multiple processors using storage-backed source.
 
-    # Create test data source
-    async def source():
-        titles = [
-            Title(record_id="1", title="Movie 1", year=2020),
-            Title(record_id="2", title="Movie 2", year=2021),
-        ]
-        for title in titles:
-            yield title
+    The source storage is configured in testing.yaml and loaded via conftest.py.
+    We read a small batch (2) of Title records from BigQuery-backed storage.
+    """
+
+    # Build storage from testing config and create an async source of Title records
+    storage = real_bm.get_storage(real_conf.storage.titles)
+    source = storage(batch_size=2)  # limit to small, deterministic batch
 
     # Create processors
     tmdb = FakeTMDBProcessor()
@@ -78,7 +80,7 @@ async def test_multi_processor_pipeline():
     # Create orchestrator with multiple processors
     orchestrator = PipelineOrchestrator(
         stage_name="test_pipeline",
-        source=source(),
+        source=source,
         processors=[tmdb, uploader],  # Chain of processors
         concurrency=2,
     )
@@ -93,6 +95,13 @@ async def test_multi_processor_pipeline():
     # Shutdown
     uploader.shutdown()
 
+    print("\nPipeline complete!")
+    print("Input: 2 Titles (from storage)")
+    print(f"Output: {len(results)} Observations")
+    print(f"Uploaded: {len(uploader.uploaded)} records")
+
     # Basic assertions: all outputs are Observations and uploader saw the same
     assert all(isinstance(r, Observation) for r in results)
     assert len(uploader.uploaded) == len(results)
+
+    return results

@@ -4,7 +4,8 @@
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
-      "source.fixAll.ruff": "explicit"
+      "source.fixAll.ruff": "explicit",
+      "source.addMissingImports": "explicit"
     }
   },
   "python.testing.unittestEnabled": false,
@@ -18,11 +19,7 @@
   "python.analysis.exclude": [
     "**/node_modules",
     "**/__pycache__",
-    ".git",
-    ".venv",
-    ".venv/**/*",
-    "**/site-packages",
-    "**/__pycache__"
+    ".git"
   ],
   "python.analysis.extraPaths": [],
   "python.analysis.diagnosticMode": "workspace",
