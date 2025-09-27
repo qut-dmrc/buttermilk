@@ -55,7 +55,7 @@ def main(conf: DictConfig) -> None:
 
     """
     OmegaConf.resolve(conf)
-    
+
     # Use the unified bootstrap function for single golden path
     from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 

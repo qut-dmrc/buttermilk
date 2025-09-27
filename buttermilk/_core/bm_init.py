@@ -133,6 +133,7 @@ class SessionInfo(BaseModel):
     agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
     flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
+    template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -840,6 +841,7 @@ def create_session_bm(
     batch_id: str | None = None,
     platform: str = "local",
     save_dir_base: str | None = None,
+    template_paths: list[str] | None = None,
     cloud_manager=None,
     secret_manager=None,
     llms_instance=None,
@@ -855,6 +857,7 @@ def create_session_bm(
         batch_id: Optional batch identifier for grouping related sessions.
         platform: Platform where the session is running.
         save_dir_base: Base directory for session outputs.
+        template_paths: Optional list of paths to search for templates.
         cloud_manager: Shared cloud manager instance (optional).
         secret_manager: Shared secret manager instance (optional).
         llms_instance: Shared LLMs instance (optional).
@@ -871,6 +874,7 @@ def create_session_bm(
         "job": job,
         "platform": platform,
         "batch_id": batch_id,
+        "template_paths": template_paths or [],
         **kwargs
     }
     

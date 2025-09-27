@@ -8,10 +8,12 @@ import asyncio
 import time
 from typing import Any, AsyncGenerator, AsyncIterator, Optional, Protocol, runtime_checkable
 
+import hydra
 import pydantic
+from omegaconf import DictConfig
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from buttermilk._core.log import logger
+from buttermilk import bm, logger
 from buttermilk._core.types import BaseRecord
 
 
@@ -53,6 +55,15 @@ class PipelineOrchestrator(BaseModel):
     _failed: int = PrivateAttr(default=0)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _instantiate_components(cls, values: dict) -> dict:
+        """Automatically instantiate source and processors from config."""
+        values["source"] = bm.get_storage(values.get("source"))
+
+        values["processors"] = [hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p for p in values.get("processors", [])]
+        return values
 
     @pydantic.model_validator(mode="after")
     def _init(self):

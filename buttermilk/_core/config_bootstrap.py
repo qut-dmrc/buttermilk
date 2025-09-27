@@ -1,7 +1,7 @@
 """Configuration bootstrapper for centralized setup of all Buttermilk infrastructure.
 
 This module provides the ConfigurationBootstrapper class that serves as the single
-entry point for all configuration management, eliminating scattered environment 
+entry point for all configuration management, eliminating scattered environment
 variable access and configuration initialization throughout the codebase.
 """
 
@@ -73,29 +73,29 @@ class ConfigurationBootstrapper:
                     # Get absolute path to config directory
                     config_dir = Path(__file__).parent.parent / self.config_path
                     config_dir = config_dir.resolve()
-                    
+
                     with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
                         self._config = compose(config_name=self.config_name, overrides=self.overrides)
                         OmegaConf.resolve(self._config)
-                        
+
                     logger.info("Configuration loaded via new Hydra initialization")
             except Exception as e:
                 logger.error(f"Failed to load configuration: {e}")
                 raise
-                
+
         return self._config
-    
+
     def setup_environment_variables(self) -> None:
         """Set all required environment variables in one place.
-        
+
         This centralizes all environment variable setup that was previously
         scattered throughout the codebase.
         """
         config = self._load_configuration()
-        
+
         # Set up environment variables for various services
         env_vars = {}
-        
+
         # OpenTelemetry configuration (previously in otel.py)
         if hasattr(config, "observability") and config.observability:
             otel_config = config.observability.get("opentelemetry", {})
@@ -109,7 +109,7 @@ class ConfigurationBootstrapper:
 
                 if otel_config.get("endpoint"):
                     env_vars["OTEL_EXPORTER_OTLP_ENDPOINT"] = otel_config["endpoint"]
-        
+
         # Cloud provider environment setup (previously scattered in cloud.py)
         if hasattr(config, "infrastructure") and config.infrastructure.get("clouds"):
             for cloud_config in config.infrastructure.clouds:
@@ -119,23 +119,23 @@ class ConfigurationBootstrapper:
                         env_vars["GOOGLE_CLOUD_PROJECT"] = cloud_config["project_id"]
                     if cloud_config.get("credentials_path"):
                         env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config["credentials_path"]
-        
+
         # Apply all environment variables
         for key, value in env_vars.items():
             os.environ[key] = str(value)
             logger.debug(f"Set environment variable: {key}")
-            
+
         if env_vars:
             logger.info(f"Configured {len(env_vars)} environment variables")
-    
+
     def get_infrastructure_config(self) -> DictConfig:
         """Get configuration for all infrastructure components.
-        
+
         Returns:
             DictConfig containing infrastructure configuration with _target_ keys intact
         """
         config = self._load_configuration()
-        
+
         # Extract infrastructure configuration as DictConfig to preserve _target_ keys
         if hasattr(config, "infrastructure"):
             return config.infrastructure
@@ -145,7 +145,7 @@ class ConfigurationBootstrapper:
             return config.bm
         else:
             raise RuntimeError("No infrastructure configuration found in config")
-    
+
     async def bootstrap_full_context(self) -> ExecutionContext:
         """Bootstrap complete execution context with all infrastructure.
 
@@ -156,7 +156,7 @@ class ConfigurationBootstrapper:
             ExecutionContext: The configured execution context
         """
         logger.info("Bootstrapping full application context...")
-        
+
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
@@ -166,17 +166,19 @@ class ConfigurationBootstrapper:
             # Debug: Log top-level configuration keys for troubleshooting
             config_keys = list(config.keys()) if config else []
             logger.debug("Configuration loaded", config_keys=config_keys)
-            
+
             # Pass the FULL infrastructure configuration to ExecutionContext
             # This ensures ExecutionContext has its own CloudManager, SecretManager, etc.
 
             # Debug: Log infrastructure configuration for troubleshooting
-            logger.debug("Infrastructure configuration loaded",
-                        clouds_count=len(infrastructure_config.get("clouds", [])),
-                        has_secret_provider=bool(infrastructure_config.get("secret_provider")),
-                        has_logging=bool(infrastructure_config.get("logging")),
-                        has_tracing=bool(infrastructure_config.get("tracing")),
-                        has_datasets=bool(infrastructure_config.get("datasets")))
+            logger.debug(
+                "Infrastructure configuration loaded",
+                clouds_count=len(infrastructure_config.get("clouds", [])),
+                has_secret_provider=bool(infrastructure_config.get("secret_provider")),
+                has_logging=bool(infrastructure_config.get("logging")),
+                has_tracing=bool(infrastructure_config.get("tracing")),
+                has_datasets=bool(infrastructure_config.get("datasets")),
+            )
 
             # Instantiate cloud configurations using Hydra
             hydrated_clouds = []
@@ -184,6 +186,7 @@ class ConfigurationBootstrapper:
                 try:
                     if isinstance(cloud_config, DictConfig):
                         import hydra
+
                         hydrated_cloud = hydra.utils.instantiate(cloud_config)
                         hydrated_clouds.append(hydrated_cloud)
                     else:
@@ -199,8 +202,10 @@ class ConfigurationBootstrapper:
                 datasets=infrastructure_config.get("datasets", {}),
             )
             await self._execution_context.ensure_initialized()
-            logger.info("ExecutionContext created with full infrastructure configuration", execution_context_id=self._execution_context.execution_context_id)
-        
+            logger.info(
+                "ExecutionContext created with full infrastructure configuration", execution_context_id=self._execution_context.execution_context_id
+            )
+
         # Initialize tracing now that infrastructure is ready
         try:
             await self._execution_context._initialize_all_tracing_providers()
@@ -211,13 +216,14 @@ class ConfigurationBootstrapper:
 
         logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
         return self._execution_context
-    
-    async def bootstrap_session_context(self, name: str, job: str, **kwargs) -> Any:
+
+    async def bootstrap_session_context(self, name: str, job: str, template_paths: list[str] | None = None, **kwargs) -> Any:
         """Bootstrap session-specific BM instance.
 
         Args:
             name: User-defined name for the current session or project
             job: User-defined name for the specific job or task
+            template_paths: Optional list of paths to search for templates.
             **kwargs: Additional arguments for session creation
 
         Returns:
@@ -235,28 +241,29 @@ class ConfigurationBootstrapper:
         session_bm = create_session_bm(
             name=name,
             job=job,
+            template_paths=template_paths,
             cloud_manager=self._execution_context.cloud_manager if self._execution_context.clouds else None,
             secret_manager=self._execution_context.secret_manager if self._execution_context._find_cloud_with_service("secrets") else None,
             llms_instance=self._execution_context.llms,
             query_runner=self._execution_context.query_runner if self._execution_context.clouds else None,
             logger_cfg=self._execution_context.logging,
-            **kwargs
+            **kwargs,
         )
-        
+
         # Ensure session BM is fully initialized
         await session_bm.ensure_initialized()
         logger.info(f"Session context bootstrap complete: {session_bm.session_info.session_id}")
-        
+
         return session_bm
-    
+
     def get_configuration(self) -> DictConfig:
         """Get the loaded configuration.
-        
+
         Returns:
             Loaded Hydra configuration
         """
         return self._load_configuration()
-    
+
 
 def create_configuration_bootstrapper(
     config_path: str = "conf", config_name: str = "config", overrides: list[str] | None = None, config: DictConfig | None = None
@@ -307,7 +314,9 @@ def init(
         RuntimeError: If project is required but not provided, or if project
                      mismatches existing execution context project.
     """
-    bm, config = bootstrap_session_with_config(job=job, project=project, run_type=run_type, config_dir=config_dir, config_name=config_name, overrides=overrides, config=config)
+    bm, config = bootstrap_session_with_config(
+        job=job, project=project, run_type=run_type, config_dir=config_dir, config_name=config_name, overrides=overrides, config=config
+    )
     return bm
 
 
@@ -343,8 +352,9 @@ def bootstrap_session_with_config(
     """
     import asyncio
     from pathlib import Path
+
     from buttermilk._core.dmrc import set_bm
-    
+
     # Resolve config directory - default to packaged config if not provided
     if not config_dir:
         config_dir = Path(__file__).parent.parent.resolve() / "conf"
@@ -380,11 +390,14 @@ def bootstrap_session_with_config(
         resolved_job = job if job is not None else final_config.run.job
         resolved_project = project if project is not None else final_config.run.name
 
+        # Extract template_paths from config
+        template_paths = final_config.bm.session_info.get("template_paths", [])
+
         # Validate and set project name using ExecutionContext
         validated_project = execution_context.validate_and_set_project(resolved_project)
 
         # Create session BM instance with validated project
-        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job))
+        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job, template_paths=template_paths))
 
         # Set the singleton BM instance
         set_bm(bm)

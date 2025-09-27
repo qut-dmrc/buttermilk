@@ -23,11 +23,33 @@ from jinja2 import (  # Jinja2 templating components
 )
 from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
-from buttermilk import logger  # Centralized logger
+from buttermilk import bm, logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.types import Record  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
+
+
+def _get_template_search_paths() -> list[str]:
+    """Get the search paths for templates, prioritizing session-specific paths."""
+    search_paths = []
+    try:
+        search_paths.extend(bm.session_info.template_paths)
+    except Exception as e:
+        logger.warning(f"Could not get template paths from session: {e}")
+
+    # Add default path if it's not already there
+    if TEMPLATES_PATH not in search_paths:
+        search_paths.append(TEMPLATES_PATH)
+
+    # Deduplicate and expand subdirectories
+    final_paths = []
+    for path in search_paths:
+        if path not in final_paths:
+            final_paths.append(path)
+            final_paths.extend([str(p) for p in Path(path).rglob("*") if p.is_dir()])
+
+    return final_paths
 
 
 class KeyValueCollector(BaseModel):
@@ -171,23 +193,24 @@ def calculate_template_hash(template_name: str) -> tuple[str, str]:
 
     """
     template_filename = f"{template_name}.jinja2"
-    
-    # Search for the template file in TEMPLATES_PATH and subdirectories
-    recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
-    
+
+    # Search for the template file in the configured search paths
+    search_paths = _get_template_search_paths()
+
     template_path = None
-    for search_path in recursive_search_paths:
+    for search_path in search_paths:
         potential_path = Path(search_path) / template_filename
         if potential_path.exists() and potential_path.is_file():
             template_path = potential_path
             break
-    
+
     if template_path is None:
-        raise FatalError(f"Template file '{template_filename}' not found in {TEMPLATES_PATH} or its subdirectories.")
-    
+        raise FatalError(f"Template file '{template_filename}' not found in {search_paths} or their subdirectories.")
+
     try:
         # Calculate hash using unified hashing module
         from buttermilk._core.hashing import compute_template_hash_from_file
+
         hash_value = compute_template_hash_from_file(template_path)
         return hash_value, str(template_path)
     except Exception as e:
@@ -314,9 +337,9 @@ def load_template(
     """
     effective_untrusted_inputs = untrusted_inputs or {}
 
-    # Define search paths for templates: TEMPLATES_PATH and all its subdirectories
-    recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
-    file_system_loader = FileSystemLoader(searchpath=recursive_search_paths)
+    # Define search paths for templates using the new helper
+    search_paths = _get_template_search_paths()
+    file_system_loader = FileSystemLoader(searchpath=search_paths)
 
     collected_undefined_vars: list[str] = []
 

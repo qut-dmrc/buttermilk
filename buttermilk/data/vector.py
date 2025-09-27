@@ -3,7 +3,6 @@ import datetime
 import json
 import signal
 import time
-from tty import CFLAG
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from pathlib import Path
@@ -27,7 +26,6 @@ from vertexai.language_models import (
 
 from buttermilk import bm, logger
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
-
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
@@ -349,9 +347,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Log sync configuration
         if not self.disable_auto_sync:
-            logger.info(
-                f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes"
-            )
+            logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
 
@@ -384,9 +380,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Step 2: Initialize ChromaDB client
         if not hasattr(self, "_client") or not self._client:
-            self._client = chromadb.PersistentClient(
-                path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False)
-            )
+            self._client = chromadb.PersistentClient(path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False))
             logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
 
         # Step 3: Ensure collection is ready (create or validate)
@@ -405,9 +399,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         import time
 
         # Get local cache path
-        cache_path = (
-            Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
-        )
+        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
 
         # Check if local cache exists and has recent modifications
         local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()
@@ -463,9 +455,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             # Only sync if modified within last 6 hours (indicates recent embedding work)
             if time_since_modified > 21600:  # 6 hours
-                logger.debug(
-                    f"Local cache not recently modified ({time_since_modified / 3600:.1f}h ago), skipping sync"
-                )
+                logger.debug(f"Local cache not recently modified ({time_since_modified / 3600:.1f}h ago), skipping sync")
                 return
 
             logger.info(f"🔄 Syncing local changes back to remote: {cache_path} → {remote_path}")
@@ -749,9 +739,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
-        logger.info(
-            f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'"
-        )
+        logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
             if skip_existing and not force_reprocess:
@@ -797,9 +785,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.info(f"📋 [VECTORIZER-{record.record_id}] Using cached embeddings, skipping API call")
             else:
                 # --- Embeddings (now with robust retry) ---
-                logger.debug(
-                    f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks..."
-                )
+                logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
                 embedding_ok = await self._embed_chunks(record.chunks)
 
                 # Save embeddings to cache if successful
@@ -809,9 +795,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             if not embedding_ok:
                 # Persist failed record for later retry BEFORE returning
                 try:
-                    failed_path = (
-                        Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
-                    )
+                    failed_path = Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
                     failed_payload = {
                         "record_id": record.record_id,
                         "title": record.title,
@@ -1109,18 +1093,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
                     # Check failure threshold
                     if failed_count > max_failures:
-                        logger.error(
-                            f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}"
-                        )
+                        logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
                         # Mark remaining records as failed
                         remaining = len(records) - (i + 1)
                         failed_count += remaining
-                        failed_records.extend(
-                            [
-                                (records[j].record_id, "batch stopped due to failures")
-                                for j in range(i + 1, len(records))
-                            ]
-                        )
+                        failed_records.extend([(records[j].record_id, "batch stopped due to failures") for j in range(i + 1, len(records))])
                         break
 
             except Exception as e:
@@ -1130,9 +1107,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
                 # Check failure threshold
                 if failed_count > max_failures:
-                    logger.error(
-                        f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}"
-                    )
+                    logger.error(f"❌ Stopping batch processing: {failed_count} failures exceed max_failures={max_failures}")
                     break
 
         processing_time_ms = (time.time() - start_time) * 1000
@@ -1216,19 +1191,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 embeddings_data = json.load(f)
 
             # Validate cache is for correct model and record
-            if (
-                embeddings_data.get("record_id") != record.record_id
-                or embeddings_data.get("embedding_model") != self._embedding_model
-            ):
+            if embeddings_data.get("record_id") != record.record_id or embeddings_data.get("embedding_model") != self._embedding_model:
                 logger.debug(f"Cache mismatch for {record.record_id}")
                 return False
 
             # Check if we have the right number of chunks
             cached_chunks = embeddings_data.get("chunks", [])
             if len(cached_chunks) != len(record.chunks):
-                logger.debug(
-                    f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}"
-                )
+                logger.debug(f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}")
                 return False
 
             # Load embeddings into chunks
@@ -1346,15 +1316,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             try:
                 if self._retry_wrapper:
-                    batch_embeddings = await self._retry_wrapper._execute_with_retry(
-                        lambda: _run_embed_batch(batch_texts)
-                    )
+                    batch_embeddings = await self._retry_wrapper._execute_with_retry(lambda: _run_embed_batch(batch_texts))
                 else:
                     batch_embeddings = await _run_embed_batch(batch_texts)
             except Exception as e:  # All retries exhausted or non-retryable error surfaced
-                logger.error(
-                    f"Embedding batch failed after retries (indices {batch_indices[0]}..{batch_indices[-1]}): {e}"
-                )
+                logger.error(f"Embedding batch failed after retries (indices {batch_indices[0]}..{batch_indices[-1]}): {e}")
                 # Convert embedding-specific errors; may raise RateLimit to be handled upstream
                 try:
                     self._convert_embedding_errors(e)
@@ -1768,9 +1734,7 @@ class DocProcessor(BaseModel):
     _semaphore: asyncio.Semaphore = PrivateAttr()
     _record_cache: Any = PrivateAttr(default=None)
     doc_iterator: AsyncIterator[Record] | None = Field(default=None, exclude=True)
-    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] | None = Field(
-        default=None, exclude=True
-    )
+    processor: Callable[[Record], Awaitable[ProcessingResult | Record | None]] | None = Field(default=None, exclude=True)
     stage_name: str | None = Field(default=None, description="Explicit stage name to disambiguate caching/logging")
     _name: str = PrivateAttr(default="")
     _original_name: str = PrivateAttr(default="")
@@ -1830,9 +1794,7 @@ class DocProcessor(BaseModel):
                 if self.enable_record_cache and self._record_cache and not self.force_reprocess:
                     cached = self._record_cache.load(doc.record_id, self._name)
                     if cached and self._validate_cached_record(cached):
-                        logger.debug(
-                            f"⚡ Cache hit for record {doc.record_id} at stage '{self._name}' – skipping processing"
-                        )
+                        logger.debug(f"⚡ Cache hit for record {doc.record_id} at stage '{self._name}' – skipping processing")
                         # Wrap cached as pseudo ProcessingResult (processed) if returning results
                         if self.return_results:
                             return ProcessingResult(
@@ -1859,9 +1821,7 @@ class DocProcessor(BaseModel):
                         )
                     return None
 
-                logger.info(
-                    f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'"
-                )
+                logger.info(f"🔷 [{self._name}-{doc.record_id}] Processing record '{doc.title[:50] if doc.title else 'Unknown'}'")
                 result = await self.processor(doc)
 
                 # Normalize to ProcessingResult for unified accounting
@@ -1928,14 +1888,10 @@ class DocProcessor(BaseModel):
                 if self.max_docs is not None:
                     if self.count_only_yielded:
                         if self._yielded >= self.max_docs:
-                            logger.info(
-                                f"🔚 Stage '{self._name}' reached max_docs (yielded={self._yielded}) – stopping intake"
-                            )
+                            logger.info(f"🔚 Stage '{self._name}' reached max_docs (yielded={self._yielded}) – stopping intake")
                             break
                     elif self._attempted >= self.max_docs:
-                        logger.info(
-                            f"🔚 Stage '{self._name}' reached max_docs (attempted={self._attempted}) – stopping intake"
-                        )
+                        logger.info(f"🔚 Stage '{self._name}' reached max_docs (attempted={self._attempted}) – stopping intake")
                         break
 
                 # Maintain in-flight up to concurrency
@@ -1989,8 +1945,7 @@ class DocProcessor(BaseModel):
                         yield out
 
             logger.info(
-                f"✅ Stage '{self._name}' complete: attempted={self._attempted} yielded={self._yielded} "
-                f"skipped={self._skipped} failed={self._failed}"
+                f"✅ Stage '{self._name}' complete: attempted={self._attempted} yielded={self._yielded} skipped={self._skipped} failed={self._failed}"
             )
         except Exception as e:
             logger.error(f"Stage '{self._name}' aborted: {e}")
@@ -2009,7 +1964,7 @@ def main(cfg) -> None:
 
     from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
-    bm, CFLAG = bootstrap_session_with_config(config=cfg)
+    bm, _ = bootstrap_session_with_config(config=cfg)
 
     objs = hydra.utils.instantiate(cfg)
     vectoriser: ChromaDBEmbeddings = objs.vectoriser
