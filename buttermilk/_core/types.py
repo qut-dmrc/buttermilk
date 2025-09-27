@@ -116,6 +116,7 @@ class BaseRecord(BaseModel):
         extra="allow",  # Allow extra fields for extensibility
         arbitrary_types_allowed=True,
         populate_by_name=True,
+        frozen=True,  # Make records immutable
     )
 
 

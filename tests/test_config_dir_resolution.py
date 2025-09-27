@@ -31,9 +31,9 @@ def test_relative_config_dir_resolves_against_cwd(monkeypatch, tmp_path):
 
         @staticmethod
         def get_configuration():
-            # Provide run.job and run.name like OmegaConf object
-            run = types.SimpleNamespace(job="cfgjob", name="cfgproj")
-            return types.SimpleNamespace(run=run)
+            session_info = types.SimpleNamespace(job="cfgjob", name="cfgproj")
+            bm = types.SimpleNamespace(session_info=session_info)
+            return types.SimpleNamespace(bm=bm)
 
     class Dummy:
         class _SI:
@@ -102,8 +102,9 @@ def test_tilde_and_env_expansion(monkeypatch, tmp_path):
 
         @staticmethod
         def get_configuration():
-            run = types.SimpleNamespace(job="cfgjob", name="cfgproj")
-            return types.SimpleNamespace(run=run)
+            session_info = types.SimpleNamespace(job="cfgjob", name="cfgproj")
+            bm = types.SimpleNamespace(session_info=session_info)
+            return types.SimpleNamespace(bm=bm)
 
     class Dummy:
         class _SI:

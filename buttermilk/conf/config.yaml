@@ -13,8 +13,8 @@ flows: {}
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: ${run.name}
-    job: ${run.job}
+    name:
+    job:
     template_paths: []
     # Session storage configuration
     sessions_dir: "data/sessions"

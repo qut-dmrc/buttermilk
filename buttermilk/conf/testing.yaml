@@ -70,6 +70,7 @@ infrastructure:
 
 run:
   mode: pytest
+  
 
 
 pipeline:

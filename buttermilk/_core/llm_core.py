@@ -103,7 +103,7 @@ class LLMCore:
 
     async def process(
         self,
-        inputs: dict[str, Any],
+        inputs: Any,
         parent_trace_id: Optional[str] = None,
         component_name: str = "LLMCore",
         cancellation_token: Optional[CancellationToken] = None
@@ -132,7 +132,13 @@ class LLMCore:
         """
         start_time = time.time()
         tracer = trace.get_tracer("buttermilk.llm_core")
-
+        if isinstance(inputs, BaseModel):
+            inputs_dict = inputs.model_dump()
+        elif isinstance(inputs, dict):
+            inputs_dict = inputs.copy()
+        else:
+            raise ProcessingError("Inputs must be a dict or Pydantic BaseModel")
+        
         # Extract special inputs
         context = inputs.pop("context", []) if isinstance(inputs.get("context"), list) else []
         records = inputs.pop("records", []) if isinstance(inputs.get("records"), list) else []

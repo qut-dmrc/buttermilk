@@ -73,104 +73,84 @@ class PipelineOrchestrator(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
-    async def _process_record(self, record: BaseRecord) -> list[BaseRecord]:
-        """Process a single record through the chain of processors.
+    async def _process_single_record(self, record: BaseRecord) -> BaseRecord:
+        """Process a single record through the entire processor chain.
 
-        Returns a list of output records (can be empty, one, or many).
+        Each record flows through all processors individually.
+        Raises exception on any error - no error forwarding.
+
+        Args:
+            record: Input record to process
+
+        Returns:
+            Final processed record with metadata
+
+        Raises:
+            Exception: If any processor fails or record is filtered out
         """
-        async with self._semaphore:
-            start_time = time.time()
+        if not self.processors:
+            raise ValueError(f"[{self.stage_name}] No processors configured")
 
-            try:
-                if not self.processors:
-                    logger.error(f"[{self.stage_name}] No processors configured")
-                    self._failed += 1
-                    return []
+        start_time = time.time()
+        current_record = record
 
-                # Start with the input record
-                current_records = [record]
+        try:
+            # Flow record through each processor in sequence
+            for processor in self.processors:
+                outputs = []
+                async for output_record in processor.process(current_record):
+                    outputs.append(output_record)
 
-                # Chain through each processor
-                for i, processor in enumerate(self.processors):
-                    next_records = []
-
-                    # Process each record from the previous stage
-                    for rec in current_records:
-                        async for output_record in processor.process(rec):
-                            if output_record is not None:
-                                next_records.append(output_record)
-
-                    # Update current records for next processor
-                    current_records = next_records
-
-                    # If no records produced, stop the chain
-                    if not current_records:
-                        break
-
-                # Track results
-                if not current_records:
-                    # No output from the chain
-                    self._skipped += 1
-                    record.metadata[self.stage_name] = {
-                        "status": "skipped",
-                        "timestamp": time.time(),
-                        "processing_time_ms": int((time.time() - start_time) * 1000),
-                    }
+                if not outputs:
+                    # Record was filtered out by this processor
+                    raise ValueError(f"Record {record.record_id} filtered out by processor {processor}")
+                elif len(outputs) == 1:
+                    # Normal 1:1 flow
+                    current_record = outputs[0]
                 else:
-                    self._processed += len(current_records)
-                    # Track success in metadata for each output
-                    processing_time_ms = int((time.time() - start_time) * 1000)
-                    for output_record in current_records:
-                        output_record.metadata[self.stage_name] = {
-                            "status": "processed",
-                            "timestamp": time.time(),
-                            "processing_time_ms": processing_time_ms,
-                        }
+                    # 1:N expansion - for now, take first output
+                    # TODO: Handle 1:N properly in future iteration
+                    current_record = outputs[0]
+                    logger.warning(f"Processor yielded {len(outputs)} records, taking first one")
 
-                return current_records
-
-            except Exception as e:
-                logger.error(f"Error processing record {record.record_id} in stage {self.stage_name}: {e}")
-                self._failed += 1
-
-                # Track error in metadata
-                record.metadata[self.stage_name] = {
-                    "status": "failed",
-                    "error": str(e),
+            # Add success metadata to final record (immutable copy)
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            final_metadata = {
+                **current_record.metadata,
+                self.stage_name: {
+                    "status": "processed",
                     "timestamp": time.time(),
-                    "processing_time_ms": int((time.time() - start_time) * 1000),
+                    "processing_time_ms": processing_time_ms,
                 }
+            }
 
-                # Append to error list if record has one
-                if hasattr(record, "error"):
-                    if not isinstance(record.error, list):
-                        record.error = []
-                    from buttermilk._core.contract import ErrorEvent
+            return current_record.model_copy(update={"metadata": final_metadata})
 
-                    record.error.append(ErrorEvent(content=f"Stage {self.stage_name}: {e}", source=self.stage_name))
-
-                return []
+        except Exception as e:
+            # Let exception bubble up - TaskGroup will handle error collection
+            logger.error(f"Error processing record {record.record_id} in stage {self.stage_name}: {e}")
+            raise
 
     async def __call__(self) -> AsyncIterator[BaseRecord]:
-        """Process records from source through the configured processor.
+        """Process records from source with TaskGroup-based concurrency.
 
-        Yields successfully processed records only (skipped/failed are filtered out).
+        Each record flows through the entire processor chain individually.
+        Uses TaskGroup for natural error collection and concurrency management.
         """
         if self.source is None:
             logger.error(f"[{self.stage_name}] No source iterator configured")
             return
 
-        pending: set[asyncio.Task] = set()
         log_interval = 15.0
         last_log = time.monotonic()
 
-        async def maybe_log_status():
+        def maybe_log_status(pending_count: int):
             nonlocal last_log
             now = time.monotonic()
             if now - last_log >= log_interval:
                 logger.debug(
                     f"📊 Stage '{self.stage_name}': attempted={self._attempted} processed={self._processed} "
-                    f"skipped={self._skipped} failed={self._failed} pending={len(pending)}"
+                    f"failed={self._failed} pending={pending_count}"
                 )
                 last_log = now
 
@@ -178,44 +158,72 @@ class PipelineOrchestrator(BaseModel):
             # Ensure we have an async iterator
             source_iter = self.source if hasattr(self.source, "__anext__") else self.source.__aiter__()
 
-            async for record in source_iter:
-                self._attempted += 1
+            pending_tasks: set[asyncio.Task] = set()
+            completed_records = asyncio.Queue()
 
-                # Check if we've hit max_records
-                if self.max_records is not None and self._processed >= self.max_records:
-                    logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._processed}) – stopping")
-                    break
+            async def process_and_queue(record: BaseRecord):
+                """Process a record and put result in queue."""
+                try:
+                    processed_record = await self._process_single_record(record)
+                    await completed_records.put(processed_record)
+                    self._processed += 1
+                except Exception as e:
+                    self._failed += 1
+                    # Let exception bubble up for TaskGroup
+                    raise
 
-                # Maintain concurrency limit
-                while len(pending) >= self.concurrency:
-                    done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                    for task in done:
-                        results = task.result()
-                        await maybe_log_status()
-                        # Yield each output record
-                        for result in results:
-                            yield result
+            async with asyncio.TaskGroup() as tg:
+                # Producer: Create tasks for incoming records
+                async def producer():
+                    nonlocal pending_tasks
+                    async for record in source_iter:
+                        self._attempted += 1
 
-                # Schedule processing
-                pending.add(asyncio.create_task(self._process_record(record)))
+                        # Check if we've hit max_records
+                        if self.max_records is not None and self._processed >= self.max_records:
+                            logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._processed}) – stopping")
+                            break
 
-            # Process remaining tasks
-            while pending:
-                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                for task in done:
-                    results = task.result()
-                    await maybe_log_status()
-                    # Yield each output record
-                    for result in results:
-                        yield result
+                        # Maintain concurrency limit
+                        while len(pending_tasks) >= self.concurrency:
+                            await asyncio.sleep(0.01)  # Brief pause to allow task completion
+                            # Clean up completed tasks
+                            pending_tasks = {t for t in pending_tasks if not t.done()}
+
+                        # Create and track task
+                        task = tg.create_task(process_and_queue(record))
+                        pending_tasks.add(task)
+
+                        maybe_log_status(len(pending_tasks))
+
+                    # Signal completion by putting None
+                    await completed_records.put(None)
+
+                # Consumer: Yield completed records
+                async def consumer():
+                    while True:
+                        record = await completed_records.get()
+                        if record is None:  # End signal
+                            break
+                        yield record
+
+                # Start producer
+                producer_task = tg.create_task(producer())
+
+                # Yield from consumer
+                async for record in consumer():
+                    yield record
 
             logger.info(
                 f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
-                f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
+                f"processed={self._processed} failed={self._failed}"
             )
 
-        except Exception as e:
-            logger.error(f"Stage '{self.stage_name}' aborted: {e}")
+        except* Exception as eg:
+            # TaskGroup collects all exceptions
+            logger.error(f"Stage '{self.stage_name}' had {len(eg.exceptions)} errors")
+            for exc in eg.exceptions:
+                logger.error(f"Task error: {exc}")
             raise
 
 

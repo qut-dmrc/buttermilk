@@ -62,7 +62,7 @@ def main(conf: DictConfig) -> None:
     # Single unified initialization - gets both BM and config
     # Don't override job/project - let Hydra configuration be used as-is
     bm, resolved_conf = bootstrap_session_with_config(
-        config=conf  # Pass the existing Hydra configuration, use run.job and run.name from config
+        config=conf  # Pass the existing Hydra configuration, use bm.session_info.job and bm.session_info.name from config
     )
 
     # Use the resolved config for consistency (in case overrides were applied)

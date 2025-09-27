@@ -374,7 +374,7 @@ def bootstrap_session_with_config(
 
     # Only override job if explicitly provided (otherwise use config default)
     if job is not None:
-        bootstrap_overrides.append(f"++run.job={job}")
+        bootstrap_overrides.append(f"++bm.session_info.job={job}")
 
     # Create bootstrapper with configuration
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
@@ -387,8 +387,8 @@ def bootstrap_session_with_config(
         final_config = bootstrapper.get_configuration()
 
         # Extract job and project from config if not provided as parameters
-        resolved_job = job if job is not None else final_config.run.job
-        resolved_project = project if project is not None else final_config.run.name
+        resolved_job = job if job is not None else final_config.bm.session_info.job
+        resolved_project = project if project is not None else final_config.bm.session_info.name
 
         # Extract template_paths from config
         template_paths = final_config.bm.session_info.get("template_paths", [])
