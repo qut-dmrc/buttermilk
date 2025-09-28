@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from buttermilk import bm
 from buttermilk._core.log import logger
-from buttermilk._core.types import BaseRecord
 from buttermilk.storage import Storage
 
 
@@ -88,7 +87,16 @@ class AsyncDataUploader:
                     await self._flush()
 
             except Exception as e:
-                logger.error(f"Worker error: {e}")
+                logger.error(
+                    f"Worker error: {e}",
+                    phase="worker",
+                    error=str(e),
+                    type=type(e).__name__,
+                    buffer_len=len(self.buffer),
+                    queue_size=self.queue.qsize(),
+                    storage=type(self.storage).__name__,
+                    task=(asyncio.current_task().get_name() if asyncio.current_task() else None),
+                )
                 await asyncio.sleep(1)
         logger.info("Data uploader loop finished.")
 
@@ -104,7 +112,16 @@ class AsyncDataUploader:
             self.buffer = []
             await self._clear_backup()
         except Exception as e:
-            logger.error(f"Flush error: {e}")
+            logger.error(
+                f"Flush error: {e}",
+                error=str(e),
+                type=type(e).__name__,
+                args=e.args,
+                traceback=e.__traceback__,
+                phase="flush",
+                buffer_len=len(self.buffer),
+                storage=type(self.storage).__name__,
+            )
             # Keep items in buffer for retry
 
     async def _backup_item(self, item):

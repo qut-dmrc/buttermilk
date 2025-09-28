@@ -12,9 +12,6 @@ defaults:
     - rag  # Use new RagAgent for structured outputs with citations
   - /tools@agents.rag.tools: 
     - chromadb_search
-  # Data source configuration for search tool
-  # - /storage@storage: osb_vector
-  # - /storage@save: flows
     
 
 # Core flow configuration
