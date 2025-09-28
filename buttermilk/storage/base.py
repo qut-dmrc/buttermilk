@@ -57,7 +57,7 @@ class Storage(ABC):
         self.config = config
         self.bm = bm
         self._record_class: Type[BaseRecord] | None = None
-        self._async_iterator: Optional[AsyncGenerator[BaseRecord, None]] = None
+        self._async_iterator: Optional[AsyncGenerator[dict[str, Any], None]] = None
 
     @abstractmethod
     def __iter__(self) -> Iterator[BaseRecord]:
@@ -130,8 +130,8 @@ class Storage(ABC):
         self,
         batch_size: Optional[int] = None,
         filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[BaseRecord, None]:
-        """Async generator that yields records from storage with optional filtering.
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Async generator that yields record dictionaries from storage with optional filtering.
 
         This method enables Storage objects to be used directly as DataSource
         in simple pipelines by implementing the async generator protocol.
@@ -141,7 +141,8 @@ class Storage(ABC):
             filter: Optional filter to apply to records before yielding
 
         Yields:
-            Records from storage that pass the filter (if provided)
+            Dictionaries containing records that pass the filter (if provided)
+            Format: {"record": BaseRecord}
         """
         count = 0
         for record in self:
@@ -152,14 +153,14 @@ class Storage(ABC):
             if batch_size is not None and count >= batch_size:
                 break
 
-            yield record
+            yield {"record": record}
             count += 1
 
     def __call__(
         self,
         batch_size: Optional[int] = None,
         filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[BaseRecord, None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:
@@ -180,11 +181,11 @@ class Storage(ABC):
             filter: Optional filter to apply to records
 
         Returns:
-            Async generator of records
+            Async generator of record dictionaries
         """
         return self.iterate_async(batch_size, filter)
 
-    def __aiter__(self) -> AsyncIterator[BaseRecord]:
+    def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
         """Make Storage objects async iterable.
 
         Returns:
@@ -194,11 +195,11 @@ class Storage(ABC):
         self._async_iterator = self.iterate_async()
         return self
 
-    async def __anext__(self) -> BaseRecord:
+    async def __anext__(self) -> dict[str, Any]:
         """Get next item from async iterator.
 
         Returns:
-            Next BaseRecord from storage
+            Next record dictionary from storage
 
         Raises:
             StopAsyncIteration: When no more records available

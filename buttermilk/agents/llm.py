@@ -126,7 +126,7 @@ class LLMAgent(Agent):
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
         # Pass the entire message object to LLMCore for flexible input handling
-        # LLMCore will extract inputs, context, and records as needed
+        # LLMCore will extract inputs, context, and record as needed
 
         # Override parameters with message parameters
         if message.parameters:

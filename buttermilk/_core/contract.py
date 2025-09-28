@@ -310,12 +310,12 @@ class AgentInput(FlowMessage):
         default_factory=list,
         description="Conversation history (list of Autogen `LLMMessage` objects like SystemMessage, UserMessage, AssistantMessage).",
     )
-    records: list[Record] = Field(
-        default_factory=list,
-        description="List of `Record` objects relevant to the current task for the agent to process.",
+    record: Record | None = Field(
+        default=None,
+        description="Single `Record` object relevant to the current task for the agent to process.",
     )
 
-    _ensure_input_list: classmethod = field_validator("context", "records", mode="before")(make_list_validator())  # type: ignore
+    _ensure_input_list: classmethod = field_validator("context", mode="before")(make_list_validator())  # type: ignore
 
     def __str__(self) -> str:
         """Provides a concise string representation of the AgentInput instance."""
@@ -327,9 +327,9 @@ class AgentInput(FlowMessage):
             parts.append(f"{len(self.inputs)} inputs keys: [{', '.join(self.inputs.keys())}]")
         if self.parameters:
             parts.append(f"{len(self.parameters)} parameters")
-        if self.records:
-            record_ids = [rec.record_id for rec in self.records if hasattr(rec, "record_id")]
-            parts.append(f"Records: [{', '.join(record_ids)}]")
+        if self.record:
+            record_id = self.record.record_id if hasattr(self.record, "record_id") else "unknown"
+            parts.append(f"Record: {record_id}")
 
         if not parts:
             return "AgentInput (empty)"

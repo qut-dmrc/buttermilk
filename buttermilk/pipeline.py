@@ -19,22 +19,28 @@ from buttermilk._core.types import BaseRecord
 
 @runtime_checkable
 class Processor(Protocol):
-    """Standard processor interface - async generator that yields records."""
+    """Standard processor interface - async generator that yields record dictionaries."""
 
-    async def process(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
-        """Process a record and yield zero or more output records.
+    async def process(self, inputs: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
+        """Process inputs dictionary and yield zero or more output dictionaries.
+
+        Args:
+            inputs: Dictionary containing 'record' and potentially other fields
+
+        Yields:
+            Dictionary containing processed data, typically with 'record' key
 
         Yield nothing to filter out the record.
-        Yield one record for 1:1 transformation.
-        Yield multiple records for 1:N transformation.
+        Yield one dict for 1:1 transformation.
+        Yield multiple dicts for 1:N transformation.
         """
         ...
 
 
 class PipelineOrchestrator(BaseModel):
-    """Concurrent async pipeline orchestrator for processing records through stages.
+    """Concurrent async pipeline orchestrator for processing record dictionaries through stages.
 
-    Simplified from DocProcessor to use BaseRecord metadata tracking instead of ProcessingResult.
+    Processes dictionaries in the format {"record": BaseRecord, ...} through processor chains.
     Each stage appends its status to record.metadata[stage_name].
     """
 
@@ -73,17 +79,17 @@ class PipelineOrchestrator(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
-    async def _process_single_record(self, record: BaseRecord) -> BaseRecord:
-        """Process a single record through the entire processor chain.
+    async def _process_single_record(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Process a single inputs dict through the entire processor chain.
 
-        Each record flows through all processors individually.
+        Each inputs dict flows through all processors individually.
         Raises exception on any error - no error forwarding.
 
         Args:
-            record: Input record to process
+            inputs: Input dictionary containing 'record' and other fields
 
         Returns:
-            Final processed record with metadata
+            Final processed inputs dict with metadata
 
         Raises:
             Exception: If any processor fails or record is filtered out
@@ -92,49 +98,55 @@ class PipelineOrchestrator(BaseModel):
             raise ValueError(f"[{self.stage_name}] No processors configured")
 
         start_time = time.time()
-        current_record = record
+        current_inputs = inputs
 
         try:
-            # Flow record through each processor in sequence
+            # Flow inputs through each processor in sequence
             for processor in self.processors:
                 outputs = []
-                async for output_record in processor.process(current_record):
-                    outputs.append(output_record)
+                async for output_dict in processor.process(current_inputs):
+                    outputs.append(output_dict)
 
                 if not outputs:
                     # Record was filtered out by this processor
-                    raise ValueError(f"Record {record.record_id} filtered out by processor {processor}")
+                    record_id = current_inputs.get("record", {}).get("record_id", "unknown")
+                    raise ValueError(f"Record {record_id} filtered out by processor {processor}")
                 elif len(outputs) == 1:
                     # Normal 1:1 flow
-                    current_record = outputs[0]
+                    current_inputs = outputs[0]
                 else:
                     # 1:N expansion - for now, take first output
                     # TODO: Handle 1:N properly in future iteration
-                    current_record = outputs[0]
-                    logger.warning(f"Processor yielded {len(outputs)} records, taking first one")
+                    current_inputs = outputs[0]
+                    logger.warning(f"Processor yielded {len(outputs)} outputs, taking first one")
 
-            # Add success metadata to final record (immutable copy)
-            processing_time_ms = int((time.time() - start_time) * 1000)
-            final_metadata = {
-                **current_record.metadata,
-                self.stage_name: {
-                    "status": "processed",
-                    "timestamp": time.time(),
-                    "processing_time_ms": processing_time_ms,
+            # Add success metadata to the record inside the dict
+            if "record" in current_inputs:
+                record = current_inputs["record"]
+                processing_time_ms = int((time.time() - start_time) * 1000)
+                final_metadata = {
+                    **record.metadata,
+                    self.stage_name: {
+                        "status": "processed",
+                        "timestamp": time.time(),
+                        "processing_time_ms": processing_time_ms,
+                    }
                 }
-            }
+                updated_record = record.model_copy(update={"metadata": final_metadata})
+                current_inputs["record"] = updated_record
 
-            return current_record.model_copy(update={"metadata": final_metadata})
+            return current_inputs
 
         except Exception as e:
             # Let exception bubble up - TaskGroup will handle error collection
-            logger.error(f"Error processing record {record.record_id} in stage {self.stage_name}: {e}")
+            record_id = inputs.get("record", {}).get("record_id", "unknown")
+            logger.error(f"Error processing record {record_id} in stage {self.stage_name}: {e}")
             raise
 
-    async def __call__(self) -> AsyncIterator[BaseRecord]:
-        """Process records from source with TaskGroup-based concurrency.
+    async def __call__(self) -> AsyncIterator[dict[str, Any]]:
+        """Process inputs dicts from source with TaskGroup-based concurrency.
 
-        Each record flows through the entire processor chain individually.
+        Each inputs dict flows through the entire processor chain individually.
         Uses TaskGroup for natural error collection and concurrency management.
         """
         if self.source is None:
@@ -159,13 +171,13 @@ class PipelineOrchestrator(BaseModel):
             source_iter = self.source if hasattr(self.source, "__anext__") else self.source.__aiter__()
 
             pending_tasks: set[asyncio.Task] = set()
-            completed_records = asyncio.Queue()
+            completed_inputs = asyncio.Queue()
 
-            async def process_and_queue(record: BaseRecord):
-                """Process a record and put result in queue."""
+            async def process_and_queue(inputs: dict[str, Any]):
+                """Process inputs dict and put result in queue."""
                 try:
-                    processed_record = await self._process_single_record(record)
-                    await completed_records.put(processed_record)
+                    processed_inputs = await self._process_single_record(inputs)
+                    await completed_inputs.put(processed_inputs)
                     self._processed += 1
                 except Exception as e:
                     self._failed += 1
@@ -173,10 +185,10 @@ class PipelineOrchestrator(BaseModel):
                     raise
 
             async with asyncio.TaskGroup() as tg:
-                # Producer: Create tasks for incoming records
+                # Producer: Create tasks for incoming inputs dicts
                 async def producer():
                     nonlocal pending_tasks
-                    async for record in source_iter:
+                    async for inputs in source_iter:
                         self._attempted += 1
 
                         # Check if we've hit max_records
@@ -191,28 +203,28 @@ class PipelineOrchestrator(BaseModel):
                             pending_tasks = {t for t in pending_tasks if not t.done()}
 
                         # Create and track task
-                        task = tg.create_task(process_and_queue(record))
+                        task = tg.create_task(process_and_queue(inputs))
                         pending_tasks.add(task)
 
                         maybe_log_status(len(pending_tasks))
 
                     # Signal completion by putting None
-                    await completed_records.put(None)
+                    await completed_inputs.put(None)
 
-                # Consumer: Yield completed records
+                # Consumer: Yield completed inputs dicts
                 async def consumer():
                     while True:
-                        record = await completed_records.get()
-                        if record is None:  # End signal
+                        inputs = await completed_inputs.get()
+                        if inputs is None:  # End signal
                             break
-                        yield record
+                        yield inputs
 
                 # Start producer
                 producer_task = tg.create_task(producer())
 
                 # Yield from consumer
-                async for record in consumer():
-                    yield record
+                async for inputs in consumer():
+                    yield inputs
 
             logger.info(
                 f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
@@ -227,7 +239,7 @@ class PipelineOrchestrator(BaseModel):
             raise
 
 
-def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[BaseRecord]:
+def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:
     """Chain multiple pipeline stages together.
 
     Each stage's output becomes the next stage's input.
@@ -236,7 +248,7 @@ def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[BaseRecord]:
         *stages: Variable number of PipelineOrchestrator instances
 
     Returns:
-        Async iterator of final processed records
+        Async iterator of final processed inputs dicts
 
     Example:
         ```python

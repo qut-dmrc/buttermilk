@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Test multi-processor pipeline orchestrator."""
 
+from typing import Any
+
 import pytest
 
 from buttermilk._core.types import BaseRecord
@@ -12,12 +14,13 @@ from buttermilk.tools.catalog_test import Observation, Title
 class FakeTMDBProcessor:
     """Mock processor that transforms Title to Observations."""
 
-    async def process(self, record: Title):
+    async def process(self, inputs: dict[str, Any]):
         """Transform Title to Observations."""
         _ = self  # reference self to satisfy linter
+        record = inputs["record"]  # Extract record from inputs dict
         print(f"  TMDB processing: {record.title}")
-        # Yield 2 observations for each title
-        yield Observation(
+        # Yield 2 observations for each title, wrapped in dict
+        yield {"record": Observation(
             record_id=record.record_id,
             title=record.title,
             year=record.year,
@@ -29,8 +32,8 @@ class FakeTMDBProcessor:
             price=None,
             currency=None,
             format=None,
-        )
-        yield Observation(
+        )}
+        yield {"record": Observation(
             record_id=record.record_id,
             title=record.title,
             year=record.year,
@@ -42,7 +45,7 @@ class FakeTMDBProcessor:
             price=None,
             currency=None,
             format=None,
-        )
+        )}
 
 
 class FakeUploader:
@@ -51,11 +54,12 @@ class FakeUploader:
     def __init__(self):
         self.uploaded = []
 
-    async def process(self, record: BaseRecord):
+    async def process(self, inputs: dict[str, Any]):
         """Pass through and track."""
+        record = inputs["record"]  # Extract record from inputs dict
         print(f"  Uploading: {type(record).__name__}")
         self.uploaded.append(record)
-        yield record
+        yield inputs  # Pass through unchanged
 
     def shutdown(self):
         print(f"  Uploader shutdown: {len(self.uploaded)} records uploaded")
@@ -88,7 +92,8 @@ async def test_live_pipeline(real_bm, real_conf):
     # Run pipeline
     print("Running pipeline...")
     results = []
-    async for record in orchestrator():
+    async for result_dict in orchestrator():
+        record = result_dict["record"]
         print(f"Final output: {type(record).__name__} - {record.record_id}")
         results.append(record)
 
