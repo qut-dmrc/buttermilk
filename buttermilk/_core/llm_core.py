@@ -24,7 +24,6 @@ from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
-from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values
 
@@ -101,12 +100,47 @@ class LLMCore:
             self._trace_writer = get_trace_writer()
         return self._trace_writer
 
+    def _combine_inputs(self, inputs: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Combine explicit inputs and kwargs into a single dict.
+
+        Args:
+            inputs: Any mappable object or None
+            kwargs: Keyword arguments to merge
+
+        Returns:
+            Combined dictionary with kwargs taking precedence
+        """
+        # Convert inputs to dict first
+        if inputs is None:
+            input_dict = {}
+        elif hasattr(inputs, 'model_dump'):
+            # Pydantic model
+            input_dict = inputs.model_dump()
+        elif hasattr(inputs, '__dict__'):
+            # Object with attributes
+            input_dict = vars(inputs).copy()
+        elif isinstance(inputs, dict):
+            # Already a dict
+            input_dict = inputs.copy()
+        else:
+            # Try to convert to dict
+            try:
+                input_dict = dict(inputs)
+            except (TypeError, ValueError):
+                # If conversion fails, start with empty dict
+                input_dict = {}
+
+        # Merge kwargs, with kwargs taking precedence
+        combined = {**input_dict, **kwargs}
+        return combined
+
     async def process(
         self,
-        inputs: Any,
+        inputs: Any = None,
         parent_trace_id: Optional[str] = None,
         component_name: str = "LLMCore",
-        cancellation_token: Optional[CancellationToken] = None
+        cancellation_token: Optional[CancellationToken] = None,
+        **kwargs: Any
     ) -> AsyncGenerator[LLMResult, None]:
         """Unified LLM processing method that handles everything.
 
@@ -115,14 +149,12 @@ class LLMCore:
         and emits ExecutionTrace for observability.
 
         Args:
-            inputs: Input data dict that can include:
-                - Any template variables
-                - 'context': list of LLMMessage objects for conversation history
-                - 'records': list of BaseRecord objects
-                - 'record': single BaseRecord (will be converted to list)
+            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
+                   that can include template variables, context, records, etc.
             parent_trace_id: Optional parent trace ID for correlation
             component_name: Name of the component using this (for tracing)
             cancellation_token: Optional token for cancelling LLM calls
+            **kwargs: Additional template variables passed as keyword arguments
 
         Yields:
             LLMResult: The processed output with content and metadata
@@ -132,20 +164,6 @@ class LLMCore:
         """
         start_time = time.time()
         tracer = trace.get_tracer("buttermilk.llm_core")
-        if isinstance(inputs, BaseModel):
-            inputs_dict = inputs.model_dump()
-        elif isinstance(inputs, dict):
-            inputs_dict = inputs.copy()
-        else:
-            raise ProcessingError("Inputs must be a dict or Pydantic BaseModel")
-        
-        # Extract special inputs
-        context = inputs.pop("context", []) if isinstance(inputs.get("context"), list) else []
-        records = inputs.pop("records", []) if isinstance(inputs.get("records"), list) else []
-
-        # Handle single record -> records list conversion
-        if "record" in inputs and isinstance(inputs["record"], BaseRecord):
-            records = [inputs.pop("record")]
 
         # Build span attributes
         span_attributes = {
@@ -161,14 +179,11 @@ class LLMCore:
             attributes=span_attributes
         ) as span:
             try:
+                # Combine inputs and kwargs into a single dict
+                combined_inputs = self._combine_inputs(inputs, kwargs)
+
                 # Process using existing method
-                result = await self.process_with_llm(
-                    inputs=inputs,
-                    context=context,
-                    records=records,
-                    parent_trace_id=parent_trace_id,
-                    cancellation_token=cancellation_token
-                )
+                result = await self.process_with_llm(inputs=combined_inputs, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token)
 
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
@@ -239,23 +254,18 @@ class LLMCore:
                 raise ProcessingError(f"LLMCore processing failed: {e}") from e
 
     async def process_with_llm(
-        self,
-        inputs: dict[str, Any],
-        context: Optional[list[LLMMessage]] = None,
-        records: Optional[list[BaseRecord]] = None,
-        parent_trace_id: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None
+        self, inputs: Any = None, parent_trace_id: Optional[str] = None, cancellation_token: Optional[CancellationToken] = None, **kwargs: Any
     ) -> LLMResult:
         """Process inputs through template rendering and LLM calling.
 
         This is the main entry point that orchestrates the full LLM workflow.
 
         Args:
-            inputs: Input data to inject into the template
-            context: Optional conversation history
-            records: Optional records to include in template rendering
+            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
+                   that contains template variables and optionally context/records
             parent_trace_id: Optional parent trace ID for correlation
             cancellation_token: Optional token for cancelling LLM calls
+            **kwargs: Additional template variables passed as keyword arguments
 
         Returns:
             LLMResult with the processed output and metadata
@@ -276,12 +286,11 @@ class LLMCore:
             attributes=span_attributes
         ) as span:
             try:
+                # Combine inputs and kwargs
+                combined_inputs = self._combine_inputs(inputs, kwargs)
+
                 # Fill template
-                llm_messages = await self._fill_template(
-                    inputs=inputs,
-                    context=context or [],
-                    records=records or []
-                )
+                llm_messages = await self._fill_template(combined_inputs)
 
                 # Store template metadata
                 result.template_metadata = self._template_metadata
@@ -339,49 +348,51 @@ class LLMCore:
 
         return result
 
-    async def _fill_template(
-        self,
-        inputs: dict[str, Any],
-        context: list[LLMMessage],
-        records: list[BaseRecord]
-    ) -> list[LLMMessage]:
-        """Render the template with provided data."""
+    async def _fill_template(self, inputs: Any) -> list[LLMMessage]:
+        """Render the template with provided data.
+
+        Args:
+            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
+                   that contains template variables and optionally context/records
+        """
         template_name = self._template
         if not template_name:
             raise ProcessingError("'template' is required but not specified")
 
+        # Convert any mappable input to dict
+        if inputs is None:
+            input_dict = {}
+        elif hasattr(inputs, 'model_dump'):
+            # Pydantic model
+            input_dict = inputs.model_dump()
+        elif hasattr(inputs, '__dict__'):
+            # Object with attributes
+            input_dict = vars(inputs).copy()
+        elif isinstance(inputs, dict):
+            # Already a dict
+            input_dict = inputs.copy()
+        else:
+            # Try to convert to dict
+            try:
+                input_dict = dict(inputs)
+            except (TypeError, ValueError):
+                raise ProcessingError(f"Cannot convert inputs of type {type(inputs)} to dict")
+
+        # Extract context and records before template rendering
+        context = input_dict.pop("context", [])
+        records = input_dict.pop("records", [])
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
         # Clean and prepare inputs
-        filtered_inputs = clean_empty_values(inputs).copy() if inputs else {}
-
-        # Check for duplicate prompts in context
-        if context and "prompt" in filtered_inputs:
-            from autogen_core.models import UserMessage
-            last_msg = context[-1]
-            if isinstance(last_msg, UserMessage) and last_msg.content == filtered_inputs["prompt"]:
-                logger.debug("Removing duplicate prompt from inputs")
-                del filtered_inputs["prompt"]
+        filtered_inputs = clean_empty_values(input_dict).copy() if input_dict else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
-            template=template_name,
-            parameters=self.parameters,
-            untrusted_inputs=filtered_inputs
+            template=template_name, parameters=self.parameters, untrusted_inputs=filtered_inputs
         )
 
         try:
-            llm_messages = make_messages(
-                local_template=rendered_template_str,
-                context=context,
-                records=records
-            )
-
-            # Remove from unfilled if provided
-            if context:
-                unfilled_vars.discard("context")
-            if records:
-                unfilled_vars.discard("records")
+            llm_messages = make_messages(local_template=rendered_template_str, records=records, context=context)
 
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e

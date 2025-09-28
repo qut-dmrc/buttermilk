@@ -98,9 +98,12 @@ class LLMAgent(Agent):
 
         # Initialize the shared LLM core
         self.llm_core = LLMCore(
-            parameters=self.parameters,
+            model=self.parameters.get("model", ""),
+            template=self.parameters.get("template", ""),
             output_model=output_model,
-            tools=self._tools or []
+            tools=self._tools or [],
+            fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
+            **self.parameters
         )
 
 
@@ -122,21 +125,20 @@ class LLMAgent(Agent):
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
-        # Prepare inputs for LLMCore
-        inputs = message.inputs.copy() if message.inputs else {}
-        if message.context:
-            inputs['context'] = message.context
-        if message.records:
-            inputs['records'] = message.records
+        # Pass the entire message object to LLMCore for flexible input handling
+        # LLMCore will extract inputs, context, and records as needed
 
         # Override parameters with message parameters
         if message.parameters:
             # Create a new LLMCore instance with merged parameters
             merged_params = {**self.parameters, **message.parameters}
             llm_core = LLMCore(
-                parameters=merged_params,
+                model=merged_params.get("model", ""),
+                template=merged_params.get("template", ""),
                 output_model=self.output_model,
-                tools=self._tools or []
+                tools=self._tools or [],
+                fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
+                **merged_params
             )
         else:
             llm_core = self.llm_core
@@ -144,7 +146,7 @@ class LLMAgent(Agent):
         try:
             # Process through LLMCore (yields LLMResult)
             async for llm_result in llm_core.process(
-                inputs=inputs,
+                inputs=message,
                 parent_trace_id=message.parent_call_id,
                 component_name=f"LLMAgent[{self.agent_name}]",
                 cancellation_token=cancellation_token
