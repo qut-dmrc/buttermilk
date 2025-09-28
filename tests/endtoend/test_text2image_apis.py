@@ -64,7 +64,7 @@ async def test_generated_image_is_valid_and_nontrivial(client):
 async def test_image_can_roundtrip_to_bytes_and_reopen(client):
     image_client = client()
     result = await image_client.generate_image(
-        prompt=TEST_PROMPT,
+        text=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
     )
 
@@ -86,7 +86,7 @@ async def test_image_can_roundtrip_to_bytes_and_reopen(client):
 async def test_cloud_artifact_matches_in_memory_dimensions(client):
     image_client = client()
     result = await image_client.generate_image(
-        prompt=TEST_PROMPT,
+        text=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
     )
 
@@ -109,7 +109,7 @@ async def test_cloud_artifact_matches_in_memory_dimensions(client):
 async def test_allows_none_negative_prompt_and_still_produces_image(client):
     image_client = client()
     result = await image_client.generate_image(
-        prompt=TEST_PROMPT,
+        text=TEST_PROMPT,
         negative_prompt=None,
     )
     assert isinstance(result, ImageRecord)
@@ -124,7 +124,7 @@ async def test_cloud_artifact_content_hash_is_stable_for_single_download(client)
     # Ensures the stored object is readable consistently (not necessarily deterministic generation)
     image_client = client()
     result = await image_client.generate_image(
-        prompt=TEST_PROMPT,
+        text=TEST_PROMPT,
         negative_prompt=TEST_NEGATIVE_PROMPT,
     )
 

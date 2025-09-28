@@ -31,13 +31,11 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, real_bm):
     run_request = RunRequest(
         ui_type="testing",
         flow="testflow",  # Assuming a flow_id like "testflow"
-        records=[record],
-        session_info=real_bm.session_info,
-        session_id="test_session",  # Add required session_id
+        inputs=dict(record=record)
     )
     async for result in flow_describer.run_flows(run_request=run_request):  # Pass run_request
         assert result
         assert not result.error
         assert isinstance(result.record, Record)
-        assert "painting" in str(result.record.text).lower()
+        assert "painting" in str(result.record).lower()
         assert "night watch" in str(result.record.title).lower()

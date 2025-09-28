@@ -16,6 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from buttermilk import bm, logger
 
 
+class RecordSkippedException(Exception):
+    """Exception raised when a record is intentionally skipped/filtered."""
+    pass
+
+
 @runtime_checkable
 class Processor(Protocol):
     """Standard processor interface - async generator that yields record dictionaries."""
@@ -47,6 +52,7 @@ class PipelineOrchestrator(BaseModel):
     max_records: Optional[int] = Field(default=None, description="Maximum records to process")
     stage_name: str = Field(..., description="Name for this processing stage")
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
+    enable_record_cache: bool = Field(default=True, description="Enable per-stage Record caching")
 
     # Inputs configured after instantiation
     source: Optional[Any] = Field(default=None, exclude=True, description="Source config or AsyncIterator")
@@ -54,6 +60,7 @@ class PipelineOrchestrator(BaseModel):
 
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
+    _record_cache: Any = PrivateAttr(default=None)
     _attempted: int = PrivateAttr(default=0)
     _processed: int = PrivateAttr(default=0)
     _skipped: int = PrivateAttr(default=0)
@@ -74,67 +81,156 @@ class PipelineOrchestrator(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self):
-        """Initialize semaphore."""
+        """Initialize semaphore and record cache."""
         self._semaphore = asyncio.Semaphore(self.concurrency)
+
+        # Initialize record cache
+        if self.enable_record_cache:
+            try:
+                from buttermilk._core.record_cache import RecordCache
+                self._record_cache = RecordCache()
+            except Exception:
+                logger.warning("Failed to initialize RecordCache, continuing without caching")
+                self._record_cache = None
+
         return self
 
-    # TODO: This needs to be refactored as an async generator to handle 1:N properly
-    async def _process_single_record(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    async def _process_single_record(self, inputs: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
         """Process a single inputs dict through the entire processor chain.
 
-        Each inputs dict flows through all processors individually.
-        Raises exception on any error - no error forwarding.
+        Properly handles 1:N transformations where processors can yield multiple outputs.
+        Each output flows through all remaining processors in the chain.
 
         Args:
             inputs: Input dictionary containing 'record' and other fields
 
-        Returns:
-            Final processed outputs dict with metadata
+        Yields:
+            Final processed outputs dicts with metadata (can be multiple for 1:N transformations)
 
         Raises:
-            Exception: If any processor fails or record is filtered out
+            RecordSkippedException: If record is filtered out by any processor
+            Exception: If any processor fails
         """
         if not self.processors:
             raise ValueError(f"[{self.stage_name}] No processors configured")
 
+        # Extract record for cache operations
+        record = inputs.get("record")
+        if not record or not hasattr(record, "record_id"):
+            # Can't cache without a record_id, process normally
+            async for result in self._process_without_cache(inputs):
+                yield result
+            return
+
+        # Check cache first
+        if self.enable_record_cache and self._record_cache and not self.force_reprocess:
+            cached_record = self._record_cache.load(record.record_id, self.stage_name)
+            if cached_record and self._validate_cached_record(cached_record):
+                logger.debug(f"⚡ Cache hit for record {record.record_id} at stage '{self.stage_name}' – skipping processing")
+
+                # Return cached record with updated metadata
+                cached_inputs = inputs.copy()
+                cached_inputs["record"] = cached_record
+                yield cached_inputs
+                return
+
+        # Process normally and cache results
+        processed_results = []
+        async for processed_inputs in self._process_without_cache(inputs):
+            processed_results.append(processed_inputs)
+            yield processed_inputs
+
+        # Cache the processed record(s) - for 1:N transformations, cache the last record
+        if (self.enable_record_cache and self._record_cache and processed_results):
+            try:
+                # For 1:N transformations, cache the last processed record
+                last_result = processed_results[-1]
+                if "record" in last_result and last_result["record"]:
+                    processed_record = last_result["record"]
+                    # Determine if we should include chunks (for vector processing compatibility)
+                    include_chunks = bool(getattr(processed_record, "chunks", None))
+                    self._record_cache.save(processed_record, self.stage_name, include_chunks=include_chunks)
+            except Exception as ce:
+                logger.debug(f"Cache save failed {record.record_id} @ {self.stage_name}: {ce}")
+
+    def _validate_cached_record(self, cached_record) -> bool:
+        """Validate that a cached record is still usable.
+
+        Override this method for custom validation logic.
+        """
+        return cached_record is not None
+
+    async def _process_without_cache(self, inputs: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
+        """Process inputs through the processor chain without caching."""
         start_time = time.time()
         current_inputs = inputs
 
+        # Log processing start
+        record = inputs.get("record")
+        if record and hasattr(record, "record_id"):
+            record_title = getattr(record, "title", "Unknown")[:50] if hasattr(record, "title") else "Unknown"
+            logger.info(f"🔷 [{self.stage_name}-{record.record_id}] Processing record '{record_title}'")
+
         try:
+            # Start with the input as a single item in a processing queue
+            processing_queue = [current_inputs]
+
             # Flow inputs through each processor in sequence
             for processor in self.processors:
-                outputs = []
-                async for output_dict in processor.process(current_inputs):
-                    outputs.append(output_dict)
+                next_queue = []
 
-                if not outputs:
-                    # Record was filtered out by this processor, which is fine and normal
-                    logger.info(f"Processor {processor} returned no further outputs.")
-                elif len(outputs) == 1:
-                    # Normal 1:1 flow
-                    current_inputs = outputs[0]
-                else:
-                    # 1:N expansion - for now, take first output
-                    # TODO: Handle 1:N properly in future iteration
-                    current_inputs = outputs[0]
-                    logger.warning(f"Processor yielded {len(outputs)} outputs, taking first one")
+                # Process each item in the current queue through this processor
+                for item in processing_queue:
+                    outputs = []
+                    async for output_dict in processor.process(item):
+                        outputs.append(output_dict)
 
-            # Add success metadata to the record inside the dict
-            if "record" in current_inputs:
-                record = current_inputs["record"]
-                processing_time_ms = int((time.time() - start_time) * 1000)
-                final_metadata = {
-                    **record.metadata,
-                    self.stage_name: {
-                        "status": "processed",
-                        "timestamp": time.time(),
-                        "processing_time_ms": processing_time_ms,
+                    if not outputs:
+                        # This item was filtered out by this processor
+                        record = item.get("record")
+                        if record:
+                            skipped_metadata = {
+                                **record.metadata,
+                                self.stage_name: {
+                                    "status": "skipped",
+                                    "timestamp": time.time(),
+                                    "reason": f"filtered_by_{getattr(processor, '__name__', 'processor')}",
+                                }
+                            }
+                            skipped_record = record.model_copy(update={"metadata": skipped_metadata})
+                            item["record"] = skipped_record
+
+                        # Raise exception to indicate this entire input was skipped
+                        raise RecordSkippedException("Record was filtered out by processor")
+                    else:
+                        # Add all outputs to the next processing queue
+                        next_queue.extend(outputs)
+
+                # Move to next stage with all outputs from this processor
+                processing_queue = next_queue
+
+            # If we reach here, processing_queue contains all final outputs
+            if not processing_queue:
+                # Everything was filtered out (shouldn't happen due to exception above)
+                raise RecordSkippedException("All outputs were filtered")
+
+            # Add success metadata to all final outputs and yield them
+            for final_inputs in processing_queue:
+                if "record" in final_inputs:
+                    record = final_inputs["record"]
+                    processing_time_ms = int((time.time() - start_time) * 1000)
+                    final_metadata = {
+                        **record.metadata,
+                        self.stage_name: {
+                            "status": "processed",
+                            "timestamp": time.time(),
+                            "processing_time_ms": processing_time_ms,
+                        }
                     }
-                }
-                updated_record = record.model_copy(update={"metadata": final_metadata})
-                current_inputs["record"] = updated_record
+                    updated_record = record.model_copy(update={"metadata": final_metadata})
+                    final_inputs["record"] = updated_record
 
-            return current_inputs
+                yield final_inputs
 
         except Exception as e:
             # Let exception bubble up - TaskGroup will handle error collection
@@ -160,7 +256,7 @@ class PipelineOrchestrator(BaseModel):
             if now - last_log >= log_interval:
                 logger.debug(
                     f"📊 Stage '{self.stage_name}': attempted={self._attempted} processed={self._processed} "
-                    f"failed={self._failed} pending={pending_count}"
+                    f"skipped={self._skipped} failed={self._failed} pending={pending_count}"
                 )
                 last_log = now
 
@@ -172,17 +268,52 @@ class PipelineOrchestrator(BaseModel):
             completed_inputs = asyncio.Queue()
 
             async def process_and_queue(inputs: dict[str, Any]):
-                """Process inputs dict and put result in queue."""
+                """Process inputs dict and put all results in queue."""
                 try:
-                    processed_inputs = await self._process_single_record(inputs)
-                    await completed_inputs.put(processed_inputs)
-                    self._processed += 1
-                except Exception:
-                    self._failed += 1
-                    # Let exception bubble up for TaskGroup
-                    raise
+                    results_count = 0
+                    async for processed_inputs in self._process_single_record(inputs):
+                        await completed_inputs.put(("success", processed_inputs))
+                        results_count += 1
 
-            async with asyncio.TaskGroup() as tg:
+                    # Only count as processed if we got at least one output
+                    if results_count > 0:
+                        self._processed += 1
+                except RecordSkippedException as e:
+                    self._skipped += 1
+                    # Record was intentionally skipped, no error logging needed
+                    record = inputs.get("record")
+                    record_id = getattr(record, "record_id", "unknown") if record else "unknown"
+                    logger.debug(f"Record {record_id} skipped in stage {self.stage_name}: {e}")
+
+                    # The metadata was already added in _process_without_cache
+                    # Just put the skipped record in queue
+                    await completed_inputs.put(("skipped", inputs))
+
+                except Exception as e:
+                    self._failed += 1
+                    # Log error but don't stop processing other records
+                    record = inputs.get("record")
+                    record_id = getattr(record, "record_id", "unknown") if record else "unknown"
+                    logger.error(f"Error processing record {record_id} in stage {self.stage_name}: {e}")
+
+                    # Add error metadata to record and put in queue
+                    if record:
+                        error_metadata = {
+                            **record.metadata,
+                            self.stage_name: {
+                                "status": "failed",
+                                "timestamp": time.time(),
+                                "error": str(e),
+                                "error_type": type(e).__name__,
+                            }
+                        }
+                        failed_record = record.model_copy(update={"metadata": error_metadata})
+                        failed_inputs = inputs.copy()
+                        failed_inputs["record"] = failed_record
+                        await completed_inputs.put(("error", failed_inputs))
+                    # Continue processing other records - don't raise
+
+            try:
                 # Producer: Create tasks for incoming inputs dicts
                 async def producer():
                     nonlocal pending_tasks
@@ -201,7 +332,7 @@ class PipelineOrchestrator(BaseModel):
                             pending_tasks = {t for t in pending_tasks if not t.done()}
 
                         # Create and track task
-                        task = tg.create_task(process_and_queue(inputs))
+                        task = asyncio.create_task(process_and_queue(inputs))
                         pending_tasks.add(task)
 
                         maybe_log_status(len(pending_tasks))
@@ -212,29 +343,51 @@ class PipelineOrchestrator(BaseModel):
                 # Consumer: Yield completed inputs dicts
                 async def consumer():
                     while True:
-                        inputs = await completed_inputs.get()
-                        if inputs is None:  # End signal
+                        result = await completed_inputs.get()
+                        if result is None:  # End signal
                             break
-                        yield inputs
+
+                        status, inputs = result
+                        if status == "success":
+                            yield inputs
+                        elif status == "skipped":
+                            # Optionally yield skipped records too (for debugging/tracking)
+                            # For now, we'll skip them and just log
+                            pass
+                        elif status == "error":
+                            # Optionally yield failed records too (for debugging/recovery)
+                            # For now, we'll skip them and just log
+                            pass
 
                 # Start producer
-                producer_task = tg.create_task(producer())
+                producer_task = asyncio.create_task(producer())
 
                 # Yield from consumer
                 async for inputs in consumer():
                     yield inputs
 
+                # Wait for producer to finish
+                await producer_task
+
+                # Wait for all remaining tasks to complete
+                if pending_tasks:
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+            except Exception as e:
+                logger.error(f"Pipeline error in stage '{self.stage_name}': {e}")
+                # Cancel all pending tasks
+                for task in pending_tasks:
+                    if not task.done():
+                        task.cancel()
+                # Wait for cancellations to complete
+                if pending_tasks:
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                raise
+
             logger.info(
                 f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
-                f"processed={self._processed} failed={self._failed}"
+                f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
             )
-
-        except* Exception as eg:
-            # TaskGroup collects all exceptions
-            logger.error(f"Stage '{self.stage_name}' had {len(eg.exceptions)} errors")
-            for exc in eg.exceptions:
-                logger.error(f"Task error: {exc}")
-            raise
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:

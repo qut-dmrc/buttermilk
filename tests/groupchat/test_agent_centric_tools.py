@@ -57,7 +57,7 @@ class MockStructuredHost(StructuredLLMHostAgent):
             "description": "Test host agent",
             "parameters": {"model": "test-model", "template": "test"},
             "inputs": {},
-            "tools": [],
+            "tools": {},
         }
         config = AgentConfig(**config_data)
         super().__init__(**config.model_dump())

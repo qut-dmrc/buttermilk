@@ -65,12 +65,12 @@ llms:
         # Mock logger to avoid actual logging infrastructure
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
-                bm = init(job="integration_test", project="test_project", config_dir=temp_config_dir)
+                bm = init(job="integration_test", project="testing", config_dir=temp_config_dir)
 
                 # Verify BM instance is created correctly
                 assert bm is not None
                 assert hasattr(bm, "session_info")
-                assert bm.session_info.project_name == "test_project"
+                assert bm.session_info.project_name == "testing"
                 assert bm.session_info.job == "integration_test"
                 assert hasattr(bm.session_info, "session_id")
 
@@ -79,7 +79,7 @@ llms:
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
                 # First session sets the project
-                bm1 = init(job="first_job", project="shared_project", config_dir=temp_config_dir)
+                bm1 = init(job="first_job", project="testing", config_dir=temp_config_dir)
 
                 # Second session should inherit the project
                 bm2 = init(
@@ -89,8 +89,8 @@ llms:
                 )
 
                 # Verify both sessions have the same project
-                assert bm1.session_info.project_name == "shared_project"
-                assert bm2.session_info.project_name == "shared_project"
+                assert bm1.session_info.project_name == "testing"
+                assert bm2.session_info.project_name == "testing"
 
                 # But different jobs
                 assert bm1.session_info.job == "first_job"
@@ -104,7 +104,7 @@ llms:
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
                 # First session sets the project
-                init(job="first_job", project="original_project", config_dir=temp_config_dir)
+                init(job="first_job", project="testing", config_dir=temp_config_dir)
 
                 # Second session with different project should fail
                 with pytest.raises(RuntimeError, match="Project name mismatch"):

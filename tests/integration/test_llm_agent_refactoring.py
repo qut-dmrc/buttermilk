@@ -133,9 +133,9 @@ class TestLLMAgentRefactoring:
         agent = LLMAgent(agent_name="record_agent", role="RECORD_PROCESSOR", parameters={"model": "gpt-4", "template": "process_records"})
 
         # Create test records
-        records = [Record(content="Record 1"), Record(content="Record 2")]
+        record = Record(content="Record 1")
 
-        agent_input = AgentInput(inputs={}, records=records)
+        agent_input = AgentInput(inputs={}, record=record)
 
         mock_result = LLMResult(content="Processed records", metadata={}, template_metadata={})
 
@@ -146,7 +146,7 @@ class TestLLMAgentRefactoring:
 
             # Verify records were passed to LLMCore
             call_args = mock_process.call_args
-            assert call_args[1]["records"] == records
+            assert call_args[1]["record"] == record
 
     @pytest.mark.asyncio
     async def test_llmagent_process_structured_output(self):

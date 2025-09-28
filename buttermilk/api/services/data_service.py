@@ -252,7 +252,7 @@ class DataService:
             inputs=inputs_data.get("inputs", {}),
             parameters=inputs_data.get("parameters", {}),
             context=inputs_data.get("context", []),
-            records=[Record(**rec) for rec in inputs_data.get("records", [])],
+            record=Record(**inputs_data.get("records", {})),
             parent_call_id=row.get("parent_call_id"),
         )
 
@@ -260,14 +260,12 @@ class DataService:
         agent_trace = ExecutionTrace(
             timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime) else datetime.datetime.fromisoformat(row["timestamp"]),
             call_id=row["call_id"],
-            agent_id=agent_config.agent_id,
             metadata=metadata_data,
             outputs=outputs_data,
             session_info=session_info_data,
             agent_info=agent_config,
             session_id=row["session_id"],
             parent_call_id=row.get("parent_call_id"),
-            tracing_link=row.get("tracing_link"),
             inputs=agent_input,
             messages=messages_data,
             error=error_data,

@@ -265,13 +265,13 @@ class LLMScorer(LLMAgent):
         record = record[0]
 
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=[record], inputs=extracted_data)
+        scorer_agent_input = AgentInput(parent_call_id=message.call_id, record=record, inputs=extracted_data)
 
         # Construct the AgentInput for this Scorer's _process method.
         # parent_call_id links this scoring trace back to the Judge's trace.
         scorer_agent_input = AgentInput(
             parent_call_id=message.call_id,  # Link to the Judge's trace
-            records=extracted_data.pop("records", []),  # Original records that were judged
+            record=extracted_data.pop("record", None),  # Original record that was judged
             inputs=extracted_data,  # Remaining extracted data (should include 'answers', 'criteria')
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )
