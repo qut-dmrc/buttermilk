@@ -138,8 +138,7 @@ class PipelineOrchestrator(BaseModel):
 
         except Exception as e:
             # Let exception bubble up - TaskGroup will handle error collection
-            record_id = inputs.get("record", {}).get("record_id", "unknown")
-            logger.error(f"Error processing record {record_id} in stage {self.stage_name}: {e}")
+            logger.error(f"Error processing record in stage {self.stage_name}: {e}")
             raise
 
     async def __call__(self) -> AsyncIterator[dict[str, Any]]:

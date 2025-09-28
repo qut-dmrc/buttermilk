@@ -54,12 +54,12 @@ class FakeUploader:
     def __init__(self):
         self.uploaded = []
 
-    async def process(self, inputs: dict[str, Any]):
+    async def process(self, inputs: Any):
         """Pass through and track."""
-        record = inputs["record"]  # Extract record from inputs dict
+        record = inputs
         print(f"  Uploading: {type(record).__name__}")
         self.uploaded.append(record)
-        yield inputs  # Pass through unchanged
+        yield record  # Pass through unchanged
 
     def shutdown(self):
         print(f"  Uploader shutdown: {len(self.uploaded)} records uploaded")
