@@ -16,16 +16,12 @@ from typing import Any
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
-from autogen_core.tools import Tool
 
-from buttermilk import bm, logger
+from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
-from buttermilk._core.llms import CreateResult, ModelOutput
-from buttermilk._core.types import Record
 
 
 class LLMAgent(Agent):
@@ -93,19 +89,15 @@ class LLMAgent(Agent):
             raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
 
         # Initialize private attributes
-        self._model: str = self.parameters.get("model", "")
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Initialize the shared LLM core
         self.llm_core = LLMCore(
-            model=self.parameters.get("model", ""),
-            template=self.parameters.get("template", ""),
             output_model=output_model,
             tools=self._tools or [],
             fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
-            **self.parameters
+            **self.parameters,
         )
-
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Core processing logic: uses LLMCore to process and wraps result in AgentOutput.
@@ -138,7 +130,7 @@ class LLMAgent(Agent):
                 output_model=self.output_model,
                 tools=self._tools or [],
                 fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
-                **merged_params
+                **merged_params,
             )
         else:
             llm_core = self.llm_core
@@ -149,7 +141,7 @@ class LLMAgent(Agent):
                 inputs=message,
                 parent_trace_id=message.parent_call_id,
                 component_name=f"LLMAgent[{self.agent_name}]",
-                cancellation_token=cancellation_token
+                cancellation_token=cancellation_token,
             ):
                 # Prepare metadata for AgentOutput
                 output_metadata = {
@@ -161,14 +153,9 @@ class LLMAgent(Agent):
 
                 logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
                 return AgentOutput(
-                    agent_id=self.agent_id,
-                    outputs=llm_result.content,
-                    messages=llm_result.messages,
-                    metadata=output_metadata,
-                    error=[]
+                    agent_id=self.agent_id, outputs=llm_result.content, messages=llm_result.messages, metadata=output_metadata, error=[]
                 )
 
         except ProcessingError as e:
             logger.error(f"Agent '{self.agent_id}': LLM processing failed: {e}")
             raise
-

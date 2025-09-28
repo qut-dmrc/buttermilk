@@ -1,6 +1,6 @@
 """BigQuery storage implementation for unified storage operations."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import shortuuid
@@ -130,13 +130,13 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error loading records from BigQuery: {e}")
             raise StorageError(f"Failed to read from BigQuery: {e}") from e
 
-    def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
-        """Save Pydantic models to BigQuery table.
+    def save(self, records: list[BaseRecord] | BaseRecord | list[dict[str, Any]] | dict[str, Any]) -> None:
+        """Save records to BigQuery table.
 
         Uses the existing upload_rows pipeline for proper serialization and error handling.
 
         Args:
-            records: Single Pydantic model, dict, or list of models/dicts to save
+            records: Single BaseRecord/dict or list of BaseRecord/dicts to save
 
         Raises:
             StorageError: If save operation fails
@@ -145,8 +145,9 @@ class BigQueryStorage(Storage, StorageClient):
         # Validate schema on first use
         self._validate_schema()
 
-        if isinstance(records, BaseModel):
-            records = [records]
+        # Normalize to list without mutating variable type for type-checkers
+        # Normalize to a sequence without tripping type invariance
+        items: Sequence[Any] = records if isinstance(records, list) else [records]
 
         if not records:
             logger.warning("No records to save")
@@ -158,14 +159,15 @@ class BigQueryStorage(Storage, StorageClient):
                 self.create()
 
             # Convert Pydantic models to list of dicts for upload_rows
-            rows_to_insert = []
-            for record in records:
+            rows_to_insert: list[dict[str, Any]] = []
+            for record in items:
                 if isinstance(record, dict):
-                    row = record
+                    rows_to_insert.append(record)
+                elif hasattr(record, "model_dump"):
+                    rows_to_insert.append(record.model_dump(mode="json"))  # type: ignore[attr-defined]
                 else:
-                    # Assume it's a Pydantic model with model_dump
-                    row = record.model_dump(mode="json")
-                rows_to_insert.append(row)
+                    # Last resort
+                    rows_to_insert.append({"value": str(record)})
 
             # Get the schema for proper data transformation
             schema = self.get_schema()
@@ -182,20 +184,15 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
             if result:
-                logger.debug(f"Successfully saved {len(records)} records to {self.get_table_ref()}")
+                logger.debug(f"Successfully saved {len(rows_to_insert)} records to {self.get_table_ref()}")
             else:
                 raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
             logger.error(
                 "Failed to save records to BigQuery",
-                extra={
-                    "table": self.get_table_ref(),
-                    "dataset_name": self.config.dataset_name,
-                    "num_records": len(records) if isinstance(records, list) else 1,
-                    "error": str(e)
-                },
-                exc_info=True
+                extra={"table": self.get_table_ref(), "dataset_name": self.config.dataset_name, "num_records": len(rows_to_insert), "error": str(e)},
+                exc_info=True,
             )
             raise StorageError(f"Failed to save to BigQuery table {self.get_table_ref()}: {e}") from e
 

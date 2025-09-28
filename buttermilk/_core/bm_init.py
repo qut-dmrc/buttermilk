@@ -723,7 +723,7 @@ class BM(BaseModel):
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory  # noqa import here to avoid loop
 
-        return StorageFactory.create_storage(config, self)
+        return StorageFactory.create_storage(config)
 
     async def get_storage_async(self, config: BaseStorageConfig | dict | None = None) -> Any:
         """Async factory method that creates and auto-initializes storage instances.

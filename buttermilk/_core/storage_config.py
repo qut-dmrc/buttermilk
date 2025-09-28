@@ -365,12 +365,11 @@ class StorageFactory:
         return adapter.validate_python(config_dict)
 
     @staticmethod
-    def create_storage(config: StorageConfig | BaseStorageConfig | dict | DictConfig, bm_instance=None):
+    def create_storage(config: StorageConfig | BaseStorageConfig | dict | DictConfig):
         """Create storage instance based on configuration type.
 
         Args:
             config: StorageConfig instance (from OmegaConf/Hydra)
-            bm_instance: BM instance for context (optional)
 
         Returns:
             Storage instance appropriate for the config type
@@ -388,10 +387,12 @@ class StorageFactory:
 
         if storage_type in ["bigquery", "bq"]:
             from buttermilk.storage.bigquery import BigQueryStorage
-            return BigQueryStorage(config, bm_instance)
+
+            return BigQueryStorage(config)
         if storage_type in ["file", "local", "gcs", "s3"]:
             from buttermilk.storage.file import FileStorage
-            return FileStorage(config, bm_instance)
+
+            return FileStorage(config)
         if storage_type == "chromadb":
             # Convert VectorStorageConfig to ChromaDBEmbeddings parameters
             chromadb_params = {
@@ -409,7 +410,8 @@ class StorageFactory:
             return ChromaDBEmbeddings(**chromadb_params)
         if storage_type == "huggingface":
             from buttermilk.storage.huggingface import HuggingFaceStorage
-            return HuggingFaceStorage(config, bm_instance)
+
+            return HuggingFaceStorage(config)
         if storage_type == "plaintext":
             # Use FileStorage with plaintext-specific configuration
             from buttermilk.storage.file import FileStorage
@@ -419,5 +421,5 @@ class StorageFactory:
                 # Set default glob for text files
                 if hasattr(config, "glob"):
                     config.glob = "**/*.txt"
-            return FileStorage(config, bm_instance)
+            return FileStorage(config)
         raise ValueError(f"Unsupported storage type: {storage_type}")

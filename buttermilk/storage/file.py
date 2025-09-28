@@ -1,7 +1,7 @@
 """File storage implementation for unified storage operations."""
 
 import json
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterator, Any
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
 
@@ -23,14 +23,14 @@ class FileStorage(Storage):
     Supports local files and cloud storage paths (GCS, S3) for JSON/JSONL formats.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize file storage.
         
         Args:
             config: Storage configuration with file path
             bm: Buttermilk instance (optional for file operations)
         """
-        super().__init__(config, bm)
+        super().__init__(config)
 
         if not config.path:
             raise ValueError("File storage requires a path")
@@ -54,7 +54,7 @@ class FileStorage(Storage):
                 file_obj = self.path.open("r", encoding="utf-8")
             else:
                 # Use regular open for local files
-                file_obj = open(self.path, "r")
+                file_obj = open(self.path, "r", encoding="utf-8")
 
             try:
                 # Check if the file is a JSON array or JSONL
@@ -72,8 +72,8 @@ class FileStorage(Storage):
                             logger.warning(f"Error processing JSON array item {line_num}: {e}")
                 else:
                     # Handle JSONL format (one JSON object per line)
-                    for line_num, line in enumerate(file_obj, 1):
-                        line = line.strip()
+                    for line_num, line_str in enumerate(file_obj, 1):
+                        line = line_str.strip()
                         if not line:
                             continue
                         try:
@@ -90,14 +90,15 @@ class FileStorage(Storage):
             logger.error(f"Error reading from file {self.path}: {e}")
             raise StorageError(f"Failed to read file: {e}") from e
 
-    def save(self, records: list[BaseRecord] | BaseRecord | list | dict) -> None:
+    def save(self, records: list[BaseRecord] | BaseRecord | list[dict] | dict) -> None:
         """Save records to file.
 
         Args:
-            records: Single record/dict or list of records/dicts to save
+            records: Single BaseRecord/dict or list of BaseRecord/dicts to save
         """
-        if not isinstance(records, list):
-            records = [records]
+        # Normalize to list for processing without mutating input variable type
+        # Create a fresh list so type-checkers accept list[Any]
+        items: list[Any] = list(records) if isinstance(records, list) else [records]
 
         if not records:
             logger.warning("No records to save")
@@ -107,10 +108,26 @@ class FileStorage(Storage):
             # Ensure parent directory exists
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Convert records to dictionaries
-            data = [self._record_to_dict(record) for record in records]
+            # Convert records (BaseRecord or dict) to dictionaries
+            data: list[dict] = []
+            for idx, record in enumerate(items, start=1):
+                try:
+                    data.append(self._record_to_dict(record))
+                except Exception as e:
+                    logger.warning(f"Failed to convert record at index {idx} to dict: {e}. Writing raw JSON if possible.")
+                    try:
+                        # Best-effort fallback
+                        if hasattr(record, "model_dump"):
+                            data.append(record.model_dump(mode="json"))  # type: ignore[attr-defined]
+                        elif isinstance(record, dict):
+                            data.append(record)
+                        else:
+                            data.append({"record": str(record)})
+                    except Exception as e2:
+                        logger.error(f"Could not serialize record at index {idx}: {e2}. Skipping.")
+                        continue
 
-            with open(self.path, "w") as f:
+            with open(self.path, "w", encoding="utf-8") as f:
                 if self.path.suffix == ".jsonl":
                     # JSONL format - one JSON object per line
                     for record_dict in data:
@@ -120,10 +137,14 @@ class FileStorage(Storage):
                     # JSON format - single JSON array
                     json.dump(data, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"Successfully saved {len(records)} records to {self.path}")
+            logger.info(f"Successfully saved {len(data)} records to {self.path}")
 
         except Exception as e:
-            logger.error(f"Error saving records to file {self.path}: {e}")
+            logger.exception(
+                f"Error saving records to file {self.path}: {e}",
+                path=self.path,
+                record_count=len(items),
+            )
             raise StorageError(f"Failed to save file: {e}") from e
 
     def count(self) -> int:
@@ -159,7 +180,7 @@ class FileStorage(Storage):
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create empty file with appropriate format
-            with open(self.path, "w") as f:
+            with open(self.path, "w", encoding="utf-8") as f:
                 if self.path.suffix == ".jsonl":
                     # Empty JSONL file
                     pass
@@ -173,7 +194,7 @@ class FileStorage(Storage):
             logger.error(f"Error creating file {self.path}: {e}")
             raise StorageError(f"Failed to create file: {e}") from e
 
-    def _dict_to_record(self, data: dict, index: int) -> BaseRecord:
+    def _dict_to_record(self, data: dict, index: int) -> BaseRecord:  # noqa: C901
         """Convert dictionary to BaseRecord object.
 
         Simple conversion that lets the consuming code handle type-specific logic.
@@ -183,7 +204,7 @@ class FileStorage(Storage):
             index: Record index for error reporting
 
         Returns:
-            BaseRecord object (typically a Record)
+            BaseRecord object 
         """
         try:
             # Apply column mapping if configured
@@ -293,9 +314,9 @@ class FileStorage(Storage):
             if "record_id" not in data:
                 data["record_id"] = data.get("id", f"record_{index}")
             if "dataset_name" not in data:
-                data["dataset_name"] = self.config.dataset_name or "default"
+                data["dataset_name"] = self.config.dataset_name
             if "split_type" not in data:
-                data["split_type"] = self.config.split_type or "default"
+                data["split_type"] = self.config.split_type
 
             # Map common alternative field names
             if "content" not in data and "text" in data:
@@ -336,29 +357,19 @@ class FileStorage(Storage):
                     metadata={"critical_error": True}
                 )
 
-    def _record_to_dict(self, record: BaseRecord) -> dict:
+    @staticmethod
+    def _record_to_dict(record: BaseRecord | dict) -> dict:
         """Convert Record object to dictionary for file storage.
-        
+
         Args:
-            record: Record object to convert
-            
+            record: Record object (preferred) or dict (from model_dump) to convert
+
         Returns:
             Dictionary representation
         """
-        result = {
-            "record_id": record.record_id,
-            "content": record.content,
-            "metadata": record.metadata,
-        }
+        if isinstance(record, dict):
+            # Assume it already resembles a model_dump output
+            return record
 
-        # Add optional fields if present
-        if record.alt_text:
-            result["alt_text"] = record.alt_text
-        if record.ground_truth:
-            result["ground_truth"] = record.ground_truth
-        if record.metadata.get("uri"):
-            result["uri"] = record.metadata.get("uri")
-        if record.mime and record.mime != "text/plain":
-            result["mime"] = record.mime
-
-        return result
+        # Preferred: BaseRecord instance -> use model_dump with JSON mode
+        return record.model_dump(mode="json")

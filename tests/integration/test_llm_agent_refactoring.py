@@ -33,9 +33,6 @@ class TestLLMAgentRefactoring:
         assert agent.llm_core._template == "test_template"
         assert agent.llm_core.parameters["temperature"] == 0.5
 
-        # Verify agent still has model reference for compatibility
-        assert agent._model == "gpt-4"
-
     def test_llmagent_with_output_model(self):
         """Test LLMAgent with structured output model."""
         agent = LLMAgent(

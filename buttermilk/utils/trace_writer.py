@@ -44,7 +44,7 @@ class TraceWriter:
                 traces_config = storage_configs.get("traces")
                 if traces_config:
                     # Create storage instance
-                    storage = Storage(traces_config)
+                    storage = bm.get_storage(traces_config)
 
                     # Create uploader with reasonable defaults
                     self.uploader = AsyncDataUploader(

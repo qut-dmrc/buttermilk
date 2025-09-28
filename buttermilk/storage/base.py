@@ -69,11 +69,16 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def save(self, records: list[BaseModel] | BaseModel) -> None:
-        """Save Pydantic models to storage.
+    def save(self, records: list[BaseRecord] | BaseRecord | list[dict[str, Any]] | dict[str, Any]) -> None:
+        """Save records to storage.
+
+        Primary contract: accept BaseRecord (or list of BaseRecord).
+        For safety/backwards-compat, dict inputs produced by BaseRecord.model_dump()
+        are also accepted and should be coerced by implementations.
 
         Args:
-            records: Single Pydantic model or list of models to save
+            records: Single BaseRecord or list of BaseRecord objects. Dict (or list of dict)
+                is tolerated for safety but not encouraged.
         """
         pass
 
@@ -126,11 +131,7 @@ class Storage(ABC):
         except Exception:
             return 0
 
-    async def iterate_async(
-        self,
-        batch_size: Optional[int] = None,
-        filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    async def iterate_async(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
         """Async generator that yields record dictionaries from storage with optional filtering.
 
         This method enables Storage objects to be used directly as DataSource
@@ -156,11 +157,7 @@ class Storage(ABC):
             yield {"record": record}
             count += 1
 
-    def __call__(
-        self,
-        batch_size: Optional[int] = None,
-        filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:
@@ -205,7 +202,7 @@ class Storage(ABC):
             StopAsyncIteration: When no more records available
         """
         if self._async_iterator is None:
-            raise StopAsyncIteration
+            self._async_iterator = self.iterate_async()  # Initialize on first call
 
         try:
             return await self._async_iterator.__anext__()
@@ -217,7 +214,7 @@ class Storage(ABC):
         """Get the record class to use for instantiation.
 
         Resolves the class from the config's record_class field, with caching.
-        Falls back to Record if not specified or on error.
+        Falls back to BaseRecord if not specified or on error.
 
         Returns:
             The class to use for creating record instances
@@ -228,7 +225,7 @@ class Storage(ABC):
 
         # Default to Record class
         if not self.config.record_class:
-            self._record_class = Record
+            self._record_class = BaseRecord
             return self._record_class
 
         try:
@@ -243,20 +240,14 @@ class Storage(ABC):
 
             # Verify it's a BaseRecord subclass
             if not issubclass(cls, BaseRecord):
-                logger.warning(
-                    f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. "
-                    f"Falling back to Record."
-                )
+                logger.warning(f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. Falling back to Record.")
                 self._record_class = Record
             else:
                 self._record_class = cls
-                logger.debug(f"Using record class: {self.config.record_class}")
+                logger.debug(f"Using BaseRecord class: {self.config.record_class}")
 
         except (ImportError, AttributeError, ValueError) as e:
-            logger.warning(
-                f"Failed to import record_class '{self.config.record_class}': {e}. "
-                f"Falling back to Record."
-            )
+            logger.warning(f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to Record.")
             self._record_class = Record
 
         return self._record_class
@@ -344,4 +335,3 @@ class StorageClient:
                 missing_parts.append("table_id")
             raise ValueError(f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}")
         return self.config.full_table_id
-

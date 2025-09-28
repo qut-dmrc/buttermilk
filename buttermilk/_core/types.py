@@ -14,14 +14,7 @@ from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
-# Optional autogen imports - fail gracefully if not available
-try:
-    from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
-    AUTOGEN_AVAILABLE = True
-except ImportError:
-    AssistantMessage = None
-    UserMessage = None
-    AUTOGEN_AVAILABLE = False
+from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
 
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
@@ -34,6 +27,7 @@ from pydantic import (
 )
 
 # Conditional imports to avoid circular dependencies
+
 
 # TODO: needs an 'as_message' method
 class BaseRecord(BaseModel):
@@ -49,6 +43,7 @@ class BaseRecord(BaseModel):
     )
     dataset_name: str | None = Field(default=None, description="Name of the dataset this record belongs to.")
     split_type: str | None = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
+    content: str | None = Field(default=None, description="Main content of the record.")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Arbitrary metadata associated with the record.",
@@ -119,6 +114,80 @@ class BaseRecord(BaseModel):
         frozen=True,  # Make records immutable
     )
 
+    def as_message(self, role: Literal["user", "assistant"] = "user") -> Any:
+        """Converts the `Record` into an Autogen `UserMessage` or `AssistantMessage`.
+
+        Args:
+            role (Literal["user", "assistant"]): The role to assign to the
+                resulting message. Defaults to "user".
+
+        Returns:
+            Autogen message object populated with the record's content and ID.
+            Returns None if Autogen is not available.
+
+        """
+        if role == "assistant":
+            # Assistant message content should likely be string representation
+            return AssistantMessage(content=self.as_markdown(), source=self.record_id)
+
+        return UserMessage(content=self.as_markdown(), source=self.record_id)
+
+    @computed_field
+    @property
+    def text_content(self) -> str:
+        """Unified text access for vector processing.
+
+        Returns the best available text representation:
+        1. content (if it's a string) - main content field
+        2. alt_text (as fallback for non-text content)
+        3. string representation of content (for multimodal)
+
+        Returns:
+            str: Text content suitable for vector processing.
+
+        """
+        return str(self.content)
+
+    def as_markdown(self) -> str:
+        """Combines metadata and text content into a single string.
+
+        Returns:
+            str: A string combining key information from the record.
+
+        """
+        parts: list[str] = []
+
+        if self.metadata:
+            for key, value in self.metadata.items():
+                parts.append(f"**{key}**: {value!s}")
+
+        # Handle content based on its type
+        if self.content and isinstance(self.content, str):
+            parts.append(self.content)
+        elif isinstance(self.content, Sequence):  # It's a list of parts
+            parts.append("\n".join(self.content))
+
+        return "\n\n".join(p for p in parts if p)  # Join non-empty parts
+
+    @computed_field
+    @property
+    def record_hash(self) -> str:
+        """Computes SHA256 hash of the record's as_markdown() output.
+
+        This enables detection of record changes by comparing hash values.
+        The hash is automatically accessible via metadata['record_hash'].
+
+        Returns:
+            str: SHA256 hexdigest of the record's markdown representation.
+        """
+        from buttermilk._core.hashing import compute_record_hash
+
+        markdown_content = self.as_markdown()
+        hash_value = compute_record_hash(markdown_content)
+        # Store in metadata for easy access
+        self.metadata["record_hash"] = hash_value
+        return hash_value
+
 
 class Record(BaseRecord):
     """Represents a single data record within the Buttermilk framework.
@@ -157,6 +226,7 @@ class Record(BaseRecord):
             `metadata`, if present.
 
     """
+
     alt_text: str | None = Field(
         default=None,
         description="Textual description or transcript of media content within this record.",
@@ -205,45 +275,6 @@ class Record(BaseRecord):
                 if isinstance(item, Image):
                     images_found.append(item)
         return images_found or None
-
-    @computed_field
-    @property
-    def text_content(self) -> str:
-        """Unified text access for vector processing.
-
-        Returns the best available text representation:
-        1. content (if it's a string) - main content field
-        2. alt_text (as fallback for non-text content)
-        3. string representation of content (for multimodal)
-
-        Returns:
-            str: Text content suitable for vector processing.
-
-        """
-        if isinstance(self.content, str) and self.content.strip():
-            return self.content
-        if self.alt_text and self.alt_text.strip():
-            return self.alt_text
-        return str(self.content)
-
-    @computed_field
-    @property
-    def record_hash(self) -> str:
-        """Computes SHA256 hash of the record's as_markdown() output.
-        
-        This enables detection of record changes by comparing hash values.
-        The hash is automatically accessible via metadata['record_hash'].
-        
-        Returns:
-            str: SHA256 hexdigest of the record's markdown representation.
-        """
-        from buttermilk._core.hashing import compute_record_hash
-        
-        markdown_content = self.as_markdown()
-        hash_value = compute_record_hash(markdown_content)
-        # Store in metadata for easy access
-        self.metadata["record_hash"] = hash_value
-        return hash_value
 
     @computed_field
     @property
@@ -450,12 +481,6 @@ class Record(BaseRecord):
             Returns None if Autogen is not available.
 
         """
-        if not AUTOGEN_AVAILABLE:
-            # Import logger here to avoid circular imports
-            from buttermilk._core.log import logger
-            logger.warning("Autogen not available. Cannot create message object.")
-            return None
-
         if role == "assistant":
             # Assistant message content should likely be string representation
             return AssistantMessage(content=self.as_markdown(), source=self.record_id)
