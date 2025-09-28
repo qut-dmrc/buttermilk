@@ -113,10 +113,10 @@ class LLMCore:
         # Convert inputs to dict first
         if inputs is None:
             input_dict = {}
-        elif hasattr(inputs, 'model_dump'):
+        elif hasattr(inputs, "model_dump"):
             # Pydantic model
             input_dict = inputs.model_dump()
-        elif hasattr(inputs, '__dict__'):
+        elif hasattr(inputs, "__dict__"):
             # Object with attributes
             input_dict = vars(inputs).copy()
         elif isinstance(inputs, dict):
@@ -362,10 +362,10 @@ class LLMCore:
         # Convert any mappable input to dict
         if inputs is None:
             input_dict = {}
-        elif hasattr(inputs, 'model_dump'):
+        elif hasattr(inputs, "model_dump"):
             # Pydantic model
             input_dict = inputs.model_dump()
-        elif hasattr(inputs, '__dict__'):
+        elif hasattr(inputs, "__dict__"):
             # Object with attributes
             input_dict = vars(inputs).copy()
         elif isinstance(inputs, dict):
@@ -380,7 +380,11 @@ class LLMCore:
 
         # Extract context and records before template rendering
         context = input_dict.pop("context", [])
+
         records = input_dict.pop("records", [])
+        if r := input_dict.pop("record", None):
+            records = [r] + records  # Ensure 'record' is first if both provided
+
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
         # Clean and prepare inputs
@@ -392,7 +396,7 @@ class LLMCore:
         )
 
         try:
-            llm_messages = make_messages(local_template=rendered_template_str, records=records, context=context)
+            llm_messages = make_messages(local_template=rendered_template_str, records=[record], context=context)
 
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
