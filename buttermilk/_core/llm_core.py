@@ -400,6 +400,13 @@ class LLMCore:
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
+        # If context or records are provided, remove them from missing variables
+        if context:
+            unfilled_vars.discard("context")
+        if records:
+            unfilled_vars.discard("records")
+            unfilled_vars.discard("record")
+
         # Check for missing variables
         if unfilled_vars and self._fail_on_unfilled_parameters:
             raise ProcessingError(
