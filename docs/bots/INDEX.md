@@ -26,11 +26,10 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 - Common configuration patterns
 - Interpolation and overrides
 
-### [exploration-before-implementation.md](exploration-before-implementation.md) - CRITICAL: Rush-to-Code Prevention
+### Rush-to-Code Prevention
 - **MANDATORY READ**: Documented failure pattern and prevention protocol
 - Required exploration phases before any implementation
 - Red flag detection and recovery procedures
-- Concrete search techniques and justification requirements
 
 ### [impact-analysis.md](impact-analysis.md) - CRITICAL: Shared Infrastructure Protection
 - **MANDATORY READ**: Prevention of tunnel vision on shared infrastructure
