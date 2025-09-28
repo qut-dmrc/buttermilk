@@ -14,7 +14,6 @@ from omegaconf import DictConfig
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
-from buttermilk._core.types import BaseRecord
 
 
 @runtime_checkable
@@ -79,6 +78,7 @@ class PipelineOrchestrator(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
+    # TODO: This needs to be refactored as an async generator to handle 1:N properly
     async def _process_single_record(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Process a single inputs dict through the entire processor chain.
 
@@ -89,7 +89,7 @@ class PipelineOrchestrator(BaseModel):
             inputs: Input dictionary containing 'record' and other fields
 
         Returns:
-            Final processed inputs dict with metadata
+            Final processed outputs dict with metadata
 
         Raises:
             Exception: If any processor fails or record is filtered out
@@ -108,9 +108,8 @@ class PipelineOrchestrator(BaseModel):
                     outputs.append(output_dict)
 
                 if not outputs:
-                    # Record was filtered out by this processor
-                    record_id = current_inputs.get("record", {}).get("record_id", "unknown")
-                    raise ValueError(f"Record {record_id} filtered out by processor {processor}")
+                    # Record was filtered out by this processor, which is fine and normal
+                    logger.info(f"Processor {processor} returned no further outputs.")
                 elif len(outputs) == 1:
                     # Normal 1:1 flow
                     current_inputs = outputs[0]
@@ -179,7 +178,7 @@ class PipelineOrchestrator(BaseModel):
                     processed_inputs = await self._process_single_record(inputs)
                     await completed_inputs.put(processed_inputs)
                     self._processed += 1
-                except Exception as e:
+                except Exception:
                     self._failed += 1
                     # Let exception bubble up for TaskGroup
                     raise

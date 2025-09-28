@@ -14,7 +14,7 @@ storage:
   observations:
     full_table_id: "prosocial-443205.testing.observations"
   titles:
-    full_table_id: "prosocial-443205.testing.tmdbtitles"
+    full_table_id: "prosocial-443205.bmdev_testing.titles_tmdb"
     batch_size: 2
 
 
@@ -70,7 +70,7 @@ infrastructure:
 
 run:
   mode: pytest
-  
+
 
 
 pipeline:

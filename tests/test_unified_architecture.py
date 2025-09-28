@@ -8,6 +8,8 @@ Storage → Pipeline → LLMCore → Template → Results
 import asyncio
 from typing import Any, AsyncGenerator
 
+import pytest
+
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
@@ -48,6 +50,7 @@ class TestProcessor:
         yield {"record": updated_record}
 
 
+@pytest.mark.anyio
 async def test_storage_to_pipeline():
     """Test 1: Storage → Pipeline flow with dict format."""
     print("\n=== Test 1: Storage → Pipeline ===")

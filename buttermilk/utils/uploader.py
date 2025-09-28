@@ -67,8 +67,7 @@ class AsyncDataUploader:
         Yields:
             The same inputs dict (pass-through behavior)
         """
-        record = inputs["record"]  # Extract record from inputs dict
-        await self.add(record)
+        await self.add(inputs)
         yield inputs  # Pass through unchanged
 
     async def _worker(self):
