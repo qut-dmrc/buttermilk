@@ -10,7 +10,7 @@ import datetime
 import json  # For JSON parsing in validators
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, Self  # Standard typing utilities
+from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
@@ -35,7 +35,7 @@ from pydantic import (
 
 # Conditional imports to avoid circular dependencies
 
-
+# TODO: needs an 'as_message' method
 class BaseRecord(BaseModel):
     """Base class for all records in pipelines and storage.
 

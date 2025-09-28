@@ -26,7 +26,7 @@ from pydantic import BaseModel, PrivateAttr  # Pydantic components
 from buttermilk import bm, logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
-from buttermilk._core.types import Record  # Core Buttermilk Record type
+from buttermilk._core.types import BaseRecord  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
 
 
@@ -437,7 +437,7 @@ def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
     context: list[LLMMessage] = [],  # Conversation history
-    records: list[Record] = [],  # Optional list of records
+    records: list[BaseRecord] = [],  # Optional list of records
     fail_on_missing_placeholders: bool = False,
 ) -> list[LLMMessage]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
@@ -460,7 +460,7 @@ def make_messages(
             expected to be in Prompty format (frontmatter optional, then chat messages).
         context (list[LLMMessage] | None): An optional list of `LLMMessage` objects
             representing prior conversation history to be injected. Defaults to an empty list.
-        records (list[Record] | None): An optional list of `Record` objects to be
+        records (list[BaseRecord] | None): An optional list of `BaseRecord` objects to be
             injected. Defaults to an empty list.
         fail_on_missing_placeholders (bool): If True, raises a `ProcessingError`
             when a placeholder (other than "context" or "records") is encountered
@@ -529,9 +529,9 @@ def make_messages(
                         "Placeholder 'context' found in template but no context provided.",
                     )
 
-            elif normalized_placeholder_key == "records":
+            elif normalized_placeholder_key in ["records", "record"]:
                 if records:
-                    output_messages.extend([rec.as_message() for rec in records if isinstance(rec, Record)])
+                    output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
                 elif fail_on_missing_placeholders:
                     raise ProcessingError(
                         "Placeholder 'records' found in template but no records provided.",
