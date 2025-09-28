@@ -380,7 +380,6 @@ class LLMCore:
 
         # Extract context and records before template rendering
         context = input_dict.pop("context", [])
-
         records = input_dict.pop("records", [])
         if r := input_dict.pop("record", None):
             records = [r] + records  # Ensure 'record' is first if both provided
@@ -396,7 +395,7 @@ class LLMCore:
         )
 
         try:
-            llm_messages = make_messages(local_template=rendered_template_str, records=[record], context=context)
+            llm_messages = make_messages(local_template=rendered_template_str, records=records, context=context)
 
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
