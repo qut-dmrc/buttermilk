@@ -44,22 +44,14 @@ class TestLLMCore:
 
     def test_init_missing_model(self):
         """Test LLMCore initialization works without model (uses empty string)."""
-        params = {
-            "template": "test_template"
-        }
-
         # LLMCore now accepts empty model - no longer raises error
-        core = LLMCore(model="", template=params["template"], **params)
+        core = LLMCore(model="", template="test_template")
         assert core._model == ""
 
     def test_init_missing_template(self):
         """Test LLMCore initialization works without template (uses empty string)."""
-        params = {
-            "model": "gpt-4"
-        }
-
         # LLMCore now accepts empty template - no longer raises error
-        core = LLMCore(model=params["model"], template="", **params)
+        core = LLMCore(model="gpt-4", template="")
         assert core._template == ""
 
     def test_init_with_output_model(self):
@@ -101,9 +93,7 @@ class TestLLMCore:
                 mock_make.return_value = [SystemMessage(content="System prompt"), UserMessage(content="User prompt", source="test")]
 
                 messages = await core._fill_template(
-                    inputs={"var": "value"},
-                    context=[],
-                    records=[]
+                    inputs={"var": "value", "context": [], "records": []}
                 )
 
                 assert len(messages) == 2
@@ -137,9 +127,7 @@ class TestLLMCore:
 
                 with pytest.raises(ProcessingError, match="unfilled parameters: missing_var"):
                     await core._fill_template(
-                        inputs={},
-                        context=[],
-                        records=[]
+                        inputs={"context": [], "records": []}
                     )
 
     @pytest.mark.asyncio
@@ -152,7 +140,8 @@ class TestLLMCore:
         }
         core = LLMCore(
             model=params.get("model", ""),
-            template=params.get("template", "")
+            template=params.get("template", ""),
+            fail_on_unfilled_parameters=params.get("fail_on_unfilled_parameters", True)
         )
 
         with patch("buttermilk._core.llm_core.load_template") as mock_load:
@@ -166,9 +155,7 @@ class TestLLMCore:
                 mock_make.return_value = [UserMessage(content="Test", source="test")]
 
                 messages = await core._fill_template(
-                    inputs={},
-                    context=[],
-                    records=[]
+                    inputs={"context": [], "records": []}
                 )
 
                 assert len(messages) == 1
@@ -196,6 +183,10 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=50, completion_tokens=50),
             cached=False
         )
+        # Set up the mock chain
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_client.call_chat.return_value = mock_result
+
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core._call_llm_with_trace(
                 messages=[UserMessage(content="Test", source="test")],
@@ -230,6 +221,99 @@ class TestLLMCore:
                     cancellation_token=None,
                     parent_trace_id=None
                 )
+
+    def test_combine_inputs_with_dict_and_kwargs(self):
+        """Test that _combine_inputs properly merges dict inputs with kwargs."""
+        params = {
+            "model": "gpt-4",
+            "template": "test_template"
+        }
+        core = LLMCore(
+            model=params["model"],
+            template=params["template"]
+        )
+
+        # Test dict inputs + kwargs
+        dict_inputs = {'my_var': 'from_dict', 'context': []}
+        kwargs = {'my_var': 'from_kwargs', 'other_var': 'kwargs_only'}
+
+        combined = core._combine_inputs(dict_inputs, kwargs)
+
+        # kwargs should take precedence
+        assert combined['my_var'] == 'from_kwargs'
+        assert combined['other_var'] == 'kwargs_only'
+        assert combined['context'] == []
+
+    def test_combine_inputs_with_none_and_kwargs(self):
+        """Test that _combine_inputs handles None inputs with kwargs."""
+        params = {
+            "model": "gpt-4",
+            "template": "test_template"
+        }
+        core = LLMCore(
+            model=params["model"],
+            template=params["template"]
+        )
+
+        kwargs = {'my_var': 'from_kwargs', 'other_var': 'kwargs_only'}
+        combined = core._combine_inputs(None, kwargs)
+
+        assert combined['my_var'] == 'from_kwargs'
+        assert combined['other_var'] == 'kwargs_only'
+
+    def test_combine_inputs_with_agentinput_and_kwargs(self):
+        """Test that _combine_inputs properly handles AgentInput objects with kwargs."""
+        from buttermilk._core.contract import AgentInput
+        from buttermilk._core.types import Record
+
+        params = {
+            "model": "gpt-4",
+            "template": "test_template"
+        }
+        core = LLMCore(
+            model=params["model"],
+            template=params["template"]
+        )
+
+        agent_input = AgentInput(
+            inputs={'agent_var': 'agent_value'},
+            context=[],
+            records=[Record(record_id='test', content='test')]
+        )
+
+        kwargs = {'kwargs_var': 'kwargs_value'}
+        combined = core._combine_inputs(agent_input, kwargs)
+
+        # Should contain all AgentInput fields plus kwargs
+        assert combined['inputs']['agent_var'] == 'agent_value'
+        assert combined['kwargs_var'] == 'kwargs_value'
+        assert combined['context'] == []
+        assert len(combined['records']) == 1
+
+    def test_template_variable_treated_normally(self):
+        """Test that 'template' input variable is treated like any other variable."""
+        params = {
+            "model": "gpt-4",
+            "template": "test_template"
+        }
+        core = LLMCore(
+            model=params["model"],
+            template=params["template"]
+        )
+
+        # Template variable in inputs should be preserved as normal variable
+        inputs = {'template': 'input_template_value', 'other': 'value'}
+        kwargs = {'more': 'kwargs_value'}
+
+        combined = core._combine_inputs(inputs, kwargs)
+
+        # Template should be treated as normal input variable
+        assert combined['template'] == 'input_template_value'
+        assert combined['other'] == 'value'
+        assert combined['more'] == 'kwargs_value'
+
+        # The LLMCore should still use its own template from init
+        assert core._template == 'test_template'  # From constructor, not inputs
 
     @pytest.mark.asyncio
     async def test_process_with_llm_success(self):
@@ -391,6 +475,8 @@ class TestLLMCore:
                 # Verify records were passed to template filling
                 mock_fill.assert_called_once()
                 call_args = mock_fill.call_args
-                assert call_args[1]["records"] == [record1, record2]
+                # Records are now part of the combined inputs dict passed as first argument
+                inputs_dict = call_args[0][0]  # First positional argument (inputs)
+                assert inputs_dict["records"] == [record1, record2]
 
                 assert result.content == "Processed records"
