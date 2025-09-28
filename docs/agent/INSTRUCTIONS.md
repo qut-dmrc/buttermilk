@@ -27,6 +27,8 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 
 ## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
 
+**🔴 READ THIS FIRST: [../bots/TESTING_ENFORCEMENT.md](../bots/TESTING_ENFORCEMENT.md) - Specific anti-pattern detection for testing**
+
 **🛑 UNIVERSAL FILE CREATION CHECKPOINT 🛑**
 **BEFORE creating ANY file (.py, .js, .md, etc.), you MUST ask yourself:**
 1. **🔴 SECURITY SCAN**: Does this file contain ANY real API keys, tokens, passwords, or secrets?
