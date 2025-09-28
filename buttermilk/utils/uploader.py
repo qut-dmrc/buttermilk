@@ -87,7 +87,7 @@ class AsyncDataUploader:
                     await self._flush()
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Worker error: {e}",
                     phase="worker",
                     error=str(e),
@@ -112,7 +112,7 @@ class AsyncDataUploader:
             self.buffer = []
             await self._clear_backup()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Flush error: {e}",
                 error=str(e),
                 type=type(e).__name__,

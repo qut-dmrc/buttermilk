@@ -1,6 +1,10 @@
+import asyncio
 import copy
 import json
 import logging
+import os
+import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +12,7 @@ import structlog
 from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
+from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 
 from buttermilk._core.context import get_logging_context
 
@@ -63,6 +68,54 @@ def configure_structlog(min_level) -> None:
             return event_dict
         return event_dict
 
+    def _add_runtime_context(logger, method_name, event_dict):
+        """Inject common runtime context onto every log."""
+        try:
+            event_dict.setdefault("pid", os.getpid())
+            event_dict.setdefault("process_name", getattr(os, "getppid", lambda: None)() and logging.getLogger().name or "python")
+            event_dict.setdefault("thread_name", threading.current_thread().name)
+            # Async task name/id if available
+            task_name = None
+            try:
+                task = asyncio.current_task()
+                if task:
+                    task_name = task.get_name()
+            except Exception:
+                pass
+            if task_name:
+                event_dict.setdefault("task", task_name)
+        except Exception:
+            return event_dict
+        return event_dict
+
+    def _extract_exception_fields(logger, method_name, event_dict):
+        """When exc_info is present, add standardized exception fields."""
+        try:
+            exc_info = event_dict.get("exc_info")
+            exc = None
+            if exc_info is True:
+                _, exc, _ = sys.exc_info()
+            elif isinstance(exc_info, tuple) and len(exc_info) == 3:
+                exc = exc_info[1]
+            elif isinstance(exc_info, BaseException):
+                exc = exc_info
+
+            if exc is not None:
+                event_dict.setdefault("error_type", exc.__class__.__name__)
+                event_dict.setdefault("error_message", str(exc))
+                # Root cause (walk __cause__ / __context__)
+                cause = exc
+                while getattr(cause, "__cause__", None) is not None:
+                    cause = cause.__cause__
+                if cause is exc and getattr(exc, "__context__", None) is not None:
+                    cause = exc.__context__
+                if cause is not None and cause is not exc:
+                    event_dict.setdefault("root_cause_type", cause.__class__.__name__)
+                    event_dict.setdefault("root_cause_message", str(cause))
+        except Exception:
+            return event_dict
+        return event_dict
+
     structlog.configure(
         processors=[
             # Add context variables automatically
@@ -73,7 +126,20 @@ def configure_structlog(min_level) -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             # Inject OTEL trace/span IDs for correlation (no-op if not available)
             _inject_trace_ids,
-            # Capture exception info if present
+            # Common runtime fields on every log
+            _add_runtime_context,
+            # Add callsite info (module, function, line)
+            CallsiteParameterAdder(
+                {
+                    CallsiteParameter.MODULE,
+                    CallsiteParameter.FUNC_NAME,
+                    CallsiteParameter.LINENO,
+                    CallsiteParameter.PATHNAME,
+                }
+            ),
+            # Normalize exception fields before rendering
+            _extract_exception_fields,
+            # Capture exception info if present (adds "exception" with traceback)
             structlog.processors.format_exc_info,
             # Output as JSON
             structlog.processors.JSONRenderer(),
