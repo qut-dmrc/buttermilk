@@ -47,7 +47,7 @@ class TestBootstrapQueryRunnerInjection:
 
         # Verify BM instance was created successfully
         assert session_bm is not None
-        assert session_bm.session_info.name == "test_query_runner_injection"
+        assert session_bm.session_info.project_name == "test_query_runner_injection"
         assert session_bm.session_info.job == "verify_query_runner_works"
 
         # CRITICAL: Verify query_runner is properly injected and accessible
@@ -93,7 +93,7 @@ class TestBootstrapQueryRunnerInjection:
         # Verify expected column values
         assert result.iloc[0]["message"] == "test", "Message column should contain expected value"
         assert result.iloc[0]["number"] == 42, "Number column should contain expected value"
-        assert result.iloc[0]["flag"] is True, "Flag column should contain expected value"
+        assert result.iloc[0]["flag"] == True, "Flag column should contain expected value"
 
     @pytest.mark.anyio
     async def test_bootstrap_query_runner_error_handling(self, real_conf):

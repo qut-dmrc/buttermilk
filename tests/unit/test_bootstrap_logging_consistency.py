@@ -22,7 +22,7 @@ class TestBootstrapLoggingConsistency:
     def test_execution_context_logging_works(self, real_conf):
         """Test that ExecutionContext properly initializes logging."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Basic checks
         assert execution_context is not None
@@ -34,7 +34,7 @@ class TestBootstrapLoggingConsistency:
     def test_execution_context_id_consistent(self, real_conf):
         """Test that execution context ID is consistent."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # ID should be consistent across access
         id1 = execution_context.execution_context_id
@@ -50,13 +50,12 @@ class TestBootstrapLoggingConsistency:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
         
         # Bootstrap full context
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Create session - should not raise exceptions
         session_bm = asyncio.run(bootstrapper.bootstrap_session_context(
             name="test_session",
             job="test_job",
-            infrastructure=infrastructure
         ))
         
         assert session_bm is not None

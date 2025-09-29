@@ -6,7 +6,8 @@ from buttermilk import (
     logger,  # noqa
 )
 
-from ._core.bm_init import BM, create_session_bm
+from buttermilk._core.bm_init import BM, create_session_bm
+from buttermilk._core.dmrc import get_bm
 
 
 def test_conf(real_bm):

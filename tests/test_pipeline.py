@@ -2,18 +2,12 @@
 """Test multi-processor pipeline orchestrator."""
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from buttermilk.pipeline import PipelineOrchestrator
-from buttermilk.tools.catalog_test import Observation, Title
-
-# !/usr/bin/env python
-"""Simple test to verify the pipeline works with TMDBTool and uploader."""
-
-from unittest.mock import MagicMock
-
-from buttermilk.tools.catalog_test import TMDBTool
+from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader
 
 

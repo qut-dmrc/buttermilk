@@ -234,15 +234,15 @@ class TestLLMCore:
         )
 
         # Test dict inputs + kwargs
-        dict_inputs = {'my_var': 'from_dict', 'context': []}
-        kwargs = {'my_var': 'from_kwargs', 'other_var': 'kwargs_only'}
+        dict_inputs = {"my_var": "from_dict", "context": []}
+        kwargs = {"my_var": "from_kwargs", "other_var": "kwargs_only"}
 
         combined = core._combine_inputs(dict_inputs, kwargs)
 
         # kwargs should take precedence
-        assert combined['my_var'] == 'from_kwargs'
-        assert combined['other_var'] == 'kwargs_only'
-        assert combined['context'] == []
+        assert combined["my_var"] == "from_kwargs"
+        assert combined["other_var"] == "kwargs_only"
+        assert combined["context"] == []
 
     def test_combine_inputs_with_none_and_kwargs(self):
         """Test that _combine_inputs handles None inputs with kwargs."""
@@ -255,11 +255,11 @@ class TestLLMCore:
             template=params["template"]
         )
 
-        kwargs = {'my_var': 'from_kwargs', 'other_var': 'kwargs_only'}
+        kwargs = {"my_var": "from_kwargs", "other_var": "kwargs_only"}
         combined = core._combine_inputs(None, kwargs)
 
-        assert combined['my_var'] == 'from_kwargs'
-        assert combined['other_var'] == 'kwargs_only'
+        assert combined["my_var"] == "from_kwargs"
+        assert combined["other_var"] == "kwargs_only"
 
     def test_combine_inputs_with_agentinput_and_kwargs(self):
         """Test that _combine_inputs properly handles AgentInput objects with kwargs."""
@@ -276,19 +276,19 @@ class TestLLMCore:
         )
 
         agent_input = AgentInput(
-            inputs={'agent_var': 'agent_value'},
+            inputs={"agent_var": "agent_value"},
             context=[],
-            records=[Record(record_id='test', content='test')]
+            records=[Record(record_id="test", content="test")]
         )
 
-        kwargs = {'kwargs_var': 'kwargs_value'}
+        kwargs = {"kwargs_var": "kwargs_value"}
         combined = core._combine_inputs(agent_input, kwargs)
 
         # Should contain all AgentInput fields plus kwargs
-        assert combined['inputs']['agent_var'] == 'agent_value'
-        assert combined['kwargs_var'] == 'kwargs_value'
-        assert combined['context'] == []
-        assert len(combined['records']) == 1
+        assert combined["inputs"]["agent_var"] == "agent_value"
+        assert combined["kwargs_var"] == "kwargs_value"
+        assert combined["context"] == []
+        assert len(combined["records"]) == 1
 
     def test_template_variable_treated_normally(self):
         """Test that 'template' input variable is treated like any other variable."""
@@ -302,18 +302,18 @@ class TestLLMCore:
         )
 
         # Template variable in inputs should be preserved as normal variable
-        inputs = {'template': 'input_template_value', 'other': 'value'}
-        kwargs = {'more': 'kwargs_value'}
+        inputs = {"template": "input_template_value", "other": "value"}
+        kwargs = {"more": "kwargs_value"}
 
         combined = core._combine_inputs(inputs, kwargs)
 
         # Template should be treated as normal input variable
-        assert combined['template'] == 'input_template_value'
-        assert combined['other'] == 'value'
-        assert combined['more'] == 'kwargs_value'
+        assert combined["template"] == "input_template_value"
+        assert combined["other"] == "value"
+        assert combined["more"] == "kwargs_value"
 
         # The LLMCore should still use its own template from init
-        assert core._template == 'test_template'  # From constructor, not inputs
+        assert core._template == "test_template"  # From constructor, not inputs
 
     @pytest.mark.asyncio
     async def test_process_with_llm_success(self):

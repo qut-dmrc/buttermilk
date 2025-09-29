@@ -27,7 +27,7 @@ class TestBMWeaveClientDelegation:
         mock_execution_context.get_weave_client = AsyncMock(return_value=mock_weave_client)
         
         # Create minimal BM instance for testing (mock initialization)
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -49,7 +49,7 @@ class TestBMWeaveClientDelegation:
         mock_execution_context.get_weave_client = AsyncMock(side_effect=Exception("Weave initialization failed"))
         
         # Create minimal BM instance for testing (mock initialization)
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -67,7 +67,7 @@ class TestBMWeaveClientDelegation:
         mock_execution_context = Mock()
         mock_execution_context.get_weave_client = AsyncMock(return_value=mock_delegated_client)
         
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -101,7 +101,7 @@ class TestBMWeaveClientDelegation:
         # Create a mock weave client for fallback
         mock_fallback_client = Mock(spec=weave.trace.weave_client.WeaveClient)
         
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -132,7 +132,7 @@ class TestBMWeaveClientBehaviorDocumentation:
         mock_initialized_client.project_name = "properly-initialized"
         mock_execution_context.get_weave_client = AsyncMock(return_value=mock_initialized_client)
         
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -149,7 +149,7 @@ class TestBMWeaveClientBehaviorDocumentation:
         mock_direct_client = Mock(spec=weave.trace.weave_client.WeaveClient)
         mock_direct_client.project_name = "backward-compatible"
         
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         
@@ -178,7 +178,7 @@ class TestBMWeaveClientBehaviorDocumentation:
         mock_fallback_client = Mock(spec=weave.trace.weave_client.WeaveClient)
         mock_fallback_client.initialized = False  # Represents potential lack of initialization
         
-        session_info = SessionInfo(name="test-project", job="weave-test")
+        session_info = SessionInfo(project_name="test-project", job="weave-test")
         with patch.object(BM, "_post_init_setup"):
             bm = BM(session_info=session_info)
         

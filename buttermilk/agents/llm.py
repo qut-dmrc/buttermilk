@@ -92,11 +92,14 @@ class LLMAgent(Agent):
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Initialize the shared LLM core
+        # Filter out parameters that we're passing explicitly to avoid duplicates
+        filtered_params = {k: v for k, v in self.parameters.items()
+                          if k not in ("output_model", "tools", "fail_on_unfilled_parameters")}
         self.llm_core = LLMCore(
             output_model=output_model,
             tools=self._tools or [],
             fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
-            **self.parameters,
+            **filtered_params,
         )
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:

@@ -5,9 +5,8 @@ from typing import Any
 
 import pytest
 
-from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
-from buttermilk.tools.catalog_test import Observation, Title
+from buttermilk.tools.catalog_test import Observation
 
 
 # Create fake processors

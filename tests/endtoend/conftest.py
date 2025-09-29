@@ -1,6 +1,6 @@
-"""Configuration for integration tests.
+"""Configuration for end-to-end tests.
 
-This file automatically applies markers to all tests in the integration/ directory.
+This file automatically applies markers to all tests in the directory.
 """
 
 import pytest

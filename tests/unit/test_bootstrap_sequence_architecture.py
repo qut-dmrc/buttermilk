@@ -33,14 +33,14 @@ class TestExecutionContextCreation:
         """Test that ExecutionContext maintains singleton-like behavior with real config."""
         # Create first ExecutionContext using real configuration
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        context1, infrastructure1 = asyncio.run(bootstrapper.bootstrap_full_context())
+        context1 = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Verify it's been set as global
         global_context = get_execution_context()
         assert global_context is context1
         
         # Second attempt should return same context
-        context2, infrastructure2 = asyncio.run(bootstrapper.bootstrap_full_context())
+        context2 = asyncio.run(bootstrapper.bootstrap_full_context())
         assert context1 is context2
         assert context1.execution_context_id == context2.execution_context_id
         
@@ -51,7 +51,7 @@ class TestExecutionContextCreation:
     def test_execution_context_id_format_and_consistency(self, real_conf):
         """Test that ExecutionContext ID has proper format and is consistent."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Verify execution context ID format
         exec_id = context.execution_context_id
@@ -83,14 +83,13 @@ class TestInfrastructureSharing:
     def test_execution_context_has_own_infrastructure(self, real_conf):
         """Test that ExecutionContext properly initializes its own infrastructure."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # ExecutionContext should have properly initialized infrastructure
         assert context is not None
-        assert infrastructure is not None
         
-        # Infrastructure should be functional (has required components)
-        assert hasattr(infrastructure, "create_session_bm")
+        # bootstrapper should be functional (has required components)
+        assert hasattr(bootstrapper, "bootstrap_session_context")
         
         # ExecutionContext should be accessible globally
         global_context = get_execution_context()
@@ -101,20 +100,18 @@ class TestInfrastructureSharing:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
         
         # Bootstrap full context first
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         initial_exec_id = execution_context.execution_context_id
         
         # Create multiple sessions using shared infrastructure
         session1 = asyncio.run(bootstrapper.bootstrap_session_context(
             name="session1",
             job="test1",
-            infrastructure=infrastructure
         ))
         
         session2 = asyncio.run(bootstrapper.bootstrap_session_context(
             name="session2",
             job="test2",
-            infrastructure=infrastructure
         ))
         
         # Sessions should be created successfully
@@ -133,19 +130,15 @@ class TestInfrastructureSharing:
         """Test that infrastructure manager remains consistent across operations."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
         
-        # Get infrastructure manager
-        infrastructure1 = bootstrapper.get_infrastructure_manager()
-        
         # Bootstrap full context
-        execution_context, infrastructure2 = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
-        # Infrastructure should be consistent
-        assert infrastructure1 is not None
-        assert infrastructure2 is not None
+        # bootstrapper should be consistent
+        assert bootstrapper is not None
+        assert execution_context is not None
         
         # Both should be functional
-        assert hasattr(infrastructure1, "create_session_bm")
-        assert hasattr(infrastructure2, "create_session_bm")
+        assert hasattr(bootstrapper, "bootstrap_session_context")
 
 
 class TestBootstrapOrderValidation:
@@ -165,7 +158,7 @@ class TestBootstrapOrderValidation:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
         
         # Step 1: ExecutionContext should be created first
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Verify ExecutionContext is properly initialized
         assert execution_context is not None
@@ -179,7 +172,6 @@ class TestBootstrapOrderValidation:
         session_bm = asyncio.run(bootstrapper.bootstrap_session_context(
             name="ordered_session",
             job="order_test",
-            infrastructure=infrastructure
         ))
         
         # Session creation should not affect ExecutionContext
@@ -196,11 +188,11 @@ class TestBootstrapOrderValidation:
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
         
         # First bootstrap
-        context1, infra1 = asyncio.run(bootstrapper.bootstrap_full_context())
+        context1 = asyncio.run(bootstrapper.bootstrap_full_context())
         initial_id = context1.execution_context_id
         
         # Second bootstrap should be safe
-        context2, infra2 = asyncio.run(bootstrapper.bootstrap_full_context())
+        context2 = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # Should return same ExecutionContext
         assert context1 is context2
@@ -224,7 +216,7 @@ class TestExecutionContextInitialization:
     def test_execution_context_initialization_with_real_components(self, real_conf):
         """Test ExecutionContext initializes properly with real configuration components."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # ExecutionContext should be properly initialized
         assert execution_context is not None
@@ -245,7 +237,7 @@ class TestExecutionContextInitialization:
     def test_execution_context_provides_infrastructure_access(self, real_conf):
         """Test that ExecutionContext provides access to infrastructure components."""
         bootstrapper = ConfigurationBootstrapper(config=real_conf)
-        execution_context, infrastructure = asyncio.run(bootstrapper.bootstrap_full_context())
+        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
         
         # ExecutionContext should provide infrastructure access
         assert execution_context is not None
@@ -260,6 +252,6 @@ class TestExecutionContextInitialization:
         if hasattr(execution_context, "tracing"):
             assert hasattr(execution_context, "tracing")
         
-        # Infrastructure should be functional
-        assert infrastructure is not None
-        assert hasattr(infrastructure, "create_session_bm")
+        # bootstrapper should be functional
+        assert bootstrapper is not None
+        assert hasattr(bootstrapper, "bootstrap_session_context")

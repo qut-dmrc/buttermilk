@@ -66,7 +66,9 @@ def get_test_category(file_path: str) -> str:
         return "unit"
     elif "integration" in path_parts:
         return "integration"
-    elif "00initial" in str(file_path):
+    elif "endtoend" in path_parts:
+        return "endtoend"
+    elif "initial" in str(file_path):
         return "initial"
     elif "agents" in path_parts:
         return "agents"
@@ -190,7 +192,7 @@ def generate_report(health: HealthRecord) -> str:
             report.append(f"- `{failure.file}`")
             if failure.test_name:
                 report.append(f"  - Test: `{failure.test_name}`")
-            report.append(f"  - Error: `{failure.error_message[:100]}...`")
+            report.append(f"  - Error: `{failure.error_message[:300]}...`")
         
         if len(failures) > 3:
             report.append(f"  - ... and {len(failures) - 3} more\n")
@@ -211,7 +213,7 @@ def generate_report(health: HealthRecord) -> str:
         for failure in priority_issues[:10]:
             report.append(f"1. `{failure.file}`")
             report.append(f"   - Type: {failure.error_type}")
-            report.append(f"   - Error: `{failure.error_message[:150]}...`")
+            report.append(f"   - Error: `{failure.error_message[:300]}...`")
     else:
         report.append("No critical blocking issues found.\n")
     
@@ -235,7 +237,7 @@ def save_detailed_json(health: HealthRecord, output_file: str = "test_health_dat
                 {
                     "file": f.file,
                     "test": f.test_name,
-                    "error": f.error_message[:200]
+                    "error": f.error_message[:300]
                 }
                 for f in failures
             ]

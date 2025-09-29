@@ -117,8 +117,10 @@ async def test_llmcore_with_record():
     print("\n=== Test 2: LLMCore with {{record}} template ===")
 
     from unittest.mock import AsyncMock, patch
-    from buttermilk._core.llms import CreateResult
+
     from autogen_core.models import RequestUsage, UserMessage
+
+    from buttermilk._core.llms import CreateResult
 
     # Create test record
     record = MockRecord(record_id="test", title="Test Title", content="Test content")
@@ -171,8 +173,10 @@ async def test_end_to_end_with_llm():
     print("\n=== Test 3: End-to-End Storage → Pipeline → LLMProcessor ===")
 
     from unittest.mock import AsyncMock, patch
-    from buttermilk._core.llms import CreateResult
+
     from autogen_core.models import RequestUsage, UserMessage
+
+    from buttermilk._core.llms import CreateResult
 
     # Create test records
     records = [

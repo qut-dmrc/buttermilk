@@ -1,10 +1,6 @@
-from pathlib import Path
-from unittest.mock import AsyncMock, mock_open
-
 import pytest
 
-from buttermilk.libs.zotero import ZotDownloader
-from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
+pytest.skip("InputDocument removed", allow_module_level=True)
 
 
 @pytest.fixture

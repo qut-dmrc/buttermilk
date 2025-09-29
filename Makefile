@@ -64,6 +64,9 @@ lint:
 test tests:
 	uv run python -m pytest 
 
+health:
+	uv run python scripts/test_health_dashboard.py
+	
 scheduled_tests:
 	uv run 	python -m pytest -m scheduled tests
 

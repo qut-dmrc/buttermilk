@@ -383,11 +383,14 @@ class PipelineOrchestrator(BaseModel):
                 if pending_tasks:
                     await asyncio.gather(*pending_tasks, return_exceptions=True)
                 raise
-
-            logger.info(
-                f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
-                f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
-            )
+            finally:
+                logger.info(
+                    f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
+                    f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
+                )
+        except Exception as e:
+            logger.error(f"Fatal error in stage '{self.stage_name}': {e}")
+            raise
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:

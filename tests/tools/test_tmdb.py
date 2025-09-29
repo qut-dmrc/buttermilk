@@ -1,7 +1,7 @@
 # ruff: noqa: PLR6301
 import json
 import os
-from unittest.mock import AsyncMock, patch, call
+from unittest.mock import AsyncMock, call, patch
 
 import pytest
 from autogen_core.tools import FunctionTool
@@ -268,9 +268,9 @@ class TestTMDBDiscoverMovies:
 
             # Mock discover().movie() method with date range parameters
             async def mock_movie_func(**kwargs):
-                page = kwargs.get('page', 1)
+                page = kwargs.get("page", 1)
                 # Only return movies on page 1, simulate month-based fetching
-                if page == 1 and 'primary_release_date.gte' in kwargs:
+                if page == 1 and "primary_release_date.gte" in kwargs:
                     return mock_movies
                 else:
                     return []  # No more results
@@ -317,8 +317,8 @@ class TestTMDBDiscoverMovies:
 
             # Mock discover().movie() method with date range parameters
             async def mock_movie_func(**kwargs):
-                page = kwargs.get('page', 1)
-                if page == 1 and 'primary_release_date.gte' in kwargs:
+                page = kwargs.get("page", 1)
+                if page == 1 and "primary_release_date.gte" in kwargs:
                     return [mock_movie]
                 else:
                     return []  # No more results
@@ -327,7 +327,7 @@ class TestTMDBDiscoverMovies:
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            results = await tmdb_tool.get_all_movies(
+            await tmdb_tool.get_all_movies(
                 start_year=1999,
                 end_year=1999,
                 max_concurrent=1,
@@ -341,7 +341,7 @@ class TestTMDBDiscoverMovies:
 
             # Verify period backup content contains our movie
             if period_files:
-                with open(period_files[0], 'r') as f:
+                with open(period_files[0], "r") as f:
                     saved_data = json.load(f)
                 assert len(saved_data) >= 1
                 # Each period file contains a list of Title objects
@@ -392,17 +392,17 @@ class TestTMDBDiscoverMovies:
 
             # Mock discover to return different movies based on date range
             async def mock_movie_func(**kwargs):
-                page = kwargs.get('page', 1)
+                page = kwargs.get("page", 1)
                 if page > 1:
                     return []  # Only page 1 has results
 
                 # Determine period from date range
-                gte_date = kwargs.get('primary_release_date.gte', '')
-                if '2020-01' in gte_date:
+                gte_date = kwargs.get("primary_release_date.gte", "")
+                if "2020-01" in gte_date:
                     return period_responses["2020-01"]
-                elif '2020-02' in gte_date:
+                elif "2020-02" in gte_date:
                     return period_responses["2020-02"]
-                elif '2020-03' in gte_date:
+                elif "2020-03" in gte_date:
                     return period_responses["2020-03"]
                 else:
                     return []
@@ -432,15 +432,14 @@ class TestTMDBDiscoverMovies:
     @pytest.mark.anyio
     async def test_get_all_movies_default_cache_dir(self, tmdb_tool):
         """Test that default cache directory follows buttermilk pattern."""
-        from pathlib import Path
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             mock_movies = [{"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}]
 
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
-                page = kwargs.get('page', 1)
-                if page == 1 and 'primary_release_date.gte' in kwargs:
+                page = kwargs.get("page", 1)
+                if page == 1 and "primary_release_date.gte" in kwargs:
                     return mock_movies
                 else:
                     return []  # No more results
@@ -468,8 +467,8 @@ class TestTMDBDiscoverMovies:
 
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
-                page = kwargs.get('page', 1)
-                if page == 1 and 'primary_release_date.gte' in kwargs:
+                page = kwargs.get("page", 1)
+                if page == 1 and "primary_release_date.gte" in kwargs:
                     return mock_movies
                 else:
                     return []
@@ -512,13 +511,14 @@ class TestTMDBUnitTests:
     async def test_fetch_period_movies_pagination(self, tmdb_tool, tmp_path):
         """Test that _fetch_period_movies correctly paginates using fetch_single_page."""
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         period = DatePeriod(date(2020, 1, 1), date(2020, 1, 31))
         progress = FetchProgress(tmp_path)
 
         # Mock fetch_single_page to return 3 pages of results
-        with patch.object(tmdb_tool, 'fetch_single_page') as mock_fetch:
+        with patch.object(tmdb_tool, "fetch_single_page") as mock_fetch:
             mock_fetch.side_effect = [
                 ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(1, 21)], True),  # Page 1: 20 movies, more available
                 ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(21, 41)], True),  # Page 2: 20 movies, more available
@@ -554,9 +554,10 @@ class TestTMDBUnitTests:
     @pytest.mark.anyio
     async def test_fetch_period_movies_resume_from_checkpoint(self, tmdb_tool, tmp_path):
         """Test that _fetch_period_movies correctly resumes from checkpoint."""
-        from datetime import date
-        from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
         import json
+        from datetime import date
+
+        from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         period = DatePeriod(date(2020, 1, 1), date(2020, 1, 31))
         progress = FetchProgress(tmp_path)
@@ -575,7 +576,7 @@ class TestTMDBUnitTests:
             json.dump(checkpoint_data, f)
 
         # Mock fetch_single_page to continue from page 3
-        with patch.object(tmdb_tool, 'fetch_single_page') as mock_fetch:
+        with patch.object(tmdb_tool, "fetch_single_page") as mock_fetch:
             mock_fetch.side_effect = [
                 ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(41, 51)], False),  # Page 3: 10 movies, no more
             ]
@@ -594,9 +595,10 @@ class TestTMDBUnitTests:
     @pytest.mark.anyio
     async def test_parallel_period_execution_timing(self, tmdb_tool, tmp_path):
         """Test that multiple periods are fetched in parallel."""
-        import time
         import asyncio
+        import time
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         # Create 3 periods
@@ -615,7 +617,7 @@ class TestTMDBUnitTests:
             await asyncio.sleep(0.1)  # Simulate API delay
             return [Title(record_id="1", title="Test Movie", type=TitleType.MOVIE)]
 
-        with patch.object(tmdb_tool, '_fetch_period_movies', side_effect=mock_fetch_period):
+        with patch.object(tmdb_tool, "_fetch_period_movies", side_effect=mock_fetch_period):
             start_time = time.time()
             results = await tmdb_tool._fetch_periods_parallel(
                 periods, max_concurrent=3, include_adult=True, include_video=False,
@@ -640,6 +642,7 @@ class TestTMDBProgressTracking:
     def test_fetch_progress_page_tracking(self, tmp_path):
         """Test page-level progress tracking."""
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         period = DatePeriod(date(2020, 1, 1), date(2020, 1, 31))
@@ -666,6 +669,7 @@ class TestTMDBProgressTracking:
     def test_fetch_progress_persistence(self, tmp_path):
         """Test that progress persists across instances."""
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         period = DatePeriod(date(2020, 1, 1), date(2020, 1, 31))
@@ -684,6 +688,7 @@ class TestTMDBProgressTracking:
     def test_fetch_progress_multiple_periods(self, tmp_path):
         """Test tracking multiple periods independently."""
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod, FetchProgress
 
         period1 = DatePeriod(date(2020, 1, 1), date(2020, 1, 31))
