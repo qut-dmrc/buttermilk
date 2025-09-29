@@ -1,6 +1,10 @@
+from pathlib import Path
+from unittest.mock import AsyncMock, mock_open
+
 import pytest
 
-pytest.skip("InputDocument removed", allow_module_level=True)
+from buttermilk._core.types import Record
+from buttermilk.libs.zotero import ZotDownloader
 
 
 @pytest.fixture
@@ -48,11 +52,11 @@ async def test_download_pdf_does_not_exist(zot_downloader, tmp_path, mocker):
     mock_file_open.assert_called_once_with("wb")
     mock_file_open().write.assert_called_once_with(b"pdf content")
 
-    assert isinstance(result, InputDocument)
+    assert isinstance(result, Record)
     assert result.record_id == "TESTKEY1"
-    assert result.title == "Test Title 1"
-    assert result.file_path == expected_file_path.as_posix()
-    assert result.metadata == {"doi": "10.1000/testdoi"}
+    assert result.metadata.get("title") == "Test Title 1"
+    assert result.metadata.get("file_path") == expected_file_path.as_posix()
+    assert result.metadata.get("doi") == "10.1000/testdoi"
 
 
 @pytest.mark.anyio
@@ -83,11 +87,11 @@ async def test_download_pdf_already_exists(zot_downloader, tmp_path, mocker):
     mock_download.assert_not_awaited()
     mock_file_open.assert_not_called()
 
-    assert isinstance(result, InputDocument)
+    assert isinstance(result, Record)
     assert result.record_id == "TESTKEY2"
-    assert result.title == "Test Title 2"
-    assert result.file_path == expected_file_path.as_posix()
-    assert result.metadata == {"doi": "http://example.com/article"}  # Falls back to URL
+    assert result.metadata.get("title") == "Test Title 2"
+    assert result.metadata.get("file_path") == expected_file_path.as_posix()
+    assert result.metadata.get("doi") == "http://example.com/article"  # Falls back to URL
 
 
 @pytest.mark.anyio

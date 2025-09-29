@@ -3,7 +3,6 @@ import json  # Import json
 import pytest
 
 from buttermilk._core.types import RunRequest  # Import RunRequest
-from buttermilk.utils.utils import read_json
 
 TEST_FLOW_ID = "test_flow"
 

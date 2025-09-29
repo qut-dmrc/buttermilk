@@ -5,7 +5,6 @@ import hydra
 from buttermilk import (
     logger,  # noqa
 )
-
 from buttermilk._core.bm_init import BM, create_session_bm
 from buttermilk._core.dmrc import get_bm
 

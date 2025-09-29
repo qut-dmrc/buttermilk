@@ -127,7 +127,7 @@ class FileStorage(Storage):
                         logger.error(f"Could not serialize record at index {idx}: {e2}. Skipping.")
                         continue
 
-            with open(self.path, "w", encoding="utf-8") as f:
+            with self.path.open("w", encoding="utf-8") as f:
                 if self.path.suffix == ".jsonl":
                     # JSONL format - one JSON object per line
                     for record_dict in data:
@@ -180,7 +180,7 @@ class FileStorage(Storage):
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create empty file with appropriate format
-            with open(self.path, "w", encoding="utf-8") as f:
+            with self.path.open("w", encoding="utf-8") as f:
                 if self.path.suffix == ".jsonl":
                     # Empty JSONL file
                     pass

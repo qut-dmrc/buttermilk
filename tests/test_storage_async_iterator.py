@@ -1,6 +1,5 @@
 """Test Storage async iterator implementation."""
 
-import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -22,10 +21,10 @@ async def test_storage_async_iterator_protocol():
         {"record_id": "3", "content": "Third record", "dataset_name": "test", "split_type": "train"}
     ]
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
         for record in test_data:
             json.dump(record, f)
-            f.write('\n')
+            f.write("\n")
         temp_path = f.name
 
     try:
@@ -75,7 +74,7 @@ async def test_storage_async_iterator_protocol():
 async def test_storage_async_iterator_empty():
     """Test async iterator with empty storage."""
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
         # Empty file
         temp_path = f.name
 
@@ -103,7 +102,7 @@ async def test_manual_anext_usage():
 
     test_data = [{"record_id": "1", "content": "Test record", "dataset_name": "test"}]
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
         json.dump(test_data[0], f)
         temp_path = f.name
 

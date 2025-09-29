@@ -278,7 +278,7 @@ class TestLLMCore:
         agent_input = AgentInput(
             inputs={"agent_var": "agent_value"},
             context=[],
-            records=[Record(record_id="test", content="test")]
+            record=Record(record_id="test", content="test")
         )
 
         kwargs = {"kwargs_var": "kwargs_value"}
@@ -288,7 +288,7 @@ class TestLLMCore:
         assert combined["inputs"]["agent_var"] == "agent_value"
         assert combined["kwargs_var"] == "kwargs_value"
         assert combined["context"] == []
-        assert len(combined["records"]) == 1
+        assert combined["record"] is not None
 
     def test_template_variable_treated_normally(self):
         """Test that 'template' input variable is treated like any other variable."""

@@ -1,7 +1,8 @@
 """Tests for catalog_test Observation model."""
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from buttermilk.tools.catalog_test import Observation, Title
 

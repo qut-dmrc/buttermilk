@@ -172,16 +172,16 @@ class TestCloudProviderConfigValidation:
         assert config.type == "azure"
         assert config.vault == "https://test-vault.vault.azure.net/"
 
-    def test_gcp_provider_config(self):
-        """Test GCP CloudProviderCfg validation."""
+    def test_gcp_provider_config_with_location(self):
+        """Test GCP CloudProviderCfg validation with location."""
         from buttermilk._core.config import CloudProviderCfg
-        
+
         config = CloudProviderCfg(
             type="gcp",
             project_id="test-project",
             location="us-central1"
         )
-        
+
         assert config.type == "gcp"
         assert config.project_id == "test-project"
         assert config.location == "us-central1"

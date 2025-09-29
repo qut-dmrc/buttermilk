@@ -1,14 +1,12 @@
 """Tests for storage record class instantiation."""
 
-import tempfile
 import json
+import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from buttermilk._core.storage_config import BaseStorageConfig, BigQueryStorageConfig, FileStorageConfig
-from buttermilk._core.types import BaseRecord, Record
+from buttermilk._core.storage_config import BaseStorageConfig, FileStorageConfig
+from buttermilk._core.types import Record
 from buttermilk.storage.base import Storage
 from buttermilk.storage.file import FileStorage
 from buttermilk.tools.catalog_test import Title
@@ -87,7 +85,7 @@ class TestStorageRecordClass:
         storage = TestStorage(config)
 
         # Should fall back to Record with a warning
-        with patch('buttermilk.storage.base.logger') as mock_logger:
+        with patch("buttermilk.storage.base.logger") as mock_logger:
             record_class = storage._get_record_class()
             assert record_class is Record
             mock_logger.warning.assert_called()
@@ -111,7 +109,7 @@ class TestStorageRecordClass:
         storage = TestStorage(config)
 
         # Should fall back to Record with a warning
-        with patch('buttermilk.storage.base.logger') as mock_logger:
+        with patch("buttermilk.storage.base.logger") as mock_logger:
             record_class = storage._get_record_class()
             assert record_class is Record
             mock_logger.warning.assert_called()
@@ -175,7 +173,7 @@ class TestStorageRecordClass:
     def test_file_storage_with_title_class(self):
         """Test FileStorage creates Title objects when configured."""
         # Create a temporary JSON file with title data
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump([
                 {
                     "record_id": "tmdb_001",
@@ -222,7 +220,7 @@ class TestStorageRecordClass:
     def test_file_storage_with_default_record_class(self):
         """Test FileStorage creates Record objects by default."""
         # Create a temporary JSON file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump([
                 {
                     "record_id": "001",
@@ -287,7 +285,7 @@ class TestStorageRecordClass:
         assert class1 is Title
 
         # Second call should return cached value
-        with patch('buttermilk.storage.base.importlib.import_module') as mock_import:
+        with patch("buttermilk.storage.base.importlib.import_module") as mock_import:
             class2 = storage._get_record_class()
             assert class2 is Title
             # import_module should not be called since class is cached

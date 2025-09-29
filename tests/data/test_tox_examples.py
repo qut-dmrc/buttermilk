@@ -1,8 +1,9 @@
 import pytest
 
 # import evaluate
-torch = pytest.importorskip("torch")
 from buttermilk.toxicity import TOXCLIENTS
+
+torch = pytest.importorskip("torch")
 
 
 class TestSpecificExamples:

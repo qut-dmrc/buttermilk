@@ -10,8 +10,7 @@ from buttermilk.data.vector import (
     MODEL_NAME,
     ChromaDBEmbeddings,
     ChunkedDocument,
-    # InputDocument,  # Class no longer exists - tests need refactoring
-    # _batch_iterator,  # Import helper for testing if needed
+    _batch_iterator,  # Import helper for testing
 )
 
 # SKIP ENTIRE FILE: InputDocument class removed, needs refactoring

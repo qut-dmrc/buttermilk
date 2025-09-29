@@ -21,7 +21,9 @@ def test_llm_config_validates_client_type():
     model_info = ModelInfo(
         family="test-family",
         function_calling=True,
-        json_output=True
+        json_output=True,
+        vision=False,
+        structured_output=False
     )
     
     # Valid client type as string
@@ -81,7 +83,9 @@ def test_no_api_type_field():
     model_info = ModelInfo(
         family="test-family",
         function_calling=True,
-        json_output=True
+        json_output=True,
+        vision=False,
+        structured_output=False
     )
     
     # Verify LLMConfig doesn't have api_type field
