@@ -177,14 +177,8 @@ class FileStorage(Storage):
         Returns:
             Number of records in the file
         """
-        try:
-            count = 0
-            for _ in self:
-                count += 1
-            return count
-        except Exception as e:
-            logger.warning(f"Error counting records in file {self.path}: {e}")
-            return -1
+        logger.warning(f"FileStorage.count() is inefficient for large files as it reads through the entire file: {self.path}", path=self.path)
+        return -1
 
     def exists(self) -> bool:
         """Check if the file exists.

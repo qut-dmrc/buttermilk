@@ -117,7 +117,7 @@ class AsyncDataUploader:
 
     async def _save_with_retry(self, data: list[Any], target_storage=None) -> None:
         """Save data with retry logic using RetryWrapper."""
-        storage_to_use = target_storage or self.storage
+        storage_to_use = target_storage if target_storage is not None else self.storage
 
         # Create a wrapper for the storage save operation
         retry_wrapper = RetryWrapper(
