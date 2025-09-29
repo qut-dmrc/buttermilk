@@ -439,7 +439,7 @@ def make_messages(
     context: list[LLMMessage] = [],  # Conversation history
     records: list[BaseRecord] = [],  # Optional list of records
     fail_on_missing_placeholders: bool = False,
-) -> list[LLMMessage]:
+) -> tuple[list[LLMMessage], set[str]]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
     This function first parses the `local_template` string to separate Prompty
@@ -469,8 +469,11 @@ def make_messages(
             in missing content.
 
     Returns:
-        list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
-        with an LLM client.
+        tuple[list[LLMMessage], set[str]]: A tuple containing:
+            - list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
+              with an LLM client.
+            - set[str]: A set of placeholder names that were successfully processed
+              ("context", "records", etc.)
 
     Raises:
         ProcessingError:
@@ -482,6 +485,7 @@ def make_messages(
 
     """
     output_messages: list[LLMMessage] = []
+    processed_placeholders: set[str] = set()
 
     try:
         # Parse main content from Prompty string (strips frontmatter)
@@ -520,6 +524,7 @@ def make_messages(
             if normalized_placeholder_key == "context":
                 if context:
                     output_messages.extend(context)
+                    processed_placeholders.add("context")
                 elif fail_on_missing_placeholders:
                     raise ProcessingError(
                         "Placeholder 'context' found in template but no context provided.",
@@ -532,6 +537,8 @@ def make_messages(
             elif normalized_placeholder_key in ["records", "record"]:
                 if records:
                     output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
+                    processed_placeholders.add("records")
+                    processed_placeholders.add("record")  # Add both variants
                 elif fail_on_missing_placeholders:
                     raise ProcessingError(
                         "Placeholder 'records' found in template but no records provided.",
@@ -546,4 +553,4 @@ def make_messages(
             raise ProcessingError(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message.")
 
     # Deduplicate messages before returning
-    return _deduplicate_messages(output_messages)
+    return _deduplicate_messages(output_messages), processed_placeholders

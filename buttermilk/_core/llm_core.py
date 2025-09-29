@@ -395,17 +395,13 @@ class LLMCore:
         )
 
         try:
-            llm_messages = make_messages(local_template=rendered_template_str, records=records, context=context)
+            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, records=records, context=context)
 
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
-        # If context or records are provided, remove them from missing variables
-        if context:
-            unfilled_vars.discard("context")
-        if records:
-            unfilled_vars.discard("records")
-            unfilled_vars.discard("record")
+        # Only remove placeholders that were successfully processed by make_messages
+        unfilled_vars -= processed_placeholders
 
         # Check for missing variables
         if unfilled_vars and self._fail_on_unfilled_parameters:
