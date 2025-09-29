@@ -236,7 +236,7 @@ addopts = [
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",
     "--tb=short",
-    "-m=not endtoend",
+    "-m", "not endtoend",
 ]
 
 

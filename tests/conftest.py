@@ -1,3 +1,5 @@
+from __future__ import annotations
+from pathlib import Path
 import inspect
 
 import pytest
@@ -21,7 +23,11 @@ def pytest_collection_modifyitems(items):
         # Check if the test function is async
         if inspect.iscoroutinefunction(item.function):
             item.add_marker(pytest.mark.anyio)
-
+        p = Path(str(item.path))
+        if "endtoend" in p.parts:
+            item.add_marker(pytest.mark.endtoend)
+        if "integration" in p.parts:
+            item.add_marker(pytest.mark.integration)
 
 @pytest.fixture(scope="session")
 def anyio_backend():
