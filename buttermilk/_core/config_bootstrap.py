@@ -14,8 +14,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
 from buttermilk._core.log import logger
-
-
 class ConfigurationBootstrapper:
     """Single point of entry for all configuration management.
 
@@ -211,8 +209,9 @@ class ConfigurationBootstrapper:
             await self._execution_context._initialize_all_tracing_providers()
             logger.info("Tracing providers initialized successfully")
         except Exception as e:
-            # Log but don't fail the bootstrap - tracing is important but not critical
-            logger.warning("Failed to initialize tracing providers", error=str(e))
+            # Log and fail the bootstrap - tracing is critical
+            logger.exception("Failed to initialize tracing providers", error=str(e))
+            raise RuntimeError(f"Tracing initialization failed: {e}") from e
 
         logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
         return self._execution_context

@@ -44,11 +44,7 @@ class TestStructuredLLMHostInitialization:
     @pytest.mark.anyio
     async def test_agent_registry_with_tools(self):
         """Test that agent announcements with tools are properly registered."""
-        host = StructuredLLMHostAgent(
-            agent_name="host",
-            role="host",
-            parameters={"model": "test-model", "human_in_loop": False}
-        )
+        host = StructuredLLMHostAgent(agent_name="host", role="host", template="lead_ra", parameters={"model": "test-model", "human_in_loop": False})
 
         # Initialize minimal state
         host.callback_to_groupchat = AsyncMock()

@@ -35,13 +35,12 @@ from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
-from buttermilk.utils.utils import load_json_flexi
-
-# Constants for configuration keys
+from buttermilk.utils.utils import load_json_flexi, load_dotenv
 
 # Global variable to store the execution context ID
 _global_execution_context_id = ""
 
+load_dotenv()
 
 def _make_execution_context_id() -> str:
     """Generates a unique execution context ID for the current process.
@@ -460,14 +459,18 @@ class ExecutionContext(BaseModel):
         weave_config = self.tracing["weave"]
         
         # Extract credentials from configuration (fail-fast if missing)
-        wandb_entity = getattr(weave_config, "project_id", None)
-        wandb_api_key = getattr(weave_config, "api_key", None)
+        wandb_entity = getattr(weave_config, "project_id", os.getenv("WANDB_ENTITY"))
+        wandb_api_key = getattr(weave_config, "api_key", os.getenv("WANDB_API_KEY"))
         
         if not wandb_entity:
-            raise RuntimeError("Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config.")
+            raise RuntimeError(
+                "Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config or set WANDB_ENTITY environment variable."
+            )
         
         if not wandb_api_key:
-            raise RuntimeError("Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config.")
+            raise RuntimeError(
+                "Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config or set WANDB_API_KEY environmnet variable."
+            )
         
         # Set environment variables for Weave initialization
         os.environ["WANDB_ENTITY"] = wandb_entity

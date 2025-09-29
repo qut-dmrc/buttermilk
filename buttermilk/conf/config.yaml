@@ -18,6 +18,7 @@ bm:
     template_paths: []
     # Session storage configuration
     sessions_dir: "data/sessions"
+    cache_dir: "~/.cache/buttermilk"
     # These defaults are currently not loaded properly.
     session:
       timeout_minutes: 60

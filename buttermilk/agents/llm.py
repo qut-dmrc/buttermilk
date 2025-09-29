@@ -140,24 +140,21 @@ class LLMAgent(Agent):
 
         try:
             # Process through LLMCore (yields LLMResult)
-            async for llm_result in llm_core.process(
+            llm_result = await llm_core.process_with_llm(
                 inputs=message,
                 parent_trace_id=message.parent_call_id,
                 component_name=f"LLMAgent[{self.agent_name}]",
                 cancellation_token=cancellation_token,
-            ):
-                # Prepare metadata for AgentOutput
-                output_metadata = {
-                    "agent_name": self.agent_name,
-                    "agent_id": self.agent_id,
-                    **llm_result.metadata,
-                    **llm_result.template_metadata,
-                }
+            )
+            # Prepare metadata for AgentOutput
+            output_metadata = {
+                "agent_name": self.agent_name,
+                "agent_id": self.agent_id,
+                **llm_result.metadata,
+            }
 
-                logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
-                return AgentOutput(
-                    agent_id=self.agent_id, outputs=llm_result.content, messages=llm_result.messages, metadata=output_metadata, error=[]
-                )
+            logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
+            return AgentOutput(agent_id=self.agent_id, outputs=llm_result.content, messages=llm_result.messages, metadata=output_metadata, error=[])
 
         except ProcessingError as e:
             logger.error(f"Agent '{self.agent_id}': LLM processing failed: {e}")

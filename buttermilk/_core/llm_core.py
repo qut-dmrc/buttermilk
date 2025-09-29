@@ -19,7 +19,9 @@ from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field
+import weave
 
+from buttermilk._core.types import BaseRecord
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
@@ -64,6 +66,7 @@ class LLMCore:
         output_model: Optional[type[pydantic.BaseModel]] = None,
         tools: Optional[list[Tool]] = None,
         fail_on_unfilled_parameters: bool = True,
+        output_col: str = "content",  # Defaults to replacing record content.
         **kwargs: Any,
     ):
         """Initialize the LLM core with configuration.
@@ -80,6 +83,7 @@ class LLMCore:
         self.parameters = kwargs
         self.output_model = output_model
         self.tools = tools or []
+        self.output_col = output_col
 
         # Extract commonly used parameters
         self._model = model
@@ -134,30 +138,28 @@ class LLMCore:
         combined = {**input_dict, **kwargs}
         return combined
 
+    @weave.op
     async def process(
         self,
-        inputs: Any = None,
+        record: Any = BaseRecord,
+        *,
+        pipeline_stage: str,
         parent_trace_id: Optional[str] = None,
         component_name: str = "LLMCore",
         cancellation_token: Optional[CancellationToken] = None,
-        **kwargs: Any
-    ) -> AsyncGenerator[LLMResult, None]:
-        """Unified LLM processing method that handles everything.
-
-        This is the main entry point for all LLM operations - template rendering,
-        LLM calling, tracing, and observability. It yields LLMResult objects
-        and emits ExecutionTrace for observability.
+        **kwargs: Any,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Unified LLM processing method for Pipeline operations.
 
         Args:
-            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
-                   that can include template variables, context, records, etc.
+            inputs: BaseRecord object
             parent_trace_id: Optional parent trace ID for correlation
             component_name: Name of the component using this (for tracing)
             cancellation_token: Optional token for cancelling LLM calls
-            **kwargs: Additional template variables passed as keyword arguments
+            **kwargs: Additional input variables passed as keyword arguments
 
         Yields:
-            LLMResult: The processed output with content and metadata
+            BaseRecord: Enriched record with LLM output in output_col and metadata
 
         Raises:
             ProcessingError: If processing fails (fail-fast semantics)
@@ -170,6 +172,7 @@ class LLMCore:
             "llm.model": self._model,
             "llm.template": self._template,
             "component.name": component_name,
+            "pipeline.stage": pipeline_stage,
         }
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
@@ -179,11 +182,7 @@ class LLMCore:
             attributes=span_attributes
         ) as span:
             try:
-                # Combine inputs and kwargs into a single dict
-                combined_inputs = self._combine_inputs(inputs, kwargs)
-
-                # Process using existing method
-                result = await self.process_with_llm(inputs=combined_inputs, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token)
+                result = await self.process_with_llm(record=record, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token, **kwargs)
 
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
@@ -193,14 +192,14 @@ class LLMCore:
                         "component_name": component_name,
                         "execution_type": "llm_processing",
                         "config": self.parameters,
+                        "pipeline_stage": pipeline_stage,
                     },
-                    inputs=inputs,
+                    inputs={"record": record, **kwargs},
                     outputs=result.content,
                     messages=result.messages,
                     parameters=self.parameters,
                     metadata={
                         **result.metadata,
-                        **result.template_metadata,
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
@@ -214,7 +213,11 @@ class LLMCore:
                         logger.warning(f"Failed to emit trace: {e}")
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
-                yield result
+
+                enriched_record = record.model_copy(
+                    update={self.output_col: result.content, "metadata": {**record.metadata, pipeline_stage: result.metadata}}
+                )
+                yield enriched_record
 
             except ProcessingError as e:
                 # Create error trace
@@ -225,11 +228,8 @@ class LLMCore:
                         "execution_type": "llm_processing",
                         "config": self.parameters,
                     },
-                    inputs=inputs,
-                    error={
-                        "event": str(e),
-                        "details": {"error_type": type(e).__name__}
-                    },
+                    inputs=record,
+                    error={"event": str(e), "details": {"error_type": type(e).__name__}},
                     metadata={
                         "duration_ms": duration_ms,
                     },
@@ -258,7 +258,7 @@ class LLMCore:
     ) -> LLMResult:
         """Process inputs through template rendering and LLM calling.
 
-        This is the main entry point that orchestrates the full LLM workflow.
+        This is the main entry point for agents for the full LLM workflow.
 
         Args:
             inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
@@ -288,12 +288,16 @@ class LLMCore:
             try:
                 # Combine inputs and kwargs
                 combined_inputs = self._combine_inputs(inputs, kwargs)
+                # Extract special placeholder keys if present
+                records = combined_inputs.pop("records", [])
+                record = combined_inputs.pop("record", [])
+                context = combined_inputs.pop("context", [])
 
                 # Fill template
-                llm_messages = await self._fill_template(combined_inputs)
+                llm_messages = await self._fill_template(combined_inputs, record=record, records=records, context=context)
 
                 # Store template metadata
-                result.template_metadata = self._template_metadata
+                result.metadata["template"] = self._template_metadata
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
@@ -348,7 +352,9 @@ class LLMCore:
 
         return result
 
-    async def _fill_template(self, inputs: Any) -> list[LLMMessage]:
+    async def _fill_template(
+        self, inputs: Any, *, record: BaseRecord = None, records: list[BaseRecord] = [], context: list[LLMMessage] = []
+    ) -> list[LLMMessage]:
         """Render the template with provided data.
 
         Args:
@@ -378,12 +384,6 @@ class LLMCore:
             except (TypeError, ValueError):
                 raise ProcessingError(f"Cannot convert inputs of type {type(inputs)} to dict")
 
-        # Extract context and records before template rendering
-        context = input_dict.pop("context", [])
-        records = input_dict.pop("records", [])
-        if r := input_dict.pop("record", None):
-            records = [r] + records  # Ensure 'record' is first if both provided
-
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
         # Clean and prepare inputs
@@ -395,13 +395,13 @@ class LLMCore:
         )
 
         try:
-            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, records=records, context=context)
-
+            llm_messages = make_messages(local_template=rendered_template_str, record=record, records=records, context=context)
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
-        # Only remove placeholders that were successfully processed by make_messages
-        unfilled_vars -= processed_placeholders
+        unfilled_vars.remove("records")  # 'records' is handled separately
+        unfilled_vars.remove("record")
+        unfilled_vars.remove("context")
 
         # Check for missing variables
         if unfilled_vars and self._fail_on_unfilled_parameters:

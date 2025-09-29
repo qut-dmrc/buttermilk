@@ -116,6 +116,7 @@ class SessionInfo(BaseModel):
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
     node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
+    cache_dir: str = Field(default="~/.cache/buttermilk", description="Directory for caching session data.")
     sessions_dir: str = Field(default="data/sessions", description="Directory for storing session data files.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
     

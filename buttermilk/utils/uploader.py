@@ -72,22 +72,19 @@ class AsyncDataUploader:
         await self._backup_item(item)
         await self.queue.put(item)
 
-    async def process(self, inputs: dict[str, Any]):
+    async def process(self, record: BaseRecord):
         """Process method to make AsyncDataUploader work as a Processor in pipelines.
 
         Adds the record to the upload queue and passes it through unchanged.
 
         Args:
-            inputs: Input dictionary containing 'record' to upload
+            record: BaseRecord to upload
 
         Yields:
-            The same inputs dict (pass-through behavior)
+            The same record (pass-through behavior)
         """
-        # Prefer BaseRecord if present
-        record: Any = inputs.get("record") if isinstance(inputs, dict) else None
-        to_enqueue: Any = record if record is not None else inputs
-        await self.add(to_enqueue)
-        yield inputs  # Pass through unchanged
+        await self.add(record)
+        yield record  # Pass through unchanged
 
     async def _worker(self):
         """Background worker that processes the queue."""

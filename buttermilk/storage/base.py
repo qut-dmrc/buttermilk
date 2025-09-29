@@ -154,10 +154,10 @@ class Storage(ABC):
             if batch_size is not None and count >= batch_size:
                 break
 
-            yield {"record": record}
+            yield record
             count += 1
 
-    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
+    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[BaseRecord, None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:

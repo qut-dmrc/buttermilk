@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from buttermilk._core.types import BaseRecord
+
 from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader
@@ -15,27 +17,24 @@ from buttermilk.utils.uploader import AsyncDataUploader
 class FakeTMDBProcessor:
     """Mock processor that transforms Title to Observations."""
 
-    async def process(self, inputs: dict[str, Any]):
+    async def process(self, record):
         """Transform Title to Observations."""
         _ = self  # reference self to satisfy linter
-        record = inputs["record"]  # Extract record from inputs dict
         print(f"  TMDB processing: {record.title}")
         # Yield 1 observation for each title (pipeline only takes first output anyway)
-        yield {
-            "record": Observation(
-                record_id=record.record_id,
-                title=record.title,
-                year=record.year,
-                provider_name="Netflix",
-                region="US",
-                available=True,
-                source="TMDB",
-                provider_type="flatrate",
-                price=None,
-                currency=None,
-                format=None,
-            )
-        }
+        yield Observation(
+            record_id=record.record_id,
+            title=record.title,
+            year=record.year,
+            provider_name="Netflix",
+            region="US",
+            available=True,
+            source="TMDB",
+            provider_type="flatrate",
+            price=None,
+            currency=None,
+            format=None,
+        )
 
 
 class FakeUploader:
@@ -44,12 +43,11 @@ class FakeUploader:
     def __init__(self):
         self.uploaded = []
 
-    async def process(self, inputs: dict[str, Any]):
+    async def process(self, record):
         """Pass through and track."""
-        record = inputs["record"]  # Extract record from inputs dict
         print(f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
         self.uploaded.append(record)
-        yield inputs  # Pass through unchanged
+        yield record  # Pass through unchanged
 
     def shutdown(self):
         print(f"  Uploader shutdown: {len(self.uploaded)} records uploaded")
@@ -83,7 +81,9 @@ async def test_pipeline_tmdb_simple():
     tool.get_availability = mock_get_availability
 
     # Create mock uploader
-    mock_storage = MagicMock()
+    from buttermilk.storage.base import Storage
+    mock_storage = MagicMock(spec=Storage)
+    mock_storage.save = MagicMock()
     uploader = AsyncDataUploader(storage=mock_storage, buffer_size=1)
 
     # Process through TMDBTool
@@ -117,7 +117,7 @@ async def test_multi_processor_pipeline(real_bm):
             Title(record_id="2", title="Movie 2", year=2021),
         ]
         for title in titles:
-            yield {"record": title}
+            yield title
 
     # Create processors
     tmdb = FakeTMDBProcessor()
@@ -135,9 +135,8 @@ async def test_multi_processor_pipeline(real_bm):
     print("Running pipeline...")
     results = []
     print("About to iterate over orchestrator...")
-    async for result_dict in orchestrator():
-        print(f"Got result_dict: {result_dict}")
-        record = result_dict["record"]
+    async for record in orchestrator():
+        print(f"Got record: {record}")
         print(f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
         results.append(record)
     print(f"Iteration complete, got {len(results)} results")
@@ -156,3 +155,217 @@ async def test_multi_processor_pipeline(real_bm):
     assert all(isinstance(r, Observation) for r in uploader.uploaded)
     assert all(r.provider_name == "Netflix" for r in uploader.uploaded)
     assert all(r.source == "TMDB" for r in uploader.uploaded)
+
+
+# Additional test processors for metadata and record_id verification
+class MetadataAddingProcessor:
+    """Processor that adds metadata and preserves record_id."""
+
+    def __init__(self, metadata_key: str, metadata_value: str):
+        self.metadata_key = metadata_key
+        self.metadata_value = metadata_value
+
+    async def process(self, record):
+        """Add metadata to record without changing record_id."""
+        print(f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}")
+
+        # Create updated record with additional metadata but same record_id
+        updated_metadata = record.metadata.copy() if record.metadata else {}
+        updated_metadata[self.metadata_key] = self.metadata_value
+
+        updated_record = record.model_copy(update={"metadata": updated_metadata})
+        print(f"  MetadataAddingProcessor yielding: {updated_record.record_id}")
+        yield updated_record
+
+
+class SplittingProcessor:
+    """Processor that splits one record into multiple (1:N transformation)."""
+
+    def __init__(self, split_count: int = 3):
+        self.split_count = split_count
+
+    async def process(self, record):
+        """Split one record into multiple, preserving record_id."""
+
+        for i in range(self.split_count):
+            # Create split record with same record_id but additional fields
+            metadata = record.metadata.copy() if record.metadata else {}
+            metadata["split_info"] = {
+                "split_index": i,
+                "split_id": f"{record.record_id}_split_{i}",
+                "total_splits": self.split_count
+            }
+            updated_record = record.model_copy(update={
+                "content": f"Split {i} of {record.content}",
+                "metadata": metadata
+            })
+            yield updated_record
+
+
+@pytest.mark.anyio
+async def test_metadata_accumulation_and_record_id_preservation():
+    """Test that metadata accumulates across stages and record_id is preserved."""
+
+    # Create test data source using Title like the working test
+    async def source():
+        from buttermilk.tools.catalog_test import Title
+        title = Title(record_id="test123", title="Test Movie", year=2024)
+        yield title
+
+    # Create processors that add metadata
+    stage1_processor = MetadataAddingProcessor("stage1_custom", "added_by_stage1")
+    stage2_processor = MetadataAddingProcessor("stage2_custom", "added_by_stage2")
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(
+        stage_name="metadata_test",
+        source=source(),
+        processors=[stage1_processor, stage2_processor],
+        concurrency=1,
+        enable_record_cache=False,  # Disable cache for this test
+    )
+
+    # Run pipeline and collect results
+    results = []
+    print("Starting to iterate over orchestrator...")
+    async for record in orchestrator():
+        print(f"Got record: {record}")
+        print(f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}")
+        results.append(record)
+    print(f"Finished iteration, got {len(results)} results")
+
+    # Verify results
+    assert len(results) == 1
+    final_record = results[0]
+
+    # Verify record_id is preserved
+    assert final_record.record_id == "test123"
+
+    # Verify metadata accumulation (not replacement)
+    assert "stage1_custom" in final_record.metadata
+    assert "stage2_custom" in final_record.metadata
+    assert "metadata_test" in final_record.metadata  # Added by pipeline
+
+    # Verify processor metadata is preserved
+    assert final_record.metadata["stage1_custom"] == "added_by_stage1"
+    assert final_record.metadata["stage2_custom"] == "added_by_stage2"
+
+    # Verify pipeline metadata
+    pipeline_metadata = final_record.metadata["metadata_test"]
+    assert pipeline_metadata["status"] == "processed"
+    assert "timestamp" in pipeline_metadata
+    assert "processing_time_ms" in pipeline_metadata
+
+
+@pytest.mark.anyio
+async def test_one_to_n_transformation_with_output_indexing():
+    """Test 1:N transformations with proper output_index tracking."""
+
+    # Create test data source
+    async def source():
+        from buttermilk._core.types import Record
+        record = Record(
+            record_id="split_test",
+            content="Content to split",
+            metadata={"source": "test"}
+        )
+        yield record
+
+    # Create splitting processor and pass-through processor
+    splitter = SplittingProcessor(split_count=3)
+    passthrough = MetadataAddingProcessor("passthrough", "processed")
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(
+        stage_name="splitting_test",
+        source=source(),
+        processors=[splitter, passthrough],
+        concurrency=1,
+        enable_record_cache=False,  # Disable cache for now - will fix cache indexing later
+    )
+
+    # Run pipeline and collect results
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # Verify we got 3 outputs from 1 input
+    assert len(results) == 3
+
+    # Verify all records have the same original record_id
+    for record in results:
+        assert record.record_id == "split_test"
+
+    # Verify output_index tracking in metadata
+    for i, record in enumerate(results):
+        # Check splitting stage metadata includes output indexing
+        splitting_metadata = record.metadata["splitting_test"]
+        assert splitting_metadata["status"] == "processed"
+        assert splitting_metadata["output_index"] == i
+        assert splitting_metadata["total_outputs"] == 3
+
+        # Verify processor-added fields are preserved in metadata
+        split_info = record.metadata["split_info"]
+        assert split_info["split_index"] == i
+        assert split_info["split_id"] == f"split_test_split_{i}"
+        assert split_info["total_splits"] == 3
+        assert record.content == f"Split {i} of Content to split"
+
+        # Verify original metadata is preserved
+        assert record.metadata["source"] == "test"
+
+        # Verify metadata from subsequent stage is added
+        assert record.metadata["passthrough"] == "processed"
+
+
+@pytest.mark.anyio
+async def test_record_filtering_no_metadata_update():
+    """Test that filtered records don't get unnecessary metadata updates."""
+
+    class FilteringProcessor:
+        """Processor that filters out records with certain content."""
+
+        async def process(self, record: BaseRecord):
+            if "skip" in record.content:
+                # Filter out this record by yielding nothing
+                return
+            yield record
+
+    # Create test data source
+    async def source():
+        from buttermilk._core.types import Record
+        records = [
+            Record(record_id="keep1", content="keep this record"),
+            Record(record_id="skip1", content="skip this record"),
+            Record(record_id="keep2", content="keep this too"),
+        ]
+        for record in records:
+            yield record
+
+    # Create filtering processor
+    filter_processor = FilteringProcessor()
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(
+        stage_name="filtering_test",
+        source=source(),
+        processors=[filter_processor],
+        concurrency=1,
+    )
+
+    # Run pipeline and collect results
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # Verify only 2 records made it through (skip1 was filtered)
+    assert len(results) == 2
+    result_ids = [r.record_id for r in results]
+    assert "keep1" in result_ids
+    assert "keep2" in result_ids
+    assert "skip1" not in result_ids
+
+    # Verify the kept records have pipeline metadata
+    for record in results:
+        assert "filtering_test" in record.metadata
+        assert record.metadata["filtering_test"]["status"] == "processed"

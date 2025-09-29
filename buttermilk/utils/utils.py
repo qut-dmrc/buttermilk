@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 from io import IOBase
 from typing import Any, TypeVar
 from urllib.parse import urlparse
-
+import os
 import fsspec
 import httpx
 import numpy as np
@@ -26,7 +26,7 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
-
+from pathlib import Path
 from buttermilk._core.exceptions import ProcessingError
 
 # Optional PDF imports - fail gracefully if not available
@@ -42,6 +42,31 @@ except ImportError:
 from .._core.log import logger
 
 T = TypeVar("T")
+
+def load_dotenv() -> None:
+    """Load environment variables from a .env file into os.environ."""
+    try:
+        from dotenv import load_dotenv as _load_dotenv, dotenv_values as _dotenv_values
+    except ImportError:
+        logger.warning("python-dotenv not installed, cannot load .env files")
+        return
+
+    home_dotenv = Path.home() / ".env"
+    if home_dotenv.exists():
+        # Load environment variables from .env file in home directory
+        _load_dotenv(home_dotenv)
+
+    # Also try to load from current directories like default
+    _load_dotenv()
+
+    # Also try to load values from .env file (even with 'export' lines)
+    config = _dotenv_values(home_dotenv) if home_dotenv.exists() else {}
+    config.update(_dotenv_values())  # Merge with any existing .env values
+
+    # Inject into environment
+    for key, value in config.items():
+        if value is not None:
+            os.environ[key] = value
 
 
 def extract_url(text: str) -> str | None:

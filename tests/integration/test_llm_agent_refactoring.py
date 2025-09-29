@@ -75,8 +75,12 @@ class TestLLMAgentRefactoring:
         # Mock LLMCore processing
         mock_result = LLMResult(
             content="Processed output",
-            metadata={"model": "gpt-4", "usage": {"total_tokens": 100}, "finish_reason": "stop"},
-            template_metadata={"template_name": "test", "template_hash": "abc123"},
+            metadata={
+                "model": "gpt-4",
+                "usage": {"total_tokens": 100},
+                "finish_reason": "stop",
+                "template": {"template_name": "test", "template_hash": "abc123"},
+            },
             trace_id="trace-001",
         )
 
@@ -116,7 +120,7 @@ class TestLLMAgentRefactoring:
 
         agent_input = AgentInput(inputs={"prompt": "Current question"}, context=context)
 
-        mock_result = LLMResult(content="Response with context", metadata={}, template_metadata={})
+        mock_result = LLMResult(content="Response with context", metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -137,7 +141,7 @@ class TestLLMAgentRefactoring:
 
         agent_input = AgentInput(inputs={}, record=record)
 
-        mock_result = LLMResult(content="Processed records", metadata={}, template_metadata={})
+        mock_result = LLMResult(content="Processed records", metadata={})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -159,7 +163,7 @@ class TestLLMAgentRefactoring:
 
         # Mock structured output from LLMCore
         structured_obj = OutputForTesting(action="proceed", reason="All checks passed")
-        mock_result = LLMResult(content=structured_obj, metadata={"model": "gpt-4"}, template_metadata={"template_name": "analyze"})
+        mock_result = LLMResult(content=structured_obj, metadata={"model": "gpt-4", "template": {"template_name": "analyze"}})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -251,9 +255,7 @@ class TestLLMAgentRefactoring:
 
         agent_input = AgentInput(inputs={"text": "test"})
 
-        mock_result = LLMResult(
-            content="Result", metadata={}, template_metadata={"template_name": "test", "template_hash": "hash123", "unfilled_vars": []}
-        )
+        mock_result = LLMResult(content="Result", metadata={"template": {"template_name": "test", "template_hash": "hash123", "unfilled_vars": []}})
 
         with patch.object(agent.llm_core, "process_with_llm") as mock_process:
             mock_process.return_value = mock_result
@@ -261,7 +263,7 @@ class TestLLMAgentRefactoring:
             result = await agent._process(message=agent_input)
 
             # Verify template metadata is in agent's internal state
-            assert agent._template_metadata == mock_result.template_metadata
+            assert agent._template_metadata == mock_result.metadata.get("template")
 
             # Verify it's included in output metadata
             assert result.metadata["template_name"] == "test"
