@@ -438,7 +438,6 @@ def make_messages(
     *,
     context: list[LLMMessage] = [],  # Conversation history
     records: list[BaseRecord] = [],  # Optional list of records
-    fail_on_missing_placeholders: bool = False,
 ) -> tuple[list[LLMMessage], set[str]]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
@@ -462,11 +461,6 @@ def make_messages(
             representing prior conversation history to be injected. Defaults to an empty list.
         records (list[BaseRecord] | None): An optional list of `BaseRecord` objects to be
             injected. Defaults to an empty list.
-        fail_on_missing_placeholders (bool): If True, raises a `ProcessingError`
-            when a placeholder (other than "context" or "records") is encountered
-            in the Prompty template that cannot be filled. If False (default),
-            a warning is logged, and the placeholder might be ignored or result
-            in missing content.
 
     Returns:
         tuple[list[LLMMessage], set[str]]: A tuple containing:
@@ -477,9 +471,6 @@ def make_messages(
 
     Raises:
         ProcessingError:
-            -   If `fail_on_missing_placeholders` is True and an expected
-                placeholder is not filled.
-
             -   If `local_template` cannot be decoded as a Prompty format
                 (e.g., due to issues in `_parse_prompty`).
 
@@ -521,32 +512,14 @@ def make_messages(
         elif role_lower == "assistant":
             output_messages.append(AssistantMessage(content=content_str, source="template_assistant"))  # Add source
         elif role_lower == "placeholder":
-            if normalized_placeholder_key == "context":
-                if context:
-                    output_messages.extend(context)
-                    processed_placeholders.add("context")
-                elif fail_on_missing_placeholders:
-                    raise ProcessingError(
-                        "Placeholder 'context' found in template but no context provided.",
-                    )
-                else:
-                    logger.warning(
-                        "Placeholder 'context' found in template but no context provided.",
-                    )
+            if normalized_placeholder_key == "context" and context:
+                output_messages.extend(context)
+                processed_placeholders.add("context")
 
-            elif normalized_placeholder_key in ["records", "record"]:
-                if records:
-                    output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
-                    processed_placeholders.add("records")
-                    processed_placeholders.add("record")  # Add both variants
-                elif fail_on_missing_placeholders:
-                    raise ProcessingError(
-                        "Placeholder 'records' found in template but no records provided.",
-                    )
-                else:
-                    logger.warning(
-                        "Placeholder 'records' found in template but no records provided.",
-                    )
+            elif normalized_placeholder_key in ["records", "record"] and records:
+                output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
+                processed_placeholders.add("records")
+                processed_placeholders.add("record")  # Add both variants
             else:  # empty placeholder
                 raise ProcessingError(f"Unrecognized placeholder '{content_str}' found in template.")
         else:  # Unrecognized role

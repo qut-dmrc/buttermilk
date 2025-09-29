@@ -101,6 +101,7 @@ class LLMCore:
         """Lazy load trace writer."""
         if self._trace_writer is None:
             from buttermilk.utils.trace_writer import get_trace_writer
+
             self._trace_writer = get_trace_writer()
         return self._trace_writer
 
@@ -177,10 +178,7 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.unified_process",
-            attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.unified_process", attributes=span_attributes) as span:
             try:
                 result = await self.process_with_llm(record=record, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token, **kwargs)
 
@@ -281,29 +279,23 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.process",
-            attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.process", attributes=span_attributes) as span:
             try:
                 # Combine inputs and kwargs
                 combined_inputs = self._combine_inputs(inputs, kwargs)
                 # Extract special placeholder keys if present
-                records = combined_inputs.pop("records", [])
-                record = combined_inputs.pop("record", [])
+                records = [r for r in (combined_inputs.pop("records", []) + [combined_inputs.pop("record", None)]) if r]
                 context = combined_inputs.pop("context", [])
 
                 # Fill template
-                llm_messages = await self._fill_template(combined_inputs, record=record, records=records, context=context)
+                llm_messages = await self._fill_template(combined_inputs, records=records, context=context)
 
                 # Store template metadata
                 result.metadata["template"] = self._template_metadata
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
-                    messages=llm_messages,
-                    cancellation_token=cancellation_token,
-                    parent_trace_id=parent_trace_id
+                    messages=llm_messages, cancellation_token=cancellation_token, parent_trace_id=parent_trace_id
                 )
 
                 # Extract content based on output type
@@ -314,13 +306,13 @@ class LLMCore:
 
                 # Store messages (input prompts + LLM response)
                 from autogen_core.models import AssistantMessage
+
                 result.messages = llm_messages.copy()
                 # Add the assistant's response as a message
                 if result.content:
-                    result.messages.append(AssistantMessage(
-                        content=str(result.content) if not isinstance(result.content, str) else result.content,
-                        source=self._model
-                    ))
+                    result.messages.append(
+                        AssistantMessage(content=str(result.content) if not isinstance(result.content, str) else result.content, source=self._model)
+                    )
 
                 # Collect metadata
                 result.metadata = {
@@ -395,19 +387,15 @@ class LLMCore:
         )
 
         try:
-            llm_messages = make_messages(local_template=rendered_template_str, record=record, records=records, context=context)
+            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, records=records, context=context)
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
-        unfilled_vars.remove("records")  # 'records' is handled separately
-        unfilled_vars.remove("record")
-        unfilled_vars.remove("context")
+        unfilled_vars -= processed_placeholders
 
         # Check for missing variables
         if unfilled_vars and self._fail_on_unfilled_parameters:
-            raise ProcessingError(
-                f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
-            )
+            raise ProcessingError(f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
         elif unfilled_vars:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
@@ -415,17 +403,14 @@ class LLMCore:
         self._template_metadata = {
             "template_name": template_name,
             "template_hash": template_hash,
-            "unfilled_vars": list(unfilled_vars) if unfilled_vars else []
+            "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
         }
 
         logger.debug(f"Template '{template_name}' rendered into {len(llm_messages)} messages")
         return llm_messages
 
     async def _call_llm_with_trace(
-        self,
-        messages: list[LLMMessage],
-        cancellation_token: Optional[CancellationToken],
-        parent_trace_id: Optional[str]
+        self, messages: list[LLMMessage], cancellation_token: Optional[CancellationToken], parent_trace_id: Optional[str]
     ) -> CreateResult | ModelOutput:
         """Call the LLM with lightweight tracing.
 
@@ -445,25 +430,16 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.call_llm",
-            attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
                 model_client = bm.llms.get_autogen_chat_client(self._model)
 
-                logger.debug(
-                    f"LLMCore: Calling {self._model} with {len(messages)} messages, "
-                    f"{len(self.tools)} tools, schema={self.output_model}"
-                )
+                logger.debug(f"LLMCore: Calling {self._model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}")
 
                 # Make the actual LLM call
                 result = await model_client.call_chat(
-                    messages=messages,
-                    tools_list=self.tools,
-                    cancellation_token=cancellation_token,
-                    schema=self.output_model
+                    messages=messages, tools_list=self.tools, cancellation_token=cancellation_token, schema=self.output_model
                 )
 
                 # Record token usage in span if available
