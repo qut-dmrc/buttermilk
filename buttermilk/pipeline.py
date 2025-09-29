@@ -304,9 +304,12 @@ class PipelineOrchestrator(BaseModel):
                 for processor_index, processor in enumerate(self.processors):
                     # Create span for this processor
                     processor_class = type(processor).__name__
+                    # Create unique stage name for this processor (for caching and process() calls)
+                    processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
+                        "processor.stage": processor_stage_name,
                         "inputs.count": len(processing_queue),
                     }
 
@@ -318,7 +321,7 @@ class PipelineOrchestrator(BaseModel):
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
                             outputs = []
-                            async for output_record in processor.process(current_record, pipeline_stage=self.stage_name):
+                            async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
                                 outputs.append(output_record)
 
                             if not outputs:

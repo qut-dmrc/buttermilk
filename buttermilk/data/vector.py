@@ -4,7 +4,7 @@ import json
 import signal
 import time
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
 
@@ -176,7 +176,7 @@ class SemanticSplitter(BaseModel):
 
         return chunks, offsets
 
-    async def process(self, doc: Record, **kwargs) -> Record | None:
+    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[Record, None]:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
         if hasattr(doc, "content"):
@@ -185,23 +185,24 @@ class SemanticSplitter(BaseModel):
             logger.warning(
                 f"Skipping chunking for record {doc.record_id} due to missing content.",
             )
-            return None
+            return
 
         if not text_content:
             logger.warning(
                 f"Skipping chunking for record {doc.record_id} due to empty content.",
             )
-            return None
+            return
 
         try:
             text_chunks, offsets = self._create_chunks(text_content)
 
-            doc.chunks = []
+            # Build chunks list without modifying the frozen record
+            chunks = []
             doc_chunk_count = 0
             for text_chunk, offset in zip(text_chunks, offsets, strict=True):
                 if not text_chunk.strip():
                     continue
-                doc.chunks.append(
+                chunks.append(
                     ChunkedDocument(
                         document_title=doc.title,
                         chunk_index=doc_chunk_count,
@@ -209,7 +210,7 @@ class SemanticSplitter(BaseModel):
                         offset=offset,
                         document_id=doc.record_id,
                         chunk_id=f"{doc.record_id}_{doc_chunk_count}",
-                        metadata=doc.metadata.copy(),
+                        metadata=doc.metadata.copy() if doc.metadata else {},
                     ),
                 )
                 doc_chunk_count += 1
@@ -218,7 +219,9 @@ class SemanticSplitter(BaseModel):
                 logger.debug(
                     f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks.",
                 )
-                return doc
+                # Create a new record with chunks using model_copy
+                chunked_doc = doc.model_copy(update={"chunks": chunks})
+                yield chunked_doc
             logger.warning(
                 f"No chunks generated for doc {doc.record_id} after splitting.",
             )
@@ -227,7 +230,6 @@ class SemanticSplitter(BaseModel):
             logger.error(
                 f"Error splitting text for doc {doc.record_id}: {e} {e.args=}",
             )
-        return None
 
 
 class GeminiEmbeddingFunction(EmbeddingFunction):

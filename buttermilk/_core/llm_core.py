@@ -144,7 +144,7 @@ class LLMCore:
         self,
         record: Any = BaseRecord,
         *,
-        pipeline_stage: str,
+        processor_stage: str,
         parent_trace_id: Optional[str] = None,
         component_name: str = "LLMCore",
         cancellation_token: Optional[CancellationToken] = None,
@@ -173,7 +173,7 @@ class LLMCore:
             "llm.model": self._model,
             "llm.template": self._template,
             "component.name": component_name,
-            "pipeline.stage": pipeline_stage,
+            "processor.stage": processor_stage,
         }
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
@@ -190,7 +190,7 @@ class LLMCore:
                         "component_name": component_name,
                         "execution_type": "llm_processing",
                         "config": self.parameters,
-                        "pipeline_stage": pipeline_stage,
+                        "processor_stage": processor_stage,
                     },
                     inputs={"record": record, **kwargs},
                     outputs=result.content,
@@ -213,7 +213,7 @@ class LLMCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
                 enriched_record = record.model_copy(
-                    update={self.output_col: result.content, "metadata": {**record.metadata, pipeline_stage: result.metadata}}
+                    update={self.output_col: result.content, "metadata": {**record.metadata, processor_stage: result.metadata}}
                 )
                 yield enriched_record
 

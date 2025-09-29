@@ -69,7 +69,7 @@ class AsyncDataUploader:
         await self._backup_item(item)
         await self.queue.put(item)
 
-    async def process(self, record: BaseRecord, pipeline_stage: str = "save"):
+    async def process(self, record: BaseRecord, processor_stage: str = "save"):
         """Process method to make AsyncDataUploader work as a Processor in pipelines.
 
         Adds the record to the upload queue and passes it through unchanged.
