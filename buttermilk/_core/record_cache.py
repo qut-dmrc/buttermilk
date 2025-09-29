@@ -39,7 +39,13 @@ class RecordCache:
     """Filesystem-backed cache for Record objects per processing stage."""
 
     def __init__(self, base_dir: str | Path | None = None, enabled: bool | None = None):
-        self.base_dir = Path(base_dir) if base_dir else _default_base_dir()
+        if base_dir:
+            # Expand paths if provided as string
+            if isinstance(base_dir, str):
+                base_dir = os.path.expandvars(os.path.expanduser(base_dir))
+            self.base_dir = Path(base_dir)
+        else:
+            self.base_dir = _default_base_dir()
         if enabled is None:
             disabled_env = os.getenv("BM_DISABLE_RECORD_CACHE", "0")
             self.enabled = disabled_env.strip() not in {"1", "true", "TRUE", "yes", "on"}

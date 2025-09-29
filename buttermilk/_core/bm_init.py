@@ -26,6 +26,7 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 
 import asyncio
 import datetime
+import os  # For path expansion
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -37,7 +38,7 @@ import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr  # Pydantic components
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator  # Pydantic components
 
 from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
@@ -116,7 +117,7 @@ class SessionInfo(BaseModel):
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
     node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
-    cache_dir: str = Field(default="~/.cache/buttermilk", description="Directory for caching session data.")
+    cache_dir: str = Field(default_factory=lambda: os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")), description="Directory for caching session data.")
     sessions_dir: str = Field(default="data/sessions", description="Directory for storing session data files.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
     
@@ -228,6 +229,12 @@ class SessionInfo(BaseModel):
             },
             "error_message": self.error_message,
         }
+
+    @field_validator('cache_dir', mode='after')
+    @classmethod
+    def expand_cache_dir(cls, v: str) -> str:
+        """Expand user home directory and environment variables in cache_dir path."""
+        return os.path.expandvars(os.path.expanduser(v))
 
     class Config:
         """Pydantic model configuration for SessionInfo."""

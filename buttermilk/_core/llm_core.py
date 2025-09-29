@@ -66,7 +66,7 @@ class LLMCore:
         output_model: Optional[type[pydantic.BaseModel]] = None,
         tools: Optional[list[Tool]] = None,
         fail_on_unfilled_parameters: bool = True,
-        output_col: str = "content",  # Defaults to replacing record content.
+        output_col: str = "output",
         **kwargs: Any,
     ):
         """Initialize the LLM core with configuration.
@@ -160,7 +160,7 @@ class LLMCore:
             **kwargs: Additional input variables passed as keyword arguments
 
         Yields:
-            BaseRecord: Enriched record with LLM output in output_col and metadata
+            BaseRecord: Enriched record with LLM output in self.output_col and metadata
 
         Raises:
             ProcessingError: If processing fails (fail-fast semantics)
