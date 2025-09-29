@@ -44,7 +44,8 @@ Essential information for LLM chatbot developers working with the Buttermilk cod
 
 ## 🤖 Specialized Agents
 
-### [TEST_FIXER_AGENT.md](TEST_FIXER_AGENT.md) - Test Fixing Workflow
+### [TESTER_QA.md](TESTER_QA.md) - Test Fixing Workflow
+
 - Systematic test repair using ruff diagnostics
 - Batch fixing procedures for test suites
 - Health dashboard and priority management

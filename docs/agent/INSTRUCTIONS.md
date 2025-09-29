@@ -1,11 +1,6 @@
 # Agent Instructions for Buttermilk Project
 
-## Configuration Hierarchy
 This is the project-specific configuration for Buttermilk.
-
-1. **Project-Specific** (this file) - Overrides all other configurations
-2. **Global** (`/writing/docs/agent/INSTRUCTIONS.md`) - Repository-wide preferences
-3. **Base** (`/writing/bot/agents/*.md`) - Core agent definitions
 
 ## Buttermilk Mission
 Buttermilk makes AI tools accessible for HASS scholars with understandable, traceable, and reproducible workflows.
@@ -66,16 +61,16 @@ child_call = weave_client.call(func, *args, **kwargs)
 - **Repository**: @qut-dmrc/buttermilk
 - **Architecture**: YAML config → Hydra → OmegaConf → Pydantic → Agent flows
 - **Testing**: Use `uv run pytest tests/` - NEVER standalone validation
-  - Use `@pytest.mark.anyio` (NOT asyncio)
-  - Use provided fixtures: `real_bm`, `real_conf`
-  - Test files only in `tests/` directory
+    - Use `@pytest.mark.anyio` (NOT asyncio)
+    - Use provided fixtures: `real_bm`, `real_conf`
+    - Test files only in `tests/` directory
 - **Configuration**: YAML-only with Hydra/OmegaConf patterns
 - **Documentation**: See [../bots/INDEX.md](../bots/INDEX.md) for specialized guidance
 
 ## Workflow Enforcement
 
 **For debugging**: ALWAYS read [../bots/debugging.md](../bots/debugging.md) FIRST
-**For testing**: NEVER create standalone validation - use existing test patterns
+**For testing**: NEVER create standalone validation - read [../bots/]
 **For shared infrastructure**: MANDATORY impact analysis before changes
 **For validation needs**: Use `Task: tester` to create proper pytest tests
 

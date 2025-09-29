@@ -1,20 +1,72 @@
-# Test Fixing Patterns for Buttermilk
+Your job is to fix our broken tests. First read 'docs/agents/TESTER_QA.md' for general testing info.
 
-## Testing Philosophy
-**CRITICAL**: Mock only at system boundaries (network, filesystem, time, env).  
-See [TESTING_PHILOSOPHY.md](TESTING_PHILOSOPHY.md) for details.
+## WORKFLOW (Follow Exactly)
+1. Run health dashboard: `uv run python scripts/test_health_dashboard.py`
+2. Pick category with most failures
+3. **DIAGNOSTIC PHASE (Ruff)**:
+   - Run: `uv run ruff check tests/[category]/ --output-format=concise`
+   - This identifies ALL problems (not just fixable ones)
+   - Parse output for: undefined names, wrong arguments, missing imports
+   - Auto-fix trivial issues: `uv run ruff check --fix tests/[category]/`
+4. **FIX PHASE** (based on ruff diagnostics):
+   - Address undefined names (F821) → Check if class/function removed
+   - Fix wrong arguments (E251, etc) → Update to new signatures
+   - Handle import errors → Update import paths or skip if removed
+5. Test collection: `uv run pytest tests/[category]/ --co -q`
+6. Run tests: `uv run pytest tests/[category]/ -x`
+7. Fix 5-10 files per batch
+8. Commit: "fix(tests): [category] - [summary]"
 
-## Ruff-First Diagnostic Approach
-**ALWAYS** start with ruff to diagnose problems:
-```bash
-# See all problems (not just auto-fixable)
-uv run ruff check tests/[category]/ --output-format=concise
-
-# Auto-fix trivial issues
-uv run ruff check --fix tests/[category]/
+## DECISION TREE
+```
+Run ruff check
+├─ F821 (undefined name)?
+│  ├─ Check if class exists in codebase
+│  ├─ Exists? → Update import
+│  └─ Removed? → Skip file with reason
+├─ Wrong arguments?
+│  └─ Check new signature → Update
+├─ Import errors?
+│  ├─ Module moved? → Update path
+│  └─ Module removed? → Skip or rewrite
+└─ Mock internal logic?
+   └─ Rewrite to test real behavior
 ```
 
-For systematic test fixing, see [docs/bots/TEST_FIXER_AGENT.md](bots/TEST_FIXER_AGENT.md).
+## BATCH SIZE GUIDANCE
+- Fix 5-10 files per session
+- Focus on one error type across multiple files
+- Complete one test category before moving to next
+- Track progress in test_health_report.md
+
+## RUFF DIAGNOSTICS GUIDE
+
+### Priority Errors (Fix First)
+| Code | Meaning | Action |
+|------|---------|--------|
+| F821 | Undefined name | Check if class exists → Update or skip |
+| F401 | Unused import | Let ruff auto-fix |
+| E999 | Syntax error | Let ruff auto-fix if possible |
+| F841 | Unused variable | Let ruff auto-fix |
+| B006 | Mutable default arg | Fix manually |
+
+### Common Diagnostics → Fixes
+```
+F821: undefined name 'InputDocument'
+→ Class removed, skip file or rewrite
+
+F821: undefined name 'VectorStoreInterface'  
+→ Class removed, update to new pattern
+
+E251: unexpected spaces around keyword / parameter equals
+→ Let ruff auto-fix
+
+F401: 'unittest.mock.patch' imported but unused
+→ Remove mock, test real logic instead
+
+B008: function calls in argument defaults
+→ Change to None, init in function
+```
 
 ## Common Test Failure Patterns and Fixes
 
