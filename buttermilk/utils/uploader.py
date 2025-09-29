@@ -30,6 +30,7 @@ class AsyncDataUploader:
         retry_min_wait: float = 1.0,
         retry_max_wait: float = 30.0,
         use_timestamp_suffix: bool | None = None,
+        output_col: str = "uri",
     ):
         self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
 
@@ -72,7 +73,7 @@ class AsyncDataUploader:
         await self._backup_item(item)
         await self.queue.put(item)
 
-    async def process(self, record: BaseRecord):
+    async def process(self, record: BaseRecord, pipeline_stage: str = "save"):
         """Process method to make AsyncDataUploader work as a Processor in pipelines.
 
         Adds the record to the upload queue and passes it through unchanged.
