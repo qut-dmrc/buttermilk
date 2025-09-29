@@ -127,15 +127,39 @@ class FileStorage(Storage):
                         logger.error(f"Could not serialize record at index {idx}: {e2}. Skipping.")
                         continue
 
-            with self.path.open("w", encoding="utf-8") as f:
+            if getattr(self.config, 'append', False) and self.exists():
+                # Append mode
                 if self.path.suffix == ".jsonl":
-                    # JSONL format - one JSON object per line
-                    for record_dict in data:
-                        json.dump(record_dict, f, ensure_ascii=False)
-                        f.write("\n")
+                    # JSONL format - append new records directly
+                    with self.path.open("a", encoding="utf-8") as f:
+                        for record_dict in data:
+                            json.dump(record_dict, f, ensure_ascii=False)
+                            f.write("\n")
                 else:
-                    # JSON format - single JSON array
-                    json.dump(data, f, indent=2, ensure_ascii=False)
+                    # JSON format - read existing, merge, and rewrite
+                    try:
+                        with self.path.open("r", encoding="utf-8") as f:
+                            existing_data = json.load(f)
+                        if not isinstance(existing_data, list):
+                            existing_data = [existing_data]
+                        combined_data = existing_data + data
+                    except (json.JSONDecodeError, FileNotFoundError):
+                        # If file doesn't exist or is invalid, just use new data
+                        combined_data = data
+
+                    with self.path.open("w", encoding="utf-8") as f:
+                        json.dump(combined_data, f, indent=2, ensure_ascii=False)
+            else:
+                # Default overwrite mode
+                with self.path.open("w", encoding="utf-8") as f:
+                    if self.path.suffix == ".jsonl":
+                        # JSONL format - one JSON object per line
+                        for record_dict in data:
+                            json.dump(record_dict, f, ensure_ascii=False)
+                            f.write("\n")
+                    else:
+                        # JSON format - single JSON array
+                        json.dump(data, f, indent=2, ensure_ascii=False)
 
             logger.info(f"Successfully saved {len(data)} records to {self.path}")
 

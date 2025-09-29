@@ -29,6 +29,7 @@ class AsyncDataUploader:
         max_flush_retries: int = 5,
         retry_min_wait: float = 1.0,
         retry_max_wait: float = 30.0,
+        use_timestamp_suffix: bool | None = None,
     ):
         self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
 
@@ -37,6 +38,15 @@ class AsyncDataUploader:
         self.max_flush_retries = max_flush_retries
         self.retry_min_wait = retry_min_wait
         self.retry_max_wait = retry_max_wait
+
+        # Smart defaults for timestamp suffixes
+        if use_timestamp_suffix is None:
+            # Default to True if file exists to prevent accidental overwrites
+            self.use_timestamp_suffix = hasattr(self.storage, 'exists') and self.storage.exists()
+        else:
+            self.use_timestamp_suffix = use_timestamp_suffix
+
+        self.original_storage = self.storage  # Keep reference to original
 
         self.queue: asyncio.Queue = asyncio.Queue()
         self.buffer: list[Any] = []
@@ -111,11 +121,13 @@ class AsyncDataUploader:
                 await asyncio.sleep(1)
         logger.info("Data uploader loop finished.")
 
-    async def _save_with_retry(self, data: list[Any]) -> None:
+    async def _save_with_retry(self, data: list[Any], target_storage=None) -> None:
         """Save data with retry logic using RetryWrapper."""
+        storage_to_use = target_storage or self.storage
+
         # Create a wrapper for the storage save operation
         retry_wrapper = RetryWrapper(
-            client=self.storage,
+            client=storage_to_use,
             max_retries=self.max_flush_retries,
             min_wait_seconds=self.retry_min_wait,
             max_wait_seconds=self.retry_max_wait,
@@ -123,10 +135,39 @@ class AsyncDataUploader:
 
         # Create an async wrapper around the sync save method
         async def async_save():
-            return self.storage.save(data)
+            return storage_to_use.save(data)
 
         # Execute with retry logic
         await retry_wrapper._execute_with_retry(async_save)
+
+    def _create_timestamped_storage(self):
+        """Create a storage instance with timestamped filename."""
+        if not self.use_timestamp_suffix:
+            return self.storage
+
+        # Only works with FileStorage for now
+        if not hasattr(self.storage, 'path'):
+            logger.warning("Timestamp suffixes only supported for FileStorage. Using original storage.")
+            return self.storage
+
+        # Create timestamp suffix
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        # Get original path and add timestamp before extension
+        original_path = str(self.storage.path)
+        if '.' in original_path:
+            name, ext = original_path.rsplit('.', 1)
+            timestamped_path = f"{name}-{timestamp}.{ext}"
+        else:
+            timestamped_path = f"{original_path}-{timestamp}"
+
+        # Create new storage with timestamped path
+        new_config = self.storage.config.model_copy()
+        new_config.path = timestamped_path
+
+        # Import here to avoid circular imports
+        from buttermilk.storage.file import FileStorage
+        return FileStorage(new_config)
 
     async def _flush(self):
         """Upload buffered items"""
@@ -134,7 +175,9 @@ class AsyncDataUploader:
             return
 
         try:
-            await self._save_with_retry(self.buffer)
+            # Use timestamped storage if configured
+            target_storage = self._create_timestamped_storage()
+            await self._save_with_retry(self.buffer, target_storage)
 
             self.last_flush = time.time()
             self.buffer = []
@@ -201,7 +244,9 @@ class AsyncDataUploader:
         # Handle synchronously to avoid event loop issues
         if self.buffer:
             try:
-                self.storage.save(self.buffer)
+                # Use timestamped storage if configured
+                target_storage = self._create_timestamped_storage()
+                target_storage.save(self.buffer)
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
                 bm.save(self.buffer, extension=".json")

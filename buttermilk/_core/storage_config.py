@@ -268,6 +268,10 @@ class FileStorageConfig(BaseStorageConfig):
         default=None,
         description="Columns to use as an index",
     )
+    append: bool = Field(
+        default=False,
+        description="If True, append to existing file instead of overwriting. For JSONL files, new records are appended. For JSON files, existing content is merged.",
+    )
 
 
 class VectorStorageConfig(BaseStorageConfig):

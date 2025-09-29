@@ -3,6 +3,8 @@
 import pandas as pd
 import pytest
 
+torch = pytest.importorskip("torch")
+
 from buttermilk._core.types import Record
 from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.llamaguard import (
@@ -20,7 +22,6 @@ from buttermilk.toxicity.llamaguard import (
 from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
 from buttermilk.toxicity.types import EvalRecord
 
-torch = pytest.importorskip("torch")
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
