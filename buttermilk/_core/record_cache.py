@@ -140,7 +140,7 @@ class RecordCache:
             with tmp_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False)
             tmp_path.replace(path)
-            logger.debug(f"🗂️  Cached record {record.record_id} at stage '{stage}' -> {path}")
+            logger.debug(f"🗂️  Cached record {record.record_id} at stage '{stage}' -> {path}", tmp_path=tmp_path, path=path, stage=stage)
             return True
         except Exception as e:  # pragma: no cover
             logger.debug(f"Failed to cache record {record.record_id} at stage {stage}: {e}")

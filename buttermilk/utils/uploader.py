@@ -29,7 +29,7 @@ class AsyncDataUploader:
         max_flush_retries: int = 5,
         retry_min_wait: float = 1.0,
         retry_max_wait: float = 30.0,
-        use_timestamp_suffix: bool | None = None,
+        use_timestamp_suffix: bool = True,
         output_col: str = "uri",
     ):
         self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
@@ -40,12 +40,8 @@ class AsyncDataUploader:
         self.retry_min_wait = retry_min_wait
         self.retry_max_wait = retry_max_wait
 
-        # Smart defaults for timestamp suffixes
-        if use_timestamp_suffix is None:
-            # Default to True if file exists to prevent accidental overwrites
-            self.use_timestamp_suffix = hasattr(self.storage, 'exists') and self.storage.exists()
-        else:
-            self.use_timestamp_suffix = use_timestamp_suffix
+        # Default to True if file exists to prevent accidental overwrites
+        self.use_timestamp_suffix = (hasattr(self.storage, 'exists') and self.storage.exists()) or use_timestamp_suffix
 
         self.original_storage = self.storage  # Keep reference to original
 

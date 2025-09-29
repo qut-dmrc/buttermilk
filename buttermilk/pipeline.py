@@ -261,6 +261,10 @@ class PipelineOrchestrator(BaseModel):
                     except Exception as ce:
                         logger.debug(f"Cache save failed {record.record_id} @ {self.stage_name}: {ce}")
 
+            except GeneratorExit:
+                # Handle early generator termination gracefully
+                span.set_status(trace.Status(trace.StatusCode.OK))
+                raise
             except Exception as e:
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise
@@ -366,6 +370,10 @@ class PipelineOrchestrator(BaseModel):
                     updated_record = final_record.model_copy(update={"metadata": updated_metadata})
                     yield updated_record
 
+            except GeneratorExit:
+                # Handle early generator termination gracefully
+                chain_span.set_status(trace.Status(trace.StatusCode.OK))
+                raise
             except Exception as e:
                 chain_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 # Let exception bubble up - TaskGroup will handle error collection
@@ -398,6 +406,10 @@ class PipelineOrchestrator(BaseModel):
             try:
                 async for record in self._run_pipeline_with_tracing(stage_span, start_time):
                     yield record
+            except GeneratorExit:
+                # Handle early generator termination gracefully
+                stage_span.set_status(trace.Status(trace.StatusCode.OK))
+                raise
             except Exception as e:
                 stage_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise
@@ -492,8 +504,8 @@ class PipelineOrchestrator(BaseModel):
                     self._attempted += 1
 
                     # Check if we've hit max_records
-                    if self.max_records is not None and self._attempted >= self.max_records:
-                        logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._processed}) – stopping")
+                    if self.max_records is not None and (self._processed + self._failed + self._skipped) >= self.max_records:
+                        logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._attempted}/{self.max_records}) – stopping")
                         break
 
                     # Maintain concurrency limit
@@ -517,22 +529,26 @@ class PipelineOrchestrator(BaseModel):
 
             # Consumer: Yield completed BaseRecord objects
             async def consumer():
-                while True:
-                    result = await completed_records.get()
-                    if result is None:  # End signal
-                        break
+                try:
+                    while True:
+                        result = await completed_records.get()
+                        if result is None:  # End signal
+                            break
 
-                    status, record = result
-                    if status == "success":
-                        yield record
-                    elif status == "skipped":
-                        # Optionally yield skipped records too (for debugging/tracking)
-                        # For now, we'll skip them and just log
-                        pass
-                    elif status == "error":
-                        # Optionally yield failed records too (for debugging/recovery)
-                        # For now, we'll skip them and just log
-                        pass
+                        status, record = result
+                        if status == "success":
+                            yield record
+                        elif status == "skipped":
+                            # Optionally yield skipped records too (for debugging/tracking)
+                            # For now, we'll skip them and just log
+                            pass
+                        elif status == "error":
+                            # Optionally yield failed records too (for debugging/recovery)
+                            # For now, we'll skip them and just log
+                            pass
+                except GeneratorExit:
+                    # Handle early consumer termination gracefully
+                    raise
 
             # Start producer
             producer_task = asyncio.create_task(producer())
