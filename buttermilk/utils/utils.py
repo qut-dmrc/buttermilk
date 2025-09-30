@@ -303,6 +303,17 @@ def scrub_serializable(d) -> T:
         except (TypeError, AttributeError):
             # If conversion fails, fall through to other handlers
             pass
+    # Handle objects with __dict__ (like RequestUsage from autogen_core)
+    if hasattr(d, '__dict__') and not isinstance(d, (str, int, float, bool)):
+        try:
+            # Convert object to dict using its __dict__ attribute
+            new_val = {key: scrub_serializable(value) for key, value in d.__dict__.items()}
+            # remove empty values
+            new_val = {k: v for k, v in new_val.items() if v is not None}
+            return new_val
+        except (TypeError, AttributeError):
+            # If conversion fails, fall through to other handlers
+            pass
 
     if isinstance(d, pd.DataFrame):
         return scrub_serializable(d.to_dict(orient="records"))

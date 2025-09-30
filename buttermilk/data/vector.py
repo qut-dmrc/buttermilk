@@ -635,6 +635,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             Record: The input record (passthrough after embedding)
         """
         try:
+            # Ensure cache is initialized before processing (required for remote storage)
+            await self.ensure_cache_initialized()
+
             # Process the record to create embeddings
             result = await self.process_record(record)
 
@@ -790,6 +793,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
 
         try:
+            # Ensure cache is initialized before processing (required for remote storage)
+            await self.ensure_cache_initialized()
             if skip_existing and not force_reprocess:
                 should_skip, skip_reason = await self._should_skip_record(record, force_reprocess)
                 if should_skip:
@@ -906,19 +911,42 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 f"✅ [VECTORIZER-{record.record_id}] Successfully processed: {len(record.chunks)} chunks ({chunk_types}) in {processing_time_ms:.1f}ms"
             )
 
-            return ProcessingResult(
-                record=record,
-                status="processed",
-                reason="successfully processed",
-                chunks_created=len(record.chunks),
-                embedding_model=effective_embedding_model,
-                processing_time_ms=processing_time_ms,
-                metadata={
-                    "chunk_types": chunk_types,
-                    "content_hash": content_hash,
-                    "session_id": session_id,
-                },
-            )
+            # Debug logging before creating ProcessingResult
+            logger.debug(f"🔍 [VECTORIZER-{record.record_id}] Record type before ProcessingResult: {type(record)}")
+            logger.debug(f"🔍 [VECTORIZER-{record.record_id}] Record is Record instance: {isinstance(record, Record)}")
+
+            try:
+                return ProcessingResult(
+                    record=record,
+                    status="processed",
+                    reason="successfully processed",
+                    chunks_created=len(record.chunks),
+                    embedding_model=effective_embedding_model,
+                    processing_time_ms=processing_time_ms,
+                    metadata={
+                        "chunk_types": chunk_types,
+                        "content_hash": content_hash,
+                        "session_id": session_id,
+                    },
+                )
+            except Exception as validation_error:
+                logger.error(f"❌ [VECTORIZER-{record.record_id}] Failed to create ProcessingResult: {validation_error}")
+                logger.error(f"🔍 [VECTORIZER-{record.record_id}] Record dict: {record.model_dump() if hasattr(record, 'model_dump') else 'No model_dump method'}")
+                # Fallback to None record to avoid complete failure
+                return ProcessingResult(
+                    record=None,
+                    status="failed",
+                    reason=f"ProcessingResult validation failed: {validation_error}",
+                    chunks_created=len(record.chunks) if hasattr(record, 'chunks') else 0,
+                    embedding_model=effective_embedding_model,
+                    processing_time_ms=processing_time_ms,
+                    metadata={
+                        "validation_error": str(validation_error),
+                        "chunk_types": chunk_types,
+                        "content_hash": content_hash,
+                        "session_id": session_id,
+                    },
+                )
 
         except Exception as e:
             processing_time_ms = (time.time() - start_time) * 1000
