@@ -70,6 +70,15 @@ class ChromaDBUploader(BaseModel):
             await self._ensure_cache_initialized()
 
         # Check if record has embedded chunks
+        chunks_count = len(getattr(record, "chunks", []))
+        logger.debug(
+            "ChromaDBUploader received record",
+            record_id=record.record_id,
+            has_chunks=hasattr(record, "chunks"),
+            chunks_count=chunks_count,
+            processor_stage=processor_stage
+        )
+
         if not hasattr(record, "chunks") or not record.chunks:
             logger.warning("Record has no chunks to upload", record_id=record.record_id, processor_stage=processor_stage)
             yield record
@@ -77,6 +86,14 @@ class ChromaDBUploader(BaseModel):
 
         # Check if chunks have embeddings
         chunks_with_embeddings = [c for c in record.chunks if c.embedding is not None]
+        logger.debug(
+            "ChromaDBUploader chunk embedding status",
+            record_id=record.record_id,
+            total_chunks=len(record.chunks),
+            chunks_with_embeddings=len(chunks_with_embeddings),
+            processor_stage=processor_stage
+        )
+
         if not chunks_with_embeddings:
             logger.warning(
                 "Record chunks have no embeddings", record_id=record.record_id, chunks_count=len(record.chunks), processor_stage=processor_stage

@@ -36,13 +36,29 @@ class TraceWriter:
         try:
             # Get the global BM instance
 
+            # Debug logging for configuration investigation
+            logger.debug(
+                "TraceWriter initialization debug",
+                has_bm_config=hasattr(bm, "config"),
+                bm_config_type=type(getattr(bm, "config", None)).__name__,
+                bm_config_keys=list(getattr(bm, "config", {}).keys()) if hasattr(bm, "config") else None,
+                has_storage_in_config="storage" in getattr(bm, "config", {})
+            )
+
             # Look for traces storage configuration
             if hasattr(bm, "config") and "storage" in bm.config:
                 storage_configs = bm.config.get("storage", {})
 
+                logger.debug(
+                    "Storage configuration debug",
+                    storage_config_keys=list(storage_configs.keys()),
+                    has_traces_config="traces" in storage_configs
+                )
+
                 # Check for traces storage config
                 traces_config = storage_configs.get("traces")
                 if traces_config:
+                    logger.debug("Found traces config", traces_config=traces_config)
                     # Create storage instance
                     storage = bm.get_storage(traces_config)
 
@@ -55,10 +71,14 @@ class TraceWriter:
                     logger.info("TraceWriter initialized with traces storage")
                 else:
                     self.uploader = None
-                    logger.warning("No traces storage configuration found")
+                    logger.warning("No traces storage configuration found", storage_keys=list(storage_configs.keys()))
             else:
                 self.uploader = None
-                logger.warning("No storage configuration available")
+                logger.warning(
+                    "No storage configuration available",
+                    has_bm_config=hasattr(bm, "config"),
+                    config_type=type(getattr(bm, "config", None)).__name__
+                )
 
         except Exception as e:
             logger.error(f"Failed to initialize TraceWriter: {e}")

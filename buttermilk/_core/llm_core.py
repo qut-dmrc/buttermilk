@@ -443,7 +443,7 @@ class LLMCore:
                     model=self.model,
                     message_count=len(messages),
                     tool_count=len(self.tools),
-                    schema=self.output_model.__name__ if self.output_model else None,
+                    schema=self.output_model if self.output_model else None,
                 )
 
                 # Make the actual LLM call

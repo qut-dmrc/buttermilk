@@ -284,6 +284,10 @@ class PipelineOrchestrator(BaseModel):
 
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
+                            # Trace record state BEFORE processor
+                            trace_before = self._trace_record_state(current_record, "before_processor", processor_class, processor_index)
+                            logger.debug("📋 Record state before processor", **trace_before)
+
                             # Check processor-specific cache first
                             cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
                             if cached_outputs:
@@ -293,6 +297,10 @@ class PipelineOrchestrator(BaseModel):
                                     processor_stage=processor_stage_name,
                                     cached_outputs_count=len(cached_outputs),
                                 )
+                                # Trace cached outputs
+                                for i, cached_output in enumerate(cached_outputs):
+                                    trace_cached = self._trace_record_state(cached_output, "cached_output", processor_class, processor_index)
+                                    logger.debug(f"📋 Cached output {i} state", **trace_cached)
                                 next_queue.extend(cached_outputs)
                                 continue
 
@@ -322,6 +330,11 @@ class PipelineOrchestrator(BaseModel):
                                 processor_span.set_attribute("filtered", True)
                                 raise RecordSkippedException(f"Record was filtered out by processor in {processor_stage_name}")
                             else:
+                                # Trace record state AFTER processor
+                                for i, output_record in enumerate(outputs):
+                                    trace_after = self._trace_record_state(output_record, "after_processor", processor_class, processor_index)
+                                    logger.debug(f"📋 Record state after processor (output {i})", **trace_after)
+
                                 # Cache the processor outputs
                                 await self._save_processor_cache(current_record, outputs, processor_stage_name)
                                 # Add all outputs to the next processing queue
@@ -618,6 +631,48 @@ class PipelineOrchestrator(BaseModel):
             output_index += 1
 
         return cached_outputs if cached_outputs else None
+
+    def _trace_record_state(self, record: BaseRecord, stage: str, processor_class: str = "", processor_index: int = -1) -> dict:
+        """Trace the current state of a record for debugging."""
+        record_id = getattr(record, "record_id", "unknown")
+
+        # Basic record info
+        trace_info = {
+            "record_id": record_id,
+            "stage": stage,
+            "processor_class": processor_class,
+            "processor_index": processor_index,
+        }
+
+        # Add cache file paths for investigation
+        if self._record_cache and processor_class:
+            processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"
+            cache_path = self._record_cache._record_path(processor_stage_name, record_id)
+            trace_info["cache_file"] = str(cache_path)
+            trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, 'exists') else False
+            trace_info["cache_base_dir"] = str(self._record_cache.base_dir)
+            trace_info["processor_stage_name"] = processor_stage_name
+
+        # Get all non-private attributes of the record
+        record_fields = {}
+        for attr_name in dir(record):
+            if not attr_name.startswith('_') and not callable(getattr(record, attr_name, None)) and not attr_name.startswith('model_'):
+                try:
+                    attr_value = getattr(record, attr_name, None)
+                    if attr_value is not None:
+                        # Handle different types of fields
+                        if isinstance(attr_value, str):
+                            record_fields[f"{attr_name}"] = attr_value[:20] + "..."
+                        elif isinstance(attr_value, list):
+                            record_fields[f"{attr_name}_count"] = len(attr_value)
+                        elif isinstance(attr_value, dict):
+                            record_fields[f"{attr_name}_keys"] = list(attr_value.keys())
+                except Exception:
+                    # Skip fields that can't be accessed
+                    continue
+
+        trace_info.update(record_fields)
+        return trace_info
 
     async def _save_processor_cache(self, input_record: BaseRecord, outputs: list[BaseRecord], processor_stage_name: str) -> None:
         """Save processor outputs to cache."""

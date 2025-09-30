@@ -9,8 +9,7 @@ from enum import auto
 from posixpath import dirname
 from pyexpat import model
 import time
-from typing import Any, AsyncGenerator, Optional
-
+from typing import Any, AsyncGenerator
 import pydantic
 from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import bm, logger
@@ -19,9 +18,6 @@ from buttermilk.data.vector import ChunkedDocument
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
-import numpy as np
-
-from bot.scripts.task_view import DIM
 
 
 class EmbeddingGenerator(BaseModel):
@@ -75,6 +71,15 @@ class EmbeddingGenerator(BaseModel):
             Record with embeddings added to chunks
         """
         # Check if record has chunks
+        chunks_count = len(getattr(record, "chunks", []))
+        logger.debug(
+            "EmbeddingGenerator received record",
+            record_id=record.record_id,
+            has_chunks=hasattr(record, "chunks"),
+            chunks_count=chunks_count,
+            processor_stage=processor_stage
+        )
+
         if not hasattr(record, "chunks") or not record.chunks:
             logger.warning("Record has no chunks to embed", record_id=record.record_id, processor_stage=processor_stage)
             yield record

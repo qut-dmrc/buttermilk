@@ -230,10 +230,20 @@ class SemanticSplitter(BaseModel):
                 )
                 # Create a new record with chunks using model_copy
                 chunked_doc = doc.model_copy(update={"chunks": chunks})
+
+                # Debug: verify chunks are attached to the record
+                logger.debug(
+                    "SemanticSplitter yielding record with chunks",
+                    record_id=doc.record_id,
+                    chunks_attached=len(chunked_doc.chunks),
+                    first_chunk_preview=chunked_doc.chunks[0].chunk_text[:100] + "..." if chunked_doc.chunks else "N/A"
+                )
+
                 yield chunked_doc
-            logger.warning(
-                f"No chunks generated for doc {doc.record_id} after splitting.",
-            )
+            else:
+                logger.warning(
+                    f"No chunks generated for doc {doc.record_id} after splitting.",
+                )
 
         except Exception as e:
             logger.error(
