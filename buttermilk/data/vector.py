@@ -28,6 +28,7 @@ from buttermilk import bm, logger
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
+from buttermilk.utils.utils import scrub_serializable
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
@@ -117,6 +118,9 @@ def _sanitize_metadata_for_chroma(
     if not isinstance(metadata, dict):
         logger.warning(f"Metadata is not a dict: {metadata}. Skipping sanitization.")
         return {}
+
+    # First, ensure all metadata is serializable (handles RequestUsage, etc.)
+    metadata = scrub_serializable(metadata)
 
     for k, v in metadata.items():
         if isinstance(v, (str, int, float, bool)):

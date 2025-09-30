@@ -292,6 +292,18 @@ def scrub_serializable(d) -> T:
         new_val = {k: v for k, v in new_val.items() if v is not None}
         return new_val
 
+    # Handle dict-like objects (DataDict, DictConfig, etc.) that aren't regular dicts
+    if hasattr(d, 'items') and hasattr(d, 'keys') and hasattr(d, 'values'):
+        try:
+            # Convert dict-like object to a regular dict
+            new_val = {key: scrub_serializable(value) for key, value in d.items()}
+            # remove empty values
+            new_val = {k: v for k, v in new_val.items() if v is not None}
+            return new_val
+        except (TypeError, AttributeError):
+            # If conversion fails, fall through to other handlers
+            pass
+
     if isinstance(d, pd.DataFrame):
         return scrub_serializable(d.to_dict(orient="records"))
 
