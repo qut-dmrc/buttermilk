@@ -69,7 +69,7 @@ child_call = weave_client.call(func, *args, **kwargs)
 
 ## Workflow Enforcement
 
-**For debugging**: ALWAYS read [../bots/debugging.md](../bots/debugging.md) FIRST
+**For debugging**: ALWAYS read [agents/debugging.md](agents/debugging.md) FIRST
 **For testing**: NEVER create standalone validation - read [../bots/]
 **For shared infrastructure**: MANDATORY impact analysis before changes
 **For validation needs**: Use `Task: tester` to create proper pytest tests

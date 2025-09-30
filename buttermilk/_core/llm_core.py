@@ -27,7 +27,7 @@ from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk.utils.templating import load_template, make_messages
-from buttermilk.utils.utils import clean_empty_values
+from buttermilk.utils.utils import clean_empty_values, scrub_serializable
 
 
 class LLMResult(BaseModel):
@@ -325,6 +325,9 @@ class LLMCore:
                 if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
                     if "pricing" in llm_result.metadata:
                         result.metadata["pricing"] = llm_result.metadata["pricing"]
+
+                # Ensure all metadata is serializable
+                result.metadata = scrub_serializable(result.metadata)
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
 

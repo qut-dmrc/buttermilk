@@ -216,7 +216,7 @@ class ConfigurationBootstrapper:
         logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
         return self._execution_context
 
-    async def bootstrap_session_context(self, name: str, job: str, template_paths: list[str] | None = None, **kwargs) -> Any:
+    async def bootstrap_session_context(self, name: str, job: str, template_paths: list[str] | None = None, config=None, **kwargs) -> Any:
         """Bootstrap session-specific BM instance.
 
         Args:
@@ -246,6 +246,7 @@ class ConfigurationBootstrapper:
             llms_instance=self._execution_context.llms,
             query_runner=self._execution_context.query_runner if self._execution_context.clouds else None,
             logger_cfg=self._execution_context.logging,
+            config=config,
             **kwargs,
         )
 
@@ -284,7 +285,7 @@ def create_configuration_bootstrapper(
 # Configuration files are stored in the local directory, and
 # options can be passed in at initialization.
 def init(
-    job: str,
+    job: str | None = None,
     project: str | None = None,
     *,
     run_type: str = "cli",
@@ -292,29 +293,33 @@ def init(
     config_name: str = "config",
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
+    base_dir: str | None = None,
 ):
     """Unified session bootstrap function for all entry points.
 
-    Simple one-liner initialization for Buttermilk.
+    Simple one-liner initialization for Buttermilk. All parameters are optional
+    with smart defaults and automatic discovery.
 
     Args:
-        job: Name for the specific job or task
-        project: Project name (required for first session, optional for subsequent sessions)
+        job: Name for the specific job or task (defaults to "default" or from config)
+        project: Project name (auto-detected from directory or config if not provided)
         run_type: Type of run ("cli", "notebook", etc.) for override management
-        config_dir: Path to configuration directory (defaults to packaged config)
+        config_dir: Path to configuration directory (auto-discovered if not provided)
         config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization
         config: Pre-loaded configuration (if already available from Hydra context)
 
     Returns:
-        Buttermilk instance ready to use
+        Buttermilk instance ready to use with config accessible via bm.cfg
 
-    Raises:
-        RuntimeError: If project is required but not provided, or if project
-                     mismatches existing execution context project.
+    Example:
+        >>> from buttermilk import init, bm
+        >>> _ = init()  # Auto-discovers everything
+        >>> cfg = bm.cfg  # Access config
+        >>> logger = bm.logger()  # Contextualized logger
     """
     bm, config = bootstrap_session_with_config(
-        job=job, project=project, run_type=run_type, config_dir=config_dir, config_name=config_name, overrides=overrides, config=config
+        job=job, project=project, run_type=run_type, config_dir=config_dir, config_name=config_name, overrides=overrides, config=config, base_dir=base_dir
     )
     return bm
 
@@ -327,6 +332,7 @@ def bootstrap_session_with_config(
     config_name: str = "config",
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
+    base_dir: str | None = None,
 ):
     """Unified session bootstrap function that also returns configuration.
 
@@ -359,12 +365,36 @@ def bootstrap_session_with_config(
         config_dir = Path(__file__).parent.parent.resolve() / "conf"
         config_dir = config_dir.as_posix()
     else:
-        # If config_dir is provided, resolve it relative to the calling app's CWD
+        # If config_dir is provided, resolve it relative to the calling app's location
         # Also expand user (~) and environment variables for convenience
         expanded = os.path.expandvars(os.path.expanduser(config_dir))
         cfg_path = Path(expanded)
         if not cfg_path.is_absolute():
-            cfg_path = Path(os.getcwd()) / cfg_path
+            # Determine base directory for relative path resolution
+            if base_dir:
+                # Use explicitly provided base directory
+                base_path = Path(base_dir)
+            else:
+                # Auto-detect caller's directory from stack trace
+                import inspect
+                frame = inspect.currentframe()
+                try:
+                    # Walk up the stack to find the first frame outside this module
+                    caller_frame = frame
+                    while caller_frame:
+                        caller_filename = caller_frame.f_code.co_filename
+                        if not caller_filename.endswith('config_bootstrap.py'):
+                            caller_dir = Path(caller_filename).parent
+                            base_path = caller_dir
+                            break
+                        caller_frame = caller_frame.f_back
+                    else:
+                        # Fallback to current working directory
+                        base_path = Path(os.getcwd())
+                finally:
+                    del frame
+
+            cfg_path = base_path / cfg_path
         config_dir = cfg_path.resolve().as_posix()
 
     # Prepare overrides with run-specific settings
@@ -378,9 +408,9 @@ def bootstrap_session_with_config(
     # Create bootstrapper with configuration
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
 
-    try:
-        # Bootstrap full context and session
-        execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
+    async def _bootstrap_async():
+        """Async bootstrap function to handle both sync and async contexts."""
+        execution_context = await bootstrapper.bootstrap_full_context()
 
         # Get the final resolved configuration
         final_config = bootstrapper.get_configuration()
@@ -389,14 +419,50 @@ def bootstrap_session_with_config(
         resolved_job = job if job is not None else final_config.bm.session_info.job
         resolved_project = project if project is not None else final_config.bm.session_info.name
 
-        # Extract template_paths from config
+        # Extract template_paths from config and resolve relative paths
         template_paths = final_config.bm.session_info.get("template_paths", [])
+        resolved_template_paths = []
+        for path in template_paths:
+            if not Path(path).is_absolute():
+                # Resolve relative to config directory
+                resolved_path = Path(config_dir) / path
+                resolved_template_paths.append(str(resolved_path.resolve()))
+            else:
+                resolved_template_paths.append(path)
+        template_paths = resolved_template_paths
 
         # Validate and set project name using ExecutionContext
         validated_project = execution_context.validate_and_set_project(resolved_project)
 
         # Create session BM instance with validated project
-        bm = asyncio.run(bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job, template_paths=template_paths))
+        bm = await bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job, template_paths=template_paths, config=final_config)
+
+        return bm, final_config
+
+    def _run_async(coro):
+        """Run async function, handling both sync and async contexts."""
+        try:
+            # Try to get the running loop
+            loop = asyncio.get_running_loop()
+            # If we get here, we're in an async context (like Jupyter)
+            # Create a task and run it
+            import concurrent.futures
+            import threading
+
+            # Run in a separate thread to avoid the running loop issue
+            def run_in_thread():
+                return asyncio.run(coro)
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
+        except RuntimeError:
+            # No running loop - use asyncio.run normally
+            return asyncio.run(coro)
+
+    try:
+        bm, final_config = _run_async(_bootstrap_async())
+
 
         # Set the singleton BM instance
         set_bm(bm)

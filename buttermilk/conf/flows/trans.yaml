@@ -18,8 +18,8 @@ defaults:
     - host/sequence_host
   # Data source configuration
   - /storage@storage.tja: tja
-  # Storage configuration for saving outputs
-  - /storage@save: flows
+  # Trace storage configuration
+  - /storage@storage.traces: traces
 
 # Core flow configuration
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator

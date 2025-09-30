@@ -279,6 +279,7 @@ class BM(BaseModel):
     _llms_instance: Any = PrivateAttr(default=None)  # Will be injected
     _query_runner: Any = PrivateAttr(default=None)  # Will be injected
     _logger_cfg: Any = PrivateAttr(default=None)  # Will be injected from ExecutionContext
+    _config: Any = PrivateAttr(default=None)  # Will store the full Hydra config
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
@@ -571,6 +572,20 @@ class BM(BaseModel):
         """Provides access to shared system credentials."""
         return self.secret_manager.get_secret(cfg_key="credentials_secret")
 
+    @property
+    def cfg(self):
+        """Provides access to the full Hydra configuration."""
+        return self._config
+
+    def logger(self):
+        """Returns a contextualized logger with session information."""
+        from buttermilk import logger as base_logger
+        return base_logger.bind(
+            session_id=self.session_info.session_id,
+            project=self.session_info.project_name,
+            job=self.session_info.job
+        )
+
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
 
@@ -855,6 +870,7 @@ def create_session_bm(
     llms_instance=None,
     query_runner=None,
     logger_cfg=None,
+    config=None,
     **kwargs
 ) -> BM:
     """Create a new session-scoped BM instance.
@@ -871,6 +887,7 @@ def create_session_bm(
         llms_instance: Shared LLMs instance (optional).
         query_runner: Shared query runner instance (optional).
         logger_cfg: Logger configuration for cloud logging (optional).
+        config: Full Hydra configuration to store on BM instance (optional).
         **kwargs: Additional arguments for SessionInfo.
         
     Returns:
@@ -906,9 +923,13 @@ def create_session_bm(
     
     if save_dir_base is not None:
         bm_data["save_dir_base"] = save_dir_base
-        
+
     bm = BM(**bm_data)
-        
+
+    # Store config on BM instance if provided
+    if config is not None:
+        bm._config = config
+
     return bm
 
 
