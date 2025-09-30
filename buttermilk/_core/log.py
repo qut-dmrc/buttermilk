@@ -274,7 +274,7 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
 
     logger.info(f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose)
     if verbose:
-        logger.debug("Verbose logging enabled for {log_path}.")
+        logger.debug(f"Verbose logging enabled for {log_path}.", log_path=str(log_path), verbose=verbose)
     
     # Mark file logging as configured
     _file_logging_configured = True

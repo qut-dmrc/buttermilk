@@ -51,9 +51,21 @@ class RecordCache:
             self.enabled = disabled_env.strip() not in {"1", "true", "TRUE", "yes", "on"}
         else:
             self.enabled = enabled
+
+        # Debug logging for cache initialization
+        logger.info(
+            "🗂️  RecordCache initialized",
+            base_dir=str(self.base_dir),
+            enabled=self.enabled,
+            working_dir=os.getcwd(),
+            cache_env_var=os.getenv("BM_RECORD_CACHE_DIR"),
+            disable_env_var=os.getenv("BM_DISABLE_RECORD_CACHE")
+        )
+
         if self.enabled:
             try:
                 self.base_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug("📁 Created cache base directory", base_dir=str(self.base_dir))
             except Exception as e:  # pragma: no cover
                 logger.debug(f"Could not create record cache base dir {self.base_dir}: {e}")
                 self.enabled = False
@@ -68,31 +80,45 @@ class RecordCache:
     # -------------------- Public API ----------------------
     def has(self, record_id: str, stage: str) -> bool:
         if not self.enabled:
+            logger.debug("🚫 Cache disabled", record_id=record_id, stage=stage)
             return False
-        return self._record_path(stage, record_id).exists()
+        path = self._record_path(stage, record_id)
+        exists = path.exists()
+        logger.debug(
+            "🔍 Cache lookup",
+            record_id=record_id,
+            stage=stage,
+            path=str(path),
+            exists=exists
+        )
+        return exists
 
     def load(self, record_id: str, stage: str) -> Record | None:
         if not self.has(record_id, stage):
+            logger.debug("❌ Cache miss", record_id=record_id, stage=stage)
             return None
         path = self._record_path(stage, record_id)
         try:
             with path.open("r", encoding="utf-8") as f:
                 payload = json.load(f)
         except Exception as e:  # pragma: no cover
-            logger.debug(f"Failed reading cache {path}: {e}")
+            logger.debug("💥 Failed reading cache file", path=str(path), error=str(e))
             return None
         if payload.get("_schema_version") != CACHE_VERSION:
+            logger.debug("🚫 Cache version mismatch", record_id=record_id, stage=stage, path=str(path))
             return None
         data = payload.get("record")
         if not isinstance(data, dict):
+            logger.debug("🚫 Invalid record data in cache", record_id=record_id, stage=stage, path=str(path))
             return None
         try:
             record = Record(**data)
         except Exception as e:  # pragma: no cover
-            logger.debug(f"Failed to rehydrate Record {record_id}: {e}")
+            logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
             return None
         # Rehydrate chunks (optional)
         raw_chunks = payload.get("chunks")
+        chunks_count = 0
         if isinstance(raw_chunks, list) and raw_chunks:
             try:
                 from buttermilk.data.vector import ChunkedDocument  # type: ignore
@@ -102,27 +128,42 @@ class RecordCache:
                     if isinstance(c, dict):
                         try:
                             hydrated.append(ChunkedDocument(**c))
+                            chunks_count += 1
                         except Exception as ce:  # pragma: no cover
                             logger.debug(f"Skipping bad chunk for {record_id}: {ce}")
                 if hydrated:
                     record.chunks = hydrated
             except Exception as e:  # pragma: no cover
                 logger.debug(f"Chunk rehydration skipped: {e}")
+
+        logger.info(
+            "✅ Cache hit - loaded record",
+            record_id=record_id,
+            stage=stage,
+            path=str(path),
+            chunks_count=chunks_count
+        )
         return record
 
     def save(self, record: Record, stage: str, include_chunks: bool = True) -> bool:
         if not self.enabled:
+            logger.debug("🚫 Cache disabled - not saving", record_id=getattr(record, "record_id", "unknown"), stage=stage)
             return False
         if not record or not getattr(record, "record_id", None):
+            logger.debug("🚫 Invalid record - not saving", record=record, stage=stage)
             return False
+
         stage_dir = self._stage_dir(stage)
         try:
             stage_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:  # pragma: no cover
-            logger.debug(f"Could not create stage dir {stage_dir}: {e}")
+            logger.debug("💥 Could not create stage dir", stage_dir=str(stage_dir), error=str(e))
             return False
+
         path = self._record_path(stage, record.record_id)
         tmp_path = path.with_suffix(".tmp")
+        chunks_count = len(getattr(record, "chunks", []))
+
         try:
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
@@ -146,10 +187,18 @@ class RecordCache:
             with tmp_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False)
             tmp_path.replace(path)
-            logger.debug(f"🗂️  Cached record {record.record_id} at stage '{stage}' -> {path}", tmp_path=tmp_path, path=path, stage=stage)
+
+            logger.info(
+                "💾 Cached record",
+                record_id=record.record_id,
+                stage=stage,
+                path=str(path),
+                chunks_count=chunks_count,
+                include_chunks=include_chunks
+            )
             return True
         except Exception as e:  # pragma: no cover
-            logger.debug(f"Failed to cache record {record.record_id} at stage {stage}: {e}")
+            logger.debug("💥 Failed to cache record", record_id=record.record_id, stage=stage, error=str(e))
             try:
                 if tmp_path.exists():
                     tmp_path.unlink()

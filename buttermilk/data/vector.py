@@ -655,11 +655,20 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 processed_record = record.model_copy(update={'metadata': metadata})
                 yield processed_record
             else:
-                logger.warning(f"Failed to embed record {record.record_id}")
+                logger.warning(
+                    "Failed to embed record in process method",
+                    record_id=record.record_id,
+                    reason="process_record returned falsy result"
+                )
                 return
 
         except Exception as e:
-            logger.error(f"Error embedding record {record.record_id}: {e}")
+            logger.error(
+                "Error embedding record in process method",
+                record_id=record.record_id,
+                error=str(e),
+                error_type=type(e).__name__
+            )
             return
 
     async def _ensure_collection_ready(self) -> None:
@@ -912,8 +921,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             )
 
             # Debug logging before creating ProcessingResult
-            logger.debug(f"🔍 [VECTORIZER-{record.record_id}] Record type before ProcessingResult: {type(record)}")
-            logger.debug(f"🔍 [VECTORIZER-{record.record_id}] Record is Record instance: {isinstance(record, Record)}")
+            logger.debug(
+                "Vectorizer about to create ProcessingResult",
+                record_id=record.record_id,
+                record_type=str(type(record)),
+                is_record_instance=isinstance(record, Record),
+                chunks_count=len(record.chunks),
+                chunk_types=chunk_types
+            )
 
             try:
                 return ProcessingResult(
@@ -930,8 +945,30 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     },
                 )
             except Exception as validation_error:
-                logger.error(f"❌ [VECTORIZER-{record.record_id}] Failed to create ProcessingResult: {validation_error}")
-                logger.error(f"🔍 [VECTORIZER-{record.record_id}] Record dict: {record.model_dump() if hasattr(record, 'model_dump') else 'No model_dump method'}")
+                logger.error(
+                    "Failed to create ProcessingResult from vectorizer",
+                    record_id=record.record_id,
+                    error=str(validation_error),
+                    error_type=type(validation_error).__name__,
+                    record_type=str(type(record)),
+                    has_model_dump=hasattr(record, 'model_dump'),
+                    chunks_count=len(record.chunks) if hasattr(record, 'chunks') else 0
+                )
+                if hasattr(record, 'model_dump'):
+                    try:
+                        record_dict = record.model_dump()
+                        logger.debug(
+                            "Record model dump for debugging",
+                            record_id=record.record_id,
+                            record_dict_keys=list(record_dict.keys()),
+                            record_dict_size=len(str(record_dict))
+                        )
+                    except Exception as dump_error:
+                        logger.error(
+                            "Failed to dump record model",
+                            record_id=record.record_id,
+                            dump_error=str(dump_error)
+                        )
                 # Fallback to None record to avoid complete failure
                 return ProcessingResult(
                     record=None,
@@ -950,7 +987,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         except Exception as e:
             processing_time_ms = (time.time() - start_time) * 1000
-            logger.error(f"❌ Failed to process record {record.record_id}: {e}")
+            logger.error(
+                "Failed to process record in vectorizer",
+                record_id=record.record_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                processing_time_ms=processing_time_ms,
+                embedding_model=effective_embedding_model
+            )
             return ProcessingResult(
                 record=None,
                 status="failed",

@@ -1,0 +1,257 @@
+"""Modular embedding generator processor for pipeline.
+
+This processor generates embeddings for chunked documents, decoupled from storage.
+It can be swapped out for different embedding models or strategies.
+"""
+
+import asyncio
+from enum import auto
+from posixpath import dirname
+from pyexpat import model
+import time
+from typing import Any, AsyncGenerator, Optional
+
+import pydantic
+from pydantic import BaseModel, Field, PrivateAttr
+from buttermilk import bm, logger
+from buttermilk._core.types import Record
+from buttermilk.data.vector import ChunkedDocument
+from vertexai.language_models import (
+    TextEmbeddingInput,
+)
+import numpy as np
+
+from bot.scripts.task_view import DIM
+
+
+class EmbeddingGenerator(BaseModel):
+    """Generate embeddings for chunked documents.
+
+    This processor expects records with a 'chunks' field containing
+    ChunkedDocument objects, and adds embeddings to those chunks in-place.
+
+    Features:
+    - Configurable embedding model and dimensionality
+    - Retry logic with exponential backoff for rate limits
+    - Batch processing with configurable batch size
+    - Partial failure handling
+    """
+
+    model_config = pydantic.ConfigDict(extra="ignore", arbitrary_types_allowed=True)
+
+    # Embedding configuration
+    embedding_model: str = Field(default="gemini-embedding-001", description="Embedding model to use")
+    dimensionality: int = Field(default=3072, description="Embedding vector dimensionality")
+    task: str = Field(default="RETRIEVAL_DOCUMENT", description="Task type for embeddings")
+
+    # Batch and retry configuration
+    embedding_batch_size: int = Field(default=100, description="Batch size for embedding API calls")
+    embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
+    embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries")
+    embedding_max_wait_seconds: float = Field(default=120.0, description="Max wait between embedding retries")
+    embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between successful embedding calls")
+
+    # Private attributes
+    _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
+
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize semaphore for concurrent embedding calls."""
+        self._embedding_semaphore = asyncio.Semaphore(20)
+        logger.info(
+            "Initialized EmbeddingGenerator",
+            embedding_model=self.embedding_model,
+            dimensionality=self.dimensionality,
+            batch_size=self.embedding_batch_size,
+        )
+
+    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
+        """Process a record by generating embeddings for its chunks.
+
+        Args:
+            record: Record with chunks field containing ChunkedDocument objects
+            processor_stage: Stage name for metadata tracking
+
+        Yields:
+            Record with embeddings added to chunks
+        """
+        # Check if record has chunks
+        if not hasattr(record, "chunks") or not record.chunks:
+            logger.warning("Record has no chunks to embed", record_id=record.record_id, processor_stage=processor_stage)
+            yield record
+            return
+
+        # Generate embeddings
+        start_time = time.time()
+        success = await self._embed_chunks(record.chunks)
+        processing_time_ms = (time.time() - start_time) * 1000
+
+        if success:
+            logger.info(
+                "Successfully generated embeddings",
+                record_id=record.record_id,
+                chunks_count=len(record.chunks),
+                processing_time_ms=processing_time_ms,
+                processor_stage=processor_stage,
+            )
+
+            # Add metadata about embedding
+            metadata = record.metadata.copy() if record.metadata else {}
+            metadata[processor_stage] = {
+                "status": "embedded",
+                "timestamp": time.time(),
+                "processor": "EmbeddingGenerator",
+                "chunks_embedded": len(record.chunks),
+                "embedding_model": self.embedding_model,
+                "dimensionality": self.dimensionality,
+                "processing_time_ms": processing_time_ms,
+            }
+
+            # Yield record with updated metadata
+            processed_record = record.model_copy(update={"metadata": metadata})
+            yield processed_record
+        else:
+            logger.error(
+                "Failed to generate embeddings", record_id=record.record_id, chunks_count=len(record.chunks), processor_stage=processor_stage
+            )
+            # Don't yield the record if embedding failed
+            return
+
+    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
+        """Generate embeddings for a list of chunks in place.
+
+        Returns:
+            bool: True if all embeddings succeeded
+        """
+        if not chunks:
+            return False
+
+        embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
+        for i, chunk in enumerate(chunks):
+            embeddings_input.append(
+                (
+                    i,
+                    TextEmbeddingInput(
+                        text=chunk.chunk_text,
+                        task_type=self.task,
+                        title=chunk.chunk_title,
+                    ),
+                ),
+            )
+
+        embedding_results = await self._embed(embeddings_input)
+
+        success_count = 0
+        for idx, embedding in embedding_results:
+            if embedding is not None and idx < len(chunks):
+                chunks[idx].embedding = embedding
+                success_count += 1
+
+        if success_count == 0:
+            logger.error("All embeddings failed for this record")
+            return False
+
+        if success_count < len(chunks):
+            logger.warning("Partial embedding failure", succeeded=success_count, total=len(chunks))
+            # Clear embeddings so we don't have partial state
+            for c in chunks:
+                c.embedding = None
+            return False
+
+        logger.debug("Generated embeddings", count=success_count)
+        return True
+
+    def _is_rate_limit_error(self, exc: Exception) -> bool:
+        """Check if an exception is a rate limit error."""
+        msg = str(exc).lower()
+        return any(k in msg for k in ["rate limit", "quota", "too many requests", "429"])
+
+    async def _embed(self, embeddings_input: list[tuple[int, Any]]) -> list[tuple[int, list[float] | None]]:
+        """Generate embeddings with retry logic.
+
+        Args:
+            embeddings_input: List of (index, TextEmbeddingInput) tuples
+
+        Returns:
+            List of (index, embedding) tuples where embedding can be None on failure
+        """
+        client = bm.genai
+
+        async def _run_embed_batch(batch_docs, attempt: int = 0):
+            """Run embedding for a batch with semaphore."""
+            async with self._embedding_semaphore:
+                try:
+                    response = await client.models.embed_content(
+                        model=self.embedding_model,
+                        contents=batch_docs,
+                        config={
+                            "output_dimensionality": self.dimensionality,
+                            "auto_truncate": False,
+                        },
+                    )
+
+                    # Extract embeddings from response
+                    embeddings = []
+                    for embedding in response.embeddings:
+                        # Convert numpy array or raw values to list
+                        if hasattr(embedding.values, "tolist"):
+                            embeddings.append(embedding.values.tolist())
+                        else:
+                            embeddings.append(list(embedding.values))
+
+                    logger.debug(
+                        "Embedding batch",
+                        batch_size=len(docs),
+                        attempt=attempt + 1,
+                        model=self.embedding_model,
+                        dimensionality=self.dimensionality,
+                        auto_truncate=False,
+                        embeddings_count=len(embeddings),
+                        cooldown_seconds=self.embedding_cooldown_seconds,
+                    )
+                    # Add cooldown to avoid rate limits
+                    if self.embedding_cooldown_seconds > 0:
+                        await asyncio.sleep(self.embedding_cooldown_seconds)
+
+                    return embeddings
+
+                except Exception as e:
+                    logger.exception("Embedding API error", error=str(e), args=e.args, batch_size=len(batch_docs))
+                    raise
+
+        # Process in batches
+        results: list[tuple[int, list[float] | None]] = []
+        batch_size = self.embedding_batch_size
+
+        for i in range(0, len(embeddings_input), batch_size):
+            batch = embeddings_input[i : i + batch_size]
+            indices = [idx for idx, _ in batch]
+            docs = [doc for _, doc in batch]
+
+            # Retry logic
+            for attempt in range(self.embedding_max_retries):
+                try:
+                    embeddings = await _run_embed_batch(docs, attempt=attempt)
+
+                    # Pair indices with embeddings
+                    for idx, embedding in zip(indices, embeddings):
+                        results.append((idx, embedding))
+                    break
+
+                except Exception as exc:
+                    if self._is_rate_limit_error(exc):
+                        # Exponential backoff for rate limits
+                        wait_time = min(self.embedding_min_wait_seconds * (2**attempt), self.embedding_max_wait_seconds)
+                        logger.warning("Rate limit hit, retrying", attempt=attempt + 1, wait_time=wait_time)
+                        await asyncio.sleep(wait_time)
+                    elif attempt == self.embedding_max_retries - 1:
+                        # Last attempt failed
+                        logger.error("Embedding batch failed after retries", batch_size=len(docs), error=str(exc))
+                        # Return None for failed embeddings
+                        for idx in indices:
+                            results.append((idx, None))
+                        break
+                    else:
+                        # Non-rate limit error, retry immediately
+                        logger.warning("Embedding error, retrying", attempt=attempt + 1, error=str(exc))
+
+        return results

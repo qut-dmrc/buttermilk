@@ -438,7 +438,13 @@ class LLMCore:
                 # Get LLM client from global BM instance
                 model_client = bm.llms.get_autogen_chat_client(self.model)
 
-                logger.debug(f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}")
+                logger.debug(
+                    f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}",
+                    model=self.model,
+                    message_count=len(messages),
+                    tool_count=len(self.tools),
+                    schema=self.output_model.__name__ if self.output_model else None,
+                )
 
                 # Make the actual LLM call
                 result = await model_client.call_chat(

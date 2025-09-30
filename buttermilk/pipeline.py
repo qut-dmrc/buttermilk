@@ -148,6 +148,14 @@ class PipelineOrchestrator(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
 
         # Initialize record cache
+        logger.info(
+            "🗂️  Pipeline cache initialization",
+            stage_name=self.stage_name,
+            enable_record_cache=self.enable_record_cache,
+            cache_dir_param=self.cache_dir,
+            session_cache_dir=getattr(bm.session_info, "cache_dir", None),
+        )
+
         if self.enable_record_cache:
             try:
                 from buttermilk._core.record_cache import RecordCache
@@ -155,10 +163,13 @@ class PipelineOrchestrator(BaseModel):
                 # Use cache_dir from session_info if available, otherwise use parameter or let RecordCache use defaults
                 cache_base_dir = self.cache_dir or bm.session_info.cache_dir
 
+                logger.info("🗂️  Creating RecordCache", cache_base_dir=cache_base_dir, stage_name=self.stage_name)
                 self._record_cache = RecordCache(base_dir=cache_base_dir)
-            except Exception:
-                logger.warning("Failed to initialize RecordCache, continuing without caching")
+            except Exception as e:
+                logger.warning("Failed to initialize RecordCache, continuing without caching", error=str(e))
                 self._record_cache = None
+        else:
+            logger.info("🚫 Record cache disabled for pipeline stage", stage_name=self.stage_name)
 
         return self
 
@@ -197,43 +208,12 @@ class PipelineOrchestrator(BaseModel):
 
         with tracer.start_as_current_span("pipeline.process_record", attributes=span_attributes) as span:
             try:
-                # Check cache first - for 1:N transformations, we need to load all cached outputs
-                if self.enable_record_cache and self._record_cache and not self.force_reprocess and hasattr(record, "record_id"):
-                    # Try to load cached results - first check if there's a single 1:1 result
-                    cached_record = self._record_cache.load(record.record_id, self.stage_name)
-                    if cached_record and self._validate_cached_record(cached_record):
-                        span.set_attribute("cache.hit", True)
-                        logger.debug(f"⚡ Cache hit for record {record.record_id} at stage '{self.stage_name}' – skipping processing")
-                        yield cached_record
-                        return
+                # Per-processor caching is now handled in _process_without_cache
 
-                    # If no 1:1 result, check for 1:N results (indexed cache keys)
-                    cached_outputs = []
-                    output_index = 0
-                    while True:
-                        cache_key = f"{record.record_id}_output_{output_index}"
-                        cached_output = self._record_cache.load(cache_key, self.stage_name)
-                        if not cached_output:
-                            break
-                        # Restore original record_id from the indexed cache key
-                        restored_output = cached_output.model_copy(update={"record_id": record.record_id})
-                        cached_outputs.append(restored_output)
-                        output_index += 1
-
-                    if cached_outputs:
-                        span.set_attribute("cache.hit", True)
-                        span.set_attribute("outputs.count", len(cached_outputs))
-                        logger.debug(
-                            f"⚡ Cache hit for record {record.record_id} at stage '{self.stage_name}' – found {len(cached_outputs)} cached outputs"
-                        )
-                        for cached_output in cached_outputs:
-                            yield cached_output
-                        return
-
-                # Mark cache miss
+                # Process using per-processor caching
                 span.set_attribute("cache.hit", False)
 
-                # Process normally and cache results
+                # Process through processor chain with per-processor caching
                 processed_results = []
                 async for processed_record in self._process_without_cache(record):
                     processed_results.append(processed_record)
@@ -243,23 +223,7 @@ class PipelineOrchestrator(BaseModel):
                 span.set_attribute("outputs.count", len(processed_results))
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
-                # Cache the processed record(s) with appropriate cache keys
-                if self.enable_record_cache and self._record_cache and processed_results and hasattr(record, "record_id"):
-                    try:
-                        if len(processed_results) == 1:
-                            # 1:1 transformation - use simple record_id as cache key
-                            self._record_cache.save(processed_results[0], self.stage_name)
-                        else:
-                            # 1:N transformation - use indexed cache keys
-                            for output_index, processed_record in enumerate(processed_results):
-                                # Temporarily modify record_id for caching purposes
-                                original_record_id = processed_record.record_id
-                                cache_key = f"{original_record_id}_output_{output_index}"
-                                # Create a copy with modified record_id for caching
-                                cache_record = processed_record.model_copy(update={"record_id": cache_key})
-                                self._record_cache.save(cache_record, self.stage_name)
-                    except Exception as ce:
-                        logger.debug(f"Cache save failed {record.record_id} @ {self.stage_name}: {ce}")
+                # Note: Caching is now handled per-processor in _process_without_cache
 
             except GeneratorExit:
                 # Handle early generator termination gracefully
@@ -320,22 +284,46 @@ class PipelineOrchestrator(BaseModel):
 
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
+                            # Check processor-specific cache first
+                            cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
+                            if cached_outputs:
+                                logger.info(
+                                    "⚡ Processor cache hit",
+                                    record_id=getattr(current_record, "record_id", "unknown"),
+                                    processor_stage=processor_stage_name,
+                                    cached_outputs_count=len(cached_outputs),
+                                )
+                                next_queue.extend(cached_outputs)
+                                continue
+
                             outputs = []
                             try:
                                 async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
                                     outputs.append(output_record)
                             except Exception as e:
-                                # Log with processor-specific stage name
+                                # Log with processor-specific stage name using structured logging
                                 record_id = getattr(current_record, 'record_id', 'unknown')
-                                logger.error(f"Error processing record {record_id} in processor stage {processor_stage_name}: {e}")
+                                processor_type = type(processor).__name__
+                                logger.error(
+                                    f"Error processing record in pipeline processor {processor_stage_name}",
+                                    record_id=record_id,
+                                    stage_name=self.stage_name,
+                                    processor_stage=processor_stage_name,
+                                    processor_type=processor_type,
+                                    processor_index=processor_index,
+                                    error=str(e),
+                                    error_type=type(e).__name__,
+                                )
                                 processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                                 raise
 
                             if not outputs:
                                 # This record was filtered out by this processor
                                 processor_span.set_attribute("filtered", True)
-                                raise RecordSkippedException("Record was filtered out by processor")
+                                raise RecordSkippedException(f"Record was filtered out by processor in {processor_stage_name}")
                             else:
+                                # Cache the processor outputs
+                                await self._save_processor_cache(current_record, outputs, processor_stage_name)
                                 # Add all outputs to the next processing queue
                                 next_queue.extend(outputs)
 
@@ -350,7 +338,7 @@ class PipelineOrchestrator(BaseModel):
                 # If we reach here, processing_queue contains all final outputs
                 if not processing_queue:
                     # Everything was filtered out (shouldn't happen due to exception above)
-                    raise RecordSkippedException("All outputs were filtered")
+                    raise RecordSkippedException("All outputs were filtered in")
 
                 # Set final chain span attributes
                 total_outputs = len(processing_queue)
@@ -387,7 +375,15 @@ class PipelineOrchestrator(BaseModel):
             except Exception as e:
                 chain_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 # Let exception bubble up - TaskGroup will handle error collection
-                logger.error(f"Error processing record in stage {self.stage_name}: {e}")
+                record_id = getattr(record, "record_id", "unknown")
+                logger.error(
+                    "Error processing record in pipeline chain",
+                    record_id=record_id,
+                    stage_name=self.stage_name,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    processor_count=len(self.processors),
+                )
                 raise
 
     async def __call__(self) -> AsyncIterator[BaseRecord]:
@@ -595,6 +591,55 @@ class PipelineOrchestrator(BaseModel):
                 f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
                 f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
             )
+
+    async def _check_processor_cache(self, record: BaseRecord, processor_stage_name: str) -> list[BaseRecord] | None:
+        """Check cache for processor-specific outputs."""
+        if not self.enable_record_cache or not self._record_cache or self.force_reprocess or not hasattr(record, "record_id"):
+            return None
+
+        logger.debug("🔍 Checking processor cache", record_id=record.record_id, processor_stage=processor_stage_name)
+
+        # Try 1:1 cached result first
+        cached_record = self._record_cache.load(record.record_id, processor_stage_name)
+        if cached_record and self._validate_cached_record(cached_record):
+            return [cached_record]
+
+        # Try 1:N cached results
+        cached_outputs = []
+        output_index = 0
+        while True:
+            cache_key = f"{record.record_id}_output_{output_index}"
+            cached_output = self._record_cache.load(cache_key, processor_stage_name)
+            if not cached_output:
+                break
+            # Restore original record_id
+            restored_output = cached_output.model_copy(update={"record_id": record.record_id})
+            cached_outputs.append(restored_output)
+            output_index += 1
+
+        return cached_outputs if cached_outputs else None
+
+    async def _save_processor_cache(self, input_record: BaseRecord, outputs: list[BaseRecord], processor_stage_name: str) -> None:
+        """Save processor outputs to cache."""
+        if not self.enable_record_cache or not self._record_cache or not outputs or not hasattr(input_record, "record_id"):
+            return
+
+        logger.debug(
+            "💾 Saving processor outputs to cache", record_id=input_record.record_id, processor_stage=processor_stage_name, outputs_count=len(outputs)
+        )
+
+        try:
+            if len(outputs) == 1:
+                # 1:1 transformation - use input record_id as cache key
+                self._record_cache.save(outputs[0], processor_stage_name)
+            else:
+                # 1:N transformation - use indexed cache keys
+                for output_index, output_record in enumerate(outputs):
+                    cache_key = f"{input_record.record_id}_output_{output_index}"
+                    cache_record = output_record.model_copy(update={"record_id": cache_key})
+                    self._record_cache.save(cache_record, processor_stage_name)
+        except Exception as e:
+            logger.debug("💥 Failed to save processor cache", record_id=input_record.record_id, processor_stage=processor_stage_name, error=str(e))
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:
