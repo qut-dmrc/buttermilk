@@ -577,6 +577,7 @@ class BM(BaseModel):
         """Provides access to the full Hydra configuration."""
         return self._config
 
+    @property
     def logger(self):
         """Returns a contextualized logger with session information."""
         from buttermilk import logger as base_logger
