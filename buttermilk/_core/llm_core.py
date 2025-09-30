@@ -181,7 +181,6 @@ class LLMCore:
         with tracer.start_as_current_span("llm_core.unified_process", attributes=span_attributes) as span:
             try:
                 result = await self.process_with_llm(record=record, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token, **kwargs)
-
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
                 execution_trace = ExecutionTrace(

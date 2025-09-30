@@ -29,7 +29,6 @@ from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk.utils.utils import scrub_serializable
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
-from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
 
@@ -307,6 +306,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         self._last_sync_time = time.time()
         self._sync_batch_size = self.sync_batch_size
         self._sync_interval_seconds = self.sync_interval_minutes * 60
+
+        from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = self.embedding_model  # Store the model name

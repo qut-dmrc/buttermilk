@@ -29,16 +29,19 @@ class TraceWriter:
         return cls._instance
 
     def __init__(self):
-        """Initialize the trace writer with storage configuration."""
+        """Initialize the trace writer (actual config loading is deferred)."""
+        # Don't initialize storage immediately - do it lazily when first needed
+        pass
+
+    def _ensure_initialized(self):
+        """Lazy initialization - only initialize when first trace is added."""
         if self._initialized:
             return
 
         try:
-            # Get the global BM instance
-
             # Debug logging for configuration investigation
             logger.debug(
-                "TraceWriter initialization debug",
+                "TraceWriter lazy initialization",
                 has_bm_config=hasattr(bm, "config"),
                 bm_config_type=type(getattr(bm, "config", None)).__name__,
                 bm_config_keys=list(getattr(bm, "config", {}).keys()) if hasattr(bm, "config") else None,
@@ -92,6 +95,7 @@ class TraceWriter:
         Args:
             trace: The ExecutionTrace to store
         """
+        self._ensure_initialized()
         if self.uploader:
             try:
                 await self.uploader.add(trace)
@@ -103,6 +107,7 @@ class TraceWriter:
 
     async def flush(self) -> None:
         """Force flush any pending traces."""
+        self._ensure_initialized()
         if self.uploader:
             try:
                 await self.uploader._flush()

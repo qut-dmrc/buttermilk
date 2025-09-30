@@ -111,30 +111,57 @@ class RecordCache:
         if not isinstance(data, dict):
             logger.debug("🚫 Invalid record data in cache", record_id=record_id, stage=stage, path=str(path))
             return None
+
+        # Remove chunks from record data to avoid dict chunks being set during Record creation
+        data_copy = data.copy()
+        data_copy.pop("chunks", None)
+
         try:
-            record = Record(**data)
+            record = Record(**data_copy)
         except Exception as e:  # pragma: no cover
             logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
             return None
-        # Rehydrate chunks (optional)
+        # Rehydrate chunks (restore chunks field from cache)
         raw_chunks = payload.get("chunks")
         chunks_count = 0
+
+        # Always restore the chunks field - either as rehydrated objects or original value
         if isinstance(raw_chunks, list) and raw_chunks:
             try:
                 from buttermilk.data.vector import ChunkedDocument  # type: ignore
 
                 hydrated = []
-                for c in raw_chunks:
+                for i, c in enumerate(raw_chunks):
                     if isinstance(c, dict):
                         try:
                             hydrated.append(ChunkedDocument(**c))
                             chunks_count += 1
-                        except Exception as ce:  # pragma: no cover
-                            logger.debug(f"Skipping bad chunk for {record_id}: {ce}")
+                        except Exception as ce:
+                            logger.warning(f"Failed to rehydrate chunk {i} for record {record_id}: {ce}")
+                            logger.debug(f"Chunk data: {c}")
+
                 if hydrated:
                     record.chunks = hydrated
-            except Exception as e:  # pragma: no cover
-                logger.debug(f"Chunk rehydration skipped: {e}")
+                else:
+                    logger.warning(f"No chunks successfully rehydrated for record {record_id} (had {len(raw_chunks)} raw chunks)")
+                    # If rehydration failed, set to empty list to avoid dict objects
+                    record.chunks = []
+            except Exception as e:
+                logger.error(f"Chunk rehydration failed completely for record {record_id}: {e}")
+                # If chunk rehydration fails, set chunks to empty list to avoid dict objects
+                record.chunks = []
+        else:
+            # No chunks in cache or chunks was empty - restore original chunks value from record data
+            original_chunks = data.get("chunks")
+            if original_chunks is None:
+                # Original record had no chunks field - don't set it
+                pass
+            elif isinstance(original_chunks, list):
+                # Original record had empty list or list of chunks
+                record.chunks = original_chunks if not original_chunks else []
+            else:
+                # Fallback for other chunk values
+                record.chunks = []
 
         logger.info(
             "✅ Cache hit - loaded record",
