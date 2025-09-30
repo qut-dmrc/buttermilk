@@ -9,6 +9,8 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
+import importlib
+import sys
 import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
@@ -63,7 +65,7 @@ class LLMCore:
         self,
         model: str,
         template: str,
-        output_model: Optional[type[pydantic.BaseModel]] = None,
+        output_model: Optional[type[pydantic.BaseModel] | str] = None,
         tools: Optional[list[Tool]] = None,
         fail_on_unfilled_parameters: bool = True,
         output_col: str = "output",
@@ -77,11 +79,17 @@ class LLMCore:
                 - template: Name of the template to render
                 - temperature: Optional temperature setting
                 - fail_on_unfilled_parameters: Whether to fail on missing template vars
-            output_model: Optional Pydantic model for structured output
+            output_model: Optional Pydantic model for structured output (class or string path)
             tools: Optional list of tools the LLM can use
         """
         self.parameters = kwargs
-        self.output_model = output_model
+
+        # Resolve output_model if it's a string
+        if isinstance(output_model, str):
+            self.output_model = self._resolve_class_from_string(output_model)
+        else:
+            self.output_model = output_model
+
         self.tools = tools or []
         self.output_col = output_col
 
@@ -95,6 +103,118 @@ class LLMCore:
 
         # Initialize trace writer (lazy loading)
         self._trace_writer = None
+
+    def _resolve_class_from_string(self, class_path: str) -> type[pydantic.BaseModel]:
+        """Resolve a string class path to an actual class.
+
+        Args:
+            class_path: String path to class, e.g. "models.Summary" or "modbot.models.Summary"
+
+        Returns:
+            The resolved class
+
+        Raises:
+            ProcessingError: If the class cannot be imported
+        """
+        import os
+
+        try:
+            # Split module and class name
+            if "." in class_path:
+                module_path, class_name = class_path.rsplit(".", 1)
+            else:
+                # If no module path, assume it's in the current directory
+                module_path = class_path
+                class_name = class_path
+
+            logger.debug(f"Attempting to import {class_name} from module {module_path}")
+
+            # List of import strategies to try
+            import_strategies = []
+
+            # Strategy 1: Try direct import
+            import_strategies.append((module_path, "direct import"))
+
+            # Strategy 2: If starts with modbot, try just models
+            if module_path.startswith("modbot."):
+                simplified_path = module_path.replace("modbot.", "")
+                import_strategies.append((simplified_path, "simplified path (removed modbot prefix)"))
+
+            # Strategy 3: Try prepending modbot if it doesn't have it
+            if not module_path.startswith("modbot.") and "." not in module_path:
+                prefixed_path = f"modbot.{module_path}"
+                import_strategies.append((prefixed_path, "prefixed with modbot"))
+
+            module = None
+            successful_strategy = None
+            last_error = None
+
+            # Try each import strategy
+            for try_module_path, strategy_name in import_strategies:
+                try:
+                    # First attempt without path modification
+                    module = importlib.import_module(try_module_path)
+                    successful_strategy = strategy_name
+                    logger.debug(f"Successfully imported using strategy: {strategy_name}")
+                    break
+                except ImportError as e1:
+                    # If that fails, try adding various paths
+                    paths_to_try = [
+                        os.getcwd(),  # Current working directory
+                        os.path.dirname(os.getcwd()),  # Parent directory
+                        "/home/nic/src/writing/projects/automod.cc",  # Specific project path
+                        "/home/nic/src/writing/projects/automod.cc/modbot",  # Modbot directory
+                    ]
+
+                    for path in paths_to_try:
+                        if path not in sys.path:
+                            sys.path.insert(0, path)
+                            logger.debug(f"Added {path} to sys.path")
+                            try:
+                                module = importlib.import_module(try_module_path)
+                                successful_strategy = f"{strategy_name} with path {path}"
+                                logger.debug(f"Successfully imported using {successful_strategy}")
+                                break
+                            except ImportError:
+                                continue
+
+                    if module:
+                        break
+                    else:
+                        last_error = e1
+
+            if not module:
+                raise ProcessingError(
+                    f"Failed to import output_model '{class_path}'. "
+                    f"Tried strategies: {[s[1] for s in import_strategies]}. "
+                    f"Current working directory: {os.getcwd()}. "
+                    f"Python path includes: {sys.path[:5]}... "
+                    f"Last error: {last_error}"
+                )
+
+            # Get the class from the module
+            cls = getattr(module, class_name)
+
+            # Verify it's a Pydantic model
+            if not (isinstance(cls, type) and issubclass(cls, pydantic.BaseModel)):
+                raise ProcessingError(
+                    f"Class {class_path} is not a Pydantic BaseModel. "
+                    f"Got type: {type(cls).__name__}"
+                )
+
+            logger.info(f"Successfully resolved output_model: {class_path} -> {cls} using {successful_strategy}")
+            return cls
+
+        except AttributeError as e:
+            raise ProcessingError(
+                f"Class '{class_name}' not found in module '{module_path}': {e}"
+            )
+        except ProcessingError:
+            raise
+        except Exception as e:
+            raise ProcessingError(
+                f"Error resolving output_model '{class_path}': {e}"
+            )
 
     @property
     def trace_writer(self):

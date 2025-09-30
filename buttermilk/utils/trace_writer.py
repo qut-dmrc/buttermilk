@@ -116,14 +116,19 @@ class TraceWriter:
                 logger.error(f"Failed to flush traces: {e}")
 
 
-# Global singleton instance
-trace_writer = TraceWriter()
+# Global singleton instance (lazy initialization)
+trace_writer = None
 
 
 def get_trace_writer() -> TraceWriter:
     """Get the global TraceWriter instance.
 
+    Creates the singleton on first access to ensure BM is initialized.
+
     Returns:
         The singleton TraceWriter instance
     """
+    global trace_writer
+    if trace_writer is None:
+        trace_writer = TraceWriter()
     return trace_writer
