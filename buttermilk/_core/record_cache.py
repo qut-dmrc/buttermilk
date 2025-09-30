@@ -27,6 +27,7 @@ from typing import Any
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
+from buttermilk.utils.utils import scrub_serializable
 
 CACHE_VERSION = 1
 
@@ -112,18 +113,14 @@ class RecordCache:
             logger.debug("🚫 Invalid record data in cache", record_id=record_id, stage=stage, path=str(path))
             return None
 
-        # Remove chunks from record data to avoid dict chunks being set during Record creation
+        # Prepare data for Record creation
         data_copy = data.copy()
-        data_copy.pop("chunks", None)
+        data_copy.pop("chunks", None)  # Remove chunks from record data temporarily
 
-        try:
-            record = Record(**data_copy)
-        except Exception as e:  # pragma: no cover
-            logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
-            return None
-        # Rehydrate chunks (restore chunks field from cache)
+        # Rehydrate chunks BEFORE creating the Record
         raw_chunks = payload.get("chunks")
         chunks_count = 0
+        hydrated_chunks = None
 
         # Always restore the chunks field - either as rehydrated objects or original value
         if isinstance(raw_chunks, list) and raw_chunks:
@@ -141,27 +138,38 @@ class RecordCache:
                             logger.debug(f"Chunk data: {c}")
 
                 if hydrated:
-                    record.chunks = hydrated
+                    hydrated_chunks = hydrated
                 else:
                     logger.warning(f"No chunks successfully rehydrated for record {record_id} (had {len(raw_chunks)} raw chunks)")
                     # If rehydration failed, set to empty list to avoid dict objects
-                    record.chunks = []
+                    hydrated_chunks = []
             except Exception as e:
                 logger.error(f"Chunk rehydration failed completely for record {record_id}: {e}")
                 # If chunk rehydration fails, set chunks to empty list to avoid dict objects
-                record.chunks = []
+                hydrated_chunks = []
         else:
             # No chunks in cache or chunks was empty - restore original chunks value from record data
             original_chunks = data.get("chunks")
             if original_chunks is None:
                 # Original record had no chunks field - don't set it
-                pass
+                hydrated_chunks = None
             elif isinstance(original_chunks, list):
                 # Original record had empty list or list of chunks
-                record.chunks = original_chunks if not original_chunks else []
+                hydrated_chunks = original_chunks if not original_chunks else []
             else:
                 # Fallback for other chunk values
-                record.chunks = []
+                hydrated_chunks = []
+
+        # Add hydrated chunks to data if they exist
+        if hydrated_chunks is not None:
+            data_copy["chunks"] = hydrated_chunks
+
+        try:
+            # Create Record with chunks already included
+            record = Record(**data_copy)
+        except Exception as e:  # pragma: no cover
+            logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
+            return None
 
         logger.info(
             "✅ Cache hit - loaded record",
@@ -196,18 +204,23 @@ class RecordCache:
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,
                 "record_id": record.record_id,
-                "record": record.model_dump(),
+                "record": scrub_serializable(record.model_dump()),  # Convert numpy arrays and clean data
             }
             if include_chunks and getattr(record, "chunks", None):
                 serializable: list[dict[str, Any]] = []
                 for ch in record.chunks:  # type: ignore[attr-defined]
                     if hasattr(ch, "model_dump"):
-                        serializable.append(ch.model_dump())
+                        # Convert numpy arrays in chunks (especially embeddings) and clean data
+                        chunk_data = scrub_serializable(ch.model_dump())
+                        serializable.append(chunk_data)
                     elif hasattr(ch, "__dict__"):
-                        serializable.append({k: v for k, v in ch.__dict__.items() if not k.startswith("_")})
+                        chunk_data = {k: v for k, v in ch.__dict__.items() if not k.startswith("_")}
+                        chunk_data = scrub_serializable(chunk_data)
+                        serializable.append(chunk_data)
                     else:
                         try:
-                            serializable.append(asdict(ch))
+                            chunk_data = scrub_serializable(asdict(ch))
+                            serializable.append(chunk_data)
                         except Exception:  # pragma: no cover
                             continue
                 payload["chunks"] = serializable

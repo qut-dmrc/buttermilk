@@ -27,10 +27,9 @@ from buttermilk import bm, logger
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk.utils.utils import scrub_serializable
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
+from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -1265,7 +1264,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     chunk_data = {
                         "chunk_id": chunk.chunk_id,
                         "chunk_index": chunk.chunk_index,
-                        "embedding": convert_numpy_to_list(chunk.embedding),  # Ensure it's regular Python list
+                        "embedding": scrub_serializable(chunk.embedding),  # Ensure it's serializable Python list
                     }
                     embeddings_data["chunks"].append(chunk_data)
 

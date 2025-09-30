@@ -16,6 +16,7 @@ from buttermilk._core.log import logger
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord
 from buttermilk.storage import Storage
+from buttermilk.utils.utils import scrub_serializable
 
 
 class AsyncDataUploader:
@@ -214,12 +215,12 @@ class AsyncDataUploader:
         backup_file = self.backup_dir / f"backup_{datetime.now().isoformat()}.json"
         try:
             if isinstance(item, BaseModel):
-                payload = item.model_dump(mode="json")
+                payload = scrub_serializable(item.model_dump(mode="json"))
             elif isinstance(item, BaseRecord):
                 # BaseRecord is a BaseModel; included above, but keep explicit branch for clarity
-                payload = item.model_dump(mode="json")
+                payload = scrub_serializable(item.model_dump(mode="json"))
             elif isinstance(item, dict):
-                payload = item
+                payload = scrub_serializable(item)
             else:
                 payload = {"value": str(item)}
             backup_file.write_text(json.dumps(payload), encoding="utf-8")

@@ -679,17 +679,6 @@ def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dic
     return obj
 
 
-def convert_numpy_to_list(obj):
-    """Recursively convert numpy arrays to lists in nested structures"""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, dict):
-        return {k: convert_numpy_to_list(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_numpy_to_list(item) for item in obj]
-    return obj
-
-
 def unwrap_parquet_lists(obj):
     """Convert Parquet list format back to regular Python lists"""
     if isinstance(obj, dict):

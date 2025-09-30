@@ -18,7 +18,7 @@ from buttermilk.data.vector import ChunkedDocument
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
-from buttermilk.utils.utils import convert_numpy_to_list
+from buttermilk.utils.utils import scrub_serializable
 
 from google import genai
 from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
@@ -48,7 +48,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         embeddings = []
         for embedding in response.embeddings:
             # Convert to list if it's a numpy array
-            embeddings.append(convert_numpy_to_list(embedding.values))
+            embeddings.append(scrub_serializable(embedding.values))
 
         return embeddings
 class EmbeddingGenerator(BaseModel):
