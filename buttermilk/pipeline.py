@@ -321,8 +321,15 @@ class PipelineOrchestrator(BaseModel):
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
                             outputs = []
-                            async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
-                                outputs.append(output_record)
+                            try:
+                                async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
+                                    outputs.append(output_record)
+                            except Exception as e:
+                                # Log with processor-specific stage name
+                                record_id = getattr(current_record, 'record_id', 'unknown')
+                                logger.error(f"Error processing record {record_id} in processor stage {processor_stage_name}: {e}")
+                                processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                                raise
 
                             if not outputs:
                                 # This record was filtered out by this processor

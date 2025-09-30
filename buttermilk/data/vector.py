@@ -193,14 +193,19 @@ class SemanticSplitter(BaseModel):
             )
             return
 
+        logger.debug(f"Processing doc {doc.record_id} with {len(text_content)} characters")
+
         try:
             text_chunks, offsets = self._create_chunks(text_content)
+
+            logger.debug(f"Created {len(text_chunks)} text chunks for doc {doc.record_id}")
 
             # Build chunks list without modifying the frozen record
             chunks = []
             doc_chunk_count = 0
             for text_chunk, offset in zip(text_chunks, offsets, strict=True):
                 if not text_chunk.strip():
+                    logger.debug(f"Skipping empty chunk {doc_chunk_count} for doc {doc.record_id}")
                     continue
                 chunks.append(
                     ChunkedDocument(
@@ -612,6 +617,43 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         except Exception as e:
             logger.error(f"❌ Finalization failed: {e}")
             return False
+
+    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
+        """Process method for pipeline integration.
+
+        Takes a chunked record and creates embeddings for it.
+
+        Args:
+            record: Record with chunks to embed
+            processor_stage: Stage name for metadata tracking
+
+        Yields:
+            Record: The input record (passthrough after embedding)
+        """
+        try:
+            # Process the record to create embeddings
+            result = await self.process_record(record)
+
+            if result and hasattr(result, 'status') and result.status == 'processed':
+                # Update metadata to track processing
+                metadata = record.metadata.copy() if record.metadata else {}
+                metadata[processor_stage] = {
+                    'status': 'processed',
+                    'timestamp': __import__('time').time(),
+                    'processor': 'ChromaDBEmbeddings',
+                    'chunks_embedded': getattr(result, 'chunks_created', 0)
+                }
+
+                # Return the original record with updated metadata
+                processed_record = record.model_copy(update={'metadata': metadata})
+                yield processed_record
+            else:
+                logger.warning(f"Failed to embed record {record.record_id}")
+                return
+
+        except Exception as e:
+            logger.error(f"Error embedding record {record.record_id}: {e}")
+            return
 
     async def _ensure_collection_ready(self) -> None:
         """Ensure the collection exists and is compatible with current configuration.

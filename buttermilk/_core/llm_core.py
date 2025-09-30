@@ -86,12 +86,12 @@ class LLMCore:
         self.output_col = output_col
 
         # Extract commonly used parameters
-        self._model = model
-        self._template = template
+        self.model = model
+        self.template = template
         self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
 
         # Template metadata for tracking
-        self._template_metadata: dict[str, Any] = {}
+        self.template_metadata: dict[str, Any] = {}
 
         # Initialize trace writer (lazy loading)
         self._trace_writer = None
@@ -170,8 +170,8 @@ class LLMCore:
 
         # Build span attributes
         span_attributes = {
-            "llm.model": self._model,
-            "llm.template": self._template,
+            "llm.model": self.model,
+            "llm.template": self.template,
             "component.name": component_name,
             "processor.stage": processor_stage,
         }
@@ -273,8 +273,8 @@ class LLMCore:
 
         # Build span attributes, filtering out None values
         span_attributes = {
-            "llm.model": self._model,
-            "llm.template": self._template,
+            "llm.model": self.model,
+            "llm.template": self.template,
         }
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
@@ -291,7 +291,7 @@ class LLMCore:
                 llm_messages = await self._fill_template(combined_inputs, records=records, context=context)
 
                 # Store template metadata
-                result.metadata["template"] = self._template_metadata
+                result.metadata["template"] = self.template_metadata
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
@@ -311,12 +311,12 @@ class LLMCore:
                 # Add the assistant's response as a message
                 if result.content:
                     result.messages.append(
-                        AssistantMessage(content=str(result.content) if not isinstance(result.content, str) else result.content, source=self._model)
+                        AssistantMessage(content=str(result.content) if not isinstance(result.content, str) else result.content, source=self.model)
                     )
 
                 # Collect metadata
                 result.metadata = {
-                    "model": self._model,
+                    "model": self.model,
                     "finish_reason": llm_result.finish_reason,
                     "usage": llm_result.usage,
                 }
@@ -353,7 +353,7 @@ class LLMCore:
             inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
                    that contains template variables and optionally context/records
         """
-        template_name = self._template
+        template_name = self.template
         if not template_name:
             raise ProcessingError("'template' is required but not specified")
 
@@ -400,7 +400,7 @@ class LLMCore:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
         # Store template metadata
-        self._template_metadata = {
+        self.template_metadata = {
             "template_name": template_name,
             "template_hash": template_hash,
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
@@ -422,7 +422,7 @@ class LLMCore:
 
         # Build span attributes
         span_attributes = {
-            "llm.model": self._model,
+            "llm.model": self.model,
             "llm.message_count": len(messages),
             "llm.has_tools": len(self.tools) > 0,
             "llm.has_schema": self.output_model is not None,
@@ -433,9 +433,9 @@ class LLMCore:
         with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
-                model_client = bm.llms.get_autogen_chat_client(self._model)
+                model_client = bm.llms.get_autogen_chat_client(self.model)
 
-                logger.debug(f"LLMCore: Calling {self._model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}")
+                logger.debug(f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}")
 
                 # Make the actual LLM call
                 result = await model_client.call_chat(
@@ -460,4 +460,4 @@ class LLMCore:
                 logger.error(f"LLM call failed: {e}")
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
-                raise ProcessingError(f"LLM call to '{self._model}' failed: {e}") from e
+                raise ProcessingError(f"LLM call to '{self.model}' failed: {e}") from e
