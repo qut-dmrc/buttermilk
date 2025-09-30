@@ -18,8 +18,39 @@ from buttermilk.data.vector import ChunkedDocument
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
+from buttermilk.utils.utils import convert_numpy_to_list
+
+from google import genai
+from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
 
 
+class GeminiEmbeddingFunction(EmbeddingFunction):
+    def __init__(
+        self,
+        embedding_model: str,
+        dimensionality: int = 3072,
+    ):
+        self.dimensionality = dimensionality
+        self.client: genai.Client = bm.genai
+        self._embedding_model = embedding_model
+
+    def __call__(self, input: Documents) -> Embeddings:
+        response = self.client.models.embed_content(
+            model=self._embedding_model,
+            contents=input,
+            config={
+                "output_dimensionality": self.dimensionality,
+                "auto_truncate": False,
+            },
+        )
+
+        # Extract embeddings from response
+        embeddings = []
+        for embedding in response.embeddings:
+            # Convert to list if it's a numpy array
+            embeddings.append(convert_numpy_to_list(embedding.values))
+
+        return embeddings
 class EmbeddingGenerator(BaseModel):
     """Generate embeddings for chunked documents.
 
@@ -180,28 +211,13 @@ class EmbeddingGenerator(BaseModel):
             List of (index, embedding) tuples where embedding can be None on failure
         """
         client = bm.genai
+        embedding_function = GeminiEmbeddingFunction(self.embedding_model, self.dimensionality)
 
         async def _run_embed_batch(batch_docs, attempt: int = 0):
             """Run embedding for a batch with semaphore."""
             async with self._embedding_semaphore:
                 try:
-                    response = await client.models.embed_content(
-                        model=self.embedding_model,
-                        contents=batch_docs,
-                        config={
-                            "output_dimensionality": self.dimensionality,
-                            "auto_truncate": False,
-                        },
-                    )
-
-                    # Extract embeddings from response
-                    embeddings = []
-                    for embedding in response.embeddings:
-                        # Convert numpy array or raw values to list
-                        if hasattr(embedding.values, "tolist"):
-                            embeddings.append(embedding.values.tolist())
-                        else:
-                            embeddings.append(list(embedding.values))
+                    embeddings = embedding_function(batch_docs)
 
                     logger.debug(
                         "Embedding batch",
@@ -220,7 +236,17 @@ class EmbeddingGenerator(BaseModel):
                     return embeddings
 
                 except Exception as e:
-                    logger.exception("Embedding API error", error=str(e), args=e.args, batch_size=len(batch_docs))
+                    logger.exception(
+                        "Embedding API error",
+                        error=str(e),
+                        args=e.args,
+                        batch_size=len(batch_docs),
+                        attempt=attempt + 1,
+                        model=self.embedding_model,
+                        dimensionality=self.dimensionality,
+                        auto_truncate=False,
+                        cooldown_seconds=self.embedding_cooldown_seconds,
+                    )
                     raise
 
         # Process in batches

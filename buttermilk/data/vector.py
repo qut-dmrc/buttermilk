@@ -16,7 +16,6 @@ import pydantic
 import semchunk
 from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
 from chromadb.api import ClientAPI
-from google import genai
 from omegaconf import OmegaConf
 from pydantic import BaseModel, Field, PrivateAttr
 from tqdm.asyncio import tqdm
@@ -30,7 +29,7 @@ from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk.utils.utils import scrub_serializable
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
-
+from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import convert_numpy_to_list, ensure_chromadb_cache
 
@@ -251,33 +250,6 @@ class SemanticSplitter(BaseModel):
             )
 
 
-class GeminiEmbeddingFunction(EmbeddingFunction):
-    def __init__(
-        self,
-        embedding_model: str,
-        dimensionality: int = 3072,
-    ):
-        self.dimensionality = dimensionality
-        self.client: genai.Client = bm.genai
-        self._embedding_model = embedding_model
-
-    def __call__(self, input: Documents) -> Embeddings:
-        response = self.client.models.embed_content(
-            model=self._embedding_model,
-            contents=input,
-            config={
-                "output_dimensionality": self.dimensionality,
-                "auto_truncate": False,
-            },
-        )
-
-        # Extract embeddings from response
-        embeddings = []
-        for embedding in response.embeddings:
-            # Convert to list if it's a numpy array
-            embeddings.append(convert_numpy_to_list(embedding.values))
-
-        return embeddings
 
 
 # --- Core Embedding and DB Interaction Class ---
