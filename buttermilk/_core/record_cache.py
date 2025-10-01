@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import scrub_serializable
 
 CACHE_VERSION = 1
@@ -108,75 +108,23 @@ class RecordCache:
         if payload.get("_schema_version") != CACHE_VERSION:
             logger.debug("🚫 Cache version mismatch", record_id=record_id, stage=stage, path=str(path))
             return None
-        data = payload.get("record")
-        if not isinstance(data, dict):
+
+        # Extract record data (remove metadata fields)
+        data = {k: v for k, v in payload.items() if k not in ["_schema_version", "stage"]}
+        if not isinstance(data, dict) or not data.get("record_id"):
             logger.debug("🚫 Invalid record data in cache", record_id=record_id, stage=stage, path=str(path))
             return None
 
-        # Prepare data for Record creation
-        data_copy = data.copy()
-        data_copy.pop("chunks", None)  # Remove chunks from record data temporarily
-
-        # Rehydrate chunks BEFORE creating the Record
-        raw_chunks = payload.get("chunks")
-        chunks_count = 0
-        hydrated_chunks = None
-
-        # Always restore the chunks field - either as rehydrated objects or original value
-        if isinstance(raw_chunks, list) and raw_chunks:
-            try:
-                from buttermilk.data.vector import ChunkedDocument  # type: ignore
-
-                hydrated = []
-                for i, c in enumerate(raw_chunks):
-                    if isinstance(c, dict):
-                        try:
-                            hydrated.append(ChunkedDocument(**c))
-                            chunks_count += 1
-                        except Exception as ce:
-                            logger.warning(f"Failed to rehydrate chunk {i} for record {record_id}: {ce}")
-                            logger.debug(f"Chunk data: {c}")
-
-                if hydrated:
-                    hydrated_chunks = hydrated
-                else:
-                    logger.warning(f"No chunks successfully rehydrated for record {record_id} (had {len(raw_chunks)} raw chunks)")
-                    # If rehydration failed, set to empty list to avoid dict objects
-                    hydrated_chunks = []
-            except Exception as e:
-                logger.error(f"Chunk rehydration failed completely for record {record_id}: {e}")
-                # If chunk rehydration fails, set chunks to empty list to avoid dict objects
-                hydrated_chunks = []
-        else:
-            # No chunks in cache or chunks was empty - restore original chunks value from record data
-            original_chunks = data.get("chunks")
-            if original_chunks is None:
-                # Original record had no chunks field - don't set it
-                hydrated_chunks = None
-            elif isinstance(original_chunks, list):
-                # Original record had empty list or list of chunks
-                hydrated_chunks = original_chunks if not original_chunks else []
-            else:
-                # Fallback for other chunk values
-                hydrated_chunks = []
-
-        # Add hydrated chunks to data if they exist
-        if hydrated_chunks is not None:
-            data_copy["chunks"] = hydrated_chunks
-
         try:
-            # Create Record with chunks already included
-            record = Record(**data_copy)
+            # Create BaseRecord directly from serialized data
+            record = BaseRecord(**data)
+            chunks_count = len(getattr(record, "chunks", []))
         except Exception as e:  # pragma: no cover
             logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
             return None
 
         logger.info(
-            "✅ Cache hit - loaded record",
-            record_id=record_id,
-            stage=stage,
-            path=str(path),
-            chunks_count=chunks_count
+            f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path), chunks_count=chunks_count
         )
         return record
 
@@ -200,30 +148,14 @@ class RecordCache:
         chunks_count = len(getattr(record, "chunks", []))
 
         try:
+            # Store complete record data with chunks included
+            record_data = scrub_serializable(record.model_dump()) if hasattr(record, 'model_dump') else record
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,
                 "record_id": record.record_id,
-                "record": scrub_serializable(record.model_dump()),  # Convert numpy arrays and clean data
+                **record_data  # Include all record data directly
             }
-            if include_chunks and getattr(record, "chunks", None):
-                serializable: list[dict[str, Any]] = []
-                for ch in record.chunks:  # type: ignore[attr-defined]
-                    if hasattr(ch, "model_dump"):
-                        # Convert numpy arrays in chunks (especially embeddings) and clean data
-                        chunk_data = scrub_serializable(ch.model_dump())
-                        serializable.append(chunk_data)
-                    elif hasattr(ch, "__dict__"):
-                        chunk_data = {k: v for k, v in ch.__dict__.items() if not k.startswith("_")}
-                        chunk_data = scrub_serializable(chunk_data)
-                        serializable.append(chunk_data)
-                    else:
-                        try:
-                            chunk_data = scrub_serializable(asdict(ch))
-                            serializable.append(chunk_data)
-                        except Exception:  # pragma: no cover
-                            continue
-                payload["chunks"] = serializable
             with tmp_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False)
             tmp_path.replace(path)

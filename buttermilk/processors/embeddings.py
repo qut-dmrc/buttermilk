@@ -13,7 +13,7 @@ from typing import Any, AsyncGenerator
 import pydantic
 from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import bm, logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import ChunkedDocument
 from vertexai.language_models import (
     TextEmbeddingInput,
@@ -91,15 +91,15 @@ class EmbeddingGenerator(BaseModel):
             batch_size=self.embedding_batch_size,
         )
 
-    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by generating embeddings for its chunks.
 
         Args:
-            record: Record with chunks field containing ChunkedDocument objects
+            record: BaseRecord with chunks field containing chunk dicts
             processor_stage: Stage name for metadata tracking
 
         Yields:
-            Record with embeddings added to chunks
+            BaseRecord with embeddings added to chunks
         """
         # Check if record has chunks
         chunks_count = len(getattr(record, "chunks", []))
@@ -152,7 +152,7 @@ class EmbeddingGenerator(BaseModel):
             # Don't yield the record if embedding failed
             return
 
-    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
+    async def _embed_chunks(self, chunks: list[Any]) -> bool:
         """Generate embeddings for a list of chunks in place.
 
         Returns:
@@ -161,15 +161,27 @@ class EmbeddingGenerator(BaseModel):
         if not chunks:
             return False
 
+        # Convert chunks to dicts if needed, consistently
+        for i, chunk in enumerate(chunks):
+            if hasattr(chunk, 'model_dump'):
+                # Convert ChunkedDocument to dict
+                chunks[i] = chunk.model_dump()
+            elif not isinstance(chunk, dict):
+                # Skip unsupported chunk types
+                logger.warning(f"Unsupported chunk type: {type(chunk)}")
+                continue
+
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
+            if not isinstance(chunk, dict):
+                continue
             embeddings_input.append(
                 (
                     i,
                     TextEmbeddingInput(
-                        text=chunk.chunk_text,
+                        text=chunk['chunk_text'],
                         task_type=self.task,
-                        title=chunk.chunk_title,
+                        title=f"{chunk['document_title']}_{chunk['chunk_index']}",  # chunk_title equivalent
                     ),
                 ),
             )
@@ -178,8 +190,8 @@ class EmbeddingGenerator(BaseModel):
 
         success_count = 0
         for idx, embedding in embedding_results:
-            if embedding is not None and idx < len(chunks):
-                chunks[idx].embedding = embedding
+            if embedding is not None and idx < len(chunks) and isinstance(chunks[idx], dict):
+                chunks[idx]['embedding'] = embedding
                 success_count += 1
 
         if success_count == 0:

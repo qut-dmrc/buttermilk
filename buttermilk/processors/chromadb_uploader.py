@@ -14,7 +14,7 @@ import chromadb
 import pydantic
 from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import bm, logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import ChunkedDocument, _sanitize_metadata_for_chroma
 from buttermilk.utils.utils import scrub_serializable
 
@@ -27,9 +27,15 @@ class ChromaDBUploader(BaseModel):
 
     This is typically used for batch updates to the vector database and
     wouldn't be included in production RAG pipelines.
+
+    Note: This processor disables pipeline caching since ChromaDB operations
+    are upserts that need to run every time to check for data changes.
     """
 
     model_config = pydantic.ConfigDict(extra="ignore", arbitrary_types_allowed=True)
+
+    # Pipeline configuration
+    skip_cache: bool = Field(default=True, description="Skip pipeline caching for this processor (recommended for upserts)")
 
     # ChromaDB configuration
     collection_name: str = Field(..., description="ChromaDB collection name")
@@ -55,15 +61,15 @@ class ChromaDBUploader(BaseModel):
         logger.info("Initialized ChromaDBUploader", collection_name=self.collection_name, persist_directory=self.persist_directory)
         self._last_sync_time = time.time()
 
-    async def process(self, record: Record, *, processor_stage: str = "chromadb_upload", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str = "chromadb_upload", **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by uploading its embedded chunks to ChromaDB.
 
         Args:
-            record: Record with embedded chunks
+            record: BaseRecord with embedded chunks
             processor_stage: Stage name for metadata tracking
 
         Yields:
-            Record unchanged (passthrough after upload)
+            BaseRecord unchanged (passthrough after upload)
         """
         # Ensure cache is initialized for remote storage
         if not self._cache_initialized:
@@ -85,7 +91,7 @@ class ChromaDBUploader(BaseModel):
             return
 
         # Check if chunks have embeddings
-        chunks_with_embeddings = [c for c in record.chunks if c.embedding is not None]
+        chunks_with_embeddings = [c for c in record.chunks if (c.get('embedding') if isinstance(c, dict) else getattr(c, 'embedding', None)) is not None]
         logger.debug(
             "ChromaDBUploader chunk embedding status",
             record_id=record.record_id,
@@ -181,12 +187,27 @@ class ChromaDBUploader(BaseModel):
 
         return local_cache_path
 
-    async def _store_chunks_for_record(self, record: Record) -> None:
+    async def _store_chunks_for_record(self, record: BaseRecord) -> None:
         """Store record chunks with metadata in ChromaDB."""
         if not self._collection:
             raise ValueError("Collection not initialized")
 
-        chunks_to_upsert = [c for c in record.chunks if c.embedding is not None]
+        chunks_to_upsert = []
+
+        # Convert chunks to dicts if needed and filter for embeddings
+        for c in record.chunks:
+            if hasattr(c, 'model_dump'):
+                # Convert ChunkedDocument to dict
+                chunk_dict = c.model_dump()
+            elif isinstance(c, dict):
+                chunk_dict = c
+            else:
+                # Skip unsupported chunk types
+                continue
+
+            if chunk_dict.get('embedding') is not None:
+                chunks_to_upsert.append(chunk_dict)
+
         if not chunks_to_upsert:
             return
 
@@ -196,23 +217,25 @@ class ChromaDBUploader(BaseModel):
         metadatas = []
 
         for chunk in chunks_to_upsert:
-            ids.append(chunk.chunk_id)
-            documents.append(chunk.chunk_text)
+            ids.append(chunk['chunk_id'])
+            documents.append(chunk['chunk_text'])
 
             # Convert numpy array or list to regular Python floats
-            if hasattr(chunk.embedding, "tolist"):
-                embeddings_list.append(chunk.embedding.tolist())
+            embedding = chunk['embedding']
+            if hasattr(embedding, "tolist"):
+                embeddings_list.append(embedding.tolist())
             else:
-                embeddings_list.append([float(x) for x in chunk.embedding])
+                embeddings_list.append([float(x) for x in embedding])
 
             # Build metadata
+            chunk_metadata = chunk.get('metadata', {})
             enhanced_metadata = {
-                "document_title": chunk.document_title,
-                "chunk_index": chunk.chunk_index,
-                "document_id": chunk.document_id,
-                "content_type": chunk.metadata.get("content_type", "unknown"),
-                "chunk_type": chunk.metadata.get("chunk_type", "unknown"),
-                **{k: v for k, v in chunk.metadata.items() if k not in ["content_type", "chunk_type"]},
+                "document_title": chunk['document_title'],
+                "chunk_index": chunk['chunk_index'],
+                "document_id": chunk['document_id'],
+                "content_type": chunk_metadata.get("content_type", "unknown"),
+                "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
+                **{k: v for k, v in chunk_metadata.items() if k not in ["content_type", "chunk_type"]},
             }
             # Ensure metadata is serializable and ChromaDB-compatible
             enhanced_metadata = scrub_serializable(enhanced_metadata)

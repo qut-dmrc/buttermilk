@@ -1,7 +1,31 @@
-"""Async pipeline orchestrator extracted and simplified from vector.py.
+"""Async pipeline orchestrator.
 
 This module provides a concurrent async pipeline orchestrator that processes
-records through stages, tracking metadata and errors without complex result objects.
+records through stages with caching and tracking metadata.
+
+PIPELINE DESIGN
+
+1. **Processor Agnosticism**: The pipeline orchestrator must not have special
+    knowledge of any processor type. This enables extensibility without
+    modifying core pipeline code.
+
+    **Implications**:
+    - No special loading paths for specific processors (e.g., ChromaDB)
+    - All processor-specific logic lives in the processor itself
+    - Pipeline only knows about the Processor Protocol
+
+    **Anti-patterns**:
+    ❌ if isinstance(processor, ChromaDBUploader): special_logic()
+    ❌ Cache layer knowing about ChunkedDocument types
+    ✅ Processors handle their own type conversions
+
+2. Processors must acccept a BaseRecord and yield zero or more BaseRecord objects.
+
+NON-GOALS
+- Pipeline will NOT validate processor-specific data shapes
+- Pipeline will NOT handle type conversions for processors
+- Pipeline will NOT have processor-specific optimizations
+
 """
 
 import asyncio
@@ -21,6 +45,7 @@ from buttermilk._core.types import BaseRecord
 
 class RecordSkippedException(Exception):
     """Exception raised when a record is intentionally skipped/filtered."""
+
     pass
 
 
@@ -50,6 +75,10 @@ class Processor(Protocol):
 
     5. **Filtering**: To filter out a record, simply yield nothing.
        The pipeline will handle the RecordSkippedException automatically.
+
+    6. Processors MUST work with standard Python types. When loading from cache, objects
+       will be deserialized into dicts/lists/primitives. Processors must handle their own
+       own conversions internally if needed.
     """
 
     async def process(
@@ -104,17 +133,22 @@ class Processor(Protocol):
 
 
 class PipelineOrchestrator(BaseModel):
-    """Concurrent async pipeline orchestrator for processing record dictionaries through stages.
+    """Concurrent async pipeline orchestrator for processing records through processor chains.
 
-    Processes dictionaries in the format {"record": BaseRecord, ...} through processor chains.
-    Each stage appends its status to record.metadata[stage_name].
+    Processes BaseRecord objects through a sequence of processors.
+    Each pipeline appends its status to record.metadata[pipeline_name].
+
+    Terminology:
+    - Pipeline: The entire processing flow (e.g., 'osb_vectorstore_pipeline')
+    - Processor: Individual processing step (e.g., LLMCore, SemanticSplitter)
+    - Processor ID: Unique identifier within pipeline (e.g., 'osb_vectorstore_pipeline.03.ChromaDBUploader')
     """
 
     concurrency: int = Field(default=1, description="Max concurrent record processing")
     max_records: Optional[int] = Field(default=None, description="Maximum records to process")
-    stage_name: str = Field(..., description="Name for this processing stage")
+    stage_name: str = Field(..., description="Name for this processing pipeline")  # TODO: rename to pipeline_name
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
-    enable_record_cache: bool = Field(default=True, description="Enable per-stage Record caching")
+    enable_record_cache: bool = Field(default=True, description="Enable per-processor Record caching")
     cache_dir: Optional[str] = Field(default=None, description="Base directory for record cache (defaults to ~/.cache/buttermilk)")
 
     # Inputs configured after instantiation
@@ -268,12 +302,13 @@ class PipelineOrchestrator(BaseModel):
                 for processor_index, processor in enumerate(self.processors):
                     # Create span for this processor
                     processor_class = type(processor).__name__
-                    # Create unique stage name for this processor (for caching and process() calls)
-                    processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"
+                    # Create unique processor ID for this processor (for caching and process() calls)
+                    # Format: {pipeline_name}.{index:02d}.{processor_class}
+                    processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
-                        "processor.stage": processor_stage_name,
+                        "processor.id": processor_stage_name,  # Full processor identifier within pipeline
                         "inputs.count": len(processing_queue),
                     }
 
@@ -288,11 +323,16 @@ class PipelineOrchestrator(BaseModel):
                             trace_before = self._trace_record_state(current_record, "before_processor", processor_class, processor_index)
                             logger.debug("📋 Record state before processor", **trace_before)
 
-                            # Check processor-specific cache first
-                            cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
+                            # Check processor-specific cache first (unless processor opts out)
+                            cached_outputs = None
+                            if getattr(processor, "skip_cache", False):
+                                logger.debug(f"🚫 Skipping cache for {processor_class} (skip_cache=True)")
+                            else:
+                                cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
+
                             if cached_outputs:
                                 logger.info(
-                                    "⚡ Processor cache hit",
+                                    f"⚡ Processor {processor_stage_name} cache hit",
                                     record_id=getattr(current_record, "record_id", "unknown"),
                                     processor_stage=processor_stage_name,
                                     cached_outputs_count=len(cached_outputs),
@@ -310,7 +350,7 @@ class PipelineOrchestrator(BaseModel):
                                     outputs.append(output_record)
                             except Exception as e:
                                 # Log with processor-specific stage name using structured logging
-                                record_id = getattr(current_record, 'record_id', 'unknown')
+                                record_id = getattr(current_record, "record_id", "unknown")
                                 processor_type = type(processor).__name__
                                 logger.error(
                                     f"Error processing record in pipeline processor {processor_stage_name}",
@@ -335,8 +375,11 @@ class PipelineOrchestrator(BaseModel):
                                     trace_after = self._trace_record_state(output_record, "after_processor", processor_class, processor_index)
                                     logger.debug(f"📋 Record state after processor (output {i})", **trace_after)
 
-                                # Cache the processor outputs
-                                await self._save_processor_cache(current_record, outputs, processor_stage_name)
+                                # Cache the processor outputs (unless processor opts out)
+                                if getattr(processor, "skip_cache", False):
+                                    logger.debug(f"🚫 Skipping cache save for {processor_class} (skip_cache=True)")
+                                else:
+                                    await self._save_processor_cache(current_record, outputs, processor_stage_name)
                                 # Add all outputs to the next processing queue
                                 next_queue.extend(outputs)
 
