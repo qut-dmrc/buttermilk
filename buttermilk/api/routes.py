@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
+from buttermilk.utils import scrub_serializable
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -153,7 +154,7 @@ async def get_session_messages_endpoint(
         is_resumable = flow_status == "running" and not is_stale
         
         # Convert ChatMessage objects to dicts for JSON response
-        message_dicts = [msg.model_dump(mode="json") for msg in messages]
+        message_dicts = [scrub_serializable(msg.model_dump) for msg in messages]
         
         response_data = {
             "messages": message_dicts,

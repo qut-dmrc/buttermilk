@@ -41,6 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.types import BaseRecord
+from buttermilk.utils.utils import scrub_serializable
 
 
 class RecordSkippedException(Exception):
@@ -622,6 +623,9 @@ class PipelineOrchestrator(BaseModel):
             # Wait for producer to finish
             await producer_task
 
+            # Call finalize_processing on all processors
+            await self._finalize_all_processors()
+
             # Set final stage span attributes
             stage_duration_ms = int((time.time() - start_time) * 1000)
             stage_span.set_attribute("records.attempted", self._attempted)
@@ -641,6 +645,11 @@ class PipelineOrchestrator(BaseModel):
             # Wait for cancellations to complete
             if pending_tasks:
                 await asyncio.gather(*pending_tasks, return_exceptions=True)
+            # Still try to finalize processors even on error
+            try:
+                await self._finalize_all_processors()
+            except Exception as finalize_error:
+                logger.error(f"Error during finalization after pipeline error: {finalize_error}")
             raise
         finally:
             logger.info(
@@ -738,6 +747,30 @@ class PipelineOrchestrator(BaseModel):
                     self._record_cache.save(cache_record, processor_stage_name)
         except Exception as e:
             logger.debug("💥 Failed to save processor cache", record_id=input_record.record_id, processor_stage=processor_stage_name, error=str(e))
+
+    async def _finalize_all_processors(self) -> None:
+        """Call finalize_processing on all processors that support it.
+
+        This ensures proper cleanup and final sync operations for processors
+        like ChromaDBUploader and ChromaDBEmbeddings.
+        """
+        logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.stage_name}'")
+
+        for i, processor in enumerate(self.processors):
+            if hasattr(processor, 'finalize_processing'):
+                try:
+                    logger.debug(f"🔄 Finalizing processor {i}: {type(processor).__name__}")
+                    result = await processor.finalize_processing()
+                    if result:
+                        logger.info(f"✅ Successfully finalized processor {i}: {type(processor).__name__}")
+                    else:
+                        logger.warning(f"⚠️ Processor {i} finalization reported issues: {type(processor).__name__}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to finalize processor {i} ({type(processor).__name__}): {e}")
+            else:
+                logger.debug(f"⏭️ Processor {i} has no finalize_processing method: {type(processor).__name__}")
+
+        logger.debug(f"✅ Completed finalization for stage '{self.stage_name}'")
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:

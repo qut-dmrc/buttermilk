@@ -29,7 +29,7 @@ from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
+from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache, generate_cache_key
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -391,8 +391,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         import time
 
-        # Get local cache path
-        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / remote_path.replace("://", "___").replace("/", "_")
+        # Get local cache path using same logic as utils.py for consistency
+        cache_key = generate_cache_key(remote_path)
+        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
 
         # Check if local cache exists and has recent modifications
         local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()

@@ -787,6 +787,21 @@ def _get_download_lock(persist_directory: str) -> threading.Lock:
         return _download_locks[persist_directory]
 
 
+def generate_cache_key(path_or_identifier: str) -> str:
+    """Generate a consistent cache key from any path or identifier.
+
+    This is the single source of truth for cache key generation to ensure
+    consistency across all caching operations (ChromaDB, embeddings, records, etc.).
+
+    Args:
+        path_or_identifier: Any path (e.g., "gs://bucket/path") or identifier to convert to cache key
+
+    Returns:
+        str: Cache key suitable for use as directory/file name
+    """
+    return path_or_identifier.replace("/", "_").replace(":", "_").replace(".", "_")
+
+
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     """Ensure ChromaDB database files are available locally, downloading from remote if needed.
 
@@ -816,7 +831,7 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
         pass  # Not a valid local path, treat as remote
 
     # Generate cache key from persist_directory
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
 
@@ -927,7 +942,7 @@ async def get_chromadb_cache_size(persist_directory: str) -> int:
         int: Size in bytes, or 0 if cache doesn't exist
 
     """
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
 
@@ -973,7 +988,7 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
 
         return await asyncio.to_thread(_clear_all)
     # Clear specific cache
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     local_cache_path = cache_dir / cache_key
 
     if not local_cache_path.exists():

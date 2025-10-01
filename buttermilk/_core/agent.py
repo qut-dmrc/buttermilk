@@ -16,6 +16,7 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from buttermilk.utils import scrub_serializable
 import weave  # For tracing - core dependency
 from opentelemetry import trace
 
@@ -483,7 +484,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
                 child_call = weave_client.create_call(
                     process_op,
-                    inputs=message.model_dump(mode="json"),
+                    inputs=scrub_serializable(message.model_dump()),
                     parent=parent_call,
                     display_name=self.agent_name,
                     attributes=trace_params,

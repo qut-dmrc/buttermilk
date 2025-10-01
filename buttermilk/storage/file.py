@@ -8,6 +8,7 @@ from cloudpathlib import AnyPath  # For handling local and cloud paths
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
+from buttermilk.utils.utils import scrub_serializable
 
 from .base import Storage
 
@@ -116,11 +117,11 @@ class FileStorage(Storage):
                 except Exception as e:
                     logger.warning(f"Failed to convert record at index {idx} to dict: {e}. Writing raw JSON if possible.")
                     try:
-                        # Best-effort fallback
+                        # Best-effort fallback with scrub_serializable
                         if hasattr(record, "model_dump"):
-                            data.append(record.model_dump(mode="json"))  # type: ignore[attr-defined]
+                            data.append(scrub_serializable(record.model_dump()))  # type: ignore[attr-defined]
                         elif isinstance(record, dict):
-                            data.append(record)
+                            data.append(scrub_serializable(record))
                         else:
                             data.append({"record": str(record)})
                     except Exception as e2:
@@ -386,8 +387,9 @@ class FileStorage(Storage):
             Dictionary representation
         """
         if isinstance(record, dict):
-            # Assume it already resembles a model_dump output
-            return record
+            # Assume it already resembles a model_dump output but scrub for safety
+            return scrub_serializable(record)
 
-        # Preferred: BaseRecord instance -> use model_dump with JSON mode
-        return record.model_dump(mode="json")
+        # Preferred: BaseRecord instance -> use model_dump (without mode) and scrub numpy arrays
+        # Note: mode="json" fails with numpy arrays, so we use basic model_dump + scrub_serializable
+        return scrub_serializable(record.model_dump())

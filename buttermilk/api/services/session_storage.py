@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from buttermilk import bm, logger
 from buttermilk.api.services.message_service import ChatMessage
+from buttermilk.utils import scrub_serializable
 
 # Default sessions directory - will be overridden by get_sessions_dir()
 SESSIONS_DIR = Path("data/sessions")
@@ -111,7 +112,7 @@ class SessionStorageService:
             session_data = self._get_or_create_session_data(session_id)
             
             # Check for duplicate messages to prevent corruption
-            message_dict = message.model_dump(mode="json")
+            message_dict = scrub_serializable(message.model_dump())
 
             # General deduplication: check if message_id already exists
             if message.message_id:

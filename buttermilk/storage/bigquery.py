@@ -3,6 +3,7 @@
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from buttermilk.utils import scrub_serializable
 import shortuuid
 from google.cloud import bigquery
 from pydantic import BaseModel
@@ -164,7 +165,7 @@ class BigQueryStorage(Storage, StorageClient):
                 if isinstance(record, dict):
                     rows_to_insert.append(record)
                 elif hasattr(record, "model_dump"):
-                    rows_to_insert.append(record.model_dump(mode="json"))  # type: ignore[attr-defined]
+                    rows_to_insert.append(scrub_serializable(record.model_dump()))  # type: ignore[attr-defined]
                 else:
                     # Last resort
                     rows_to_insert.append({"value": str(record)})

@@ -10,6 +10,7 @@ structures without hardcoding access patterns within the agent logic.
 from collections.abc import Sequence  # For type hinting sequences
 from typing import Any  # For general type hinting
 
+from buttermilk.utils import scrub_serializable
 import jmespath  # For resolving input mappings using JMESPath query language
 from jmespath import exceptions as jmespath_exceptions  # JMESPath specific exceptions
 
@@ -67,7 +68,7 @@ def extract_message_data(
     # The message content is nested under a key derived from the source.
     # e.g., if source is "AgentName-xyz", key becomes "AgentName".
     source_key = source.split("-", maxsplit=1)[0]
-    message_dict = message.model_dump(mode="json")  # Serialize to dict, handling complex types
+    message_dict = scrub_serializable(message.model_dump())  # Serialize to dict, handling complex types
 
     data_for_jmespath = {source_key: message_dict}
 

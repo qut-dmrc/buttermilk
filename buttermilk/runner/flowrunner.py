@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from buttermilk.utils import scrub_serializable
 import shortuuid
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
@@ -350,7 +351,7 @@ class FlowRunContext(BaseModel):
 
         try:
             message_type = formatted_message.type
-            message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+            message_data_to_send = scrub_serializable(formatted_message.model_dump(exclude_unset=True, exclude_none=True))
 
             # Consolidate debug info into a single log entry
             logger.debug(

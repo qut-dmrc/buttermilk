@@ -215,10 +215,10 @@ class AsyncDataUploader:
         backup_file = self.backup_dir / f"backup_{datetime.now().isoformat()}.json"
         try:
             if isinstance(item, BaseModel):
-                payload = scrub_serializable(item.model_dump(mode="json"))
+                payload = scrub_serializable(item.model_dump())
             elif isinstance(item, BaseRecord):
                 # BaseRecord is a BaseModel; included above, but keep explicit branch for clarity
-                payload = scrub_serializable(item.model_dump(mode="json"))
+                payload = scrub_serializable(item.model_dump())
             elif isinstance(item, dict):
                 payload = scrub_serializable(item)
             else:
@@ -252,3 +252,20 @@ class AsyncDataUploader:
                         f.unlink()
                     except Exception:
                         pass
+
+    async def finalize_processing(self) -> bool:
+        """Finalize processing by flushing any remaining data.
+
+        This method is called by the pipeline at the end of processing
+        to ensure all data is safely written before completion.
+
+        Returns:
+            bool: True if finalization succeeded, False otherwise
+        """
+        try:
+            # Trigger shutdown to flush remaining data
+            self.shutdown()
+            return True
+        except Exception as e:
+            logger.error(f"Error during AsyncDataUploader finalization: {e}")
+            return False

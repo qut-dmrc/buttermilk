@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import bm, logger
 from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import ChunkedDocument, _sanitize_metadata_for_chroma
-from buttermilk.utils.utils import scrub_serializable
+from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache, generate_cache_key
 
 
 class ChromaDBUploader(BaseModel):
@@ -176,8 +176,8 @@ class ChromaDBUploader(BaseModel):
 
     async def _setup_local_cache(self, remote_path: str) -> Path:
         """Setup local cache for remote ChromaDB."""
-        # Simple cache path generation
-        cache_key = remote_path.replace("://", "_").replace("/", "_")
+        # Use same cache key generation as utils.py for consistency
+        cache_key = generate_cache_key(remote_path)
         local_cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
         local_cache_path.mkdir(parents=True, exist_ok=True)
 
@@ -273,15 +273,51 @@ class ChromaDBUploader(BaseModel):
 
         if should_sync and self._original_remote_path:
             logger.info("Syncing to remote storage", reason=reason, processed_count=self._processed_count)
-            # In production, implement actual sync to remote here
-            # For now, just reset counters
-            self._processed_count = 0
-            self._last_sync_time = current_time
+            try:
+                # Get the local cache path
+                local_cache_path = await self._get_local_cache_path()
+                if local_cache_path:
+                    await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
+                    logger.info("Successfully synced ChromaDB to remote storage", processed_count=self._processed_count)
+                else:
+                    logger.warning("Could not determine local cache path for sync")
+            except Exception as e:
+                logger.error("Failed to sync to remote storage", error=str(e), processed_count=self._processed_count)
+            finally:
+                # Reset counters regardless of sync success/failure
+                self._processed_count = 0
+                self._last_sync_time = current_time
 
     async def finalize_processing(self) -> bool:
         """Finalize processing by syncing to remote."""
         if self._original_remote_path:
             logger.info("Final sync to remote storage", processed_count=self._processed_count)
-            # In production, implement final sync here
-            return True
+            try:
+                # Get the local cache path
+                local_cache_path = await self._get_local_cache_path()
+                if local_cache_path:
+                    await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
+                    logger.info("Successfully completed final sync to remote storage", processed_count=self._processed_count)
+                    return True
+                else:
+                    logger.warning("Could not determine local cache path for final sync")
+                    return False
+            except Exception as e:
+                logger.error("Failed final sync to remote storage", error=str(e), processed_count=self._processed_count)
+                return False
         return True
+
+    async def _get_local_cache_path(self) -> Path | None:
+        """Get the local cache path for the ChromaDB instance."""
+        if not self._original_remote_path:
+            return None
+
+        # Recreate the cache path logic from _setup_local_cache (must match utils.py)
+        cache_key = generate_cache_key(self._original_remote_path)
+        local_cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
+
+        if local_cache_path.exists():
+            return local_cache_path
+        else:
+            logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
+            return None
