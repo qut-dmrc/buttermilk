@@ -802,7 +802,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     )
 
             if validate_before_process:
-                if not getattr(record, "chunks", None) and not record.text_content:
+                if not getattr(record, "chunks", None) and not record.content:
                     processing_time_ms = (time.time() - start_time) * 1000
                     return ProcessingResult(
                         record=None,
@@ -1452,11 +1452,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     def _extract_raw_text(self, record: Record) -> str:
         """Return the raw text used for hashing (pre-chunk)."""
-        if hasattr(record, "content") and record.content:
-            return record.content if isinstance(record.content, str) else str(record.content)
-        if hasattr(record, "text_content") and record.text_content:
-            return record.text_content if isinstance(record.text_content, str) else str(record.text_content)
-        return ""
+        return record.content if isinstance(record.content, str) else str(record.content)
 
     def _get_content_hash(self, record: Record) -> str:
         """Compute a stable content hash for deduplication (content + minimal metadata)."""

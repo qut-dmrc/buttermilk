@@ -132,9 +132,7 @@ class BaseRecord(BaseModel):
 
         return UserMessage(content=self.as_markdown(), source=self.record_id)
 
-    @computed_field
-    @property
-    def text_content(self) -> str:
+    def as_text(self) -> str:
         """Unified text access for vector processing.
 
         Returns the best available text representation:
@@ -296,10 +294,6 @@ class Record(BaseRecord):
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
         """Custom model_dump that excludes computed fields by default.
-
-        For simple text content, text_content duplicates content, so we exclude it
-        unless explicitly requested. For multimodal content, users can include it
-        by passing exclude=None or exclude={other_fields}.
         """
         # Get current exclude set
         current_exclude = kwargs.get("exclude", set())
@@ -312,8 +306,7 @@ class Record(BaseRecord):
 
         # Add computed fields to exclusion for simple text content
         if isinstance(self.content, str):
-            # For simple string content, text_content is redundant
-            current_exclude.update({"text_content", "title", "images", "record_hash", "ground_truth_hash"})
+            current_exclude.update({"title", "images", "record_hash", "ground_truth_hash"})
 
         kwargs["exclude"] = current_exclude
         return super().model_dump(**kwargs)
@@ -379,7 +372,7 @@ class Record(BaseRecord):
         populate_by_name=True,  # Allow population by field name or alias
         exclude_unset=True,  # Exclude fields not explicitly set during serialization
         exclude_none=True,  # Exclude fields with None values during serialization
-        exclude={"title", "images", "text_content", "record_hash", "ground_truth_hash"},  # Exclude computed properties from model_dump
+        exclude={"title", "images", "record_hash", "ground_truth_hash"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 

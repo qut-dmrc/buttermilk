@@ -99,15 +99,6 @@ class TestRecordContentValidation:
         # Ensure orphaned fulltext doesn't exist in metadata
         assert "fulltext" not in record.metadata
 
-    def test_text_content_property_with_valid_content(self):
-        """Test that text_content property works correctly with valid content."""
-        record = Record(content="Test content for chunking")
-        assert record.text_content == "Test content for chunking"
-        
-        # Ensure it's long enough for meaningful chunking
-        long_content = "This is a longer piece of content. " * 50  # 1750 chars
-        record = Record(content=long_content)
-        assert len(record.text_content) > 1200  # Should be chunkable with 1200 char chunks
 
     def test_content_validation_prevents_silent_failures(self):
         """Test that content validation prevents silent failures in vector processing."""

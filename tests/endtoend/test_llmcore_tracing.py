@@ -224,7 +224,6 @@ async def test_trace_writer_save(real_bm):
         outputs={"response": "Hi there!"},
         metadata={"test_key": "test_value", "test_type": "trace_writer_save"},
         parameters={"param1": "value1"},
-        timestamp=test_start_time,
     )
 
     # Emit trace if trace writer is available
@@ -236,7 +235,7 @@ async def test_trace_writer_save(real_bm):
     await trace_writer.flush()
 
     # Give BigQuery a moment to process the upload
-    await asyncio.sleep(2)
+    await asyncio.sleep(5)
 
     # Query BigQuery to verify trace was uploaded
     query = f"""

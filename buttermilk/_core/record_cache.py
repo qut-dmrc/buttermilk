@@ -118,17 +118,14 @@ class RecordCache:
         try:
             # Create BaseRecord directly from serialized data
             record = BaseRecord(**data)
-            chunks_count = len(getattr(record, "chunks", []))
         except Exception as e:  # pragma: no cover
             logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
             return None
 
-        logger.info(
-            f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path), chunks_count=chunks_count
-        )
+        logger.info(f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path))
         return record
 
-    def save(self, record: Record, stage: str, include_chunks: bool = True) -> bool:
+    def save(self, record: BaseRecord, stage: str, include_chunks: bool = True) -> bool:
         if not self.enabled:
             logger.debug("🚫 Cache disabled - not saving", record_id=getattr(record, "record_id", "unknown"), stage=stage)
             return False

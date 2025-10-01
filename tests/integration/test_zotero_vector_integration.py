@@ -191,7 +191,6 @@ class TestZoteroVectorIntegration:
         assert len(records) == 1
         record = records[0]
         assert record.content == MOCK_FULLTEXT_RESPONSE
-        assert record.text_content == MOCK_FULLTEXT_RESPONSE["content"]
 
     @pytest.mark.anyio
     async def test_annotation_extraction_not_implemented(self, temp_dirs, mock_zotero_api):
@@ -221,7 +220,7 @@ class TestZoteroVectorIntegration:
 
         # Create vector store with multi-field config for different content types
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[

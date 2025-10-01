@@ -349,7 +349,7 @@ def data_to_export_rows(
             ]
         bq_rows = data.to_dict(orient="records")
     elif isinstance(data, BaseModel):  # Check for Pydantic BaseModel
-        bq_rows = [data.model_dump(mode="json")]  # Use model_dump for Pydantic v2
+        bq_rows = [data.model_dump()]  # Use model_dump for Pydantic v2
     elif isinstance(data, dict):  # Single dictionary row
         bq_rows = [data.copy()]
     elif isinstance(data, list) and all(isinstance(i, dict) for i in data):  # List of dictionaries
@@ -527,6 +527,7 @@ def upload_rows(
 
     all_errors = []
     for row_chunk in chunks(bq_prepared_rows, 100):  # Process in chunks of 100 rows
+        logger.debug(f"Row chunk to upload: {row_chunk}", row_chunk=row_chunk)
         chunk_errors = bq_client.insert_rows(table_ref, row_chunk, selected_fields=final_schema)
         if chunk_errors:
             all_errors.extend(chunk_errors)

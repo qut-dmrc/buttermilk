@@ -112,7 +112,7 @@ class TestZoteroMultiFieldEmbeddings:
     async def test_multifield_chunk_creation(self, zotero_record_with_rich_metadata):
         """Test creation of chunks from different fields."""
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[
@@ -192,7 +192,7 @@ class TestZoteroMultiFieldEmbeddings:
         _, mock_collection = mock_chromadb
 
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[
@@ -289,7 +289,7 @@ class TestZoteroMultiFieldEmbeddings:
         )
 
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[
@@ -356,7 +356,7 @@ class TestZoteroMultiFieldEmbeddings:
         )
 
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[
@@ -435,7 +435,7 @@ class TestZoteroMultiFieldEmbeddings:
         )
 
         MultiFieldEmbeddingConfig(
-            content_field="text_content",
+            content_field="content",
             chunk_size=1000,
             chunk_overlap=200,
             additional_fields=[
