@@ -303,8 +303,8 @@ class PipelineOrchestrator(BaseModel):
                     # Create span for this processor
                     processor_class = type(processor).__name__
                     # Create unique processor ID for this processor (for caching and process() calls)
-                    # Format: {pipeline_name}.{index:02d}.{processor_class}
-                    processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
+                    # Format: {pipeline_name}/{index:02d}.{processor_class}
+                    processor_stage_name = f"{self.stage_name}/{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
@@ -689,7 +689,7 @@ class PipelineOrchestrator(BaseModel):
 
         # Add cache file paths for investigation
         if self._record_cache and processor_class:
-            processor_stage_name = f"{self.stage_name}.{processor_index:02d}.{processor_class}"
+            processor_stage_name = f"{self.stage_name}/{processor_index:02d}.{processor_class}"
             cache_path = self._record_cache._record_path(processor_stage_name, record_id)
             trace_info["cache_file"] = str(cache_path)
             trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, 'exists') else False
