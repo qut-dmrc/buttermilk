@@ -19,7 +19,6 @@ class HuggingFaceStorage:
             bm_instance: BM instance for context (optional)
         """
         self.config = config
-        self.bm_instance = bm_instance
 
         # Import datasets with proper error handling
         try:

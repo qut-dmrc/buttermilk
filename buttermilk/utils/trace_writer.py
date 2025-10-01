@@ -42,15 +42,15 @@ class TraceWriter:
             # Debug logging for configuration investigation
             logger.debug(
                 "TraceWriter lazy initialization",
-                has_bm_config=hasattr(bm, "config"),
-                bm_config_type=type(getattr(bm, "config", None)).__name__,
-                bm_config_keys=list(getattr(bm, "config", {}).keys()) if hasattr(bm, "config") else None,
-                has_storage_in_config="storage" in getattr(bm, "config", {})
+                has_bm_cfg=hasattr(bm, "cfg"),
+                bm_cfg_type=type(getattr(bm, "cfg", None)).__name__,
+                bm_cfg_keys=list(getattr(bm, "cfg", {}).keys()) if hasattr(bm, "cfg") else None,
+                has_storage_in_cfg="storage" in getattr(bm, "cfg", {})
             )
 
             # Look for traces storage configuration
-            if hasattr(bm, "config") and "storage" in bm.config:
-                storage_configs = bm.config.get("storage", {})
+            if hasattr(bm, "cfg") and "storage" in bm.cfg:
+                storage_configs = bm.cfg.get("storage", {})
 
                 logger.debug(
                     "Storage configuration debug",
@@ -79,8 +79,8 @@ class TraceWriter:
                 self.uploader = None
                 logger.warning(
                     "No storage configuration available",
-                    has_bm_config=hasattr(bm, "config"),
-                    config_type=type(getattr(bm, "config", None)).__name__
+                    has_bm_cfg=hasattr(bm, "cfg"),
+                    cfg_type=type(getattr(bm, "cfg", None)).__name__
                 )
 
         except Exception as e:

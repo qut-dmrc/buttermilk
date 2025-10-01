@@ -9,9 +9,8 @@ from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
-
+from buttermilk import bm, logger
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
@@ -47,15 +46,13 @@ class Storage(ABC):
     that support both reading and writing operations with the same configuration.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize storage with configuration and BM instance.
 
         Args:
             config: Storage configuration
-            bm: Buttermilk instance for accessing clients and defaults
         """
         self.config = config
-        self.bm = bm
         self._record_class: Type[BaseRecord] | None = None
         self._async_iterator: Optional[AsyncGenerator[dict[str, Any], None]] = None
 
@@ -275,7 +272,7 @@ class StorageClient:
     schema handling, and configuration management.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize storage client.
 
         Args:
@@ -283,20 +280,15 @@ class StorageClient:
             bm: Buttermilk instance for accessing clients
         """
         self.config = config
-        self.bm = bm
         self._schema_cache = None
 
     def get_bq_client(self):
         """Get BigQuery client from BM instance."""
-        if not self.bm:
-            raise ValueError("BM instance required for BigQuery operations")
-        return self.bm.bq
+        return bm.bq
 
     def get_gcs_client(self):
         """Get Google Cloud Storage client from BM instance."""
-        if not self.bm:
-            raise ValueError("BM instance required for GCS operations")
-        return self.bm.gcs
+        return bm.gcs
 
     def get_schema(self):
         """Load and cache schema from configuration."""

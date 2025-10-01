@@ -57,13 +57,6 @@ from buttermilk._core.config import FatalError, Tracing
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
 
-def setup_tracing_otel(tracing_cfg: Tracing) -> None:
-    """Legacy OTEL setup using BM singleton. Use setup_tracing_otel_with_execution_context instead."""
-    # Initialize OpenTelemetry with OTLP exporters
-    _ = tracing_cfg  # for signature compatibility
-    _ = bm.gcp_credentials
-
-
 def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context) -> None:
     """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""
     # Get credentials from ExecutionContext instead of BM singleton

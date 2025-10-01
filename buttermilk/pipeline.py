@@ -132,6 +132,20 @@ class Processor(Protocol):
         """
         ...
 
+    async def finalize_processing(self) -> bool:
+        """Optional: Perform cleanup/finalization after all records are processed.
+
+        Called by the pipeline at the end of processing to allow processors to:
+        - Flush any remaining data (e.g., ChromaDBUploader syncing to remote)
+        - Close connections or resources
+        - Perform any final cleanup operations
+
+        Returns:
+            bool: True if finalization succeeded, False if there were issues
+                 (False doesn't stop pipeline, just logs a warning)
+        """
+        ...
+
 
 class PipelineOrchestrator(BaseModel):
     """Concurrent async pipeline orchestrator for processing records through processor chains.
@@ -147,7 +161,7 @@ class PipelineOrchestrator(BaseModel):
 
     concurrency: int = Field(default=1, description="Max concurrent record processing")
     max_records: Optional[int] = Field(default=None, description="Maximum records to process")
-    stage_name: str = Field(..., description="Name for this processing pipeline")  # TODO: rename to pipeline_name
+    pipeline_name: str = Field(..., description="Name for this processing pipeline")
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
     enable_record_cache: bool = Field(default=True, description="Enable per-processor Record caching")
     cache_dir: Optional[str] = Field(default=None, description="Base directory for record cache (defaults to ~/.cache/buttermilk)")
@@ -185,7 +199,7 @@ class PipelineOrchestrator(BaseModel):
         # Initialize record cache
         logger.info(
             "🗂️  Pipeline cache initialization",
-            stage_name=self.stage_name,
+            pipeline_name=self.pipeline_name,
             enable_record_cache=self.enable_record_cache,
             cache_dir_param=self.cache_dir,
             session_cache_dir=getattr(bm.session_info, "cache_dir", None),
@@ -198,13 +212,13 @@ class PipelineOrchestrator(BaseModel):
                 # Use cache_dir from session_info if available, otherwise use parameter or let RecordCache use defaults
                 cache_base_dir = self.cache_dir or bm.session_info.cache_dir
 
-                logger.info("🗂️  Creating RecordCache", cache_base_dir=cache_base_dir, stage_name=self.stage_name)
+                logger.info("🗂️  Creating RecordCache", cache_base_dir=cache_base_dir, pipeline_name=self.pipeline_name)
                 self._record_cache = RecordCache(base_dir=cache_base_dir)
             except Exception as e:
                 logger.warning("Failed to initialize RecordCache, continuing without caching", error=str(e))
                 self._record_cache = None
         else:
-            logger.info("🚫 Record cache disabled for pipeline stage", stage_name=self.stage_name)
+            logger.info("🚫 Record cache disabled for pipeline stage", pipeline_name=self.pipeline_name)
 
         return self
 
@@ -226,7 +240,7 @@ class PipelineOrchestrator(BaseModel):
             Exception: If any processor fails
         """
         if not self.processors:
-            raise ValueError(f"[{self.stage_name}] No processors configured")
+            raise ValueError(f"[{self.pipeline_name}] No processors configured")
 
         tracer = trace.get_tracer("buttermilk.pipeline")
         record_id = getattr(record, "record_id", "unknown")
@@ -237,7 +251,7 @@ class PipelineOrchestrator(BaseModel):
         span_attributes = {
             "record.id": record_id,
             "record.title": record_title,
-            "stage.name": self.stage_name,
+            "stage.name": self.pipeline_name,
             "stage.processor_count": len(self.processors),
         }
 
@@ -285,12 +299,12 @@ class PipelineOrchestrator(BaseModel):
         if hasattr(record, "record_id"):
             title = getattr(record, "title", None)
             record_title = (title[:50] if title else "Unknown") if hasattr(record, "title") else "Unknown"
-            logger.info(f"🔷 [{self.stage_name}-{record.record_id}] Processing record '{record_title}'")
+            logger.info(f"🔷 {self.pipeline_name} Processing record ID: {record.record_id} - '{record_title}'")
 
         # Build span attributes for processor chain
         span_attributes = {
             "record.id": record_id,
-            "stage.name": self.stage_name,
+            "pipeline.name": self.pipeline_name,
             "processor.count": len(self.processors),
         }
 
@@ -305,7 +319,7 @@ class PipelineOrchestrator(BaseModel):
                     processor_class = type(processor).__name__
                     # Create unique processor ID for this processor (for caching and process() calls)
                     # Format: {pipeline_name}/{index:02d}.{processor_class}
-                    processor_stage_name = f"{self.stage_name}/{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
+                    processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
@@ -356,7 +370,7 @@ class PipelineOrchestrator(BaseModel):
                                 logger.error(
                                     f"Error processing record in pipeline processor {processor_stage_name}",
                                     record_id=record_id,
-                                    stage_name=self.stage_name,
+                                    pipeline_name=self.pipeline_name,
                                     processor_stage=processor_stage_name,
                                     processor_type=processor_type,
                                     processor_index=processor_index,
@@ -420,7 +434,7 @@ class PipelineOrchestrator(BaseModel):
 
                     # Preserve existing metadata and add stage metadata
                     updated_metadata = final_record.metadata.copy() if final_record.metadata else {}
-                    updated_metadata[self.stage_name] = stage_metadata
+                    updated_metadata[self.pipeline_name] = stage_metadata
 
                     updated_record = final_record.model_copy(update={"metadata": updated_metadata})
                     yield updated_record
@@ -436,7 +450,7 @@ class PipelineOrchestrator(BaseModel):
                 logger.error(
                     "Error processing record in pipeline chain",
                     record_id=record_id,
-                    stage_name=self.stage_name,
+                    pipeline_name=self.pipeline_name,
                     error=str(e),
                     error_type=type(e).__name__,
                     processor_count=len(self.processors),
@@ -450,7 +464,7 @@ class PipelineOrchestrator(BaseModel):
         Uses TaskGroup for natural error collection and concurrency management.
         """
         if self.source is None:
-            logger.error(f"[{self.stage_name}] No source iterator configured")
+            logger.error(f"[{self.pipeline_name}] No source iterator configured")
             return
 
         tracer = trace.get_tracer("buttermilk.pipeline")
@@ -458,14 +472,14 @@ class PipelineOrchestrator(BaseModel):
 
         # Build span attributes for stage orchestration
         span_attributes = {
-            "stage.name": self.stage_name,
+            "stage.name": self.pipeline_name,
             "stage.concurrency": self.concurrency,
             "stage.max_records": self.max_records,
             "stage.processor_count": len(self.processors),
             "cache.enabled": self.enable_record_cache,
         }
 
-        with tracer.start_as_current_span(f"pipeline.stage.{self.stage_name}", attributes=span_attributes) as stage_span:
+        with tracer.start_as_current_span(f"pipeline.{self.pipeline_name}", attributes=span_attributes) as stage_span:
             try:
                 async for record in self._run_pipeline_with_tracing(stage_span, start_time):
                     yield record
@@ -491,7 +505,7 @@ class PipelineOrchestrator(BaseModel):
                 now = time.monotonic()
                 if now - last_log >= log_interval:
                     logger.debug(
-                        f"📊 Stage '{self.stage_name}': attempted={self._attempted} processed={self._processed} "
+                        f"📊 Pipeline '{self.pipeline_name}': attempted={self._attempted} processed={self._processed} "
                         f"skipped={self._skipped} failed={self._failed} pending={pending_count}"
                     )
                     last_log = now
@@ -508,7 +522,7 @@ class PipelineOrchestrator(BaseModel):
                 # Create span for individual task processing
                 task_span_attributes = {
                     "record.id": record_id,
-                    "stage.name": self.stage_name,
+                    "pipeline.name": self.pipeline_name,
                 }
 
                 with tracer.start_as_current_span("pipeline.task.process", attributes=task_span_attributes) as task_span:
@@ -534,7 +548,7 @@ class PipelineOrchestrator(BaseModel):
                         task_span.set_attribute("skip_reason", str(e))
                         task_span.set_status(trace.Status(trace.StatusCode.OK))
                         # Record was intentionally skipped, no error logging needed
-                        logger.debug(f"Record {record_id} skipped in stage {self.stage_name}: {e}")
+                        logger.debug(f"Record {record_id} skipped in stage {self.pipeline_name}: {e}")
                         # For now we just drop skipped records, don't put them in queue
 
                     except Exception as e:
@@ -543,13 +557,13 @@ class PipelineOrchestrator(BaseModel):
                         task_span.set_attribute("error_type", type(e).__name__)
                         task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                         # Log error but don't stop processing other records
-                        logger.error(f"Error processing record {record_id} in stage {self.stage_name}: {e}")
+                        logger.error(f"Error processing record {record_id} in pipeline {self.pipeline_name}: {e}")
 
                         # Add error metadata to record and put in queue
                         existing_metadata = getattr(record, "metadata", None) or {}
                         error_metadata = {
                             **existing_metadata,
-                            self.stage_name: {
+                            self.pipeline_name: {
                                 "status": "failed",
                                 "timestamp": time.time(),
                                 "error": str(e),
@@ -568,7 +582,7 @@ class PipelineOrchestrator(BaseModel):
 
                     # Check if we've hit max_records
                     if self.max_records is not None and (self._processed + self._failed + self._skipped) >= self.max_records:
-                        logger.info(f"🔚 Stage '{self.stage_name}' reached max_records ({self._attempted}/{self.max_records}) – stopping")
+                        logger.info(f"🔚 Stage '{self.pipeline_name}' reached max_records ({self._attempted}/{self.max_records}) – stopping")
                         break
 
                     # Maintain concurrency limit
@@ -637,7 +651,7 @@ class PipelineOrchestrator(BaseModel):
 
         except Exception as e:
             stage_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-            logger.error(f"Pipeline error in stage '{self.stage_name}': {e}")
+            logger.error(f"Pipeline error in stage '{self.pipeline_name}': {e}")
             # Cancel all pending tasks
             for task in pending_tasks:
                 if not task.done():
@@ -653,7 +667,7 @@ class PipelineOrchestrator(BaseModel):
             raise
         finally:
             logger.info(
-                f"✅ Stage '{self.stage_name}' complete: attempted={self._attempted} "
+                f"✅ Pipeline '{self.pipeline_name}' stage ? complete: attempted={self._attempted} "
                 f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
             )
 
@@ -698,7 +712,7 @@ class PipelineOrchestrator(BaseModel):
 
         # Add cache file paths for investigation
         if self._record_cache and processor_class:
-            processor_stage_name = f"{self.stage_name}/{processor_index:02d}.{processor_class}"
+            processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}"
             cache_path = self._record_cache._record_path(processor_stage_name, record_id)
             trace_info["cache_file"] = str(cache_path)
             trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, 'exists') else False
@@ -754,7 +768,7 @@ class PipelineOrchestrator(BaseModel):
         This ensures proper cleanup and final sync operations for processors
         like ChromaDBUploader and ChromaDBEmbeddings.
         """
-        logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.stage_name}'")
+        logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.pipeline_name}'")
 
         for i, processor in enumerate(self.processors):
             if hasattr(processor, 'finalize_processing'):
@@ -770,7 +784,7 @@ class PipelineOrchestrator(BaseModel):
             else:
                 logger.debug(f"⏭️ Processor {i} has no finalize_processing method: {type(processor).__name__}")
 
-        logger.debug(f"✅ Completed finalization for stage '{self.stage_name}'")
+        logger.debug(f"✅ Completed finalization for stage '{self.pipeline_name}'")
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:
@@ -789,13 +803,15 @@ def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]
         source = storage(batch_size=100)
 
         stage1 = PipelineOrchestrator(
-            stage_name="enrich",
+            pipeline_name="demo",
+            processor_stage_name="enrich",
             source=source,
             processor=enrich_func
         )
 
         stage2 = PipelineOrchestrator(
-            stage_name="validate",
+            pipeline_name="demo",
+            processor_stage_name="validate",
             source=stage1(),
             processor=validate_func
         )

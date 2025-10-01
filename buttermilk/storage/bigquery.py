@@ -3,7 +3,6 @@
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from buttermilk.utils import scrub_serializable
 import shortuuid
 from google.cloud import bigquery
 from pydantic import BaseModel
@@ -11,13 +10,13 @@ from pydantic import BaseModel
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
+from buttermilk.utils import scrub_serializable
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
 from .base import Storage, StorageClient
 
 if TYPE_CHECKING:
-    from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
 
@@ -32,7 +31,7 @@ class BigQueryStorage(Storage, StorageClient):
     replacing separate BigQueryRecordLoader and save functionality.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize BigQuery storage.
 
         Args:
@@ -43,8 +42,8 @@ class BigQueryStorage(Storage, StorageClient):
             StorageError: If schema_path is missing or schema cannot be loaded
 
         """
-        super().__init__(config, bm)
-        StorageClient.__init__(self, config, bm)
+        super().__init__(config)
+        StorageClient.__init__(self, config)
 
         if config.type != "bigquery":
             raise ValueError(f"BigQueryStorage requires type='bigquery', got '{config.type}'")
@@ -90,10 +89,7 @@ class BigQueryStorage(Storage, StorageClient):
     def client(self) -> bigquery.Client:
         """Get BigQuery client, creating it if necessary."""
         if self._client is None:
-            if self.bm:
-                self._client = self.get_bq_client()
-            else:
-                self._client = bigquery.Client(project=self.config.project_id)
+            self._client = self.get_bq_client()
         return self._client
 
     @property

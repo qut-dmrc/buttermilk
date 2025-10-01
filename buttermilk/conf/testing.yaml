@@ -16,6 +16,13 @@ storage:
   titles:
     full_table_id: "prosocial-443205.bmdev_testing.titles_tmdb"
     batch_size: 2
+  traces:
+    type: bigquery
+    project_id: prosocial-443205
+    dataset_id: testing
+    table_id: traces
+    dataset_name: traces
+    schema_path: traces.schema.json
 
 
 bm:
