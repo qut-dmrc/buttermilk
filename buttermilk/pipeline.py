@@ -31,17 +31,16 @@ NON-GOALS
 import asyncio
 import time
 from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional, Protocol, runtime_checkable
-import weave
 
 import hydra
 import pydantic
+import weave
 from omegaconf import DictConfig
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.types import BaseRecord
-from buttermilk.utils.utils import scrub_serializable
 
 
 class RecordSkippedException(Exception):
@@ -56,11 +55,12 @@ class Processor(Protocol):
 
     PROCESSOR GUIDELINES:
 
-    1. **record_id Immutability**: NEVER modify the record_id field. It must remain
-       unchanged through all transformations to preserve lineage to the original record.
+    1. **record_id Uniqueness**: Each record must have a unique record_id for proper caching.
+       For 1:N transformations, the pipeline automatically creates indexed record_ids
+       (e.g., "ABC123_output_0", "ABC123_output_1") and preserves the original in metadata.
 
     2. **Semantic Identifiers**: When creating 1:N transformations (splits), add your own
-       meaningful identifier fields instead of modifying record_id:
+       meaningful identifier fields for business logic:
        - Chunking processor: Add `chunk_id`, `chunk_index` fields
        - TMDB processor: Add `observation_id`, `provider_name` fields
        - LLM processor with multiple calls: Add `llm_call_index` field
@@ -691,9 +691,7 @@ class PipelineOrchestrator(BaseModel):
             cached_output = self._record_cache.load(cache_key, processor_stage_name)
             if not cached_output:
                 break
-            # Restore original record_id
-            restored_output = cached_output.model_copy(update={"record_id": record.record_id})
-            cached_outputs.append(restored_output)
+            cached_outputs.append(cached_output)
             output_index += 1
 
         return cached_outputs if cached_outputs else None
@@ -715,14 +713,14 @@ class PipelineOrchestrator(BaseModel):
             processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}"
             cache_path = self._record_cache._record_path(processor_stage_name, record_id)
             trace_info["cache_file"] = str(cache_path)
-            trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, 'exists') else False
+            trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, "exists") else False
             trace_info["cache_base_dir"] = str(self._record_cache.base_dir)
             trace_info["processor_stage_name"] = processor_stage_name
 
         # Get all non-private attributes of the record
         record_fields = {}
         for attr_name in dir(record):
-            if not attr_name.startswith('_') and not callable(getattr(record, attr_name, None)) and not attr_name.startswith('model_'):
+            if not attr_name.startswith("_") and not callable(getattr(record, attr_name, None)) and not attr_name.startswith("model_"):
                 try:
                     attr_value = getattr(record, attr_name, None)
                     if attr_value is not None:
@@ -757,7 +755,13 @@ class PipelineOrchestrator(BaseModel):
                 # 1:N transformation - use indexed cache keys
                 for output_index, output_record in enumerate(outputs):
                     cache_key = f"{input_record.record_id}_output_{output_index}"
-                    cache_record = output_record.model_copy(update={"record_id": cache_key})
+
+                    # Preserve original record_id in metadata (only if not already set)
+                    updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
+                    if "original_record_id" not in updated_metadata:
+                        updated_metadata["original_record_id"] = input_record.record_id
+
+                    cache_record = output_record.model_copy(update={"record_id": cache_key, "metadata": updated_metadata})
                     self._record_cache.save(cache_record, processor_stage_name)
         except Exception as e:
             logger.debug("💥 Failed to save processor cache", record_id=input_record.record_id, processor_stage=processor_stage_name, error=str(e))
@@ -771,7 +775,7 @@ class PipelineOrchestrator(BaseModel):
         logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.pipeline_name}'")
 
         for i, processor in enumerate(self.processors):
-            if hasattr(processor, 'finalize_processing'):
+            if hasattr(processor, "finalize_processing"):
                 try:
                     logger.debug(f"🔄 Finalizing processor {i}: {type(processor).__name__}")
                     result = await processor.finalize_processing()
