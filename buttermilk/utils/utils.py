@@ -799,7 +799,11 @@ def generate_cache_key(path_or_identifier: str) -> str:
     Returns:
         str: Cache key suitable for use as directory/file name
     """
-    return path_or_identifier.replace("/", "_").replace(":", "_").replace(".", "_")
+    # Handle protocol separators first to avoid double underscores
+    result = path_or_identifier.replace("://", "_")
+    # Then handle remaining special characters
+    result = result.replace("/", "_").replace(":", "_").replace(".", "_")
+    return result
 
 
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
