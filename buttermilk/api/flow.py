@@ -266,7 +266,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     ))
                     
                     # Add callback to handle unhandled task exceptions
-                    def handle_task_exception(task_future):
+                    async def handle_task_exception(task_future):
                         if task_future.exception() is not None:
                             exc = task_future.exception()
                             # Log the exception with full traceback
@@ -276,14 +276,12 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                             
                             # Send error message to UI if session is still active
                             try:
-                                session = flow_runner.session_manager.get_session_sync(session_id)
+                                session = await flow_runner.session_manager.get_or_create_session(session_id)
                                 if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
                                     # Send error to UI asynchronously
-                                    asyncio.create_task(session.websocket.send_json({
-                                        "type": "error",
-                                        "message": f"Flow execution failed: {str(exc)}",
-                                        "fatal": True
-                                    }))
+                                    await session.websocket.send_json(
+                                        {"type": "error", "message": f"Flow execution failed: {str(exc)}", "fatal": True}
+                                    )
                             except Exception as notify_exc:
                                 logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
                     
