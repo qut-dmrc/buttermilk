@@ -6,16 +6,15 @@ files when configured to do so, preventing accidental overwrites.
 
 import asyncio
 import tempfile
-import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from buttermilk.utils.uploader import AsyncDataUploader
-from buttermilk.storage.file import FileStorage
 from buttermilk._core.storage_config import FileStorageConfig
 from buttermilk._core.types import Record
+from buttermilk.storage.file import FileStorage
+from buttermilk.utils.uploader import AsyncDataUploader
 
 
 class TestAsyncDataUploaderTimestamp:
@@ -24,8 +23,6 @@ class TestAsyncDataUploaderTimestamp:
     @pytest.mark.anyio
     async def test_timestamp_suffix_when_file_exists(self, real_bm):
         """Test that timestamp suffixes are used by default when file exists."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
@@ -114,8 +111,6 @@ class TestAsyncDataUploaderTimestamp:
     @pytest.mark.anyio
     async def test_no_timestamp_suffix_when_file_not_exists(self, real_bm):
         """Test that timestamp suffixes are NOT used by default when file doesn't exist."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=True) as tmp:
             tmp_path = tmp.name
@@ -180,8 +175,6 @@ class TestAsyncDataUploaderTimestamp:
     @pytest.mark.anyio
     async def test_explicit_timestamp_suffix_override(self, real_bm):
         """Test explicit timestamp suffix parameter overrides default behavior."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
@@ -251,8 +244,6 @@ class TestAsyncDataUploaderTimestamp:
     @pytest.mark.anyio
     async def test_timestamp_format(self, real_bm):
         """Test that timestamp format is correct and predictable."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
@@ -280,14 +271,14 @@ class TestAsyncDataUploaderTimestamp:
             )
 
             # Mock datetime to get predictable timestamp
-            with patch('buttermilk.utils.uploader.datetime') as mock_datetime:
+            with patch("buttermilk.utils.uploader.datetime") as mock_datetime:
                 mock_datetime.now.return_value.strftime.return_value = "20250929-123456"
 
                 # Test the _create_timestamped_storage method directly
                 timestamped_storage = uploader._create_timestamped_storage()
 
                 # Verify the path format
-                expected_path = tmp_path.replace('.json', '-20250929-123456.json')
+                expected_path = tmp_path.replace(".json", "-20250929-123456.json")
                 assert str(timestamped_storage.path) == expected_path
 
             # Cleanup uploader

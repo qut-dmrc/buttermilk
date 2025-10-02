@@ -5,8 +5,7 @@ where FileStorage.save() was using Python's open() instead of cloudpathlib's
 .open() method, causing files to be created locally instead of uploaded to GCS.
 """
 
-import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
 
 from buttermilk.storage.file import FileStorage
 
@@ -38,8 +37,8 @@ class TestFileStorageCloudPath:
         )
 
         # Mock the cloudpathlib AnyPath.open method
-        with patch.object(storage.path, 'open', mock_open()) as mock_path_open:
-            with patch.object(storage.path.parent, 'mkdir') as mock_mkdir:
+        with patch.object(storage.path, "open", mock_open()) as mock_path_open:
+            with patch.object(storage.path.parent, "mkdir") as mock_mkdir:
                 # Call save
                 storage.save([test_record])
 
@@ -75,8 +74,8 @@ class TestFileStorageCloudPath:
         )
 
         # Mock the cloudpathlib AnyPath.open method
-        with patch.object(storage.path, 'open', mock_open()) as mock_path_open:
-            with patch.object(storage.path.parent, 'mkdir') as mock_mkdir:
+        with patch.object(storage.path, "open", mock_open()) as mock_path_open:
+            with patch.object(storage.path.parent, "mkdir") as mock_mkdir:
                 # Call save
                 storage.save([test_record])
 
@@ -99,9 +98,9 @@ class TestFileStorageCloudPath:
         storage = FileStorage(config)
 
         # Mock the cloudpathlib AnyPath.open and exists methods
-        with patch.object(storage.path, 'open', mock_open()) as mock_path_open:
-            with patch.object(storage.path, 'exists', return_value=False):
-                with patch.object(storage.path.parent, 'mkdir') as mock_mkdir:
+        with patch.object(storage.path, "open", mock_open()) as mock_path_open:
+            with patch.object(storage.path, "exists", return_value=False):
+                with patch.object(storage.path.parent, "mkdir") as mock_mkdir:
                     # Call create
                     storage.create()
 

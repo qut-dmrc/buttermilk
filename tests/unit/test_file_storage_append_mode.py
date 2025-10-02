@@ -4,15 +4,12 @@ This test verifies that FileStorage correctly appends to existing files
 when the append parameter is set to True, preventing data loss.
 """
 
-import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from buttermilk.storage.file import FileStorage
 from buttermilk._core.storage_config import FileStorageConfig
 from buttermilk._core.types import Record
+from buttermilk.storage.file import FileStorage
 
 
 class TestFileStorageAppendMode:
@@ -20,8 +17,6 @@ class TestFileStorageAppendMode:
 
     def test_append_mode_jsonl_format(self, real_bm):
         """Test append mode with JSONL format files."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tmp:
             tmp_path = tmp.name
@@ -90,8 +85,6 @@ class TestFileStorageAppendMode:
 
     def test_append_mode_json_format(self, real_bm):
         """Test append mode with JSON format files."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
@@ -146,8 +139,6 @@ class TestFileStorageAppendMode:
 
     def test_overwrite_mode_default(self, real_bm):
         """Test that default behavior (append=False) still overwrites."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
@@ -201,8 +192,6 @@ class TestFileStorageAppendMode:
 
     def test_append_mode_nonexistent_file(self, real_bm):
         """Test append mode when file doesn't exist initially."""
-        from buttermilk._core.storage_config import FileStorageConfig
-        from buttermilk._core.types import Record
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=True) as tmp:
             tmp_path = tmp.name
