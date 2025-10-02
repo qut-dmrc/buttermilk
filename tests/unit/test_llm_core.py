@@ -90,7 +90,7 @@ class TestLLMCore:
             )
 
             with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = [SystemMessage(content="System prompt"), UserMessage(content="User prompt", source="test")]
+                mock_make.return_value = ([SystemMessage(content="System prompt"), UserMessage(content="User prompt", source="test")], set())
 
                 messages = await core._fill_template(
                     inputs={"var": "value", "context": [], "records": []}
@@ -123,7 +123,7 @@ class TestLLMCore:
             )
 
             with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = [UserMessage(content="Test", source="test")]
+                mock_make.return_value = ([UserMessage(content="Test", source="test")], set())
 
                 with pytest.raises(ProcessingError, match="unfilled parameters: missing_var"):
                     await core._fill_template(
@@ -152,7 +152,7 @@ class TestLLMCore:
             )
 
             with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = [UserMessage(content="Test", source="test")]
+                mock_make.return_value = ([UserMessage(content="Test", source="test")], set())
 
                 messages = await core._fill_template(
                     inputs={"context": [], "records": []}

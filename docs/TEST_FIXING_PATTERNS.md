@@ -4,10 +4,9 @@ Your job is to fix our broken tests. First read 'docs/agents/TESTER_QA.md' for g
 
 **IMPORTANT**: Execute cycles continuously without asking for permission. Keep fixing tests until:
 - Pass rate reaches >90%, OR
-- Only complex/decision tests remain (documented in TESTS_NEEDING_DECISIONS.md), OR
-- You complete 3-5 cycles of work
+- Only complex/decision tests remain (documented in TESTS_NEEDING_DECISIONS.md)
 
-After each cycle, commit your changes and immediately start the next cycle. Only stop to report when you've made significant progress or hit a natural stopping point.
+After each cycle, commit your changes and immediately start the next cycle. Only stop when you can no longer make progress.
 
 ## EFFICIENT WORKFLOW - CYCLE-BASED APPROACH
 

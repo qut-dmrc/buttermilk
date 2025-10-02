@@ -142,7 +142,7 @@ async def test_llmcore_with_record():
         )
 
         with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-            mock_make.return_value = [UserMessage(content="Test message", source="test")]
+            mock_make.return_value = ([UserMessage(content="Test message", source="test")], set())
 
             with patch("buttermilk._core.llm_core.bm") as mock_bm:
                 mock_client = AsyncMock()
@@ -196,7 +196,7 @@ async def test_end_to_end_with_llm():
         )
 
         with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-            mock_make.return_value = [UserMessage(content="Test", source="test")]
+            mock_make.return_value = ([UserMessage(content="Test", source="test")], set())
 
             with patch("buttermilk._core.llm_core.bm") as mock_bm:
                 mock_client = AsyncMock()
