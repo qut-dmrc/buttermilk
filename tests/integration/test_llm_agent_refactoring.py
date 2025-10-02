@@ -29,8 +29,8 @@ class TestLLMAgentRefactoring:
 
         # Verify LLMCore is initialized
         assert hasattr(agent, "llm_core")
-        assert agent.llm_core._model == "gpt-4"
-        assert agent.llm_core._template == "test_template"
+        assert agent.llm_core.model == "gpt-4"
+        assert agent.llm_core.template == "test_template"
         assert agent.llm_core.parameters["temperature"] == 0.5
 
     def test_llmagent_with_output_model(self):
@@ -263,7 +263,7 @@ class TestLLMAgentRefactoring:
             result = await agent._process(message=agent_input)
 
             # Verify template metadata is in agent's internal state
-            assert agent._template_metadata == mock_result.metadata.get("template")
+            assert agent.template_metadata == mock_result.metadata.get("template")
 
             # Verify it's included in output metadata
             assert result.metadata["template_name"] == "test"

@@ -25,7 +25,7 @@ class FakeChatClient(ChatCompletionClient):
         self._count = 0
         self._schema_model = schema_model
         # minimal model info dict; wrapper treats it like a Mapping
-        self._model_info = {
+        self.model_info = {
             "family": "openai",
             "vision": False,
             "json_output": False,
@@ -36,7 +36,7 @@ class FakeChatClient(ChatCompletionClient):
     # Required abstract interface pieces
     @property
     def model_info(self):  # type: ignore[override]
-        return self._model_info
+        return self.model_info
 
     @property
     def capabilities(self):  # type: ignore[override]

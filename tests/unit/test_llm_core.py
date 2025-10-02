@@ -36,8 +36,8 @@ class TestLLMCore:
             fail_on_unfilled_parameters=params["fail_on_unfilled_parameters"]
         )
 
-        assert core._model == "gpt-4"
-        assert core._template == "test_template"
+        assert core.model == "gpt-4"
+        assert core.template == "test_template"
         assert core._fail_on_unfilled_parameters is False
         assert core.output_model is None
         assert core.tools == []
@@ -46,13 +46,13 @@ class TestLLMCore:
         """Test LLMCore initialization works without model (uses empty string)."""
         # LLMCore now accepts empty model - no longer raises error
         core = LLMCore(model="", template="test_template")
-        assert core._model == ""
+        assert core.model == ""
 
     def test_init_missing_template(self):
         """Test LLMCore initialization works without template (uses empty string)."""
         # LLMCore now accepts empty template - no longer raises error
         core = LLMCore(model="gpt-4", template="")
-        assert core._template == ""
+        assert core.template == ""
 
     def test_init_with_output_model(self):
         """Test LLMCore initialization with structured output model."""
@@ -99,8 +99,8 @@ class TestLLMCore:
                 assert len(messages) == 2
                 assert isinstance(messages[0], SystemMessage)
                 assert isinstance(messages[1], UserMessage)
-                assert core._template_metadata["template_name"] == "test_template"
-                assert core._template_metadata["template_hash"] == "template_hash_123"
+                assert core.template_metadata["template_name"] == "test_template"
+                assert core.template_metadata["template_hash"] == "template_hash_123"
 
     @pytest.mark.asyncio
     async def test_fill_template_with_unfilled_vars_strict(self):
@@ -159,7 +159,7 @@ class TestLLMCore:
                 )
 
                 assert len(messages) == 1
-                assert core._template_metadata["unfilled_vars"] == ["missing_var"]
+                assert core.template_metadata["unfilled_vars"] == ["missing_var"]
 
     @pytest.mark.asyncio
     async def test_call_llm_with_trace_success(self):
@@ -313,7 +313,7 @@ class TestLLMCore:
         assert combined["more"] == "kwargs_value"
 
         # The LLMCore should still use its own template from init
-        assert core._template == "test_template"  # From constructor, not inputs
+        assert core.template == "test_template"  # From constructor, not inputs
 
     @pytest.mark.asyncio
     async def test_process_with_llm_success(self):
