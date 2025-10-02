@@ -403,8 +403,8 @@ class LLMCore:
                 # Combine inputs and kwargs
                 combined_inputs = self._combine_inputs(inputs, kwargs)
                 # Extract special placeholder keys if present
-                records = [r for r in (combined_inputs.pop("records", []) + [combined_inputs.pop("record", None)]) if r]
-                context = combined_inputs.pop("context", [])
+                records = [r for r in ((combined_inputs.pop("records", None) or []) + [combined_inputs.pop("record", None)]) if r]
+                context = combined_inputs.pop("context", None) or []
 
                 # Fill template
                 llm_messages = await self._fill_template(combined_inputs, records=records, context=context)
