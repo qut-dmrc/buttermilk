@@ -292,7 +292,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self._bm is not None:
             return self._bm
         else:
-            return bm
+            from buttermilk._core.dmrc import get_bm
+            return get_bm()
 
     async def run(self, request: RunRequest) -> None:
         """Public entry point to start the orchestrator's flow execution.

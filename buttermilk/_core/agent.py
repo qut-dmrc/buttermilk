@@ -160,7 +160,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             return self._config.bm
         else:
             # Fall back to global singleton
-            return bm
+            from buttermilk._core.dmrc import get_bm
+            return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""

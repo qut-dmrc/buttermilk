@@ -1,7 +1,5 @@
 """Test the BM singleton pattern."""
 
-import hydra
-
 from buttermilk import (
     logger,  # noqa
 )
@@ -20,12 +18,20 @@ def test_conf(real_bm):
 def test_singleton_instance(real_bm):
     """Test that singleton access returns the same instance, but new sessions create new instances."""
     # Get singleton instance should return the same BM
-    from buttermilk import bm
-    bm_direct = bm
+    bm_direct = get_bm()
     assert bm_direct is real_bm, "bm should be the same singleton instance"
 
-    # But hydra.utils.instantiate creates new session-scoped instances (new architecture)
-    bm_new_session = hydra.utils.instantiate(real_bm)
+    # Create a new session-scoped BM instance (new architecture)
+    bm_new_session = create_session_bm(
+        name=real_bm.session_info.project_name,
+        job=real_bm.session_info.job,
+        platform=real_bm.session_info.platform,
+        save_dir_base=real_bm.save_dir_base,
+        cloud_manager=None,
+        secret_manager=None,
+        llms_instance=None,
+        logger_cfg=None,
+    )
     assert bm_new_session is not None, "New BM instance should not be None"
     assert bm_new_session.session_info.job == "testing", "New BM instance job should be 'testing'"
 
@@ -67,9 +73,7 @@ def test_singleton_between_modules(real_bm):
     # We'll use a function for simplicity
     def second_module_access():
         """Function simulating another module accessing BM."""
-
-        from buttermilk import bm
-        return bm
+        return get_bm()
 
     bm2 = second_module_access()
 
@@ -128,10 +132,8 @@ def test_import_singleton_from_different_modules():
 
     # Define a function that simulates importing from another module
     def import_from_another_module():
-        # This imports get_bm fresh in this scope
-        from buttermilk import bm as another_bm
-
-        return another_bm
+        # Get BM instance directly
+        return get_bm()
 
     # Get the instance through the simulated import
     instance_from_other_module = import_from_another_module()
@@ -161,9 +163,7 @@ def test_deferred_import_function():
 
     # Define a function that simulates the deferred import pattern
     def get_bm_deferred():
-        from buttermilk import bm as _bm
-
-        return _bm
+        return get_bm()
 
     # Get the instance through the deferred import
     deferred_instance = get_bm_deferred()
