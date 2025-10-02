@@ -8,7 +8,6 @@ import weave  # noqa
 from hydra import compose, initialize
 from pytest import MarkDecorator
 
-from buttermilk import BM, bm, init
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
