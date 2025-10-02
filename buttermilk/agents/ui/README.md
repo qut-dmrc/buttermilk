@@ -47,32 +47,28 @@ defaults:
 
 ### Command Line
 
-When running a flow, specify the UI type using the `ui_type` parameter:
+When running a flow, specify the UI type using the `ui` configuration parameter:
 
 ```bash
-# Run with web UI (default)
+# Run with web UI
 python -m buttermilk.runner.cli ui=api flows=trans
 
 # Run with console UI
-python -m buttermilk.runner.cli ui=api flows=trans ui_type=console
-
-# Run with Slack UI
-python -m buttermilk.runner.cli ui=api flows=trans ui_type=slack
+python -m buttermilk.runner.cli ui=console flows=trans
 ```
 
 ### In Code
 
-When creating a `FlowRunner` instance, set the `ui_type` parameter:
+When creating a `FlowRunner` instance, UI configuration is specified via the config:
 
 ```python
 from buttermilk.runner.flowrunner import FlowRunner
 
-# Create FlowRunner with console UI
+# Create FlowRunner - UI is specified in the config
 flow_runner = FlowRunner(
     bm=bm,
     flows=flows,
-    ui="api",
-    ui_type="console"
+    ui="console"
 )
 ```
 
@@ -107,7 +103,7 @@ register_ui("my_custom", MyCustomUIAgent)
 3. Use it in your flow:
 
 ```bash
-python -m buttermilk.runner.cli ui=api flows=trans ui_type=my_custom
+python -m buttermilk.runner.cli ui=my_custom flows=trans
 ```
 
 ## Benefits

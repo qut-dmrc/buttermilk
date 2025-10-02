@@ -159,7 +159,8 @@ class ExecutionContext(BaseModel):
     def _setup_logging(self) -> None:
         """Set up modern logging for the execution context."""
         verbose = getattr(self.logging, "verbose", False) if self.logging else False
-        setup_console_logging(verbose=verbose)
+        enable_console = getattr(self.logging, "console", True) if self.logging else True
+        setup_console_logging(verbose=verbose, enable_console=enable_console)
 
         # Set up structured JSON file logging
         log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose)

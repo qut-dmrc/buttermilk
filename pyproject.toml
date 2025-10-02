@@ -14,7 +14,6 @@ dependencies = [
     "structlog>=24.1.0,<25.0.0",
     "pyyaml>=6.0.2,<7.0.0",
     "python-dotenv>=1.1.1",
-
     # Essential utilities
     "shortuuid>=1.0.13,<2.0.0",
     "psutil>=5.9.5,<6.0.0",
@@ -22,31 +21,24 @@ dependencies = [
     "requests>=2.32.3,<3.0.0",
     "rich>=13.9.4,<14.0.0",
     "anyio>=4.7.0,<5.0.0",
-
     # LLM core (always needed for AI features)
     "litellm>=1.0.0",
     "anthropic[vertex]>=0.42.0,<1.0.0",
-
     # Basic data structures
     "numpy>=1.26.4",
     "pandas>=2.3.0",
-
     # JSON/data handling
     "json-repair>=0.28.3,<1.0.0",
     "jsonschema>=4.0.0,<5.0.0",
     "marshmallow==3.23.2",
-
     # File paths
     "cloudpathlib>=0.20.0,<1.0.0",
     "pathlib>=1.0.1,<2.0.0",
-
     # Utilities
     "regex>=2024.9.11,<2025.0.0",
     "unidecode>=1.3.8,<2.0.0",
     "validators>=0.33.0,<1.0.0",
     "keyring>23.4.0",
-
-    
     # GCP cloud support
     "google-cloud-storage>=2.19.0,<3.0.0",
     "google-cloud-bigquery>=3.27.0,<4.0.0",
@@ -62,9 +54,7 @@ dependencies = [
     "proto-plus>=1.25.0,<2.0.0",
     "db-dtypes>=1.3.1,<2.0.0",
     "gspread>=6.1.2,<7.0.0",
-    "coloredlogs>=15.0.1,<16.0.0",  # For GCP logging
-
-    
+    "coloredlogs>=15.0.1,<16.0.0", # For GCP logging
     # Vector database and RAG
     "chromadb>=0.5.0",
     "langchain>=0.3.21",
@@ -72,8 +62,6 @@ dependencies = [
     "semchunk>=3.2.2",
     "huggingface-hub>=0.26.1,<1.0.0",
     "sentencepiece>=0.2.0,<1.0.0",
-
-    
     # Web scraping and content extraction
     "beautifulsoup4>=4.12.3,<5.0.0",
     "readabilipy>=0.3.0",
@@ -87,13 +75,11 @@ dependencies = [
     "json5>=0.10.0",
     "jq>=1.8.0,<2.0.0",
     "gql<4.0.0",
-
     # Multi-agent frameworks
     "autogen-core>=0.7.0",
     "autogen-agentchat>=0.4.9.2",
     "autogen-ext[azure,gemini,openai]>=0.7.0",
     "autogen-gemini>=0.0.1",
-    
     # Tracing and observability
     "weave==0.51.59",
     "traceloop-sdk>=0.38.5",
@@ -109,6 +95,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.56",
     "opentelemetry-resourcedetector-gcp>=1.8",
     "sentry-sdk>=2.24.0",
+    "jmespath>=1.0.1",
 ]
 
 [project.optional-dependencies]

@@ -100,7 +100,7 @@ class MockOrchestrator(Orchestrator):
         """Override run to generate fake messages instead of using real agents"""
         try:
             # Setup the mock environment
-            await self._setup(request or RunRequest(flow="mock_flow", ui_type="web"))
+            await self._setup(request or RunRequest(flow="mock_flow"))
 
             # Set callback on request if provided
             if request and hasattr(request, "callback_to_ui") and request.callback_to_ui:

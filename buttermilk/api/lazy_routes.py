@@ -122,7 +122,6 @@ def create_core_router() -> APIRouter:
             run_request = RunRequest(
                 flow=flow_name,
                 inputs=parameters,
-                ui_type="web",
             )
 
         # For web UI, we should return session info so client can connect via WebSocket

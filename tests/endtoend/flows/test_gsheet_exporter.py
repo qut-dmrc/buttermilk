@@ -9,7 +9,7 @@ TEST_FLOW_ID = "test_flow"
 pytestmark = pytest.mark.anyio
 
 async def test_gsheet_exporter(real_flow_runner):
-    run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
+    run_request = RunRequest(flow=TEST_FLOW_ID, session_id="test_session")  # Replaced Job with RunRequest and mapped args
 
     # Mock the flow's run_flows method to return a mock ExecutionTrace with outputs
     class MockExecutionTrace:

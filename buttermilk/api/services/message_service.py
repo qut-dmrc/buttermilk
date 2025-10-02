@@ -239,7 +239,6 @@ class MessageService:
                         parameters["criteria"] = data.pop("criteria")
 
                     run_request = RunRequest(
-                        ui_type="web",
                         flow=data.pop("flow"),
                         parameters=parameters,
                         inputs=data,

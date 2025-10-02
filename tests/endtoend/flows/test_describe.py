@@ -29,7 +29,6 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, real_bm):
     record = await download_and_convert(image_bytes, "image/jpeg")
     # Create a RunRequest instance
     run_request = RunRequest(
-        ui_type="testing",
         flow="testflow",  # Assuming a flow_id like "testflow"
         inputs=dict(record=record)
     )

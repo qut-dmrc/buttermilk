@@ -548,8 +548,6 @@ class RunRequest(BaseModel):
             Flow-specific parameters can also be included. Defaults to an empty dict.
         callback_to_ui (Any | None): An optional callback function to send updates
             or messages back to a UI. Excluded from serialization.
-        ui_type (str): The type of UI initiating the run (e.g., "cli", "api", "streamlit").
-            This is a mandatory field, excluded from serialization.
         batch_id (str | None): If this run is part of a larger batch, this field
             holds the ID of the parent batch.
         source (list[str]): List of source identifiers, potentially for API requests
@@ -588,10 +586,6 @@ class RunRequest(BaseModel):
         default=None,
         exclude=True,
         description="Optional callback function for sending updates to a UI.",
-    )
-    ui_type: str = Field(
-        ...,
-        description="Type of UI initiating the run (e.g., 'cli', 'api', 'test').",
     )
 
     # Batch processing specific fields

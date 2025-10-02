@@ -168,23 +168,35 @@ class StructlogRichHandler(RichHandler):
         return super().format(display_record)
 
 
-def setup_console_logging(verbose: bool = False) -> None:
+def setup_console_logging(verbose: bool = False, enable_console: bool = True) -> None:
     """Set up beautiful console logging with Rich.
 
     Args:
         verbose: If True, shows DEBUG level logs on console
-        
+        enable_console: If False, disables console logging (useful for MCP servers)
+
     Raises:
         RuntimeError: If console logging has already been configured
+
+    Note:
+        Console logging should be disabled (enable_console=False) for MCP servers
+        and other stdio-based protocols that use stdout/stderr for communication.
     """
     global _console_logging_configured
-    
+
     if _console_logging_configured:
         raise RuntimeError(
             "Console logging has already been configured. "
             "Multiple calls to setup_console_logging() can break verbose logging functionality. "
             "This indicates a problematic initialization sequence."
         )
+
+    if not enable_console:
+        # Still configure structlog but without console handler
+        struct_level = logging.DEBUG if verbose else logging.INFO
+        configure_structlog(min_level=struct_level)
+        _console_logging_configured = True
+        return
 
     # Clear existing handlers to avoid conflicts
     root_logger = logging.getLogger()
@@ -194,7 +206,7 @@ def setup_console_logging(verbose: bool = False) -> None:
     for logger_name in list(logging.Logger.manager.loggerDict.keys()):
         if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
             logging.getLogger(logger_name).setLevel(logging.WARNING)
-    
+
     # Ensure buttermilk logger respects verbose setting
     logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
@@ -211,7 +223,7 @@ def setup_console_logging(verbose: bool = False) -> None:
     # Also ensure structlog is configured for proper integration
     struct_level = logging.DEBUG if verbose else logging.INFO
     configure_structlog(min_level=struct_level)
-    
+
     # Mark console logging as configured
     _console_logging_configured = True
     logger.debug(f"Console logging configured with verbose={verbose}")

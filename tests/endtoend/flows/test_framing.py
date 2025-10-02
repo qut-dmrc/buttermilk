@@ -51,7 +51,6 @@ async def test_frames_text(framer, text_record, real_bm: BM, model):
         results.append(result)
 
     run_request = RunRequest(
-        ui_type="testing",
         flow="testframer",
         parameters={"records": [text_record]},
         session_info=real_bm.session_info,
@@ -86,7 +85,6 @@ async def test_frames_article(framer, news_record, real_bm: BM, model):
         results.append(result)
 
     run_request = RunRequest(
-        ui_type="testing",
         flow="testframer",
         parameters={"records": [news_record]},
         session_info=real_bm.session_info,
@@ -121,7 +119,6 @@ async def test_framing_video(framer, model, real_bm, link_to_video_gcp):
         results.append(result)
 
     run_request = RunRequest(
-        ui_type="testing",
         flow="testframer",
         parameters={"records": [record]},
         session_info=real_bm.session_info,

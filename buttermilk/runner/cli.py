@@ -102,7 +102,6 @@ def main(conf: DictConfig) -> None:
                 parameters["uri"] = conf.get("uri")
 
             run_request = RunRequest(
-                ui_type=conf.ui,
                 flow=conf.get("flow"),
                 inputs=parameters,
                 callback_to_ui=ui.callback_to_ui,

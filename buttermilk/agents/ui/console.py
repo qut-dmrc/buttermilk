@@ -754,7 +754,7 @@ class CLIUserAgent(UIAgent):
 
         """
         # Call base class initialize if needed
-        await super().initialize(ui_type="console", callback_to_groupchat=callback_to_groupchat, **kwargs)
+        await super().initialize(callback_to_groupchat=callback_to_groupchat, **kwargs)
 
         # Initialize the console and set up the input task.
         logger.debug("Initializing", agent_name=self.agent_name)

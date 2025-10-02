@@ -326,6 +326,10 @@ class LoggerConfig(BaseModel):
         default=False,
         description="Enable verbose logging"
     )
+    console: bool = Field(
+        default=True,
+        description="Enable console/stdout logging. Set to False for MCP servers and other stdio-based protocols."
+    )
 
     @model_validator(mode="after")
     def set_project_from_env(self) -> "LoggerConfig":

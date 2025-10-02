@@ -289,7 +289,7 @@ class MockAgentConfig(BaseModel):
 
 
 # --- Test Data ---
-PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"},"ui_type":"console","session_id":"test","created_at":"2024-01-01T00:00:00","source":["test"]}'
+PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"},"session_id":"test","created_at":"2024-01-01T00:00:00","source":["test"]}'
 
 
 @pytest.fixture
