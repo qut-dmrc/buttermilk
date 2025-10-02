@@ -174,7 +174,7 @@ class TestBootstrapSequenceErrorRecovery:
         invalid_config = config_override(
             {},
             {
-                "bm.session_info.name": "test",
+                "bm.session_info.project_name": "test",
                 "bm.session_info.job": "error_test",
                 # Missing 'infrastructure' section
             },

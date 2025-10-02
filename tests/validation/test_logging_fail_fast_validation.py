@@ -167,7 +167,7 @@ class TestFailFastProtectionValidation:
             mock_cloud_manager = MagicMock()
             mock_session_info = MagicMock()
             mock_session_info.session_id = "test-session-123"
-            mock_session_info.name = "test-session"
+            mock_session_info.project_name = "test-session"
             mock_session_info.job = "test-job"
             mock_session_info.platform = "test"
             mock_session_info.batch_id = None

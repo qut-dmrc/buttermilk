@@ -13,7 +13,7 @@ flows: {}
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name:
+    project_name:
     job:
     template_paths: []
     # Session storage configuration

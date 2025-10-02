@@ -14,7 +14,7 @@ def test_conf(real_bm):
     # Test the actual nested configuration structure
     assert real_bm is not None, "BM instance should not be None"
     assert real_bm.session_info.job == "testing", "BM instance job should be 'testing'"
-    assert real_bm.session_info.name == "buttermilk"
+    assert real_bm.session_info.project_name == "buttermilk"
 
 
 def test_singleton_instance(real_bm):
@@ -34,9 +34,9 @@ def test_singleton_instance(real_bm):
     assert bm_new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # But both should have the same basic configuration
-    assert bm_new_session.session_info.name == real_bm.session_info.name, "New session should match config"
+    assert bm_new_session.session_info.project_name == real_bm.session_info.project_name, "New session should match config"
     assert bm_new_session.session_info.job == real_bm.session_info.job, "New session should match config"
-    assert bm_direct.session_info.name == real_bm.session_info.name, "Singleton should match config"
+    assert bm_direct.session_info.project_name == real_bm.session_info.project_name, "Singleton should match config"
     assert bm_direct.session_info.job == real_bm.session_info.job, "Singleton should match config"
 
 
@@ -46,11 +46,11 @@ def test_session_scoped_instances(real_bm):
     assert real_bm.session_info.job == "testing", "Initial job should be 'testing'"
 
     # Creating new session-scoped instances should work (new architecture)
-    new_session = BM(session_info={"name": "test-project", "job": "new_task"})
+    new_session = BM(session_info={"project_name": "test-project", "job": "new_task"})
 
     # Verify new session has different ID but works correctly
     assert new_session.session_info.job == "new_task", "New session should have new job"
-    assert new_session.session_info.name == "test-project", "New session should have new name"
+    assert new_session.session_info.project_name == "test-project", "New session should have new name"
     assert new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # Original singleton should be unchanged
@@ -77,7 +77,7 @@ def test_singleton_between_modules(real_bm):
     assert bm1 is bm2, "BM should be the same instance across different module functions"
 
     # Properties should be the same (using session_info)
-    assert bm2.session_info.name == "buttermilk", "Property 'name' should be maintained across modules"
+    assert bm2.session_info.project_name == "buttermilk", "Property 'name' should be maintained across modules"
     assert bm2.session_info.job == "testing", "Property 'job' should be maintained across modules"
     assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
 
@@ -104,7 +104,7 @@ def test_get_bm_after_set():
 
     # Verify it's the same instance
     assert retrieved_instance is test_instance
-    assert retrieved_instance.session_info.name == "test"
+    assert retrieved_instance.session_info.project_name == "test"
     assert retrieved_instance.session_info.job == "test_job"
 
 
@@ -138,7 +138,7 @@ def test_import_singleton_from_different_modules():
 
     # Verify it's the same instance
     assert instance_from_other_module is test_instance
-    assert instance_from_other_module.session_info.name == "test2"
+    assert instance_from_other_module.session_info.project_name == "test2"
 
 
 def test_deferred_import_function():
@@ -170,4 +170,4 @@ def test_deferred_import_function():
 
     # Verify it's the same instance
     assert deferred_instance is test_instance
-    assert deferred_instance.session_info.name == "test3"
+    assert deferred_instance.session_info.project_name == "test3"

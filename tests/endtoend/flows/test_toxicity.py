@@ -1,6 +1,5 @@
 # Let's provide an interface for all the various toxicity models
 
-import pandas as pd
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -21,7 +20,6 @@ from buttermilk.toxicity.llamaguard import (
 )
 from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
 from buttermilk.toxicity.types import EvalRecord
-
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
@@ -90,7 +88,7 @@ class TestLlamaGuard:
         for standard in ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"]:
             client = MDJudgeLocal(standard=standard)
             assert client.standard == standard
-            assert hasattr(client, 'mod_single')
+            assert hasattr(client, "mod_single")
 
     def test_interpret(self, llamaguard: LlamaGuardTox):
         # check the right standard is being applied
@@ -163,7 +161,7 @@ class TestDataPipes:
         """Test that ToxicChat client is available and functional."""
         # Test that ToxicChat can be instantiated
         client = ToxicChat()
-        assert hasattr(client, 'moderate')
+        assert hasattr(client, "moderate")
         assert client.standard is not None
 
 

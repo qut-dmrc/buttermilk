@@ -59,13 +59,13 @@ def main(conf: DictConfig) -> None:
 
     async def _async_main():
         """Async initialization and main logic."""
+        nonlocal conf
         # Single unified async initialization - gets both BM and config
         bm, resolved_conf = await bootstrap_session_with_config_async(
             config=conf  # Pass the existing Hydra configuration
         )
 
         # Use the resolved config for consistency
-        nonlocal conf
         conf = resolved_conf
         logger.info("Async bootstrap complete - BM and config ready")
 

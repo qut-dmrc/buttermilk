@@ -3,6 +3,9 @@ from hashlib import sha256
 from io import BytesIO
 
 import pytest
+
+# Skip module if replicate not installed (requires ml extras)
+pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
 from cloudpathlib import CloudPath
 from PIL import Image, ImageStat
 

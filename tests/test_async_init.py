@@ -5,7 +5,7 @@ This module tests the new async-first initialization pathway for Buttermilk.
 
 import pytest
 
-from buttermilk import init_async, create_session_bm_async
+from buttermilk import create_session_bm_async
 
 
 @pytest.mark.asyncio

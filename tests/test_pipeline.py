@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 """Test multi-processor pipeline orchestrator."""
 
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from buttermilk._core.types import BaseRecord
-
 from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader

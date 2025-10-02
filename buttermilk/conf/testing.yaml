@@ -28,8 +28,8 @@ storage:
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: testing
-    job: tests
+    project_name: buttermilk
+    job: testing
 
 infrastructure:
   clouds:

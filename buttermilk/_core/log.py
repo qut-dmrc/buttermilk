@@ -376,7 +376,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Check for existing cloud handlers to prevent duplicates
             root_logger = logging.getLogger()
             existing_cloud_handlers = [
-                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.name
+                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.project_name
             ]
             
             if existing_cloud_handlers:

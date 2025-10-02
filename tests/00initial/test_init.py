@@ -49,7 +49,7 @@ def test_init():
     assert execution_context is not None
     assert session_bm.cloud_manager is execution_context.cloud_manager
     assert session_bm.secret_manager is execution_context.secret_manager
-    assert session_bm.llms_instance is execution_context.llms
+    assert session_bm.llms is execution_context.llms
     assert session_bm.query_runner is execution_context.query_runner
 
     # Step 4. When needed, create new session, reusing existing infrastructure
@@ -64,5 +64,5 @@ def test_init():
     assert new_session_bm is not session_bm  # Ensure it's a new instance
     assert new_session_bm.cloud_manager is session_bm.cloud_manager
     assert new_session_bm.secret_manager is session_bm.secret_manager
-    assert new_session_bm.llms_instance is session_bm.llms
+    assert new_session_bm.llms is session_bm.llms
     assert new_session_bm.query_runner is session_bm.query_runner

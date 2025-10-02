@@ -457,7 +457,7 @@ async def bootstrap_session_with_config_async(
 
     # Extract job and project from config if not provided as parameters
     resolved_job = job if job is not None else final_config.bm.session_info.job
-    resolved_project = project if project is not None else final_config.bm.session_info.name
+    resolved_project = project if project is not None else final_config.bm.session_info.project_name
 
     # Extract template_paths from config and resolve relative paths
     template_paths = final_config.bm.session_info.get("template_paths", [])
