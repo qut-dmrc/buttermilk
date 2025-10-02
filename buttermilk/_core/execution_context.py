@@ -122,22 +122,29 @@ class ExecutionContext(BaseModel):
     _tracing_providers_initialized: bool = PrivateAttr(default=False)
 
     def __init__(self, **data: Any) -> None:
-        """Initialize the ExecutionContext with infrastructure setup."""
+        """Initialize the ExecutionContext with minimal field assignment.
+
+        This is a lightweight constructor. All I/O and setup logic happens
+        in the async _async_init() method.
+        """
         super().__init__(**data)
         self._initialization_error = None
-        self._post_init_setup()
 
-    def _post_init_setup(self) -> None:
-        """Perform setup tasks after model initialization."""
+    async def _async_init(self) -> None:
+        """Async initialization of ExecutionContext infrastructure.
+
+        This method performs all I/O operations and setup logic that should happen
+        asynchronously after the ExecutionContext instance is created.
+        """
         # Set up logging early
         self._setup_logging()
-        
+
         # Set GCP environment variables immediately
         self._setup_gcp_environment()
-        
-        # Run initialization synchronously
-        self._sync_background_init()
-        
+
+        # Initialize infrastructure asynchronously
+        await self._async_background_init()
+
         # Check for secrets cloud using service-aware pattern
         secrets_cloud = self._find_cloud_with_service("secrets")
         secret_provider_type = secrets_cloud.type if secrets_cloud else None
@@ -189,20 +196,20 @@ class ExecutionContext(BaseModel):
                 f"GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
             )
 
-    def _sync_background_init(self) -> None:
-        """Synchronous initialization of infrastructure components."""
+    async def _async_background_init(self) -> None:
+        """Async initialization of infrastructure components."""
         try:
             # Initialize cloud manager
             if self.clouds:
-                logger.debug("Performing synchronous cloud authentication...")
+                logger.debug("Performing cloud authentication...")
                 _ = self.cloud_manager
 
             # Initialize secret manager if secrets cloud is available
             if self._find_cloud_with_service("secrets"):
-                logger.debug("Initializing secret manager synchronously...")
+                logger.debug("Initializing secret manager...")
                 _ = self.secret_manager
 
-            logger.info("ExecutionContext synchronous initialization completed", execution_context_id=self.execution_context_id)
+            logger.info("ExecutionContext initialization completed", execution_context_id=self.execution_context_id)
             self._initialization_complete.set()
         except Exception as e:
             logger.error("Error during ExecutionContext initialization", error=str(e))
@@ -548,16 +555,18 @@ def set_execution_context(context: ExecutionContext) -> None:
     _execution_context_initialized = True
 
 
-def create_execution_context(**kwargs) -> ExecutionContext:
-    """Create and set a new ExecutionContext.
-    
+async def create_execution_context_async(**kwargs) -> ExecutionContext:
+    """Create and set a new ExecutionContext with async initialization.
+
+    This is the primary async factory method for creating ExecutionContext instances.
+
     Raises:
         RuntimeError: If an ExecutionContext has already been initialized.
                      This prevents accidental reinitialization that would
                      break logging configuration and lose execution context state.
     """
     global _execution_context_initialized
-    
+
     if _execution_context_initialized:
         raise RuntimeError(
             "ExecutionContext has already been initialized. "
@@ -566,31 +575,60 @@ def create_execution_context(**kwargs) -> ExecutionContext:
             "Use get_execution_context() to access the existing context, or "
             "get_or_create_execution_context() for safe initialization."
         )
-    
+
     context = ExecutionContext(**kwargs)
+    await context._async_init()
     set_execution_context(context)
     _execution_context_initialized = True
     return context
 
 
-def get_or_create_execution_context(**kwargs) -> ExecutionContext:
-    """Get existing ExecutionContext or create a new one if none exists.
-    
-    This is the safe way to initialize ExecutionContext that won't break
-    if called multiple times. Use this instead of create_execution_context()
-    in scenarios where you're unsure if context has been initialized.
-    
+def create_execution_context(**kwargs) -> ExecutionContext:
+    """Sync wrapper for create_execution_context_async - DEPRECATED.
+
+    This is a lightweight sync wrapper that exists for backward compatibility.
+    New code should use create_execution_context_async() directly.
+
+    Raises:
+        RuntimeError: If an ExecutionContext has already been initialized.
+                     This prevents accidental reinitialization that would
+                     break logging configuration and lose execution context state.
+    """
+    return asyncio.run(create_execution_context_async(**kwargs))
+
+
+async def get_or_create_execution_context_async(**kwargs) -> ExecutionContext:
+    """Get existing ExecutionContext or create a new one if none exists (async).
+
+    This is the safe async way to initialize ExecutionContext that won't break
+    if called multiple times.
+
     Args:
         **kwargs: Arguments passed to ExecutionContext constructor if creating new
-        
+
     Returns:
         ExecutionContext: The existing or newly created ExecutionContext
     """
     global _execution_context_initialized
-    
+
     if _execution_context_initialized:
         logger.debug("ExecutionContext already initialized, returning existing context")
         return get_execution_context()
-    
+
     logger.debug("No ExecutionContext found, creating new one")
-    return create_execution_context(**kwargs)
+    return await create_execution_context_async(**kwargs)
+
+
+def get_or_create_execution_context(**kwargs) -> ExecutionContext:
+    """Sync wrapper for get_or_create_execution_context_async - DEPRECATED.
+
+    This is a lightweight sync wrapper that exists for backward compatibility.
+    New code should use get_or_create_execution_context_async() directly.
+
+    Args:
+        **kwargs: Arguments passed to ExecutionContext constructor if creating new
+
+    Returns:
+        ExecutionContext: The existing or newly created ExecutionContext
+    """
+    return asyncio.run(get_or_create_execution_context_async(**kwargs))

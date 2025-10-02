@@ -78,8 +78,6 @@ infrastructure:
 run:
   mode: pytest
 
-flows: {}
-
 pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   stage_name: testing_processor

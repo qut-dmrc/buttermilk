@@ -83,7 +83,7 @@ def __getattr__(name):
 
 
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
-from ._core.config_bootstrap import init
+from ._core.config_bootstrap import init, init_async
 from ._core.contract import (
     AgentInput as AgentInput,
     AllMessages as AllMessages,
@@ -109,7 +109,8 @@ __all__ = [
     "BQ_SCHEMA_DIR",
     "COL_PREDICTION",
     "TEMPLATES_PATH",
-    "init",
+    "init",  # Sync wrapper (deprecated)
+    "init_async",  # PRIMARY async initialization
     "bm",  # Export the singleton accessor (deprecated)
     "BM",  # Export the BM class for type hints
     "logger",
