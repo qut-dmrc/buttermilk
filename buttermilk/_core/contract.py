@@ -266,6 +266,32 @@ def _get_session_info() -> Any:
         return None
 
 
+def _get_session_id() -> str:
+    """Get session_id from context variable with fallback to bm.session_info.
+
+    This ensures ExecutionTrace always has a valid session_id, which is required
+    by the BigQuery schema.
+
+    Returns:
+        str: Session ID from context variable, bm.session_info, or a generated default.
+    """
+    # First try context variable (set by BM._setup_session_logging or API websocket)
+    session_id = session_id_var.get()
+    if session_id:
+        return session_id
+
+    # Fallback to bm.session_info if available
+    try:
+        from buttermilk import bm
+        if hasattr(bm, 'session_info') and bm.session_info and hasattr(bm.session_info, 'session_id'):
+            return bm.session_info.session_id
+    except (ImportError, AttributeError):
+        pass
+
+    # Last resort: generate a default session ID
+    return f"unknown-session-{shortuuid.uuid()}"
+
+
 # --- Core Step Execution ---
 
 
@@ -504,7 +530,7 @@ class ExecutionTrace(BaseModel):
         description="ID of the parent call for tracing nested operations.",
     )
     session_id: str = Field(
-        default_factory=session_id_var.get,
+        default_factory=_get_session_id,
         description="Unique identifier for the client session or overall flow execution.",
     )
     session_info: Any = Field(

@@ -390,8 +390,9 @@ class AutoGenWrapper(BaseModel):
             error_msg = f"Error during LLM call: {e!s}"
             raise ProcessingError(error_msg) from e
 
-        # Calculate pricing from usage data
-        pricing_metadata = self._calculate_pricing(create_result.usage)
+        # Calculate pricing from usage data (defensive check for None)
+        usage = getattr(create_result, 'usage', None)
+        pricing_metadata = self._calculate_pricing(usage)
 
         # Now that we've made the LLM call and received a response, from
         # this point on, any errors we encounter will return a CreateResult or ModelOutput object
@@ -652,31 +653,32 @@ class AutoGenWrapper(BaseModel):
 
     def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
         """Calculate pricing information from usage data.
-        
+
         Args:
             usage: RequestUsage object or None
-            
+
         Returns:
             Dictionary with pricing information
         """
         if usage is None:
+            logger.warning("LLM response had no usage data - using 0 tokens for pricing")
             return {
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "total_cost": 0.0
             }
-        
+
         # Extract tokens from usage object
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-        
+
         # Calculate cost using the utility function with resolved litellm model name
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
             model=self.litellm_model_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens
         )
-        
+
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,

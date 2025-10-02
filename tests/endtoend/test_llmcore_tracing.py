@@ -219,6 +219,7 @@ async def test_trace_writer_save(real_bm):
 
     dummy_trace = ExecutionTrace(
         call_id=test_call_id,
+        session_id=f"test-session-{test_start_time.timestamp()}",
         agent_info={"component_name": "test_trace_writer", "processor_stage": "save_test", "execution_type": "test"},
         inputs={"prompt": "Hello, world!"},
         outputs={"response": "Hi there!"},
@@ -230,12 +231,15 @@ async def test_trace_writer_save(real_bm):
     logger.info(f"Adding trace with call_id: {test_call_id}")
     await trace_writer.add(dummy_trace)
 
+    # Give a moment for trace to be queued
+    await asyncio.sleep(2)
+
     # Force flush to ensure it's uploaded
     logger.info("Flushing trace to BigQuery...")
     await trace_writer.flush()
 
     # Give BigQuery a moment to process the upload
-    await asyncio.sleep(5)
+    await asyncio.sleep(2)
 
     # Query BigQuery to verify trace was uploaded
     query = f"""

@@ -42,7 +42,7 @@ class AsyncDataUploader:
         self.retry_max_wait = retry_max_wait
 
         # Default to True if file exists to prevent accidental overwrites
-        self.use_timestamp_suffix = (hasattr(self.storage, 'exists') and self.storage.exists()) or use_timestamp_suffix
+        self.use_timestamp_suffix = (hasattr(self.storage, "exists") and self.storage.exists()) or use_timestamp_suffix
 
         self.original_storage = self.storage  # Keep reference to original
 
@@ -141,8 +141,7 @@ class AsyncDataUploader:
             return self.storage
 
         # Only works with FileStorage for now
-        if not hasattr(self.storage, 'path'):
-            logger.warning("Timestamp suffixes only supported for FileStorage. Using original storage.")
+        if not hasattr(self.storage, "path"):
             return self.storage
 
         # Create timestamp suffix
@@ -150,8 +149,8 @@ class AsyncDataUploader:
 
         # Get original path and add timestamp before extension
         original_path = str(self.storage.path)
-        if '.' in original_path:
-            name, ext = original_path.rsplit('.', 1)
+        if "." in original_path:
+            name, ext = original_path.rsplit(".", 1)
             timestamped_path = f"{name}-{timestamp}.{ext}"
         else:
             timestamped_path = f"{original_path}-{timestamp}"
@@ -169,6 +168,8 @@ class AsyncDataUploader:
         if not self.buffer:
             return
 
+        buffer_size = len(self.buffer)
+
         try:
             # Use timestamped storage if configured
             target_storage = self._create_timestamped_storage()
@@ -177,6 +178,7 @@ class AsyncDataUploader:
             self.last_flush = time.time()
             self.buffer = []
             await self._clear_backup()
+            logger.debug(f"{buffer_size} traces flushed to storage and buffer cleared.", buffer_size=buffer_size)
         except RetryError as e:
             # All retries exhausted - dump to emergency file
             logger.error(
@@ -190,7 +192,7 @@ class AsyncDataUploader:
 
             # Emergency dump to disk
             emergency_file = bm.save(self.buffer, extension=".json")
-            logger.error(f"Emergency data saved to: {emergency_file}")
+            logger.error(f"Emergency data saved to: {emergency_file}", emergency_file=emergency_file, buffer_size=buffer_size)
 
             # Clear buffer to prevent infinite retry loop
             self.buffer = []
@@ -205,7 +207,7 @@ class AsyncDataUploader:
                 args=e.args,
                 traceback=e.__traceback__,
                 phase="flush",
-                buffer_len=len(self.buffer),
+                buffer_size=buffer_size,
                 storage=type(self.storage).__name__,
             )
             # Keep items in buffer for retry

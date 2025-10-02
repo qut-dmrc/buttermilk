@@ -34,6 +34,7 @@ def anyio_backend():
     return "asyncio"
 
 
+
 def init():
     """Real ExecutionContext created from testing.yaml configuration."""
     with initialize(version_base=None, config_path="../buttermilk/conf"):

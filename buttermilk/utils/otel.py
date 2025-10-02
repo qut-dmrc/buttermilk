@@ -56,6 +56,9 @@ from buttermilk._core.config import FatalError, Tracing
 """Base URL for Weights & Biases tracing services."""
 WANDB_BASE_URL = "https://trace.wandb.ai"
 
+# Suppress noisy OpenTelemetry instrumentation debug logs for non-OpenAI models
+logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(logging.WARNING)
+
 
 def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context) -> None:
     """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""

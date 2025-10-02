@@ -346,7 +346,7 @@ class PipelineOrchestrator(BaseModel):
                                 cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
 
                             if cached_outputs:
-                                logger.info(
+                                logger.debug(
                                     f"⚡ Processor {processor_stage_name} cache hit",
                                     record_id=getattr(current_record, "record_id", "unknown"),
                                     processor_stage=processor_stage_name,

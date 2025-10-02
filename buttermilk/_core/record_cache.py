@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +121,7 @@ class RecordCache:
             logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
             return None
 
-        logger.info(f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path))
+        logger.debug(f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path))
         return record
 
     def save(self, record: BaseRecord, stage: str, include_chunks: bool = True) -> bool:
@@ -146,7 +145,7 @@ class RecordCache:
 
         try:
             # Store complete record data with chunks included
-            record_data = scrub_serializable(record.model_dump()) if hasattr(record, 'model_dump') else record
+            record_data = scrub_serializable(record.model_dump()) if hasattr(record, "model_dump") else record
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,
@@ -157,13 +156,8 @@ class RecordCache:
                 json.dump(payload, f, ensure_ascii=False)
             tmp_path.replace(path)
 
-            logger.info(
-                "💾 Cached record",
-                record_id=record.record_id,
-                stage=stage,
-                path=str(path),
-                chunks_count=chunks_count,
-                include_chunks=include_chunks
+            logger.debug(
+                "💾 Cached record", record_id=record.record_id, stage=stage, path=str(path), chunks_count=chunks_count, include_chunks=include_chunks
             )
             return True
         except Exception as e:  # pragma: no cover

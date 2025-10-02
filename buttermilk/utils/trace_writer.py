@@ -111,7 +111,6 @@ class TraceWriter:
         if self.uploader:
             try:
                 await self.uploader._flush()
-                logger.debug("Traces flushed to storage")
             except Exception as e:
                 logger.error(f"Failed to flush traces: {e}")
 
