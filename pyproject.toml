@@ -45,11 +45,9 @@ dependencies = [
     "unidecode>=1.3.8,<2.0.0",
     "validators>=0.33.0,<1.0.0",
     "keyring>23.4.0",
-]
 
-[project.optional-dependencies]
-# GCP cloud support
-gcp = [
+    
+    # GCP cloud support
     "google-cloud-storage>=2.19.0,<3.0.0",
     "google-cloud-bigquery>=3.27.0,<4.0.0",
     "google-cloud-bigquery-storage>=2.27.0,<3.0.0",
@@ -65,8 +63,55 @@ gcp = [
     "db-dtypes>=1.3.1,<2.0.0",
     "gspread>=6.1.2,<7.0.0",
     "coloredlogs>=15.0.1,<16.0.0",  # For GCP logging
+
+    
+    # Vector database and RAG
+    "chromadb>=0.5.0",
+    "langchain>=0.3.21",
+    "langchain-text-splitters>=0.3.7",
+    "semchunk>=3.2.2",
+    "huggingface-hub>=0.26.1,<1.0.0",
+    "sentencepiece>=0.2.0,<1.0.0",
+
+    
+    # Web scraping and content extraction
+    "beautifulsoup4>=4.12.3,<5.0.0",
+    "readabilipy>=0.3.0",
+    "newspaper4k>=0.9.3.1",
+    "lxml[html-clean]>=5.3.0",
+    "fake-useragent>=2.0.3",
+    "bleach>=6.2.0,<7.0.0",
+    "urllib3>=2.2.2,<3.0.0",
+    "pillow>=10.0.0",
+    "pdfminer-six==20240706",
+    "json5>=0.10.0",
+    "jq>=1.8.0,<2.0.0",
+    "gql<4.0.0",
+
+    # Multi-agent frameworks
+    "autogen-core>=0.7.0",
+    "autogen-agentchat>=0.4.9.2",
+    "autogen-ext[azure,gemini,openai]>=0.7.0",
+    "autogen-gemini>=0.0.1",
+    
+    # Tracing and observability
+    "weave==0.51.59",
+    "traceloop-sdk>=0.38.5",
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-instrumentation>=0.50b0",
+    "opentelemetry-instrumentation-openai>=0.33.0",
+    "opentelemetry-instrumentation-logging>=0.56",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0",
+    "opentelemetry-exporter-gcp-trace>=1.9.0",
+    "opentelemetry-exporter-gcp-monitoring>=1.8.0",
+    "opentelemetry-exporter-gcp-logging>=1.8.0",
+    "opentelemetry-semantic-conventions>=0.56",
+    "opentelemetry-resourcedetector-gcp>=1.8",
+    "sentry-sdk>=2.24.0",
 ]
 
+[project.optional-dependencies]
 # Azure cloud support
 azure = [
     "azureml-core>=1.57.0,<2.0.0",
@@ -84,81 +129,12 @@ aws = [
     "boto3>=1.35.7,<2.0.0",
 ]
 
-# Vector database and RAG
-vector = [
-    "chromadb>=0.5.0",
-    "langchain>=0.3.21",
-    "langchain-text-splitters>=0.3.7",
-    "semchunk>=3.2.2",
-    "huggingface-hub>=0.26.1,<1.0.0",
-    "sentencepiece>=0.2.0,<1.0.0",
-]
 
-# Web scraping and content extraction
-web = [
-    "beautifulsoup4>=4.12.3,<5.0.0",
-    "readabilipy>=0.3.0",
-    "newspaper4k>=0.9.3.1",
-    "lxml[html-clean]>=5.3.0",
-    "fake-useragent>=2.0.3",
-    "bleach>=6.2.0,<7.0.0",
-    "urllib3>=2.2.2,<3.0.0",
-    "pillow>=10.0.0",
-    "pdfminer-six==20240706",
-    "json5>=0.10.0",
-    "jq>=1.8.0,<2.0.0",
-    "gql<4.0.0",
-]
-
-# Tracing and observability
-tracing = [
-    "weave==0.51.59",
-    "traceloop-sdk>=0.38.5",
-    "opentelemetry-api>=1.30.0",
-    "opentelemetry-sdk>=1.30.0",
-    "opentelemetry-instrumentation>=0.50b0",
-    "opentelemetry-instrumentation-openai>=0.33.0",
-    "opentelemetry-instrumentation-logging>=0.56",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0",
-    "opentelemetry-exporter-gcp-trace>=1.9.0",
-    "opentelemetry-exporter-gcp-monitoring>=1.8.0",
-    "opentelemetry-exporter-gcp-logging>=1.8.0",
-    "opentelemetry-semantic-conventions>=0.56",
-    "opentelemetry-resourcedetector-gcp>=1.8",
-    "sentry-sdk>=2.24.0",
-]
-
-# API/Web server
-server = [
-    "fastapi>=0.100.0,<1.0.0",
-    "uvicorn>=0.34.0,<1.0.0",
-    "flask-restx>=1.3.0",
-    "slack-bolt>=1.21.2,<2.0.0",
-]
-
-# UI frameworks
-ui = [
-    "streamlit>=1.45.0",
-    "shiny>=1.4.0",
-    "aioconsole>=0.8.1",
-]
-
-# Multi-agent frameworks
-agents = [
-    "autogen-core>=0.7.0",
-    "autogen-agentchat>=0.4.9.2",
-    "autogen-ext[azure,gemini,openai]>=0.7.0",
-    "autogen-gemini>=0.0.1",
-]
-
-# Toxicity/moderation tools (requires Azure)
-toxicity = [
-    "buttermilk[azure]",
-    "replicate>=0.32.1,<1.0.0",
-]
 
 # ML/Training (heavy dependencies)
 ml = [
+    "buttermilk[azure]",
+    "replicate>=0.32.1,<1.0.0",
     "torch>=2.5.1,<3.0.0",
     "scipy>=1.15.3",
     "transformers>=4.44.2,<5.0.0",
@@ -171,6 +147,13 @@ ml = [
 
 # Research/academic tools
 research = [
+    "fastapi>=0.100.0,<1.0.0",
+    "uvicorn>=0.34.0,<1.0.0",
+    "flask-restx>=1.3.0",
+    "slack-bolt>=1.21.2,<2.0.0",
+    "streamlit>=1.45.0",
+    "shiny>=1.4.0",
+    "aioconsole>=0.8.1",
     "pyzotero>=1.6.11",
     "themoviedb>=1.0.2",
 ]
@@ -216,7 +199,7 @@ dev = [
 
 # Everything (for backwards compatibility or quick start)
 all = [
-    "buttermilk[gcp,azure,aws,vector,web,tracing,server,ui,agents,toxicity,ml,research]"
+    "buttermilk[azure,aws,ml,research]"
 ]
 
 [build-system]

@@ -433,6 +433,65 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
     return deduplicated
 
 
+def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) -> list[dict[str, str]]:
+    """Simple chat message parser for Prompty-style format.
+
+    Parses chat strings like:
+        system: You are a helpful assistant
+        user: Hello!
+        assistant: Hi there!
+
+    Args:
+        chat_str: String containing chat messages with role prefixes
+        valid_roles: Optional list of valid roles to accept
+
+    Returns:
+        List of dicts with 'role' and 'content' keys
+    """
+    if valid_roles is None:
+        valid_roles = ["system", "user", "assistant", "placeholder", "developer", "human"]
+
+    messages = []
+    current_role = None
+    current_content = []
+
+    # Split by lines and process
+    for line in chat_str.split("\n"):
+        # Check if this line starts with a role marker (role: or # role:)
+        stripped = line.strip()
+        role_match = None
+
+        # Try matching with optional # prefix
+        for role in valid_roles:
+            if stripped.lower().startswith(f"# {role}:") or stripped.lower().startswith(f"{role}:"):
+                role_match = role
+                # Extract content after the role marker
+                if stripped.lower().startswith(f"# {role}:"):
+                    content_start = stripped.index(":") + 1
+                else:
+                    content_start = stripped.index(":") + 1
+                current_content_line = stripped[content_start:].strip()
+
+                # Save previous message if exists
+                if current_role is not None:
+                    messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+
+                # Start new message
+                current_role = role
+                current_content = [current_content_line] if current_content_line else []
+                break
+
+        # If no role match, add to current content
+        if role_match is None and current_role is not None:
+            current_content.append(line)
+
+    # Don't forget the last message
+    if current_role is not None:
+        messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+
+    return messages
+
+
 def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
@@ -442,8 +501,7 @@ def make_messages(
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
     This function first parses the `local_template` string to separate Prompty
-    frontmatter (if any) from the main content. It then uses PromptFlow's utility
-    (`promptflow.core._prompty_utils.parse_chat`) to parse the main content into
+    frontmatter (if any) from the main content. It then parses the main content into
     a list of message dictionaries, each specifying a role and content.
 
     These dictionaries are then converted into Autogen `LLMMessage` objects
@@ -485,12 +543,10 @@ def make_messages(
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
         raise ProcessingError(err_msg) from e
 
-    # Use PromptFlow's utility to parse chat messages from the Prompty content
-    from promptflow.core._prompty_utils import parse_chat  # Local import as it's a specific utility
-
-    parsed_chat_messages = parse_chat(
+    # Parse chat messages using our own parser (no promptflow dependency)
+    parsed_chat_messages = _parse_chat_messages(
         prompty_content_str,
-        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"],  # Allowed roles in Prompty
+        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"],
     )
 
     # Convert parsed message dictionaries to LLMMessage objects
@@ -520,8 +576,11 @@ def make_messages(
                 output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
                 processed_placeholders.add("records")
                 processed_placeholders.add("record")  # Add both variants
-            else:  # empty placeholder
-                raise ProcessingError(f"Unrecognized placeholder '{content_str}' found in template.")
+            elif content_str.strip():  # Non-empty placeholder content that's not context/records
+                # Treat as user message - this handles templates where "placeholder:"
+                # is used as a marker with rendered Jinja variables
+                output_messages.append(UserMessage(content=content_str, source="template_placeholder"))
+            # else: empty placeholder, skip it
         else:  # Unrecognized role
             raise ProcessingError(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message.")
 

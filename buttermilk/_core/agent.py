@@ -270,7 +270,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     # --- Announcement Methods ---
 
     @weave.op
-    r.start_as_current_span("send_chat")
     async def _send_chat(
         self,
         message: OOBMessages,
