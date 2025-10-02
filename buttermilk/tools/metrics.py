@@ -85,7 +85,3 @@ class Metriciser:
         metrics = metrics.sort_values(by="f1-score", ascending=False)
 
         return metrics
-
-    def log_metrics(self, metrics: pd.DataFrame):
-        """Log metrics (no-op: promptflow removed)."""
-        pass
