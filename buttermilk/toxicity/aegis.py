@@ -7,7 +7,6 @@ from typing import (
 import torch
 from peft.config import PeftConfig
 from peft.peft_model import PeftModel
-from promptflow.tracing import trace
 from pydantic import (
     Field,
 )
@@ -67,7 +66,6 @@ class Aegis(LlamaGuardTox):
             torch_device=self.device,
         )
 
-    @trace
     def call_client(
         self,
         prompt: str,

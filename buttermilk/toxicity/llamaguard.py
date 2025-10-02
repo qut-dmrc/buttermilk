@@ -10,7 +10,6 @@ from typing import (
 import regex as re
 import torch
 from huggingface_hub import login
-from promptflow.tracing import trace
 from pydantic import (
     Field,
 )
@@ -133,7 +132,6 @@ class LlamaGuardTox(ToxicityModel):
     model: str
     options: ClassVar[dict] = dict()
 
-    @trace
     def make_prompt(self, content):
         # Load the message info into the output
         agent_type = "Agent"
@@ -141,7 +139,6 @@ class LlamaGuardTox(ToxicityModel):
 
         return content
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         reasons = []
         explanation = ""
@@ -417,7 +414,6 @@ class MDJudge2(MDJudgeLocal):
 
         return prompt
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -443,7 +439,7 @@ class MDJudge2(MDJudgeLocal):
     #         response = """The agent message provided is harmful. It contains derogatory language ('SISSY') which is offensive and can be considered a slur. Additionally, it directs the user to a specific tweet, which could potentially lead to further harmful content or interactions. The use of such language and the promotion of potentially offensive content can contribute to a hostile environment and emotional harm in the conversation.
     # [RESULT]: unsafe, score 4
     # [UNSAFE CATEGORY]: O1: Toxic Content"""
-    @trace
+
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
         reasons = []

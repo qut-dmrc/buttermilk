@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any
 
 from cloudpathlib import CloudPath
-from promptflow.tracing import trace
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk import bm
@@ -71,7 +70,6 @@ class ResultsCollector(BaseModel):
         # Assuming the response is an ExecutionTrace, dump it
         return response.model_dump()
 
-    @trace
     def save_with_trace(self, **kwargs):
         return self._save(**kwargs)
 
