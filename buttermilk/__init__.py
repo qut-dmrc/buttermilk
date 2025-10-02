@@ -82,6 +82,7 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+from ._core.bm_init import create_session_bm_async
 from ._core.config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from ._core.config_bootstrap import init, init_async
 from ._core.contract import (
@@ -114,6 +115,7 @@ __all__ = [
     "bm",  # Export the singleton accessor (deprecated)
     "BM",  # Export the BM class for type hints
     "logger",
+    "create_session_bm_async",
     "initialize_session_bm",  # Initialize session-scoped BM as singleton
     # New session-scoped API
     "ExecutionContext",  # Execution context class
