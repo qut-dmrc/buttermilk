@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
+from rich.console import Console
 from rich.logging import RichHandler
 from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 
@@ -173,14 +174,16 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
 
     Args:
         verbose: If True, shows DEBUG level logs on console
-        enable_console: If False, disables console logging (useful for MCP servers)
+        enable_console: If False, disables console logging entirely
 
     Raises:
         RuntimeError: If console logging has already been configured
 
     Note:
-        Console logging should be disabled (enable_console=False) for MCP servers
-        and other stdio-based protocols that use stdout/stderr for communication.
+        Logs are written to stderr (not stdout) following Python best practices.
+        This makes buttermilk compatible with MCP servers and other stdio protocols
+        without requiring special configuration. MCP clients automatically capture
+        stderr for debugging.
     """
     global _console_logging_configured
 
@@ -210,8 +213,17 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
     # Ensure buttermilk logger respects verbose setting
     logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
-    # Create Rich handler for beautiful console output
-    rich_handler = StructlogRichHandler(show_time=True, show_level=True, show_path=False, markup=True, rich_tracebacks=True)
+    # Create Rich handler for beautiful console output (write to stderr, not stdout)
+    # This follows Python best practices and is required for MCP servers
+    stderr_console = Console(stderr=True)
+    rich_handler = StructlogRichHandler(
+        console=stderr_console,
+        show_time=True,
+        show_level=True,
+        show_path=False,
+        markup=True,
+        rich_tracebacks=True
+    )
 
     # Keep buttermilk logger at INFO level
     console_level = logging.INFO  # logging.DEBUG if verbose else logging.INFO

@@ -1,12 +1,3 @@
-# # Import silence_logs early to suppress noisy log messages - conditional to avoid circular imports
-# try:
-#     from buttermilk.utils.silence_logs import silence_task_logs
-#     # Suppress logs as early as possible during import
-#     silence_task_logs()
-# except ImportError:
-#     # If we can't import silence_task_logs, create a no-op function
-#     def silence_task_logs():
-#         pass
 from typing import TYPE_CHECKING
 
 import structlog
@@ -105,6 +96,15 @@ from ._core.exceptions import FatalError, ProcessingError
 from ._core.execution_context import ExecutionContext, create_execution_context, get_or_create_execution_context
 from ._core.llm_core import LLMCore
 
+# MCP server utilities - import these FIRST in MCP servers
+from .utils.suppress_stdout import (
+    configure_for_mcp,
+    redirect_stdout_to_stderr,
+    stdout_redirected_to_stderr,
+    stdout_suppressed,
+    suppress_stdout_completely,
+)
+
 __all__ = [
     "BASE_DIR",
     "BQ_SCHEMA_DIR",
@@ -145,6 +145,12 @@ __all__ = [
     "FatalError",
     "ProcessingError",
     "_LOGGER_NAME",
+    # MCP server utilities
+    "configure_for_mcp",
+    "redirect_stdout_to_stderr",
+    "stdout_redirected_to_stderr",
+    "stdout_suppressed",
+    "suppress_stdout_completely",
 ]
 
 # Replace the placeholder BM with the real class now that all imports are complete

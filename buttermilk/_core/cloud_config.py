@@ -328,7 +328,7 @@ class LoggerConfig(BaseModel):
     )
     console: bool = Field(
         default=True,
-        description="Enable console/stdout logging. Set to False for MCP servers and other stdio-based protocols."
+        description="Enable console logging to stderr. Logs go to stderr by default (Python best practice), making buttermilk MCP-compatible without configuration."
     )
 
     @model_validator(mode="after")
