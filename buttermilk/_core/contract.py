@@ -621,6 +621,51 @@ class ExecutionTrace(BaseModel):
         """Check if this trace represents an error."""
         return self.error is not None and bool(self.error)
 
+    @computed_field
+    @property
+    def object_type(self) -> str:
+        """Attempts to determine the Python type name of the `outputs` field.
+
+        Useful for later rehydration or analysis of the output data.
+
+        Returns:
+            str: The type name of `self.outputs` if available, otherwise "null".
+
+        """
+        try:
+            if self.outputs is not None:
+                return type(self.outputs).__name__
+        except Exception:  # Broad catch as type determination can be tricky
+            pass  # Fall through to return "null"
+        return "null"  # Default if outputs is None or type cannot be determined
+
+    def as_markdown(self) -> str:
+        """Returns a Markdown formatted string for use in templates.
+
+        If the outputs have an as_markdown method, uses that with agent context.
+        Otherwise falls back to string representation.
+
+        Returns:
+            str: Formatted markdown string suitable for template insertion
+        """
+        if self.outputs and hasattr(self.outputs, "as_markdown"):
+            # Pass agent context to the output's as_markdown method
+            return self.outputs.as_markdown(self.agent_id, self.call_id)
+        elif self.outputs:
+            # Fallback: create simple formatted output
+            short_call_id = self.call_id[-8:] if len(self.call_id) > 8 else self.call_id
+            header = f"**{self.agent_id} #{short_call_id}**\n"
+            return f"{header}{str(self.outputs)}"
+        else:
+            # No outputs, return error or empty message
+            if self.error:
+                return f"**{self.agent_id}**\nERROR: {self.error}"
+            return f"**{self.agent_id}**\n(No output)"
+
+    def __str__(self) -> str:
+        """Returns the `content` (string representation of `outputs`) of the agent trace."""
+        return self.as_markdown()
+
     @classmethod
     def from_output(
         cls,

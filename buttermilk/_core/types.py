@@ -10,7 +10,7 @@ import datetime
 import json  # For JSON parsing in validators
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
-from typing import Any, Literal, Self  # Standard typing utilities
+from typing import Any, Literal, Protocol, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
@@ -29,7 +29,6 @@ from pydantic import (
 # Conditional imports to avoid circular dependencies
 
 
-# TODO: needs an 'as_message' method
 class BaseRecord(BaseModel):
     """Base class for all records in pipelines and storage.
 
@@ -187,6 +186,7 @@ class BaseRecord(BaseModel):
         return hash_value
 
 
+
 class Record(BaseRecord):
     """Represents a single data record within the Buttermilk framework.
 
@@ -224,7 +224,6 @@ class Record(BaseRecord):
             `metadata`, if present.
 
     """
-
     alt_text: str | None = Field(
         default=None,
         description="Textual description or transcript of media content within this record.",
