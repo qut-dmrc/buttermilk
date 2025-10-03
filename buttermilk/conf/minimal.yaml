@@ -1,0 +1,56 @@
+# Minimal Buttermilk configuration without cloud dependencies
+# For local testing and development without requiring GCP credentials
+
+defaults:
+  - _self_
+
+# Reduce path-induced surprises
+hydra.job.chdir: false
+
+verbose: false
+flows: {}
+
+bm:
+  _target_: buttermilk._core.bm_init.BM
+  session_info:
+    project_name: buttermilk
+    job: local_test
+    template_paths: []
+    sessions_dir: "data/sessions"
+    cache_dir: ".cache/buttermilk"
+    session:
+      timeout_minutes: 60
+      cleanup_interval_minutes: 15
+      max_concurrent_sessions: 50
+
+infrastructure:
+  # No cloud configuration - purely local
+  clouds: []
+
+  # No LLMs configured - add specific models as needed
+  llms: {}
+
+  # Tracing disabled for minimal setup
+  tracing:
+    weave:
+      enabled: false
+    traceloop:
+      enabled: false
+    otel:
+      enabled: false
+
+  # Local logging only
+  logging:
+    type: local
+    verbose: ${verbose}
+
+run:
+  mode: local
+  ui: console
+  human_in_loop: false
+
+# Minimal storage - only local file system
+storage: {}
+
+# No pipeline by default
+pipeline: null
