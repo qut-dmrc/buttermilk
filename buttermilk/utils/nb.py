@@ -16,7 +16,6 @@ from rich.console import Console
 from IPython.display import display
 from rich import print
 
-from dotenv import load_dotenv
 from buttermilk import BM, bm, logger  # noqa
 
 console = Console()
@@ -100,11 +99,6 @@ def nb_init_with_config(job: str, project: str, overrides: list[str] = [], confi
     """
     # Use unified bootstrap function with config return
     from buttermilk._core.config_bootstrap import bootstrap_session_with_config
-
-    try:
-        load_dotenv(dotenv_path=os.path.expanduser("~/.env"))
-    except Exception as e:
-        logger.warning(f"Could not load .env file: {e}")
 
     bm, config = bootstrap_session_with_config(job=job, project=project, run_type="notebook", config_dir=config_dir, config_name=config_name, overrides=overrides)
 

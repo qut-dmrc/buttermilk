@@ -40,8 +40,6 @@ from buttermilk.utils.utils import load_json_flexi, load_dotenv
 # Global variable to store the execution context ID
 _global_execution_context_id = ""
 
-load_dotenv()
-
 def _make_execution_context_id() -> str:
     """Generates a unique execution context ID for the current process.
 
@@ -477,7 +475,7 @@ class ExecutionContext(BaseModel):
         
         if not wandb_api_key:
             raise RuntimeError(
-                "Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config or set WANDB_API_KEY environmnet variable."
+                "Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config or set WANDB_API_KEY environment variable."
             )
         
         # Set environment variables for Weave initialization

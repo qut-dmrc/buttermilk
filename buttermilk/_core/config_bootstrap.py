@@ -14,6 +14,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
 from buttermilk._core.log import logger
+from buttermilk.utils.utils import load_json_flexi, load_dotenv
+
+
 class ConfigurationBootstrapper:
     """Single point of entry for all configuration management.
 
@@ -43,6 +46,8 @@ class ConfigurationBootstrapper:
         self.overrides = overrides or []
         self._config: DictConfig | None = config
         self._execution_context: ExecutionContext | None = None
+
+        load_dotenv()
 
     def _load_configuration(self) -> DictConfig:
         """Load configuration via Hydra (single initialization).
