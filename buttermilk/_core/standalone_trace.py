@@ -51,7 +51,8 @@ class StandaloneTraceContext:
         self._op = weave.op(_standalone_operation, call_display_name=self.name)
 
         # Create the parent trace call
-        self.trace_call = bm.get_weave_client().create_call(
+        client = await bm.get_weave_client()
+        self.trace_call = client.create_call(
             self._op,
             inputs=clean_empty_values({"name": self.name, **self.attributes}),
             display_name=self.name,

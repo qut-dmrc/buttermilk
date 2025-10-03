@@ -79,14 +79,10 @@ def main(conf: DictConfig) -> None:
     # Get the mode from config to determine if we need FlowRunner
     mode = conf.run.get("mode", "console")
 
-    # Only initialize FlowRunner for modes that need it
-    flow_runner = None
-    if mode not in ["pipeline"]:
-        # Initialize FlowRunner with its configuration section (e.g., conf.run)
-        flow_runner = FlowRunner.model_validate(conf.run)
+    flow_runner = FlowRunner(flows=conf.flows)
 
-        # Set the session-scoped BM for this FlowRunner
-        flow_runner.set_session_bm(bm)
+    # Set the session-scoped BM for this FlowRunner
+    flow_runner.set_session_bm(bm)
 
     # Branch execution based on the configured UI mode.
     match mode:
