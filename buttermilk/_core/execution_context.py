@@ -613,10 +613,8 @@ async def get_or_create_execution_context_async(**kwargs) -> ExecutionContext:
     global _execution_context_initialized
 
     if _execution_context_initialized:
-        logger.debug("ExecutionContext already initialized, returning existing context")
         return get_execution_context()
 
-    logger.debug("No ExecutionContext found, creating new one")
     return await create_execution_context_async(**kwargs)
 
 
