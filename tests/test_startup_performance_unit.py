@@ -96,11 +96,11 @@ class TestBMInitialization:
             )
             
             # First access should import and initialize weave
-            weave1 = bm.weave
+            weave1 = bm.get_weave_client()
             mock_weave_init.assert_called_once()
             
             # Second access should use cached value
-            weave2 = bm.weave
+            weave2 = bm.get_weave_client()
             assert weave1 is weave2
             # Should still only be called once
             assert mock_weave_init.call_count == 1

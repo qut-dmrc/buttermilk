@@ -507,7 +507,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 otel_span.record_exception(e)
             finally:
                 # Mark the child call as complete, regardless of success or failure.
-                # Output is passed to bm.weave.finish_call if result is not None
+                # Output is passed to .finish_call if result is not None
                 # Error is also passed if exception_obj is not None
                 if weave_client and child_call:
                     weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)

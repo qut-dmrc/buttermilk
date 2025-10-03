@@ -465,8 +465,9 @@ class ExecutionContext(BaseModel):
         weave_config = self.tracing["weave"]
         
         # Extract credentials from configuration (fail-fast if missing)
-        wandb_entity = getattr(weave_config, "project_id", os.getenv("WANDB_ENTITY"))
-        wandb_api_key = getattr(weave_config, "api_key", os.getenv("WANDB_API_KEY"))
+        # Use 'or' to fallback to env var if config value is None/empty
+        wandb_entity = getattr(weave_config, "project_id", None) or os.getenv("WANDB_ENTITY")
+        wandb_api_key = getattr(weave_config, "api_key", None) or os.getenv("WANDB_API_KEY")
         
         if not wandb_entity:
             raise RuntimeError(
