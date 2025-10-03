@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from buttermilk.data.vector import GeminiEmbeddingFunction
+from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM

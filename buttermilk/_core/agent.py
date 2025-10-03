@@ -16,6 +16,7 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from buttermilk.utils import scrub_serializable
 import weave  # For tracing - core dependency
 from opentelemetry import trace
 
@@ -46,9 +47,9 @@ from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
     AgentOutput,  # Standard input message structure
-    AgentTrace,
     ConductorRequest,
     ErrorEvent,
+    ExecutionTrace,
     OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
@@ -151,8 +152,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             >>> # Storage access is now session-isolated for multi-session environments
             
         Note:
-            Agents can continue using the global `get_bm()` pattern for backward compatibility,
-            but using `self.get_effective_bm()` provides session isolation benefits in
+            Using `self.get_effective_bm()` provides session isolation benefits in
             API and orchestrated environments.
         """
         # Check if BM was injected via config
@@ -160,7 +160,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             return self._config.bm
         else:
             # Fall back to global singleton
-            from buttermilk import get_bm
+            from buttermilk._core.dmrc import get_bm
             return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
@@ -271,7 +271,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     # --- Announcement Methods ---
 
     @weave.op
-    @tracer.start_as_current_span("send_chat")
     async def _send_chat(
         self,
         message: OOBMessages,
@@ -320,8 +319,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     async def invoke(
         self,
-        message: AgentInput | StepRequest,
-    ) -> AgentTrace | None:
+        message: AgentInput | StepRequest | str,
+        *,
+        context: Any | None = None,
+        **kwargs: Any,
+    ) -> ExecutionTrace | None:
         """Prepare input, calls the agent's core logic, and handles callbacks.
 
         It performs the following steps:
@@ -331,9 +333,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         3. Invokes the agent's core logic via `self._process`.
         4. Handles any errors during execution, creating an `ErrorEvent` if necessary.
         5. Notifies listeners that task processing has completed (or failed).
-        6. Constructs an `AgentTrace` object containing details of the execution,
+        6. Constructs an `ExecutionTrace` object containing details of the execution,
            including inputs, outputs (if any), and configuration.
-        7. Publishes the `AgentTrace` to listeners.
+        7. Publishes the `ExecutionTrace` to listeners.
 
 
         Args:
@@ -346,18 +348,25 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 These are not directly used by `invoke` but are available for potential extensions.
 
         Returns:
-            AgentTrace: An object detailing the agent's execution for this invocation.
+            ExecutionTrace: An object detailing the agent's execution for this invocation.
             None: If the agent does not run.
 
         Raises:
             ProcessingError: If `_add_state_to_input` fails. (Errors from the actual call
-                are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
+                are caught and reported in the `ExecutionTrace` and `TaskProcessingComplete` event).
 
         """
         await self._publish(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0), topic_id=self._topic_id)
 
         # --- Prepare the input state for processing ---
         try:
+            # Backward compatibility: allow direct string prompt + optional context
+            if isinstance(message, str):
+                message = AgentInput(inputs={"prompt": message, "context": context or ""})
+            # Fallback: if an unexpected type is provided, coerce to AgentInput using string representation
+            elif not isinstance(message, (AgentInput, StepRequest)):
+                message = AgentInput(inputs={"prompt": str(message), "context": context or ""})
+
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
@@ -375,7 +384,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         if not trace_object:
             return None
 
-        # Publish the AgentTrace result.
+        # Store trace to BigQuery if configured
+        try:
+            from buttermilk.utils.trace_writer import get_trace_writer
+            trace_writer = get_trace_writer()
+            await trace_writer.add(trace_object)
+        except Exception as e:
+            logger.warning(f"Failed to store trace: {e}")
+
+        # Publish the ExecutionTrace result.
         # Importantly, StepRequests might be sent privately or to a subset of agents. But we
         # want to publish the trace to the general topic so it can be consumed by any interested parties.
         # So we publish to self._topic_id, not ctx.topic_id.
@@ -394,7 +411,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     async def trace_and_execute(
         self,
         message: AgentInput,
-    ) -> AgentTrace | None:
+    ) -> ExecutionTrace | None:
         """Primary execution entry point for the agent, handling a single `AgentInput`.
 
         This method orchestrates the core processing logic of the agent. It is
@@ -410,7 +427,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 with agent state by `_add_state_to_input`.
 
         Returns:
-            - AgentTrace: An object containing the results of the agent's processing, with
+            - ExecutionTrace: An object containing the results of the agent's processing, with
             complete tracing information.
 
             - None: If the agent does not produce output.
@@ -467,7 +484,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
                 child_call = weave_client.create_call(
                     process_op,
-                    inputs=message.model_dump(mode="json"),
+                    inputs=scrub_serializable(message.model_dump()),
                     parent=parent_call,
                     display_name=self.agent_name,
                     attributes=trace_params,
@@ -490,27 +507,34 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 otel_span.record_exception(e)
             finally:
                 # Mark the child call as complete, regardless of success or failure.
-                # Output is passed to bm.weave.finish_call if result is not None
+                # Output is passed to .finish_call if result is not None
                 # Error is also passed if exception_obj is not None
                 if weave_client and child_call:
                     weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
                     tracing_link = child_call.ui_url
 
-        # --- Turn the result into AgentTrace for long-term storage ---
+        # --- Turn the result into ExecutionTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)
         # This doesn't include errors or null results since they are captured in the AgentOutput
         if result is None:
             return None
 
-        # Create AgentTrace from the result, overwriting call_id and parent_call_id with
+        # Create ExecutionTrace from the result, overwriting call_id and parent_call_id with
         # values directly from Weave.
-        trace_object = AgentTrace.from_output(
+        trace_object = ExecutionTrace.from_output(
             result,
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
             inputs=message,
-            agent_info=self._config,
-            tracing_link=tracing_link,
+            agent_info={
+                "component_name": self.agent_name,
+                "execution_type": "agent",
+                "agent_id": self.agent_id,
+                "role": self.role,
+                "config": self._config.model_dump() if hasattr(self._config, "model_dump") else self._config,
+            },
+            parameters=message.parameters if hasattr(message, "parameters") else None,
+            tracing={"tracing_link": tracing_link} if tracing_link else None,
         )
 
         return trace_object
@@ -598,7 +622,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         self,
         message: StepRequest,
         ctx: MessageContext,
-    ) -> AgentTrace | None:
+    ) -> ExecutionTrace | None:
         """Handle an invocation message, preparing input and calling the agent's core logic.
 
         This method is designed to be used by host agents to invoke
@@ -611,12 +635,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             ctx: Message context containing sender and topic information.
 
         Returns:
-            AgentTrace: An object detailing the agent's execution for this invocation.
+            ExecutionTrace: An object detailing the agent's execution for this invocation.
             None: If the agent does not run.
 
         Raises:
             ProcessingError: If `_add_state_to_input` fails. (Errors from the actual call
-                are caught and reported in the `AgentTrace` and `TaskProcessingComplete` event).
+                are caught and reported in the `ExecutionTrace` and `TaskProcessingComplete` event).
 
         """
         if message.role != self.role:
@@ -629,15 +653,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     @message_handler  # Add agent output messages to model context
     async def handle_agent_output(
         self,
-        message: AgentOutput | AgentTrace,
+        message: AgentOutput | ExecutionTrace,
         ctx: MessageContext,
     ) -> None:
-        """Handle AgentOutput or AgentTrace messages, extracting Records and data based on our configured input mappings.
+        """Handle AgentOutput or ExecutionTrace messages, extracting Records and data based on our configured input mappings.
 
-        AgentTrace is a subclass of AgentOutput with additional run and tracing information.
+        ExecutionTrace is a subclass of AgentOutput with additional run and tracing information.
 
         Args:
-            message: The AgentTrace or AgentOutput message to process.
+            message: The ExecutionTrace or AgentOutput message to process.
             ctx: Message context containing sender and topic information.
 
         """

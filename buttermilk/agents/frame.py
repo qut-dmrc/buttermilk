@@ -11,7 +11,7 @@ from typing import Optional  # For type hinting
 from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentTrace  # Base types
+from buttermilk._core.agent import AgentInput, ExecutionTrace  # Base types
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
@@ -182,7 +182,7 @@ class FrameAnalysisResults(BaseModel):
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns the summary.
         """
-        # Check if agent context is available (set by AgentTrace)
+        # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
         
@@ -230,7 +230,7 @@ class Frame(LLMAgent):
     async def analyze_article(
         self,
         message: AgentInput,
-    ) -> AgentTrace:
+    ) -> ExecutionTrace:
         """Handles an `AgentInput` request to analyze article content using frame analysis.
 
         This method is intended to be the primary entry point when the `Frame`
@@ -246,10 +246,10 @@ class Frame(LLMAgent):
                 Frame's prompt template expects (e.g., article text, analysis focus).
 
         Returns:
-            AgentTrace: An `AgentTrace` object. If successful, `outputs` will
+            ExecutionTrace: An `ExecutionTrace` object. If successful, `outputs` will
             contain an instance of `FrameAnalysisResults` (the structured analysis).
             If processing or the LLM call fails, the `error` field within the
-            `AgentTrace` will be populated.
+            `ExecutionTrace` will be populated.
 
         Raises:
             NotImplementedError: Currently raised as a placeholder, indicating this
@@ -271,7 +271,7 @@ class Frame(LLMAgent):
     async def analyze_climate_activism(
         self,
         message: AgentInput,
-    ) -> AgentTrace:
+    ) -> ExecutionTrace:
         """Specialized method for climate activism frame analysis.
 
         This method provides a domain-specific entry point for analyzing climate
@@ -281,7 +281,7 @@ class Frame(LLMAgent):
             message (AgentInput): The `AgentInput` message containing the article content.
 
         Returns:
-            AgentTrace: An `AgentTrace` object with the frame analysis results.
+            ExecutionTrace: An `ExecutionTrace` object with the frame analysis results.
 
         """
         # Ensure the analysis focus is set appropriately

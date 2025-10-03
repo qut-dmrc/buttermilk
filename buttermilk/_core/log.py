@@ -1,15 +1,23 @@
+import asyncio
 import copy
 import json
 import logging
+import os
+import sys
+import threading
 from pathlib import Path
 from typing import Any
 
 import structlog
 from google.cloud import logging as gcp_logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
+from rich.console import Console
 from rich.logging import RichHandler
+from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 
 from buttermilk._core.context import get_logging_context
+
+from .constants import _LOGGER_NAME
 
 try:
     # Optional: OpenTelemetry trace context for log correlation
@@ -18,7 +26,6 @@ except Exception:  # pragma: no cover
     get_current_span = None  # type: ignore
 
 # Single logger for the entire application
-_LOGGER_NAME = "buttermilk"
 logger = structlog.get_logger(_LOGGER_NAME)
 
 # Global state tracking for logging initialization protection
@@ -62,6 +69,54 @@ def configure_structlog(min_level) -> None:
             return event_dict
         return event_dict
 
+    def _add_runtime_context(logger, method_name, event_dict):
+        """Inject common runtime context onto every log."""
+        try:
+            event_dict.setdefault("pid", os.getpid())
+            event_dict.setdefault("process_name", getattr(os, "getppid", lambda: None)() and logging.getLogger().name or "python")
+            event_dict.setdefault("thread_name", threading.current_thread().name)
+            # Async task name/id if available
+            task_name = None
+            try:
+                task = asyncio.current_task()
+                if task:
+                    task_name = task.get_name()
+            except Exception:
+                pass
+            if task_name:
+                event_dict.setdefault("task", task_name)
+        except Exception:
+            return event_dict
+        return event_dict
+
+    def _extract_exception_fields(logger, method_name, event_dict):
+        """When exc_info is present, add standardized exception fields."""
+        try:
+            exc_info = event_dict.get("exc_info")
+            exc = None
+            if exc_info is True:
+                _, exc, _ = sys.exc_info()
+            elif isinstance(exc_info, tuple) and len(exc_info) == 3:
+                exc = exc_info[1]
+            elif isinstance(exc_info, BaseException):
+                exc = exc_info
+
+            if exc is not None:
+                event_dict.setdefault("error_type", exc.__class__.__name__)
+                event_dict.setdefault("error_message", str(exc))
+                # Root cause (walk __cause__ / __context__)
+                cause = exc
+                while getattr(cause, "__cause__", None) is not None:
+                    cause = cause.__cause__
+                if cause is exc and getattr(exc, "__context__", None) is not None:
+                    cause = exc.__context__
+                if cause is not None and cause is not exc:
+                    event_dict.setdefault("root_cause_type", cause.__class__.__name__)
+                    event_dict.setdefault("root_cause_message", str(cause))
+        except Exception:
+            return event_dict
+        return event_dict
+
     structlog.configure(
         processors=[
             # Add context variables automatically
@@ -72,7 +127,20 @@ def configure_structlog(min_level) -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             # Inject OTEL trace/span IDs for correlation (no-op if not available)
             _inject_trace_ids,
-            # Capture exception info if present
+            # Common runtime fields on every log
+            _add_runtime_context,
+            # Add callsite info (module, function, line)
+            CallsiteParameterAdder(
+                {
+                    CallsiteParameter.MODULE,
+                    CallsiteParameter.FUNC_NAME,
+                    CallsiteParameter.LINENO,
+                    CallsiteParameter.PATHNAME,
+                }
+            ),
+            # Normalize exception fields before rendering
+            _extract_exception_fields,
+            # Capture exception info if present (adds "exception" with traceback)
             structlog.processors.format_exc_info,
             # Output as JSON
             structlog.processors.JSONRenderer(),
@@ -101,23 +169,37 @@ class StructlogRichHandler(RichHandler):
         return super().format(display_record)
 
 
-def setup_console_logging(verbose: bool = False) -> None:
+def setup_console_logging(verbose: bool = False, enable_console: bool = True) -> None:
     """Set up beautiful console logging with Rich.
 
     Args:
         verbose: If True, shows DEBUG level logs on console
-        
+        enable_console: If False, disables console logging entirely
+
     Raises:
         RuntimeError: If console logging has already been configured
+
+    Note:
+        Logs are written to stderr (not stdout) following Python best practices.
+        This makes buttermilk compatible with MCP servers and other stdio protocols
+        without requiring special configuration. MCP clients automatically capture
+        stderr for debugging.
     """
     global _console_logging_configured
-    
+
     if _console_logging_configured:
         raise RuntimeError(
             "Console logging has already been configured. "
             "Multiple calls to setup_console_logging() can break verbose logging functionality. "
             "This indicates a problematic initialization sequence."
         )
+
+    if not enable_console:
+        # Still configure structlog but without console handler
+        struct_level = logging.DEBUG if verbose else logging.INFO
+        configure_structlog(min_level=struct_level)
+        _console_logging_configured = True
+        return
 
     # Clear existing handlers to avoid conflicts
     root_logger = logging.getLogger()
@@ -127,12 +209,21 @@ def setup_console_logging(verbose: bool = False) -> None:
     for logger_name in list(logging.Logger.manager.loggerDict.keys()):
         if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
             logging.getLogger(logger_name).setLevel(logging.WARNING)
-    
+
     # Ensure buttermilk logger respects verbose setting
     logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
-    # Create Rich handler for beautiful console output
-    rich_handler = StructlogRichHandler(show_time=True, show_level=True, show_path=False, markup=True, rich_tracebacks=True)
+    # Create Rich handler for beautiful console output (write to stderr, not stdout)
+    # This follows Python best practices and is required for MCP servers
+    stderr_console = Console(stderr=True)
+    rich_handler = StructlogRichHandler(
+        console=stderr_console,
+        show_time=True,
+        show_level=True,
+        show_path=False,
+        markup=True,
+        rich_tracebacks=True
+    )
 
     # Keep buttermilk logger at INFO level
     console_level = logging.INFO  # logging.DEBUG if verbose else logging.INFO
@@ -144,7 +235,7 @@ def setup_console_logging(verbose: bool = False) -> None:
     # Also ensure structlog is configured for proper integration
     struct_level = logging.DEBUG if verbose else logging.INFO
     configure_structlog(min_level=struct_level)
-    
+
     # Mark console logging as configured
     _console_logging_configured = True
     logger.debug(f"Console logging configured with verbose={verbose}")
@@ -207,7 +298,7 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
 
     logger.info(f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose)
     if verbose:
-        logger.debug("Verbose logging enabled for {log_path}.")
+        logger.debug(f"Verbose logging enabled for {log_path}.", log_path=str(log_path), verbose=verbose)
     
     # Mark file logging as configured
     _file_logging_configured = True
@@ -285,7 +376,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Check for existing cloud handlers to prevent duplicates
             root_logger = logging.getLogger()
             existing_cloud_handlers = [
-                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.name
+                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.project_name
             ]
             
             if existing_cloud_handlers:

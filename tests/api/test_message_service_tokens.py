@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 from buttermilk import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentOutput, AgentTrace, ErrorEvent
+from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ExecutionTrace
 from buttermilk.api.services.message_service import ChatMessage, MessageService
 
 
@@ -67,7 +67,7 @@ class TestMessageServiceTokenExtraction:
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
     def test_format_message_extracts_tokens_from_agent_trace(self, mock_extract, mock_calculate):
-        """Test that tokens are extracted from AgentTrace metadata."""
+        """Test that tokens are extracted from ExecutionTrace metadata."""
         mock_extract.return_value = {"input_tokens": 200, "output_tokens": 75}
         mock_calculate.return_value = (200, 75, 0.005)
 
@@ -77,7 +77,7 @@ class TestMessageServiceTokenExtraction:
 
         from buttermilk._core.types import AssistantMessage
 
-        agent_trace = AgentTrace(
+        agent_trace = ExecutionTrace(
             agent_id="test_agent",
             agent_info=agent_config,
             inputs=agent_input,

@@ -1,11 +1,11 @@
 """Unit tests for storage configuration in buttermilk._core.storage_config module."""
 
-from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.storage_config import BigQueryStorageConfig, FileStorageConfig
 
 
 def test_storage_config_creation():
     """Test basic StorageConfig creation."""
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         project_id="test-project",
         dataset_id="test_dataset",
@@ -19,7 +19,7 @@ def test_storage_config_creation():
 
 def test_storage_config_full_table_id():
     """Test that full_table_id is computed correctly."""
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         project_id="test-project",
         dataset_id="test_dataset",
@@ -30,7 +30,7 @@ def test_storage_config_full_table_id():
 
 def test_storage_config_full_table_id_none_when_missing_parts():
     """Test that full_table_id is None when parts are missing."""
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         project_id="test-project",
         # Missing dataset_id and table_id
@@ -41,7 +41,7 @@ def test_storage_config_full_table_id_none_when_missing_parts():
 def test_storage_config_with_columns():
     """Test StorageConfig with column mapping."""
     columns = {"content": "text_field", "metadata": "meta_field"}
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         columns=columns,
     )
@@ -51,23 +51,23 @@ def test_storage_config_with_columns():
 
 def test_storage_config_defaults():
     """Test StorageConfig default values."""
-    config = StorageConfig(type="bigquery")
+    config = BigQueryStorageConfig(type="bigquery")
     assert config.randomize is True
     assert config.batch_size == 1000
     assert config.auto_create is True
-    assert config.clustering_fields == ["record_id", "dataset_name"]
+    assert config.clustering_fields == ["record_id", "dataset_name", "split_type"]
 
 
 def test_storage_config_merge_defaults():
     """Test merging StorageConfig with defaults."""
-    defaults = StorageConfig(
+    defaults = BigQueryStorageConfig(
         type="bigquery",
         project_id="default-project",
         batch_size=500,
         randomize=False,
     )
 
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         dataset_id="specific-dataset",
         batch_size=1000,  # This should override the default
@@ -82,7 +82,7 @@ def test_storage_config_merge_defaults():
 
 def test_storage_config_file_type():
     """Test StorageConfig for file type."""
-    config = StorageConfig(
+    config = FileStorageConfig(
         type="file",
         path="/path/to/data.json",
         glob="*.json",
@@ -94,7 +94,7 @@ def test_storage_config_file_type():
 
 def test_storage_config_serialization():
     """Test that StorageConfig can be serialized and deserialized."""
-    config = StorageConfig(
+    config = BigQueryStorageConfig(
         type="bigquery",
         project_id="test-project",
         dataset_id="test_dataset",
@@ -109,7 +109,7 @@ def test_storage_config_serialization():
 
     # Test reconstruction (exclude computed fields like full_table_id)
     serializable_data = {k: v for k, v in dumped.items() if k != "full_table_id"}
-    new_config = StorageConfig(**serializable_data)
+    new_config = BigQueryStorageConfig(**serializable_data)
     assert new_config.type == config.type
     assert new_config.project_id == config.project_id
     assert new_config.columns == config.columns

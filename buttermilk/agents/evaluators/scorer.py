@@ -20,7 +20,7 @@ from buttermilk import logger  # Centralized logger
 from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
     AgentOutput,  # Used as return type hint for _process
-    AgentTrace,
+    ExecutionTrace,
 )
 from buttermilk._core.message_data import extract_message_data  # Utility for data extraction
 from buttermilk.agents.judge import JudgeReasons  # Expected input model from Judge agent
@@ -158,7 +158,7 @@ class QualResults(QualScore):
 class LLMScorer(LLMAgent):
     """An LLM-based agent that qualitatively scores another agent's output.
 
-    This agent listens for `AgentTrace` messages, particularly those containing
+    This agent listens for `ExecutionTrace` messages, particularly those containing
     `JudgeReasons` in their outputs (typically from a `Judge` agent). When such a
     message is detected and relevant ground truth information is available (either
     attached to the original record or inferred from the context), the `LLMScorer`
@@ -168,7 +168,7 @@ class LLMScorer(LLMAgent):
     `AgentConfig.parameters.prompt_template`) to produce a structured score
     conforming to the `QualScore` Pydantic model. This structured score is then
     wrapped in a `QualResults` model, adding metadata about the assessed item,
-    and included in the `AgentTrace` produced by this scorer.
+    and included in the `ExecutionTrace` produced by this scorer.
 
     The agent can integrate with Weave for logging scores against the trace of
     the original agent's output that was scored.
@@ -193,14 +193,14 @@ class LLMScorer(LLMAgent):
     @message_handler(match=lambda msg, ctx: isinstance(msg.outputs, JudgeReasons))
     async def _score_judge(
         self,
-        message: AgentTrace,
+        message: ExecutionTrace,
         ctx: MessageContext,
     ) -> None:
-        """Listens for relevant `AgentTrace` messages and triggers the scoring process.
+        """Listens for relevant `ExecutionTrace` messages and triggers the scoring process.
 
         This method is invoked when the `LLMScorer` passively receives a message
         in a group chat or similar context. It performs the following checks:
-        1.  Verifies if the incoming `message` is an `AgentTrace`.
+        1.  Verifies if the incoming `message` is an `ExecutionTrace`.
         2.  Checks if `message.outputs` is an instance of `JudgeReasons` (indicating
             it's likely a structured reasoning output from another evaluation agent like `Judge`).
         3.  Ensures `message.inputs` (the original input to the judged agent) is present,
@@ -213,23 +213,23 @@ class LLMScorer(LLMAgent):
 
         Finally, it invokes its own processing logic (via `self.__call__`, which
         wraps `self._process`) to perform the scoring. The resulting score
-        (as an `AgentTrace` containing `QualResults`) is published using the
+        (as an `ExecutionTrace` containing `QualResults`) is published using the
         `public_callback`.
 
         Args:
-            message: The incoming message object. Expected to be an `AgentTrace`
+            message: The incoming message object. Expected to be an `ExecutionTrace`
                 from another agent (e.g., a `Judge` agent).
             cancellation_token: An optional token for cancelling the operation.
             source: The identifier of the agent that sent the `message`.
             public_callback: An asynchronous callback function used to publish
-                the scoring results (as an `AgentTrace`) back to the flow or UI.
+                the scoring results (as an `ExecutionTrace`) back to the flow or UI.
             **kwargs: Additional keyword arguments.
 
         """
         # Validate the incoming message type and content
-        if not isinstance(message, AgentTrace) or not isinstance(message.outputs, JudgeReasons) or not message.inputs:  # Ensure inputs exist
+        if not isinstance(message, ExecutionTrace) or not isinstance(message.outputs, JudgeReasons) or not message.inputs:  # Ensure inputs exist
             logger.debug(
-                "Scorer received message that is not a suitable AgentTrace with JudgeReasons and inputs. Skipping.",
+                "Scorer received message that is not a suitable ExecutionTrace with JudgeReasons and inputs. Skipping.",
                 agent_id=self.agent_id,
                 message_agent_id=message.agent_id,
             )
@@ -241,7 +241,7 @@ class LLMScorer(LLMAgent):
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
         # and 'criteria' (if the criteria template is dynamic).
         extracted_data = extract_message_data(
-            message=message,  # The AgentTrace from the Judge
+            message=message,  # The ExecutionTrace from the Judge
             source=message.agent_id,  # The Judge agent's ID/name
             input_mappings=self.inputs,  # Configured mappings for the Scorer
         )
@@ -265,13 +265,13 @@ class LLMScorer(LLMAgent):
         record = record[0]
 
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=[record], inputs=extracted_data)
+        scorer_agent_input = AgentInput(parent_call_id=message.call_id, record=record, inputs=extracted_data)
 
         # Construct the AgentInput for this Scorer's _process method.
         # parent_call_id links this scoring trace back to the Judge's trace.
         scorer_agent_input = AgentInput(
             parent_call_id=message.call_id,  # Link to the Judge's trace
-            records=extracted_data.pop("records", []),  # Original records that were judged
+            record=extracted_data.pop("record", None),  # Original record that was judged
             inputs=extracted_data,  # Remaining extracted data (should include 'answers', 'criteria')
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )

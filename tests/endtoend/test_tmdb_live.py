@@ -373,6 +373,7 @@ class TestTMDBLiveAPI:
     async def test_live_discover_movies_with_backup(self, tmdb_tool_live: TMDBTool, tmp_path) -> None:
         """Test discovering movies from TMDB with JSON backup using minimal data."""
         from datetime import date
+
         from buttermilk.tools.catalog_test import DatePeriod
 
         # Test backup functionality by fetching just two small periods (two single days)
@@ -406,6 +407,7 @@ class TestTMDBLiveAPI:
         # Test that we can create backup files manually (simulating the backup functionality)
         backup_file = tmp_path / "period_test.json"
         import json
+
         from buttermilk.utils.utils import scrub_serializable
 
         if results:
@@ -459,7 +461,7 @@ class TestTMDBLiveAPI:
         # Try to query for some of the data we just saved
         # Note: This is a simple existence check - may fail if table doesn't exist yet
         try:
-            saved_count = len(titles_storage) if hasattr(titles_storage, '__len__') else 0
+            saved_count = len(titles_storage) if hasattr(titles_storage, "__len__") else 0
             print(f"Saved {saved_count} titles to BigQuery test dataset from 1968")
         except Exception as e:
             print(f"Could not verify BigQuery save (table may not exist yet): {e}")

@@ -105,7 +105,7 @@ class TestHostAgentErrorHandling:
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
         
         # Should return False (stop flow)
-        result = await host_agent.wait_check_last_step_completions()
+        result = await host_agent.wait_check_current_step_completions()
         assert result is False
 
     @pytest.mark.anyio
@@ -119,7 +119,7 @@ class TestHostAgentErrorHandling:
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
         
         # Should return True (continue flow)
-        result = await host_agent.wait_check_last_step_completions()
+        result = await host_agent.wait_check_current_step_completions()
         assert result is True
 
     @pytest.mark.anyio
@@ -132,9 +132,9 @@ class TestHostAgentErrorHandling:
         host_agent._total_tasks_in_step = 5
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1})
         host_agent._pending_tasks_by_agent = defaultdict(int, {"agent_1": 0})
-        
-        # Call wait_check_last_step_completions
-        result = await host_agent.wait_check_last_step_completions()
+
+        # Call wait_check_current_step_completions
+        result = await host_agent.wait_check_current_step_completions()
         assert result is True
         
         # Check that tracking is cleared
@@ -161,7 +161,7 @@ class TestHostAgentErrorHandling:
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
         
         # Should continue (below threshold)
-        result = await strict_host.wait_check_last_step_completions()
+        result = await strict_host.wait_check_current_step_completions()
         assert result is True
         
         # Now test with 3 out of 10 tasks failed (30% > 25% threshold)
@@ -169,7 +169,7 @@ class TestHostAgentErrorHandling:
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
         
         # Should stop (above threshold)
-        result = await strict_host.wait_check_last_step_completions()
+        result = await strict_host.wait_check_current_step_completions()
         assert result is False
 
     @pytest.mark.anyio
@@ -183,7 +183,7 @@ class TestHostAgentErrorHandling:
         host_agent._failed_tasks_by_agent = defaultdict(int)
         
         # Should continue (no tasks means no errors)
-        result = await host_agent.wait_check_last_step_completions()
+        result = await host_agent.wait_check_current_step_completions()
         assert result is True
 
     @pytest.mark.anyio
@@ -197,5 +197,5 @@ class TestHostAgentErrorHandling:
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
         
         # Should stop (100% > 50% threshold)
-        result = await host_agent.wait_check_last_step_completions()
+        result = await host_agent.wait_check_current_step_completions()
         assert result is False

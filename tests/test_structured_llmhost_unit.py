@@ -32,29 +32,19 @@ class TestStructuredLLMHostInitialization:
 
     def create_agent_announcement(self, agent_id: str, role: str, tool_def: ToolSchema | None = None) -> AgentAnnouncement:
         """Create a mock AgentAnnouncement."""
-        config = AgentConfig(
-            agent_id=agent_id,
-            role=role,
-            agent_name=agent_id.lower(),
-            description=f"{role} agent"
-        )
+        config = AgentConfig(agent_id=agent_id, role=role, description=f"{role} agent")
         return AgentAnnouncement(
             agent_config=config,
             available_tools=[tool_def["name"]] if tool_def else [],
-            tool_definition=tool_def,
             status="active",
             announcement_type="initial",
-            content=f"{role} agent joining the group"
+            content=f"{role} agent joining the group",
         )
 
     @pytest.mark.anyio
     async def test_agent_registry_with_tools(self):
         """Test that agent announcements with tools are properly registered."""
-        host = StructuredLLMHostAgent(
-            agent_name="host",
-            role="host",
-            parameters={"model": "test-model", "human_in_loop": False}
-        )
+        host = StructuredLLMHostAgent(agent_name="host", role="host", template="lead_ra", parameters={"model": "test-model", "human_in_loop": False})
 
         # Initialize minimal state
         host.callback_to_groupchat = AsyncMock()

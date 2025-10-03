@@ -32,7 +32,7 @@ class TestBMInitialization:
         
         # BM creation should be very fast (under 100ms)
         assert creation_time < 0.1, f"BM creation took {creation_time:.3f}s, expected <0.1s"
-        assert bm.session_info.name == "test"
+        assert bm.session_info.project_name == "test"
         assert bm.session_info.job == "test"
 
     def test_llm_property_is_lazy(self):
@@ -96,11 +96,11 @@ class TestBMInitialization:
             )
             
             # First access should import and initialize weave
-            weave1 = bm.weave
+            weave1 = bm.get_weave_client()
             mock_weave_init.assert_called_once()
             
             # Second access should use cached value
-            weave2 = bm.weave
+            weave2 = bm.get_weave_client()
             assert weave1 is weave2
             # Should still only be called once
             assert mock_weave_init.call_count == 1

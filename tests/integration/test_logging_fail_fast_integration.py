@@ -73,7 +73,7 @@ class TestBMSessionLoggingProtection:
         
         # Verify session was created successfully
         assert bm is not None
-        assert bm.session_info.name == "test_session"
+        assert bm.session_info.project_name == "test_session"
         assert bm.session_info.job == "test_job"
         
         # Verify logging was set up once during ExecutionContext creation
@@ -124,8 +124,8 @@ class TestBMSessionLoggingProtection:
         )
         
         # Verify both sessions exist
-        assert bm1.session_info.name == "test_session_1"
-        assert bm2.session_info.name == "test_session_2"
+        assert bm1.session_info.project_name == "test_session_1"
+        assert bm2.session_info.project_name == "test_session_2"
         
         # Verify logging setup was still only called once (protection worked)
         assert mock_setup_console.call_count == 1
@@ -168,8 +168,8 @@ class TestBMSessionLoggingProtection:
         assert context1 is context2
         
         # Verify both sessions are valid
-        assert bm1.session_info.name == "safe_session_1"
-        assert bm2.session_info.name == "safe_session_2"
+        assert bm1.session_info.project_name == "safe_session_1"
+        assert bm2.session_info.project_name == "safe_session_2"
         
         # Verify logging setup was only called once
         assert mock_setup_console.call_count == 1
@@ -535,7 +535,7 @@ class TestFailFastIntegrationExamples:
         # Step 3: Verify all sessions are valid
         assert len(bm_sessions) == 3
         for i, session in enumerate(bm_sessions):
-            assert session.session_info.name == f"session_{i}"
+            assert session.session_info.project_name == f"session_{i}"
             assert session.session_info.job == f"job_{i}"
         
         # Step 4: Verify logging was only set up once

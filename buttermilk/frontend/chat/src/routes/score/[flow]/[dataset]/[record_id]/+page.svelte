@@ -52,7 +52,7 @@
 			};
 
 			// Fetch record details, scores, and responses in parallel
-			// Note: APIs now return native Buttermilk objects (Record and AgentTrace)
+			// Note: APIs now return native Buttermilk objects (Record and ExecutionTrace)
 			const [recordResponse, scoresResponse, responsesResponse] = await Promise.all([
 				fetch(buildApiUrl('')),
 				fetch(buildApiUrl('/scores')),
@@ -79,8 +79,8 @@
 
 			// Now working with native Buttermilk objects
 			// recordDetails is now a native Record object from Pydantic model_dump()
-			// scoresData contains agent_traces array with native AgentTrace objects
-			// responsesData contains agent_traces array with native AgentTrace objects
+			// scoresData contains agent_traces array with native ExecutionTrace objects
+			// responsesData contains agent_traces array with native ExecutionTrace objects
 
 			recordData = {
 				// Native Record object structure
@@ -88,7 +88,7 @@
 				name: recordDetails.title || recordDetails.record_id,
 				content: recordDetails.content,
 				metadata: recordDetails.metadata,
-				// Process AgentTrace objects for scores
+				// Process ExecutionTrace objects for scores
 				toxicity_scores: {
 					agent_traces: scoresData.agent_traces || [],
 					// For backwards compatibility, maintain some structure
@@ -101,7 +101,7 @@
 						agreement_rate: 0.8
 					}
 				},
-				// Native AgentTrace objects for messages
+				// Native ExecutionTrace objects for messages
 				messages: responsesData.agent_traces || [],
 				agent_traces: {
 					scores: scoresData.agent_traces || [],

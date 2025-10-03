@@ -23,11 +23,33 @@ from jinja2 import (  # Jinja2 templating components
 )
 from pydantic import BaseModel, PrivateAttr  # Pydantic components
 
-from buttermilk import logger  # Centralized logger
+from buttermilk import bm, logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
-from buttermilk._core.types import Record  # Core Buttermilk Record type
+from buttermilk._core.types import BaseRecord  # Core Buttermilk Record type
 from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
+
+
+def _get_template_search_paths() -> list[str]:
+    """Get the search paths for templates, prioritizing session-specific paths."""
+    search_paths = []
+    try:
+        search_paths.extend(bm.session_info.template_paths)
+    except Exception as e:
+        logger.warning(f"Could not get template paths from session: {e}")
+
+    # Add default path if it's not already there
+    if TEMPLATES_PATH not in search_paths:
+        search_paths.append(TEMPLATES_PATH)
+
+    # Deduplicate and expand subdirectories
+    final_paths = []
+    for path in search_paths:
+        if path not in final_paths:
+            final_paths.append(path)
+            final_paths.extend([str(p) for p in Path(path).rglob("*") if p.is_dir()])
+
+    return final_paths
 
 
 class KeyValueCollector(BaseModel):
@@ -171,23 +193,24 @@ def calculate_template_hash(template_name: str) -> tuple[str, str]:
 
     """
     template_filename = f"{template_name}.jinja2"
-    
-    # Search for the template file in TEMPLATES_PATH and subdirectories
-    recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
-    
+
+    # Search for the template file in the configured search paths
+    search_paths = _get_template_search_paths()
+
     template_path = None
-    for search_path in recursive_search_paths:
+    for search_path in search_paths:
         potential_path = Path(search_path) / template_filename
         if potential_path.exists() and potential_path.is_file():
             template_path = potential_path
             break
-    
+
     if template_path is None:
-        raise FatalError(f"Template file '{template_filename}' not found in {TEMPLATES_PATH} or its subdirectories.")
-    
+        raise FatalError(f"Template file '{template_filename}' not found in {search_paths} or their subdirectories.")
+
     try:
         # Calculate hash using unified hashing module
         from buttermilk._core.hashing import compute_template_hash_from_file
+
         hash_value = compute_template_hash_from_file(template_path)
         return hash_value, str(template_path)
     except Exception as e:
@@ -314,9 +337,9 @@ def load_template(
     """
     effective_untrusted_inputs = untrusted_inputs or {}
 
-    # Define search paths for templates: TEMPLATES_PATH and all its subdirectories
-    recursive_search_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
-    file_system_loader = FileSystemLoader(searchpath=recursive_search_paths)
+    # Define search paths for templates using the new helper
+    search_paths = _get_template_search_paths()
+    file_system_loader = FileSystemLoader(searchpath=search_paths)
 
     collected_undefined_vars: list[str] = []
 
@@ -410,18 +433,75 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
     return deduplicated
 
 
+def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) -> list[dict[str, str]]:
+    """Simple chat message parser for Prompty-style format.
+
+    Parses chat strings like:
+        system: You are a helpful assistant
+        user: Hello!
+        assistant: Hi there!
+
+    Args:
+        chat_str: String containing chat messages with role prefixes
+        valid_roles: Optional list of valid roles to accept
+
+    Returns:
+        List of dicts with 'role' and 'content' keys
+    """
+    if valid_roles is None:
+        valid_roles = ["system", "user", "assistant", "placeholder", "developer", "human"]
+
+    messages = []
+    current_role = None
+    current_content = []
+
+    # Split by lines and process
+    for line in chat_str.split("\n"):
+        # Check if this line starts with a role marker (role: or # role:)
+        stripped = line.strip()
+        role_match = None
+
+        # Try matching with optional # prefix
+        for role in valid_roles:
+            if stripped.lower().startswith(f"# {role}:") or stripped.lower().startswith(f"{role}:"):
+                role_match = role
+                # Extract content after the role marker
+                if stripped.lower().startswith(f"# {role}:"):
+                    content_start = stripped.index(":") + 1
+                else:
+                    content_start = stripped.index(":") + 1
+                current_content_line = stripped[content_start:].strip()
+
+                # Save previous message if exists
+                if current_role is not None:
+                    messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+
+                # Start new message
+                current_role = role
+                current_content = [current_content_line] if current_content_line else []
+                break
+
+        # If no role match, add to current content
+        if role_match is None and current_role is not None:
+            current_content.append(line)
+
+    # Don't forget the last message
+    if current_role is not None:
+        messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+
+    return messages
+
+
 def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
     context: list[LLMMessage] = [],  # Conversation history
-    records: list[Record] = [],  # Optional list of records
-    fail_on_missing_placeholders: bool = False,
-) -> list[LLMMessage]:
+    records: list[BaseRecord] = [],  # Optional list of records
+) -> tuple[list[LLMMessage], set[str]]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
     This function first parses the `local_template` string to separate Prompty
-    frontmatter (if any) from the main content. It then uses PromptFlow's utility
-    (`promptflow.core._prompty_utils.parse_chat`) to parse the main content into
+    frontmatter (if any) from the main content. It then parses the main content into
     a list of message dictionaries, each specifying a role and content.
 
     These dictionaries are then converted into Autogen `LLMMessage` objects
@@ -437,28 +517,24 @@ def make_messages(
             expected to be in Prompty format (frontmatter optional, then chat messages).
         context (list[LLMMessage] | None): An optional list of `LLMMessage` objects
             representing prior conversation history to be injected. Defaults to an empty list.
-        records (list[Record] | None): An optional list of `Record` objects to be
+        records (list[BaseRecord] | None): An optional list of `BaseRecord` objects to be
             injected. Defaults to an empty list.
-        fail_on_missing_placeholders (bool): If True, raises a `ProcessingError`
-            when a placeholder (other than "context" or "records") is encountered
-            in the Prompty template that cannot be filled. If False (default),
-            a warning is logged, and the placeholder might be ignored or result
-            in missing content.
 
     Returns:
-        list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
-        with an LLM client.
+        tuple[list[LLMMessage], set[str]]: A tuple containing:
+            - list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
+              with an LLM client.
+            - set[str]: A set of placeholder names that were successfully processed
+              ("context", "records", etc.)
 
     Raises:
         ProcessingError:
-            -   If `fail_on_missing_placeholders` is True and an expected
-                placeholder is not filled.
-
             -   If `local_template` cannot be decoded as a Prompty format
                 (e.g., due to issues in `_parse_prompty`).
 
     """
     output_messages: list[LLMMessage] = []
+    processed_placeholders: set[str] = set()
 
     try:
         # Parse main content from Prompty string (strips frontmatter)
@@ -467,12 +543,10 @@ def make_messages(
         err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
         raise ProcessingError(err_msg) from e
 
-    # Use PromptFlow's utility to parse chat messages from the Prompty content
-    from promptflow.core._prompty_utils import parse_chat  # Local import as it's a specific utility
-
-    parsed_chat_messages = parse_chat(
+    # Parse chat messages using our own parser (no promptflow dependency)
+    parsed_chat_messages = _parse_chat_messages(
         prompty_content_str,
-        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"],  # Allowed roles in Prompty
+        valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"],
     )
 
     # Convert parsed message dictionaries to LLMMessage objects
@@ -494,33 +568,21 @@ def make_messages(
         elif role_lower == "assistant":
             output_messages.append(AssistantMessage(content=content_str, source="template_assistant"))  # Add source
         elif role_lower == "placeholder":
-            if normalized_placeholder_key == "context":
-                if context:
-                    output_messages.extend(context)
-                elif fail_on_missing_placeholders:
-                    raise ProcessingError(
-                        "Placeholder 'context' found in template but no context provided.",
-                    )
-                else:
-                    logger.warning(
-                        "Placeholder 'context' found in template but no context provided.",
-                    )
+            if normalized_placeholder_key == "context" and context:
+                output_messages.extend(context)
+                processed_placeholders.add("context")
 
-            elif normalized_placeholder_key == "records":
-                if records:
-                    output_messages.extend([rec.as_message() for rec in records if isinstance(rec, Record)])
-                elif fail_on_missing_placeholders:
-                    raise ProcessingError(
-                        "Placeholder 'records' found in template but no records provided.",
-                    )
-                else:
-                    logger.warning(
-                        "Placeholder 'records' found in template but no records provided.",
-                    )
-            else:  # empty placeholder
-                raise ProcessingError(f"Unrecognized placeholder '{content_str}' found in template.")
+            elif normalized_placeholder_key in ["records", "record"] and records:
+                output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
+                processed_placeholders.add("records")
+                processed_placeholders.add("record")  # Add both variants
+            elif content_str.strip():  # Non-empty placeholder content that's not context/records
+                # Treat as user message - this handles templates where "placeholder:"
+                # is used as a marker with rendered Jinja variables
+                output_messages.append(UserMessage(content=content_str, source="template_placeholder"))
+            # else: empty placeholder, skip it
         else:  # Unrecognized role
             raise ProcessingError(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message.")
 
     # Deduplicate messages before returning
-    return _deduplicate_messages(output_messages)
+    return _deduplicate_messages(output_messages), processed_placeholders

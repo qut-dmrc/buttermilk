@@ -17,12 +17,11 @@ class TestZoteroIncrementalSync:
     """Test suite for Zotero incremental sync functionality."""
 
     @pytest.fixture
-    def mock_get_bm(self, real_bm):
-        """Mock the get_bm function to provide test credentials."""
-        with patch("buttermilk.libs.zotero.get_bm") as mock:
-            real_bm.credentials.get.return_value = "test_api_key"
-            mock.return_value = real_bm
-            yield mock
+    def mock_bm_credentials(self, real_bm):
+        """Mock bm.credentials to provide test credentials."""
+        with patch("buttermilk.libs.zotero.bm") as mock_bm:
+            mock_bm.credentials.get.return_value = "test_api_key"
+            yield mock_bm
 
     @pytest.fixture
     def temp_dir(self, tmp_path):
@@ -30,7 +29,7 @@ class TestZoteroIncrementalSync:
         return tmp_path
 
     @pytest.fixture
-    def zot_downloader(self, temp_dir, mock_get_bm):
+    def zot_downloader(self, temp_dir, mock_bm_credentials):
         """Create a ZotDownloader instance for testing."""
         with patch("buttermilk.libs.zotero.zotero.Zotero") as mock_zotero_class:
             mock_zot_instance = MagicMock()
@@ -81,7 +80,7 @@ class TestZoteroIncrementalSync:
         assert saved_state["last_sync_timestamp"] == test_timestamp
 
     @pytest.mark.anyio
-    async def test_get_all_records_first_run(self, zot_downloader, mock_get_bm):
+    async def test_get_all_records_first_run(self, zot_downloader, mock_bm_credentials):
         """Test get_all_records on first run (no previous version)."""
         # Mock the Zotero API
         mock_zot = zot_downloader._zot
@@ -125,7 +124,7 @@ class TestZoteroIncrementalSync:
         assert records[1].record_id == "ITEM2"
 
     @pytest.mark.anyio
-    async def test_get_all_records_incremental(self, zot_downloader, temp_dir, mock_get_bm):
+    async def test_get_all_records_incremental(self, zot_downloader, temp_dir, mock_bm_credentials):
         """Test get_all_records with existing version (incremental sync)."""
         # Set up previous sync state
         state_file = Path(temp_dir) / ".zotero_sync_state.json"
@@ -176,7 +175,7 @@ class TestZoteroIncrementalSync:
         assert records[0].record_id == "ITEM3"
 
     @pytest.mark.anyio
-    async def test_version_state_updated_after_sync(self, zot_downloader, temp_dir, mock_get_bm):
+    async def test_version_state_updated_after_sync(self, zot_downloader, temp_dir, mock_bm_credentials):
         """Test that version state is updated after successful sync."""
         # Mock the Zotero API
         mock_zot = zot_downloader._zot
@@ -241,7 +240,7 @@ class TestZoteroIncrementalSync:
         assert state["last_sync_timestamp"] is None
 
     @pytest.mark.anyio
-    async def test_get_all_records_with_force_full_sync(self, zot_downloader, temp_dir, mock_get_bm):
+    async def test_get_all_records_with_force_full_sync(self, zot_downloader, temp_dir, mock_bm_credentials):
         """Test that force_full_sync parameter bypasses incremental sync."""
         # Set up existing state
         state_file = Path(temp_dir) / ".zotero_sync_state.json"

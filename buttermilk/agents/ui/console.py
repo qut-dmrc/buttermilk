@@ -21,7 +21,7 @@ from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentAnnouncement,  # Agent announcement messages
     AgentOutput,
-    AgentTrace,
+    ExecutionTrace,
     FlowMessage,  # Base type for messages
     OOBMessages,
     SystemPromptMessage,  # Requests sent *to* the manager (this agent)
@@ -176,7 +176,7 @@ def format_timestamp() -> str:
 
 # Define a Union for types _fmt_msg can handle, improving type safety for the formatter.
 FormattableMessages = Union[
-    AgentTrace,
+    ExecutionTrace,
     TaskProcessingComplete,
     TaskProcessingStarted,
     SystemPromptMessage,
@@ -279,7 +279,7 @@ class CLIUserAgent(UIAgent):
             # Format content based on message type
             content_added = False
 
-            if isinstance(message, AgentTrace) or hasattr(message, "outputs"):
+            if isinstance(message, ExecutionTrace) or hasattr(message, "outputs"):
                 outputs = getattr(message, "outputs", None)
 
                 if isinstance(outputs, QualResults):
@@ -564,8 +564,8 @@ class CLIUserAgent(UIAgent):
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_agent_trace(self, message: AgentTrace, ctx: MessageContext) -> None:
-        """Handle AgentTrace messages by displaying them."""
+    async def handle_agent_trace(self, message: ExecutionTrace, ctx: MessageContext) -> None:
+        """Handle ExecutionTrace messages by displaying them."""
         await super().handle_agent_trace(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
@@ -754,7 +754,7 @@ class CLIUserAgent(UIAgent):
 
         """
         # Call base class initialize if needed
-        await super().initialize(ui_type="console", callback_to_groupchat=callback_to_groupchat, **kwargs)
+        await super().initialize(callback_to_groupchat=callback_to_groupchat, **kwargs)
 
         # Initialize the console and set up the input task.
         logger.debug("Initializing", agent_name=self.agent_name)

@@ -130,7 +130,7 @@ def test_init_modules_importable():
         
         # Verify the imports are accessible (not just importable)
         assert BM is not None
-        assert init is not None  
+        assert init is not None
         assert nb_init is not None
         assert ConfigurationBootstrapper is not None
     except ImportError as e:

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { getScoreColor } from '$lib/utils/messageUtils';
 
-	// Native AgentTrace interface
-	interface AgentTrace {
+	// Native ExecutionTrace interface
+	interface ExecutionTrace {
 		timestamp: string;
 		call_id: string;
 		agent_id: string;
@@ -19,7 +19,7 @@
 		};
 	}
 
-	export let messages: AgentTrace[];
+	export let messages: ExecutionTrace[];
 
 	// Generate ASCII score bar similar to other components
 	function generateScoreBar(score: number): string {
@@ -58,7 +58,7 @@
 		return now.toISOString().replace(/\.\d{3}Z$/, '');
 	}
 
-	// Process AgentTrace objects into display format
+	// Process ExecutionTrace objects into display format
 	$: processedMessages = messages.map((trace) => {
 		const outputs = trace.outputs || {};
 		const agentName = trace.agent_info?.agent_name || trace.agent_id;

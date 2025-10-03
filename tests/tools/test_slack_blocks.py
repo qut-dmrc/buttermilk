@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.contract import AgentTrace
+from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.types import Record
 from buttermilk.agents.ui.formatting.slackblock import (
     format_response,
@@ -10,7 +10,7 @@ from buttermilk.agents.ui.formatting.slackblock import (
 @pytest.fixture
 def sample_agent_output():
     """Create a sample agent output for testing formatting."""
-    return AgentTrace(
+    return ExecutionTrace(
         agent_id="test",
         content="This is the main content",
         outputs={

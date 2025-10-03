@@ -94,12 +94,6 @@ def silence_task_logs():
     )
     warnings.filterwarnings(
         action="ignore",
-        message="The `dict` method is deprecated",
-        module="promptflow-tracing",
-        category=DeprecationWarning,
-    )
-    warnings.filterwarnings(
-        action="ignore",
         module="traceloop",
         category=DeprecationWarning,
     )

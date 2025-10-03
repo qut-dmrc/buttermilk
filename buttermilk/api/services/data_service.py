@@ -1,9 +1,9 @@
 import datetime
 from typing import Any, Protocol
 
+from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig, SessionConfig
-from buttermilk._core.contract import AgentInput, AgentTrace
-from buttermilk._core.log import logger
+from buttermilk._core.contract import AgentInput, ExecutionTrace
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.types import Record
 
@@ -13,8 +13,7 @@ class FlowRunner(Protocol):
 
     flows: dict[str, Any]
 
-    async def get_records_for_flow(self) -> list[dict[str, Any]]:
-        ...
+    async def get_records_for_flow(self) -> list[dict[str, Any]]: ...
 
 
 class DataService:
@@ -100,8 +99,6 @@ class DataService:
                 raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk import get_bm
-            bm = get_bm()
             storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_key])
 
             for record in storage:
@@ -164,8 +161,8 @@ class DataService:
 
             # Sanitize the response to ensure all expected keys are present
             return {
-                "scores": defaults["scores"],      # This will be populated later by MessageService
-                "outcomes": defaults["outcomes"],    # This will be populated later by MessageService
+                "scores": defaults["scores"],  # This will be populated later by MessageService
+                "outcomes": defaults["outcomes"],  # This will be populated later by MessageService
                 "pending_agents": progress.get("pending_agents", defaults["pending_agents"]),
                 "progress": progress,
             }
@@ -199,13 +196,11 @@ class DataService:
                 storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
             # Use unified storage system instead of deprecated create_data_loader
-            from buttermilk import get_bm
-            bm = get_bm()
             storage = bm.get_storage(storage_config_raw)
 
             # Use storage's get_record_by_id method (handles iteration internally)
             record = storage.get_record_by_id(record_id)
-            
+
             if record:
                 # Enhance the existing Record object with computed metadata
                 record.metadata.update(
@@ -222,17 +217,17 @@ class DataService:
             return None
 
     @staticmethod
-    def _reconstruct_agent_trace_from_row(row: dict) -> AgentTrace:
-        """Convenience method to reconstruct AgentTrace from database row.
+    def _reconstruct_agent_trace_from_row(row: dict) -> ExecutionTrace:
+        """Convenience method to reconstruct ExecutionTrace from database row.
 
-        This method centralizes the logic for reconstructing AgentTrace objects
+        This method centralizes the logic for reconstructing ExecutionTrace objects
         from database query results, eliminating code duplication.
 
         Args:
-            row: Database row containing AgentTrace data
+            row: Database row containing ExecutionTrace data
 
         Returns:
-            AgentTrace object reconstructed from the row data
+            ExecutionTrace object reconstructed from the row data
 
         Raises:
             Exception: If reconstruction fails due to invalid data
@@ -257,22 +252,20 @@ class DataService:
             inputs=inputs_data.get("inputs", {}),
             parameters=inputs_data.get("parameters", {}),
             context=inputs_data.get("context", []),
-            records=[Record(**rec) for rec in inputs_data.get("records", [])],
+            record=Record(**inputs_data.get("records", {})),
             parent_call_id=row.get("parent_call_id"),
         )
 
-        # Create AgentTrace
-        agent_trace = AgentTrace(
+        # Create ExecutionTrace
+        agent_trace = ExecutionTrace(
             timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime) else datetime.datetime.fromisoformat(row["timestamp"]),
             call_id=row["call_id"],
-            agent_id=agent_config.agent_id,
             metadata=metadata_data,
             outputs=outputs_data,
             session_info=session_info_data,
             agent_info=agent_config,
             session_id=row["session_id"],
             parent_call_id=row.get("parent_call_id"),
-            tracing_link=row.get("tracing_link"),
             inputs=agent_input,
             messages=messages_data,
             error=error_data,
@@ -281,8 +274,8 @@ class DataService:
         return agent_trace
 
     @staticmethod
-    async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[AgentTrace]:
-        """Get toxicity scores for a specific record as AgentTrace objects
+    async def get_scores_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None) -> list[ExecutionTrace]:
+        """Get toxicity scores for a specific record as ExecutionTrace objects
 
         Args:
             record_id: The record ID
@@ -291,17 +284,11 @@ class DataService:
             session_id: Optional session ID for filtering
 
         Returns:
-            List[AgentTrace]: List of AgentTrace objects containing the scoring results
 
         """
         try:
-            # Get BigQuery client from BM instance
-            from buttermilk import get_bm
-            bm_instance = get_bm()
-            bq_client = bm_instance.bq
-            query_runner = QueryRunner(bq_client=bq_client)
-
-            # Use the provided flow runner to access flow configuration and save settings
+            bq_client = bm.bq
+            query_runner = QueryRunner(bq_client=bq_client)  # Use the provided flow runner to access flow configuration and save settings
 
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
@@ -326,26 +313,26 @@ class DataService:
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
-            # Query the full AgentTrace data from the configured flows table
+            # Query the full ExecutionTrace data from the configured flows table
             sql = f"""
-            SELECT
-                session_id,
-                call_id,
-                timestamp,
-                agent_info,
-                inputs,
-                outputs,
-                metadata,
-                session_info,
-                parent_call_id,
-                tracing_link,
-                error,
-                messages
-            FROM `{bq_client.project}.{dataset_id}.{table_id}`
-            {where_clause}
-            AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
-            AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
-            ORDER BY timestamp DESC
+                SELECT
+                    session_id,
+                    call_id,
+                    timestamp,
+                    agent_info,
+                    inputs,
+                    outputs,
+                    metadata,
+                    session_info,
+                    parent_call_id,
+                    tracing_link,
+                    error,
+                    messages
+                FROM `{bq_client.project}.{dataset_id}.{table_id}`
+                {where_clause}
+                AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
+                AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
+                ORDER BY timestamp DESC
             """
 
             result = query_runner.run_query(sql, return_df=False)
@@ -359,7 +346,7 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing AgentTrace from row: {e}")
+                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
                     continue
 
             return agent_traces
@@ -369,8 +356,10 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_responses_for_record(record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None, include_reasoning: bool = True) -> list[AgentTrace]:
-        """Get detailed AI responses for a specific record as AgentTrace objects
+    async def get_responses_for_record(
+        record_id: str, flow_name: str, flow_runner: FlowRunner, session_id: str | None = None, include_reasoning: bool = True
+    ) -> list[ExecutionTrace]:
+        """Get detailed AI responses for a specific record as ExecutionTrace objects
 
         Args:
             record_id: The record ID
@@ -380,14 +369,12 @@ class DataService:
             include_reasoning: Whether to include detailed reasoning (preserved for API compatibility)
 
         Returns:
-            List[AgentTrace]: List of AgentTrace objects containing the detailed responses
+            List[ExecutionTrace]: List of ExecutionTrace objects containing the detailed responses
 
         """
         try:
             # Get BigQuery client from BM instance
-            from buttermilk import get_bm
-            bm_instance = get_bm()
-            bq_client = bm_instance.bq
+            bq_client = bm.bq
             query_runner = QueryRunner(bq_client=bq_client)
 
             # Use the provided flow runner to access flow configuration and save settings
@@ -415,8 +402,8 @@ class DataService:
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
-            # Reuse the same query as get_scores_for_record since we want the full AgentTrace data
-            # The include_reasoning parameter is ignored since AgentTrace contains all data
+            # Reuse the same query as get_scores_for_record since we want the full ExecutionTrace data
+            # The include_reasoning parameter is ignored since ExecutionTrace contains all data
             sql = f"""
             SELECT
                 session_id,
@@ -449,7 +436,7 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing AgentTrace from row: {e}")
+                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
                     continue
 
             return agent_traces

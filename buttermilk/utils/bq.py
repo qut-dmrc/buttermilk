@@ -162,14 +162,10 @@ def construct_dict_from_schema(
 
         # Handle simple data type conversions for non-repeated, non-STRUCT fields
         elif field_type_upper in ("TIMESTAMP", "DATETIME", "DATE"):
-            if isinstance(value, datetime.datetime):
-                converted_value = value
-            elif isinstance(value, str):
-                try:
-                    converted_value = pd.to_datetime(value)  # Handles various string formats
-                except Exception as e_dt:
-                    logger.warning(f"Could not parse string '{value}' to datetime for field '{key}': {e_dt!s}. Skipping.")
-                    continue
+            # BigQuery accepts datetime objects or ISO format strings
+            # Keep strings as-is to avoid unnecessary conversions (string -> datetime -> string)
+            if isinstance(value, (datetime.datetime, datetime.date, str)):
+                transformed_dict[key] = value
             elif isinstance(value, (int, float)):  # Assume POSIX timestamp (seconds or ms)
                 try:
                     converted_value = datetime.datetime.utcfromtimestamp(value)
@@ -179,14 +175,10 @@ def construct_dict_from_schema(
                     except Exception as e_ts:
                         logger.warning(f"Could not parse numeric '{value}' as timestamp for field '{key}': {e_ts!s}. Skipping.")
                         continue
+                transformed_dict[key] = converted_value
             else:
                 logger.warning(f"Unsupported type '{type(value)}' for datetime conversion for field '{key}'. Skipping.")
                 continue
-
-            if field_type_upper == "DATE" and isinstance(converted_value, datetime.datetime):
-                transformed_dict[key] = converted_value.date()
-            else:
-                transformed_dict[key] = converted_value
 
         elif field_type_upper in ("INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC"):
             try:

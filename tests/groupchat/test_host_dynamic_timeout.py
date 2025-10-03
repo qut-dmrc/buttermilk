@@ -22,8 +22,8 @@ def mock_host_agent():
         max_wait_time=120,  # Base timeout of 2 minutes
     )
     agent._publish = AsyncMock()
-    agent._model_context = MagicMock()
-    agent._model_context.add_message = AsyncMock()
+    agent.model_context = MagicMock()
+    agent.model_context.add_message = AsyncMock()
     return agent
 
 

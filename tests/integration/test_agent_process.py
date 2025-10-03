@@ -11,11 +11,12 @@ import pytest
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     AgentInput,
-    AgentTrace,
+    ExecutionTrace,
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
 
+pytestmark = pytest.mark.anyio
 # Try to import LLMJudge, but don't fail if it doesn't exist
 try:
     from buttermilk.agents.judge import Reasons
@@ -73,11 +74,13 @@ class TestScorerAgent:
 
         # Mock _process to return a valid score
         scorer.agent._process = AsyncMock()
-        scorer._process.return_value = AgentTrace(
+        scorer._process.return_value = ExecutionTrace(
             agent_info="scorer-test",
-            outputs=QualScore(assessments=[
-                QualScoreCRA(correct=True, feedback="This is correct"),
-            ]),
+            outputs=QualScore(
+                assessments=[
+                    QualScoreCRA(correct=True, feedback="This is correct"),
+                ]
+            ),
         )
 
         return scorer
@@ -94,13 +97,13 @@ class TestScorerAgent:
 
         # Verify the agent's _process method was called
         scorer_test.adapter.agent._process.assert_called_once()
-        assert isinstance(result, AgentTrace)
+        assert isinstance(result, ExecutionTrace)
         assert not result.is_error
 
     async def test_scorer_listen_with_valid_message(self, scorer_test):
         """Test the scorer's _listen method with a valid message."""
         # Setup a valid judge output
-        judge_output = AgentTrace(
+        judge_output = ExecutionTrace(
             agent_info="judge-abc",
             outputs=Reasons(
                 conclusion="Judge conclusion",

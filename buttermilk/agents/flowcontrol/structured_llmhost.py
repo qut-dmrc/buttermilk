@@ -173,11 +173,12 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         """Process the message using the LLM with intercepted tool calls."""
         # Fill template and call LLM
         try:
+            inputs = message.inputs or {}
+            inputs.update(kwargs)
+
             llm_messages_to_send = await self._fill_template(
                 task_params=message.parameters or {},
-                inputs=message.inputs or {},
-                context=message.context,
-                records=message.records,
+                inputs=inputs,
             )
         except Exception as e:
             logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")

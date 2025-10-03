@@ -16,17 +16,12 @@ from typing import Any
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import AssistantMessage, LLMMessage, UserMessage
-from autogen_core.tools import Tool
 
-from buttermilk import bm, logger
+from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput
-from buttermilk._core.types import Record
-from buttermilk.utils.templating import load_template, make_messages
-from buttermilk.utils.utils import clean_empty_values
+from buttermilk._core.llm_core import LLMCore
 
 
 class LLMAgent(Agent):
@@ -94,243 +89,73 @@ class LLMAgent(Agent):
             raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
 
         # Initialize private attributes
-        self._model: str = self.parameters.get("model", "")
-
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
-        # Control behavior - moved from Field declaration
-        self._fail_on_unfilled_parameters: bool = self.parameters.pop("fail_on_unfilled_parameters", True)
-        
-        # Template metadata for tracking in AgentTrace
-        self._template_metadata: dict[str, str] = {}
-
-    async def _fill_template(
-        self,
-        task_params: dict[str, Any],
-        inputs: dict[str, Any],
-        context: list[LLMMessage] = [],
-        records: list[Record] = [],
-    ) -> list[LLMMessage]:
-        """Renders the agent's prompt template (e.g., Jinja2/Prompty) with provided data.
-
-        This method constructs the list of messages to be sent to the LLM.
-        It determines the correct prompt template to use based on `self.parameters`,
-        `task_params` (from `AgentInput.parameters`), or `inputs` (from `AgentInput.inputs`).
-        It then renders this template, injecting `inputs` as direct template
-        variables, and `context` and `records` into specific placeholders within
-        the template structure (if using Prompty format).
-
-        Args:
-            task_params: Parameters specific to the current task/request, typically
-                from `AgentInput.parameters`. These can override agent defaults.
-            inputs: Input data provided in the `AgentInput.inputs` dictionary. These
-                are made available as variables during template rendering.
-            context: Optional. Conversation history as a list of `LLMMessage` objects.
-                Used to fill context placeholders in the prompt. Defaults to empty list.
-            records: Optional. List of `Record` objects associated with the current task.
-                Used to fill record placeholders in the prompt. Defaults to empty list.
-
-        Returns:
-            list[LLMMessage]: A list of `LLMMessage` objects (e.g., `SystemMessage`,
-            `UserMessage`, `AssistantMessage`) ready to be sent to the LLM.
-
-        Raises:
-            ProcessingError: If no prompt template name is defined in the configuration,
-                if the template parsing fails, or if `self._fail_on_unfilled_parameters`
-                is True and required template variables are missing from `inputs`.
-
-        """
-        template_name = self.parameters.get("template")
-        if not template_name or not isinstance(template_name, str):
-            raise ProcessingError(f"Agent '{self.agent_id}': 'template' is a required parameter and must be a non-empty string.")
-        logger.debug(f"Agent '{self.agent_name}': Using prompt template '{template_name}'.")
-
-        combined_params = {**(self.parameters if self.parameters is not None else {}), **(task_params if task_params is not None else {})}
-
-        filtered_inputs = clean_empty_values(inputs).copy() if inputs else {}
-
-        # Check if prompt is already in context to avoid duplication
-        # If the last message in context has the same content as the prompt, don't include it again
-        if context and "prompt" in filtered_inputs:
-            last_context_msg = context[-1]
-            if isinstance(last_context_msg, UserMessage) and last_context_msg.content == filtered_inputs["prompt"]:
-                logger.debug(f"Agent '{self.agent_name}': Removing duplicate prompt from inputs (already in context)")
-                del filtered_inputs["prompt"]
-
-        rendered_template_str, unfilled_vars, template_hash = load_template(
-            template=template_name,
-            parameters=combined_params,
-            untrusted_inputs=filtered_inputs,
+        # Initialize the shared LLM core
+        # Filter out parameters that we're passing explicitly to avoid duplicates
+        filtered_params = {k: v for k, v in self.parameters.items()
+                          if k not in ("output_model", "tools", "fail_on_unfilled_parameters")}
+        self.llm_core = LLMCore(
+            output_model=output_model,
+            tools=self._tools or [],
+            fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
+            **filtered_params,
         )
 
-        try:
-            llm_messages: list[LLMMessage] = make_messages(
-                local_template=rendered_template_str,
-                context=context,
-                records=records,
-            )
-            # If context or records are provided, remove them from missing variables
-            if context:
-                unfilled_vars.discard("context")
-            if records:
-                unfilled_vars.discard("records")
-
-        except ProcessingError:
-            raise
-        except Exception as e:
-            raise ProcessingError(f"Failed to create messages from template '{template_name}' for agent '{self.agent_id}'") from e
-
-        # Identify missing variables
-        missing_vars_in_template = set(unfilled_vars)
-        if missing_vars_in_template:
-            err_msg = (
-                f"Agent '{self.agent_id}' template '{template_name}' has unfilled parameters: {', '.join(sorted(list(missing_vars_in_template)))}"
-            )
-            if self._fail_on_unfilled_parameters:
-                raise ProcessingError(err_msg)
-            logger.warning(f"{err_msg}. Proceeding as fail_on_unfilled_parameters is False.")
-
-        # Store template metadata for AgentTrace
-        self._template_metadata = {
-            "template_name": template_name,
-            "template_hash": template_hash,
-        }
-
-        logger.debug(f"Agent '{self.agent_name}': Template '{template_name}' rendered into {len(llm_messages)} messages for LLM.")
-        return llm_messages
-
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
-        """Core processing logic: fills template, calls LLM, makes AgentOutput.
+        """Core processing logic: uses LLMCore to process and wraps result in AgentOutput.
 
         Args:
             message: The `AgentInput` message containing data, context, and
                 parameters for this processing step.
             cancellation_token: Optional. A token to signal cancellation of the
                 LLM call or other async operations.
-            **kwargs: Additional keyword arguments (currently not explicitly used but
-                provides flexibility for future extensions or subclass overrides).
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            AgentOutput: An `AgentOutput` message. The `outputs` attribute will
-            contain the processed LLM response (either a string, a parsed Pydantic
-            model if `output_model` was used, or a generic JSON structure).
-            The `metadata` attribute will include information from the LLM call
-            (e.g., token usage) and details about the agent.
+            AgentOutput: An `AgentOutput` message with the processed LLM response.
 
         Raises:
-            ProcessingError: If template filling fails and `fail_on_unfilled_parameters`
-                is True, or if the LLM call itself fails after retries, or if
-                parsing/validation of the LLM response fails critically.
-            FatalError: If the LLM client fails to initialize (caught in `init_model`).
-
+            ProcessingError: If LLM processing fails.
         """
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
 
-        try:
-            llm_messages_to_send = await self._fill_template(
-                task_params=message.parameters if message.parameters is not None else {},
-                inputs=message.inputs if message.inputs is not None else {},
-                context=message.context,
-                records=message.records,
+        # Pass the entire message object to LLMCore for flexible input handling
+        # LLMCore will extract inputs, context, and record as needed
+
+        # Override parameters with message parameters
+        if message.parameters:
+            # Create a new LLMCore instance with merged parameters
+            merged_params = {**self.parameters, **message.parameters}
+            llm_core = LLMCore(
+                model=merged_params.get("model", ""),
+                template=merged_params.get("template", ""),
+                output_model=self.output_model,
+                tools=self._tools or [],
+                fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
+                **merged_params,
             )
-        except ProcessingError as template_fill_error:  # Catch specific ProcessingError from _fill_template
-            msg = f"Critical error during prompt template processing: {template_fill_error!s}"
-            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=False)
-            raise ProcessingError(msg) from template_fill_error
-
-        except Exception as e:  # Catch any other unexpected error during templating
-            msg = f"Unexpected template error: {e!s}"
-            logger.error(f"Agent '{self.agent_id}': {msg}", exc_info=True)
-            raise ProcessingError(msg) from e
-
-        tool_names = [getattr(tool, "name", str(tool)) for tool in self._tools]
-        logger.debug(
-            f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self.parameters['model']}'. "
-            f"Configured tools ({len(self._tools)}): {tool_names}",
-        )
-
-        # Call the LLM through our helper method
-        # Extract cancellation_token from kwargs if provided
-        cancellation_token = kwargs.get("cancellation_token")
-
-        chat_result = await self._call_llm(
-            messages=llm_messages_to_send,
-            tools=self._tools,
-            schema=self.output_model,
-            cancellation_token=cancellation_token,
-        )
-        logger.debug(
-            f"Agent {self.agent_name}: Received {type(chat_result)} from model '{self.parameters['model']}'. Finish reason: {chat_result.finish_reason}",
-        )
-
-        # Prepare metadata for AgentOutput
-        output_metadata = {
-            "agent_name": self.agent_name,
-            "agent_id": self.agent_id,
-            "agent_model": self.parameters["model"],
-            "finish_reason": chat_result.finish_reason,
-            "usage": chat_result.usage,
-        }
-        
-        # Add template metadata for tracking template versions
-        output_metadata.update(self._template_metadata)
-        
-        # Include pricing metadata if available
-        if isinstance(chat_result, ModelOutput) and hasattr(chat_result, "metadata") and "pricing" in chat_result.metadata:
-            output_metadata["pricing"] = chat_result.metadata["pricing"]
-        
-        # Fail-fast: at this point, chat_result is a successful CreateResult/ModelOutput
-        llm_messages_to_send.append(
-            AssistantMessage(content=chat_result.content, thought=getattr(chat_result, "thought", None), source=self.agent_id),
-        )
-
-        # Extract the final output based on whether we have structured output
-        if self.output_model and isinstance(chat_result, ModelOutput) and isinstance(chat_result.parsed_object, self.output_model):
-            final_output = chat_result.parsed_object
         else:
-            # Use raw content (string)
-            final_output = chat_result.content
+            llm_core = self.llm_core
 
-        logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(final_output).__name__}")
-        return AgentOutput(agent_id=self.agent_id, outputs=final_output, metadata=output_metadata, error=None)
-
-    async def _call_llm(
-        self,
-        messages: list[LLMMessage],
-        tools: list[Tool],
-        schema: type[pydantic.BaseModel] | None,
-        cancellation_token: CancellationToken | None,
-    ) -> CreateResult | ModelOutput:
-        """Helper method to call the LLM.
-
-        This method can be overridden by subclasses that need special LLM handling.
-
-        Args:
-            messages: The messages to send to the LLM
-            tools: Available tools for the LLM to call
-            schema: Optional Pydantic schema for structured output
-            cancellation_token: Optional cancellation token
-
-        Returns:
-            CreateResult | ModelOutput: The LLM response, potentially with parsed object
-
-        Raises:
-            ProcessingError: If the LLM call fails
-
-        """
-        # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
-
-        logger.debug(f"Agent {self.agent_name}: Calling LLM with schema: {schema} (type: {type(schema)})")
         try:
-            chat_result = await model_client.call_chat(
-                messages=messages,
-                tools_list=tools,
+            # Process through LLMCore (yields LLMResult)
+            llm_result = await llm_core.process_with_llm(
+                inputs=message,
+                parent_trace_id=message.parent_call_id,
+                component_name=f"LLMAgent[{self.agent_name}]",
                 cancellation_token=cancellation_token,
-                schema=schema,
             )
-        except Exception as llm_error:
-            msg = f"Agent {self.agent_id}: Error during LLM call to '{self.parameters['model']}': {llm_error}"
-            raise ProcessingError(msg) from llm_error
+            # Prepare metadata for AgentOutput
+            output_metadata = {
+                "agent_name": self.agent_name,
+                "agent_id": self.agent_id,
+                **llm_result.metadata,
+            }
 
-        return chat_result
+            logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
+            return AgentOutput(agent_id=self.agent_id, outputs=llm_result.content, messages=llm_result.messages, metadata=output_metadata, error=[])
+
+        except ProcessingError as e:
+            logger.error(f"Agent '{self.agent_id}': LLM processing failed: {e}")
+            raise

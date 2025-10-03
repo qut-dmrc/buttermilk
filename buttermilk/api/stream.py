@@ -31,7 +31,7 @@ async def flow_stream(
     # Run the flow directly with RunRequest
     async for result in flow.run_flows(run_request=run_request):  # Pass run_request directly
         if result:
-            # Assuming result is AgentTrace or similar with outputs and agent_info
+            # Assuming result is ExecutionTrace or similar with outputs and agent_info
             agent_name = getattr(getattr(result, "agent_info", None), "name", "unknown")
             if not getattr(result, "outputs", None):
                  logger.info(
@@ -41,7 +41,7 @@ async def flow_stream(
                 # raise StopAsyncIteration
 
             if return_json:
-                # Assuming result has model_dump_json method (like AgentTrace)
+                # Assuming result has model_dump_json method (like ExecutionTrace)
                 yield result.model_dump_json()
             else:
                 yield result

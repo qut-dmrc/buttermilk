@@ -21,7 +21,7 @@ except ImportError:
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.utils.lazy_loading import cached_property
 from buttermilk.utils.utils import load_json_flexi
-
+import os
 
 class SecretsManager(CloudProviderCfg):
     _path: str = ""
@@ -54,6 +54,11 @@ class SecretsManager(CloudProviderCfg):
         version: str = "latest",
     ) -> str:
         """Retrieve latest version of a secret by ID"""
+
+        # First, check environment variables.
+        if cfg_key and (env_var := os.environ.get(cfg_key)):
+            return env_var
+
         secret_name = secret_name or secret_class or getattr(self, cfg_key)
 
         _client = self.client

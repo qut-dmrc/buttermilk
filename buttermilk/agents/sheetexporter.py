@@ -44,7 +44,7 @@ class GSheetExporter(Agent):
         single row. If it's a list of dictionaries, each dictionary becomes a row.
 
     Output:
-        Returns an `AgentTrace` where the `outputs` field contains a dictionary
+        Returns an `ExecutionTrace` where the `outputs` field contains a dictionary
         with details of the saved sheet, including `sheet_url` and `sheet_id`.
     """
     # Note: 'name' and 'flow' are Pydantic fields with init=False, meaning they are
@@ -52,8 +52,8 @@ class GSheetExporter(Agent):
     # Their usage pattern might need clarification if they are meant for dynamic config.
     name: str = Field(
         default="gsheetexporter",
-        init=False, # Not initialized via __init__ args, treated as class var or set later
-        description="Default name of the GSheetExporter agent."
+        init=False,  # Not initialized via __init__ args, treated as class var or set later
+        description="Default name of the GSheetExporter agent.",
     )
     flow: str | None = Field(
         default=None,
@@ -62,7 +62,7 @@ class GSheetExporter(Agent):
     )
 
     convert_json_columns: list[str] = Field(
-        default_factory=list, # Use factory for mutable default
+        default_factory=list,  # Use factory for mutable default
         description="List of column names from the input data that should be converted to JSON strings before saving to the sheet.",
     )
 
@@ -71,13 +71,13 @@ class GSheetExporter(Agent):
     with the Google Sheets API. Initialized on first use.
     """
 
-    model_config = ConfigDict(extra="allow") # Allow extra fields if passed in config
+    model_config = ConfigDict(extra="allow")  # Allow extra fields if passed in config
 
-    async def _process( # Renamed from process_job to align with Agent base class
+    async def _process(  # Renamed from process_job to align with Agent base class
         self,
         *,
         message: AgentInput,
-        **kwargs: Any, # Allow for additional keyword arguments from base class or callers
+        **kwargs: Any,  # Allow for additional keyword arguments from base class or callers
     ) -> AgentOutput | None:
         """Processes the input data and exports it to a Google Sheet.
 
@@ -113,7 +113,7 @@ class GSheetExporter(Agent):
         if isinstance(message.inputs, dict):
             input_data_list = [message.inputs]
         elif isinstance(message.inputs, list):
-            input_data_list = message.inputs # type: ignore # Assuming list of dicts
+            input_data_list = message.inputs  # type: ignore # Assuming list of dicts
         else:
             logger.error("GSheetExporter message.inputs is not a dict or list of dicts.", agent_id=self.agent_id, type=type(message.inputs))
             raise ProcessingError(f"message.inputs type {type(message.inputs)} not supported.")
@@ -138,7 +138,7 @@ class GSheetExporter(Agent):
         )
 
         save_config_params = {}
-        if self.save: # self.save is a configuration object from AgentConfig
+        if self.save:  # self.save is a configuration object from AgentConfig
             save_config_params = self.save.model_dump(exclude_none=True)
         else:
             logger.warning("GSheetExporter no 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.", agent_id=self.agent_id)

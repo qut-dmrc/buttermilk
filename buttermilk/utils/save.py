@@ -349,7 +349,7 @@ def data_to_export_rows(
             ]
         bq_rows = data.to_dict(orient="records")
     elif isinstance(data, BaseModel):  # Check for Pydantic BaseModel
-        bq_rows = [data.model_dump(mode="json")]  # Use model_dump for Pydantic v2
+        bq_rows = [data.model_dump()]  # Use model_dump for Pydantic v2
     elif isinstance(data, dict):  # Single dictionary row
         bq_rows = [data.copy()]
     elif isinstance(data, list) and all(isinstance(i, dict) for i in data):  # List of dictionaries

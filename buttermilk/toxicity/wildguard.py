@@ -5,7 +5,6 @@ from typing import (
 
 import regex as re
 import torch
-from promptflow.tracing import trace
 from pydantic import Field
 
 from buttermilk.utils import read_text
@@ -36,12 +35,10 @@ class Wildguard(ToxicityModel):
             **self.options,
         )
 
-    @trace
     def make_prompt(self, content: str) -> str:
         prompt = self.template.format(content=content)
         return prompt
 
-    @trace
     def call_client(
         self,
         prompt: str,

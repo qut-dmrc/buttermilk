@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 from io import IOBase
 from typing import Any, TypeVar
 from urllib.parse import urlparse
-
+import os
 import fsspec
 import httpx
 import numpy as np
@@ -26,7 +26,7 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
-
+from pathlib import Path
 from buttermilk._core.exceptions import ProcessingError
 
 # Optional PDF imports - fail gracefully if not available
@@ -42,6 +42,31 @@ except ImportError:
 from .._core.log import logger
 
 T = TypeVar("T")
+
+def load_dotenv() -> None:
+    """Load environment variables from a .env file into os.environ."""
+    try:
+        from dotenv import load_dotenv as _load_dotenv, dotenv_values as _dotenv_values
+    except ImportError:
+        logger.warning("python-dotenv not installed, cannot load .env files")
+        return
+
+    home_dotenv = Path.home() / ".env"
+    if home_dotenv.exists():
+        # Load environment variables from .env file in home directory
+        _load_dotenv(home_dotenv)
+
+    # Also try to load from current directories like default
+    _load_dotenv()
+
+    # Also try to load values from .env file (even with 'export' lines)
+    config = _dotenv_values(home_dotenv) if home_dotenv.exists() else {}
+    config.update(_dotenv_values())  # Merge with any existing .env values
+
+    # Inject into environment
+    for key, value in config.items():
+        if value is not None:
+            os.environ[key] = value
 
 
 def extract_url(text: str) -> str | None:
@@ -266,6 +291,29 @@ def scrub_serializable(d) -> T:
         # remove empty values
         new_val = {k: v for k, v in new_val.items() if v is not None}
         return new_val
+
+    # Handle dict-like objects (DataDict, DictConfig, etc.) that aren't regular dicts
+    if hasattr(d, 'items') and hasattr(d, 'keys') and hasattr(d, 'values'):
+        try:
+            # Convert dict-like object to a regular dict
+            new_val = {key: scrub_serializable(value) for key, value in d.items()}
+            # remove empty values
+            new_val = {k: v for k, v in new_val.items() if v is not None}
+            return new_val
+        except (TypeError, AttributeError):
+            # If conversion fails, fall through to other handlers
+            pass
+    # Handle objects with __dict__ (like RequestUsage from autogen_core)
+    if hasattr(d, '__dict__') and not isinstance(d, (str, int, float, bool)):
+        try:
+            # Convert object to dict using its __dict__ attribute
+            new_val = {key: scrub_serializable(value) for key, value in d.__dict__.items()}
+            # remove empty values
+            new_val = {k: v for k, v in new_val.items() if v is not None}
+            return new_val
+        except (TypeError, AttributeError):
+            # If conversion fails, fall through to other handlers
+            pass
 
     if isinstance(d, pd.DataFrame):
         return scrub_serializable(d.to_dict(orient="records"))
@@ -631,17 +679,6 @@ def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dic
     return obj
 
 
-def convert_numpy_to_list(obj):
-    """Recursively convert numpy arrays to lists in nested structures"""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, dict):
-        return {k: convert_numpy_to_list(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_numpy_to_list(item) for item in obj]
-    return obj
-
-
 def unwrap_parquet_lists(obj):
     """Convert Parquet list format back to regular Python lists"""
     if isinstance(obj, dict):
@@ -750,6 +787,25 @@ def _get_download_lock(persist_directory: str) -> threading.Lock:
         return _download_locks[persist_directory]
 
 
+def generate_cache_key(path_or_identifier: str) -> str:
+    """Generate a consistent cache key from any path or identifier.
+
+    This is the single source of truth for cache key generation to ensure
+    consistency across all caching operations (ChromaDB, embeddings, records, etc.).
+
+    Args:
+        path_or_identifier: Any path (e.g., "gs://bucket/path") or identifier to convert to cache key
+
+    Returns:
+        str: Cache key suitable for use as directory/file name
+    """
+    # Handle protocol separators first to avoid double underscores
+    result = path_or_identifier.replace("://", "_")
+    # Then handle remaining special characters
+    result = result.replace("/", "_").replace(":", "_").replace(".", "_")
+    return result
+
+
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     """Ensure ChromaDB database files are available locally, downloading from remote if needed.
 
@@ -779,7 +835,7 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
         pass  # Not a valid local path, treat as remote
 
     # Generate cache key from persist_directory
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
 
@@ -890,7 +946,7 @@ async def get_chromadb_cache_size(persist_directory: str) -> int:
         int: Size in bytes, or 0 if cache doesn't exist
 
     """
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     cache_dir = _get_cache_dir()
     local_cache_path = cache_dir / cache_key
 
@@ -936,7 +992,7 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
 
         return await asyncio.to_thread(_clear_all)
     # Clear specific cache
-    cache_key = persist_directory.replace("/", "_").replace(":", "_").replace(".", "_")
+    cache_key = generate_cache_key(persist_directory)
     local_cache_path = cache_dir / cache_key
 
     if not local_cache_path.exists():

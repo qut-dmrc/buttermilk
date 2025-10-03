@@ -13,10 +13,12 @@ flows: {}
 bm:
   _target_: buttermilk._core.bm_init.BM
   session_info:
-    name: ${run.name}
-    job: ${run.job}
+    project_name:
+    job:
+    template_paths: []
     # Session storage configuration
     sessions_dir: "data/sessions"
+    cache_dir: "~/.cache/buttermilk"
     # These defaults are currently not loaded properly.
     session:
       timeout_minutes: 60

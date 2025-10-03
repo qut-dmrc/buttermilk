@@ -14,7 +14,7 @@ from autogen_core.tools import FunctionTool, Tool
 
 from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput, AgentOutput, AgentTrace, StepRequest  # Buttermilk message contracts
+from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace, StepRequest  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
@@ -90,7 +90,7 @@ class FetchAgent(Agent):
             raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 
     @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
-    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | AgentTrace | None:
+    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | ExecutionTrace | None:
         return await self.invoke(message=message)
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:

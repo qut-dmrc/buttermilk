@@ -3,15 +3,14 @@
 import importlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, Optional, Protocol, Type, TypeVar
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Iterator, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
-
+from buttermilk import bm, logger
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
@@ -47,16 +46,15 @@ class Storage(ABC):
     that support both reading and writing operations with the same configuration.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize storage with configuration and BM instance.
 
         Args:
             config: Storage configuration
-            bm: Buttermilk instance for accessing clients and defaults
         """
         self.config = config
-        self.bm = bm
         self._record_class: Type[BaseRecord] | None = None
+        self._async_iterator: Optional[AsyncGenerator[dict[str, Any], None]] = None
 
     @abstractmethod
     def __iter__(self) -> Iterator[BaseRecord]:
@@ -68,11 +66,16 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def save(self, records: list[BaseModel] | BaseModel) -> None:
-        """Save Pydantic models to storage.
+    def save(self, records: list[BaseRecord] | BaseRecord | list[dict[str, Any]] | dict[str, Any]) -> None:
+        """Save records to storage.
+
+        Primary contract: accept BaseRecord (or list of BaseRecord).
+        For safety/backwards-compat, dict inputs produced by BaseRecord.model_dump()
+        are also accepted and should be coerced by implementations.
 
         Args:
-            records: Single Pydantic model or list of models to save
+            records: Single BaseRecord or list of BaseRecord objects. Dict (or list of dict)
+                is tolerated for safety but not encouraged.
         """
         pass
 
@@ -125,12 +128,8 @@ class Storage(ABC):
         except Exception:
             return 0
 
-    async def iterate_async(
-        self,
-        batch_size: Optional[int] = None,
-        filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[BaseRecord, None]:
-        """Async generator that yields records from storage with optional filtering.
+    async def iterate_async(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
+        """Async generator that yields record dictionaries from storage with optional filtering.
 
         This method enables Storage objects to be used directly as DataSource
         in simple pipelines by implementing the async generator protocol.
@@ -140,7 +139,8 @@ class Storage(ABC):
             filter: Optional filter to apply to records before yielding
 
         Yields:
-            Records from storage that pass the filter (if provided)
+            Dictionaries containing records that pass the filter (if provided)
+            Format: {"record": BaseRecord}
         """
         count = 0
         for record in self:
@@ -154,11 +154,7 @@ class Storage(ABC):
             yield record
             count += 1
 
-    def __call__(
-        self,
-        batch_size: Optional[int] = None,
-        filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[BaseRecord, None]:
+    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[BaseRecord, None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:
@@ -179,15 +175,43 @@ class Storage(ABC):
             filter: Optional filter to apply to records
 
         Returns:
-            Async generator of records
+            Async generator of record dictionaries
         """
         return self.iterate_async(batch_size, filter)
+
+    def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
+        """Make Storage objects async iterable.
+
+        Returns:
+            Self as async iterator
+        """
+        # Reset/initialize the async iterator
+        self._async_iterator = self.iterate_async()
+        return self
+
+    async def __anext__(self) -> dict[str, Any]:
+        """Get next item from async iterator.
+
+        Returns:
+            Next record dictionary from storage
+
+        Raises:
+            StopAsyncIteration: When no more records available
+        """
+        if self._async_iterator is None:
+            self._async_iterator = self.iterate_async()  # Initialize on first call
+
+        try:
+            return await self._async_iterator.__anext__()
+        except StopAsyncIteration:
+            self._async_iterator = None
+            raise
 
     def _get_record_class(self) -> Type[BaseRecord]:
         """Get the record class to use for instantiation.
 
         Resolves the class from the config's record_class field, with caching.
-        Falls back to Record if not specified or on error.
+        Falls back to BaseRecord if not specified or on error.
 
         Returns:
             The class to use for creating record instances
@@ -198,7 +222,7 @@ class Storage(ABC):
 
         # Default to Record class
         if not self.config.record_class:
-            self._record_class = Record
+            self._record_class = BaseRecord
             return self._record_class
 
         try:
@@ -213,20 +237,14 @@ class Storage(ABC):
 
             # Verify it's a BaseRecord subclass
             if not issubclass(cls, BaseRecord):
-                logger.warning(
-                    f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. "
-                    f"Falling back to Record."
-                )
+                logger.warning(f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. Falling back to Record.")
                 self._record_class = Record
             else:
                 self._record_class = cls
-                logger.debug(f"Using record class: {self.config.record_class}")
+                logger.debug(f"Using BaseRecord class: {self.config.record_class}")
 
         except (ImportError, AttributeError, ValueError) as e:
-            logger.warning(
-                f"Failed to import record_class '{self.config.record_class}': {e}. "
-                f"Falling back to Record."
-            )
+            logger.warning(f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to Record.")
             self._record_class = Record
 
         return self._record_class
@@ -254,7 +272,7 @@ class StorageClient:
     schema handling, and configuration management.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize storage client.
 
         Args:
@@ -262,20 +280,15 @@ class StorageClient:
             bm: Buttermilk instance for accessing clients
         """
         self.config = config
-        self.bm = bm
         self._schema_cache = None
 
     def get_bq_client(self):
         """Get BigQuery client from BM instance."""
-        if not self.bm:
-            raise ValueError("BM instance required for BigQuery operations")
-        return self.bm.bq
+        return bm.bq
 
     def get_gcs_client(self):
         """Get Google Cloud Storage client from BM instance."""
-        if not self.bm:
-            raise ValueError("BM instance required for GCS operations")
-        return self.bm.gcs
+        return bm.gcs
 
     def get_schema(self):
         """Load and cache schema from configuration."""
@@ -314,4 +327,3 @@ class StorageClient:
                 missing_parts.append("table_id")
             raise ValueError(f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}")
         return self.config.full_table_id
-

@@ -1,0 +1,101 @@
+[
+    {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "call_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "parent_call_id",
+        "type": "STRING",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "session_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "session_info",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "agent_info",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "parameters",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "inputs",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "outputs",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "messages",
+        "type": "JSON",
+        "mode": "REPEATED"
+    },
+    {
+        "name": "record",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "fields": [
+            {
+                "name": "record_id",
+                "type": "STRING",
+                "mode": "NULLABLE"
+            },
+            {
+                "name": "dataset_name",
+                "type": "STRING",
+                "mode": "NULLABLE"
+            },
+            {
+                "name": "split_type",
+                "type": "STRING",
+                "mode": "NULLABLE"
+            }
+        ]
+    },
+    {
+        "name": "error",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "fields": [
+            {
+                "name": "event",
+                "type": "STRING",
+                "mode": "NULLABLE"
+            },
+            {
+                "name": "details",
+                "type": "JSON",
+                "mode": "NULLABLE"
+            }
+        ]
+    },
+    {
+        "name": "metadata",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "tracing",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    }
+]

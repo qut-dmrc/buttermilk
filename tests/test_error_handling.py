@@ -66,10 +66,10 @@ async def test_error_handling():
     # Check error tracking
     print(f"Failed tasks by agent: {dict(host._failed_tasks_by_agent)}")
     print(f"Total tasks in step: {host._total_tasks_in_step}")
-    
-    # Test wait_check_last_step_completions - should return False due to high error rate
-    print("Testing wait_check_last_step_completions...")
-    result = await host.wait_check_last_step_completions()
+
+    # Test wait_check_current_step_completions - should return False due to high error rate
+    print("Testing wait_check_current_step_completions...")
+    result = await host.wait_check_current_step_completions()
     
     if not result:
         print("✅ SUCCESS: Host correctly stopped flow due to high error rate (60% > 40% threshold)")
@@ -131,10 +131,10 @@ async def test_error_handling_below_threshold():
     # Check error tracking
     print(f"Failed tasks by agent: {dict(host._failed_tasks_by_agent)}")
     print(f"Total tasks in step: {host._total_tasks_in_step}")
-    
-    # Test wait_check_last_step_completions - should return True since error rate is below threshold
-    print("Testing wait_check_last_step_completions...")
-    result = await host.wait_check_last_step_completions()
+
+    # Test wait_check_current_step_completions - should return True since error rate is below threshold
+    print("Testing wait_check_current_step_completions...")
+    result = await host.wait_check_current_step_completions()
     
     if result:
         print("✅ SUCCESS: Host correctly continued flow (40% ≤ 70% threshold)")

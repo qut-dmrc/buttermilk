@@ -286,7 +286,7 @@ async def start_flow_thread(
         )
         thread_orchestrator = globals()[orchestrator_name](**_config.model_dump())
 
-        t = asyncio.create_task(thread_orchestrator.run(RunRequest(flow=flow_cfg.name, ui_type="slack-thread")))
+        t = asyncio.create_task(thread_orchestrator.run(RunRequest(flow=flow_cfg.name)))
         await orchestrator_tasks.put(t)
         logger.debug(
             "Flow task created and queued",

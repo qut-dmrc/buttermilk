@@ -33,7 +33,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import get_bm, logger  # Global Buttermilk instance for framework access
+from buttermilk import bm, logger  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
 from buttermilk._core.config import (  # Configuration models
@@ -47,7 +47,6 @@ from buttermilk._core.storage_config import (
 from buttermilk._core.types import (
     RunRequest,
 )
-from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects  # Pydantic validators
 
 
@@ -199,8 +198,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     specific to the orchestration strategy.
 
     Internal State Attributes:
-        _flow_data (KeyValueCollector): An internal state collector used to store
-            and manage data passed between steps or used for templating within the flow.
         _bm (Any | None): Optional session-scoped BM instance. If None, falls back to global singleton.
         model_config (ConfigDict): Pydantic model configuration.
             - `extra`: "forbid" - Disallows extra fields not explicitly defined.
@@ -208,7 +205,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
             - `populate_by_name`: True.
     """
 
-    _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _bm: Any | None = PrivateAttr(default=None)
 
     model_config = ConfigDict(
@@ -227,8 +223,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         1. Ensures all role keys in `self.agents` are uppercase for consistency.
         2. Validates that each agent definition conforms to the `AgentVariants` model.
            If a plain dictionary is provided, it attempts to parse it as an `AgentVariants`.
-        3. Initializes the internal `_flow_data` state collector with the list of
-           validated agent roles.
 
         Returns:
             Self: The validated and updated orchestrator instance.
@@ -258,7 +252,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         self.agents = validated_agents
         logger.debug(f"Agent roles validated: {list(self.agents.keys())}")
 
-        self._flow_data.init(agent_roles)
         return self
 
     def set_bm(self, bm: Any) -> None:
@@ -282,15 +275,15 @@ class Orchestrator(OrchestratorProtocol, ABC):
     
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
-        
+
         This method provides transparent access to BM functionality while supporting
         both session-scoped and global singleton patterns. Orchestrators should use
-        this method instead of calling get_bm() directly to benefit from session isolation.
-        
+        this method to benefit from session isolation.
+
         Returns:
             BM instance to use for operations. Returns session-scoped BM if one was
             injected via set_bm(), otherwise falls back to the global singleton.
-            
+
         Example:
             >>> bm = self.get_effective_bm()
             >>> storage = bm.get_storage(config)  # Gets session-isolated or global storage
@@ -299,6 +292,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         if self._bm is not None:
             return self._bm
         else:
+            from buttermilk._core.dmrc import get_bm
             return get_bm()
 
     async def run(self, request: RunRequest) -> None:

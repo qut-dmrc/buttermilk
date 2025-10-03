@@ -3,7 +3,6 @@ from typing import (
 )
 
 from google.cloud import language_v2
-from promptflow.tracing import trace
 
 from .toxicity import EvalRecord, Score, ToxicityModel
 
@@ -20,11 +19,9 @@ class GoogleModerate(ToxicityModel):
     def init_client(self) -> None:
         self.client = language_v2.LanguageServiceClient()
 
-    @trace
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(self, prompt: str, **kwargs) -> language_v2.ModerateTextResponse:
         document = language_v2.Document(
             content=prompt,

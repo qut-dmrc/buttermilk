@@ -14,6 +14,7 @@ from typing import Any, Iterator, Protocol, runtime_checkable
 
 import cloudpathlib
 
+from buttermilk import bm
 from buttermilk._core.log import logger
 
 
@@ -394,7 +395,6 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
 
     # Try to use new storage system first
     try:
-        from buttermilk import get_bm
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
@@ -420,7 +420,6 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
 
         storage_config = StorageConfig(**storage_dict)
 
-        bm = get_bm()
         storage = bm.get_storage(storage_config)
 
         # Ensure storage implements DataLoader interface
@@ -451,7 +450,6 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         return PlaintextDataLoader(config)
     elif config.type in ["bigquery", "bq"]:
         # Use new unified storage system
-        from buttermilk import get_bm
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
@@ -460,7 +458,6 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
             **config.model_dump(exclude={"type"})
         )
 
-        bm = get_bm()
         storage = bm.get_storage(storage_config)
         return DataLoaderWrapper(storage)
     else:

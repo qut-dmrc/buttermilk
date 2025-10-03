@@ -34,7 +34,6 @@ def test_agent_variants_parameter_merging():
     # Create RunRequest with string criteria
     run_request = RunRequest(
         flow="test_flow",
-        ui_type="test",
         parameters={"criteria": "glaad"}
     )
     
@@ -95,7 +94,6 @@ def test_variant_filtering_with_runrequest_override():
     # Create RunRequest that overrides criteria
     run_request = RunRequest(
         flow="test_flow",
-        ui_type="test",
         parameters={"criteria": "glaad_override"}  # This should win
     )
     

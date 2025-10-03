@@ -11,8 +11,7 @@ from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter
 from pyzotero import zotero, zotero_errors
 
 # Import bm for credentials access
-from buttermilk import get_bm
-from buttermilk._core.log import logger
+from buttermilk import bm, logger
 from buttermilk._core.types import Record
 from buttermilk.utils.utils import get_pdf_text
 
@@ -60,7 +59,6 @@ class ZotDownloader(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
-        bm = get_bm()
         self._zot = zotero.Zotero(
             library_id=self.library,
             library_type="group",

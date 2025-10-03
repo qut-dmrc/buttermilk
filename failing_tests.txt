@@ -1,0 +1,314 @@
+FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[gemini25flash] - AttributeError: 'NoneType' object has no attribute 'run_flows'
+FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[gpt41] - AttributeError: 'NoneType' object has no attribute 'run_flows'
+FAILED tests/endtoend/flows/test_describe.py::test_run_flow_describe_only[llama32_90b] - AttributeError: 'NoneType' object has no attribute 'run_flows'
+FAILED tests/endtoend/flows/test_fastapi.py::test_run_flow - TypeError: AsyncClient.__init__() got an unexpected keyword argument 'app'
+FAILED tests/data/test_chromadb_sync_fix.py::TestChromaDBSyncFix::test_path_preservation_logic - AttributeError: <module 'buttermilk.data.vector' from '/home/nic/src/writing/projects/buttermilk/buttermilk/data/vector.py'> does not have the attribute 'VertexAIEmbeddingFunction'
+FAILED tests/endtoend/flows/test_framing.py::test_framing_video[gemini25pro] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_framing_video[llama4maverick] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/api/test_session_persistence.py::TestSessionGCSArchival::test_archive_to_gcs_success - ValueError: "BM" object has no field "save"
+FAILED tests/api/test_session_persistence.py::TestSessionGCSArchival::test_finalize_session - ValueError: "BM" object has no field "save"
+FAILED tests/api/test_session_persistence.py::TestSessionGCSArchival::test_finalize_session_always_attempts_archival - ValueError: "BM" object has no field "save"
+FAILED tests/api/test_osb_websocket_lifecycle.py::TestOSBWebSocketMessageFlow::test_osb_error_message_flow - AttributeError: 'method' object has no attribute 'side_effect'
+FAILED tests/api/test_session_persistence.py::TestConfigurableSessionsDirectory::test_get_sessions_dir_fallback_when_bm_unavailable - AttributeError: <module 'buttermilk' from '/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py'> does not have the attribute 'get_bm'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[osb blm-gemini25flash] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[osb blm-gpt5nano] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_scores_for_record_no_data - TypeError: list indices must be integers or slices, not str
+FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_scores_for_record_with_data - TypeError: list indices must be integers or slices, not str
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[osb blm-haiku] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_framing_video[gemini25flash] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/api/test_score_endpoints.py::TestDataService::test_get_responses_for_record - TypeError: list indices must be integers or slices, not str
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[SD35Large] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[VertexImagegenModels] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/api/test_message_service_tokens.py::TestMessageServiceTokenExtraction::test_format_message_extracts_tokens_from_agent_trace - AttributeError: <module 'buttermilk.api.services.message_service' from '/home/nic/src/writing/projects/buttermilk/buttermilk/api/services/message_service.py'> does not have the attribute 'extract_usage_from_metadata'
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[SD3] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[SDXL] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[SDXL] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[SDXLReplicate] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[SDXLReplicate] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_generate_in_parallel_all_clients - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_llms_multimodal.py::test_multimodal_input_with_message_conversion - TypeError: Expected dict or Image instance, got <class 'PIL.JpegImagePlugin.JpegImageFile'>
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[DALLE] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[DALLE] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[SD35Large] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[SD35Large] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/flows/test_framing.py::test_framing_video[gpt41] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[VertexImagegenModels] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[VertexImagegenModels] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[SD3] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[SDXL] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_content_hash_is_stable_for_single_download[SDXLReplicate] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_llmagents.py::test_llm_agent_template_metadata[gpt5nano] - buttermilk._core.exceptions.ProcessingError: Unexpected template error: Template 'best' (file: 'best.jinja2') could not be loaded.
+FAILED tests/endtoend/flows/test_framing.py::test_framing_video[llama32_90b] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[gemini25flash] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
+FAILED tests/api/test_message_service_tokens.py::TestMessageServiceTokenExtraction::test_format_message_model_from_metadata - AttributeError: <module 'buttermilk.api.services.message_service' from '/home/nic/src/writing/projects/buttermilk/buttermilk/api/services/message_service.py'> does not have the attribute 'calculate_token_cost'
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_responds_to_host_announcement - AttributeError: 'MockAgent' object has no attribute '_listen'
+FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[gemini25pro] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_does_not_respond_to_non_host_announcement - AttributeError: 'MockAgent' object has no attribute '_listen'
+FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[gpt5mini] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
+FAILED tests/agents/test_fetch.py::TestFetch::test_load_data - AttributeError: 'BM' object has no attribute 'get_storage'
+FAILED tests/endtoend/test_llmagents.py::test_llm_agent_template_metadata[haiku] - buttermilk._core.exceptions.ProcessingError: Unexpected template error: Template 'best' (file: 'best.jinja2') could not be loaded.
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_announces_on_cleanup - AttributeError: 'MockAgent' object has no attribute 'cleanup_with_announcement'
+FAILED tests/endtoend/flows/test_rag_zotero_llm.py::test_rag_zotero_with_structured_output[gpt5nano] - TypeError: Agent.invoke() got an unexpected keyword argument 'context'
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_announcement_includes_tools_and_message_types - AttributeError: 'MockAgent' object has no attribute 'create_announcement'
+FAILED tests/api/test_osb_criteria_mapping.py::test_osb_criteria_mapped_to_query - AttributeError: 'RunRequest' object has no attribute 'record_id'
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_handles_announcement_errors_gracefully - Failed: Agent should handle announcement errors gracefully
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_announcement_in_invoke_lifecycle - AttributeError: 'MockAgent' object has no attribute 'initialize_with_announcement'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_update_agent_registry_joining - TypeError: HostAgent.update_agent_registry() missing 1 required positional argument: 'ctx'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_update_agent_registry_leaving - TypeError: HostAgent.update_agent_registry() missing 1 required positional argument: 'ctx'
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptErrorScenarios::test_main_script_error_first_session_no_project - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_update_agent_registry_multiple_agents_same_tool - TypeError: HostAgent.update_agent_registry() missing 1 required positional argument: 'ctx'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_create_registry_summary - TypeError: HostAgent.update_agent_registry() missing 1 required positional argument: 'ctx'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_host_listens_for_announcements - AttributeError: 'HostAgent' object has no attribute 'initialize'
+FAILED tests/groupchat/test_host_agent_registry.py::TestHostAgentRegistry::test_host_announces_itself_and_receives_responses - AttributeError: 'HostAgent' object has no attribute 'initialize_with_announcement'
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptErrorScenarios::test_main_script_error_project_mismatch - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_wait_check_completions_stops_on_high_errors - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_wait_check_completions_continues_on_low_errors - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_wait_check_completions_clears_tracking - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_custom_error_threshold - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptErrorScenarios::test_main_script_save_directory_project_integration - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_edge_case_no_tasks - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/groupchat/test_host_error_handling.py::TestHostAgentErrorHandling::test_edge_case_all_tasks_failed - AttributeError: 'HostAgent' object has no attribute 'wait_check_current_step_completions'. Did you mean: 'wait_check_current_step_completions'?
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptLoggingIntegration::test_main_script_logging_includes_session_context - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBMInjectionSystem::test_orchestrator_bm_injection - AttributeError: 'MockOrchestrator' object has no attribute '__pydantic_fields_set__'. Did you mean: '__pydantic_fields__'?
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBMInjectionSystem::test_agent_bm_injection - Failed: DID NOT RAISE <class 'Exception'>
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_basic_usage_example - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_agent_integration_example - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBMInjectionSystem::test_end_to_end_bm_flow - ValueError: Failed to create orchestrator for flow 'test_flow': No module named 'tests.integration.test_bm_session_isolation'
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptExamples::test_main_script_scenario_1_first_session_with_project - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_batch_processing_pattern - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBMInjectionSystem::test_session_isolation_between_runners - ValueError: Failed to create orchestrator for flow 'test_flow': No module named 'tests.integration.test_bm_session_isolation'
+FAILED tests/groupchat/test_host_topic_routing.py::TestHostTopicRouting::test_flow_event_sent_before_step_request - IndexError: list index out of range
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptExamples::test_main_script_scenario_2_different_project_new_context - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBackwardCompatibility::test_orchestrator_without_session_bm - AttributeError: 'MockOrchestrator' object has no attribute '__pydantic_fields_set__'. Did you mean: '__pydantic_fields__'?
+FAILED tests/integration/20core/test_bm_session_isolation.py::TestBackwardCompatibility::test_agent_without_session_bm - Failed: DID NOT RAISE <class 'Exception'>
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptExamples::test_main_script_scenario_3_inherited_project - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/examples/test_main_script_examples.py::TestMainScriptExamples::test_main_script_complete_scenario_sequence - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/integration/20core/test_setup_infrastructure.py::test_hf_login - KeyError: 'HUGGINGFACEHUB_API_TOKEN'
+FAILED tests/integration/test_agent_process.py::TestScorerAgent::test_scorer_direct_invoke - Failed: async def functions are not natively supported.
+FAILED tests/integration/test_agent_process.py::TestScorerAgent::test_scorer_listen_with_valid_message - Failed: async def functions are not natively supported.
+FAILED tests/api/test_osb_websocket_lifecycle.py::TestOSBWebSocketErrorHandling::test_websocket_session_not_found_handling - AttributeError: 'method' object has no attribute 'return_value'
+FAILED tests/data/test_records_openaimessages.py::test_from_uri_article[abc-gaza-https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486-He said it was a "relief" to hear the news of the ceasefire "which we were calling for, for the last 15 months".] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+FAILED tests/integration/20core/test_config_reload.py::TestConfigurationReload::test_reload_configurations_success - Failed: async def functions are not natively supported.
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_with_output_model - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_passes_tools_to_llmcore - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_process_basic_input - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_process_with_context - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_process_with_records - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_process_structured_output - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_parameter_merging - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_handles_processing_error - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_handles_unexpected_error - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_preserves_parent_trace_id - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/integration/test_llm_agent_refactoring.py::TestLLMAgentRefactoring::test_llmagent_template_metadata_preserved - AttributeError: 'LLMAgent' object has no attribute 'llm_core'
+FAILED tests/api/test_osb_websocket_lifecycle.py::TestOSBWebSocketSessionIsolation::test_session_data_isolation - AttributeError: 'method' object has no attribute 'side_effect'
+FAILED tests/api/test_osb_websocket_lifecycle.py::TestOSBWebSocketMessageFlow::test_osb_query_message_flow - AttributeError: 'method' object has no attribute 'return_value'
+FAILED tests/data/test_records_openaimessages.py::test_from_uri_article[guardian-somethingmiriam-https://www.theguardian.com/tv-and-radio/2024/apr/25/she-was-tough-but-it-broke-her-why-theres-something-about-miriam-was-reality-tvs-most-shameful-low-it wasn\u2019t a joke. It was Miriam and her life.] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+FAILED tests/data/test_records_openaimessages.py::test_from_uri_invalid - AttributeError: 'Record' object has no attribute 'all_text'. Did you mean: 'alt_text'?
+FAILED tests/data/test_records_openaimessages.py::test_from_object_valid - AttributeError: 'Record' object has no attribute 'components'
+FAILED tests/data/test_records_openaimessages.py::test_record_update - AttributeError: 'Record' object has no attribute 'update_from'
+FAILED tests/data/test_records_openaimessages.py::test_as_openai_message_with_media - TypeError: Expected dict or Image instance, got <class 'PIL.JpegImagePlugin.JpegImageFile'>
+FAILED tests/data/test_records_openaimessages.py::test_as_openai_message_with_text - TypeError: 'UserMessage' object is not subscriptable
+FAILED tests/data/test_records_openaimessages.py::test_as_openai_message_no_media_no_text - Failed: DID NOT RAISE <class 'OSError'>
+FAILED tests/endtoend/test_text2image_apis.py::test_generated_image_is_valid_and_nontrivial[DALLE] - KeyError: 'OPENAI_API_KEY not found in bm.credentials for DALL-E client.'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketIntegration::test_osb_websocket_message_validation - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketIntegration::test_osb_session_creation_via_websocket - ModuleNotFoundError: No module named 'buttermilk.runner.osb_session_manager'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketIntegration::test_osb_multi_agent_query_routing - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketIntegration::test_osb_websocket_response_streaming - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketIntegration::test_osb_session_isolation - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketErrorHandling::test_osb_websocket_connection_recovery - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_osb_websocket_integration.py::TestOSBWebSocketErrorHandling::test_osb_agent_failure_handling - ModuleNotFoundError: No module named 'buttermilk.api.websocket'
+FAILED tests/integration/test_logging_fail_fast_integration.py::TestFailFastIntegrationExamples::test_recommended_application_startup_pattern - AttributeError: 'SessionInfo' object has no attribute 'name'
+FAILED tests/integration/test_unified_tracing_config.py::TestUnifiedTracingConfig::test_traceloop_missing_api_key_validation - Failed: DID NOT RAISE <class 'Exception'>
+FAILED tests/integration/test_unified_tracing_config.py::TestUnifiedTracingConfig::test_otel_gcp_trace_setup - AttributeError: <module 'buttermilk.utils.otel' from '/home/nic/src/writing/projects/buttermilk/buttermilk/utils/otel.py'> does not have the attribute 'CloudTraceSpanExporter'
+FAILED tests/runner/test_cli.py::test_main_slack_mode_initialization - ValueError: Invalid config type (MagicMock), expected an OmegaConf Container
+FAILED tests/runner/test_cli.py::test_main_slack_mode_event_loop - ValueError: Invalid config type (MagicMock), expected an OmegaConf Container
+FAILED tests/integration/test_tmdb_agent_integration.py::TestTMDBAgentIntegration::test_tool_error_handling_for_agents - Exception: API Error
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_simple_column_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageRegressionTests::test_tja_config_compatibility - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_nested_metadata_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_real_osb_data_structure - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageIntegration::test_jsonl_format_with_column_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_mixed_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_no_column_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageIntegration::test_cloud_path_simulation - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_explicit_clustering_fields_validation - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_clustering_fields_validation_without_dataset_name - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_no_valid_clustering_fields - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_missing_mapped_fields - TypeError: 'types.UnionType' object is not callable
+FAILED tests/runner/test_cli.py::test_main_console_mode - ValueError: Invalid config type (MagicMock), expected an OmegaConf Container
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_clustering_fields_with_both_fields - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageColumnMapping::test_empty_metadata_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/runner/test_cli.py::test_main_slack_mode_environment_vars - ValueError: Invalid config type (MagicMock), expected an OmegaConf Container
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_parse_record_with_json_strings - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_parse_record_with_already_parsed_fields - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bigquery_storage.py::TestBigQueryStorage::test_parse_record_with_invalid_json - TypeError: 'types.UnionType' object is not callable
+FAILED tests/storage/test_file_storage_column_mapping.py::TestFileStorageRegressionTests::test_tox_config_compatibility - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_initialization_completes_before_use - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_storage_config_full_table_id_computation - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_bigquery_storage_config_valid - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_storage_config_with_columns_mapping - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_initialization_error_handling - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_file_storage_config_valid - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_secret_manager_early_initialization - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'SecretsManager'
+FAILED tests/test_configuration_unit.py::TestConfigurationCaching::test_config_model_creation_performance - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_storage_config_defaults - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_sync_initialization_fallback - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_configuration_unit.py::TestConfigurationCaching::test_config_validation_caching - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_storage_config_merge_defaults - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_multiple_ensure_initialized_calls - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_bm_async_init.py::TestBMAsyncInitialization::test_cloud_manager_lazy_initialization - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_configuration_unit.py::TestStorageConfigValidation::test_storage_config_serialization - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_improved_tool_routing_messages.py::TestImprovedToolRoutingMessages::test_structured_llm_host_tool_call_summary - ValueError: Agent STRUCTURED_HOST test-model GZXJJF: 'template' is required in agent parameters.
+FAILED tests/test_configuration_unit.py::TestValidationErrorHandling::test_invalid_storage_type - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_improved_tool_routing_messages.py::TestImprovedToolRoutingMessages::test_structured_llm_host_integration - ValueError: Agent STRUCTURED_HOST test-model 3EBURQ: 'template' is required in agent parameters.
+FAILED tests/test_configuration_unit.py::TestValidationErrorHandling::test_missing_required_bigquery_fields - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_lazy_loading_unit.py::TestAsyncBackgroundOperations::test_background_config_saving - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/endtoend/test_text2image_apis.py::test_generated_image_is_valid_and_nontrivial[SD35Large] - ValueError: Azure Stability 3.5 URL or API Key not configured in bm.credentials.
+FAILED tests/test_otel_gcp_integration.py::TestOtelGCPIntegration::test_otel_gcp_and_wandb_exporters_configured - AttributeError: <module 'buttermilk.utils.otel' from '/home/nic/src/writing/projects/buttermilk/buttermilk/utils/otel.py'> does not have the attribute 'CloudTraceSpanExporter'
+FAILED tests/test_lazy_loading_unit.py::TestAsyncBackgroundOperations::test_ip_fetching_is_background - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/00initial/test_init.py::test_short_form_nb - AttributeError: 'BM' object has no attribute 'logger'
+FAILED tests/test_record_content_validation.py::TestRecordContentValidation::test_osb_field_mapping_scenario - Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+FAILED tests/test_simple_rag_agent.py::TestSimpleRagAgent::test_rag_agent_forces_structured_output - ValueError: Agent RESEARCHER XE9K3Z: 'model' is required in agent parameters.
+FAILED tests/test_simple_rag_agent.py::TestRagZotero::test_rag_zotero_forces_zotero_output - ValueError: Agent ZOTERO_RESEARCHER IJW7EB: 'model' is required in agent parameters.
+FAILED tests/test_simple_rag_agent.py::TestSimpleRagAgent::test_rag_agent_custom_template - ValueError: Agent RESEARCHER VNPKVM: 'model' is required in agent parameters.
+FAILED tests/test_otel_gcp_integration.py::TestOtelGCPIntegration::test_otel_gcp_from_env_variable - AttributeError: <module 'buttermilk.utils.otel' from '/home/nic/src/writing/projects/buttermilk/buttermilk/utils/otel.py'> does not have the attribute 'CloudTraceSpanExporter'
+FAILED tests/test_lazy_loading_unit.py::TestMemoryEfficiency::test_large_objects_not_created_unnecessarily - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_record_content_validation.py::TestRecordContentValidation::test_record_requires_content - Failed: DID NOT RAISE <class 'pydantic_core._pydantic_core.ValidationError'>
+FAILED tests/test_startup_performance_unit.py::TestBMInitialization::test_bm_creation_is_fast - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_startup_performance_unit.py::TestBMInitialization::test_secret_manager_is_lazy - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_otel_gcp_integration.py::TestOtelGCPIntegration::test_otel_no_exporters_configured - AttributeError: module 'buttermilk.utils.otel' has no attribute 'trace_sdk'
+FAILED tests/test_startup_performance_unit.py::TestConfigurationValidation::test_storage_config_validation - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_startup_performance_unit.py::TestBMInitialization::test_llm_property_is_lazy - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_startup_performance_unit.py::TestBMInitialization::test_weave_import_is_cached - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_startup_performance_unit.py::TestAsyncCacheOperations::test_llm_cache_writing_is_async - AttributeError: <module 'buttermilk._core.bm_init' from '/home/nic/src/writing/projects/buttermilk/buttermilk/_core/bm_init.py'> does not have the attribute 'CloudManager'
+FAILED tests/test_storage_config_unit.py::test_storage_config_full_table_id_none_when_missing_parts - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_storage_config_unit.py::test_storage_config_creation - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_storage_config_unit.py::test_storage_config_file_type - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_storage_config_unit.py::test_storage_config_full_table_id - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_storage_config_unit.py::test_storage_config_with_columns - TypeError: 'types.UnionType' object is not callable
+FAILED tests/00initial/test_init.py::test_init - AttributeError: 'BM' object has no attribute 'llms_instance'
+FAILED tests/test_storage_config_unit.py::test_storage_config_serialization - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_storage_config_unit.py::test_storage_config_defaults - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_structured_llmhost_unit.py::TestStructuredLLMHostInitialization::test_agent_registry_with_tools - ValueError: Agent HOST test-model XIHTGW: 'template' is required in agent parameters.
+FAILED tests/test_storage_config_unit.py::test_storage_config_merge_defaults - TypeError: 'types.UnionType' object is not callable
+FAILED tests/test_structured_llmhost_unit.py::TestStructuredLLMHostInitialization::test_agent_leaving_removes_tools - ValueError: Agent HOST test-model QWEXO7: 'template' is required in agent parameters.
+FAILED tests/test_structured_llmhost_unit.py::TestStructuredLLMHostSequence::test_sequence_generation - ValueError: Agent HOST test-model 8F9ZWG: 'template' is required in agent parameters.
+FAILED tests/test_structured_tool_handling.py::TestStructuredToolHandling::test_tool_invocation_with_role_prefix - ValueError: Agent HOST: 'model' is required in agent parameters.
+FAILED tests/test_structured_tool_handling.py::TestStructuredToolHandling::test_tool_parameters_passed_correctly - ValueError: Agent RESEARCHER: 'model' is required in agent parameters.
+FAILED tests/test_tool_definition_unit.py::TestAgentToolDefinition::test_to_autogen_schema - KeyError: 'type'
+FAILED tests/test_structured_llmhost_unit.py::TestStructuredLLMHostTools::test_tool_routing_to_agents - ValueError: Agent HOST test-model LPKKHP: 'template' is required in agent parameters.
+FAILED tests/test_ui_agent_display.py::TestUIAgentDisplay::test_announcement_display_in_listen - AttributeError: 'CLIUserAgent' object has no attribute '_listen'
+FAILED tests/test_structured_tool_handling.py::TestStructuredToolHandling::test_tool_registration_from_conductor_request - ValueError: Agent HOST: 'model' is required in agent parameters.
+FAILED tests/agents/test_fetch.py::TestFetch::test_ingest_news[abc news web] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+FAILED tests/tools/test_templating.py::test_parse_raises_error - Failed: DID NOT RAISE <class 'json.decoder.JSONDecodeError'>
+FAILED tests/test_otel_gcp_integration.py::TestCloudPyGCPTracing::test_setup_google_tracing_with_correct_imports - ImportError: cannot import name 'CloudService' from 'buttermilk._core.cloud' (/home/nic/src/writing/projects/buttermilk/buttermilk/_core/cloud.py)
+FAILED tests/agents/test_fetch.py::TestFetch::test_ingest_news[semaphor web] - cloudpathlib.exceptions.CloudPathFileNotFoundError: File opened for read or append, but it does not exist on cloud: https://www.semafor.com/article/11/12/2024/after-a-stinging-loss-democrats-debate-over-where-to-draw-the-line-on-transgender-rights
+FAILED tests/tools/test_tmdb.py::TestTMDBGetAvailability::test_get_availability_no_providers_returns_null_observations - TypeError: TMDBTool.get_availability() got an unexpected keyword argument 'regions'
+FAILED tests/tools/test_tmdb.py::TestTMDBGetAvailability::test_get_availability_api_error_handling - TypeError: TMDBTool.get_availability() got an unexpected keyword argument 'regions'
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[SD3] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[SDXL] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_cloud_artifact_matches_in_memory_dimensions[SDXLReplicate] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[DALLE] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[SD35Large] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[VertexImagegenModels] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_text2image_apis.py::test_allows_none_negative_prompt_and_still_produces_image[SD3] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/test_structured_tool_handling.py::TestStructuredToolHandling::test_error_handling_for_missing_participants - ValueError: Agent HOST: 'model' is required in agent parameters.
+FAILED tests/tools/test_uploader.py::TestAsyncDataUploader::test_uploader_initialization_with_real_storage - ValueError: Storage configuration is required
+FAILED tests/tools/test_uploader.py::TestAsyncDataUploader::test_uploader_handles_storage_interface - ValueError: Storage configuration is required
+FAILED tests/tools/test_uploader.py::TestAsyncDataUploaderErrorHandling::test_uploader_handles_invalid_buffer_size - ValueError: Storage configuration is required
+FAILED tests/tools/test_utils.py::test_get_templates_default_pattern[criteria-criteria_ordinary-5240] - TypeError: list_files_with_content() got an unexpected keyword argument 'filename_pattern'
+FAILED tests/tools/test_utils.py::test_get_templates_default_pattern[criteria-criteria_hatefb_factorised-9000] - TypeError: list_files_with_content() got an unexpected keyword argument 'filename_pattern'
+FAILED tests/tools/test_utils.py::test_get_templates_default_pattern[synth-synthesise-1000] - TypeError: list_files_with_content() got an unexpected keyword argument 'filename_pattern'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_simple_path_resolution - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_whole_step_resolution - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_nested_path_resolution - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_nested_mappings - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_list_aggregation - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_tmdb.py::TestTMDBGetAvailability::test_get_availability_with_providers - TypeError: TMDBTool.get_availability() got an unexpected keyword argument 'regions'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_complex_list_aggregation - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_score_agg - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_multiple_outputs_all_matches - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouterSpecialCases::test_special_case_mappings - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_collect_all_matching_fields - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouterSpecialCases::test_empty_lists - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::test_placeholder_integration - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouterSpecialCases::test_nested_special_cases - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/unit/test_bm_injection.py::TestRealBMIntegration::test_backward_compatibility_with_global_bm - ImportError: cannot import name 'get_bm' from 'buttermilk' (/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py)
+FAILED tests/unit/test_bm_injection.py::TestBMInjectionMechanism::test_flowrunner_fallback_to_global - ImportError: cannot import name 'get_bm' from 'buttermilk' (/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py)
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_inject_parent_trace_example - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/unit/test_bootstrap_sequence_architecture.py::TestInfrastructureSharing::test_infrastructure_manager_consistency - AttributeError: 'ConfigurationBootstrapper' object has no attribute 'get_infrastructure_manager'. Did you mean: 'get_infrastructure_config'?
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_error_handling_example - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceExamples::test_manual_context_management - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/examples/test_standalone_trace_examples.py::TestStandaloneTraceEdgeCases::test_nested_traces - AttributeError: 'BM' object has no attribute 'weave'. Did you mean: 'save'?
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_announces_on_initialize - AttributeError: 'MockAgent' object has no attribute 'initialize_with_announcement'
+FAILED tests/groupchat/test_agent_announcement_behavior.py::TestAgentAnnouncementBehavior::test_agent_detects_available_tools - AttributeError: 'MockAgent' object has no attribute 'get_available_tools'. Did you mean: '_get_available_tools'?
+FAILED tests/unit/test_citator.py::test_citator_initialization_with_defaults - KeyError: 'fail_on_unfilled_parameters'
+FAILED tests/unit/test_execution_trace.py::TestTraceWriter::test_trace_writer_no_config - AttributeError: <module 'buttermilk.utils.trace_writer' from '/home/nic/src/writing/projects/buttermilk/buttermilk/utils/trace_writer.py'> does not have the attribute 'get_bm'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_jmespath_expressions - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/unit/test_llm_core.py::TestLLMCore::test_call_llm_with_trace_success - AttributeError: <module 'buttermilk' from '/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py'> does not have the attribute 'get_bm'
+FAILED tests/tools/test_varmap.py::TestFlowVariableRouter::test_nonexistent_path - AttributeError: 'KeyValueCollector' object has no attribute '_resolve_mappings'
+FAILED tests/unit/test_llm_core.py::TestLLMCore::test_call_llm_with_trace_failure - AttributeError: <module 'buttermilk' from '/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py'> does not have the attribute 'get_bm'
+FAILED tests/unit/test_logging_handler_fix.py::TestStructlogRichHandlerFix::test_logger_info_produces_structured_json_in_file - Failed: Invalid JSON in log file: '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x...
+FAILED tests/unit/test_logging_handler_fix.py::TestStructlogRichHandlerFix::test_logger_debug_still_produces_structured_json_in_file - Failed: Invalid JSON in log file: '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x...
+FAILED tests/utils/test_init_summary.py::test_init_modules_importable - Failed: Failed to import required modules: cannot import name 'nb_init' from 'buttermilk' (/home/nic/src/writing/projects/buttermilk/buttermilk/__init__.py)
+FAILED tests/unit/test_logging_handler_fix.py::TestStructlogRichHandlerFix::test_both_info_and_debug_produce_consistent_json_format - Failed: Invalid JSON in log file: '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x...
+FAILED tests/validation/test_main_script_validation.py::TestMainScriptContractValidation::test_bootstrap_session_function_signature - ImportError: cannot import name 'bootstrap_session' from 'buttermilk._core.config_bootstrap' (/home/nic/src/writing/projects/buttermilk/buttermilk/_core/config_bootstrap.py)
+FAILED tests/validation/test_main_script_validation.py::TestMainScriptContractValidation::test_session_info_project_name_field - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/validation/test_main_script_validation.py::TestMainScriptValidation::test_main_script_logic_simulation - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/validation/test_main_script_validation.py::TestMainScriptValidation::test_main_script_session_info_structure - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/integration/20core/test_cloud_logging_live.py::test_warning - AttributeError: 'BM' object has no attribute 'gcs_log_client'
+FAILED tests/validation/test_main_script_validation.py::TestMainScriptValidation::test_main_script_error_scenario - AttributeError: module 'buttermilk.utils' has no attribute 'cli'
+FAILED tests/endtoend/test_llms_multimodal.py::test_multimodal_question[rijksmuseum local] - TypeError: Expected dict or Image instance, got <class 'PIL.JpegImagePlugin.JpegImageFile'>
+FAILED tests/data/test_records_openaimessages.py::test_record_no_keywords - AttributeError: 'Record' object has no attribute 'components'
+FAILED tests/data/test_records_openaimessages.py::test_from_path_valid - AttributeError: 'Record' object has no attribute 'components'
+FAILED tests/data/test_records_openaimessages.py::test_from_uri_valid - cloudpathlib.exceptions.CloudPathFileNotFoundError: File opened for read or append, but it does not exist on cloud: https://picsum.photos/64
+FAILED tests/integration/20core/test_config_reload.py::TestConfigurationReload::test_reload_configurations_failure - Failed: async def functions are not natively supported.
+FAILED tests/endtoend/test_imagegen.py::test_batch - TypeError: BatchImageGenerator.abatch() got an unexpected keyword argument 'input'
+FAILED tests/integration/20core/test_setup_infrastructure.py::test_database[prosocial-443205.testing.flow-schemas/flow.json] - ValueError: Did not recognise schemas/flow.json as valid path type or url.
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_pydantic_response_ambiguous[gemini25flash] - AttributeError: type object 'TestPromptStyles' has no attribute 'StructuredTestAgentOutput'
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_pydantic_response_ambiguous[gpt5nano] - AttributeError: type object 'TestPromptStyles' has no attribute 'StructuredTestAgentOutput'
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_pydantic_response_ambiguous[haiku] - AttributeError: type object 'TestPromptStyles' has no attribute 'StructuredTestAgentOutput'
+FAILED tests/endtoend/test_llms_infrastructure.py::test_config_llms - TypeError: object of type 'LLMs' has no len()
+FAILED tests/endtoend/test_llms_multimodal.py::test_multimodal_input_pil_image - TypeError: Expected dict or Image instance, got <class 'PIL.JpegImagePlugin.JpegImageFile'>
+FAILED tests/endtoend/test_text2image_apis.py::test_generated_image_is_valid_and_nontrivial[VertexImagegenModels] - AttributeError: 'NoneType' object has no attribute 'startswith'
+FAILED tests/endtoend/test_text2image_apis.py::test_generated_image_is_valid_and_nontrivial[SD3] - KeyError: 'STABILITY_AI_KEY environment variable not set for SD3 client.'
+FAILED tests/endtoend/test_text2image_apis.py::test_generated_image_is_valid_and_nontrivial[SDXL] - KeyError: 'HUGGINGFACEHUB_API_TOKEN environment variable not set for SDXL client.'
+FAILED tests/endtoend/test_text2image_apis.py::test_image_can_roundtrip_to_bytes_and_reopen[DALLE] - TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given
+FAILED tests/endtoend/test_llm_tool_calling.py::test_single_tool_call[opus] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (2 sub-exceptions)
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_words_in_mouth[gemini25flash] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (4 sub-exceptions)
+FAILED tests/test_error_handling.py::test_error_handling - Failed: async def functions are not natively supported.
+FAILED tests/test_error_handling.py::test_error_handling_below_threshold - Failed: async def functions are not natively supported.
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_usertext_and_placeholder[osb blm-gpt5nano] - buttermilk._core.exceptions.ProcessingError: Error during LLM call: Error code: 400 - {'error': {'message': "The response was filtered due to the prompt triggering Azure OpenAI's content management policy. Please modify your prompt and retry. To learn more about our content filtering policies...
+FAILED test_pipeline_multi.py::test_multi_processor_pipeline - Failed: async def functions are not natively supported.
+FAILED test_pipeline_simple.py::test_pipeline - Failed: async def functions are not natively supported.
+FAILED tests/endtoend/test_llm_tool_calling.py::test_single_tool_call[sonnet] - buttermilk._core.exceptions.ProcessingError: Failed to synthesize after tool execution: Error during LLM call: 'AnthropicChatCompletionClient' object has no attribute '_last_used_tools'
+FAILED tests/endtoend/test_llm_tool_calling.py::test_call_chat_tool_exec_then_synthesis_with_schema[gemini25flash] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (4 sub-exceptions)
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[lady macbeth-gemini25flash] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[lady macbeth-gpt5nano] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_text[lady macbeth-haiku] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_words_in_mouth[gpt5mini] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (2 sub-exceptions)
+FAILED tests/endtoend/test_llm_tool_calling.py::test_structured_output_with_incorrect_tools[gemini25pro] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (3 sub-exceptions)
+FAILED tests/endtoend/test_llms.py::TestPromptStyles::test_words_in_mouth[gpt5nano] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (2 sub-exceptions)
+FAILED tests/endtoend/flows/test_framing.py::test_frames_article[coal-gemini25flash] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_article[coal-gpt5nano] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/endtoend/flows/test_framing.py::test_frames_article[coal-haiku] - ValueError: Failed to create orchestrator for flow 'testframer': module 'buttermilk.orchestrators.groupchat' has no attribute 'GroupChatOrchestrator'
+FAILED tests/integration/test_logging_fail_fast_integration.py::TestBMSessionLoggingProtection::test_single_bm_session_logging_setup - AttributeError: 'SessionInfo' object has no attribute 'name'
+FAILED tests/integration/test_logging_fail_fast_integration.py::TestBMSessionLoggingProtection::test_multiple_bm_sessions_logging_protection - AttributeError: 'SessionInfo' object has no attribute 'name'
+FAILED tests/integration/test_logging_fail_fast_integration.py::TestBMSessionLoggingProtection::test_safe_execution_context_reuse_pattern - AttributeError: 'SessionInfo' object has no attribute 'name'
+FAILED tests/endtoend/test_llmagents.py::test_judge_agent_process[gemini25flash] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (5 sub-exceptions)
+FAILED tests/endtoend/test_llm_tool_calling.py::test_structured_output_without_tools[opus] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (4 sub-exceptions)
+FAILED tests/endtoend/test_llmagents.py::test_judge_agent_process[sonnet] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (2 sub-exceptions)
+FAILED tests/endtoend/test_llmagents.py::test_llm_agent_template_metadata[gemini25flash] - buttermilk._core.exceptions.ProcessingError: Unexpected template error: Template 'best' (file: 'best.jinja2') could not be loaded.
+FAILED tests/endtoend/test_llm_tool_calling.py::test_call_chat_tool_exec_then_synthesis_with_schema[llama4maverick] - ExceptionGroup: Multiple exceptions occurred in asynchronous callbacks (3 sub-exceptions)
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_listen_manager_message - ValueError: Agent HOST test-model SAWXHP: 'template' is required in agent parameters.
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_listen_skip_command_messages - ValueError: Agent HOST test-model WQQDB9: 'template' is required in agent parameters.
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_process_routes_tool_calls - ValueError: Agent HOST test-model Z7C4ZH: 'template' is required in agent parameters.
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_listen_clear_pending_steps - ValueError: Agent HOST test-model ZDDWBX: 'template' is required in agent parameters.
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_no_matching_agent_for_tool - ValueError: Agent HOST test-model RQSHH7: 'template' is required in agent parameters.
+ERROR tests/test_structured_llmhost_unit.py::TestStructuredLLMHostListen::test_listen_handle_end_response - ValueError: Agent HOST test-model BETZEK: 'template' is required in agent parameters.
+ERROR tests/data/test_records_openaimessages.py::test_record_remote_load[web video] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+ERROR tests/endtoend/test_llms_multimodal.py::test_multimodal_question[web video] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+ERROR tests/endtoend/flows/test_framing.py::test_frames_article[web page-gemini25flash] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+ERROR tests/endtoend/flows/test_framing.py::test_frames_article[web page-gpt5nano] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+ERROR tests/endtoend/flows/test_framing.py::test_frames_article[web page-haiku] - AttributeError: 'NoneType' object has no attribute 'timestamp'
+ERROR tests/00initial/test_bq.py::test_append_rows_integration - RuntimeError: There is no current event loop in thread 'MainThread'.

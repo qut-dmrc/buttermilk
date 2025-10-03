@@ -6,15 +6,17 @@ from buttermilk import BM
 
 
 def test_has_test_info(real_bm: BM):
-    assert real_bm.session_info.project_name == "testing"
-    assert real_bm.session_info.job == "tests"
+    assert real_bm.session_info.project_name == "buttermilk"
+    assert real_bm.session_info.job == "testing"
     assert real_bm.session_info.save_dir is not None
     assert real_bm.session_info.save_dir != ""
 
 
 def test_save_dir(real_bm: BM):
-    # The save_dir should contain the project name and job
-    assert "testing/tests/" in real_bm.session_info.save_dir
+    # The save_dir should contain the project name and session ID
+    # Format: /path/to/base/buttermilk/testing/session-xxx
+    assert "buttermilk/testing/" in real_bm.session_info.save_dir
+    assert real_bm.session_info.session_id in real_bm.session_info.save_dir
     assert AnyPath(real_bm.session_info.save_dir)
 
 

@@ -39,47 +39,50 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(conf: DictConfig) -> None:
-    """Main application entry point, configured and launched by Hydra.
+    """Main application entry point with async initialization.
 
-    This function initializes the Buttermilk environment using the ConfigurationBootstrapper
-    as the single point of entry for all configuration management. It creates the infrastructure
-    and session-scoped BM instances, then determines the operational mode and starts the
-    corresponding application logic.
+    This function initializes the Buttermilk environment using async initialization
+    as the primary pathway. It creates the infrastructure and session-scoped BM
+    instances, then determines the operational mode and starts the corresponding
+    application logic.
 
     Args:
         conf (DictConfig): The configuration object loaded and populated by Hydra.
             This OmegaConf `DictConfig` contains nested configurations for various
-            parts of the application, such as `bm` (for the global Buttermilk settings),
-            `run` (for the `FlowRunner` and operational mode), and mode-specific
-            parameters like `flow`, `record_id`, `prompt` for console mode.
+            parts of the application.
 
     """
     OmegaConf.resolve(conf)
-    
-    # Use the unified bootstrap function for single golden path
-    from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
-    # Single unified initialization - gets both BM and config
-    # Don't override job/project - let Hydra configuration be used as-is
-    bm, resolved_conf = bootstrap_session_with_config(
-        config=conf  # Pass the existing Hydra configuration, use run.job and run.name from config
-    )
+    # Use async bootstrap function - the primary pathway
+    from buttermilk._core.config_bootstrap import bootstrap_session_with_config_async
 
-    # Use the resolved config for consistency (in case overrides were applied)
-    conf = resolved_conf
+    async def _async_main():
+        """Async initialization and main logic."""
+        nonlocal conf
+        # Single unified async initialization - gets both BM and config
+        bm, resolved_conf = await bootstrap_session_with_config_async(
+            config=conf  # Pass the existing Hydra configuration
+        )
+
+        # Use the resolved config for consistency
+        conf = resolved_conf
+        logger.info("Async bootstrap complete - BM and config ready")
+
+        return bm
+
+    # Run async initialization
+    bm = asyncio.run(_async_main())
+
     logger.info("Unified bootstrap complete - BM and config ready")
 
     # Get the mode from config to determine if we need FlowRunner
     mode = conf.run.get("mode", "console")
 
-    # Only initialize FlowRunner for modes that need it
-    flow_runner = None
-    if mode not in ["pipeline"]:
-        # Initialize FlowRunner with its configuration section (e.g., conf.run)
-        flow_runner = FlowRunner.model_validate(conf.run)
+    flow_runner = FlowRunner(flows=conf.flows)
 
-        # Set the session-scoped BM for this FlowRunner
-        flow_runner.set_session_bm(bm)
+    # Set the session-scoped BM for this FlowRunner
+    flow_runner.set_session_bm(bm)
 
     # Branch execution based on the configured UI mode.
     match mode:
@@ -95,7 +98,6 @@ def main(conf: DictConfig) -> None:
                 parameters["uri"] = conf.get("uri")
 
             run_request = RunRequest(
-                ui_type=conf.ui,
                 flow=conf.get("flow"),
                 inputs=parameters,
                 callback_to_ui=ui.callback_to_ui,
@@ -329,7 +331,7 @@ def main(conf: DictConfig) -> None:
                 stage_name="pipeline",
                 concurrency=concurrency,
                 max_records=max_records,
-                source=source_storage() if callable(source_storage) else source_storage,
+                source=source_storage,
                 processors=processors,  # Pass all processors as a list
             )
 

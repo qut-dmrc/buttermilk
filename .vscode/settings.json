@@ -4,11 +4,21 @@
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
-      "source.fixAll.ruff": "explicit"
+      "source.fixAll.ruff": "explicit",
+      "source.addMissingImports": "explicit"
     }
   },
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [
+    "--override-ini",
+    "addopts=",
+    // If you also exclude folders via norecursedirs, clear that too:
+    "--override-ini",
+    "norecursedirs=",
+    // Optionally list your test roots (helps discovery):
+    "tests"
+  ],
   "python.terminal.activateEnvironment": false,
   "editor.defaultFormatter": "charliermarsh.ruff",
   "python.analysis.languageServerMode": "full",
@@ -18,11 +28,7 @@
   "python.analysis.exclude": [
     "**/node_modules",
     "**/__pycache__",
-    ".git",
-    ".venv",
-    ".venv/**/*",
-    "**/site-packages",
-    "**/__pycache__"
+    ".git"
   ],
   "python.analysis.extraPaths": [],
   "python.analysis.diagnosticMode": "workspace",

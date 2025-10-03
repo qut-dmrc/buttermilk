@@ -185,25 +185,6 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "vectorise",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.data.vector",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "justMyCode": false,
-      "args": [
-        "run=vectorise_zotero",
-        "+quiet=false"
-        // "experiments.model=[haiku]"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
       "name": "batch automod: ots",
       "type": "debugpy",
       "request": "launch",
@@ -217,7 +198,6 @@
       "args": [
         "+experiments=ots",
         "+data=drag_noalt",
-        "+save=bq"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

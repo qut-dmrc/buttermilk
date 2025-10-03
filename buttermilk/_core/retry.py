@@ -3,6 +3,7 @@ from collections.abc import Callable
 from logging import DEBUG
 from typing import Any
 
+import aiohttp
 import requests
 import urllib3
 from anthropic._exceptions import (
@@ -78,6 +79,7 @@ class RetryWrapper(BaseModel):
                     ConnectionResetError,
                     ConnectionError,
                     ConnectionAbortedError,
+                    aiohttp.ClientError,
                 ),
             ),
             "stop": stop_after_attempt(self.max_retries),

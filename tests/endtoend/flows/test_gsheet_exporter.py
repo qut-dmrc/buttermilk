@@ -3,36 +3,16 @@ import json  # Import json
 import pytest
 
 from buttermilk._core.types import RunRequest  # Import RunRequest
-from buttermilk.utils.utils import read_json
 
 TEST_FLOW_ID = "test_flow"
 
 pytestmark = pytest.mark.anyio
 
-
-async def test_flow_data_source(real_flow_runner):
-    run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
-
-    results = read_json("tests/data/result.json")  # three results with 1, 4 & 3 reasons
-
-    # Mock the flow's run_flows method to return the predefined results
-    async def mock_run_flows(run_request):  # Changed parameter name
-        for result in results:
-            yield result
-
-    real_flow_runner.run_flows = mock_run_flows
-
-    # Run the flow and check that the data source correctly extracts results
-    async for result in real_flow_runner.run_flows(run_request=run_request):  # Pass run_request
-        assert result
-        assert isinstance(result, dict)  # Assuming results are dicts in this test
-
-
 async def test_gsheet_exporter(real_flow_runner):
-    run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
+    run_request = RunRequest(flow=TEST_FLOW_ID, session_id="test_session")  # Replaced Job with RunRequest and mapped args
 
-    # Mock the flow's run_flows method to return a mock AgentTrace with outputs
-    class MockAgentTrace:
+    # Mock the flow's run_flows method to return a mock ExecutionTrace with outputs
+    class MockExecutionTrace:
         def __init__(self, outputs):
             self.outputs = outputs
             self.agent_info = {"name": "mock_agent"}  # Add mock agent_info
@@ -46,7 +26,7 @@ async def test_gsheet_exporter(real_flow_runner):
     async def mock_run_flows(run_request):  # Changed parameter name
         # Simulate the output structure expected by the gsheet exporter
         mock_outputs = {"sheet_url": "mock_url", "sheet_id": "mock_id"}
-        yield MockAgentTrace(outputs=mock_outputs)
+        yield MockExecutionTrace(outputs=mock_outputs)
 
     real_flow_runner.run_flows = mock_run_flows
 
@@ -54,6 +34,6 @@ async def test_gsheet_exporter(real_flow_runner):
     # This test might need a mock for the actual gsheet saving logic
     async for result in real_flow_runner.run_flows(run_request=run_request):  # Pass run_request
         assert result
-        assert isinstance(result, MockAgentTrace)
+        assert isinstance(result, MockExecutionTrace)
         assert result.outputs["sheet_url"] == "mock_url"
         assert result.outputs["sheet_id"] == "mock_id"

@@ -76,7 +76,7 @@ storage = BigQueryStorage(config, bm=None)  # Missing BM integration
 ### Reading Data
 
 ```python
-bm = get_bm()
+from buttermilk import bm, logger, BM
 
 # Read from BigQuery
 storage = bm.get_bigquery_storage("my_dataset")
@@ -96,7 +96,7 @@ records = list(storage)
 ### Writing Data
 
 ```python
-bm = get_bm()
+from buttermilk import bm, logger, BM
 
 # Write to BigQuery
 storage = bm.get_bigquery_storage("my_dataset")

@@ -72,7 +72,7 @@ class JobQueueClient(BaseModel):
         record = toxic_record()
 
         inputs = {"criteria": "criteria_ordinary", "records": [record]}
-        data = {"ui_type": "web", "inputs": inputs}
+        data = {"inputs": inputs}
         request = RunRequest(flow=flow, **data)
         return request
 
@@ -183,7 +183,7 @@ class JobQueueClient(BaseModel):
 
         try:
             # Add default fields that are likely missing because we're in batch mode
-            data = {"ui_type": "web", "session_id": uuid.uuid4().hex, "callback_to_ui": None}
+            data = {"session_id": uuid.uuid4().hex, "callback_to_ui": None}
 
             # Decode the message data and parse it into a RunRequest
             incoming = json.loads(message_data.decode("utf-8"))

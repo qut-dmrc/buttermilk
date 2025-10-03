@@ -1,14 +1,10 @@
 """Test the BM singleton pattern."""
 
-import hydra
-
 from buttermilk import (
-    BM,  # Removed logger import here
-    create_session_bm,
-    get_bm,  # Import get_bm
     logger,  # noqa
-    set_bm,
 )
+from buttermilk._core.bm_init import BM, create_session_bm
+from buttermilk._core.dmrc import get_bm
 
 
 def test_conf(real_bm):
@@ -16,17 +12,26 @@ def test_conf(real_bm):
     # Test the actual nested configuration structure
     assert real_bm is not None, "BM instance should not be None"
     assert real_bm.session_info.job == "testing", "BM instance job should be 'testing'"
-    assert real_bm.session_info.name == "buttermilk"
+    assert real_bm.session_info.project_name == "buttermilk"
 
 
 def test_singleton_instance(real_bm):
     """Test that singleton access returns the same instance, but new sessions create new instances."""
     # Get singleton instance should return the same BM
-    bm_direct = get_bm()  # Use get_bm() to access the singleton
-    assert bm_direct is real_bm, "get_bm() should return the same singleton instance"
+    bm_direct = get_bm()
+    assert bm_direct is real_bm, "bm should be the same singleton instance"
 
-    # But hydra.utils.instantiate creates new session-scoped instances (new architecture)
-    bm_new_session = hydra.utils.instantiate(real_bm)
+    # Create a new session-scoped BM instance (new architecture)
+    bm_new_session = create_session_bm(
+        name=real_bm.session_info.project_name,
+        job=real_bm.session_info.job,
+        platform=real_bm.session_info.platform,
+        save_dir_base=real_bm.save_dir_base,
+        cloud_manager=None,
+        secret_manager=None,
+        llms_instance=None,
+        logger_cfg=None,
+    )
     assert bm_new_session is not None, "New BM instance should not be None"
     assert bm_new_session.session_info.job == "testing", "New BM instance job should be 'testing'"
 
@@ -35,9 +40,9 @@ def test_singleton_instance(real_bm):
     assert bm_new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # But both should have the same basic configuration
-    assert bm_new_session.session_info.name == real_bm.session_info.name, "New session should match config"
+    assert bm_new_session.session_info.project_name == real_bm.session_info.project_name, "New session should match config"
     assert bm_new_session.session_info.job == real_bm.session_info.job, "New session should match config"
-    assert bm_direct.session_info.name == real_bm.session_info.name, "Singleton should match config"
+    assert bm_direct.session_info.project_name == real_bm.session_info.project_name, "Singleton should match config"
     assert bm_direct.session_info.job == real_bm.session_info.job, "Singleton should match config"
 
 
@@ -47,11 +52,11 @@ def test_session_scoped_instances(real_bm):
     assert real_bm.session_info.job == "testing", "Initial job should be 'testing'"
 
     # Creating new session-scoped instances should work (new architecture)
-    new_session = BM(session_info={"name": "test-project", "job": "new_task"})
+    new_session = BM(session_info={"project_name": "test-project", "job": "new_task"})
 
     # Verify new session has different ID but works correctly
     assert new_session.session_info.job == "new_task", "New session should have new job"
-    assert new_session.session_info.name == "test-project", "New session should have new name"
+    assert new_session.session_info.project_name == "test-project", "New session should have new name"
     assert new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # Original singleton should be unchanged
@@ -68,8 +73,7 @@ def test_singleton_between_modules(real_bm):
     # We'll use a function for simplicity
     def second_module_access():
         """Function simulating another module accessing BM."""
-
-        return get_bm()  # Use get_bm()
+        return get_bm()
 
     bm2 = second_module_access()
 
@@ -77,7 +81,7 @@ def test_singleton_between_modules(real_bm):
     assert bm1 is bm2, "BM should be the same instance across different module functions"
 
     # Properties should be the same (using session_info)
-    assert bm2.session_info.name == "buttermilk", "Property 'name' should be maintained across modules"
+    assert bm2.session_info.project_name == "buttermilk", "Property 'name' should be maintained across modules"
     assert bm2.session_info.job == "testing", "Property 'job' should be maintained across modules"
     assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
 
@@ -95,7 +99,7 @@ def test_get_bm_after_set():
         llms_instance=None,
         logger_cfg=None,
     )
-
+    from buttermilk._core.dmrc import set_bm
     # Set it as the singleton
     set_bm(test_instance)
 
@@ -104,7 +108,7 @@ def test_get_bm_after_set():
 
     # Verify it's the same instance
     assert retrieved_instance is test_instance
-    assert retrieved_instance.session_info.name == "test"
+    assert retrieved_instance.session_info.project_name == "test"
     assert retrieved_instance.session_info.job == "test_job"
 
 
@@ -123,21 +127,20 @@ def test_import_singleton_from_different_modules():
     )
 
     # Set it as the singleton
+    from buttermilk._core.dmrc import set_bm
     set_bm(test_instance)
 
     # Define a function that simulates importing from another module
     def import_from_another_module():
-        # This imports get_bm fresh in this scope
-        from buttermilk import get_bm as another_get_bm
-
-        return another_get_bm()
+        # Get BM instance directly
+        return get_bm()
 
     # Get the instance through the simulated import
     instance_from_other_module = import_from_another_module()
 
     # Verify it's the same instance
     assert instance_from_other_module is test_instance
-    assert instance_from_other_module.session_info.name == "test2"
+    assert instance_from_other_module.session_info.project_name == "test2"
 
 
 def test_deferred_import_function():
@@ -155,17 +158,16 @@ def test_deferred_import_function():
     )
 
     # Set it as the singleton
+    from buttermilk._core.dmrc import set_bm
     set_bm(test_instance)
 
     # Define a function that simulates the deferred import pattern
     def get_bm_deferred():
-        from buttermilk import get_bm as _get_bm
-
-        return _get_bm()
+        return get_bm()
 
     # Get the instance through the deferred import
     deferred_instance = get_bm_deferred()
 
     # Verify it's the same instance
     assert deferred_instance is test_instance
-    assert deferred_instance.session_info.name == "test3"
+    assert deferred_instance.session_info.project_name == "test3"

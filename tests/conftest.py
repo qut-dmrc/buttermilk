@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import inspect
+from pathlib import Path
 
 import pytest
 import weave  # noqa
 from hydra import compose, initialize
 from pytest import MarkDecorator
 
-from buttermilk import set_bm
 from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
@@ -22,42 +24,37 @@ def pytest_collection_modifyitems(items):
         # Check if the test function is async
         if inspect.iscoroutinefunction(item.function):
             item.add_marker(pytest.mark.anyio)
-
+        p = Path(str(item.path))
+        if "endtoend" in p.parts:
+            item.add_marker(pytest.mark.endtoend)
+        if "integration" in p.parts:
+            item.add_marker(pytest.mark.integration)
 
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="session")
-def init_conf():
-    """Real Hydra config fixture loaded from testing.yaml."""
+def init():
+    """Real ExecutionContext created from testing.yaml configuration."""
     with initialize(version_base=None, config_path="../buttermilk/conf"):
         cfg = compose(config_name="testing")
-    return cfg
-
-
-@pytest.fixture(scope="session")
-def real_execution_context(init_conf):
-    """Real ExecutionContext created from testing.yaml configuration."""
-    bm, resolved_conf = bootstrap_session_with_config(
-        config=init_conf  # Pass the existing Hydra configuration, use run.job and run.name from config
-    )
-    set_bm(bm)  # Set global BM for modules that rely on it
+    bm, resolved_conf = bootstrap_session_with_config(config=cfg)
     return bm, resolved_conf
 
 
+bm, resolved_conf = init()
+
+
 @pytest.fixture(scope="session")
-def real_conf(real_execution_context):
+def real_conf():
     """Real configuration dictionary from testing.yaml."""
-    _, resolved_conf = real_execution_context
     return resolved_conf
 
 
 @pytest.fixture(scope="session")
-def real_bm(real_execution_context):
+def real_bm():
     """Real BM instance created from testing.yaml configuration."""
-    bm, _ = real_execution_context
     return bm
 
 

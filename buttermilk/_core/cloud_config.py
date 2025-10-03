@@ -326,6 +326,10 @@ class LoggerConfig(BaseModel):
         default=False,
         description="Enable verbose logging"
     )
+    console: bool = Field(
+        default=True,
+        description="Enable console logging to stderr. Logs go to stderr by default (Python best practice), making buttermilk MCP-compatible without configuration."
+    )
 
     @model_validator(mode="after")
     def set_project_from_env(self) -> "LoggerConfig":

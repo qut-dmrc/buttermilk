@@ -26,6 +26,7 @@ from __future__ import annotations  # Enable postponed annotations for type hint
 
 import asyncio
 import datetime
+import os  # For path expansion
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
@@ -37,16 +38,11 @@ import shortuuid  # For generating short, unique IDs
 import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
-from opentelemetry import trace
-from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator  # Pydantic components
 
 from buttermilk._core.log import logger  # Centralized logger instance
 from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig  # Unified storage config
 from buttermilk.utils import save  # Utility for saving data
-
-_TRACER_NAME = "buttermilk"
-
-tracer = trace.get_tracer(_TRACER_NAME)
 
 
 def _make_session_id() -> str:
@@ -121,6 +117,7 @@ class SessionInfo(BaseModel):
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
     node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
+    cache_dir: str = Field(default_factory=lambda: os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")), description="Directory for caching session data.")
     sessions_dir: str = Field(default="data/sessions", description="Directory for storing session data files.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
     
@@ -138,6 +135,7 @@ class SessionInfo(BaseModel):
     agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
     flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
+    template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -232,6 +230,12 @@ class SessionInfo(BaseModel):
             "error_message": self.error_message,
         }
 
+    @field_validator('cache_dir', mode='after')
+    @classmethod
+    def expand_cache_dir(cls, v: str) -> str:
+        """Expand user home directory and environment variables in cache_dir path."""
+        return os.path.expandvars(os.path.expanduser(v))
+
     class Config:
         """Pydantic model configuration for SessionInfo."""
 
@@ -247,20 +251,6 @@ class BM(BaseModel):
     Each session gets its own BM instance with session-specific state while sharing
     infrastructure resources (clouds, secrets, LLMs) through dependency injection.
     This eliminates complex hierarchy while providing proper session isolation.
-
-    Typical Usage:
-    ```python
-    from buttermilk import create_session_bm
-
-    bm = create_session_bm(name="my_project", job="analysis")
-
-    # Access shared infrastructure
-    bm.gcs.upload_from_filename(...)
-    response = bm.llms.my_chat_model.create(messages=[...])
-
-    # Session-specific operations
-    bm.save(data, "results.json")
-    ```
 
     Attributes:
         session_info (SessionInfo): Session-specific information and metrics.
@@ -289,10 +279,15 @@ class BM(BaseModel):
     _llms_instance: Any = PrivateAttr(default=None)  # Will be injected
     _query_runner: Any = PrivateAttr(default=None)  # Will be injected
     _logger_cfg: Any = PrivateAttr(default=None)  # Will be injected from ExecutionContext
+    _config: Any = PrivateAttr(default=None)  # Will store the full Hydra config
 
     # Session-specific state
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
+
+    # Allow attaching test doubles/mocks to instances (e.g., real_bm.get_storage = Mock(...))
+    # This relaxes Pydantic's attribute setting restrictions for testing convenience.
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     @pydantic.field_validator("save_dir_base", mode="before")
     @classmethod
@@ -341,10 +336,10 @@ class BM(BaseModel):
         return values
 
     def __init__(self, logger_cfg=None, cloud_manager=None, secret_manager=None, llms_instance=None, query_runner=None, **data: Any) -> None:
-        """Initializes the BM instance with provided configuration data.
+        """Initializes the BM instance with minimal field assignment.
 
-        After standard Pydantic model initialization, it calls `_post_init_setup`
-        to perform session-specific setup tasks.
+        This is a lightweight constructor that only sets fields. All I/O operations
+        and setup logic happen in the async _async_init() method.
 
         Args:
             logger_cfg: Logger configuration for cloud logging (optional).
@@ -356,30 +351,34 @@ class BM(BaseModel):
 
         """
         super().__init__(**data)
-        
-        # Inject shared infrastructure before model initialization
+
+        # Inject shared infrastructure - just field assignment
         self._logger_cfg = logger_cfg
         self._cloud_manager = cloud_manager
         self._secret_manager = secret_manager
         self._llms_instance = llms_instance
         self._query_runner = query_runner
-        
         self._initialization_error = None
-        self._post_init_setup()
 
-    def _post_init_setup(self) -> None:
-        """Performs session-specific setup tasks after model initialization."""
-        
+    async def _async_init(self) -> None:
+        """Async initialization of session-specific setup tasks.
+
+        This method performs all I/O operations and setup logic that should happen
+        asynchronously after the BM instance is created.
+        """
         try:
             # Set up session-specific logging context
             self._setup_session_logging()
-            
+
             # Finalize save directory
             self._finalize_save_dir()
-            
+
             # Save initial session config
             self._save_initial_config()
-            
+
+            # Start async IP fetch task if event loop is running
+            self.start_fetch_ip_task()
+
             self._initialization_complete.set()
             logger.info(
                 "Session initialized successfully",
@@ -478,6 +477,14 @@ class BM(BaseModel):
         )
         logger.debug("Initial BM config saved successfully")
 
+    # Permit overriding/attaching attributes (e.g., monkeypatching methods) in tests
+    def __setattr__(self, name: str, value: Any) -> None:  # type: ignore[override]
+        try:
+            return super().__setattr__(name, value)
+        except ValueError:
+            # Fallback to plain setattr for non-field attributes (e.g., method monkeypatch)
+            object.__setattr__(self, name, value)
+
     @property
     def cloud_manager(self):
         """Provides access to the CloudManager instance."""
@@ -568,6 +575,21 @@ class BM(BaseModel):
     def credentials(self) -> dict[str, str]:
         """Provides access to shared system credentials."""
         return self.secret_manager.get_secret(cfg_key="credentials_secret")
+
+    @property
+    def cfg(self):
+        """Provides access to the full Hydra configuration."""
+        return self._config
+
+    @property
+    def logger(self):
+        """Returns a contextualized logger with session information."""
+        from buttermilk import logger as base_logger
+        return base_logger.bind(
+            session_id=self.session_info.session_id,
+            project=self.session_info.project_name,
+            job=self.session_info.job
+        )
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
@@ -729,7 +751,7 @@ class BM(BaseModel):
         # Use the storage factory to create the appropriate storage instance
         from buttermilk._core.storage_config import StorageFactory  # noqa import here to avoid loop
 
-        return StorageFactory.create_storage(config, self)
+        return StorageFactory.create_storage(config)
 
     async def get_storage_async(self, config: BaseStorageConfig | dict | None = None) -> Any:
         """Async factory method that creates and auto-initializes storage instances.
@@ -841,36 +863,42 @@ class BM(BaseModel):
 
 # Factory functions for creating session-scoped BM instances
 
-def create_session_bm(
+async def create_session_bm_async(
     name: str,
     job: str,
     batch_id: str | None = None,
     platform: str = "local",
     save_dir_base: str | None = None,
+    template_paths: list[str] | None = None,
     cloud_manager=None,
     secret_manager=None,
     llms_instance=None,
     query_runner=None,
     logger_cfg=None,
+    config=None,
     **kwargs
 ) -> BM:
-    """Create a new session-scoped BM instance.
-    
+    """Create a new session-scoped BM instance with async initialization.
+
+    This is the primary async factory method for creating BM instances.
+
     Args:
         name: User-defined name for the current session or project.
         job: User-defined name for the specific job or task.
         batch_id: Optional batch identifier for grouping related sessions.
         platform: Platform where the session is running.
         save_dir_base: Base directory for session outputs.
+        template_paths: Optional list of paths to search for templates.
         cloud_manager: Shared cloud manager instance (optional).
         secret_manager: Shared secret manager instance (optional).
         llms_instance: Shared LLMs instance (optional).
         query_runner: Shared query runner instance (optional).
         logger_cfg: Logger configuration for cloud logging (optional).
+        config: Full Hydra configuration to store on BM instance (optional).
         **kwargs: Additional arguments for SessionInfo.
-        
+
     Returns:
-        BM: A new session-scoped BM instance.
+        BM: A fully initialized session-scoped BM instance.
     """
     # Create session info
     session_info_data = {
@@ -878,17 +906,18 @@ def create_session_bm(
         "job": job,
         "platform": platform,
         "batch_id": batch_id,
+        "template_paths": template_paths or [],
         **kwargs
     }
-    
+
     # Create SessionInfo instance to get auto-generated session_id
     session_info = SessionInfo(**session_info_data)
-    
+
     # Use provided query_runner or create one if cloud_manager is available
     if query_runner is None and cloud_manager is not None:
         from buttermilk._core.query import QueryRunner
         query_runner = QueryRunner(bq_client=cloud_manager.bq)
-    
+
     # Create BM instance with all dependencies passed to constructor
     bm_data = {
         "session_info": session_info,
@@ -898,13 +927,75 @@ def create_session_bm(
         "llms_instance": llms_instance,
         "query_runner": query_runner,
     }
-    
+
     if save_dir_base is not None:
         bm_data["save_dir_base"] = save_dir_base
-        
+
     bm = BM(**bm_data)
-        
+
+    # Store config on BM instance if provided
+    if config is not None:
+        bm._config = config
+
+    # Perform async initialization
+    await bm._async_init()
+
     return bm
+
+
+def create_session_bm(
+    name: str,
+    job: str,
+    batch_id: str | None = None,
+    platform: str = "local",
+    save_dir_base: str | None = None,
+    template_paths: list[str] | None = None,
+    cloud_manager=None,
+    secret_manager=None,
+    llms_instance=None,
+    query_runner=None,
+    logger_cfg=None,
+    config=None,
+    **kwargs
+) -> BM:
+    """Sync wrapper for create_session_bm_async - DEPRECATED.
+
+    This is a lightweight sync wrapper that exists for backward compatibility.
+    New code should use create_session_bm_async() directly.
+
+    Args:
+        name: User-defined name for the current session or project.
+        job: User-defined name for the specific job or task.
+        batch_id: Optional batch identifier for grouping related sessions.
+        platform: Platform where the session is running.
+        save_dir_base: Base directory for session outputs.
+        template_paths: Optional list of paths to search for templates.
+        cloud_manager: Shared cloud manager instance (optional).
+        secret_manager: Shared secret manager instance (optional).
+        llms_instance: Shared LLMs instance (optional).
+        query_runner: Shared query runner instance (optional).
+        logger_cfg: Logger configuration for cloud logging (optional).
+        config: Full Hydra configuration to store on BM instance (optional).
+        **kwargs: Additional arguments for SessionInfo.
+
+    Returns:
+        BM: A new session-scoped BM instance.
+    """
+    return asyncio.run(create_session_bm_async(
+        name=name,
+        job=job,
+        batch_id=batch_id,
+        platform=platform,
+        save_dir_base=save_dir_base,
+        template_paths=template_paths,
+        cloud_manager=cloud_manager,
+        secret_manager=secret_manager,
+        llms_instance=llms_instance,
+        query_runner=query_runner,
+        logger_cfg=logger_cfg,
+        config=config,
+        **kwargs
+    ))
 
 
 def create_batch_session_bm(

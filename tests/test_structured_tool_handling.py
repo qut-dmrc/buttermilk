@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from buttermilk._core.contract import AgentOutput, AgentTrace, ConductorRequest, StepRequest
+from buttermilk._core.contract import AgentOutput, ConductorRequest, ExecutionTrace, StepRequest
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.agents.rag import RagAgent
 
@@ -116,7 +116,7 @@ class TestStructuredToolHandling:
         await host._build_agent_tools()
 
         # Simulate LLM response with tool call
-        mock_llm_response = AgentTrace(
+        mock_llm_response = ExecutionTrace(
             agent_id="test_host",
             agent_type="host",
             agent_name="TestHost",
@@ -207,7 +207,7 @@ class TestStructuredToolHandling:
         await host.initialize(callback_to_groupchat=mock_callback)
 
         # Simulate LLM response with tool call
-        mock_llm_response = AgentTrace(
+        mock_llm_response = ExecutionTrace(
             agent_id="test_host",
             agent_type="host",
             agent_name="TestHost",
@@ -229,7 +229,7 @@ class TestStructuredToolHandling:
         # Verify error message was sent
         mock_callback.assert_called_once()
         error_trace = mock_callback.call_args[0][0]
-        assert isinstance(error_trace, AgentTrace)
+        assert isinstance(error_trace, ExecutionTrace)
         assert "not currently available" in error_trace.content
         assert "Available agents are: none" in error_trace.content
 

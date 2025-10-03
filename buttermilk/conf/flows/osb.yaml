@@ -10,11 +10,10 @@ defaults:
     - host/llm_host
   - /agents: 
     - rag  # Use new RagAgent for structured outputs with citations
-  - /tools@agents.rag.tools: 
+  - /tools@agents.rag.tools:
     - chromadb_search
-  # Data source configuration for search tool
-  # - /storage@storage: osb_vector
-  # - /storage@save: flows
+  # Trace storage configuration
+  - /storage@storage.traces: traces
     
 
 # Core flow configuration

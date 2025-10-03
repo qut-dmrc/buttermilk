@@ -27,7 +27,6 @@ from azure.core.credentials import AzureKeyCredential
 from googleapiclient import discovery
 from huggingface_hub import login
 from msrest.authentication import CognitiveServicesCredentials
-from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -42,7 +41,7 @@ from transformers import (
 )
 
 from buttermilk import logger
-from buttermilk._core.contract import AgentInput, AgentTrace  # Import AgentInput and AgentTrace
+from buttermilk._core.contract import AgentInput, ExecutionTrace  # Import AgentInput and ExecutionTrace
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from .types import EvalRecord, Score
@@ -103,7 +102,7 @@ class ToxicityModel(BaseModel):
         if self.client is None:
             raise NotImplementedError
 
-    def run(self, message: AgentInput) -> AgentTrace:  # Changed parameter name/type and return type
+    def run(self, message: AgentInput) -> ExecutionTrace:  # Changed parameter name/type and return type
         # Assuming the AgentInput contains at least one record
         if not message.records:
             raise ValueError("AgentInput must contain at least one record for ToxicityModel.")
@@ -121,19 +120,18 @@ class ToxicityModel(BaseModel):
         # response.standard = self.standard
         # response.record_id = record.record_id # Already set in add_output_info
 
-        # Create an AgentTrace object to return the results
-        trace = AgentTrace(
+        # Create an ExecutionTrace object to return the results
+        trace = ExecutionTrace(
             agent_id=self.agent_id,
-            session_id=self.session_id,  # session_id is required for AgentTrace
-            agent_info=self._config,  # agent_info is required for AgentTrace
+            session_id=self.session_id,  # session_id is required for ExecutionTrace
+            agent_info=self._config,  # agent_info is required for ExecutionTrace
             inputs=message,  # Include the original input message
             outputs=response,  # Store the EvalRecord in outputs
             # Add other relevant metadata if needed
         )
 
-        return trace  # Return the AgentTrace object
+        return trace  # Return the ExecutionTrace object
 
-    @trace
     def __call__(self, prompt: str, **kwargs) -> EvalRecord:
         return self.moderate(prompt=prompt, **kwargs)
 
@@ -151,7 +149,7 @@ class ToxicityModel(BaseModel):
     #         # Retry up to five times before giving up
     #         stop=stop_after_attempt(5),
     # )
-    @trace
+
     def call_client(
         self,
         prompt: str,
@@ -163,7 +161,6 @@ class ToxicityModel(BaseModel):
     def make_prompt(self, content):
         raise NotImplementedError
 
-    @trace
     def moderate_batch(self, dataset, **kwargs):  # -> Generator[Any, Any, None]:
         # if isinstance(self.client, transformers.Pipeline):
         #     # prepare batch
@@ -209,7 +206,6 @@ class ToxicityModel(BaseModel):
     ) -> EvalRecord:
         return self.moderate(content=text, record_id=record_id, **kwargs)
 
-    @trace
     def moderate(
         self,
         content: str,
@@ -229,7 +225,6 @@ class ToxicityModel(BaseModel):
         output = self.add_output_info(output, record_id=record_id)
         return output
 
-    @trace
     @abc.abstractmethod
     def interpret(self, response: Any) -> EvalRecord:
         raise NotImplementedError
@@ -272,7 +267,6 @@ class _HF(ToxicityModel):
             trust_remote_code=True,
         ).to(self.device)
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -328,7 +322,6 @@ class Perspective(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(prediction=False)
         for key, value in response["attributeScores"].items():
@@ -346,7 +339,6 @@ class Perspective(ToxicityModel):
 
         return outcome
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -388,7 +380,6 @@ class Comprehend(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -399,7 +390,6 @@ class Comprehend(ToxicityModel):
             TextSegments=[{"Text": prompt}],
         )
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(
             prediction=False,
@@ -457,7 +447,6 @@ class AzureContentSafety(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -469,7 +458,6 @@ class AzureContentSafety(ToxicityModel):
         )
         return self.client.analyze_text(request)
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord(
@@ -541,7 +529,6 @@ class AzureModerator(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -559,7 +546,6 @@ class AzureModerator(ToxicityModel):
 
         return response
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord(
@@ -613,7 +599,6 @@ class REGARD(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -622,7 +607,6 @@ class REGARD(ToxicityModel):
         result = self.client.compute(data=[prompt])
         return result
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         result = response["regard"][0]
 
@@ -653,7 +637,6 @@ class HONEST(ToxicityModel):
     def make_prompt(self, content: str) -> list[str]:
         return content.split(" ")
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -662,7 +645,6 @@ class HONEST(ToxicityModel):
         result = self.client.compute(predictions=prompt)
         return result
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
         outcome.scores = [Score(measure="honest", score=response["honest_score"])]
@@ -700,7 +682,6 @@ class LFTW(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -715,7 +696,6 @@ class LFTW(ToxicityModel):
         confidence = float(logits.softmax(dim=-1)[0][prediction_class_id])
         return dict(label=result, confidence=confidence)
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord()
@@ -764,7 +744,6 @@ class GPTJT(ToxicityModel):
         prompt = self.template.format(content=content)
         return prompt
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -779,7 +758,6 @@ class GPTJT(ToxicityModel):
 
         return result.strip()
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord()
@@ -823,7 +801,6 @@ class OpenAIModerator(ToxicityModel):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -831,7 +808,6 @@ class OpenAIModerator(ToxicityModel):
     ) -> Any:
         return self.client.create(input=prompt, model=self.model)
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         if len(response.results) > 1:
             raise ValueError("Expected only one result from OpenAI model")
@@ -881,7 +857,6 @@ class ShieldGemma(ToxicityModel):
         prompt = self._tpl.format(text=text, criteria=self._criteria)
         return prompt
 
-    @trace
     def call_client(
         self,
         prompt: str,
@@ -904,7 +879,6 @@ class ShieldGemma(ToxicityModel):
 
         return dict(score=score)
 
-    @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(
             prediction=False,

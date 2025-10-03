@@ -14,7 +14,7 @@ from pydantic import ConfigDict, Field, field_validator
 from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
 
-from buttermilk import get_bm, logger
+from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.storage_config import StorageConfig
@@ -288,14 +288,12 @@ class TMDBTool:
 
     def _setup_observations_storage(self, config: StorageConfig, batch_size: int):
         """Set up storage for observations data."""
-        bm = get_bm()
 
         storage = bm.get_storage(config)
         self.observations_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 
     def _setup_titles_storage(self, config: StorageConfig, batch_size: int):
         """Set up storage for titles data."""
-        bm = get_bm()
         storage = bm.get_storage(config)
         self.titles_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 

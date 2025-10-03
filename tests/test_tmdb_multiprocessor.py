@@ -1,11 +1,8 @@
 """Test TMDBTool as a processor yielding Observations."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 
 

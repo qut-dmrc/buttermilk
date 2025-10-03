@@ -9,11 +9,9 @@ from enum import Enum
 from typing import Any
 
 import shortuuid
-from fastapi import WebSocketDisconnect
-from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk import AgentTrace, logger
+from buttermilk import ExecutionTrace, logger
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -28,6 +26,7 @@ from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
+from buttermilk.utils import scrub_serializable
 from buttermilk.utils.otel import (
     attach_session_baggage,
     detach_session_baggage,
@@ -282,8 +281,7 @@ class FlowRunContext(BaseModel):
         while True:
             await asyncio.sleep(0.1)
 
-            # Check if the WebSocket is connected
-            if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
+            if not self.websocket:
                 continue
 
             try:
@@ -312,18 +310,13 @@ class FlowRunContext(BaseModel):
                 else:
                     await self.callback_to_groupchat(message)
 
-            except WebSocketDisconnect:
-                logger.debug("Client disconnected", session_id=self.session_id)
-                self.websocket = None
-                # Don't break immediately - let the session manager handle reconnection
-                break
             except Exception as e:
                 logger.error("Error receiving/processing client message", session_id=self.session_id, error=str(e))
                 self.websocket = None
                 break
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
-    async def send_message_to_ui(self, message: AgentTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage) -> None:
+    async def send_message_to_ui(self, message: ExecutionTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
 
         Args:
@@ -350,7 +343,7 @@ class FlowRunContext(BaseModel):
 
         try:
             message_type = formatted_message.type
-            message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+            message_data_to_send = scrub_serializable(formatted_message.model_dump(exclude_unset=True, exclude_none=True))
 
             # Consolidate debug info into a single log entry
             logger.debug(
@@ -366,10 +359,6 @@ class FlowRunContext(BaseModel):
                     # Raise an error to be caught by tenacity or the outer try/except
                     raise RuntimeError(f"WebSocket is None for session {self.session_id} during send attempt.")
 
-                if self.websocket.client_state != WebSocketState.CONNECTED:
-                    logger.debug("WebSocket not connected", state=self.websocket.client_state, session_id=self.session_id)
-                    # Proceed to send; if it fails due to state, tenacity will catch and retry.
-
                 await self.websocket.send_json(message_data_to_send)
 
             await _send_with_retry_internal()
@@ -377,7 +366,7 @@ class FlowRunContext(BaseModel):
         except Exception as e:
             # Attempt to send an error message back to the client if the websocket is still viable
             websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
-            if self.websocket and self.websocket.client_state == WebSocketState.CONNECTED:
+            if self.websocket:
                 try:
                     error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
                     error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
@@ -960,7 +949,7 @@ class FlowRunner(BaseModel):
         if self.bm is not None:
             return self.bm
         else:
-            from buttermilk import get_bm
+            from buttermilk._core.dmrc import get_bm
             return get_bm()
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
@@ -1448,7 +1437,6 @@ class FlowRunner(BaseModel):
             for i, record in enumerate(records):
                 data = {"record_id": record.record_id, "dataset_key": dataset_key}
                 job = RunRequest(
-                    ui_type="batch",
                     batch_id=batch_id,
                     flow=flow_name,
                     parameters=iteration_params,

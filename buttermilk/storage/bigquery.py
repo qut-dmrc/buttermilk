@@ -1,6 +1,6 @@
 """BigQuery storage implementation for unified storage operations."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import shortuuid
@@ -10,13 +10,13 @@ from pydantic import BaseModel
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord, Record
+from buttermilk.utils import scrub_serializable
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
 from .base import Storage, StorageClient
 
 if TYPE_CHECKING:
-    from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
 
@@ -31,7 +31,7 @@ class BigQueryStorage(Storage, StorageClient):
     replacing separate BigQueryRecordLoader and save functionality.
     """
 
-    def __init__(self, config: "StorageConfig", bm: "BM | None" = None):
+    def __init__(self, config: "StorageConfig"):
         """Initialize BigQuery storage.
 
         Args:
@@ -42,8 +42,8 @@ class BigQueryStorage(Storage, StorageClient):
             StorageError: If schema_path is missing or schema cannot be loaded
 
         """
-        super().__init__(config, bm)
-        StorageClient.__init__(self, config, bm)
+        super().__init__(config)
+        StorageClient.__init__(self, config)
 
         if config.type != "bigquery":
             raise ValueError(f"BigQueryStorage requires type='bigquery', got '{config.type}'")
@@ -89,10 +89,7 @@ class BigQueryStorage(Storage, StorageClient):
     def client(self) -> bigquery.Client:
         """Get BigQuery client, creating it if necessary."""
         if self._client is None:
-            if self.bm:
-                self._client = self.get_bq_client()
-            else:
-                self._client = bigquery.Client(project=self.config.project_id)
+            self._client = self.get_bq_client()
         return self._client
 
     @property
@@ -130,13 +127,13 @@ class BigQueryStorage(Storage, StorageClient):
             logger.error(f"Error loading records from BigQuery: {e}")
             raise StorageError(f"Failed to read from BigQuery: {e}") from e
 
-    def save(self, records: list[BaseModel | dict[str, Any]] | BaseModel | dict[str, Any]) -> None:
-        """Save Pydantic models to BigQuery table.
+    def save(self, records: list[BaseRecord] | BaseRecord | list[dict[str, Any]] | dict[str, Any]) -> None:
+        """Save records to BigQuery table.
 
         Uses the existing upload_rows pipeline for proper serialization and error handling.
 
         Args:
-            records: Single Pydantic model, dict, or list of models/dicts to save
+            records: Single BaseRecord/dict or list of BaseRecord/dicts to save
 
         Raises:
             StorageError: If save operation fails
@@ -145,8 +142,9 @@ class BigQueryStorage(Storage, StorageClient):
         # Validate schema on first use
         self._validate_schema()
 
-        if isinstance(records, BaseModel):
-            records = [records]
+        # Normalize to list without mutating variable type for type-checkers
+        # Normalize to a sequence without tripping type invariance
+        items: Sequence[Any] = records if isinstance(records, list) else [records]
 
         if not records:
             logger.warning("No records to save")
@@ -158,14 +156,15 @@ class BigQueryStorage(Storage, StorageClient):
                 self.create()
 
             # Convert Pydantic models to list of dicts for upload_rows
-            rows_to_insert = []
-            for record in records:
+            rows_to_insert: list[dict[str, Any]] = []
+            for record in items:
                 if isinstance(record, dict):
-                    row = record
+                    rows_to_insert.append(record)
+                elif hasattr(record, "model_dump"):
+                    rows_to_insert.append(scrub_serializable(record.model_dump()))  # type: ignore[attr-defined]
                 else:
-                    # Assume it's a Pydantic model with model_dump
-                    row = record.model_dump(mode="json")
-                rows_to_insert.append(row)
+                    # Last resort
+                    rows_to_insert.append({"value": str(record)})
 
             # Get the schema for proper data transformation
             schema = self.get_schema()
@@ -182,20 +181,15 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
             if result:
-                logger.debug(f"Successfully saved {len(records)} records to {self.get_table_ref()}")
+                logger.debug(f"Successfully saved {len(rows_to_insert)} records to {self.get_table_ref()}")
             else:
                 raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
             logger.error(
                 "Failed to save records to BigQuery",
-                extra={
-                    "table": self.get_table_ref(),
-                    "dataset_name": self.config.dataset_name,
-                    "num_records": len(records) if isinstance(records, list) else 1,
-                    "error": str(e)
-                },
-                exc_info=True
+                extra={"table": self.get_table_ref(), "dataset_name": self.config.dataset_name, "num_records": len(rows_to_insert), "error": str(e)},
+                exc_info=True,
             )
             raise StorageError(f"Failed to save to BigQuery table {self.get_table_ref()}: {e}") from e
 

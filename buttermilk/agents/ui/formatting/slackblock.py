@@ -6,7 +6,7 @@ import regex as re
 from pydantic import BaseModel
 
 from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
-from buttermilk._core.contract import AgentTrace
+from buttermilk._core.contract import ExecutionTrace
 from buttermilk.agents.evaluators.scorer import QualScore
 
 
@@ -118,7 +118,7 @@ def dict_to_blocks(input) -> list[dict]:
     return create_context_blocks(elements_list=elements)
 
 
-def format_slack_message(result: AgentTrace) -> dict:
+def format_slack_message(result: ExecutionTrace) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
     blocks = []
 

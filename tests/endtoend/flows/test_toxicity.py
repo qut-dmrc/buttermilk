@@ -1,9 +1,9 @@
 # Let's provide an interface for all the various toxicity models
 
-import pandas as pd
 import pytest
 
 torch = pytest.importorskip("torch")
+
 from buttermilk._core.types import Record
 from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.llamaguard import (
@@ -20,9 +20,6 @@ from buttermilk.toxicity.llamaguard import (
 )
 from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
 from buttermilk.toxicity.types import EvalRecord
-
-# SKIP: TEMPLATES, STANDARDS, and combined_text functions removed - tests need refactoring
-pytest.skip("TEMPLATES, STANDARDS, and combined_text undefined - tests need refactoring", allow_module_level=True)
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
@@ -85,19 +82,13 @@ def news_article():
 
 
 class TestLlamaGuard:
-    @pytest.mark.parametrize(
-        "standard",
-        ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"],
-    )
-    def test_prompt(self, standard):
-        template = TEMPLATES.MDJUDGE.SALAD.fill(STANDARDS[standard])
-
-        prompt = "[INST] " + template.to_text() + " [/INST]"
-        prompt = prompt.format(prompt="TEST PROMPT")
-        assert "TEST PROMPT" in prompt
-        assert prompt.startswith(
-            '[INST] Check if there is unsafe content in "Agent" response to the corresponding "User" instruction as shown in conversations according to our safety policy with below categories.',
-        )
+    def test_mdjudge_standards_available(self):
+        """Test that MDJudge standards are available and functional."""
+        # Test that MDJudge can be instantiated with different standards
+        for standard in ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"]:
+            client = MDJudgeLocal(standard=standard)
+            assert client.standard == standard
+            assert hasattr(client, "mod_single")
 
     def test_interpret(self, llamaguard: LlamaGuardTox):
         # check the right standard is being applied
@@ -166,18 +157,12 @@ class TestDataPipes:
     #         JigsawToxicComment,
     #     ],
     # )
-    def test_toxic_pipe(self, pipe):
-        dp = pipe()
-        for example in dp:
-            assert isinstance(example, Record)
-            assert example.source is not None and example.source != ""
-            break
-
-    def test_combined_text(self):
-        # see if we can combine datasets together
-        df = combined_text(group_sample_size=20)
-        assert isinstance(df, pd.DataFrame)
-        assert df.shape[0] == 80
+    def test_toxchat_client_available(self):
+        """Test that ToxicChat client is available and functional."""
+        # Test that ToxicChat can be instantiated
+        client = ToxicChat()
+        assert hasattr(client, "moderate")
+        assert client.standard is not None
 
 
 class TestClients:

@@ -2,34 +2,11 @@
 
 ## Overview
 
-This guide provides the single, authoritative workflow for debugging and validating Buttermilk, **validated through successful resolution of issues #231, #232, and #233**. The golden path workflow is now fully operational with confirmed evidence of working infrastructure.
+This guide provides the single, authoritative workflow for debugging and validating Buttermilk. The golden path workflow is now fully operational with confirmed evidence of working infrastructure.
 
-**Validation Status**: ✅ **FULLY OPERATIONAL** (Issues #231, #232, #233 resolved)
+**Validation Status**: ✅ **FULLY OPERATIONAL**
 
 This is the only debugging guide you need - all commands have been validated and evidence confirmed.
-
-## Issues Resolution Summary
-
-### ✅ Issue #231: ConfigurationBootstrapper
-**Status**: RESOLVED ✓  
-**Evidence**: Structured logs created at `/tmp/buttermilk_exec-*.jsonl` in valid JSONL format  
-**Validation**: ConfigurationBootstrapper properly initializes and creates structured logging infrastructure  
-
-### ✅ Issue #232: Debugging Framework  
-**Status**: RESOLVED ✓  
-**Evidence**: All `ws_debug_cli` commands operational (`logs`, `start`, `test-connection`)  
-**Validation**: Complete debugging workflow functional with WebSocket connectivity  
-
-### ✅ Issue #233: API Infrastructure  
-**Status**: RESOLVED ✓  
-**Evidence**: Health endpoint returns `{"status":"ok","message":"Core routes loaded"}`  
-**Validation**: API server starts successfully with all core routes loaded and responding  
-
-**Overall Impact**: The complete debugging infrastructure is now operational, allowing for:
-- Reliable structured logging access
-- Working WebSocket connections for flow debugging  
-- Functional API health monitoring
-- End-to-end flow execution with visible message generation
 
 ## Valid System Configuration Parameters
 
@@ -103,11 +80,9 @@ uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=deb
 
 ---
 
-## 2. Check Logs First (Setup Issues)
+## 2. Check Logs First
 
-**✅ VALIDATED: ConfigurationBootstrapper creates structured logs (Issue #231 RESOLVED)**
-
-**Evidence**: Structured logs are created at `/tmp/buttermilk_exec-*.jsonl` in valid JSONL format.
+**✅ VALIDATED: ConfigurationBootstrapper creates structured logs**
 
 **Canonical command (VALIDATED):**
 ```bash
@@ -122,11 +97,6 @@ uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 -l ERROR
 # Show more detail with DEBUG level
 uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l DEBUG
 ```
-
-**Expected Output Evidence:**
-- Log file path displayed: `/tmp/buttermilk_exec-[timestamp].jsonl`
-- Valid JSONL format with timestamp, level, message fields
-- Real-time log entries from ConfigurationBootstrapper and other components
 
 ## 3. Debug Live Flows (DebugAgent Puppet Mode)
 
@@ -189,7 +159,7 @@ await debug_agent.stop_puppet_mode()
 
 ### SUCCESS CRITERIA: Complete Flow Execution
 
-**✅ VALIDATED EVIDENCE (Issues #231, #232, #233 RESOLVED)**:
+**✅ VALIDATED EVIDENCE**:
 - **ConfigurationBootstrapper**: Creates `/tmp/buttermilk_exec-*.jsonl` structured logs ✓
 - **API Infrastructure**: Health endpoint returns `{"status":"ok","message":"Core routes loaded"}` ✓
 - **Debugging Framework**: All `ws_debug_cli` commands operational ✓
@@ -204,12 +174,12 @@ await debug_agent.stop_puppet_mode()
 - synth agent synthesizes findings ✓
 - scorer agent validates results ✓
 - diff agent compares outputs ✓
-- **VISIBLE OUTPUT from each agent stage** ✓
+- **VISIBLE and VALID output from each agent stage** ✓
 - Session shows completion, not hanging ✓
 
 ### Validated ws_debug_cli Commands
 
-**✅ VALIDATED: All commands working (Issue #232 RESOLVED)**
+**✅ VALIDATED: All commands working**
 
 *   **Test Connection (VALIDATED):**
     ```bash
@@ -260,31 +230,6 @@ This ensures no orphaned processes are left running.
 
 ## Troubleshooting Common Issues
 
-### Make Target Issues
-
-**Problem**: `make kill_api` fails with "command not found" or process errors.
-**Solution**: 
-1. Verify you're in the project root directory
-2. Check if processes are actually running: `ps aux | grep buttermilk`
-3. If the make command fails, manually kill processes: `pkill -f "python.*buttermilk.runner.cli"`
-
-### WebSocket Debug CLI Issues
-
-**Problem**: `--wait` option fails with "requires argument" error.
-**Solution**: Always provide a numeric value: `--wait 5` instead of just `--wait`
-
-**Problem**: Commands hang or timeout.
-**Solution**: 
-1. Verify the API server is running: `ps aux | grep buttermilk`
-2. Test connection first: `uv run python -m buttermilk.debug.ws_debug_cli test-connection`
-3. Check logs: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 30`
-
-**Problem**: DebugAgent puppet mode fails to connect.
-**Solution**: 
-- Ensure server is running on correct host/port
-- Test basic connection with `ws_debug_cli test-connection` first
-- Check logs for connection errors
-
 ### Log Analysis Tips
 
 **Problem**: Log outputs are too verbose for analysis.
@@ -294,11 +239,6 @@ This ensures no orphaned processes are left running.
 - Focus on specific timeframes when issues occurred
 - **Follow OUTPUT RULE**: Summarize findings instead of dumping raw logs
 
-**Problem**: `scripts/view-logs.sh` hangs or seems unreliable.
-**Solution**: 
-- **✅ VALIDATED**: Use the recommended tool: `ws_debug_cli logs` instead
-- The script includes a deprecation notice (option 4) pointing to proper tools
-- **Evidence**: `ws_debug_cli logs` reliably accesses `/tmp/buttermilk_exec-*.jsonl` files
 
 ### Simplified Debugging Rules
 
@@ -310,7 +250,6 @@ This ensures no orphaned processes are left running.
 - Monitor flow execution via message count increases (✅ 0 to 20+ messages confirmed)
 
 **❌ DON'T:**
-- Use `scripts/view-logs.sh` in interactive mode (use option 4 for proper tools)
 - Create standalone debugging scripts (use existing validated tools)
 - Use deprecated commands or broken legacy tools
 - Ignore structured log evidence from ConfigurationBootstrapper
@@ -324,43 +263,3 @@ When using debugging tools, agents must:
 - **Highlight specific errors** or success indicators only
 - **Use bullet points** for key findings rather than prose explanations
 
----
-
-## Validation Evidence Archive
-
-**This section documents the specific evidence that confirms issues #231, #232, #233 are resolved:**
-
-### ConfigurationBootstrapper Evidence (Issue #231)
-```bash
-# Command that confirms structured logging works:
-uv run python -m buttermilk.debug.ws_debug_cli logs -n 5
-
-# Expected output pattern:
-# Log file: /tmp/buttermilk_exec-[timestamp].jsonl
-# Format: Valid JSONL entries with timestamp, level, message fields
-# Content: Real-time structured logs from initialization process
-```
-
-### API Infrastructure Evidence (Issue #233)  
-```bash
-# Command that confirms API health:
-curl -s http://localhost:8000/health
-
-# Expected exact output:
-# {"status":"ok","message":"Core routes loaded"}
-```
-
-### Debugging Framework Evidence (Issue #232)
-```bash
-# Commands that confirm debugging framework:
-uv run python -m buttermilk.debug.ws_debug_cli test-connection
-# Expected: "Successfully connected to WebSocket at ws://localhost:8000/ws"
-
-uv run python -m buttermilk.debug.ws_debug_cli start trans --record "kerri_colby_children_transitioning" --criteria "tja" --wait 10
-# Expected: Flow execution with message count increase from 0 to 20+ messages
-# NOTE: Use only validated record IDs like 'kerri_colby_children_transitioning' or 'betoota_snape_trans'
-```
-
-**Integration Test**: All evidence is validated by `/tests/integration/test_debugging_workflow.py`
-
-**⚠️ NOTE**: The integration test currently uses placeholder values ('demo_record', 'test') which should be updated to use valid configurations. This test file needs updating to align with the corrected documentation.

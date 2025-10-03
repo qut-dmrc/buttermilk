@@ -11,7 +11,7 @@ from slack_bolt.async_app import AsyncApp
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
-    AgentTrace,
+    ExecutionTrace,
     GroupchatMessageTypes,
     OOBMessages,
     SystemPromptMessage,
@@ -31,7 +31,7 @@ from buttermilk.libs.slack import (
 _active_thread_registry = {}
 
 
-def _fn_debug_blocks(message: AgentTrace):
+def _fn_debug_blocks(message: ExecutionTrace):
     try:
         console = Console(highlight=True)
         console.print(Markdown("## -----DEBUG BLOCKS------"))
@@ -59,7 +59,7 @@ class SlackUIAgent(UIAgent):
 
     async def _send_to_user(self, message: GroupchatMessageTypes) -> None:
         try:
-            if isinstance(message, AgentTrace):
+            if isinstance(message, ExecutionTrace):
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
             else:
@@ -89,7 +89,7 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
-        if isinstance(message, AgentTrace | AgentInput):
+        if isinstance(message, ExecutionTrace | AgentInput):
             await self._send_to_user(message)
 
     async def _request_input(

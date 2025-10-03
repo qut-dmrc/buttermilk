@@ -1,3 +1,4 @@
+build/
 gha-creds-*.json
 *.backup
 outputs

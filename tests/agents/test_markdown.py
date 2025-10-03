@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from buttermilk._core.contract import AgentConfig, AgentTrace
+from buttermilk._core.contract import AgentConfig, ExecutionTrace
 from buttermilk.agents.describer import MediaDescription
 from buttermilk.agents.differences import Differences, Divergence, Position
 from buttermilk.agents.frame import FramedStatement
@@ -201,11 +201,11 @@ class TestZoteroResearchResultMarkdown:
         assert "The research shows" in result
 
 
-class TestAgentTraceMarkdown:
-    """Test markdown formatting for AgentTrace wrapper."""
+class TestExecutionTraceMarkdown:
+    """Test markdown formatting for ExecutionTrace wrapper."""
     
     def test_agent_trace_with_judge_output(self):
-        """Test AgentTrace formatting with JudgeReasons output."""
+        """Test ExecutionTrace formatting with JudgeReasons output."""
         config = AgentConfig(
             agent_id="JUDGE-gpt4",
             agent_name="judge_agent",
@@ -218,8 +218,8 @@ class TestAgentTraceMarkdown:
             prediction=False,
             uncertainty="low"
         )
-        
-        trace = MagicMock(spec=AgentTrace)
+
+        trace = MagicMock(spec=ExecutionTrace)
         trace.agent_info = config
         trace.agent_id = "JUDGE-gpt4"
         trace.call_id = "ABCD1234"
@@ -228,7 +228,7 @@ class TestAgentTraceMarkdown:
         
         # The trace should use the output's as_markdown method
         trace.as_markdown()
-        
-        # We'll need to implement this on AgentTrace
+
+        # We'll need to implement this on ExecutionTrace
         # For now, check that the method would exist
         assert hasattr(trace, "as_markdown")

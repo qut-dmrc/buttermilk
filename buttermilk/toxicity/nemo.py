@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal
 
 import regex as re
-from promptflow.tracing import trace
 
 from buttermilk._core.llms import LLMs
 from buttermilk.utils.json_parser import ChatParser
@@ -67,7 +66,6 @@ class NemoLangchain(Nemo):
     def make_prompt(self, content: str) -> str:
         return content
 
-    @trace
     def call_client(
         self,
         prompt: str,

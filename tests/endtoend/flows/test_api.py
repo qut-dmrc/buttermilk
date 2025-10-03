@@ -17,7 +17,7 @@ def client(real_flow_runner, bm: BM) -> TestClient:
 
 @pytest.fixture
 def flow_request_data():
-    # Return raw dict without RunRequest serialization since ui_type is excluded
+    # Return raw dict for flow request data
     return {
         "flow": "test_minimal",
         "model": "haiku",

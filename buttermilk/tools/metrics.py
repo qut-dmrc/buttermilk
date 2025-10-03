@@ -1,5 +1,4 @@
 import pandas as pd
-from promptflow.core import log_metric
 
 from buttermilk import COL_PREDICTION
 
@@ -86,11 +85,3 @@ class Metriciser:
         metrics = metrics.sort_values(by="f1-score", ascending=False)
 
         return metrics
-
-    def log_metrics(self, metrics: pd.DataFrame):
-        try:  # try to log metrics to promptflow
-            for row in metrics.to_dict(orient="records"):
-                for key, value in row.items():
-                    log_metric(key=key, value=value)
-        except:
-            pass

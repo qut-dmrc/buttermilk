@@ -14,8 +14,8 @@ from buttermilk._core.contract import (
     AgentAnnouncement,
     AgentInput,
     AgentOutput,
-    AgentTrace,
     ConductorRequest,
+    ExecutionTrace,
     FlowEvent,
     FlowProgressUpdate,
     StepRequest,
@@ -200,10 +200,10 @@ class HostAgent(Agent):
     @message_handler
     async def handle_agent_trace(
         self,
-        message: AgentTrace,
+        message: ExecutionTrace,
         ctx: MessageContext,
     ) -> None:
-        """Handle AgentTrace messages and add to conversation history."""
+        """Handle ExecutionTrace messages and add to conversation history."""
         content_to_log = str(message.content)[:TRUNCATE_LEN]
         await self._model_context.add_message(
             AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else ""),
