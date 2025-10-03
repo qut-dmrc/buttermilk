@@ -1,19 +1,17 @@
 """Test storage configuration validation in orchestrators."""
 
-import pytest
 from typing import Any
-from unittest.mock import Mock, patch
 
-from buttermilk._core.orchestrator import OrchestratorProtocol, Orchestrator
+import pytest
+
+from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.storage_config import (
-    BaseStorageConfig,
     BigQueryStorageConfig,
     FileStorageConfig,
-    VectorStorageConfig,
     GeneratorStorageConfig,
     StorageFactory,
+    VectorStorageConfig,
 )
-from buttermilk._core.config import DataSourceConfig
 
 
 class TestStorageConfigValidation:
@@ -75,14 +73,14 @@ class TestStorageConfigValidation:
         """Test that vector storage configs are properly validated."""
         config_dict = {
             "orchestrator": "test",
-            "name": "test_flow", 
+            "name": "test_flow",
             "storage": {
                 "osb_vector": {
                     "type": "chromadb",  # Use chromadb instead of vector
                     "persist_directory": "/data/embeddings",
-                    "collection_name": "osb_documents"
+                    "collection_name": "osb_documents",
                 }
-            }
+            },
         }
         
         # Create orchestrator protocol with config
@@ -115,7 +113,7 @@ class TestStorageConfigValidation:
         assert "legacy" in orchestrator_config.storage
         legacy_config = orchestrator_config.storage["legacy"]
         # It will be converted to GeneratorStorageConfig for type="outputs"
-        assert isinstance(legacy_config, (GeneratorStorageConfig, DataSourceConfig))
+        assert isinstance(legacy_config, GeneratorStorageConfig)
     
     def test_mixed_storage_configs(self):
         """Test flow with mixed storage config types."""
@@ -168,7 +166,7 @@ class TestStorageConfigValidation:
         assert "bq_legacy" in orchestrator_config.storage
         bq_config = orchestrator_config.storage["bq_legacy"]
         # It should be converted to DataSourceConfig or BigQueryStorageConfig
-        assert isinstance(bq_config, (DataSourceConfig, BigQueryStorageConfig))
+        assert isinstance(bq_config, BigQueryStorageConfig)
     
     def test_storage_factory_direct(self):
         """Test StorageFactory.create_config directly."""
@@ -216,7 +214,7 @@ class TestStorageConfigValidation:
         assert "auto_detect" in orchestrator_config.storage
         config = orchestrator_config.storage["auto_detect"]
         assert isinstance(config, FileStorageConfig)
-        assert config.auto_create == True
+        assert config.auto_create
 
 
 class ConcreteOrchestrator(Orchestrator):

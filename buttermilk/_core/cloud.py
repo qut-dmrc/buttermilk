@@ -5,8 +5,7 @@ from typing import Any
 
 from google import genai
 from google.auth import default
-from google.auth.credentials import Credentials as GoogleCredentials
-from google.auth.credentials import TokenState
+from google.auth.credentials import Credentials as GoogleCredentials, TokenState
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
 

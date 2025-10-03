@@ -20,15 +20,14 @@ from buttermilk._core.contract import (
     FlowMessage,
     FlowProgressUpdate,
     SystemPromptMessage,
-    UserResponseMessage,
     TaskProcessingStarted,
+    UserResponseMessage,
 )
 from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag import ResearchResult
-from buttermilk.utils.pricing import extract_usage_from_metadata
 
 PREVIEW_LENGTH = 200
 

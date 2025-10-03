@@ -127,5 +127,11 @@ def test_init_modules_importable():
     try:
         from buttermilk import BM, init, nb_init
         from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+        
+        # Verify the imports are accessible (not just importable)
+        assert BM is not None
+        assert init is not None  
+        assert nb_init is not None
+        assert ConfigurationBootstrapper is not None
     except ImportError as e:
         pytest.fail(f"Failed to import required modules: {e}")

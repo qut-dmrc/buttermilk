@@ -1,0 +1,27 @@
+[
+    {
+        "mode": "REQUIRED",
+        "name": "record_id",
+        "type": "STRING"
+    },
+    {
+        "mode": "REQUIRED",
+        "name": "title",
+        "type": "STRING"
+    },
+    {
+        "mode": "NULLABLE",
+        "name": "year",
+        "type": "INTEGER"
+    },
+    {
+        "mode": "REQUIRED",
+        "name": "type",
+        "type": "STRING"
+    },
+    {
+        "mode": "NULLABLE",
+        "name": "metadata",
+        "type": "JSON"
+    }
+]

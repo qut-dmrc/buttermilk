@@ -151,10 +151,10 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Deduplicate tools by name (handle both Tool objects and ToolSchema dicts)
         def get_tool_name(tool):
-            if hasattr(tool, 'name'):
+            if hasattr(tool, "name"):
                 return tool.name  # Tool object
             else:
-                return tool['name']  # ToolSchema dict
+                return tool["name"]  # ToolSchema dict
         
         tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 

@@ -1,0 +1,45 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - /storage@pipeline.source: tmdbtitles
+  - /storage@pipeline.output: observations
+
+run:
+  mode: pipeline
+  name: mediamarkets
+  job: observations_tmdb
+
+pipeline:
+  # Storage config for input data with decade-based sampling
+  source:
+    # SQL query to sample n/14 random records from each decade
+    custom_query: |
+      WITH decade_samples AS (
+        SELECT *,
+          FLOOR(year / 10) * 10 AS decade,
+          ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
+        FROM {table}
+        WHERE year IS NOT NULL
+          AND year >= 1900
+          AND year < 2030
+      )
+      SELECT * EXCEPT(decade, rn)
+      FROM decade_samples
+      WHERE rn <= CEIL({n} / 14.0)
+      ORDER BY RAND()
+      LIMIT {n}
+
+  # Number of samples to collect from database (will be distributed across decades)
+  sample_size: 10000  # ~700 records per decade
+
+  # TMDB processor configuration
+  tmdb: {}  
+
+  # Storage config for output
+  output: {}
+
+  buffer_size: 500
+  flush_interval: 30
+
+  concurrency: 20

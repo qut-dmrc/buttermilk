@@ -7,73 +7,106 @@ Your response should follow this schema exactly:
 {% raw %}
 ```json
 { 
-   "content": <STRING: Your summary of the content of the post.>,
-   "context": <STRING: Your summary of the factual context of the post, including who posted it, to whom, how it was received, and any other relevant contextual information.>,
-   "reasoning": [ARRAY of RECORDS with the following fields for each step of application:
-        {"issue": <STRING: summarise the problem to be determined or resolved in this discrete logical step.>,
-        "rule": <STRING: explain the generalisable principle that applies. Be precise and explain where the principle comes from. Quote and reference any authoritative statement VERBATIM.>,
-        "facts": <STRING: An objective description of the relevant content and context, including a description of any disagreement or uncertainty.>,
-        "analysis": <STRING: explain in detail how the Board resolved the issue. Make sure you show the link between the facts and relevant context of the case and the Board's determination.  Make sure you explain any relevant uncertainty in a rule or conflict between applicable rules or principles. Explain the factors upon which the issue turned and how the decision may have come out differently.>,
-        "conclusion": <STRING: A short statement that concludes the issue by applying the general rule to the specific facts of the case.>},
-        ... OTHER LOGICAL STEPS ...
-    ]
-   "summary": <STRING: Your summary of the key findings, rationale, and outcome of the case.>,
+   "content": <STRING: Your summary of the content and factual context of the post, including who posted it, to whom, how it was received, and any other relevant contextual information.>,
+   "procedural_history": <STRING: Your summary of the procedural history of the case, including how it was reported, reviewed, and escalated to the Board.>,
+   "content_policies": [<ARRAY of STRING>, each quoting a relevant operative component of a content policy verbatim, split into separate issues for analysis in the REASONING ANALYSIS section.],
+   "human_rights_standards": [<ARRAY of STRING>, each quoting a relevant operative component of a human rights standard verbatim, split into separate issues for analysis in the REASONING ANALYSIS section.],
    "recommendations": <ARRAY OF STRING: Your summary of the Board's policy recommendations, if applicable.>,
-   "ratio": <ARRAY of STRING: A short, universal statement of the major principles that the case establishes. Include key minority and dissenting principles as well.>
+   "reasoning": [<ARRAY of STRING>, each describing a single contentious issue in the case, including the rule, facts, analysis, and conclusion.],
+   "ratio": <ARRAY of STRING: A list of short, universal statements of the major principles that the case establishes. Include key minority and dissenting principles as well.>,
+   "summary": <STRING: Your summary of the key findings, rationale, and outcome of the case.>,
 }
 ```
 {% endraw %}
 
+## INSTRUCTIONS
+
 Your goal is to identify and summarise the 'ratio decidendi', including the key facts, applicable rules, and the board's key findings and analysis that led to the outcome.
 
-You should work through the reasoning step-by-step. For each logical step, you should: identify and state the rule that applies, summarise the relevant facts, and explain the Board's application of the rule to the facts.
 
-1. ISSUE: State the specific rule and any relevant exceptions.
+### 1. Content and context: Provide a clear and concise summary of the content of the post
+- Include who posted it, to whom, how it was received, and any other relevant contextual information.
+- Provide a thorough description of the content that includes ALL relevant details.
+- In particular, ensure that you you include a thorough description of the extent any disagreement or uncertainty about the content or factual context.
+
+### 2. Procedural history: Provide a brief summary of the procedural history of the case.
+- Explain how the content or account was reported, including how many times and at what stage it was flagged by users or automatically detected, whether any third parties were involved, and any other relevant information.
+- Summarise the timeline for any decisions taken about the content, account, or complaint, appeal, or review, and explain the basis and process leading to each decision by human moderation contractors, automated systems, escalation teams, Meta staff, or any other process.
+- At each stage, explain how the reports were treated by Meta, including details about whether it was removed or left up, any measures to restrict access to the content or add information or instititial warnings, any warnings or strikes applied to the account, and any other relevant information.
+- Explain the procedural history of the appeal to the Board, including how and when the case was reviewed by Meta, how it was referred to the Board, and any other relevant information leading up to the Board's decision.
+
+### 3. Content policies
+- Extract and list ALL content policies that were considered by the Board, including any relevant sub-sections or components of a policy.
+- Quote the relevant operative components of each policy VERBATIM.
+- Separate each component of each policy into a separate issue for analysis in the REASONING ANALYSIS section.
+
+### 4. Human rights standards
+- Extract and list ALL human rights standards that were considered by the Board, including any relevant sub-sections or components of a standard.
+- Quote the relevant components of each standard or source of principle VERBATIM and include precise attribution or citation information.
+- Separate each logical question to be determined under each standard into a separate issue for analysis in the REASONING ANALYSIS section.
+
+### 5. Extract and summarise any policy recommendations made by the Board.
+- Summarise any recommendations SEPARATELY. Do not include them in your analysis of the rationale of the decision. Recommendations are not binding and must therefore be kept separate from the rules that content moderators must learn and apply.
+- Make sure you distinguish between formal recommendations (made in the 'Recommendations' section) and non-binding obiter dicta in the main case reasoning. 
+- Note that summary decisions do not have formal recommendations. 
+
+### 6. Detailed reasoning analysis:
+- **CRITICAL**: Repeat this step for EACH contentious issue, analysing EACH issue one-by-one and provide your response to each individually.
+- Identify EVERY contentious issue in the case, including all relevant rules, exceptions, and points of application that involve some interpretation, discretion, decision, or judgement.
+- If a particular issue was not considered at length, you may answer in a single sentence, but you must still include it in the analysis.
+- Otherwise, you should provide at least one paragraph of summary text for each issue and logical step.
+- You should include analysis of rules that the Board considered but ultimately did not rely on.
+- Also include any separate exceptions that were considered, whether they were successful or not.
+
+For each contentious issue, identify and summarise the following elements:
+
+**RULE**: State the specific rule and any relevant exceptions.
+- Summarise the problem to be determined or resolved in this discrete logical step.
+- Be precise and explain where the principle comes from. 
+- Quote and reference any authoritative statement VERBATIM.
 - Do not include clearly irrelevant components of the rule.
 - Do not describe the rule in general terms (i.e. "Hate Speech Community Standard (Tier 2)"). Instead, say "Tier 2 of the Hate Speech Community Standard prohibits "<quote the specific operative component of the rule>".
 
-2. FACTS: Provide a thorough description of the content that includes ALL facts that are relevant to the application of the rule.
-- Your content description should reflect only the information knowable at the outset. 
-- Where it is relevant to the decision, you can provide objective information about the user, and any details about the audience to whom it was made available and their reactions. 
+**FACTS**: State ALL facts that are relevant to the application of the rule.
+- Provide an objective description of the relevant content and context
+- Include a thorough description of any disagreement or uncertainty
+- Include relevant objective information about the user, and any details about the audience to whom it was made available and their reactions. 
 
-3. ANALYSIS: Distil the Board's rationale into a clear principle that APPLIES the RULE to the FACTS in GENERALIZABLE way. 
+**ANALYSIS**: Distil the Board's rationale into a clear principle that APPLIES the RULE to the FACTS in GENERALIZABLE way. 
+- Explain in detail how the Board resolved the issue. Make sure you show the link between the facts and relevant context of the case and the Board's determination.  
 - Do not describe what the Board did or found. You are writing a rule book. The Board is irrelevant to future content moderators; all that matters is that they are able to accurately apply the rules.
 - Be clear about which conclusions of fact lead to what outcomes. 
 - Don't say "The user's bio further confirms this intent". Instead, say "The fact that the user's bio says <x> is <strong / conclusive / weak> evidence of their intent to <y>.
 - When applying rules, don't say "<x> is an admission of intolerance, which is a violation in itself." Instead, say "<x> is an admission of intolerance, which directly violates the prohibition  on "<quote the specific operative rule>".
 - Don't skimp on detail. For example, don't say "the statement was interpreted to amount to a threat". Instead, explain exactly why the PARTICULAR language or feature of the post should be understood as threatening. Be as SPECIFIC AS POSSIBLE.
-- Include information about material facts and, where available and relevant, explain how the analysis would change if a particular fact were different.
+- Make sure you explain any relevant uncertainty in a rule or conflict between applicable rules or principles. 
 - Where there are majority and dissenting opinions, make sure you note whether each principle is made unanimously, by majority, or only by a minority of the Board.  
 
-4. CONCLUSION: A simple and specific answer to the question at ISSUE.
-
-<EXAMPLE ANALYSIS RATIONALE>
-```
-The post included a quote from Goebbels, Hitler's Minister for Public Enlightenment and Propaganda. The quote read: "A lie told once remains a lie, but a lie told a thousand times becomes the truth." Generally, quoting Goebbels violates the Dangerous Organizations and Individuals policy, which prohibits content that "praises", "substantively supports", or "represents" certain "individuals and organizations designated as dangerous", including the Nazi party. However, the same policy allows content that "discusses a dangerous organization or individual in a neutral way or that condemns its actions." The post also included a caption that expressed the author's opinion that the spread of disinformation in present-day political discourse in the United States mirrors the historical spread of propaganda in Nazi Germany. The clear intent of the post was to criticize current political discourse by warning about repeating historical threats. The post provides no "support" or "praise" for Goebbels or the Nazi ideology. If the quote were posted without additional context, it might be construed to "represent" or, potentially, "support" the views of the Nazi party and therefore may have been prohibited. Because the internet of the post is clearly conveyed by the caption, however, it must be interpreted not to violate this clause of the policy.
-```
-<END EXAMPLE RATIONALE>
-
-5. Reasoning: Repeat Steps 1-3 for EACH key rule and point of application.
-- Ensure that you identify ALL key points of analysis and fact upon which the reasoning depends.
-- You should generate at least one paragraph of summary text for each issue and logical step.
-- You should include analysis of rules that the Board considered but ultimately did not rely on.
-- Also include any separate exceptions that were considered, whether they were successful or not.
-
-6. Summary: Provide a clear and concise summary of the case and your analysis.
-- Summarise which rules were violated and why.
+**CONCLUSION**: A simple and specific answer to the question at ISSUE.
 - Explain which facts were most salient to the conclusion.
-- Explain any exceptions that applied.
 - Note any rules or exceptions that were not satisfied.
+- Explain how material facts were interpreted and any difference of opinion or dissenting views.
 - Include any information about how the outcome would have differed if specific facts were different. 
 
-7. Extract and summarise any policy recommendations made by the Board.
-- Summarise any recommendations SEPARATELY. Do not include them in your analysis of the rationale of the decision. Recommendations are not binding and must therefore be kept separate from the rules that content moderators must learn and apply.
-- Make sure you distinguish between formal recommendations (made in the 'Recommendations' section) and non-binding obiter dicta in the main case reasoning. 
-- Note that summary decisions do not have formal recommendations. 
+Example of a completed reasoning analysis:
+```
+The post included a quote from Goebbels, Hitler's Minister for Public Enlightenment and Propaganda. The quote read: "A lie told once remains a lie, but a lie told a thousand times becomes the truth." Generally, quoting Goebbels violates the Dangerous Organizations and Individuals policy, which prohibits content that "praises", "substantively supports", or "represents" certain "individuals and organizations designated as dangerous", including the Nazi party. However, the same policy allows content that "discusses a dangerous organization or individual in a neutral way or that condemns its actions." The post also included a caption that expressed the author's opinion that the spread of disinformation in present-day political discourse in the United States mirrors the historical spread of propaganda in Nazi Germany. The clear intent of the post was to criticize current political discourse by warning about repeating historical threats. The post provides no "support" or "praise" for Goebbels or the Nazi ideology. If the quote were posted without additional context, it might be construed to "represent" or, potentially, "support" the views of the Nazi party and therefore may have been prohibited. Because the intent of the post in question is clearly conveyed by the caption, however, it must be interpreted not to violate this clause of the policy.
+```
 
-8. Ratio Decidendi: generate a short set of principles to be learned from this case. The ratio is the set of universal principles upon which the outcome of the case turns. Include each key principle as well as the key principles of any minority or dissenting judgments. 
+### 7. Ratio Decidendi: principles to be learned from this case
+- The ratio is the set of generalisable principles upon which the outcome of the case turns.
+- Include EACH key principle as a separate record. 
+- Be very concise and precise.
+- Each principle should be a single sentence, stated in a general way that can be applied to future cases.
+- Avoid any reference to the specific facts of the case, the Board, Meta,
+- Ensure that you include the key principles of any minority or dissenting judgments.
 
-Style:
+### 8. Summary
+- Provide a concise summary of the key findings, rationale, and outcome of the case.
+- This should be a brief restatement of your analysis in two to five sentences.
+
+## STYLE
+
 The audience for your summary will be content moderators. Your results will be used for training on the application of content rules ONLY. You should answer as if you are writing a rule book, not reviewing a case. For training purposes, you must isolate the general principle, not the specifics of the Board's decision. The only information that is relevant is the description of the content, the context in which it was shared, the rules that apply to the content, and the Board's rationale for its decision to keep up or take down the content. 
 - Provide sufficient detail to allow content moderators to understand the Board's reasoning and apply it to or to distinguish similar cases in the future.
 - Do not mention the Board, Meta, Facebook, Instagram, or other specific platforms. 

@@ -32,15 +32,23 @@ def test_citator_initialization_with_defaults():
 def test_formatted_citation_model():
     """Test FormattedCitation model creation."""
     citation = FormattedCitation(
-        text="Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10.", style="APA"
+        title="Example Article",
+        citation="Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10.",
+        style="APA"
     )
 
-    assert citation.text == "Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10."
+    assert citation.title == "Example Article"
+    assert citation.citation == "Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10."
     assert citation.style == "APA"
     assert citation.error is None
 
     # Test with error
-    citation_with_error = FormattedCitation(text="", style="Unknown", error="Failed to generate citation")
+    citation_with_error = FormattedCitation(
+        title="Unknown",
+        citation="",
+        style="Unknown",
+        error="Failed to generate citation"
+    )
     assert citation_with_error.error == "Failed to generate citation"
 
 

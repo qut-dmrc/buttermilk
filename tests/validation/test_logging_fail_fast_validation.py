@@ -13,27 +13,27 @@ Validation scenarios:
 """
 
 import logging
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from buttermilk._core.log import (
-    logger,
-    setup_console_logging,
-    setup_file_logging,
-    setup_cloud_logging,
-    validate_logging_state,
-    ensure_logging_properly_initialized,
-    _console_logging_configured,
-    _file_logging_configured,
-    _cloud_logging_sessions,
-)
+import pytest
+
 from buttermilk._core.execution_context import (
-    ExecutionContext,
+    _execution_context_initialized,
     create_execution_context,
     get_or_create_execution_context,
-    _execution_context_initialized,
+)
+from buttermilk._core.log import (
+    _cloud_logging_sessions,
+    _console_logging_configured,
+    _file_logging_configured,
+    ensure_logging_properly_initialized,
+    logger,
+    setup_cloud_logging,
+    setup_console_logging,
+    setup_file_logging,
+    validate_logging_state,
 )
 
 
@@ -117,8 +117,8 @@ class TestFailFastProtectionValidation:
         current_file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(current_file_handlers) == len(file_handlers)  # No additional handlers
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_validate_execution_context_protection_prevents_logging_corruption(self, mock_setup_file, mock_setup_console):
         """Validate that ExecutionContext protection prevents logging corruption."""
         mock_setup_console.return_value = None
@@ -156,8 +156,8 @@ class TestFailFastProtectionValidation:
         assert len(_cloud_logging_sessions) == 0
         
         # Mock cloud logging components
-        with patch('buttermilk._core.log.gcp_logging'), \
-             patch('buttermilk._core.log.CloudLoggingHandler') as mock_cloud_handler_cls:
+        with patch("buttermilk._core.log.gcp_logging"), \
+             patch("buttermilk._core.log.CloudLoggingHandler") as mock_cloud_handler_cls:
             
             mock_logger_cfg = MagicMock()
             mock_logger_cfg.type = "gcp"
@@ -220,7 +220,7 @@ class TestFailFastProtectionValidation:
         assert validation_correct["valid"]
         
         # Should detect mismatch when expectations don't match
-        validation_mismatch = validate_logging_state(verbose_expected=False)
+        validate_logging_state(verbose_expected=False)
         # Note: This should still be valid because the logging is properly configured,
         # just not matching the expected verbose level
         
@@ -275,7 +275,7 @@ class TestFailFastProtectionValidation:
         
         # Force handler flush
         for handler in root_logger.handlers:
-            if hasattr(handler, 'flush'):
+            if hasattr(handler, "flush"):
                 handler.flush()
         
         # Verify messages were logged to file
@@ -296,15 +296,15 @@ class TestFailFastProtectionValidation:
         
         # Force flush again
         for handler in root_logger.handlers:
-            if hasattr(handler, 'flush'):
+            if hasattr(handler, "flush"):
                 handler.flush()
         
         # Verify logging levels are still DEBUG
         assert buttermilk_logger.getEffectiveLevel() == logging.DEBUG
         assert root_logger.getEffectiveLevel() == logging.DEBUG
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_validate_safe_alternatives_work_correctly(self, mock_setup_file, mock_setup_console):
         """Validate that safe alternatives work correctly."""
         mock_setup_console.return_value = None

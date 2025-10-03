@@ -57,6 +57,10 @@ class BaseStorageConfig(BaseModel):
         default=None,
         description="Logical dataset name for filtering/grouping",
     )
+    split_type: str | None = Field(
+        default=None,
+        description="Data split type for datasets (e.g., 'train', 'test', 'validation').",
+    )
     randomize: bool = Field(
         default=True,
         description="Whether to randomize query results",
@@ -110,6 +114,16 @@ class BaseStorageConfig(BaseModel):
         description="Database-specific configuration parameters",
     )
 
+    # Record class configuration
+    record_class: str | None = Field(
+        default=None,
+        description=(
+            "Fully qualified class name for record instantiation. "
+            "Example: 'buttermilk.tools.catalog_test.Title'. "
+            "If not specified, defaults to 'buttermilk._core.types.Record'."
+        ),
+    )
+
     model_config = {
         "extra": "forbid",
         "arbitrary_types_allowed": False,
@@ -133,6 +147,25 @@ class BigQueryStorageConfig(BaseStorageConfig):
 
     type: Literal["bigquery"] = Field(default="bigquery", description="Storage backend type")
 
+    # Custom SQL support for complex filtering
+    custom_where: str | None = Field(
+        default=None,
+        description=(
+            "Custom SQL WHERE clause for complex filtering. "
+            "Example: 'year BETWEEN 2020 AND 2023 AND popularity > 50'. "
+            "This is appended to the standard dataset/split filters."
+        ),
+    )
+    custom_query: str | None = Field(
+        default=None,
+        description=(
+            "Complete custom SQL query to override default query generation. "
+            "Must return columns matching Record fields. "
+            "Use {table} placeholder for table reference. "
+            "Example: 'SELECT * FROM {table} WHERE complex_conditions'"
+        ),
+    )
+
     # BigQuery-specific fields
     project_id: str | None = Field(
         default=None,
@@ -147,7 +180,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
         description="Table identifier",
     )
     clustering_fields: list[str] = Field(
-        default=["record_id", "dataset_name"],
+        default=["record_id", "dataset_name", "split_type"],
         description="Fields to use for clustering",
     )
 
@@ -171,10 +204,6 @@ class BigQueryStorageConfig(BaseStorageConfig):
     last_n_days: int = Field(
         default=7,
         description="For time-series data, retrieve from the last N days.",
-    )
-    split_type: str | None = Field(
-        default=None,
-        description="Data split type for datasets (e.g., 'train', 'test', 'validation').",
     )
 
     @model_validator(mode="before")

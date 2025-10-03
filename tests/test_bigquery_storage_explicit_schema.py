@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 from google.cloud import bigquery
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.storage_config import StorageFactory
-from buttermilk.storage.base import StorageError
 from buttermilk.storage.bigquery import BigQueryStorage
 
 
@@ -25,7 +25,7 @@ class TestBigQueryExplicitSchema:
         })
 
         with pytest.raises(StorageError) as exc_info:
-            storage = BigQueryStorage(config)
+            BigQueryStorage(config)
 
         assert "explicit schema_path" in str(exc_info.value)
 
@@ -155,10 +155,10 @@ class TestBigQueryExplicitSchema:
                     bigquery.SchemaField("data", "JSON"),
                 ]
 
-                storage = BigQueryStorage(config)
+                BigQueryStorage(config)
 
                 # Should not raise type errors
-                custom_obj = CustomModel(id="test", data={"key": "value"})
+                CustomModel(id="test", data={"key": "value"})
 
                 # This should work without type errors
                 # (actual implementation will be updated to support this)

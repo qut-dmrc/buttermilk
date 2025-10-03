@@ -6,7 +6,6 @@ This script demonstrates the capabilities of the standalone WebSocket debug CLI.
 
 import subprocess
 import sys
-import time
 
 
 def test_cli_help():
@@ -14,7 +13,7 @@ def test_cli_help():
     print("Testing CLI help command...")
     result = subprocess.run(
         ["uv", "run", "python", "-m", "buttermilk.debug.cli", "websocket", "--help"],
-        capture_output=True,
+        check=False, capture_output=True,
         text=True
     )
     
@@ -34,7 +33,7 @@ def test_cli_standalone():
     print("\nTesting standalone CLI script...")
     result = subprocess.run(
         ["uv", "run", "python", "buttermilk/debug/ws_debug_cli.py", "--help"],
-        capture_output=True,
+        check=False, capture_output=True,
         text=True
     )
     

@@ -3,7 +3,7 @@ OSB WebSocket Connection Lifecycle Tests
 
 Comprehensive pytest-asyncio test suite for OSB WebSocket functionality:
 - Connection establishment and authentication
-- Message routing and response handling  
+- Message routing and response handling
 - Session isolation verification
 - Concurrent session stress testing
 - Error recovery and reconnection testing
@@ -112,7 +112,7 @@ class TestOSBWebSocketConnection:
         session_id = "test-osb-init-session"
 
         with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            with client.websocket_connect(f"/ws/{session_id}"):
                 # Verify session was created
                 real_flow_runner.get_websocket_session_async.assert_called_once()
                 call_args = real_flow_runner.get_websocket_session_async.call_args
@@ -223,7 +223,7 @@ class TestOSBWebSocketSessionIsolation:
                 for _, websocket in websockets:
                     try:
                         websocket.__exit__(None, None, None)
-                    except:
+                    except Exception:
                         pass
 
     @pytest.mark.anyio
@@ -367,7 +367,7 @@ class TestOSBWebSocketErrorHandling:
 
         with TestClient(test_app) as client:
             try:
-                with client.websocket_connect(f"/ws/{session_id}") as websocket:
+                with client.websocket_connect(f"/ws/{session_id}"):
                     # This may fail at connection level depending on implementation
                     pass
             except Exception as e:
@@ -446,7 +446,7 @@ class TestOSBWebSocketPerformance:
                 for ws in session_connections:
                     try:
                         ws.__exit__(None, None, None)
-                    except:
+                    except Exception:
                         pass
 
 

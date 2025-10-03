@@ -3,19 +3,8 @@
 Tests the AgentToolDefinition, decorators, and schema validation utilities.
 """
 
-from typing import Any
-
 import pytest
 
-from buttermilk import AgentInput
-from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentOutput
-from buttermilk._core.mcp_decorators import (
-    MCPRoute,
-    _type_to_json_schema,
-    extract_tool_definitions,
-    tool,
-)
 from buttermilk._core.schema_validation import (
     SchemaValidationError,
     SchemaValidator,
@@ -25,7 +14,6 @@ from buttermilk._core.schema_validation import (
 )
 from buttermilk._core.tool_definition import (
     AgentToolDefinition,
-    MCPServerConfig,
 )
 
 
@@ -43,7 +31,6 @@ class TestAgentToolDefinition:
         
         assert tool_def.name == "test_tool"
         assert tool_def.description == "A test tool"
-        assert tool_def.mcp_route is None
         assert tool_def.permissions == []
     
     def test_tool_definition_with_mcp_route(self):
@@ -53,11 +40,9 @@ class TestAgentToolDefinition:
             description="Analyze data",
             input_schema={"type": "object"},
             output_schema={"type": "object"},
-            mcp_route="/analyze",
             permissions=["read:data"],
         )
-        
-        assert tool_def.mcp_route == "/analyze"
+
         assert tool_def.permissions == ["read:data"]
     
     def test_to_autogen_schema(self):
@@ -78,120 +63,6 @@ class TestAgentToolDefinition:
         assert schema["function"]["name"] == "test_tool"
         assert schema["function"]["description"] == "A test tool"
         assert schema["function"]["parameters"] == tool_def.input_schema
-
-    def test_to_mcp_route_definition(self):
-        """Test conversion to MCP route definition."""
-        tool_def = AgentToolDefinition(
-            name="analyze",
-            description="Analyze data",
-            input_schema={"type": "object"},
-            output_schema={"type": "object"},
-            mcp_route="/api/analyze",
-            permissions=["read", "write"],
-        )
-        
-        route_def = tool_def.to_mcp_route_definition()
-        assert route_def is not None
-        assert route_def["path"] == "/api/analyze"
-        assert route_def["method"] == "POST"
-        assert route_def["handler"] == "analyze"
-        assert route_def["permissions"] == ["read", "write"]
-    
-    def test_to_mcp_route_definition_none(self):
-        """Test MCP route definition when no route specified."""
-        tool_def = AgentToolDefinition(
-            name="test",
-            description="Test",
-            input_schema={},
-            output_schema={},
-        )
-        
-        assert tool_def.to_mcp_route_definition() is None
-
-
-class TestMCPServerConfig:
-    """Test MCPServerConfig class."""
-    
-    def test_default_config(self):
-        """Test default server configuration."""
-        config = MCPServerConfig()
-        assert config.mode == "embedded"
-        assert config.port == 8787
-        assert config.auth_required is True
-        assert config.allowed_origins == ["*"]
-    
-    def test_daemon_mode(self):
-        """Test daemon mode configuration."""
-        config = MCPServerConfig(
-            mode="daemon",
-            port=9000,
-            auth_required=False,
-            allowed_origins=["http://localhost:3000"]
-        )
-        assert config.mode == "daemon"
-        assert config.port == 9000
-        assert config.auth_required is False
-        assert config.allowed_origins == ["http://localhost:3000"]
-
-
-class TestDecorators:
-    """Test tool and MCPRoute decorators."""
-
-    def test_tool_decorator_basic(self):
-        """Test basic tool decorator."""
-
-        @tool
-        def my_tool(x: int, y: int) -> int:
-            """Add two numbers."""
-            return x + y
-
-        assert hasattr(my_tool, "_tool_metadata")
-        assert my_tool._tool_metadata["name"] == "my_tool"
-        assert my_tool._tool_metadata["description"] == "Add two numbers."
-        assert my_tool._tool_metadata["include_in_mcp"] is True
-
-    def test_tool_decorator_with_args(self):
-        """Test tool decorator with arguments."""
-
-        @tool(name="custom_name", description="Custom description", include_in_mcp=False)
-        def my_tool(x: int) -> int:
-            return x * 2
-
-        assert my_tool._tool_metadata["name"] == "custom_name"
-        assert my_tool._tool_metadata["description"] == "Custom description"
-        assert my_tool._tool_metadata["include_in_mcp"] is False
-
-    def test_mcp_route_decorator(self):
-        """Test MCPRoute decorator."""
-
-        @MCPRoute("/compute", permissions=["execute"], description="Compute result")
-        def compute(a: float, b: float) -> float:
-            return a * b
-
-        assert hasattr(compute, "_mcp_route")
-        assert compute._mcp_route["path"] == "/compute"
-        assert compute._mcp_route["permissions"] == ["execute"]
-        assert compute._mcp_route["description"] == "Compute result"
-        assert compute._mcp_route["include_in_tools"] is True
-
-    def test_type_to_json_schema(self):
-        """Test type conversion to JSON schema."""
-        # Basic types
-        assert _type_to_json_schema(str) == {"type": "string"}
-        assert _type_to_json_schema(int) == {"type": "integer"}
-        assert _type_to_json_schema(float) == {"type": "number"}
-        assert _type_to_json_schema(bool) == {"type": "boolean"}
-        assert _type_to_json_schema(list) == {"type": "array"}
-        assert _type_to_json_schema(dict) == {"type": "object"}
-
-        # None type
-        assert _type_to_json_schema(type(None)) == {"type": "null"}
-
-        # List with type parameter
-        from typing import List
-
-        schema = _type_to_json_schema(List[str])
-        assert schema == {"type": "array", "items": {"type": "string"}}
 
 
 class TestSchemaValidation:
@@ -276,78 +147,3 @@ class TestSchemaValidation:
         # Invalid input
         with pytest.raises(SchemaValidationError):
             validate_tool_input(schema, {"x": "not a number"})
-
-
-class TestAgentToolGeneration:
-    """Test tool generation from agents."""
-
-    def test_extract_tools_from_agent(self):
-        """Test extracting tool definitions from an agent."""
-
-        class TestAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
-                return AgentOutput(source="test", role="test", outputs={})
-
-            @tool
-            def simple_tool(self, text: str) -> str:
-                """Process text."""
-                return text.upper()
-
-            @MCPRoute("/analyze")
-            async def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
-                """Analyze data."""
-                return {"result": "analyzed"}
-
-            def _private_method(self):
-                """Should not be included."""
-                pass
-
-            def public_method_no_decorator(self):
-                """Should not be included without decorator."""
-                pass
-
-        agent = TestAgent(agent_name="test", model_name="test", role="test")
-        tools = extract_tool_definitions(agent)
-
-        assert len(tools) == 2
-
-        # Check simple_tool
-        simple_tool_def = next(t for t in tools if t.name == "simple_tool")
-        assert simple_tool_def.description == "Process text."
-        assert simple_tool_def.mcp_route == "/simple_tool"
-        assert "text" in simple_tool_def.input_schema["properties"]
-
-        # Check analyze tool
-        analyze_def = next(t for t in tools if t.name == "analyze")
-        assert analyze_def.description == "Analyze data."
-        assert analyze_def.mcp_route == "/analyze"
-        assert "data" in analyze_def.input_schema["properties"]
-
-    def test_agent_get_tool_definitions(self):
-        """Test Agent.get_tool_definitions() method."""
-
-        class CalculatorAgent(Agent):
-            async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
-                return AgentOutput(source="calc", role="calc", outputs={})
-
-            @tool(name="add", description="Add two numbers")
-            def add(self, a: float, b: float) -> float:
-                return a + b
-
-            @tool(include_in_mcp=False)
-            def subtract(self, a: float, b: float) -> float:
-                """Subtract b from a."""
-                return a - b
-
-        agent = CalculatorAgent(agent_name="calc", model_name="calc", role="calculator")
-        tools = agent.get_tool_definitions()
-
-        assert len(tools) == 2
-
-        add_tool = next(t for t in tools if t.name == "add")
-        assert add_tool.description == "Add two numbers"
-        assert add_tool.mcp_route == "/add"
-
-        subtract_tool = next(t for t in tools if t.name == "subtract")
-        assert subtract_tool.description == "Subtract b from a."
-        assert subtract_tool.mcp_route is None  # include_in_mcp=False

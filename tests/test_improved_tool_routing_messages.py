@@ -1,11 +1,12 @@
 """Test improved tool routing messages in HostAgent and StructuredLLMHostAgent."""
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from autogen_core import FunctionCall
 
-from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 
 class TestImprovedToolRoutingMessages:
@@ -116,16 +117,16 @@ class TestImprovedToolRoutingMessages:
 
         # Test multiple different tools (few)
         tool_calls = [
-            FunctionCall(id="9", name="search", arguments='{}'),
-            FunctionCall(id="10", name="analyze", arguments='{}'),
-            FunctionCall(id="11", name="report", arguments='{}')
+            FunctionCall(id="9", name="search", arguments="{}"),
+            FunctionCall(id="10", name="analyze", arguments="{}"),
+            FunctionCall(id="11", name="report", arguments="{}")
         ]
         summary = agent._create_tool_call_summary(tool_calls)
         assert summary == "Calling: search, analyze, report"
 
         # Test many different tools
         tool_calls = [
-            FunctionCall(id=str(i), name=f"tool_{i}", arguments='{}')
+            FunctionCall(id=str(i), name=f"tool_{i}", arguments="{}")
             for i in range(12, 20)
         ]
         summary = agent._create_tool_call_summary(tool_calls)
@@ -160,8 +161,8 @@ class TestImprovedToolRoutingMessages:
             ]
 
             # Mock the necessary methods
-            with patch.object(agent, '_model_client') as mock_client, \
-                 patch.object(agent, '_route_tool_calls_to_agents', new_callable=AsyncMock):
+            with patch.object(agent, "_model_client") as mock_client, \
+                 patch.object(agent, "_route_tool_calls_to_agents", new_callable=AsyncMock):
 
                 mock_client.create = AsyncMock(return_value=mock_create_result)
 

@@ -1,14 +1,13 @@
 """Tests for type-specific storage configuration schemas."""
 
 import pytest
+
 from buttermilk._core.storage_config import (
-    BaseStorageConfig,
-    BigQueryStorageConfig, 
+    BigQueryStorageConfig,
     FileStorageConfig,
-    VectorStorageConfig,
-    HuggingFaceStorageConfig,
     GeneratorStorageConfig,
-    StorageFactory
+    HuggingFaceStorageConfig,
+    VectorStorageConfig,
 )
 
 
@@ -26,25 +25,25 @@ class TestTypeSpecificStorageConfigs:
         )
         
         # Should have vector-specific fields
-        assert hasattr(config, 'persist_directory')
-        assert hasattr(config, 'collection_name') 
-        assert hasattr(config, 'embedding_model')
-        assert hasattr(config, 'dimensionality')
-        assert hasattr(config, 'multi_field_embedding')
+        assert hasattr(config, "persist_directory")
+        assert hasattr(config, "collection_name")
+        assert hasattr(config, "embedding_model")
+        assert hasattr(config, "dimensionality")
+        assert hasattr(config, "multi_field_embedding")
         
         # Should NOT have file-specific fields
-        assert not hasattr(config, 'glob')
-        assert not hasattr(config, 'index')
+        assert not hasattr(config, "glob")
+        assert not hasattr(config, "index")
         
         # Should NOT have BigQuery-specific fields
-        assert not hasattr(config, 'project_id')
-        assert not hasattr(config, 'dataset_id')
-        assert not hasattr(config, 'table_id')
-        assert not hasattr(config, 'clustering_fields')
-        assert not hasattr(config, 'last_n_days')
+        assert not hasattr(config, "project_id")
+        assert not hasattr(config, "dataset_id")
+        assert not hasattr(config, "table_id")
+        assert not hasattr(config, "clustering_fields")
+        assert not hasattr(config, "last_n_days")
         
         # Should NOT have HuggingFace-specific fields
-        assert not hasattr(config, 'split')
+        assert not hasattr(config, "split")
         
     def test_file_config_has_relevant_fields_only(self):
         """File configs should only have file-specific fields."""
@@ -55,57 +54,57 @@ class TestTypeSpecificStorageConfigs:
         )
         
         # Should have file-specific fields
-        assert hasattr(config, 'path')
-        assert hasattr(config, 'glob')
-        assert hasattr(config, 'max_records_per_group')
-        assert hasattr(config, 'index')
+        assert hasattr(config, "path")
+        assert hasattr(config, "glob")
+        assert hasattr(config, "max_records_per_group")
+        assert hasattr(config, "index")
         
         # Should NOT have vector-specific fields
-        assert not hasattr(config, 'persist_directory')
-        assert not hasattr(config, 'collection_name')
-        assert not hasattr(config, 'embedding_model')
-        assert not hasattr(config, 'dimensionality')
-        assert not hasattr(config, 'multi_field_embedding')
+        assert not hasattr(config, "persist_directory")
+        assert not hasattr(config, "collection_name")
+        assert not hasattr(config, "embedding_model")
+        assert not hasattr(config, "dimensionality")
+        assert not hasattr(config, "multi_field_embedding")
         
         # Should NOT have BigQuery-specific fields
-        assert not hasattr(config, 'project_id')
-        assert not hasattr(config, 'dataset_id') 
-        assert not hasattr(config, 'table_id')
-        assert not hasattr(config, 'clustering_fields')
-        assert not hasattr(config, 'last_n_days')
+        assert not hasattr(config, "project_id")
+        assert not hasattr(config, "dataset_id")
+        assert not hasattr(config, "table_id")
+        assert not hasattr(config, "clustering_fields")
+        assert not hasattr(config, "last_n_days")
         
     def test_bigquery_config_has_relevant_fields_only(self):
         """BigQuery configs should only have BigQuery-specific fields."""
         config = BigQueryStorageConfig(
             type="bigquery",
             project_id="test-project",
-            dataset_id="test_dataset", 
+            dataset_id="test_dataset",
             table_id="test_table"
         )
         
         # Should have BigQuery-specific fields
-        assert hasattr(config, 'project_id')
-        assert hasattr(config, 'dataset_id')
-        assert hasattr(config, 'table_id')
-        assert hasattr(config, 'clustering_fields')
-        assert hasattr(config, 'max_records_per_group')
-        assert hasattr(config, 'last_n_days')
-        assert hasattr(config, 'join')
-        assert hasattr(config, 'agg')
-        assert hasattr(config, 'group')
-        assert hasattr(config, 'full_table_id')
+        assert hasattr(config, "project_id")
+        assert hasattr(config, "dataset_id")
+        assert hasattr(config, "table_id")
+        assert hasattr(config, "clustering_fields")
+        assert hasattr(config, "max_records_per_group")
+        assert hasattr(config, "last_n_days")
+        assert hasattr(config, "join")
+        assert hasattr(config, "agg")
+        assert hasattr(config, "group")
+        assert hasattr(config, "full_table_id")
         
         # Should NOT have file-specific fields
-        assert not hasattr(config, 'path')
-        assert not hasattr(config, 'glob')
-        assert not hasattr(config, 'index')
+        assert not hasattr(config, "path")
+        assert not hasattr(config, "glob")
+        assert not hasattr(config, "index")
         
         # Should NOT have vector-specific fields
-        assert not hasattr(config, 'persist_directory')
-        assert not hasattr(config, 'collection_name')
-        assert not hasattr(config, 'embedding_model')
-        assert not hasattr(config, 'dimensionality')
-        assert not hasattr(config, 'multi_field_embedding')
+        assert not hasattr(config, "persist_directory")
+        assert not hasattr(config, "collection_name")
+        assert not hasattr(config, "embedding_model")
+        assert not hasattr(config, "dimensionality")
+        assert not hasattr(config, "multi_field_embedding")
         
     def test_huggingface_config_has_relevant_fields_only(self):
         """HuggingFace configs should only have HF-specific fields."""
@@ -116,63 +115,63 @@ class TestTypeSpecificStorageConfigs:
         )
         
         # Should have HuggingFace-specific fields
-        assert hasattr(config, 'dataset_id')
-        assert hasattr(config, 'split')
+        assert hasattr(config, "dataset_id")
+        assert hasattr(config, "split")
         
         # Should NOT have vector-specific fields
-        assert not hasattr(config, 'persist_directory')
-        assert not hasattr(config, 'collection_name')
-        assert not hasattr(config, 'embedding_model')
-        assert not hasattr(config, 'dimensionality')
-        assert not hasattr(config, 'multi_field_embedding')
+        assert not hasattr(config, "persist_directory")
+        assert not hasattr(config, "collection_name")
+        assert not hasattr(config, "embedding_model")
+        assert not hasattr(config, "dimensionality")
+        assert not hasattr(config, "multi_field_embedding")
         
         # Should NOT have file-specific fields
-        assert not hasattr(config, 'path')
-        assert not hasattr(config, 'glob')
+        assert not hasattr(config, "path")
+        assert not hasattr(config, "glob")
         
     def test_storage_factory_handles_type_specific_configs(self):
         """StorageFactory should handle new type-specific configs."""
         
         # Test with dict input (OmegaConf format)
         chromadb_dict = {
-            'type': 'chromadb',
-            'persist_directory': './data/chromadb',
-            'collection_name': 'test',
-            'embedding_model': 'gemini-embedding-001',
-            'dimensionality': 3072
+            "type": "chromadb",
+            "persist_directory": "./data/chromadb",
+            "collection_name": "test",
+            "embedding_model": "gemini-embedding-001",
+            "dimensionality": 3072
         }
         
         file_dict = {
-            'type': 'file', 
-            'path': './data/files',
-            'glob': '**/*.json'
+            "type": "file",
+            "path": "./data/files",
+            "glob": "**/*.json"
         }
         
         bigquery_dict = {
-            'type': 'bigquery',
-            'project_id': 'test-project',
-            'dataset_id': 'test_dataset',
-            'table_id': 'test_table'
+            "type": "bigquery",
+            "project_id": "test-project",
+            "dataset_id": "test_dataset",
+            "table_id": "test_table"
         }
         
         # These should not raise exceptions
         try:
             # Note: We can't actually create storage instances without dependencies
             # but we can test that the config conversion works
-            storage_type = chromadb_dict['type']
-            if storage_type in ['chromadb', 'vector']:
+            storage_type = chromadb_dict["type"]
+            if storage_type in ["chromadb", "vector"]:
                 config = VectorStorageConfig(**chromadb_dict)
-                assert config.type == 'chromadb'
+                assert config.type == "chromadb"
                 
-            storage_type = file_dict['type']  
-            if storage_type in ['file', 'local', 'gcs', 's3', 'plaintext']:
+            storage_type = file_dict["type"]
+            if storage_type in ["file", "local", "gcs", "s3", "plaintext"]:
                 config = FileStorageConfig(**file_dict)
-                assert config.type == 'file'
+                assert config.type == "file"
                 
-            storage_type = bigquery_dict['type']
-            if storage_type == 'bigquery':
+            storage_type = bigquery_dict["type"]
+            if storage_type == "bigquery":
                 config = BigQueryStorageConfig(**bigquery_dict)
-                assert config.type == 'bigquery'
+                assert config.type == "bigquery"
                 
         except Exception as e:
             pytest.fail(f"StorageFactory config conversion failed: {e}")
@@ -188,8 +187,8 @@ class TestTypeSpecificStorageConfigs:
         ]
         
         common_fields = [
-            'type', 'dataset_name', 'randomize', 'batch_size', 'auto_create',
-            'filter', 'columns', 'limit', 'name', 'schema_path', 'uri', 'db'
+            "type", "dataset_name", "randomize", "batch_size", "auto_create",
+            "filter", "columns", "limit", "name", "schema_path", "uri", "db"
         ]
         
         for config in configs:
@@ -201,7 +200,7 @@ class TestTypeSpecificStorageConfigs:
         
         # Valid types should work
         VectorStorageConfig(type="chromadb")
-        VectorStorageConfig(type="vector") 
+        VectorStorageConfig(type="vector")
         FileStorageConfig(type="file")
         FileStorageConfig(type="local")
         FileStorageConfig(type="gcs")

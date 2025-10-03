@@ -78,7 +78,7 @@ class TestRecordContentValidation:
         # Case 2: Content field gets None due to wrong source field
         with pytest.raises(ValidationError, match="Input should be a valid string|Input should be an instance of Sequence"):
             Record(
-                record_id="test-id", 
+                record_id="test-id",
                 content=None,  # Would happen if JSON field name is wrong
                 metadata={
                     "title": "Test Document",
@@ -124,10 +124,10 @@ class TestRecordContentValidation:
         
         # Valid case should work
         record = Record(
-            record_id="OSB-123", 
+            record_id="OSB-123",
             content="This is substantial content that can be chunked into multiple pieces. " * 30,
             metadata={
-                "title": "Some Document", 
+                "title": "Some Document",
                 "summary": "Document summary"
             }
         )
@@ -140,7 +140,7 @@ class TestRecordFieldCounts:
     
     def test_record_has_reasonable_field_count(self):
         """Test that Record doesn't have too many fields."""
-        record = Record(content="test")
+        Record(content="test")
         
         # Get all actual fields (not computed properties)
         actual_fields = set(Record.model_fields.keys())
@@ -184,7 +184,7 @@ class TestStructuredDataHandling:
                 "case_content": "The first post included a picture showing weapons...",
                 "result": "leave up",
                 "type": "summary",
-                "location": "Somalia", 
+                "location": "Somalia",
                 "case_date": "2023-11-22",
                 "topics": ["War and conflict", "Dangerous individuals and organizations"],
                 "standards": ["Dangerous Individuals and Organizations policy"],

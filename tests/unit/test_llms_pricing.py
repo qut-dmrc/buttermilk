@@ -68,7 +68,7 @@ class TestAutoGenWrapperPricing:
 
         # Create wrapper with proper model info
         wrapper = AutoGenWrapper(
-            client=mock_client,
+            client_factory=lambda: mock_client,
             model_info=model_info,
             litellm_model_name="openai/gpt-4"
         )
@@ -131,7 +131,7 @@ class TestAutoGenWrapperPricing:
 
         # Create wrapper
         wrapper = AutoGenWrapper(
-            client=mock_client,
+            client_factory=lambda: mock_client,
             model_info=model_info,
             litellm_model_name="openai/gpt-4"
         )
@@ -183,7 +183,7 @@ class TestAutoGenWrapperPricing:
 
         # Create wrapper
         wrapper = AutoGenWrapper(
-            client=mock_client,
+            client_factory=lambda: mock_client,
             model_info=model_info,
             litellm_model_name="openai/gpt-4"
         )
@@ -327,7 +327,7 @@ class TestLiteLLMIntegration:
     """Test that generated model names actually work with litellm cost_per_token."""
 
     @pytest.mark.skipif(
-        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
         reason="litellm not available"
     )
     def test_gemini_vertex_openai_litellm_compatibility(self):
@@ -354,7 +354,7 @@ class TestLiteLLMIntegration:
             pytest.fail(f"litellm cost_per_token failed for {resolved_name}: {e}")
 
     @pytest.mark.skipif(
-        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
         reason="litellm not available"
     )
     def test_gemini_models_litellm_compatibility(self):
@@ -383,7 +383,7 @@ class TestLiteLLMIntegration:
                 pytest.fail(f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}")
 
     @pytest.mark.skipif(
-        not hasattr(__import__('litellm.cost_calculator', fromlist=['cost_per_token']), 'cost_per_token'),
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
         reason="litellm not available"
     )
     def test_bad_model_names_should_fail(self):

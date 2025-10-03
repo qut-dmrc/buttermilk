@@ -32,6 +32,8 @@ from tenacity import (  # Retry library components
     wait_exponential_jitter,
 )
 
+from buttermilk._core.exceptions import StorageError
+
 
 # Use deferred import to avoid circular references if this module is imported early
 def get_bm() -> Any:  # Return type should be 'BM' from bm_init.py if type hint is resolvable
@@ -44,8 +46,9 @@ def get_bm() -> Any:  # Return type should be 'BM' from bm_init.py if type hint 
         Any: The Buttermilk global instance (`bm`).
 
     """
-    from buttermilk._core.bm_init import get_bm as _get_bm  # Actual import of get_bm
-    return _get_bm()
+    from buttermilk import bm
+
+    return bm
 
 
 from .._core.log import logger  # Centralized logger
@@ -520,7 +523,7 @@ def upload_rows(
         logger.error(err_msg)
         raise OSError(err_msg) from e
 
-    logger.debug(f"Inserting {len(bq_prepared_rows)} rows into BigQuery table {final_dataset}.")
+    logger.debug(f"Inserting {len(bq_prepared_rows)} rows into BigQuery table {final_dataset}.", n_rows=len(bq_prepared_rows), table=final_dataset)
 
     all_errors = []
     for row_chunk in chunks(bq_prepared_rows, 100):  # Process in chunks of 100 rows
@@ -529,11 +532,13 @@ def upload_rows(
             all_errors.extend(chunk_errors)
 
     if not all_errors:
-        logger.info(f"Successfully pushed {len(bq_prepared_rows)} rows to BigQuery table {final_dataset}.")
+        logger.info(
+            f"Successfully pushed {len(bq_prepared_rows)} rows to BigQuery table {final_dataset}.", n_rows=len(bq_prepared_rows), table=final_dataset
+        )
     else:
         error_summary = str(all_errors)[:1000]  # Limit error string length for logging
-        logger.error(f"Errors during BigQuery upload to {final_dataset}: {all_errors}")
-        raise OSError(f"Google BigQuery returned errors during upload to {final_dataset}: {error_summary}")
+        logger.error(f"Errors during BigQuery upload to {final_dataset}: {error_summary}", table=final_dataset, errors=error_summary)
+        raise StorageError(f"Google BigQuery returned errors during upload to {final_dataset}: {error_summary}")
 
     return final_dataset
 

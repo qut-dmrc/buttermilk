@@ -161,7 +161,7 @@ class FrameAnalysisResults(BaseModel):
         if self.statements:
             statement_parts = []
             for stmt in self.statements[:3]:  # Show first 3 statements
-                statement_parts.append(f"- {stmt.speaker_name}: \"{stmt.statement[:100]}...\"")
+                statement_parts.append(f'- {stmt.speaker_name}: "{stmt.statement[:100]}..."')
             statements_str = "\n".join(statement_parts)
             if len(self.statements) > 3:
                 statements_str += f"\n- ... and {len(self.statements) - 3} more statements"
@@ -183,8 +183,8 @@ class FrameAnalysisResults(BaseModel):
         includes the full header. Otherwise returns the summary.
         """
         # Check if agent context is available (set by AgentTrace)
-        agent_id = getattr(self, '_agent_id', None)
-        call_id = getattr(self, '_call_id', None)
+        agent_id = getattr(self, "_agent_id", None)
+        call_id = getattr(self, "_call_id", None)
         
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)

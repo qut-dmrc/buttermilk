@@ -33,7 +33,7 @@ class TestDataService:
     @pytest.mark.anyio
     async def test_get_record_by_id_found(self, real_flow_runner, real_bm):
         """Test getting a record that exists"""
-        with pytest.MonkeyPatch().context() as m:
+        with pytest.MonkeyPatch().context():
             # Mock the data loader
             mock_record = Mock()
             mock_record.record_id = "test_record_1"
@@ -54,7 +54,7 @@ class TestDataService:
     @pytest.mark.anyio
     async def test_get_record_by_id_not_found(self, real_flow_runner, real_bm):
         """Test getting a record that doesn't exist"""
-        with pytest.MonkeyPatch().context() as m:
+        with pytest.MonkeyPatch().context():
             mock_storage = Mock()
             mock_storage.__iter__ = Mock(return_value=iter([]))  # Empty storage
             
@@ -67,7 +67,7 @@ class TestDataService:
     @pytest.mark.anyio
     async def test_get_records_for_flow_without_scores(self, real_flow_runner, real_bm):
         """Test getting records list without scores"""
-        with pytest.MonkeyPatch().context() as m:
+        with pytest.MonkeyPatch().context():
             mock_record = Mock()
             mock_record.record_id = "test_record_1"
             mock_record.title = "Test Record"
@@ -87,7 +87,7 @@ class TestDataService:
     @pytest.mark.anyio
     async def test_get_records_for_flow_with_scores(self, real_flow_runner, real_bm):
         """Test getting records list with scores"""
-        with pytest.MonkeyPatch().context() as m:
+        with pytest.MonkeyPatch().context():
             mock_record = Mock()
             mock_record.record_id = "test_record_1"
             mock_record.title = "Test Record"

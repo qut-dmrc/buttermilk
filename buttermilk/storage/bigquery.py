@@ -1,18 +1,19 @@
 """BigQuery storage implementation for unified storage operations."""
 
-import json
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import shortuuid
 from google.cloud import bigquery
 from pydantic import BaseModel
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import unwrap_numpy_arrow_types
 
-from .base import Storage, StorageClient, StorageError
+from .base import Storage, StorageClient
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -102,16 +103,21 @@ class BigQueryStorage(Storage, StorageClient):
             self._table = self.client.get_table(table_ref)
         return self._table
 
-    def __iter__(self) -> Iterator[Record]:
+    def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over records from BigQuery table.
 
         Yields:
-            Record objects from the table
+            BaseRecord objects from the table (Record, Title, or other subclasses)
 
         """
         try:
-            query = self._build_select_query()
-            job_config = self._build_query_job_config()
+            # Use custom query if provided
+            if self.config.custom_query:
+                query = self.config.custom_query.replace("{table}", f"`{self.get_table_ref()}`")
+                job_config = None  # Custom query handles its own parameters
+            else:
+                query = self._build_select_query()
+                job_config = self._build_query_job_config()
 
             logger.info(f"Loading records from {self.get_table_ref()} for dataset '{self.config.dataset_name}'")
 
@@ -181,17 +187,26 @@ class BigQueryStorage(Storage, StorageClient):
                 raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
-            logger.error(f"Error saving records to BigQuery: {e}")
-            raise StorageError(f"Failed to save to BigQuery: {e}") from e
+            logger.error(
+                "Failed to save records to BigQuery",
+                extra={
+                    "table": self.get_table_ref(),
+                    "dataset_name": self.config.dataset_name,
+                    "num_records": len(records) if isinstance(records, list) else 1,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to save to BigQuery table {self.get_table_ref()}: {e}") from e
 
-    def get_record_by_id(self, record_id: str) -> Record | None:
+    def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by ID using a parameterized BigQuery query.
 
         Args:
             record_id: The unique identifier of the record to retrieve.
 
         Returns:
-            Record if found, otherwise None.
+            BaseRecord if found, otherwise None.
 
         Raises:
             StorageError: If query fails or essential columns are missing.
@@ -331,9 +346,9 @@ class BigQueryStorage(Storage, StorageClient):
         # Validate schema on first use
         self._validate_schema()
 
-        try:
-            table_id = self.get_table_ref()
+        table_id = self.get_table_ref()
 
+        try:
             # CRITICAL: Require explicit schema - no implicit defaults
             expected_schema = self.get_schema()
             if not expected_schema:
@@ -342,22 +357,67 @@ class BigQueryStorage(Storage, StorageClient):
                 )
 
             if self.exists():
-                # CRITICAL: Never modify existing tables
-                logger.debug(f"Table {table_id} already exists. Skipping creation. BigQuery storage will not modify existing tables. If schema changes are needed, handle them manually.",
-                )
                 return
 
             # Create new table
             table = bigquery.Table(table_id, schema=expected_schema)
-            table.clustering_fields = self.config.clustering_fields or ["dataset_name", "record_id"]
+
+            # Determine clustering fields based on what's actually in the schema
+            schema_field_names = {field.name for field in expected_schema}
+
+            # Use configured clustering fields if provided, otherwise determine based on schema
+            if self.config.clustering_fields:
+                # Validate configured clustering fields exist in schema
+                valid_clustering_fields = [
+                    field for field in self.config.clustering_fields
+                    if field in schema_field_names
+                ]
+                if valid_clustering_fields != self.config.clustering_fields:
+                    invalid_fields = set(self.config.clustering_fields) - set(valid_clustering_fields)
+                    logger.warning(
+                        "Some clustering fields not found in schema",
+                        extra={
+                            "table": table_id,
+                            "requested_fields": self.config.clustering_fields,
+                            "valid_fields": valid_clustering_fields,
+                            "invalid_fields": list(invalid_fields)
+                        }
+                    )
+                table.clustering_fields = valid_clustering_fields if valid_clustering_fields else None
+            else:
+                # Auto-determine clustering fields based on common fields in schema
+                default_clustering = []
+                for field in ["dataset_name", "record_id"]:
+                    resolved_field = self._resolve_column(field)
+                    if resolved_field in schema_field_names:
+                        default_clustering.append(resolved_field)
+
+                table.clustering_fields = default_clustering if default_clustering else None
+
             table.description = f"Buttermilk table for dataset '{self.config.dataset_name}'"
 
             table = self.client.create_table(table, exists_ok=True)
-            logger.info(f"Created BigQuery table: {table_id}")
+            logger.info(
+                "Created BigQuery table",
+                extra={
+                    "table": table_id,
+                    "dataset_name": self.config.dataset_name,
+                    "clustering_fields": table.clustering_fields,
+                    "num_fields": len(expected_schema)
+                }
+            )
 
         except Exception as e:
-            logger.error(f"Error creating/updating BigQuery table: {e}")
-            raise StorageError(f"Failed to create/update table: {e}") from e
+            logger.error(
+                "Failed to create BigQuery table",
+                extra={
+                    "table": table_id,
+                    "dataset_name": self.config.dataset_name,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise StorageError(f"Failed to create table {table_id}: {e}") from e
 
     def _build_select_query(self) -> str:
         """Build SQL query for selecting records."""
@@ -402,6 +462,7 @@ class BigQueryStorage(Storage, StorageClient):
         """Build WHERE clause (without the 'WHERE' keyword). Returns empty string if none.
 
         Avoids referencing columns that don't exist. Uses named parameters @dataset_name and @split_type.
+        Includes custom_where clause if provided.
         """
         clauses: list[str] = []
 
@@ -409,7 +470,7 @@ class BigQueryStorage(Storage, StorageClient):
         split_col = self._resolve_column("split_type")
 
         # Dataset filter only if column exists
-        if dataset_col in available_cols or not available_cols:
+        if self.config.dataset_name and (dataset_col in available_cols or not available_cols):
             clauses.append(f"{dataset_col} = @dataset_name")
         else:
             logger.warning(
@@ -428,6 +489,11 @@ class BigQueryStorage(Storage, StorageClient):
         for key, value in self.config.filter.items():
             clauses.append(f"{key} = '{value}'" if isinstance(value, str) else f"{key} = {value}")
 
+        # Add custom WHERE clause if provided
+        if self.config.custom_where:
+            # Wrap custom clause in parentheses for safety
+            clauses.append(f"({self.config.custom_where})")
+
         return " AND ".join(clauses)
 
     def _build_query_job_config(self) -> bigquery.QueryJobConfig:
@@ -443,32 +509,39 @@ class BigQueryStorage(Storage, StorageClient):
 
         return bigquery.QueryJobConfig(query_parameters=parameters)
 
-    def _parse_record(self, row: bigquery.Row) -> Record:
-        """Parse a BigQuery row into a Record object."""
+    def _parse_record(self, row: bigquery.Row) -> BaseRecord:
+        """Parse a BigQuery row into a BaseRecord object.
+
+        Leverages Pydantic's validation to handle JSON parsing and defaults.
+        """
         # Convert row to dictionary
         row_dict = dict(row.items())
 
         # Unwrap numpy/arrow types if present
-        # This is necessary because BigQuery can return numpy/arrow types in the row data
         row_dict = unwrap_numpy_arrow_types(row_dict)
 
         # Apply column mapping if specified
         if self.config.columns:
-            for new_name, old_name in self.config.columns.items():
-                row_dict[new_name] = row_dict[old_name]
+            for logical, physical in self.config.columns.items():
+                if physical in row_dict and physical != logical:
+                    row_dict[logical] = row_dict.pop(physical)
 
-        # Parse JSON fields - metadata and ground_truth are stored as JSON strings in BigQuery
-        metadata = json.loads(row_dict["metadata"]) if isinstance(row_dict["metadata"], str) else row_dict["metadata"]
+        # Add config defaults if not present in row
+        if "dataset_name" not in row_dict:
+            row_dict["dataset_name"] = self.config.dataset_name
+        if "split_type" not in row_dict:
+            row_dict["split_type"] = self.config.split_type
 
-        ground_truth = None
-        if row_dict.get("ground_truth"):
-            ground_truth = json.loads(row_dict["ground_truth"]) if isinstance(row_dict["ground_truth"], str) else row_dict["ground_truth"]
-
-        # Create Record object from row data
-        return Record(
-            record_id=row_dict["record_id"],
-            content=row_dict["content"],
-            metadata=metadata,
-            ground_truth=ground_truth,
-            mime=row_dict.get("mime", "text/plain"),
-        )
+        # Let Pydantic handle all validation, JSON parsing, and type conversion
+        try:
+            return self._create_record(**row_dict)
+        except Exception as e:
+            # If record creation fails, create minimal valid Record for debugging
+            logger.warning(f"Failed to create record from row data: {e}")
+            return Record(
+                record_id=str(row_dict.get("record_id", shortuuid.uuid())),
+                dataset_name=str(row_dict.get("dataset_name", self.config.dataset_name or "default")),
+                split_type=str(row_dict.get("split_type", self.config.split_type or "default")),
+                metadata={"parse_error": str(e), "raw_data": str(row_dict)[:1000]},
+                content=f"Failed to parse record: {e}",
+            )

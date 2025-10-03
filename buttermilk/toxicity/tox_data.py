@@ -9,12 +9,13 @@ import cloudpathlib as cp
 import pandas as pd
 from cloudpathlib import CloudPath
 from datasets import load_dataset
-from torch.utils.data.datapipes.datapipe import IterDataPipe
 
+from buttermilk import logger
 from buttermilk._core.types import Record
 
 
-class ToxicPipe(IterDataPipe):
+# this used to be an iterdatapipe, but that's not supported anymore.
+class ToxicPipe:
     source: str
 
 

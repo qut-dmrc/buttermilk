@@ -4,8 +4,8 @@ Tests the dependency injection mechanism for session-scoped BM instances
 without requiring full infrastructure setup.
 """
 
-import pytest
 from unittest.mock import Mock
+
 from buttermilk.runner.flowrunner import FlowRunner
 
 
@@ -24,14 +24,14 @@ class TestBMInjectionMechanism:
         """Test that FlowRunner can store and retrieve session-scoped BM."""
         # Create FlowRunner without BM
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.real_bm is None
+        assert runner.bm is None
         
         # Create mock session BM
         session_bm = MockBM("test-session-123")
         
         # Inject session BM
         runner.set_session_bm(session_bm)
-        assert runner.real_bm is session_bm
+        assert runner.bm is session_bm
         
         # Verify get_effective_bm returns session BM
         effective_bm = runner.get_effective_bm()
@@ -41,7 +41,7 @@ class TestBMInjectionMechanism:
     def test_flowrunner_fallback_to_global(self, real_bm):
         """Test that FlowRunner falls back to global BM when no session BM is set."""
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.real_bm is None
+        assert runner.bm is None
         
         # get_effective_bm should return the global BM (mock from fixture)
         effective_bm = runner.get_effective_bm()
@@ -79,7 +79,7 @@ class TestRealBMIntegration:
         # Verify injection worked
         effective_bm = runner.get_effective_bm()
         assert effective_bm is real_bm
-        assert hasattr(effective_bm, 'session_info')
+        assert hasattr(effective_bm, "session_info")
         assert effective_bm.session_info.session_id  # Should have a session ID
     
     def test_backward_compatibility_with_global_bm(self, real_bm):
@@ -92,7 +92,7 @@ class TestRealBMIntegration:
         
         # FlowRunner without session BM should fall back to this global one
         runner = FlowRunner(flows={}, mode="test")
-        assert runner.real_bm is None
+        assert runner.bm is None
         
         effective_bm = runner.get_effective_bm()
         assert effective_bm is global_bm

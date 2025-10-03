@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, Iterator
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
 
+from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord, Record
 
-from .base import Storage, StorageError
+from .base import Storage
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -36,11 +37,11 @@ class FileStorage(Storage):
 
         self.path = AnyPath(config.path)
 
-    def __iter__(self) -> Iterator[Record]:
+    def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over records from file.
-        
+
         Yields:
-            Record objects from the file
+            BaseRecord objects from the file (Record, Title, or other subclasses)
         """
         try:
             if not self.exists():
@@ -89,13 +90,13 @@ class FileStorage(Storage):
             logger.error(f"Error reading from file {self.path}: {e}")
             raise StorageError(f"Failed to read file: {e}") from e
 
-    def save(self, records: list[Record] | Record) -> None:
+    def save(self, records: list[BaseRecord] | BaseRecord | list | dict) -> None:
         """Save records to file.
-        
+
         Args:
-            records: Single record or list of records to save
+            records: Single record/dict or list of records/dicts to save
         """
-        if isinstance(records, Record):
+        if not isinstance(records, list):
             records = [records]
 
         if not records:
@@ -172,15 +173,17 @@ class FileStorage(Storage):
             logger.error(f"Error creating file {self.path}: {e}")
             raise StorageError(f"Failed to create file: {e}") from e
 
-    def _dict_to_record(self, data: dict, index: int) -> Record:
-        """Convert dictionary to Record object.
-        
+    def _dict_to_record(self, data: dict, index: int) -> BaseRecord:
+        """Convert dictionary to BaseRecord object.
+
+        Simple conversion that lets the consuming code handle type-specific logic.
+
         Args:
             data: Dictionary data from file
             index: Record index for error reporting
-            
+
         Returns:
-            Record object
+            BaseRecord object (typically a Record)
         """
         try:
             # Apply column mapping if configured
@@ -268,33 +271,50 @@ class FileStorage(Storage):
                     if should_remove:
                         data.pop(field, None)
 
-            # Extract required and optional fields
-            record_id = data.get("record_id", data.get("id", f"record_{index}"))
-            content = data.get("content", data.get("text", ""))
-
-            # Build metadata from remaining fields
-            metadata = data.get("metadata", {})
-            if isinstance(metadata, str):
+            # Parse metadata field if it's a string
+            if "metadata" in data and isinstance(data["metadata"], str):
                 try:
-                    metadata = json.loads(metadata)
+                    data["metadata"] = json.loads(data["metadata"])
                 except json.JSONDecodeError:
-                    metadata = {"raw_metadata": metadata}
+                    data["metadata"] = {"raw_metadata": data["metadata"]}
+            elif "metadata" not in data:
+                data["metadata"] = {}
 
-            # Add other fields to metadata if not already Record fields
-            record_fields = {"record_id", "content", "metadata", "alt_text", "ground_truth", "uri", "mime"}
-            for key, value in data.items():
-                if key not in record_fields and key not in ["id", "text"]:
-                    metadata[key] = value
+            # Parse error field if it exists and is a string
+            if "error" in data and isinstance(data["error"], str):
+                try:
+                    data["error"] = json.loads(data["error"])
+                except json.JSONDecodeError:
+                    data["error"] = []
+            elif "error" not in data:
+                data["error"] = []
 
-            return Record(
-                record_id=str(record_id),
-                content=content,
-                metadata=metadata,
-                alt_text=data.get("alt_text"),
-                ground_truth=data.get("ground_truth"),
-                uri=data.get("uri"),
-                mime=data.get("mime", "text/plain")
-            )
+            # Ensure required BaseRecord fields with sensible defaults
+            if "record_id" not in data:
+                data["record_id"] = data.get("id", f"record_{index}")
+            if "dataset_name" not in data:
+                data["dataset_name"] = self.config.dataset_name or "default"
+            if "split_type" not in data:
+                data["split_type"] = self.config.split_type or "default"
+
+            # Map common alternative field names
+            if "content" not in data and "text" in data:
+                data["content"] = data["text"]
+
+            # Create a record using the configured class type
+            try:
+                return self._create_record(**data)
+            except Exception as e:
+                # If Record creation fails, create minimal valid record
+                logger.warning(f"Failed to create Record from data at index {index}: {e}")
+                return Record(
+                    record_id=str(data.get("record_id", f"error_{index}")),
+                    dataset_name=str(data.get("dataset_name", "default")),
+                    split_type=str(data.get("split_type", "default")),
+                    metadata=data.get("metadata", {}),
+                    content=str(data),  # Store full data as content for debugging
+                    error=data.get("error", [])
+                )
 
         except Exception as e:
             logger.warning(f"Error converting data to Record at index {index}: {e}")
@@ -316,7 +336,7 @@ class FileStorage(Storage):
                     metadata={"critical_error": True}
                 )
 
-    def _record_to_dict(self, record: Record) -> dict:
+    def _record_to_dict(self, record: BaseRecord) -> dict:
         """Convert Record object to dictionary for file storage.
         
         Args:

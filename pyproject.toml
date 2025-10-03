@@ -111,6 +111,8 @@ dependencies = [
     "opentelemetry-instrumentation-logging>=0.56",
     "gql<4.0.0",
     "autogen-gemini>=0.0.1",
+    "themoviedb>=1.0.2",
+    "python-dotenv>=1.1.1",
 ]
 
 [project.optional-dependencies]
@@ -143,6 +145,10 @@ dev = [
     "streamlit>=1.28.0",
     "plotly>=5.17.0",
     "altair>=5.0.0",
+    "jupyter>=1.1.1",
+    "ipywidgets>=8.1.7",
+]
+
 ]
 ml = [
     "torch>=2.5.1,<3.0.0",
@@ -187,6 +193,8 @@ python_version = "3.11"  # Specify your target Python version
 strict = false
 annotations = true      # delayed typing annotations
 warn_unused_configs = true # Warn about unused mypy settings
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 plugins = ["pydantic.mypy"]
 
 [tool.pydantic-mypy]
@@ -213,7 +221,8 @@ buttermilk-assess-journalism = "buttermilk.scripts.run_trans_flow:run"
 
 [tool.pytest.ini_options]
 markers = [
-  "integration: integration tests, don't run by default",
+  "integration: integration tests (slower, mocked and faked at the edges)",
+  "endtoend: tests that require real API calls with valid credentials",
   "scheduled: mark tests to run in scheduled testing",
 ]
 
@@ -231,12 +240,9 @@ addopts = [
     "--tb=short",
     # "--show-capture=no",
     # "--disable-warnings",
-    # "-m not integration",
+    "-m not endtoend",
 ]
 
-#  "--timeout_method=thread", 
-# "--with-integration"
-# 
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",

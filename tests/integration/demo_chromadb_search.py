@@ -13,11 +13,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import hydra
-from omegaconf import OmegaConf
+import hydra  # noqa: E402
+from omegaconf import OmegaConf  # noqa: E402
 
-from buttermilk import BM, logger
-from buttermilk.tools.chromadb_search import ChromaDBSearchTool
+from buttermilk import BM, logger  # noqa: E402
+from buttermilk.tools.chromadb_search import ChromaDBSearchTool  # noqa: E402
 
 
 async def main():
@@ -38,8 +38,8 @@ async def main():
         set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
         # Extract storage config
         storage_cfg = OmegaConf.to_container(cfg.storage, resolve=True)
-        logger.info("Using collection", collection_name=storage_cfg['collection_name'])
-        logger.info("Embedding model", embedding_model=storage_cfg['embedding_model'])
+        logger.info("Using collection", collection_name=storage_cfg["collection_name"])
+        logger.info("Embedding model", embedding_model=storage_cfg["embedding_model"])
 
         # Create and initialize the search tool
         search_tool = ChromaDBSearchTool(**storage_cfg)
@@ -71,7 +71,7 @@ async def main():
 
                 for i, result in enumerate(results, 1):
                     logger.info("--- Result ---", result_num=i)
-                    logger.info("Document", document_title=result.document_title or 'Unknown')
+                    logger.info("Document", document_title=result.document_title or "Unknown")
                     logger.info("Document ID", document_id=result.document_id)
                     logger.info("Chunk ID", chunk_id=result.id)
                     logger.info("Score", score=f"{result.score:.4f}" if result.score else "N/A")

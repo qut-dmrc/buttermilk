@@ -4,6 +4,7 @@ These tests demonstrate how to use standalone tracing for batch processes
 and scripts running outside of orchestrator contexts. They ensure
 the examples in our documentation remain accurate.
 """
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -77,7 +78,7 @@ class TestStandaloneTraceExamples:
         items_to_process = ["item1", "item2", "item3"]
         processed_items = []
 
-        async with create_standalone_trace("batch_processor", total_items=len(items_to_process)) as trace:
+        async with create_standalone_trace("batch_processor", total_items=len(items_to_process)):
             for item in items_to_process:
                 try:
                     # Process each item (mock processing here)
@@ -185,7 +186,3 @@ class TestStandaloneTraceEdgeCases:
                 # Each context maintains its own trace
                 assert outer_id != inner_id
                 assert outer.trace_call != inner.trace_call
-
-
-# Import asyncio at module level for use in examples
-import asyncio

@@ -55,7 +55,7 @@ class TestChromaDBSearchToolIntegration:
 
             # Log the result for inspection
             logger.info("Search Result", result_num=i + 1)
-            logger.info("  Document", document_title=result.document_title or 'Unknown')
+            logger.info("  Document", document_title=result.document_title or "Unknown")
             logger.info("  Score", score=result.score)
             logger.info("  Content preview", content_preview=f"{result.content[:200]}...")
             if result.metadata:
@@ -80,7 +80,7 @@ class TestChromaDBSearchToolIntegration:
             if "content_type" in result.metadata:
                 assert result.metadata["content_type"] == "abstract"
 
-    @pytest.xfail(reason="No duplicates feature not implemented yet")
+    @pytest.mark.xfail(reason="No duplicates feature not implemented yet")
     @pytest.mark.anyio
     async def test_search_no_duplicates(self, search_tool):
         """Test search with no_duplicates option."""

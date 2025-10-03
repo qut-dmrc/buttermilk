@@ -17,7 +17,7 @@ class TestBMInitialization:
         """Test that BM instance creation doesn't do heavy work immediately."""
         start_time = time.time()
 
-        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud:
+        with patch("buttermilk._core.bm_init.CloudManager"):
             from buttermilk import BM
             
             # Create BM instance with minimal config
@@ -73,7 +73,7 @@ class TestBMInitialization:
         with patch("google.auth.default") as mock_auth:
             from buttermilk import BM
             
-            bm = BM(
+            BM(
                 name="test",
                 job="test",
                 secret_provider={"type": "gcp", "project": "test-project"},
@@ -213,13 +213,12 @@ class TestSecretsManagerOptimizations:
             from buttermilk._core.keys import SecretsManager
 
             # Create SecretsManager
-            sm = SecretsManager(type="gcp", project="test-project")
+            SecretsManager(type="gcp", project="test-project")
 
             # Client should not be created yet
             mock_client.assert_not_called()
 
             # Access client property to trigger lazy loading
-            client = sm.client
 
             # Now client should be created
             mock_client.assert_called_once()
@@ -323,7 +322,7 @@ class TestStartupTiming:
         
         start_time = time.time()
         
-        app = FastAPI()
+        FastAPI()
         
         creation_time = time.time() - start_time
         

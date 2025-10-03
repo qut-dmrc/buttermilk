@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from buttermilk._core.config_bootstrap import bootstrap_session, bootstrap_session_with_config
+from buttermilk import init
+from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
 
 class TestUnifiedBootstrapIntegration:
@@ -103,7 +104,7 @@ llms:
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
                 # First session sets the project
-                bm1 = init(job="first_job", project="original_project", config_dir=temp_config_dir)
+                init(job="first_job", project="original_project", config_dir=temp_config_dir)
 
                 # Second session with different project should fail
                 with pytest.raises(RuntimeError, match="Project name mismatch"):
@@ -113,7 +114,9 @@ llms:
         """Test the bootstrap_session function directly with real config."""
         with patch("buttermilk._core.config_bootstrap.logger"):
             with patch("buttermilk._core.execution_context.logger"):
-                bm = bootstrap_session(job="direct_bootstrap_test", project="bootstrap_project", run_type="test", config_dir=temp_config_dir)
+                bm, _ = bootstrap_session_with_config(
+                    job="direct_bootstrap_test", project="bootstrap_project", run_type="test", config_dir=temp_config_dir
+                )
 
                 # Verify BM instance
                 assert bm is not None

@@ -7,9 +7,10 @@ different components of Buttermilk.
 """
 
 import datetime
+import json  # For JSON parsing in validators
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
-from typing import Any, Literal, Self  # Standard typing utilities
+from typing import Any, Literal, Protocol, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
 
@@ -35,7 +36,90 @@ from pydantic import (
 # Conditional imports to avoid circular dependencies
 
 
-class Record(BaseModel):
+class BaseRecord(BaseModel):
+    """Base class for all records in pipelines and storage.
+
+    This base model defines the common fields and validation logic for any record type
+    that flows through pipelines or is stored in Buttermilk storage.
+    """
+
+    record_id: str = Field(
+        default_factory=lambda: str(shortuuid.ShortUUID().uuid()),
+        description="Unique identifier for the record.",
+    )
+    dataset_name: str | None = Field(default=None, description="Name of the dataset this record belongs to.")
+    split_type: str | None = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arbitrary metadata associated with the record.",
+    )
+    error: list[Any] = Field(
+        default_factory=list,
+        description="List of errors or error events associated with this record.",
+    )
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def parse_metadata(cls, v):
+        """Parse metadata from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else {}
+            except json.JSONDecodeError:
+                # If it's not valid JSON, return empty dict
+                return {}
+        elif v is None:
+            return {}
+        return v
+
+    @field_validator("error", mode="before")
+    @classmethod
+    def parse_error(cls, v):
+        """Parse error from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else []
+            except json.JSONDecodeError:
+                # If it's not valid JSON, return empty list
+                return []
+        elif v is None:
+            return []
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_defaults_for_required_fields(cls, values):
+        """Set default values for required BaseRecord fields if missing.
+
+        This runs before field validation to ensure required fields have defaults.
+        """
+        if isinstance(values, dict):
+            # Convert record_id to string if it's an integer (common from BigQuery)
+            if "record_id" in values and values["record_id"] is not None:
+                values["record_id"] = str(values["record_id"])
+            elif not values.get("record_id"):
+                values["record_id"] = str(shortuuid.ShortUUID().uuid())
+
+            # These can remain None but ensure the keys exist
+            if "dataset_name" not in values:
+                values["dataset_name"] = None
+            if "split_type" not in values:
+                values["split_type"] = None
+
+            # Ensure error field exists as empty list if not present
+            if "error" not in values:
+                values["error"] = []
+
+        return values
+
+    model_config = ConfigDict(
+        extra="allow",  # Allow extra fields for extensibility
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+    )
+
+
+class Record(BaseRecord):
     """Represents a single data record within the Buttermilk framework.
 
     A `Record` encapsulates a piece of data to be processed, along with its
@@ -43,7 +127,7 @@ class Record(BaseModel):
     and a unique identifier. It can handle both simple text content and more
     complex, potentially multimodal content (e.g., sequences of text and images).
 
-    Attributes:
+    Inherits from BaseRecord:
         record_id (str): A unique identifier for the record. Defaults to a
             new short UUID.
         dataset_name (str): The name of the dataset this record belongs to.
@@ -51,6 +135,9 @@ class Record(BaseModel):
             "test", or "validation".
         metadata (dict[str, Any]): A dictionary for storing arbitrary metadata
             associated with the record (e.g., source, title, creation date, tags, uri).
+        error (list[Any]): List of errors or error events associated with this record.
+
+    Additional Attributes:
         alt_text (str | None): A textual description or transcript of the media
             objects contained in this record, especially useful for non-text content.
         ground_truth (dict | None): Optional dictionary containing ground truth
@@ -69,26 +156,16 @@ class Record(BaseModel):
             `metadata`, if present.
 
     """
-
-    record_id: str = Field(
-        default_factory=lambda: str(shortuuid.ShortUUID().uuid()),
-        description="Unique identifier for the record.",
-    )
-    dataset_name: str = Field(default="default", description="Name of the dataset this record belongs to.")
-    split_type: str = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,  # Use factory for mutable default
-        description="Arbitrary metadata associated with the record.",
-    )
     alt_text: str | None = Field(
         default=None,
         description="Textual description or transcript of media content within this record.",
     )
-    ground_truth: dict[str, Any] | list[str | dict[str, str]] | None = Field(  # Added type hint for dict value
+    ground_truth: dict[str, Any] | list[str | dict[str, str]] | str | None = Field(  # Added type hint for dict value
         default=None,
         description="Optional ground truth data associated with this record for evaluation.",
     )
-    content: str | Sequence[str | Image] = Field(
+    content: str | Sequence[str | Image] | None = Field(
+        default=None,
         description="Main content of the record: a string, or a sequence of strings and Pillow Images.",
     )
     mime: str | None = Field(
@@ -273,6 +350,18 @@ class Record(BaseModel):
         exclude={"title", "images", "text_content", "record_hash", "ground_truth_hash"},  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
+
+    @field_validator("ground_truth", mode="before")
+    @classmethod
+    def parse_ground_truth(cls, v):
+        """Parse ground_truth from JSON string if needed."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else None
+            except json.JSONDecodeError:
+                # If it's not valid JSON, keep as string
+                return v
+        return v
 
     @field_validator("content")
     @classmethod

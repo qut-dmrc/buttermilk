@@ -1,13 +1,16 @@
 """Base storage classes for unified storage operations."""
 
+import importlib
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Iterator, TypeVar
-
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, Optional, Protocol, Type, TypeVar
+
 from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
+from buttermilk._core.types import BaseRecord, Record
 
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -16,6 +19,25 @@ if TYPE_CHECKING:
 
 # Generic type for any Pydantic model
 T = TypeVar("T", bound=BaseModel)
+
+
+class RecordFilter(Protocol):
+    """Protocol for custom record filtering/sampling strategies.
+
+    Implementations can provide any sampling logic - random sampling,
+    field-based filtering, complex business rules, etc.
+    """
+
+    async def should_include(self, record: BaseRecord) -> bool:
+        """Determine if a record should be included in the results.
+
+        Args:
+            record: The record to evaluate
+
+        Returns:
+            True if the record should be included, False to skip it
+        """
+        ...
 
 
 class Storage(ABC):
@@ -34,13 +56,14 @@ class Storage(ABC):
         """
         self.config = config
         self.bm = bm
+        self._record_class: Type[BaseRecord] | None = None
 
     @abstractmethod
-    def __iter__(self) -> Iterator[BaseModel]:
+    def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over items from storage.
 
         Returns:
-            Iterator yielding Pydantic model objects
+            Iterator yielding BaseRecord objects (or subclasses like Record, Title, etc.)
         """
         pass
 
@@ -53,9 +76,9 @@ class Storage(ABC):
         """
         pass
 
-    def get_record_by_id(self, record_id: str) -> BaseModel | None:
+    def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by its ID.
-        
+
         Default implementation: iterates through all records (assumes small datasets).
         Storage backends optimized for large datasets should override this method.
 
@@ -66,7 +89,7 @@ class Storage(ABC):
             The record if found, None otherwise
         """
         for record in self:
-            if hasattr(record, 'record_id') and record.record_id == record_id:
+            if hasattr(record, "record_id") and record.record_id == record_id:
                 return record
         return None
 
@@ -101,6 +124,127 @@ class Storage(ABC):
             return self.count()
         except Exception:
             return 0
+
+    async def iterate_async(
+        self,
+        batch_size: Optional[int] = None,
+        filter: Optional[RecordFilter] = None
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Async generator that yields records from storage with optional filtering.
+
+        This method enables Storage objects to be used directly as DataSource
+        in simple pipelines by implementing the async generator protocol.
+
+        Args:
+            batch_size: Maximum number of records to yield (None = unlimited)
+            filter: Optional filter to apply to records before yielding
+
+        Yields:
+            Records from storage that pass the filter (if provided)
+        """
+        count = 0
+        for record in self:
+            # Apply filter if provided
+            if filter and not await filter.should_include(record):
+                continue
+
+            if batch_size is not None and count >= batch_size:
+                break
+
+            yield record
+            count += 1
+
+    def __call__(
+        self,
+        batch_size: Optional[int] = None,
+        filter: Optional[RecordFilter] = None
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Make Storage objects callable as DataSource for pipelines.
+
+        This allows Storage objects to be used directly in simple pipelines:
+        ```python
+        storage = bm.get_storage(config)
+
+        # Without filter
+        await run_simple_pipeline(storage(batch_size=100), processors)
+
+        # With filter
+        from buttermilk.storage.filters import YearRangeFilter
+        filter = YearRangeFilter(2020, 2023)
+        await run_simple_pipeline(storage(batch_size=100, filter=filter), processors)
+        ```
+
+        Args:
+            batch_size: Maximum number of records to yield (None = unlimited)
+            filter: Optional filter to apply to records
+
+        Returns:
+            Async generator of records
+        """
+        return self.iterate_async(batch_size, filter)
+
+    def _get_record_class(self) -> Type[BaseRecord]:
+        """Get the record class to use for instantiation.
+
+        Resolves the class from the config's record_class field, with caching.
+        Falls back to Record if not specified or on error.
+
+        Returns:
+            The class to use for creating record instances
+        """
+        # Return cached class if available
+        if self._record_class is not None:
+            return self._record_class
+
+        # Default to Record class
+        if not self.config.record_class:
+            self._record_class = Record
+            return self._record_class
+
+        try:
+            # Parse the class path
+            module_path, class_name = self.config.record_class.rsplit(".", 1)
+
+            # Import the module
+            module = importlib.import_module(module_path)
+
+            # Get the class
+            cls = getattr(module, class_name)
+
+            # Verify it's a BaseRecord subclass
+            if not issubclass(cls, BaseRecord):
+                logger.warning(
+                    f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. "
+                    f"Falling back to Record."
+                )
+                self._record_class = Record
+            else:
+                self._record_class = cls
+                logger.debug(f"Using record class: {self.config.record_class}")
+
+        except (ImportError, AttributeError, ValueError) as e:
+            logger.warning(
+                f"Failed to import record_class '{self.config.record_class}': {e}. "
+                f"Falling back to Record."
+            )
+            self._record_class = Record
+
+        return self._record_class
+
+    def _create_record(self, **kwargs: Any) -> BaseRecord:
+        """Create a record instance using the configured class.
+
+        Args:
+            **kwargs: Fields to pass to the record constructor
+
+        Returns:
+            A new record instance of the configured type
+
+        Raises:
+            Exception: If record creation fails (will be caught by storage implementations)
+        """
+        record_class = self._get_record_class()
+        return record_class(**kwargs)
 
 
 class StorageClient:
@@ -171,17 +315,3 @@ class StorageClient:
             raise ValueError(f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}")
         return self.config.full_table_id
 
-
-class StorageError(Exception):
-    """Base exception for storage operations."""
-    pass
-
-
-class StorageConfigError(StorageError):
-    """Exception raised for storage configuration errors."""
-    pass
-
-
-class StorageConnectionError(StorageError):
-    """Exception raised for storage connection errors."""
-    pass

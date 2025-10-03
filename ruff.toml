@@ -17,6 +17,8 @@ extend-ignore = [
     "PLR0915",  # Too many public methods
     "W293",
     "PLR1702",
+    "PLR2004",  # Magic values used in comparisons -- we can address this later.
+    "PLC0415", # import` should be at the top-level of a file -- mainly in tests and delayed imports.
 ]
 
 [lint.isort]

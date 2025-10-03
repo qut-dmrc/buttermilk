@@ -13,9 +13,9 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
     GroupchatMessageTypes,
-    UserResponseMessage,
     OOBMessages,
     SystemPromptMessage,
+    UserResponseMessage,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
@@ -150,7 +150,6 @@ class SlackUIAgent(UIAgent):
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(message, SystemPromptMessage):
             await self._request_input(message)
-        return None
 
     async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
         """Initialize the interface and register handlers"""

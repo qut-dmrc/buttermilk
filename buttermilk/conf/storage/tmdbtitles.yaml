@@ -1,0 +1,5 @@
+type: bigquery
+randomize: false
+full_table_id: "prosocial-443205.mediamarkets.titles_tmdb_theatrical"
+schema_path: "tmdbtitles.schema.json"
+record_class: "buttermilk.tools.catalog_test.Title"

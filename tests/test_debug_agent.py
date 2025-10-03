@@ -1,7 +1,9 @@
 """Test the DebugAgent MCP tools."""
 
 import asyncio
+
 import pytest
+
 from buttermilk.debug.debug_agent import DebugAgent
 
 

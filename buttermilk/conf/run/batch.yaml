@@ -1,7 +1,0 @@
-_target_: buttermilk.runner.flowrunner.FlowRunner
-name: bm_batch
-job: flows
-mode: batch
-ui: console
-human_in_loop: false
-flows: ${flows}

@@ -1,0 +1,14 @@
+# Default BigQuery storage configuration template
+# Can be inherited by specific datasets
+
+type: bigquery
+dataset_id: "unknown"
+table_id: records
+randomize: true
+batch_size: 1000
+auto_create: true
+clustering_fields: 
+  - record_id
+  - dataset_name
+max_records_per_group: -1
+last_n_days: 7

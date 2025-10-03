@@ -1,16 +1,14 @@
 """Test module for agent output Markdown formatting."""
 
-import pytest
 from unittest.mock import MagicMock
-import shortuuid
 
-from buttermilk.agents.judge import JudgeReasons, Reasons
-from buttermilk.agents.differences import Differences, Divergence, Position, Expert, DifferencesOutput
+from buttermilk._core.contract import AgentConfig, AgentTrace
 from buttermilk.agents.describer import MediaDescription
+from buttermilk.agents.differences import Differences, Divergence, Position
 from buttermilk.agents.frame import FramedStatement
-from buttermilk.agents.rag.simple_rag_agent import ResearchResult, Reference
-from buttermilk.agents.rag.rag_zotero import ZoteroResearchResult, ZoteroReference
-from buttermilk._core.contract import AgentTrace, AgentConfig
+from buttermilk.agents.judge import JudgeReasons
+from buttermilk.agents.rag.rag_zotero import ZoteroReference, ZoteroResearchResult
+from buttermilk.agents.rag.simple_rag_agent import Reference, ResearchResult
 
 
 class TestJudgeReasonsMarkdown:
@@ -31,7 +29,7 @@ class TestJudgeReasonsMarkdown:
             uncertainty="low"
         )
         
-        expected = (
+        (
             f"**{agent_id} #{call_id[:8]}**\n"
             f"The content violates policy due to harmful content\n"
             f"Conclusion: violating\n"
@@ -41,7 +39,7 @@ class TestJudgeReasonsMarkdown:
         )
         
         # We'll implement as_markdown and check it matches expected format
-        assert hasattr(output, 'as_markdown')
+        assert hasattr(output, "as_markdown")
         result = output.as_markdown(agent_id, call_id)
         
         # Check key components are present
@@ -229,8 +227,8 @@ class TestAgentTraceMarkdown:
         trace.error = []
         
         # The trace should use the output's as_markdown method
-        formatted = trace.as_markdown()
+        trace.as_markdown()
         
         # We'll need to implement this on AgentTrace
         # For now, check that the method would exist
-        assert hasattr(trace, 'as_markdown')
+        assert hasattr(trace, "as_markdown")

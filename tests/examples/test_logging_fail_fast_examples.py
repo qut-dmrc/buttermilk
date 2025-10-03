@@ -17,20 +17,21 @@ Usage examples cover:
 """
 
 import logging
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
+
+from buttermilk._core.execution_context import (
+    create_execution_context,
+    get_or_create_execution_context,
+)
 from buttermilk._core.log import (
+    ensure_logging_properly_initialized,
     logger,
     setup_console_logging,
     setup_file_logging,
     validate_logging_state,
-    ensure_logging_properly_initialized,
-)
-from buttermilk._core.execution_context import (
-    create_execution_context,
-    get_or_create_execution_context,
 )
 
 
@@ -70,7 +71,7 @@ class TestBasicUsageExamples:
         
         # Step 2: Set up file logging (first call succeeds)
         execution_context_id = f"basic_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Step 3: Verify logging is working
         logger.debug("This debug message will be logged")
@@ -106,7 +107,7 @@ class TestBasicUsageExamples:
         # Example A: Verbose logging setup
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Verify DEBUG level is configured
         buttermilk_logger = logging.getLogger("buttermilk")
@@ -138,7 +139,7 @@ class TestBasicUsageExamples:
         # Set up non-verbose logging
         setup_console_logging(verbose=False)
         execution_context_id = f"non_verbose_example_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
         
         # Verify INFO level is configured
         buttermilk_logger = logging.getLogger("buttermilk")
@@ -179,8 +180,8 @@ class TestExecutionContextExamples:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_example_safe_execution_context_pattern(self, mock_setup_file, mock_setup_console):
         """
         Example of the safe ExecutionContext usage pattern.
@@ -212,8 +213,8 @@ class TestExecutionContextExamples:
             safe_context = get_or_create_execution_context()
             assert safe_context is context1
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_example_dangerous_execution_context_pattern(self, mock_setup_file, mock_setup_console):
         """
         Example of the dangerous ExecutionContext pattern that fails fast.

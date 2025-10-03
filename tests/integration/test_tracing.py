@@ -71,9 +71,9 @@ async def test_unified_tracing_config_integration(real_bm: BM):
         pytest.skip("Weave client is not configured (get_weave_client returned None).")
     
     # Verify that the client has the expected methods (fixes NoneType error)
-    assert hasattr(client, 'create_call'), "Weave client should have create_call method"
-    assert hasattr(client, 'finish_call'), "Weave client should have finish_call method"
-    assert hasattr(client, 'get_call'), "Weave client should have get_call method"
+    assert hasattr(client, "create_call"), "Weave client should have create_call method"
+    assert hasattr(client, "finish_call"), "Weave client should have finish_call method"
+    assert hasattr(client, "get_call"), "Weave client should have get_call method"
     
     # Test that we can use the client for tracing operations
     def test_unified_config_op(value: str) -> str:
@@ -89,7 +89,7 @@ async def test_unified_tracing_config_integration(real_bm: BM):
         attributes={"config_type": "unified", "test": "integration"}
     )
     
-    # Verify call was created successfully 
+    # Verify call was created successfully
     assert call is not None, "Call should be created successfully with unified config"
     assert getattr(call, "id", None), "Call should have an ID"
     assert getattr(call, "trace_id", None), "Call should have a trace_id"

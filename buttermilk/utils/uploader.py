@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from buttermilk._core.log import logger
+from buttermilk._core.types import BaseRecord
 from buttermilk.storage import Storage
 
 
@@ -53,6 +54,20 @@ class AsyncDataUploader:
             item = item.model_dump(mode="json")
         await self._backup_item(item)
         await self.queue.put(item)
+
+    async def process(self, record: BaseRecord):
+        """Process method to make AsyncDataUploader work as a Processor in pipelines.
+
+        Adds the record to the upload queue and passes it through unchanged.
+
+        Args:
+            record: Record to upload
+
+        Yields:
+            The same record (pass-through behavior)
+        """
+        await self.add(record)
+        yield record
 
     async def _worker(self):
         """Background worker that processes the queue."""

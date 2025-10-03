@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, mock_open
 
 import pytest
 
-from buttermilk.data.vector import InputDocument
 from buttermilk.libs.zotero import ZotDownloader
 from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
 
@@ -200,8 +199,10 @@ async def test_prepare_docs_citation_error(
     assert chunks[1].metadata == {"original": "value"}
 
 
+@pytest.mark.skip(reason="Test is incomplete - missing setup for full_text and other variables")
 @pytest.mark.anyio
 async def test_citation():
+    # This test appears to be incomplete and needs proper setup
     citation_input_text = full_text[:CITATION_TEXT_CHAR_LIMIT]
     # Verify citation generator was called
     mock_async_citation_generator.assert_awaited_once_with(citation_input_text)

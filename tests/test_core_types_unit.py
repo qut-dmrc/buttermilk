@@ -1,6 +1,5 @@
 """Unit tests for core types in buttermilk._core.types module."""
 
-import pytest
 from buttermilk._core.types import Record
 
 

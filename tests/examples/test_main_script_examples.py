@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from buttermilk import init
 from buttermilk._core.execution_context import ExecutionContext
 
 

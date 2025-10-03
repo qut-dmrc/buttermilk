@@ -11,26 +11,26 @@ The fail-fast system includes:
 """
 
 import logging
-import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from buttermilk._core.log import (
-    logger,
-    setup_console_logging,
-    setup_file_logging,
-    setup_cloud_logging,
-    validate_logging_state,
-    ensure_logging_properly_initialized,
-    _console_logging_configured,
-    _file_logging_configured,
-    _cloud_logging_sessions,
-)
+import pytest
+
 from buttermilk._core.execution_context import (
     ExecutionContext,
     create_execution_context,
     get_or_create_execution_context,
-    _execution_context_initialized,
+)
+from buttermilk._core.log import (
+    _cloud_logging_sessions,
+    _console_logging_configured,
+    _file_logging_configured,
+    ensure_logging_properly_initialized,
+    logger,
+    setup_cloud_logging,
+    setup_console_logging,
+    setup_file_logging,
+    validate_logging_state,
 )
 
 
@@ -206,8 +206,8 @@ class TestCloudLoggingDeduplication:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.log.gcp_logging')
-    @patch('buttermilk._core.log.CloudLoggingHandler')
+    @patch("buttermilk._core.log.gcp_logging")
+    @patch("buttermilk._core.log.CloudLoggingHandler")
     def test_setup_cloud_logging_first_call_succeeds(self, mock_cloud_handler_cls, mock_gcp_logging):
         """Test that first call to setup_cloud_logging succeeds."""
         # Mock objects
@@ -245,8 +245,8 @@ class TestCloudLoggingDeduplication:
         root_logger = logging.getLogger()
         root_logger.addHandler.assert_not_called()  # Mocked, but we can verify the call happened
 
-    @patch('buttermilk._core.log.gcp_logging')
-    @patch('buttermilk._core.log.CloudLoggingHandler')
+    @patch("buttermilk._core.log.gcp_logging")
+    @patch("buttermilk._core.log.CloudLoggingHandler")
     def test_setup_cloud_logging_duplicate_session_skipped(self, mock_cloud_handler_cls, mock_gcp_logging):
         """Test that duplicate cloud logging setup for same session is skipped."""
         # Mock objects
@@ -322,8 +322,8 @@ class TestExecutionContextFailFast:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_create_execution_context_first_call_succeeds(self, mock_setup_file, mock_setup_console):
         """Test that first call to create_execution_context succeeds."""
         mock_setup_console.return_value = None
@@ -340,8 +340,8 @@ class TestExecutionContextFailFast:
         mock_setup_console.assert_called_once()
         mock_setup_file.assert_called_once()
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_create_execution_context_second_call_fails_fast(self, mock_setup_file, mock_setup_console):
         """Test that second call to create_execution_context raises RuntimeError."""
         mock_setup_console.return_value = None
@@ -361,8 +361,8 @@ class TestExecutionContextFailFast:
         assert "loss of execution context state" in error_msg
         assert "get_or_create_execution_context()" in error_msg
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_get_or_create_execution_context_safe_multiple_calls(self, mock_setup_file, mock_setup_console):
         """Test that get_or_create_execution_context is safe for multiple calls."""
         mock_setup_console.return_value = None
@@ -380,8 +380,8 @@ class TestExecutionContextFailFast:
         mock_setup_console.assert_called_once()
         mock_setup_file.assert_called_once()
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_get_or_create_execution_context_multiple_calls_with_different_kwargs(self, mock_setup_file, mock_setup_console):
         """Test that get_or_create_execution_context ignores kwargs on subsequent calls."""
         mock_setup_console.return_value = None
@@ -550,15 +550,15 @@ class TestIntegrationScenarios:
         validation_2 = validate_logging_state(verbose_expected=True)
         assert validation_2["valid"] is True
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_execution_context_prevents_logging_corruption(self, mock_setup_file, mock_setup_console):
         """Test that ExecutionContext protection prevents logging corruption."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
         
         # First ExecutionContext creation should succeed
-        context1 = create_execution_context()
+        create_execution_context()
         
         # Verify logging was set up once
         assert mock_setup_console.call_count == 1
@@ -580,7 +580,7 @@ class TestIntegrationScenarios:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_test_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Verify verbose logging is properly configured
         validation = validate_logging_state(verbose_expected=True)
@@ -690,7 +690,7 @@ class TestFailFastProtectionExamples:
         
         # Step 2: Set up file logging once
         execution_context_id = f"correct_usage_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
         
         # Step 3: Validate the setup is correct
         validation = validate_logging_state(verbose_expected=True)
@@ -703,8 +703,8 @@ class TestFailFastProtectionExamples:
         # Step 5: Validation continues to pass
         ensure_logging_properly_initialized()
 
-    @patch('buttermilk._core.execution_context.setup_console_logging')
-    @patch('buttermilk._core.execution_context.setup_file_logging')
+    @patch("buttermilk._core.execution_context.setup_console_logging")
+    @patch("buttermilk._core.execution_context.setup_file_logging")
     def test_safe_execution_context_pattern_example(self, mock_setup_file, mock_setup_console):
         """Example of safe ExecutionContext usage pattern."""
         mock_setup_console.return_value = None

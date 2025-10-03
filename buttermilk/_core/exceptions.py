@@ -38,6 +38,24 @@ class ProcessingError(Exception):
     pass
 
 
+class StorageError(Exception):
+    """Base exception for storage operations."""
+
+    pass
+
+
+class StorageConfigError(StorageError):
+    """Exception raised for storage configuration errors."""
+
+    pass
+
+
+class StorageConnectionError(StorageError):
+    """Exception raised for storage connection errors."""
+
+    pass
+
+
 class RateLimit(Exception):
     """Indicates that an API rate limit has been exceeded.
 

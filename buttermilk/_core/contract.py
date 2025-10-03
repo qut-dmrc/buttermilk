@@ -595,7 +595,7 @@ class AgentTrace(AgentOutput):
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
-        if self.outputs and hasattr(self.outputs, 'as_markdown'):
+        if self.outputs and hasattr(self.outputs, "as_markdown"):
             # Pass agent context to the output's as_markdown method
             return self.outputs.as_markdown(self.agent_id, self.call_id)
         elif self.outputs:

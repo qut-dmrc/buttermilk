@@ -7,10 +7,9 @@ import pytest
 from autogen_core.tools import ToolSchema
 
 from buttermilk import AgentInput, StepRequest
-from buttermilk._core.contract import UserResponseMessage
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import END, MANAGER
-from buttermilk._core.contract import AgentAnnouncement
+from buttermilk._core.contract import AgentAnnouncement, UserResponseMessage
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 

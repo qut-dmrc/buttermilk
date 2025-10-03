@@ -11,6 +11,12 @@ from rich.logging import RichHandler
 
 from buttermilk._core.context import get_logging_context
 
+try:
+    # Optional: OpenTelemetry trace context for log correlation
+    from opentelemetry.trace import get_current_span
+except Exception:  # pragma: no cover
+    get_current_span = None  # type: ignore
+
 # Single logger for the entire application
 _LOGGER_NAME = "buttermilk"
 logger = structlog.get_logger(_LOGGER_NAME)
@@ -34,6 +40,28 @@ def configure_structlog(min_level) -> None:
     if _structlog_configured:
         return  # Already configured, skip to prevent breaking existing setup
 
+    def _inject_trace_ids(logger, method_name, event_dict):
+        """Inject OTEL trace_id/span_id into logs if available."""
+        try:
+            if get_current_span is None:
+                return event_dict
+            span = get_current_span()
+            if span is None:
+                return event_dict
+            ctx = span.get_span_context()
+            # Some SDKs expose is_valid attribute; guard usage
+            if getattr(ctx, "trace_id", 0):
+                event_dict["trace_id"] = f"{ctx.trace_id:032x}"
+                event_dict["span_id"] = f"{ctx.span_id:016x}"
+                # Add sampled flag when available
+                sampled = getattr(getattr(ctx, "trace_flags", None), "sampled", None)
+                if sampled is not None:
+                    event_dict["trace_sampled"] = bool(sampled)
+        except Exception:
+            # Never break logging due to telemetry issues
+            return event_dict
+        return event_dict
+
     structlog.configure(
         processors=[
             # Add context variables automatically
@@ -42,6 +70,8 @@ def configure_structlog(min_level) -> None:
             structlog.processors.add_log_level,
             # Add timestamp
             structlog.processors.TimeStamper(fmt="iso"),
+            # Inject OTEL trace/span IDs for correlation (no-op if not available)
+            _inject_trace_ids,
             # Capture exception info if present
             structlog.processors.format_exc_info,
             # Output as JSON

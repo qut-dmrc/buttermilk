@@ -80,8 +80,8 @@ class ResearchResult(BaseModel):
         includes the full header. Otherwise returns the summary.
         """
         # Check if agent context is available (set by AgentTrace)
-        agent_id = getattr(self, '_agent_id', None)
-        call_id = getattr(self, '_call_id', None)
+        agent_id = getattr(self, "_agent_id", None)
+        call_id = getattr(self, "_call_id", None)
         
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)

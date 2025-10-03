@@ -1,13 +1,21 @@
 defaults:
-  - _self_
-  - local
+  - env: testing
   - flows:
     - zot
     - trans
     - osb
   - llms: debug
+  - _self_
 
 verbose: true
+
+#  Testing paths for bigquery datasets
+storage:
+  observations:
+    full_table_id: "prosocial-443205.testing.observations"
+  titles:
+    full_table_id: "prosocial-443205.testing.tmdbtitles"
+
 
 bm:
   _target_: buttermilk._core.bm_init.BM
@@ -23,7 +31,6 @@ infrastructure:
       region: us-central1
       location: us-central1
       storage_bucket: prosocial-dev
-      bigquery_dataset: buttermilk
       secrets:
         _target_: buttermilk._core.cloud_config.SecretsServiceConfig
         models_secret: dev__llm__connections
