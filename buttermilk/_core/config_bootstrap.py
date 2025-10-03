@@ -61,7 +61,7 @@ class ConfigurationBootstrapper:
 
                     self._config = compose(config_name=self.config_name, overrides=self.overrides)
                     OmegaConf.resolve(self._config)
-                    logger.info("Configuration loaded from existing Hydra context")
+                    # logger.debug("Configuration loaded from existing Hydra context")  # Removed: logging not configured yet
                 else:
                     # Load configuration using Hydra compose API
                     from pathlib import Path
@@ -76,7 +76,7 @@ class ConfigurationBootstrapper:
                         self._config = compose(config_name=self.config_name, overrides=self.overrides)
                         OmegaConf.resolve(self._config)
 
-                    logger.info("Configuration loaded via new Hydra initialization")
+                    # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
             except Exception as e:
                 logger.error(f"Failed to load configuration: {e}")
                 raise
@@ -153,7 +153,7 @@ class ConfigurationBootstrapper:
         Returns:
             ExecutionContext: The configured execution context
         """
-        logger.info("Bootstrapping full application context...")
+        # logger.debug("Bootstrapping full application context...")  # Removed: logging not configured yet
 
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
@@ -162,18 +162,20 @@ class ConfigurationBootstrapper:
             infrastructure_config = config.get("infrastructure", {})
 
             # Debug: Log top-level configuration keys for troubleshooting
-            config_keys = list(config.keys()) if config else []
-            logger.debug("Configuration loaded", config_keys=config_keys)
+            # Removed: logging not configured yet
+            # config_keys = list(config.keys()) if config else []
+            # logger.debug("Configuration loaded", config_keys=config_keys)
 
             # Debug: Log infrastructure configuration for troubleshooting
-            logger.debug(
-                "Infrastructure configuration loaded",
-                clouds_count=len(infrastructure_config.get("clouds", [])),
-                has_secret_provider=bool(infrastructure_config.get("secret_provider")),
-                has_logging=bool(infrastructure_config.get("logging")),
-                has_tracing=bool(infrastructure_config.get("tracing")),
-                has_datasets=bool(infrastructure_config.get("datasets")),
-            )
+            # Removed: logging not configured yet
+            # logger.debug(
+            #     "Infrastructure configuration loaded",
+            #     clouds_count=len(infrastructure_config.get("clouds", [])),
+            #     has_secret_provider=bool(infrastructure_config.get("secret_provider")),
+            #     has_logging=bool(infrastructure_config.get("logging")),
+            #     has_tracing=bool(infrastructure_config.get("tracing")),
+            #     has_datasets=bool(infrastructure_config.get("datasets")),
+            # )
 
             # Instantiate cloud configurations using Hydra
             hydrated_clouds = []
