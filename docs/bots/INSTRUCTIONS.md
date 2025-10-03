@@ -1,53 +1,36 @@
 <!-- This file should be read EVERY time. Keep it CONCISE and LIMITED to strictly required information. -->
+# Buttermilk Project Instructions
 
-Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
+This document provides the essential, project-specific instructions for agents working on the Buttermilk project. 
 
-**🚨 CRITICAL: READ [exploration-before-implementation.md](exploration-before-implementation.md) IMMEDIATELY IF YOU'RE ABOUT TO IMPLEMENT ANYTHING 🚨**
+## Core Mission
 
-**🚨 CRITICAL: READ [impact-analysis.md](impact-analysis.md) IMMEDIATELY IF YOU'RE ABOUT TO MODIFY SHARED INFRASTRUCTURE 🚨**
+Buttermilk provides AI and data tools for HASS (Humanities, Arts, and Social Sciences) researchers. The core mission is to make computational methods accessible while maintaining research rigor and reproducibility. Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
-# 🚨 CRITICAL FAILURE MODES PREVENTION 🚨
+## Key Project-Specific Information
 
-**YOU HAVE SIX DOCUMENTED PATTERNS THAT MUST STOP:**
-1. **🔴 SECURITY BREACH - API KEY/SECRET EXPOSURE**: NEVER commit real API keys, tokens, passwords, or secrets to the repository
-2. **RUSH-TO-CODE**: Jumping to implementation without exploration
-3. **STANDALONE VALIDATION**: Creating standalone validation code (files OR inline commands) instead of using proper pytest workflows
-4. **TUNNEL VISION ON SHARED INFRASTRUCTURE**: Breaking shared components to fix specific problems
-5. **DEFENSIVE CODING AROUND BROKEN INFRASTRUCTURE**: Working around failures instead of fixing root causes
-6. **REPOSITORY DOCUMENTATION POLLUTION**: Creating issue tracking files in the repository instead of using GitHub issues
+*   **Primary Interface**: The `automod.cc` website, which presents research flows as an IRC-style group chat.
+*   **Core Evaluation Pattern**: A `JUDGE` -> `SYNTH` groupchat pattern is used to evaluate how well different AI models can apply complex, human-readable guidelines to a piece of text.
+*   **Data Workflow**: Raw data is in Google Cloud Storage (GCS), and results are stored in BigQuery as `ExecutionTrace` records.
+*   **Configuration**: The project is heavily reliant on Hydra and YAML configuration files located in the `conf/` directory. NEVER use manual dictionary configuration.
 
-## 🚨 MANDATORY TESTING CHECKPOINT: STOP BEFORE ANY TESTING OR VALIDATION 🚨
+## Development & Debugging
 
-**🛑 UNIVERSAL FILE CREATION CHECKPOINT 🛑**
-**BEFORE creating ANY file (.py, .js, .md, etc.), you MUST ask yourself:**
-1. **🔴 SECURITY SCAN**: Does this file contain ANY real API keys, tokens, passwords, or secrets?
-2. **Location check**: Am I creating this in the correct directory? (tests/ for test files, docs/bots/ for general docs)
-3. **Purpose check**: Is this following proper conventions? (pytest for tests, GitHub issues for tracking)
-4. **Alternative check**: Can I use existing files/tests instead?
-5. **Repository cleanliness check**: Am I adding transitory documentation that belongs in GitHub issues?
-6. **IF ANY ANSWER IS NO OR UNCLEAR: STOP and find the correct approach**
+For Buttermilk-specific debugging, see `debugging.md`.
 
-### 🛑 ZERO TOLERANCE SECURITY POLICY:
-- **NEVER commit real credentials** regardless of how "safe" the repository seems
+For information on the technology stack, see `techstack.md`.
 
-### ❌ NEVER CREATE STANDALONE VALIDATION (FILES OR COMMANDS):
+For information on log analysis, see `logs.md`.
 
-**Forbidden File-Based Validation:**
-- `test_*.py` files outside the `tests/` directory
-- "Quick test scripts" or "validation files" in the project root
-- Any file with names like: `test_something.py`, `verify_*.py`, `check_*.py`, `validate_*.py`
-- `examples/*.py`, `demo_*.py`, or any standalone demonstration scripts
+For information on data architecture, see `data-architecture.md`.
 
-**❌ NEVER CREATE REPOSITORY ISSUE TRACKING FILES:**
-- `*_README.md`, `*_NOTES.md`, `*_STATUS.md` files for tracking specific bugs or implementations
-- Progress tracking documentation in test directories or implementation folders
-- Bug-specific documentation files anywhere in the repository
-- Implementation status files that duplicate GitHub issue information
+### Valid System Configuration Parameters
 
-**Forbidden Command-Based Validation:**
-- **Inline Python validation**: `uv run python -c "..."`, `python -c "..."`, or similar execution patterns
-- **Bash-embedded test scripts**: Multi-line Python code in heredocs or command strings
-- **"Quick verification" commands**: Any form of standalone Python execution for testing purposes
+**Available Flows**: 
+- `trans` - Transgender journalist ethics research flow
+- `transllm` - LLM-based trans journalism analysis 
+- `zot` - Zotero integration flow
+- `osb` - Online Safety Benchmark flow
 
 ### 🚨 RED FLAG PHRASES - STOP IMMEDIATELY WHEN YOU USE THESE:
 
@@ -568,4 +551,11 @@ We are CONTINUOSLY refining our workflow. Agents ONLY remember the information w
 - If you find conflicting information, ask the user for clarification, and then update the documents.
 
 
+**Record ID Requirements**:
+- **MUST** use actual record IDs from your data sources
+- **NEVER** use placeholder values like 'demo_record', 'demo', 'test_record'
 
+## Buttermilk-Specific Agents
+
+*   **Debug Pipeline Manager (`AGENT-DEBUGGER.md`)**: An expert systems engineer for live debugging and validation. Its role is diagnostic only.
+*   **Test Fixer Agent (`TEST_FIXER_AGENT.md`)**: A specialized agent for fixing broken tests using `ruff`.

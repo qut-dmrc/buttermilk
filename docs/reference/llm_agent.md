@@ -42,7 +42,7 @@ sequenceDiagram
 
     AutoGenWrapper.call_chat()-->>LLMAgent._process(): Returns final result
     LLMAgent._process()-->>Agent.invoke(): Returns AgentOutput
-    Agent.invoke()-->>User: Returns AgentTrace
+    Agent.invoke()-->>User: Returns ExecutionTrace
 ```
 
    Detailed Execution Flow
@@ -58,7 +58,7 @@ sequenceDiagram
           _add_state_to_input().
        3. It calls trace_and_execute(), which in turn calls the abstract _process() method. This is where control is handed to the specific
           agent implementation (in this case, LLMAgent).
-       4. After _process() returns, it wraps the result in an AgentTrace object for logging and returns it.
+       4. After _process() returns, it wraps the result in an ExecutionTrace object for logging and returns it.
 
   2. LLMAgent._process() - The Agent's Core Logic (fail-fast)
    * File: buttermilk/agents/llm.py
