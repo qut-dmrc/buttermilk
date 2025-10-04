@@ -80,16 +80,17 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 ### 4. Building and Running
 
-Build:
+Build and push to registry:
 ```bash
-docker build -f deploy/Dockerfile -t your-image:latest .
+cd your-mcp-server
+./deploy/build.sh --push
 ```
 
-Run in stdio mode (for MCP clients):
+Run from registry (stdio mode for MCP clients):
 ```bash
 docker run --rm \
   -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
-  -i your-image:latest
+  -i us-central1-docker.pkg.dev/prosocial-443205/reg/your-mcp-server:latest
 ```
 
 Run in HTTP mode:
@@ -98,10 +99,10 @@ docker run --rm \
   -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
   -e MODE=http \
   -p 8024:8024 \
-  your-image:latest
+  us-central1-docker.pkg.dev/prosocial-443205/reg/your-mcp-server:latest
 ```
 
-**Note:** The gcloud credentials mount (`-v ${HOME}/.config/gcloud:/root/.config/gcloud:ro`) provides GCP authentication for accessing Cloud Storage, BigQuery, and other Google Cloud services. This is standard for all buttermilk-based containers.
+**Note:** The gcloud credentials mount (`-v ${HOME}/.config/gcloud:/root/.config/gcloud:ro`) provides GCP authentication for accessing Cloud Storage, BigQuery, and other Google Cloud services. This is standard for all buttermilk-based containers and required for most functionality.
 
 ## Examples
 
