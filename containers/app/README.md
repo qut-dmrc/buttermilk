@@ -87,13 +87,21 @@ docker build -f deploy/Dockerfile -t your-image:latest .
 
 Run in stdio mode (for MCP clients):
 ```bash
-docker run --rm -i your-image:latest
+docker run --rm \
+  -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
+  -i your-image:latest
 ```
 
 Run in HTTP mode:
 ```bash
-docker run --rm -e MODE=http -p 8024:8024 your-image:latest
+docker run --rm \
+  -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
+  -e MODE=http \
+  -p 8024:8024 \
+  your-image:latest
 ```
+
+**Note:** The gcloud credentials mount (`-v ${HOME}/.config/gcloud:/root/.config/gcloud:ro`) provides GCP authentication for accessing Cloud Storage, BigQuery, and other Google Cloud services. This is standard for all buttermilk-based containers.
 
 ## Examples
 
