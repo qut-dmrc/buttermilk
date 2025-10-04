@@ -1,0 +1,42 @@
+# Example Dockerfile for deploying FastMCP apps on buttermilk base
+#
+# This template shows the minimal pattern for packaging MCP servers
+# that depend on the buttermilk library.
+#
+# Usage:
+# 1. Copy this file to your project's deploy/Dockerfile
+# 2. Adjust PROJECT_NAME and resource COPY lines
+# 3. Build with: docker build -f deploy/Dockerfile -t your-image .
+
+FROM us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest
+
+ARG PROJECT_NAME=your-app-name
+WORKDIR /app/${PROJECT_NAME}
+
+# Copy project-specific resources (e.g., ChromaDB cache, static data)
+# Uncomment and customize as needed:
+# COPY .cache/your-data .cache/your-data
+
+# Copy application code
+COPY pyproject.toml ./
+COPY src/ ./src/
+
+# Install app dependencies
+# Note: buttermilk should be in pyproject.toml dependencies via git reference
+RUN --mount=type=cache,target=/root/.cache/uv uv sync
+
+# Set Python paths
+ENV PYTHONPATH="/app/${PROJECT_NAME}/src:/src/buttermilk:${PYTHONPATH}"
+ENV PATH="/src/buttermilk/.venv/bin:/app/${PROJECT_NAME}/.venv/bin:$PATH"
+
+# Default to stdio mode for MCP clients
+ENV MODE=stdio
+
+# Expose HTTP port (only used if MODE=http)
+EXPOSE 8024
+
+# Copy and set entrypoint
+COPY deploy/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
