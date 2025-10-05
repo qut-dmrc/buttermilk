@@ -12,9 +12,9 @@ from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
 
-from buttermilk._core.execution_context import ExecutionContext, get_or_create_execution_context
+from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.log import logger
-from buttermilk.utils.utils import load_json_flexi, load_dotenv
+from buttermilk.utils.utils import load_dotenv
 
 
 class ConfigurationBootstrapper:
@@ -366,6 +366,23 @@ def init(
         >>> cfg = bm.cfg  # Access config
     """
     import asyncio
+
+    if loop := asyncio.get_event_loop():
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                init_async(
+                    job=job,
+                    project=project,
+                    run_type=run_type,
+                    config_dir=config_dir,
+                    config_name=config_name,
+                    overrides=overrides,
+                    config=config,
+                    base_dir=base_dir,
+                ),
+                loop,
+            ).result()
+
     return asyncio.run(init_async(
         job=job, project=project, run_type=run_type, config_dir=config_dir,
         config_name=config_name, overrides=overrides, config=config, base_dir=base_dir
@@ -431,7 +448,7 @@ async def bootstrap_session_with_config_async(
                     caller_frame = frame
                     while caller_frame:
                         caller_filename = caller_frame.f_code.co_filename
-                        if not caller_filename.endswith('config_bootstrap.py'):
+                        if not caller_filename.endswith("config_bootstrap.py"):
                             caller_dir = Path(caller_filename).parent
                             base_path = caller_dir
                             break

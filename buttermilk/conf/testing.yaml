@@ -1,7 +1,6 @@
 defaults:
   - env: testing
   - flows:
-    - zot
     - trans
     - osb
   - llms: debug
