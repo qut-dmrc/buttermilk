@@ -69,9 +69,8 @@ class Slurp(SingleAgent):
 
         # Create an ExecutionTrace object to return the results
         trace = ExecutionTrace(
-            agent_id=self.agent_id,
             session_id=self.session_id,  # session_id is required for ExecutionTrace
-            agent_info=self._config,  # agent_info is required for ExecutionTrace
+            agent_info=self._config.model_dump(),  # agent_info is required for ExecutionTrace (as dict)
             inputs=message,  # Include the original input message
             outputs=outputs_list,  # Store the collected outputs
             # Add other relevant metadata if needed

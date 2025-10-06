@@ -16,9 +16,10 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from buttermilk.utils import scrub_serializable
 import weave  # For tracing - core dependency
 from opentelemetry import trace
+
+from buttermilk.utils import scrub_serializable
 
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
@@ -38,7 +39,7 @@ from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
-from buttermilk import bm, logger, tracer
+from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -59,7 +60,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.tracing import get_parent_call_weave  # Function to retrieve parent call for tracing
-from buttermilk._core.types import Record  # Data record structure
+from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
 # --- Base Agent Class ---
@@ -135,22 +136,22 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
-        
+
         This method provides agents with transparent access to BM functionality while
         supporting session-level observability isolation. When agents are created through
         the orchestration framework (FlowRunner -> Orchestrator -> Agent), they automatically
         receive session-scoped BM instances for proper observability separation.
-        
+
         Returns:
             BM instance to use for operations. Returns session-scoped BM if one was
             injected during agent creation, otherwise falls back to the global singleton.
-            
+
         Example:
             >>> # In an agent's _process method:
             >>> bm = self.get_effective_bm()
             >>> storage = bm.get_storage(self.data["input_source"])
             >>> # Storage access is now session-isolated for multi-session environments
-            
+
         Note:
             Using `self.get_effective_bm()` provides session isolation benefits in
             API and orchestrated environments.
@@ -161,6 +162,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         else:
             # Fall back to global singleton
             from buttermilk._core.dmrc import get_bm
+
             return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
@@ -175,7 +177,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         RoutedAgent.__init__(self, description=self._config.description)
 
         # Initialize private attributes
-        self._records = []
         self._model_context = UnboundedChatCompletionContext()
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
@@ -387,6 +388,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # Store trace to BigQuery if configured
         try:
             from buttermilk.utils.trace_writer import get_trace_writer
+
             trace_writer = get_trace_writer()
             await trace_writer.add(trace_object)
         except Exception as e:
@@ -463,7 +465,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             "agent.id": self.agent_id,
             "agent.type": str(type(self)),
         }
-        
+
         # Only add optional attributes if they have non-None values
         if self._config and self._config.role:
             span_attributes["agent.role"] = self._config.role
@@ -471,7 +473,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             span_attributes["session_id"] = session_id
         if parent_call_id := getattr(message, "parent_call_id", None):
             span_attributes["parent_call_id"] = parent_call_id
-        
+
         with tracer.start_as_current_span(
             f"agent.{self.agent_name}",
             attributes=span_attributes,
@@ -597,7 +599,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         # Get ALL tool definitions (decorated methods + configured tools)
         tool_definitions = self.get_tool_definitions()
-        
+
         # Convert AgentToolDefinition objects to ToolSchema for serialization
         tool_schemas = [tool_def.schema for tool_def in tool_definitions]
 
@@ -616,7 +618,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Mark as announced
         self._announced = True
-    
+
     @message_handler  # Invoke on StepRequest
     async def handle_request(
         self,
@@ -674,16 +676,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 source=source,
                 input_mappings=self.inputs,
             )
-            # Add extracted records to self._records
-            extracted_records = extracted.pop("records", [])
-            for rec in extracted_records:
-                try:
-                    self._records.append(Record.model_validate(rec))
-                    logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
-                except Exception as e:
-                    logger.error(f"Agent {self.agent_name} failed to validate record {rec}: {e}")
-
-            # Add other extracted data to self._data
+            # Add extracted data to self._data
             found_keys = []
             for key, value in extracted.items():
                 if value is not None and value not in ([], {}):  # Ensure value is meaningful
@@ -722,13 +715,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 source=source,
                 input_mappings=self.inputs,
             )
-            # Add extracted records to self._records
-            extracted_records = extracted.pop("records", [])
-            if extracted_records:
-                self._records.extend(extracted_records)
-                logger.debug(f"Agent {self.agent_name} extracted {len(extracted_records)} records via mappings.")
-
-            # Add other extracted data to self._data
+            # Add extracted data to self._data
             found_keys = []
             for key, value in extracted.items():
                 if value is not None and value not in ([], {}):  # Ensure value is meaningful
@@ -759,7 +746,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             `updated_inputs.inputs`. Incoming `inputs.inputs` can override these.
         4.  **Conversation History**: Messages from `self._model_context` are prepended
             to `updated_inputs.context`.
-        5.  **Records**: If `updated_inputs.records` is empty, the most recent record(s)
+        5.  **Records**: If `updated_inputs.record` is empty, the most recent record(s)
             from `self._records` are used.
 
         Args:
@@ -792,6 +779,17 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 for key in self.inputs.keys():  # Iterate over configured input mapping keys
                     # Retrieve data from self._data; note that KeyValueCollector stores values in lists
                     data_values = self._data.get(key, [])
+
+                    # Special handling for 'record': extract most recent and reconstruct as BaseRecord
+                    if key == "record" and data_values and not updated_inputs.record:
+                        record_data = data_values[-1]  # Get most recent
+                        if isinstance(record_data, dict):
+                            updated_inputs.record = BaseRecord.from_dict(record_data)
+                        else:
+                            updated_inputs.record = record_data
+                        # Don't add to inputs dict - record goes in the record field
+                        continue
+
                     extracted_data[key] = data_values
 
                 # Merge resolved mappings, letting original message inputs override
@@ -810,9 +808,18 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             logger.error(f"Agent {self.agent_name}: Error retrieving model context: {e!s}")
             # Decide handling: continue without history or raise? For now, log and continue.
 
-        # 5. Ensure records list exists. Use the last saved one if input records are empty.
-        if not updated_inputs.records and self._records:
-            updated_inputs.records = [self._records[-1]]  # Use only the most recent record as default
+        # 5. Use most recent record from data if not provided in input
+        if not updated_inputs.record:
+            record_list = self._data.get("record", [])
+            if record_list:
+                record_data = record_list[-1]  # Get most recent
+
+                # Reconstruct as proper BaseRecord subclass if it's a dict
+                if isinstance(record_data, dict):
+                    updated_inputs.record = BaseRecord.from_dict(record_data)
+                else:
+                    # Already an object
+                    updated_inputs.record = record_data
 
         # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
 
@@ -820,7 +827,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             f"Agent {self.agent_id}: Added state to input. "
             f"Final input keys: {list(updated_inputs.inputs.keys()) if updated_inputs.inputs else []}, "
             f"Context length: {len(updated_inputs.context)}, "
-            f"Records count: {len(updated_inputs.records)}.",
+            f"Has record: {updated_inputs.record is not None}.",
         )
 
         return updated_inputs

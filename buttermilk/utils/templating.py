@@ -496,7 +496,7 @@ def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
     context: list[LLMMessage] = [],  # Conversation history
-    records: list[BaseRecord] = [],  # Optional list of records
+    record: BaseRecord | None = None,  # Optional record
 ) -> tuple[list[LLMMessage], set[str]]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
 
@@ -509,15 +509,15 @@ def make_messages(
     "placeholder" roles in the Prompty template are handled:
     -   A placeholder with content "context" (case-insensitive, after stripping
         non-alphanumerics) will be replaced by the messages in the `context` argument.
-    -   A placeholder with content "records" will be replaced by converting each
-        `Record` in the `records` argument into an `UserMessage` (using `record.as_message()`).
+    -   A placeholder with content "record" will be replaced by converting the given
+        `Record` into an `UserMessage` (using `record.as_message()`).
 
     Args:
         local_template (str): The string content of the rendered template,
             expected to be in Prompty format (frontmatter optional, then chat messages).
         context (list[LLMMessage] | None): An optional list of `LLMMessage` objects
             representing prior conversation history to be injected. Defaults to an empty list.
-        records (list[BaseRecord] | None): An optional list of `BaseRecord` objects to be
+        record (BaseRecord | None): An optional list of `BaseRecord` objects to be
             injected. Defaults to an empty list.
 
     Returns:
@@ -525,7 +525,7 @@ def make_messages(
             - list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
               with an LLM client.
             - set[str]: A set of placeholder names that were successfully processed
-              ("context", "records", etc.)
+              ("context", "record", etc.)
 
     Raises:
         ProcessingError:
@@ -572,11 +572,10 @@ def make_messages(
                 output_messages.extend(context)
                 processed_placeholders.add("context")
 
-            elif normalized_placeholder_key in ["records", "record"] and records:
-                output_messages.extend([rec.as_message() for rec in records if isinstance(rec, BaseRecord)])
-                processed_placeholders.add("records")
-                processed_placeholders.add("record")  # Add both variants
-            elif content_str.strip():  # Non-empty placeholder content that's not context/records
+            elif normalized_placeholder_key == "record" and record:
+                output_messages.append(record.as_message())
+                processed_placeholders.add("record")
+            elif content_str.strip():  # Non-empty placeholder content that's not context/record
                 # Treat as user message - this handles templates where "placeholder:"
                 # is used as a marker with rendered Jinja variables
                 output_messages.append(UserMessage(content=content_str, source="template_placeholder"))

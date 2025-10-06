@@ -374,7 +374,7 @@ class FlowTestClient:
             logger.error(f"Unexpected error in message listener: {e}")
             raise
 
-    async def start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = ""):
+    async def start_flow(self, flow_name: str, prompt: str = "", record_id: str = "", criteria: str = ""):
         """Start a flow."""
         message = {
             "type": MessageType.RUN_FLOW,
@@ -383,12 +383,12 @@ class FlowTestClient:
         }
         
         # Add optional parameters if provided
-        if record:
-            message["record"] = record
+        if record_id:
+            message["record_id"] = record_id
         if criteria:
             message["criteria"] = criteria
 
-        logger.info(f"Starting flow: {flow_name} (record: {record}, criteria: {criteria})")
+        logger.info(f"Starting flow: {flow_name} (record_id: {record_id}, criteria: {criteria})")
         await self.ws.send_json(message)
 
     async def send_manager_response(self, content: str):
@@ -444,11 +444,11 @@ class FlowTestClient:
     ) -> list[CollectedMessage]:
         """Wait for specific agents to provide results."""
         # First wait for agents to announce
-        await self.waiter.wait_for_agents(expected_agents, timeout/2)
+        await self.waiter.wait_for_agents(expected_agents, timeout / 2)
 
         # Then wait for their results
         start_time = time.time()
-        while time.time() - start_time < timeout/2:
+        while time.time() - start_time < timeout / 2:
             results = []
             for agent in expected_agents:
                 agent_results = self.collector.get_agent_results(agent)

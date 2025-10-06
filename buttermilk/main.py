@@ -19,7 +19,7 @@ logger.info("=== Testing simple new session creation ===")
 
 # First session - project required
 logger.info("1. Creating first session...")
-bm1 = init(job="first_analysis", project="project_alpha")
+bm1 = init(job="first_analysis", project_name="project_alpha")
 logger.info("First session started")
 logger.info(f"   Session 1: {bm1.session_info.session_id}")
 logger.info(f"   Project: {bm1.session_info.project_name}, Job: {bm1.session_info.job}")

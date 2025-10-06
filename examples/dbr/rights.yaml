@@ -17,4 +17,4 @@
         variants:
           model: ${llms.general}
         inputs:
-          records: "[FETCH.outputs]||*.records[]"
+          record: "[FETCH.outputs]||*.record[]"

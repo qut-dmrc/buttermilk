@@ -252,7 +252,7 @@ class HostAgent(Agent):
     async def update_agent_registry(
         self,
         message: AgentAnnouncement,
-        ctx: MessageContext,
+        ctx: MessageContext = None,
     ) -> None:
         """Update registry with agent announcement.
         
@@ -498,10 +498,27 @@ class HostAgent(Agent):
             # Create more descriptive step content using the participant description
             step_description = f"Executing {role.lower()} step: {description}"
 
+            # Separate record from inputs dict - record should be in the record field, not inputs
+            step_inputs = self._host_initial_inputs.copy()
+            record = step_inputs.pop("record", None)
+
+            # Reconstruct record if needed
+            if record:
+                from buttermilk._core.types import BaseRecord
+
+                # If it's a list, take the last item (most recent)
+                if isinstance(record, list):
+                    record = record[-1] if record else None
+
+                # If it's a dict, reconstruct as BaseRecord
+                if isinstance(record, dict):
+                    record = BaseRecord.from_dict(record)
+
             yield StepRequest(
                 role=role,
                 content=step_description,
-                inputs=self._host_initial_inputs.copy(),
+                inputs=step_inputs,
+                record=record,
             )
         yield StepRequest(role=END, content="Sequence completed.")
 

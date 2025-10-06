@@ -252,6 +252,7 @@ markers = [
   "integration: integration tests (slower, mocked and faked at the edges)",
   "endtoend: tests that require real API calls with valid credentials",
   "scheduled: mark tests to run in scheduled testing",
+  "slow: mark tests as slow (deselect with '-m \"not slow\"')",
 ]
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]

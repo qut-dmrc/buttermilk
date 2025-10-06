@@ -103,12 +103,12 @@ class ToxicityModel(BaseModel):
             raise NotImplementedError
 
     def run(self, message: AgentInput) -> ExecutionTrace:  # Changed parameter name/type and return type
-        # Assuming the AgentInput contains at least one record
-        if not message.records:
-            raise ValueError("AgentInput must contain at least one record for ToxicityModel.")
+        # Assuming the AgentInput contains a record
+        if not message.record:
+            raise ValueError("AgentInput must contain a record for ToxicityModel.")
 
-        # Process the first record in the input message
-        record = message.records[0]
+        # Process the record in the input message
+        record = message.record
 
         response = self.moderate(content=record.content, record_id=record.record_id)  # Access content and record_id from Record
         if not isinstance(response, EvalRecord):
@@ -122,9 +122,8 @@ class ToxicityModel(BaseModel):
 
         # Create an ExecutionTrace object to return the results
         trace = ExecutionTrace(
-            agent_id=self.agent_id,
             session_id=self.session_id,  # session_id is required for ExecutionTrace
-            agent_info=self._config,  # agent_info is required for ExecutionTrace
+            agent_info=self._config.model_dump(),  # agent_info is required for ExecutionTrace (as dict)
             inputs=message,  # Include the original input message
             outputs=response,  # Store the EvalRecord in outputs
             # Add other relevant metadata if needed

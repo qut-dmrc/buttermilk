@@ -126,11 +126,11 @@ class Describer(LLMAgent):
             ProcessingError: If no records provided or no content to describe.
 
         """
-        if not message.records:
-            raise ProcessingError("No records provided for description.")
+        if not message.record:
+            raise ProcessingError("No record provided for description.")
 
         # Get the record to describe
-        record = message.records[0]  # Use the first record if multiple
+        record = message.record
 
         # Check if alt_text already exists in metadata
         if (

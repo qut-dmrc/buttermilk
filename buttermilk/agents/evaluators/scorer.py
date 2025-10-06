@@ -143,10 +143,7 @@ class QualResults(QualScore):
         score_val = self.correctness
         score_str = f"{score_val:.2f}" if score_val is not None else "N/A"
 
-        assessment_lines = [
-            f"**{'✔️ Correct' if cra.correct else '✘ Incorrect'}**: {cra.feedback}"
-            for cra in self.assessments
-        ]
+        assessment_lines = [f"**{'✔️ Correct' if cra.correct else '✘ Incorrect'}**: {cra.feedback}" for cra in self.assessments]
         return (
             f"**Assessed Answer Call ID**: {self.assessed_call_id}\n"
             f"**Overall Score**: {score_str} ({self.score_text})\n\n"
@@ -231,25 +228,27 @@ class LLMScorer(LLMAgent):
             logger.debug(
                 "Scorer received message that is not a suitable ExecutionTrace with JudgeReasons and inputs. Skipping.",
                 agent_id=self.agent_id,
-                message_agent_id=message.agent_id,
+                message_agent_id=message.agent_info.get('agent_id'),
             )
             return
 
-        logger.debug("Scorer received potential scoring target", scorer_agent_id=self.agent_id, from_agent_id=message.agent_id, call_id=message.call_id)
+        logger.debug(
+            "Scorer received potential scoring target", scorer_agent_id=self.agent_id, from_agent_id=message.agent_info.get('agent_id'), call_id=message.call_id
+        )
 
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
         # and 'criteria' (if the criteria template is dynamic).
         extracted_data = extract_message_data(
             message=message,  # The ExecutionTrace from the Judge
-            source=message.agent_id,  # The Judge agent's ID/name
+            source=message.agent_info.get('agent_id'),  # The Judge agent's ID/name
             input_mappings=self.inputs,  # Configured mappings for the Scorer
         )
 
         # Ignore messages that don't have ground truth in the input record
         record = extracted_data.pop("records", [])
         if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
-            logger.debug("Scorer received message without ground truth.", scorer_agent_name=self.agent_name, from_agent_id=message.agent_id)
+            logger.debug("Scorer received message without ground truth.", scorer_agent_name=self.agent_name, from_agent_id=message.agent_info.get('agent_id'))
             return
 
         # `records` for scoring should come from the original input to the agent being judged.
@@ -258,9 +257,9 @@ class LLMScorer(LLMAgent):
         # The `scorer_agent_input` needs to be structured according to what the
         # scorer's prompt template expects.
 
-        # Ensure 'records' and 'answers' are present, as they are crucial for scoring.
+        # Ensure 'record' and 'answers' are present, as they are crucial for scoring.
         # 'answers' would typically be mapped from message.outputs (the JudgeReasons).
-        # 'records' would typically be mapped from message.inputs.records (original records judged).
+        # 'record' would typically be mapped from message.inputs.record (original record judged).
         # Extract the first record
         record = record[0]
 
@@ -277,7 +276,9 @@ class LLMScorer(LLMAgent):
         )
 
         # Invoke the scoring process using the LLM
-        logger.debug("Scorer scoring request", scorer_agent_name=self.agent_name, assessed_agent_id=message.agent_id, assessed_call_id=message.call_id)
+        logger.debug(
+            "Scorer scoring request", scorer_agent_name=self.agent_name, assessed_agent_id=message.agent_info.get('agent_id'), assessed_call_id=message.call_id
+        )
         response = await self.invoke(message=scorer_agent_input)
 
         # We don't publish here, because the invoke() method have already published the result.

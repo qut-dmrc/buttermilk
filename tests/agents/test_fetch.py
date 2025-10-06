@@ -53,6 +53,7 @@ class TestFetch:
     def fetch(self):
         return FetchAgent(description="test only")
 
+    @pytest.mark.skip(reason="load_data method removed from FetchAgent - data sources initialized in __init__")
     @pytest.mark.anyio
     async def test_load_data(self, fetch, real_bm):
         """Test the load_data method with unified storage API."""

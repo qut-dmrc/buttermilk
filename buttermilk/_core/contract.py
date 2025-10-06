@@ -283,7 +283,8 @@ def _get_session_id() -> str:
     # Fallback to bm.session_info if available
     try:
         from buttermilk import bm
-        if hasattr(bm, 'session_info') and bm.session_info and hasattr(bm.session_info, 'session_id'):
+
+        if hasattr(bm, "session_info") and bm.session_info and hasattr(bm.session_info, "session_id"):
             return bm.session_info.session_id
     except (ImportError, AttributeError):
         pass
@@ -315,8 +316,8 @@ class AgentInput(FlowMessage):
         context (list[LLMMessage]): A list of messages representing the conversation
             history (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage` from Autogen).
             This provides conversational context, especially for LLM-based agents.
-        records (list[Record]): A list of `Record` objects relevant to the current
-            task. These are typically the primary data items the agent will process.
+        record (Record | None): A `Record` object relevant to the current
+            task. This is typically the primary data item the agent will process.
 
     """
 
@@ -367,7 +368,7 @@ class StepRequest(AgentInput):
 
     This message instructs an agent (identified by `role`) to perform a task.
     It inherits all fields from `AgentInput` (like `inputs`, `parameters`, `context`,
-    `records`) to provide the necessary data for the step.
+    `record`) to provide the necessary data for the step.
 
     Attributes:
         role (str): The role name (typically uppercase) of the agent or group of
@@ -648,19 +649,20 @@ class ExecutionTrace(BaseModel):
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
+        agent_id = self.agent_info.get("agent_id", "unknown-agent")
         if self.outputs and hasattr(self.outputs, "as_markdown"):
             # Pass agent context to the output's as_markdown method
-            return self.outputs.as_markdown(self.agent_id, self.call_id)
+            return self.outputs.as_markdown(agent_id, self.call_id)
         elif self.outputs:
             # Fallback: create simple formatted output
             short_call_id = self.call_id[-8:] if len(self.call_id) > 8 else self.call_id
-            header = f"**{self.agent_id} #{short_call_id}**\n"
+            header = f"**{agent_id} #{short_call_id}**\n"
             return f"{header}{str(self.outputs)}"
         else:
             # No outputs, return error or empty message
             if self.error:
-                return f"**{self.agent_id}**\nERROR: {self.error}"
-            return f"**{self.agent_id}**\n(No output)"
+                return f"**{agent_id}**\nERROR: {self.error}"
+            return f"**{agent_id}**\n(No output)"
 
     def __str__(self) -> str:
         """Returns the `content` (string representation of `outputs`) of the agent trace."""

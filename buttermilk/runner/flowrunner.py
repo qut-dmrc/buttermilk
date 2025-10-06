@@ -10,6 +10,7 @@ from typing import Any
 
 import shortuuid
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.websockets import WebSocketDisconnect
 
 from buttermilk import ExecutionTrace, logger
 from buttermilk._core.context import set_logging_context
@@ -309,7 +310,10 @@ class FlowRunContext(BaseModel):
                     continue
                 else:
                     await self.callback_to_groupchat(message)
-
+            except WebSocketDisconnect:
+                logger.debug("WebSocket disconnected for session", session_id=self.session_id)
+                self.websocket = None
+                break
             except Exception as e:
                 logger.error("Error receiving/processing client message", session_id=self.session_id, error=str(e))
                 self.websocket = None

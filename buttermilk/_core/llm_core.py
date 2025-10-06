@@ -16,18 +16,18 @@ import uuid
 from typing import Any, AsyncGenerator, Optional
 
 import pydantic
+import weave
 from autogen_core import CancellationToken
 from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field
-import weave
 
-from buttermilk._core.types import BaseRecord
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
 
@@ -197,24 +197,17 @@ class LLMCore:
 
             # Verify it's a Pydantic model
             if not (isinstance(cls, type) and issubclass(cls, pydantic.BaseModel)):
-                raise ProcessingError(
-                    f"Class {class_path} is not a Pydantic BaseModel. "
-                    f"Got type: {type(cls).__name__}"
-                )
+                raise ProcessingError(f"Class {class_path} is not a Pydantic BaseModel. Got type: {type(cls).__name__}")
 
             logger.info(f"Successfully resolved output_model: {class_path} -> {cls} using {successful_strategy}")
             return cls
 
         except AttributeError as e:
-            raise ProcessingError(
-                f"Class '{class_name}' not found in module '{module_path}': {e}"
-            )
+            raise ProcessingError(f"Class '{class_name}' not found in module '{module_path}': {e}")
         except ProcessingError:
             raise
         except Exception as e:
-            raise ProcessingError(
-                f"Error resolving output_model '{class_path}': {e}"
-            )
+            raise ProcessingError(f"Error resolving output_model '{class_path}': {e}")
 
     @property
     def trace_writer(self):
@@ -400,14 +393,37 @@ class LLMCore:
 
         with tracer.start_as_current_span("llm_core.process", attributes=span_attributes) as span:
             try:
-                # Combine inputs and kwargs
+                # Extract record and context BEFORE combining to avoid serialization
+                record = None
+                context = None
+
+                # First check kwargs (they take precedence)
+                record = kwargs.pop("record", None)
+                context = kwargs.pop("context", None)
+
+                # If not in kwargs, extract from inputs
+                if record is None:
+                    if hasattr(inputs, "record"):
+                        record = inputs.record
+                    elif isinstance(inputs, dict):
+                        record = inputs.get("record")
+
+                if context is None:
+                    if hasattr(inputs, "context"):
+                        context = inputs.context
+                    elif isinstance(inputs, dict):
+                        context = inputs.get("context")
+
+                context = context or []
+
+                # Combine inputs and kwargs (record/context already removed from kwargs)
                 combined_inputs = self._combine_inputs(inputs, kwargs)
-                # Extract special placeholder keys if present
-                records = [r for r in ((combined_inputs.pop("records", None) or []) + [combined_inputs.pop("record", None)]) if r]
-                context = combined_inputs.pop("context", None) or []
+                # Remove record/context from combined_inputs if they were in inputs dict
+                combined_inputs.pop("record", None)
+                combined_inputs.pop("context", None)
 
                 # Fill template
-                llm_messages = await self._fill_template(combined_inputs, records=records, context=context)
+                llm_messages = await self._fill_template(combined_inputs, record=record, context=context)
 
                 # Store template metadata
                 result.metadata["template"] = self.template_metadata
@@ -466,9 +482,7 @@ class LLMCore:
 
         return result
 
-    async def _fill_template(
-        self, inputs: Any, *, record: BaseRecord = None, records: list[BaseRecord] = [], context: list[LLMMessage] = []
-    ) -> list[LLMMessage]:
+    async def _fill_template(self, inputs: Any, *, record: BaseRecord = None, context: list[LLMMessage] = []) -> list[LLMMessage]:
         """Render the template with provided data.
 
         Args:
@@ -509,7 +523,7 @@ class LLMCore:
         )
 
         try:
-            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, records=records, context=context)
+            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, record=record, context=context)
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 

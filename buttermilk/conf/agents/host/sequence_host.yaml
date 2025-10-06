@@ -5,6 +5,6 @@ host:
   name: "Sequence Coordinator"
   agent_obj: HostAgent
   parameters:
-    human_in_loop: ${run.human_in_loop}
+    human_in_loop: false
     execution_mode: "sequential"  # Execute agents in defined order
     # error_threshold: 0.5  # Optional: Stop flow if >50% of tasks fail (default: 0.5)

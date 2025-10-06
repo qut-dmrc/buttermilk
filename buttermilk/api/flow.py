@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
-from buttermilk import logger
+from buttermilk import create_session_bm_async, logger
 from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk.runner.flowrunner import FlowRunner
@@ -238,16 +238,15 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     # use to create a new flow.
                     logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
                     logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
-                    
-                    # Create session-scoped BM for this flow execution using existing infrastructure
-                    from buttermilk._core.bm_init import create_session_bm
+
+                    # Create session-scoped BM for this flow execution using existing infrastructurep
                     from buttermilk._core.execution_context import get_execution_context
 
                     # Get the existing ExecutionContext to reuse infrastructure
                     execution_context = get_execution_context()
 
-                    session_bm = create_session_bm(
-                        name=execution_context.project_name,  # Use same project
+                    session_bm = await create_session_bm_async(
+                        project_name=execution_context.project_name,  # Use same project
                         job=run_request.flow,  # Use flow name as job
                         cloud_manager=execution_context.cloud_manager if execution_context.clouds else None,
                         secret_manager=execution_context.secret_manager if execution_context._find_cloud_with_service("secrets") else None,
@@ -266,25 +265,29 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     ))
                     
                     # Add callback to handle unhandled task exceptions
-                    async def handle_task_exception(task_future):
+                    def handle_task_exception(task_future):
                         if task_future.exception() is not None:
                             exc = task_future.exception()
                             # Log the exception with full traceback
                             logger.error(f"🚨 FATAL: Unhandled exception in flow task for session {session_id}: {exc}", exc_info=exc)
                             fatal_msg = f"Flow execution failed for '{run_request.flow}' in session {session_id}: {exc}"
                             logger.critical(f"💥 FATAL ERROR: {fatal_msg}")
-                            
-                            # Send error message to UI if session is still active
-                            try:
-                                session = await flow_runner.session_manager.get_or_create_session(session_id)
-                                if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
-                                    # Send error to UI asynchronously
-                                    await session.websocket.send_json(
-                                        {"type": "error", "message": f"Flow execution failed: {str(exc)}", "fatal": True}
-                                    )
-                            except Exception as notify_exc:
-                                logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
-                    
+
+                            # Send error message to UI if session is still active - schedule as async task
+                            async def notify_ui():
+                                try:
+                                    session = await flow_runner.session_manager.get_or_create_session(session_id)
+                                    if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
+                                        # Send error to UI asynchronously
+                                        await session.websocket.send_json(
+                                            {"type": "error", "message": f"Flow execution failed: {str(exc)}", "fatal": True}
+                                        )
+                                except Exception as notify_exc:
+                                    logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
+
+                            # Schedule the async notification
+                            asyncio.create_task(notify_ui())
+
                     task.add_done_callback(handle_task_exception)
                     logger.info(f"[WEBSOCKET] Task created: {task}")
 
@@ -295,12 +298,31 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     # Track error in session metrics
                     metrics_collector.update_session_activity(session_id, error_occurred=True)
                     msg = f"Error receiving/processing client message for {session_id}: {e}"
+                    logger.exception(msg)  # Log with full traceback to structured logs
                     raise FatalError(msg) from e
                 finally:
                     session_id_var.reset(token)
         except asyncio.CancelledError:
             logger.debug(f"[WEBSOCKET] Monitor UI task cancelled for session {session_id} (WebSocket replacement)")
             # Don't treat this as an error - this is expected when WebSocket connections are replaced
+        except Exception as e:
+            # Catch any unhandled exceptions from the websocket loop
+            logger.exception(f"Unhandled exception in websocket endpoint for session {session_id}")
+            # Try to notify the client
+            try:
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Fatal error: {str(e)}",
+                        "fatal": True
+                    })
+            except Exception:
+                pass  # Best effort notification
+            # Close the websocket cleanly
+            try:
+                await websocket.close(code=1011, reason="Internal server error")
+            except Exception:
+                pass
 
         # Clear the monitor_ui task reference from session
         if session and session.monitor_ui_task == current_task:

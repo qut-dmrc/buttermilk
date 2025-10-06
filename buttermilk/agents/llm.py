@@ -125,15 +125,20 @@ class LLMAgent(Agent):
 
         # Override parameters with message parameters
         if message.parameters:
-            # Create a new LLMCore instance with merged parameters
+            # Create a new LLMCore instance with runtime parameters
+            # Template is set at init time and should not be overridden
             merged_params = {**self.parameters, **message.parameters}
+            # Filter out parameters we're passing explicitly to avoid duplicates
+            # Template comes from agent config only, not message parameters
+            filtered_params = {k: v for k, v in merged_params.items()
+                              if k not in ("model", "output_model", "tools", "fail_on_unfilled_parameters", "template")}
             llm_core = LLMCore(
                 model=merged_params.get("model", ""),
-                template=merged_params.get("template", ""),
+                template=self.parameters.get("template", ""),  # Use agent's template, not message override
                 output_model=self.output_model,
                 tools=self._tools or [],
                 fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
-                **merged_params,
+                **filtered_params,
             )
         else:
             llm_core = self.llm_core
@@ -141,7 +146,9 @@ class LLMAgent(Agent):
         try:
             # Process through LLMCore (yields LLMResult)
             llm_result = await llm_core.process_with_llm(
-                inputs=message,
+                inputs=message.inputs,
+                record=message.record,
+                context=message.context,
                 parent_trace_id=message.parent_call_id,
                 component_name=f"LLMAgent[{self.agent_name}]",
                 cancellation_token=cancellation_token,

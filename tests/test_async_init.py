@@ -54,18 +54,3 @@ async def test_bm_ensure_initialized():
     assert bm._initialization_complete.is_set()
     assert bm._initialization_error is None
 
-
-def test_sync_wrappers_still_work():
-    """Test that sync wrappers remain functional for backward compatibility."""
-    from buttermilk._core.bm_init import create_session_bm
-
-    # Sync wrapper should still work
-    bm = create_session_bm(
-        name="test_project",
-        job="test_job",
-        platform="test"
-    )
-
-    assert bm is not None
-    assert bm.session_info.project_name == "test_project"
-    assert bm.session_info.job == "test_job"

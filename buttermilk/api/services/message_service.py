@@ -150,9 +150,13 @@ class MessageService:
                 elif message.error:
                     # Handle error - convert to ErrorEvent if it's a list
                     if isinstance(message.error, list) and message.error:
-                        message = message.error[0] if isinstance(message.error[0], ErrorEvent) else ErrorEvent(source=agent_info.name if agent_info else "unknown", content=str(message.error[0]))
+                        message = (
+                            message.error[0]
+                            if isinstance(message.error[0], ErrorEvent)
+                            else ErrorEvent(source=agent_info.get("name", "unknown") if agent_info else "unknown", content=str(message.error[0]))
+                        )
                     else:
-                        message = ErrorEvent(source=agent_info.name if agent_info else "unknown", content=str(message.error))
+                        message = ErrorEvent(source=agent_info.get("name", "unknown") if agent_info else "unknown", content=str(message.error))
                 else:
                     logger.warning(f"[MessageService] ExecutionTrace object with no outputs: {message}, returning None.")
                     return None

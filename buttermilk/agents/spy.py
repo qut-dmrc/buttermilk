@@ -117,7 +117,7 @@ class SpyAgent(RoutedAgent):
         1.  Checks if the incoming `message` is an instance of `ExecutionTrace`.
         2.  If it is an `ExecutionTrace` and has `outputs` (i.e., it's not an empty trace),
             it performs a data cleaning step: if any `Record` objects within
-            `message.inputs.records` have both "text" and "content" attributes,
+            `message.inputs.record` have both "text" and "content" attributes,
             the "text" attribute is excluded before saving (this addresses a
             potential data conflict or redundancy).
         3.  The (potentially modified) `ExecutionTrace` message is then added to the
@@ -148,12 +148,12 @@ class SpyAgent(RoutedAgent):
             if message.outputs:
                 logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
                 # # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.
-                # if message.inputs and message.inputs.records:
-                #     for record in message.inputs.records:
+                # if message.inputs and message.inputs.record:
+                #     for record in message.inputs.record:
                 #         if hasattr(record, "text") and hasattr(record, "content"):
                 #             # This shouldn't happen because the pydantic model excludes text.
                 #             # But for some reason it does, so we need to handle it.
-                #             message.inputs.records = [x.model_dump(exclude="text") for x in message.inputs.records]
+                #             message.inputs.record = [x.model_dump(exclude="text") for x in message.inputs.record]
                 #             break
                 await self.manager.add(message)
             else:

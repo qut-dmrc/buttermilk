@@ -32,7 +32,7 @@ flows:
         variants:
           model: ${llms.judgers}
         inputs:
-          records: "[FETCH.outputs]||*.records[]"
+          record: "[FETCH.outputs]||*.record[]"
     observers:
       fetch:
         role: FETCH
@@ -47,7 +47,6 @@ flows:
         name: "🎯 Assistant"
         description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
         agent_obj: StructuredLLMHostAgent
-        human_in_loop: ${run.human_in_loop}
         parameters:
           template: lead_ra
           model: ${llms.host}

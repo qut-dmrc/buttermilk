@@ -28,8 +28,6 @@ def test_actual_judge_reasons_direct_dump():
         assert not dumped_reasons["prediction"]
         assert dumped_reasons["reasons"] == ["Reason 1", "Reason 2"]
         assert dumped_reasons["uncertainty"] == "low"
-        # Check that a preview field is generated
-        assert "preview" in dumped_reasons
     except ValidationError as e:
         pytest.fail(f"JudgeReasons validation failed: {e}")
 
@@ -48,10 +46,9 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs():
 
     # Instantiate ExecutionTrace - provide minimal required fields
     output_obj = ExecutionTrace(
-        agent_info=minimal_agent_config,
+        agent_info=minimal_agent_config.model_dump(),  # Convert to dict
         session_id="test_session",
         call_id="actual_test_id",
-        agent_id="test",  # Add required agent_id field
         inputs=AgentInput(),  # Add the required inputs field
     )
     output_obj.outputs = reasons_obj  # Assign the nested actual model
@@ -70,10 +67,6 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs():
     assert outputs["reasons"] == SAMPLE_REASONS_DATA["reasons"]
     assert outputs["uncertainty"] == SAMPLE_REASONS_DATA["uncertainty"]
 
-    # Verify computed field is present (but don't check exact value since it has randomness)
-    assert "preview" in outputs, "Computed 'preview' field should be present in output"
-    assert isinstance(outputs["preview"], str), "Preview field should be a string"
-
     assert full_dump["call_id"] == "actual_test_id"  # Verify other fields
 
 
@@ -83,9 +76,8 @@ def test_actual_agent_trace_full_dump_with_default_outputs():
     minimal_agent_config = AgentConfig(role="TEST")
 
     output_obj = ExecutionTrace(
-        agent_info=minimal_agent_config,
+        agent_info=minimal_agent_config.model_dump(),  # Convert to dict
         session_id="test_session",
-        agent_id="test",  # agent_id is part of AgentOutput base class
         inputs=AgentInput(),  # Add the required inputs field
     )  # Instantiate with defaults
 

@@ -7,7 +7,7 @@ from buttermilk._core.agent import Agent
 async def test_agent_name_generation():
     """Test that agent_name is generated correctly based on name_components."""
     # Sample data
-    inputs_data = {"records": "[FETCH.outputs]||*.records[]", "template": "judge", "model": "gemini25pro", "criteria": "trans_factored"}
+    inputs_data = {"records": "[FETCH.outputs]||*.record[]", "template": "judge", "model": "gemini25pro", "criteria": "trans_factored"}
     name_components = ["⚖️", "role", "model", "criteria", "unique_identifier"]
 
     # Mock AgentConfig and Agent
@@ -35,6 +35,7 @@ async def test_agent_name_generation():
 @pytest.mark.anyio
 async def test_agent_name_generation_empty_components():
     """Test that agent_name falls back to agent_id when name_components resolve to empty strings."""
+
     class MockAgent(Agent):
         async def _process(self, *args, **kwargs):
             return None  # Dummy implementation
@@ -55,6 +56,7 @@ async def test_agent_name_generation_empty_components():
 @pytest.mark.anyio
 async def test_agent_name_generation_jmespath_failure():
     """Test that agent_name handles JMESPath expression failures gracefully."""
+
     class MockAgent(Agent):
         async def _process(self, *args, **kwargs):
             return None  # Dummy implementation
@@ -75,6 +77,7 @@ async def test_agent_name_generation_jmespath_failure():
 @pytest.mark.anyio
 async def test_agent_name_generation_short_string_component():
     """Test that agent_name includes short string components directly."""
+
     class MockAgent(Agent):
         async def _process(self, *args, **kwargs):
             return None  # Dummy implementation

@@ -238,7 +238,7 @@ class Storage(ABC):
             # Verify it's a BaseRecord subclass
             if not issubclass(cls, BaseRecord):
                 logger.warning(f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. Falling back to Record.")
-                self._record_class = Record
+                self._record_class = BaseRecord
             else:
                 self._record_class = cls
                 logger.debug(f"Using BaseRecord class: {self.config.record_class}")

@@ -10,12 +10,10 @@ import datetime
 import json  # For JSON parsing in validators
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, Self  # Standard typing utilities
+from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-
 from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
-
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
     BaseModel,
@@ -26,7 +24,7 @@ from pydantic import (
     model_validator,  # For model-level validation
 )
 
-# Conditional imports to avoid circular dependencies
+from .log import logger
 
 
 class BaseRecord(BaseModel):
@@ -166,6 +164,46 @@ class BaseRecord(BaseModel):
 
         return "\n\n".join(p for p in parts if p)  # Join non-empty parts
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BaseRecord":
+        """Reconstruct a BaseRecord from a dictionary, using the correct subclass.
+
+        If the dictionary contains a 'record_class' field, this method will dynamically
+        import and instantiate the correct subclass. Otherwise, it will use the class
+        this method was called on.
+
+        Args:
+            data: Dictionary containing record data (potentially serialized from a subclass)
+
+        Returns:
+            Reconstructed record instance of the appropriate type
+        """
+        import importlib
+
+        # Check if data specifies a record class
+        record_class_path = data.get("record_class")
+
+        if record_class_path and record_class_path != f"{cls.__module__}.{cls.__name__}":
+            # Need to reconstruct as a different class
+            try:
+                module_path, class_name = record_class_path.rsplit(".", 1)
+                module = importlib.import_module(module_path)
+                RecordClass = getattr(module, class_name)
+
+                # Verify it's a BaseRecord subclass
+                if not issubclass(RecordClass, BaseRecord):
+                    logger.warning(f"Class '{record_class_path}' is not a BaseRecord subclass. Using {cls.__name__}.")
+                    return cls(**data)
+
+                return RecordClass(**data)
+
+            except (ImportError, AttributeError, ValueError) as e:
+                logger.warning(f"Failed to resolve record_class '{record_class_path}': {e}. Using {cls.__name__}.")
+                return cls(**data)
+
+        # No special class specified, or it matches current class
+        return cls(**data)
+
     @computed_field
     @property
     def record_hash(self) -> str:
@@ -185,6 +223,19 @@ class BaseRecord(BaseModel):
         self.metadata["record_hash"] = hash_value
         return hash_value
 
+    @computed_field
+    @property
+    def record_class(self) -> str:
+        """Fully qualified class path for this record type.
+
+        This enables proper reconstruction of record objects from serialized data.
+        The class path can be used to dynamically import and instantiate the
+        correct record class when deserializing.
+
+        Returns:
+            str: Fully qualified class path (e.g., "buttermilk._core.types.Record")
+        """
+        return f"{self.__class__.__module__}.{self.__class__.__name__}"
 
 
 class Record(BaseRecord):
@@ -224,6 +275,7 @@ class Record(BaseRecord):
             `metadata`, if present.
 
     """
+
     alt_text: str | None = Field(
         default=None,
         description="Textual description or transcript of media content within this record.",
@@ -277,23 +329,22 @@ class Record(BaseRecord):
     @property
     def ground_truth_hash(self) -> str | None:
         """Computes SHA256 hash of the ground_truth values if they exist.
-        
+
         This enables detection of ground truth changes by comparing hash values.
         The hash is automatically accessible via metadata['ground_truth_hash'].
-        
+
         Returns:
             str | None: SHA256 hexdigest of ground_truth data, or None if no ground_truth.
         """
         from buttermilk._core.hashing import compute_ground_truth_hash
-        
+
         hash_value = compute_ground_truth_hash(self.ground_truth)
         # Store in metadata for easy access
         self.metadata["ground_truth_hash"] = hash_value
         return hash_value
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
-        """Custom model_dump that excludes computed fields by default.
-        """
+        """Custom model_dump that excludes computed fields by default."""
         # Get current exclude set
         current_exclude = kwargs.get("exclude", set())
         if current_exclude is None:

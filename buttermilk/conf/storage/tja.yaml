@@ -7,4 +7,5 @@ dataset_name: tja
 split_type: train
 #full_table_id: prosocial-443205.bmdev_testing.records_tja
 schema_path: record.schema.json
+record_class: "buttermilk._core.types.Record"
 

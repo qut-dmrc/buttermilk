@@ -28,6 +28,7 @@ import uvicorn  # For running the FastAPI server
 from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
 
 from buttermilk import (
+    init_async,
     # dmrc as DMRC,
     logger,  # Centralized logger
 )
@@ -54,26 +55,13 @@ def main(conf: DictConfig) -> None:
     """
     OmegaConf.resolve(conf)
 
-    # Use async bootstrap function - the primary pathway
-    from buttermilk._core.config_bootstrap import bootstrap_session_with_config_async
-
-    async def _async_main():
-        """Async initialization and main logic."""
-        nonlocal conf
-        # Single unified async initialization - gets both BM and config
-        bm, resolved_conf = await bootstrap_session_with_config_async(
+    # Run async initialization
+    bm = asyncio.run(
+        init_async(
             config=conf  # Pass the existing Hydra configuration
         )
-
-        # Use the resolved config for consistency
-        conf = resolved_conf
-        logger.info("Async bootstrap complete - BM and config ready")
-
-        return bm
-
-    # Run async initialization
-    bm = asyncio.run(_async_main())
-
+    )
+    conf = bm.cfg  # Use the resolved config from BM
     logger.info("Unified bootstrap complete - BM and config ready")
 
     # Get the mode from config to determine if we need FlowRunner

@@ -331,7 +331,7 @@ class DataService:
                 FROM `{bq_client.project}.{dataset_id}.{table_id}`
                 {where_clause}
                 AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
-                AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
+                AND JSON_QUERY_ARRAY(inputs, '$.record') IS NOT NULL
                 ORDER BY timestamp DESC
             """
 
@@ -421,7 +421,7 @@ class DataService:
             FROM `{bq_client.project}.{dataset_id}.{table_id}`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
-            AND JSON_QUERY_ARRAY(inputs, '$.records') IS NOT NULL
+            AND JSON_QUERY_ARRAY(inputs, '$.record') IS NOT NULL
             ORDER BY timestamp DESC
             """
 

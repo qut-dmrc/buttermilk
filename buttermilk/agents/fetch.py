@@ -16,7 +16,7 @@ from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace, StepRequest  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.utils import URL_PATTERN
 
@@ -104,9 +104,15 @@ class FetchAgent(Agent):
             or message.parameters.get("url")
             or message.parameters.get("uri")
         )
+
+        # Check for record_id in inputs/parameters, or extract from message.record field
         record_id = (
             message.inputs.get("record_id") or message.parameters.get("record_id") or message.inputs.get("record") or message.parameters.get("record")
         )
+
+        # If no record_id found but message.record exists, extract record_id from it
+        if not record_id and message.record:
+            record_id = getattr(message.record, "record_id", None)
 
         if uri and record_id:
             raise ProcessingError("Cannot provide both uri and record_id.")
@@ -115,14 +121,14 @@ class FetchAgent(Agent):
             if uri:
                 result = await self.fetch_uri(uri=uri)
             elif record_id:
-                if not (dataset_name := message.inputs.get("dataset_name")):
+                if not (dataset_name := message.inputs.get("dataset")):
                     dataset_name = list(self._data_sources)[0]  # use first dataset as default
                 result = await self.fetch_record(record_id=record_id, dataset_name=dataset_name)
         except ProcessingError as e:
             logger.error(f"FetchAgent '{self.agent_id}': {e}")
             raise
 
-        if result and isinstance(result, Record):
+        if result and isinstance(result, BaseRecord):
             # Wrap the Record in an AgentOutput
             return AgentOutput(
                 agent_id=self.agent_id,

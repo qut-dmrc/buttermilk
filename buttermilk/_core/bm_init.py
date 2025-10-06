@@ -230,7 +230,7 @@ class SessionInfo(BaseModel):
             "error_message": self.error_message,
         }
 
-    @field_validator('cache_dir', mode='after')
+    @field_validator("cache_dir", mode="after")
     @classmethod
     def expand_cache_dir(cls, v: str) -> str:
         """Expand user home directory and environment variables in cache_dir path."""
@@ -864,7 +864,7 @@ class BM(BaseModel):
 # Factory functions for creating session-scoped BM instances
 
 async def create_session_bm_async(
-    name: str,
+    project_name: str,
     job: str,
     batch_id: str | None = None,
     platform: str = "local",
@@ -876,7 +876,7 @@ async def create_session_bm_async(
     query_runner=None,
     logger_cfg=None,
     config=None,
-    **kwargs
+    **kwargs,
 ) -> BM:
     """Create a new session-scoped BM instance with async initialization.
 
@@ -902,12 +902,12 @@ async def create_session_bm_async(
     """
     # Create session info
     session_info_data = {
-        "project_name": name,
+        "project_name": project_name,
         "job": job,
         "platform": platform,
         "batch_id": batch_id,
         "template_paths": template_paths or [],
-        **kwargs
+        **kwargs,
     }
 
     # Create SessionInfo instance to get auto-generated session_id
@@ -941,101 +941,3 @@ async def create_session_bm_async(
     await bm._async_init()
 
     return bm
-
-
-def create_session_bm(
-    name: str,
-    job: str,
-    batch_id: str | None = None,
-    platform: str = "local",
-    save_dir_base: str | None = None,
-    template_paths: list[str] | None = None,
-    cloud_manager=None,
-    secret_manager=None,
-    llms_instance=None,
-    query_runner=None,
-    logger_cfg=None,
-    config=None,
-    **kwargs
-) -> BM:
-    """Sync wrapper for create_session_bm_async - DEPRECATED.
-
-    This is a lightweight sync wrapper that exists for backward compatibility.
-    New code should use create_session_bm_async() directly.
-
-    Args:
-        name: User-defined name for the current session or project.
-        job: User-defined name for the specific job or task.
-        batch_id: Optional batch identifier for grouping related sessions.
-        platform: Platform where the session is running.
-        save_dir_base: Base directory for session outputs.
-        template_paths: Optional list of paths to search for templates.
-        cloud_manager: Shared cloud manager instance (optional).
-        secret_manager: Shared secret manager instance (optional).
-        llms_instance: Shared LLMs instance (optional).
-        query_runner: Shared query runner instance (optional).
-        logger_cfg: Logger configuration for cloud logging (optional).
-        config: Full Hydra configuration to store on BM instance (optional).
-        **kwargs: Additional arguments for SessionInfo.
-
-    Returns:
-        BM: A new session-scoped BM instance.
-    """
-    return asyncio.run(create_session_bm_async(
-        name=name,
-        job=job,
-        batch_id=batch_id,
-        platform=platform,
-        save_dir_base=save_dir_base,
-        template_paths=template_paths,
-        cloud_manager=cloud_manager,
-        secret_manager=secret_manager,
-        llms_instance=llms_instance,
-        query_runner=query_runner,
-        logger_cfg=logger_cfg,
-        config=config,
-        **kwargs
-    ))
-
-
-def create_batch_session_bm(
-    name: str,
-    job: str,
-    batch_id: str,
-    platform: str = "local",
-    save_dir_base: str | None = None,
-    cloud_manager=None,
-    secret_manager=None,
-    llms_instance=None,
-    **kwargs
-) -> BM:
-    """Create a new session-scoped BM instance that belongs to a batch.
-    
-    This is a convenience function for creating BM instances that are part of
-    a larger batch (e.g., multiple related sessions in a batch job).
-    
-    Args:
-        name: User-defined name for the current session or project.
-        job: User-defined name for the specific job or task.
-        batch_id: Batch identifier that this session belongs to.
-        platform: Platform where the session is running.
-        save_dir_base: Base directory for session outputs.
-        cloud_manager: Shared cloud manager instance (optional).
-        secret_manager: Shared secret manager instance (optional).
-        llms_instance: Shared LLMs instance (optional).
-        **kwargs: Additional arguments for SessionInfo.
-        
-    Returns:
-        BM: A new session-scoped BM instance belonging to the batch.
-    """
-    return create_session_bm(
-        name=name,
-        job=job,
-        batch_id=batch_id,
-        platform=platform,
-        save_dir_base=save_dir_base,
-        cloud_manager=cloud_manager,
-        secret_manager=secret_manager,
-        llms_instance=llms_instance,
-        **kwargs
-    )

@@ -9,7 +9,7 @@ Inputs:
              The template accesses `answer.outputs.reasons`.
   - feedback: (Optional) Additional feedback to incorporate.
   - criteria: The evaluation criteria to apply during synthesis.
-  - records: (Placeholder) Likely contains the original data record(s). Used as placeholder in template.
+  - record: (Placeholder) Likely contains the original data record(s). Used as placeholder in template.
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
 --- 
 -#}
@@ -53,5 +53,4 @@ Your response should be written for an external audience. Do not mention our int
 {# Loop through each provided draft answer, using simplified formatting. #}
 {% for answer in answers %}
 {{ answer }}
-
 {% endfor %}

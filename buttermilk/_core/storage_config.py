@@ -120,7 +120,7 @@ class BaseStorageConfig(BaseModel):
         description=(
             "Fully qualified class name for record instantiation. "
             "Example: 'buttermilk.tools.catalog_test.Title'. "
-            "If not specified, defaults to 'buttermilk._core.types.Record'."
+            "If not specified, defaults to 'buttermilk._core.types.BaseRecord'."
         ),
     )
 

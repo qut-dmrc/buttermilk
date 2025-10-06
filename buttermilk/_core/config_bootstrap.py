@@ -166,22 +166,6 @@ class ConfigurationBootstrapper:
             config = self._load_configuration()
             infrastructure_config = config.get("infrastructure", {})
 
-            # Debug: Log top-level configuration keys for troubleshooting
-            # Removed: logging not configured yet
-            # config_keys = list(config.keys()) if config else []
-            # logger.debug("Configuration loaded", config_keys=config_keys)
-
-            # Debug: Log infrastructure configuration for troubleshooting
-            # Removed: logging not configured yet
-            # logger.debug(
-            #     "Infrastructure configuration loaded",
-            #     clouds_count=len(infrastructure_config.get("clouds", [])),
-            #     has_secret_provider=bool(infrastructure_config.get("secret_provider")),
-            #     has_logging=bool(infrastructure_config.get("logging")),
-            #     has_tracing=bool(infrastructure_config.get("tracing")),
-            #     has_datasets=bool(infrastructure_config.get("datasets")),
-            # )
-
             # Instantiate cloud configurations using Hydra
             hydrated_clouds = []
             for cloud_config in infrastructure_config.get("clouds", []):
@@ -245,7 +229,7 @@ class ConfigurationBootstrapper:
 
         # Create session-scoped BM instance using ExecutionContext's infrastructure (async)
         session_bm = await create_session_bm_async(
-            name=name,
+            project_name=name,
             job=job,
             template_paths=template_paths,
             cloud_manager=self._execution_context.cloud_manager if self._execution_context.clouds else None,
@@ -291,7 +275,7 @@ def create_configuration_bootstrapper(
 
 async def init_async(
     job: str | None = None,
-    project: str | None = None,
+    project_name: str | None = None,
     *,
     run_type: str = "cli",
     config_dir: str | None = None,
@@ -325,8 +309,14 @@ async def init_async(
         >>> logger = bm.logger  # Contextualized logger
     """
     bm, config = await bootstrap_session_with_config_async(
-        job=job, project=project, run_type=run_type, config_dir=config_dir,
-        config_name=config_name, overrides=overrides, config=config, base_dir=base_dir
+        job=job,
+        project_name=project_name,
+        run_type=run_type,
+        config_dir=config_dir,
+        config_name=config_name,
+        overrides=overrides,
+        config=config,
+        base_dir=base_dir,
     )
     return bm
 
@@ -371,7 +361,7 @@ def _run_coro_sync(coro):
 
 def init(
     job: str | None = None,
-    project: str | None = None,
+    project_name: str | None = None,
     *,
     run_type: str = "cli",
     config_dir: str | None = None,
@@ -387,7 +377,7 @@ def init(
 
     Args:
         job: Name for the specific job or task (defaults to "default" or from config)
-        project: Project name (auto-detected from directory or config if not provided)
+        project_name: Project name (auto-detected from directory or config if not provided)
         run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (auto-discovered if not provided)
         config_name: Name of the configuration file to load (without .yaml extension)
@@ -408,7 +398,7 @@ def init(
     return _run_coro_sync(
         init_async(
             job=job,
-            project=project,
+            project_name=project_name,
             run_type=run_type,
             config_dir=config_dir,
             config_name=config_name,
@@ -421,7 +411,7 @@ def init(
 
 async def bootstrap_session_with_config_async(
     job: str | None = None,
-    project: str | None = None,
+    project_name: str | None = None,
     run_type: str = "cli",
     config_dir: str | None = None,
     config_name: str = "config",
@@ -511,7 +501,7 @@ async def bootstrap_session_with_config_async(
 
     # Extract job and project from config if not provided as parameters
     resolved_job = job if job is not None else final_config.bm.session_info.job
-    resolved_project = project if project is not None else final_config.bm.session_info.project_name
+    resolved_project = project_name if project_name is not None else final_config.bm.session_info.project_name
 
     # Extract template_paths from config and resolve relative paths
     template_paths = final_config.bm.session_info.get("template_paths", [])
@@ -569,13 +559,15 @@ def bootstrap_session_with_config(
     """
     import asyncio
 
-    return asyncio.run(bootstrap_session_with_config_async(
-        job=job,
-        project=project,
-        run_type=run_type,
-        config_dir=config_dir,
-        config_name=config_name,
-        overrides=overrides,
-        config=config,
-        base_dir=base_dir
-    ))
+    return asyncio.run(
+        bootstrap_session_with_config_async(
+            job=job,
+            project_name=project,
+            run_type=run_type,
+            config_dir=config_dir,
+            config_name=config_name,
+            overrides=overrides,
+            config=config,
+            base_dir=base_dir,
+        )
+    )

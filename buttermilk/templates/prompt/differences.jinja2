@@ -3,7 +3,7 @@ Defines metadata and expected inputs for this prompt template.
 Inputs:
   - answers: A list of answers (ExecutionTraces) from previous steps (e.g., judge, synth) to compare.
              The template accesses `answer.agent_id` and `answer.outputs.reasons`.
-  - records: (Placeholder) Likely contains the original data record(s).
+  - record: (Placeholder) Likely contains the original data record(s).
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
 --- #}
 {% from '_macros.jinja2' import render_or_include with context %}
@@ -61,7 +61,7 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 Analyse the underlying reasons behind differences among the answers below.
 {# Loop through the provided answers, using simplified formatting. #}
 {% for answer in answers %}
-{{ answer }}
+{{ str(answer) }}
 
 {% endfor %}
 {% else %}
