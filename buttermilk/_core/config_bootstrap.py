@@ -331,6 +331,44 @@ async def init_async(
     return bm
 
 
+def _run_coro_sync(coro):
+    """Run a coroutine from sync code.
+
+    - If no event loop is running, use asyncio.run.
+    - If an event loop is already running in this thread, run the coroutine
+      on a dedicated loop in a background thread and block for the result.
+    """
+    import asyncio
+    import concurrent.futures as cf
+    import threading
+
+    try:
+        # Raises RuntimeError if no running loop in this thread
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop: safe to use asyncio.run
+        return asyncio.run(coro)
+
+    # A loop is running in this thread: use a separate thread + loop
+    fut: cf.Future = cf.Future()
+
+    def _thread_runner():
+        try:
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(coro)
+                fut.set_result(result)
+            finally:
+                loop.close()
+        except BaseException as e:
+            fut.set_exception(e)
+
+    t = threading.Thread(target=_thread_runner, name="buttermilk-init-loop", daemon=True)
+    t.start()
+    return fut.result()
+
+
 def init(
     job: str | None = None,
     project: str | None = None,
@@ -365,28 +403,20 @@ def init(
         >>> _ = init()  # Sync wrapper (not recommended for new code)
         >>> cfg = bm.cfg  # Access config
     """
-    import asyncio
 
-    if loop := asyncio.get_event_loop():
-        if loop.is_running():
-            return asyncio.run_coroutine_threadsafe(
-                init_async(
-                    job=job,
-                    project=project,
-                    run_type=run_type,
-                    config_dir=config_dir,
-                    config_name=config_name,
-                    overrides=overrides,
-                    config=config,
-                    base_dir=base_dir,
-                ),
-                loop,
-            ).result()
-
-    return asyncio.run(init_async(
-        job=job, project=project, run_type=run_type, config_dir=config_dir,
-        config_name=config_name, overrides=overrides, config=config, base_dir=base_dir
-    ))
+    # Run directly if no loop; otherwise run in a background thread loop
+    return _run_coro_sync(
+        init_async(
+            job=job,
+            project=project,
+            run_type=run_type,
+            config_dir=config_dir,
+            config_name=config_name,
+            overrides=overrides,
+            config=config,
+            base_dir=base_dir,
+        )
+    )
 
 
 async def bootstrap_session_with_config_async(
