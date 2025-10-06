@@ -24,22 +24,7 @@ and verify and compare results.
 
 The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
-## 📚 Documentation
-
-**[→ Complete Documentation](docs/README.md)**
-
-### Quick Start
-- **[Installation Guide](docs/getting-started/installation.md)** - Set up your environment
-- **[Quick Start](docs/getting-started/quickstart.md)** - Get running in 5 minutes
-- **[Your First Flow](docs/getting-started/first-flow.md)** - Build a custom flow
-
-### User Guide
-- **[Running Flows](docs/user-guide/flows.md)** - Complete flow execution guide
-- **[Configuration](docs/user-guide/configuration.md)** - Hydra configuration management
-- **[API Reference](docs/user-guide/api-reference.md)** - REST API documentation
-- **[CLI Reference](docs/user-guide/cli-reference.md)** - Command-line interface
-
-### Core Concepts
+## Core Concepts
 
 Buttermilk is built around a few core concepts that help structure your research and data processing:
 
@@ -52,61 +37,27 @@ Buttermilk is built around a few core concepts that help structure your research
 
 For detailed explanations, see **[Core Concepts](docs/reference/concepts.md)**.
 
-## Usage
+## Features
 
 Buttermilk provides several components and features to facilitate HASS research:
 
-Currently available:
 
 *   Multimodal support for current-generation foundation models (Gemini, Claude, Llama, GPT) and plug-in support for other analysis tool APIs.
 *   A prompt templating system for evaluating, improving, and reusing prompt components.
 *   Standard cloud logging, flexible data storage options, secure credential management (e.g., Azure KeyVault, Google Secrets), built-in database storage (e.g., BigQuery), and tracing capabilities (e.g., Promptflow, Langchain).
 *   An API and CLI for integrating components and orchestrating complex workflows.
 *   Support for running code locally, on remote GPUs, or in cloud compute environments (Azure/Google Compute, with AWS Lambda planned).
-
-Future Development:
-
-*   Tutorial workbooks demonstrating complete research pipeline examples.
 *   A distributed queue system (e.g., pub/sub) for managing batch runs.
+
+
+## 📚 Examples and tutorials
+
+Currently available:
 *   A web interface and example notebooks for assessing, tracking, and comparing performance.
 
 ## Contributing and Current Status
 
 Buttermilk is actively under development. We welcome contributions and feedback! If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au) to discuss ideas, planning, or how to contribute.
-
-### For Contributors
-- **[Contributing Guide](docs/developer-guide/contributing.md)** - Development process and standards
-- **[Architecture Guide](docs/developer-guide/architecture.md)** - System architecture and design
-- **[Creating Agents](docs/developer-guide/creating-agents.md)** - Build custom agents
-- **[Testing Guide](docs/developer-guide/testing.md)** - Testing best practices
-
-## Contributing to Documentation
-
-We warmly welcome contributions to improve Buttermilk's documentation! Clear, concise, and up-to-date documentation is crucial for helping HASS scholars and developers effectively use and contribute to the project.
-
-### Documentation Style
-
-*   **Docstrings (Python Code)**: Please follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for all docstrings within the Python code. This includes clear descriptions of modules, classes, functions, methods, arguments, and return values.
-*   **Markdown Files (e.g., README.md, docs/*.md)**: Aim for clarity, conciseness, and accuracy. Use standard Markdown formatting. Ensure that examples are easy to follow and reproduce.
-*   **General Principles**:
-    *   Write for the target audience (HASS scholars, developers).
-    *   Be explicit and avoid jargon where possible, or explain it clearly.
-    *   Keep documentation consistent with the current state of the codebase.
-
-### Keeping Documentation Up-to-Date
-
-As features are added or modified, please ensure that corresponding documentation is also updated. This includes:
-*   Updating module, class, and function docstrings.
-*   Revising relevant sections in `README.md` or other documentation files in the `docs/` directory.
-*   Ensuring examples and command-line usage instructions are still accurate.
-
-### Process for Documentation Changes
-
-*   **Identify Areas for Improvement**: This could be missing information, unclear explanations, outdated instructions, or typos.
-*   **Make Your Changes**: Edit the relevant files. For new concepts or substantial additions, consider discussing them in an issue first.
-*   **Submit Changes**: Documentation changes should be submitted via Pull Requests (PRs) to the main repository. Please clearly describe the documentation changes made in your PR description.
-
-We appreciate your help in making Buttermilk more accessible and understandable!
 
 ## Installation
 
