@@ -33,7 +33,6 @@ parameters:
     - trans_simplified
     - apc
 
-save: {}
 storage: {}
 
 # These will be populated by the defaults

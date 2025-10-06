@@ -33,12 +33,10 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import bm, logger  # Global Buttermilk instance for framework access
+from buttermilk import logger  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
-from buttermilk._core.config import (  # Configuration models
-    AgentVariants,  # Added SaveInfo
-)
+from buttermilk._core.config import AgentVariants  # Configuration models
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.message_data import clean_empty_values
 from buttermilk._core.storage_config import (
@@ -66,9 +64,6 @@ class OrchestratorProtocol(BaseModel):
             Useful for logging and identification.
         description (str): A brief description explaining the purpose and goals
             of this flow.
-        save (SaveInfo | None): Optional configuration for saving the results of
-            the flow (e.g., to a file, database, or cloud storage). If None,
-            results might not be persisted automatically by the orchestrator.
         storage (Mapping[str, BaseStorageConfig]): A mapping where keys are descriptive
             names for input storage backends and values are `BaseStorageConfig` objects
             defining how to load and configure each input storage backend for the flow.
@@ -105,10 +100,6 @@ class OrchestratorProtocol(BaseModel):
     description: str = Field(
         default="",
         description="Short description explaining the purpose and goals of this flow.",
-    )
-    save: StorageConfig | None = Field(
-        default=None,
-        description="Optional configuration for saving flow results (e.g., to disk, database).",
     )
     storage: Mapping[str, StorageConfig] = Field(
         default_factory=dict,
