@@ -122,7 +122,7 @@ llms:
 
         # logger.info("2. Creating second session...")
         # bm2 = init(job="second_analysis", project="project_beta")
-        bm2 = init(job="second_analysis", project="project_beta")
+        bm2 = init(job="second_analysis", project_name="project_beta")
 
         # logger.info("3. Creating third session (same project, different job)...")
         # bm3 = init(job="third_analysis")  # Inherits "project_beta" from execution context
@@ -193,7 +193,7 @@ llms:
 
         # Second session should fail
         with pytest.raises(RuntimeError, match="Project name mismatch"):
-            init(job="second_analysis", project="project_beta")
+            init(job="second_analysis", project_name="project_beta")
 
     def test_main_script_session_info_structure(self):
         """Test that session info has the expected structure for main.py."""
@@ -209,7 +209,7 @@ llms:
             mock_bootstrap_session.return_value = mock_bm
 
             # Test that the structure matches what main.py expects
-            bm = init(job="test_job", project="test_project")
+            bm = init(job="test_job", project_name="test_project")
 
             # Verify the session info has all required attributes
             assert hasattr(bm, "session_info")
@@ -309,7 +309,7 @@ class TestMainScriptContractValidation:
             mock_bootstrap_session.return_value = mock_bm
 
             # Test the contract
-            bm = init(job="my_job", project="my_project")
+            bm = init(job="my_job", project_name="my_project")
 
             # Verify the contract that main.py depends on
             assert hasattr(bm.session_info, "project_name")

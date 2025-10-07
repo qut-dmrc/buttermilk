@@ -700,7 +700,7 @@ class ExecutionTrace(BaseModel):
         if output.error:
             error_dict = {
                 "event": str(output.error[0]) if output.error else None,
-                "details": {"errors": [str(e) for e in output.error]} if output.error else {}
+                "details": {"errors": [str(e) for e in output.error]} if output.error else {},
             }
 
         # Merge metadata

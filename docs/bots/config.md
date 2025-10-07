@@ -133,7 +133,7 @@ Use the main init() function to bootstrap a Buttermilk session:
 from buttermilk._core.config_bootstrap import init
 
 ## Initialize with job name and project
-bm = init(job="my_analysis_job", project="my_project")
+bm = init(job="my_analysis_job", project_name="my_project")
 
 Accessing Storage Objects
 
@@ -161,7 +161,7 @@ Complete Usage Example
 ```python
 def run_my_flow():
     # 1. Initialize
-    bm = init(job="data_analysis", project="my_project")
+    bm = init(job="data_analysis", project_name="my_project")
 
     # 2. Get storage from config
     storage = bm.get_storage(storage_config)

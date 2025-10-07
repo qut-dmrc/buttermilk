@@ -35,6 +35,7 @@ from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.utils.utils import clean_empty_values, expand_dict  # Utility for dictionary expansion
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,  # Pydantic validators
+    make_class_import_validator,
     uppercase_validator,
 )
 
@@ -307,6 +308,7 @@ class AgentConfig(BaseModel):
 
     # Behavior & Connections
     output_model: type[BaseModel] | None = Field(default=None, description="Pydantic model for structured output parsing.")
+
     tools: dict[str, Any] = Field(
         default_factory=dict,
         description="Configuration for tools (functions) that the agent can potentially use, keyed by tool name. Can be ToolConfig objects or direct tool instances.",
@@ -357,6 +359,10 @@ class AgentConfig(BaseModel):
         "data",  # Added data
         mode="before",
     )(convert_omegaconf_objects)
+
+    _validate_output_model = field_validator("output_model", mode="before")(
+        make_class_import_validator(BaseModel)
+    )
 
     @field_validator("data", mode="after")
     @classmethod

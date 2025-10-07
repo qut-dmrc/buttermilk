@@ -52,7 +52,7 @@ class TestMainScriptRealExecution:
             init(job="first_analysis", overrides=["bm.session_info.name=null"])
 
         # 2. First session with an explicit project succeeds
-        bm1 = init(job="first_analysis", project="project_alpha")
+        bm1 = init(job="first_analysis", project_name="project_alpha")
         assert bm1.session_info.project_name == "project_alpha"
         assert bm1.session_info.job == "first_analysis"
         assert get_bm().session_info.project_name == "project_alpha"
@@ -64,4 +64,4 @@ class TestMainScriptRealExecution:
 
         # 4. Third session with a different project is not allowed in the same execution context
         with pytest.raises(RuntimeError, match="Project name mismatch"):
-            init(job="third_analysis", project="project_beta")
+            init(job="third_analysis", project_name="project_beta")

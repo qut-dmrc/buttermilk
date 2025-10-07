@@ -1,6 +1,5 @@
 """Base storage classes for unified storage operations."""
 
-import importlib
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Iterator, Optional, Protocol, Type, TypeVar
@@ -10,6 +9,7 @@ from pydantic import BaseModel
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.types import BaseRecord, Record
+from buttermilk.utils.validators import import_class_from_path
 from buttermilk import bm, logger
 if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
@@ -220,32 +220,20 @@ class Storage(ABC):
         if self._record_class is not None:
             return self._record_class
 
-        # Default to Record class
+        # Default to BaseRecord class
         if not self.config.record_class:
             self._record_class = BaseRecord
             return self._record_class
 
         try:
-            # Parse the class path
-            module_path, class_name = self.config.record_class.rsplit(".", 1)
-
-            # Import the module
-            module = importlib.import_module(module_path)
-
-            # Get the class
-            cls = getattr(module, class_name)
-
-            # Verify it's a BaseRecord subclass
-            if not issubclass(cls, BaseRecord):
-                logger.warning(f"Configured record_class '{self.config.record_class}' is not a BaseRecord subclass. Falling back to Record.")
-                self._record_class = BaseRecord
-            else:
-                self._record_class = cls
-                logger.debug(f"Using BaseRecord class: {self.config.record_class}")
+            # Use the general utility function to import the class
+            cls = import_class_from_path(self.config.record_class, expected_base_class=BaseRecord)
+            self._record_class = cls
+            logger.debug(f"Using record class: {self.config.record_class}")
 
         except (ImportError, AttributeError, ValueError) as e:
-            logger.warning(f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to Record.")
-            self._record_class = Record
+            logger.warning(f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to BaseRecord.")
+            self._record_class = BaseRecord
 
         return self._record_class
 

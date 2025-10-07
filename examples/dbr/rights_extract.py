@@ -19,7 +19,7 @@ async def init_buttermilk():
     """
     # PRIMARY async initialization - this is the recommended approach
     # Simple one-liner that handles all bootstrap logic internally
-    bm = await init_async(job=JOB, project="dbr", overrides=["llms=full"])
+    bm = await init_async(job=JOB, project_name="dbr", overrides=["llms=full"])
 
     # Access config and logger from the BM instance
     # cfg = bm.cfg
@@ -64,7 +64,7 @@ async def run_flow(bm):
 async def main():
     """Main entry point demonstrating proper async initialization."""
     # Initialize Buttermilk using init_async - THE recommended way
-    bm = await init_async(job=JOB, project="dbr", overrides=["llms=full"])
+    bm = await init_async(job=JOB, project_name="dbr", overrides=["llms=full"])
 
     # Run the flow
     await run_flow(bm)
