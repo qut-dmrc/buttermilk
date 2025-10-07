@@ -4,6 +4,7 @@ import pytest
 
 from buttermilk._core.storage_config import (
     BigQueryStorageConfig,
+    DuckDBStorageConfig,
     FileStorageConfig,
     GeneratorStorageConfig,
     HuggingFaceStorageConfig,
@@ -183,7 +184,8 @@ class TestTypeSpecificStorageConfigs:
             FileStorageConfig(type="file"),
             BigQueryStorageConfig(type="bigquery"),
             HuggingFaceStorageConfig(type="huggingface"),
-            GeneratorStorageConfig(type="generator")
+            GeneratorStorageConfig(type="generator"),
+            DuckDBStorageConfig(type="duckdb")
         ]
         
         common_fields = [
@@ -197,7 +199,7 @@ class TestTypeSpecificStorageConfigs:
                 
     def test_type_validation_enforced(self):
         """Type fields should enforce allowed values."""
-        
+
         # Valid types should work
         VectorStorageConfig(type="chromadb")
         VectorStorageConfig(type="vector")
@@ -211,13 +213,14 @@ class TestTypeSpecificStorageConfigs:
         GeneratorStorageConfig(type="generator")
         GeneratorStorageConfig(type="job")
         GeneratorStorageConfig(type="outputs")
-        
+        DuckDBStorageConfig(type="duckdb")
+
         # Invalid types should fail validation
         with pytest.raises(ValueError):
             VectorStorageConfig(type="invalid_type")
-            
+
         with pytest.raises(ValueError):
             FileStorageConfig(type="chromadb")  # Wrong type for file config
-            
+
         with pytest.raises(ValueError):
             BigQueryStorageConfig(type="file")  # Wrong type for BQ config

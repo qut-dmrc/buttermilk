@@ -329,9 +329,36 @@ class GeneratorStorageConfig(BaseStorageConfig):
     type: Literal["generator", "job", "outputs"] = Field(description="Storage backend type")
 
 
+class DuckDBStorageConfig(BaseStorageConfig):
+    """Configuration for DuckDB storage operations."""
+
+    type: Literal["duckdb"] = Field(default="duckdb", description="Storage backend type")
+
+    # DuckDB-specific fields
+    database: str | None = Field(
+        default=None,
+        description="Path to DuckDB database file or ':memory:' for in-memory database",
+    )
+    table_name: str | None = Field(
+        default=None,
+        description="Name of the table to query/write",
+    )
+    schema_name: str | None = Field(
+        default=None,
+        description="Schema name (defaults to 'main' if not specified)",
+    )
+    custom_query: str | None = Field(
+        default=None,
+        description=(
+            "Complete custom SQL query to override default query generation. "
+            "Cannot be used with write operations."
+        ),
+    )
+
+
 # Discriminated union for all storage config types
 StorageConfig = Annotated[
-    BigQueryStorageConfig | FileStorageConfig | VectorStorageConfig | HuggingFaceStorageConfig | GeneratorStorageConfig,
+    BigQueryStorageConfig | FileStorageConfig | VectorStorageConfig | HuggingFaceStorageConfig | GeneratorStorageConfig | DuckDBStorageConfig,
     Field(discriminator="type"),
 ]
 
@@ -426,4 +453,8 @@ class StorageFactory:
                 if hasattr(config, "glob"):
                     config.glob = "**/*.txt"
             return FileStorage(config)
+        if storage_type == "duckdb":
+            from buttermilk.storage.duckdb import DuckDBStorage
+
+            return DuckDBStorage(config)
         raise ValueError(f"Unsupported storage type: {storage_type}")
