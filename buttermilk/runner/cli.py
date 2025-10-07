@@ -105,8 +105,16 @@ def main(conf: DictConfig) -> None:
             logger.info("Creating batch jobs...")
 
             async def run_with_shutdown():
+                # Support multiple ways to specify storage:
+                # 1. storage_config: Direct storage config dict (pipeline style)
+                # 2. dataset_key: Legacy key lookup in flow.storage (backward compat)
+                # 3. None: Auto-discover from flow.storage
+                storage_config = conf.get("storage_config") or conf.get("dataset_key") or None
+
                 await flow_runner.create_batch(
-                    flow_name=conf.get("flow"), dataset_key=conf.get("dataset_key"), max_records=conf.get("max_records", None)
+                    flow_name=conf.get("flow"),
+                    storage_config=storage_config,
+                    max_records=conf.get("max_records", None)
                 )
                 await bm.graceful_shutdown()
 

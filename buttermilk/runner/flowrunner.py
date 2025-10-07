@@ -1404,24 +1404,61 @@ class FlowRunner(BaseModel):
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
 
-    async def create_batch(self, flow_name, dataset_key: str, max_records: int | None) -> list[RunRequest]:
-        """Create a new batch job from the given request.
+    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:
+        """Create a new batch job from storage source.
 
         Args:
-            batch_request: The batch configuration
+            flow_name: Name of the flow to execute
+            storage_config: Storage configuration. Can be:
+                - dict: Direct storage configuration (pipeline pattern)
+                - str: Key into flow.storage dict (backward compat with dataset_key)
+                - None: Auto-discover from flow.storage (uses 'initial' or first available)
+            max_records: Maximum number of records to process
 
         Returns:
-            The created batch metadata
+            List of created RunRequest objects
 
         Raises:
-            ValueError: If the flow doesn't exist or record extraction fails
+            ValueError: If the flow doesn't exist or storage cannot be resolved
 
         """
-        # Extract record IDs from the flow's data source
-        records = await DataService.get_records_for_flow(flow_name=flow_name, flow_runner=self, dataset_key=dataset_key)
-        logger.info("Extracted records for flow", record_count=len(records), flow_name=flow_name)
-
+        # Resolve storage configuration
         flow = self.flows[flow_name]
+
+        if storage_config is None:
+            # Auto-discover: prefer 'initial' key, fallback to first available
+            if hasattr(flow, 'storage') and flow.storage:
+                if 'initial' in flow.storage:
+                    storage_cfg = flow.storage['initial']
+                    logger.debug("Auto-discovered storage using 'initial' key", flow_name=flow_name)
+                else:
+                    storage_cfg = next(iter(flow.storage.values()))
+                    logger.debug("Auto-discovered storage using first available", flow_name=flow_name)
+            else:
+                raise ValueError(f"Flow '{flow_name}' has no storage configuration and none was provided")
+        elif isinstance(storage_config, str):
+            # Legacy dataset_key behavior - lookup in flow.storage
+            if not hasattr(flow, 'storage') or storage_config not in flow.storage:
+                available = list(flow.storage.keys()) if hasattr(flow, 'storage') else []
+                raise ValueError(
+                    f"Storage key '{storage_config}' not found in flow '{flow_name}'. "
+                    f"Available: {available}"
+                )
+            storage_cfg = flow.storage[storage_config]
+            logger.debug("Using storage from key", storage_key=storage_config, flow_name=flow_name)
+        else:
+            # Direct storage configuration dict (pipeline pattern)
+            storage_cfg = storage_config
+            logger.debug("Using direct storage configuration", flow_name=flow_name)
+
+        # Create storage instance using BM
+        from buttermilk._core.dmrc import get_bm
+        bm = get_bm()
+        storage = bm.get_storage(storage_cfg)
+
+        # Stream records from storage (don't load all into memory)
+        records = list(storage)  # Storage.__iter__ yields BaseRecord objects
+        logger.info("Extracted records from storage", record_count=len(records), flow_name=flow_name)
 
         # Create multiple iterations by multiplying the parameters
         iteration_values = expand_dict(flow.parameters) or [{}]
@@ -1439,7 +1476,7 @@ class FlowRunner(BaseModel):
         # Apply iteration values
         for iteration_params in iteration_values:
             for i, record in enumerate(records):
-                data = {"record_id": record.record_id, "dataset_key": dataset_key}
+                data = {"record_id": record.record_id}
                 job = RunRequest(
                     batch_id=batch_id,
                     flow=flow_name,
