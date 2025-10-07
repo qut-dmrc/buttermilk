@@ -332,6 +332,10 @@ class LLMCore:
                     messages=llm_messages, cancellation_token=cancellation_token, parent_trace_id=parent_trace_id
                 )
 
+                # Check for errors in LLM result
+                if isinstance(llm_result, ModelOutput) and llm_result.error_message:
+                    raise ProcessingError(llm_result.error_message)
+
                 # Extract content based on output type
                 if self.output_model and isinstance(llm_result, ModelOutput):
                     result.content = llm_result.parsed_object
@@ -344,8 +348,16 @@ class LLMCore:
                 result.messages = llm_messages.copy()
                 # Add the assistant's response as a message
                 if result.content:
+                    # Convert content to string, handling BaseModel via model_dump_json
+                    if isinstance(result.content, str):
+                        content_str = result.content
+                    elif hasattr(result.content, "model_dump_json"):
+                        content_str = result.content.model_dump_json()
+                    else:
+                        content_str = str(result.content)
+
                     result.messages.append(
-                        AssistantMessage(content=str(result.content) if not isinstance(result.content, str) else result.content, source=self.model)
+                        AssistantMessage(content=content_str, source=self.model)
                     )
 
                 # Collect metadata

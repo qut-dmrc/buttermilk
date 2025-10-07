@@ -479,7 +479,7 @@ class AutoGenWrapper(BaseModel):
                 usage=create_result.usage,
                 thought=getattr(create_result, "thought", None),
                 cached=create_result.cached,
-                parsed_object=parsed_object,
+                parsed_object=None,  # Always None on error to prevent malformed BaseModel objects
                 tool_calls=tool_calls,
                 metadata={"pricing": pricing_metadata},
             )
