@@ -106,14 +106,13 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle ConductorRequest to start the flow."""
-        await super().handle_conductor_request(message, ctx)
-
         logger.info(
             "Host received ConductorRequest",
             agent_name=self.agent_name,
             num_participants=len(message.participants),
             participants=list(message.participants.keys()),
         )
+        await super().handle_conductor_request(message=message, ctx=ctx)
 
         if hasattr(self, "_conductor_task") and self._conductor_task:
             logger.warning("Host received ConductorRequest but task is already running.", agent_name=self.agent_name)
