@@ -39,7 +39,7 @@ from buttermilk.utils.validators import convert_omegaconf_objects, make_list_val
 
 from .config import AgentConfig  # Core agent configuration model
 from .log import logger  # Centralized logger
-from .types import Record  # Core data types like Record
+from .types import BaseRecord, Record  # Core data types like Record
 
 # --- General Communication & Base Messages ---
 
@@ -568,7 +568,7 @@ class ExecutionTrace(BaseModel):
     )
 
     # Record context (for pipeline processing)
-    record: dict[str, Any] | None = Field(
+    record: dict[str, Any] | BaseRecord | None = Field(
         default=None,
         description="Record context with record_id, dataset_name, split_type.",
     )
@@ -710,6 +710,13 @@ class ExecutionTrace(BaseModel):
         if metadata:
             combined_metadata.update(metadata)
 
+        # Extract record information from inputs if available
+        record_obj = None
+        if inputs and hasattr(inputs, "record") and inputs.record:
+            record_obj = inputs.record
+            inputs = dict(inputs)
+            _ = inputs.pop("record", None)
+
         return cls(
             call_id=call_id or output.call_id,
             agent_info=agent_info or {"agent_id": output.agent_id},
@@ -721,6 +728,7 @@ class ExecutionTrace(BaseModel):
             metadata=combined_metadata if combined_metadata else None,
             parent_call_id=parent_call_id,
             tracing=tracing,
+            record=record_obj,
         )
 
 

@@ -576,7 +576,7 @@ class HostAgent(Agent):
             logger.info("Host participants initialized", participants=list(self._participants.keys()))
 
             async for next_step in self._step_generator:
-                logger.info("Host processing step {next_step.role}", agent_name=self.agent_name, step_role=next_step.role)
+                logger.info(f"Host processing step {next_step.role}", agent_name=self.agent_name, step_role=next_step.role)
 
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
