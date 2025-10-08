@@ -24,20 +24,21 @@ if TYPE_CHECKING:
 
 class ZotDownloader(BaseModel):
     """Downloads and processes items from a Zotero library with incremental sync support.
-    
+
     This class handles:
     - Incremental synchronization using Zotero's version tracking
     - PDF and full-text download from Zotero attachments
     - Conversion to Record objects for downstream processing
     - Integration with vector stores for duplicate detection
-    
+
     The incremental sync feature tracks the library version from the last successful
     sync and only fetches items that have been modified since then. This significantly
     reduces API calls and processing time for large libraries.
-    
+
     Attributes:
         save_dir: Directory path for saving downloaded files and sync state
         library: Zotero library ID to sync from
+        vector_store: Optional ChromaDBEmbeddings instance for deduplication checks before downloading
 
     """
 
@@ -45,10 +46,12 @@ class ZotDownloader(BaseModel):
     library: str = Field(..., description="Zotero library ID to sync from")
     local: bool = Field(default=False, description="Use local mode for Zotero API")
     download_concurrency: int = Field(default=20, description="Maximum concurrent downloads from Zotero")
+    vector_store: "ChromaDBEmbeddings | None" = Field(
+        default=None,
+        description="Vector store for deduplication - checks existence before downloading PDFs"
+    )
 
     _zot: zotero.Zotero = PrivateAttr()
-    # Add private attribute to store the vector store instance
-    _vector_store: "ChromaDBEmbeddings | None" = PrivateAttr(default=None)
 
     @pydantic.field_validator("local")
     @classmethod
@@ -69,9 +72,13 @@ class ZotDownloader(BaseModel):
         return self
 
     def set_vector_store(self, vectoriser: "ChromaDBEmbeddings") -> None:
-        """Stores the vectoriser instance to allow checking for existing documents."""
-        self._vector_store = vectoriser
-        logger.info("Vector store instance set for ZotDownloader.")
+        """Stores the vectoriser instance to allow checking for existing documents.
+
+        DEPRECATED: Use vector_store constructor parameter instead.
+        This method is kept for backward compatibility.
+        """
+        self.vector_store = vectoriser
+        logger.info("Vector store instance set for ZotDownloader (deprecated method - use constructor parameter)")
 
     def _get_state_file_path(self) -> Path:
         """Get the path to the sync state file."""
@@ -224,8 +231,8 @@ class ZotDownloader(BaseModel):
                 if item.get("data", {}).get("itemType") in {"attachment", "note", "annotation"}:
                     logger.debug(f"Skipping item {key} of type {item.get('data', {}).get('itemType')}.")
                     continue
-                # --- Check for existence using the stored vector_store ---
-                if self._vector_store and self._vector_store.check_document_exists(key):
+                # --- Check for existence using the vector_store ---
+                if self.vector_store and self.vector_store.check_document_exists(key):
                     logger.debug(
                         f"Document {key} already exists in vector store, skipping.",
                     )

@@ -514,6 +514,48 @@ async def test_full_pipeline_integration():
         logger.info("Successfully processed records", processed_count=processed)
         """
 
+    @pytest.mark.anyio
+    async def test_zotero_deduplication_with_vector_store(self, temp_dirs, mock_zotero_api, mock_chromadb):
+        """Test 10: ZotDownloader skips records that exist in ChromaDBEmbeddings via constructor parameter."""
+        save_dir, vector_dir = temp_dirs
+        _, mock_collection = mock_chromadb
+
+        # Mock check_document_exists to return True for TEST123 (already exists)
+        def mock_check_exists(doc_id):
+            return doc_id == "TEST123"
+
+        # Create ChromaDBEmbeddings
+        vector_store = ChromaDBEmbeddings(
+            persist_directory=vector_dir,
+            collection_name="test_dedup",
+            embedding_model="text-embedding-005",
+            dimensionality=768,
+            deduplication_strategy="record_id"
+        )
+        vector_store.check_document_exists = mock_check_exists
+
+        # Create ZotDownloader with explicit vector_store parameter
+        downloader = ZotDownloader(
+            save_dir=save_dir,
+            library="test_library",
+            vector_store=vector_store  # Explicit config - no auto-wiring
+        )
+        downloader._zot = mock_zotero_api
+
+        # Process records - TEST123 should be skipped before download
+        records = []
+        async for record in downloader.get_all_records():
+            records.append(record)
+
+        # Since TEST123 exists in vector store, it should be skipped
+        # No records should be yielded
+        assert len(records) == 0
+
+        logger.info(
+            "✅ ZotDownloader successfully skipped existing record using explicit vector_store parameter",
+            deduplication_strategy=vector_store.deduplication_strategy
+        )
+
 
 if __name__ == "__main__":
     # Run specific test for debugging
