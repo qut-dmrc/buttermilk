@@ -354,6 +354,7 @@ class DuckDBStorageConfig(BaseStorageConfig):
             "Cannot be used with write operations."
         ),
     )
+    read_only: bool = Field(default=False, description="Open the database in RO mode.")
 
 
 # Discriminated union for all storage config types

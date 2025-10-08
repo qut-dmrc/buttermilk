@@ -18,7 +18,7 @@ class DuckDBStorage(Storage):
     Supports querying DuckDB databases with table names or custom SQL queries.
     """
 
-    def __init__(self, config: "DuckDBStorageConfig"):
+    def __init__(self, config: DuckDBStorageConfig):
         """Initialize DuckDB storage.
 
         Args:
@@ -36,6 +36,7 @@ class DuckDBStorage(Storage):
         self.table_name = config.table_name
         self.schema_name = config.schema_name or "main"
         self.custom_query = config.custom_query
+        self.read_only = config.read_only
 
         # Validate configuration
         if not self.table_name and not self.custom_query:
@@ -48,7 +49,8 @@ class DuckDBStorage(Storage):
         if self._conn is None:
             try:
                 import duckdb
-                self._conn = duckdb.connect(self.database, read_only=False)
+
+                self._conn = duckdb.connect(self.database, read_only=self.read_only)
                 # Load JSON extension for handling JSON columns
                 self._conn.execute("INSTALL json; LOAD json;")
                 logger.debug(f"Connected to DuckDB database: {self.database}")
