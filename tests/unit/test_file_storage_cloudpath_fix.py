@@ -52,11 +52,11 @@ class TestFileStorageCloudPath:
 
     def test_file_storage_uses_cloudpath_open_for_local_paths(self, real_bm):
         """Test that FileStorage.save() uses cloudpathlib's .open() method for local paths too."""
-        from buttermilk._core.storage_config import StorageConfig
+        from buttermilk._core.storage_config import FileStorageConfig
         from buttermilk._core.types import Record
 
         # Create a local path config
-        config = StorageConfig(
+        config = FileStorageConfig(
             type="file",
             path="/tmp/test-local.json",
             dataset_name="test",
@@ -85,10 +85,10 @@ class TestFileStorageCloudPath:
 
     def test_file_storage_create_uses_cloudpath_open(self, real_bm):
         """Test that FileStorage.create() also uses cloudpathlib's .open() method."""
-        from buttermilk._core.storage_config import StorageConfig
+        from buttermilk._core.storage_config import FileStorageConfig
 
         # Create a GCS path config
-        config = StorageConfig(
+        config = FileStorageConfig(
             type="file",
             path="gs://test-bucket/test-create.json",
             dataset_name="test",

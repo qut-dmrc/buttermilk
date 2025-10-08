@@ -259,12 +259,12 @@ class TestConfigurationValidation:
         from buttermilk._core.storage_config import StorageConfig
 
         # Valid config
-        config = StorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table")
+        config = BigQueryStorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table")
 
         assert config.full_table_id == "test-project.test_dataset.test_table"
 
         # Incomplete config
-        incomplete_config = StorageConfig(
+        incomplete_config = BigQueryStorageConfig(
             type="bigquery",
             project_id="test-project",
             # Missing dataset_id and table_id
