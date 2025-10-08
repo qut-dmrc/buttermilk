@@ -2,7 +2,6 @@ defaults:
   - env: testing
   - flows:
     - trans
-    - osb
   - llms: debug
   - _self_
 

@@ -334,19 +334,30 @@ class ExecutionContext(BaseModel):
                     logger.warning("Failed to load LLM connections from cache, will try secrets", error=str(e))
                     connections_data = None
 
-            # If not loaded from cache, get from secret manager
+            # If not loaded from cache, try secret manager (if available)
             if connections_data is None:
-                try:
-                    connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
-                    if not isinstance(connections_data, dict):
-                        raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
-                    logger.info("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
-                    
-                    # Cache the connections data
-                    self._write_cache_sync(connections_data, cache_path)
-                except Exception as e:
-                    logger.error("Failed to load LLM connections from secret manager", error=str(e), secret_key=MODELS_CFG_KEY)
-                    raise RuntimeError(f"Failed to load LLM connections from both cache and secrets. Could not find secret '{MODELS_CFG_KEY}' in secret manager.") from e
+                secrets_cloud = self._find_cloud_with_service("secrets")
+                if not secrets_cloud:
+                    logger.warning(
+                        "No secret manager configured and no cached LLM connections found. "
+                        "LLM functionality will be limited. To enable LLMs, either: "
+                        f"1) Configure a cloud provider with secrets service, or "
+                        f"2) Provide a cached models config at {cache_path}"
+                    )
+                    connections_data = {}
+                else:
+                    try:
+                        connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
+                        if not isinstance(connections_data, dict):
+                            raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
+                        logger.info("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
+
+                        # Cache the connections data
+                        self._write_cache_sync(connections_data, cache_path)
+                    except Exception as e:
+                        logger.error("Failed to load LLM connections from secret manager", error=str(e), secret_key=MODELS_CFG_KEY)
+                        logger.warning("Proceeding with empty LLM connections. LLM functionality will not be available.")
+                        connections_data = {}
 
             self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
@@ -391,13 +402,28 @@ class ExecutionContext(BaseModel):
 
     @property
     def credentials(self) -> dict[str, str]:
-        """Retrieves shared system credentials from the secret manager."""
+        """Retrieves shared system credentials from the secret manager.
+
+        Returns an empty dict if no secret manager is configured, allowing the system
+        to function in local-only mode without cloud credentials.
+        """
         if self._credentials_cached is None:
+            # Check if secret manager is available
+            secrets_cloud = self._find_cloud_with_service("secrets")
+            if not secrets_cloud:
+                logger.debug("No secret manager configured, returning empty credentials dict")
+                self._credentials_cached = {}
+                return self._credentials_cached
+
             logger.debug("Fetching shared credentials from secret manager...")
-            creds = self.secret_manager.get_secret(cfg_key=SHARED_CREDENTIALS_KEY)
-            if not isinstance(creds, dict):
-                raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
-            self._credentials_cached = creds
+            try:
+                creds = self.secret_manager.get_secret(cfg_key=SHARED_CREDENTIALS_KEY)
+                if not isinstance(creds, dict):
+                    raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
+                self._credentials_cached = creds
+            except Exception as e:
+                logger.warning(f"Failed to fetch credentials from secret manager: {e}. Using empty credentials dict.")
+                self._credentials_cached = {}
         return self._credentials_cached
 
     async def _setup_tracing(self) -> None:

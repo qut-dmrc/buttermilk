@@ -573,8 +573,21 @@ class BM(BaseModel):
 
     @property
     def credentials(self) -> dict[str, str]:
-        """Provides access to shared system credentials."""
-        return self.secret_manager.get_secret(cfg_key="credentials_secret")
+        """Provides access to shared system credentials.
+
+        Returns an empty dict if no secret manager is configured, allowing the system
+        to function in local-only mode without cloud credentials.
+        """
+        # Check if secret manager is available
+        if self._secret_manager is None:
+            logger.debug("No secret manager configured, returning empty credentials dict")
+            return {}
+
+        try:
+            return self.secret_manager.get_secret(cfg_key="credentials_secret")
+        except Exception as e:
+            logger.warning(f"Failed to fetch credentials from secret manager: {e}. Returning empty credentials dict.")
+            return {}
 
     @property
     def cfg(self):
