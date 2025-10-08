@@ -8,7 +8,8 @@ async def test_agent_name_generation():
     """Test that agent_name is generated correctly based on name_components."""
     # Sample data
     inputs_data = {"records": "[FETCH.outputs]||*.record[]", "template": "judge", "model": "gemini25pro", "criteria": "trans_factored"}
-    name_components = ["⚖️", "role", "model", "criteria", "unique_identifier"]
+    # Don't include "unique_identifier" in name_components since it's auto-generated
+    name_components = ["⚖️", "role", "model", "criteria"]
 
     # Mock AgentConfig and Agent
     class MockAgent(Agent):
@@ -17,7 +18,6 @@ async def test_agent_name_generation():
 
     # Instantiate Agent with mocked data
     agent = MockAgent(
-        unique_identifier="test_agent_id",
         role="TestRole",
         name_components=name_components,
         inputs=inputs_data,
@@ -41,8 +41,8 @@ async def test_agent_name_generation_empty_components():
             return None  # Dummy implementation
 
     agent = MockAgent(
-        agent_id="test_agent_id",
-        unique_identifier="test_agent_id",
+        # Set agent_id explicitly to control the value
+        agent_id="EMPTYROLE-TESTID",
         role="EmptyRole",
         name_components=["nonexistent"],  # This should result in fallback behavior
         inputs={},
@@ -50,7 +50,7 @@ async def test_agent_name_generation_empty_components():
         session_id="test_session_id",
     )
 
-    assert agent.agent_name == "EMPTYROLE-test_agent_id"
+    assert agent.agent_name == "EMPTYROLE-TESTID"
 
 
 @pytest.mark.anyio
@@ -62,8 +62,8 @@ async def test_agent_name_generation_jmespath_failure():
             return None  # Dummy implementation
 
     agent = MockAgent(
-        agent_id="test_agent_id",
-        unique_identifier="test_agent_id",
+        # Set agent_id explicitly to control the value
+        agent_id="TESTROLE-TESTID",
         role="TestRole",
         name_components=["nonexistent.field"],  # Invalid JMESPath expression
         inputs={},
@@ -71,7 +71,7 @@ async def test_agent_name_generation_jmespath_failure():
         session_id="test_session_id",
     )
 
-    assert agent.agent_name == "TESTROLE-test_agent_id"
+    assert agent.agent_name == "TESTROLE-TESTID"
 
 
 @pytest.mark.anyio
@@ -83,8 +83,7 @@ async def test_agent_name_generation_short_string_component():
             return None  # Dummy implementation
 
     agent = MockAgent(
-        agent_id="test_agent_id",
-        unique_identifier="test_agent_id",
+        agent_id="TESTROLE-TESTID",
         role="TestRole",
         name_components=["OK"],  # Short string component
         inputs={},
