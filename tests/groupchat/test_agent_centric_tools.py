@@ -35,7 +35,7 @@ class MockSimpleAgent(Agent):
             "description": description,
             "parameters": {"model": "test-model"},
             "inputs": {},
-            "tools": [],
+            "tools": {},
         }
         config = AgentConfig(**config_data)
         # Initialize with config values
