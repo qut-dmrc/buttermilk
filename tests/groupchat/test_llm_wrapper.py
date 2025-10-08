@@ -6,7 +6,6 @@ from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import ChatCompletionClient, CreateResult, RequestUsage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, ModelOutput
 
 

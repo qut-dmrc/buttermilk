@@ -6,7 +6,6 @@ This file automatically applies markers to all tests in the directory.
 import pytest
 from hydra import compose, initialize
 
-from buttermilk._core.bm_init import BM
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config
 
 # Apply markers to all tests in this directory

@@ -15,11 +15,7 @@ from buttermilk import bm, logger
 from buttermilk._core.types import Record
 from buttermilk.utils.utils import get_pdf_text
 
-# Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
-# and causes circular import issues. If they are in the same module or structure prevents
-# circular imports, this might not be strictly necessary but is good practice.
-if TYPE_CHECKING:
-    from buttermilk.data.vector import ChromaDBEmbeddings
+from buttermilk.data.vector import ChromaDBEmbeddings
 
 
 class ZotDownloader(BaseModel):
