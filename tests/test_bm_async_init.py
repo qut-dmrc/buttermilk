@@ -62,7 +62,7 @@ class TestBMAsyncInitialization:
             # Create BM instance with GCS save_dir
             bm = BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 save_dir_base="gs://test-bucket/runs",
                 clouds=[mock_cloud_config],
@@ -94,7 +94,7 @@ class TestBMAsyncInitialization:
 
             bm = BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 clouds=[mock_cloud_config],
             )
@@ -115,7 +115,7 @@ class TestBMAsyncInitialization:
             # Create BM instance - should fall back to sync init
             bm = BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 save_dir_base="gs://test-bucket/runs",
                 clouds=[mock_cloud_config],
@@ -137,7 +137,7 @@ class TestBMAsyncInitialization:
 
             bm = BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 clouds=[mock_cloud_config],
             )
@@ -165,7 +165,7 @@ class TestBMAsyncInitialization:
 
             bm = BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 secret_provider=mock_secret_config,
             )
@@ -186,7 +186,7 @@ class TestBMAsyncInitialization:
         try:
             BM(
                 platform="test",
-                name="test",
+                project_name="test",
                 job="test-job",
                 clouds=[mock_cloud_config],
             )
@@ -212,7 +212,7 @@ class TestBMAsyncInitialization:
         """Test that ensure_initialized can be called multiple times safely."""
         with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk._core.bm_init.SecretsManager"):
 
-            bm = BM(platform="test", name="test", job="test-job")
+            bm = BM(platform="test", project_name="test", job="test-job")
 
             # Call ensure_initialized multiple times
             await bm.ensure_initialized()

@@ -13,7 +13,7 @@ async def test_create_session_bm_async():
     """Test async BM session creation."""
     # Create a BM instance asynchronously
     bm = await create_session_bm_async(
-        name="test_project",
+        project_name="test_project",
         job="test_job",
         platform="test"
     )
@@ -29,7 +29,7 @@ async def test_create_session_bm_async():
 async def test_bm_async_init_creates_save_dir():
     """Test that async init properly sets up save directory."""
     bm = await create_session_bm_async(
-        name="test_project",
+        project_name="test_project",
         job="test_job"
     )
 
@@ -43,7 +43,7 @@ async def test_bm_async_init_creates_save_dir():
 async def test_bm_ensure_initialized():
     """Test BM ensure_initialized() waits for async init."""
     bm = await create_session_bm_async(
-        name="test_project",
+        project_name="test_project",
         job="test_job"
     )
 
