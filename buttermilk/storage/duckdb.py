@@ -7,9 +7,7 @@ from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord
 
 from .base import Storage
-
-if TYPE_CHECKING:
-    from .._core.storage_config import DuckDBStorageConfig
+from .._core.storage_config import DuckDBStorageConfig
 
 
 class DuckDBStorage(Storage):
