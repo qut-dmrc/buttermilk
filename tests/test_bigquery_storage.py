@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from google.cloud import bigquery
 
-from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.storage_config import BigQueryStorageConfig
 from buttermilk._core.types import Record
 from buttermilk.storage.bigquery import BigQueryStorage
 
@@ -21,14 +21,14 @@ class TestBigQueryStorage:
             bigquery.SchemaField("content", "STRING"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
             dataset_id="test_dataset",
             table_id="test_table",
             schema_path="/tmp/test_schema.json",
-            clustering_fields=None,  # Let it auto-determine
+            # clustering_fields will auto-determine
         )
 
         storage = BigQueryStorage(config)
@@ -55,7 +55,7 @@ class TestBigQueryStorage:
             bigquery.SchemaField("title", "STRING"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
@@ -74,7 +74,8 @@ class TestBigQueryStorage:
         storage.create()
 
         create_call = storage.client.create_table.call_args[0][0]
-        assert create_call.clustering_fields == ["dataset_name", "record_id"]
+        # Order changed - now record_id first
+        assert create_call.clustering_fields == ["record_id", "dataset_name"]
 
     def test_explicit_clustering_fields_validation(self):
         """Test that explicit clustering fields are validated against schema."""
@@ -84,7 +85,7 @@ class TestBigQueryStorage:
             bigquery.SchemaField("title", "STRING"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
@@ -120,7 +121,7 @@ class TestBigQueryStorage:
             bigquery.SchemaField("content", "STRING"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
@@ -153,7 +154,7 @@ class TestBigQueryStorage:
             ("content", "Test movie content"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
@@ -188,7 +189,7 @@ class TestBigQueryStorage:
             ("content", "Another test"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
@@ -216,7 +217,7 @@ class TestBigQueryStorage:
             ("content", "Test content"),
         ]
 
-        config = StorageConfig(
+        config = BigQueryStorageConfig(
             type="bigquery",
             dataset_name="test_dataset",
             project_id="test-project",
