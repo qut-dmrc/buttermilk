@@ -126,20 +126,25 @@ class ZotDownloader(BaseModel):
         self, force_full_sync: bool = False, max_docs: int | None = None, start: int | None = None, **kwargs
     ) -> AsyncIterator[Record]:
         """Fetches Zotero items, checks existence, downloads, extracts, and yields Records.
-        
+
         This method implements incremental sync by default, only fetching items that have
         been modified since the last successful sync. The sync state is persisted to disk.
-        
+
         Args:
             force_full_sync: If True, bypasses incremental sync and fetches all items
             start: Starting index for pagination (default: None, fetches all)
             max_docs: Maximum number of records to yield before stopping (None = no limit)
             **kwargs: Additional parameters to pass to the Zotero API
-            
+
         Yields:
             Record: Processed records from Zotero items
 
         """
+        # Initialize vector store cache if present (required for remote ChromaDB)
+        if self.vector_store:
+            await self.vector_store.ensure_cache_initialized()
+            logger.debug("Vector store cache initialized for deduplication checks")
+
         # Load sync state for incremental sync
         sync_state = self._load_version_state()
         last_version = sync_state["last_version"]
@@ -156,7 +161,7 @@ class ZotDownloader(BaseModel):
             api_params["start"] = start
 
         # Add incremental sync parameters if not forcing full sync
-        if False and not force_full_sync and last_version is not None:
+        if not force_full_sync and last_version is not None:
             api_params.update({
                 "since": last_version,
                 "sort": "dateModified",
