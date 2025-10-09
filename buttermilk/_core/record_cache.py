@@ -39,36 +39,62 @@ class RecordCache:
     """Filesystem-backed cache for Record objects per processing stage."""
 
     def __init__(self, base_dir: str | Path | None = None, enabled: bool | None = None):
-        if base_dir:
-            # Expand paths if provided as string
-            if isinstance(base_dir, str):
-                base_dir = os.path.expandvars(os.path.expanduser(base_dir))
-            self.base_dir = Path(base_dir)
-        else:
-            self.base_dir = _default_base_dir()
+        # Store the configured base_dir (may be None for lazy resolution)
+        self._base_dir_config = base_dir
+        self._base_dir: Path | None = None
+
         if enabled is None:
             disabled_env = os.getenv("BM_DISABLE_RECORD_CACHE", "0")
             self.enabled = disabled_env.strip() not in {"1", "true", "TRUE", "yes", "on"}
         else:
             self.enabled = enabled
 
-        # Debug logging for cache initialization
-        logger.info(
-            "🗂️  RecordCache initialized",
-            base_dir=str(self.base_dir),
-            enabled=self.enabled,
-            working_dir=os.getcwd(),
-            cache_env_var=os.getenv("BM_RECORD_CACHE_DIR"),
-            disable_env_var=os.getenv("BM_DISABLE_RECORD_CACHE")
-        )
+    @property
+    def base_dir(self) -> Path:
+        """Lazily resolve base_dir on first access.
 
-        if self.enabled:
-            try:
-                self.base_dir.mkdir(parents=True, exist_ok=True)
-                logger.debug("📁 Created cache base directory", base_dir=str(self.base_dir))
-            except Exception as e:  # pragma: no cover
-                logger.debug(f"Could not create record cache base dir {self.base_dir}: {e}")
-                self.enabled = False
+        If base_dir was not provided, tries to get it from bm.session_info.cache_dir.
+        Falls back to default if bm is not available.
+        """
+        if self._base_dir is None:
+            if self._base_dir_config:
+                # Expand paths if provided as string
+                if isinstance(self._base_dir_config, str):
+                    expanded = os.path.expandvars(os.path.expanduser(self._base_dir_config))
+                    self._base_dir = Path(expanded)
+                else:
+                    self._base_dir = Path(self._base_dir_config)
+            else:
+                # Try to get from bm.session_info.cache_dir if available
+                try:
+                    from buttermilk import bm
+                    self._base_dir = Path(bm.session_info.cache_dir) / "records"
+                    logger.debug("📁 RecordCache using cache_dir from bm.session_info", base_dir=str(self._base_dir))
+                except Exception:
+                    # Fall back to default if bm not available
+                    self._base_dir = _default_base_dir()
+                    logger.debug("📁 RecordCache using default cache dir", base_dir=str(self._base_dir))
+
+            # Log initialization
+            logger.info(
+                "🗂️  RecordCache base_dir resolved",
+                base_dir=str(self._base_dir),
+                enabled=self.enabled,
+                working_dir=os.getcwd(),
+                cache_env_var=os.getenv("BM_RECORD_CACHE_DIR"),
+                disable_env_var=os.getenv("BM_DISABLE_RECORD_CACHE")
+            )
+
+            # Create directory if enabled
+            if self.enabled:
+                try:
+                    self._base_dir.mkdir(parents=True, exist_ok=True)
+                    logger.debug("📁 Created cache base directory", base_dir=str(self._base_dir))
+                except Exception as e:  # pragma: no cover
+                    logger.debug(f"Could not create record cache base dir {self._base_dir}: {e}")
+                    self.enabled = False
+
+        return self._base_dir
 
     # -------------------- Path helpers --------------------
     def _stage_dir(self, stage: str) -> Path:

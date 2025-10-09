@@ -10,11 +10,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from omegaconf import DictConfig, OmegaConf
-
 import hydra
 from hydra import compose, initialize_config_dir
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
+
 from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.log import logger
 from buttermilk.utils.utils import load_dotenv
@@ -84,8 +83,6 @@ class ConfigurationBootstrapper:
                         OmegaConf.resolve(config_to_instantiate)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
-
-                    # Instantiate
 
             except Exception as e:
                 logger.error(f"Failed to load configuration: {e}")
