@@ -118,6 +118,10 @@ class ZotDownloader(BaseModel):
             state_file.unlink()
             logger.info("Sync state reset. Next sync will fetch all items.")
 
+    def __aiter__(self):
+        """Enable async iteration over ZotDownloader."""
+        return self.get_all_records()
+
     async def get_all_records(
         self, force_full_sync: bool = False, max_docs: int | None = None, start: int | None = None, **kwargs
     ) -> AsyncIterator[Record]:
