@@ -47,7 +47,7 @@ class ZotDownloader(BaseModel):
         description="Vector store for deduplication - checks existence before downloading PDFs"
     )
 
-    _zot: zotero.Zotero = PrivateAttr()
+    _zot: zotero.Zotero | None = PrivateAttr(default=None)
 
     @pydantic.field_validator("local")
     @classmethod
@@ -56,16 +56,18 @@ class ZotDownloader(BaseModel):
             return False
         return TypeAdapter(bool).validate_python(v)
 
-    @pydantic.model_validator(mode="after")
-    def _init(self) -> Self:
-        self._zot = zotero.Zotero(
-            library_id=self.library,
-            library_type="group",
-            api_key=bm.credentials.get("ZOTERO_API_KEY"),
-            local=self.local,  # Use local mode if specified
-        )
-        os.makedirs(self.save_dir, exist_ok=True)
-        return self
+    @property
+    def zot(self) -> zotero.Zotero:
+        """Lazily initialize the Zotero client on first access."""
+        if self._zot is None:
+            self._zot = zotero.Zotero(
+                library_id=self.library,
+                library_type="group",
+                api_key=bm.credentials.get("ZOTERO_API_KEY"),
+                local=self.local,  # Use local mode if specified
+            )
+            os.makedirs(self.save_dir, exist_ok=True)
+        return self._zot
 
     def _get_state_file_path(self) -> Path:
         """Get the path to the sync state file."""
@@ -165,15 +167,15 @@ class ZotDownloader(BaseModel):
 
         try:
             # Fetch only parent items (books, articles, ...), not attachments directly
-            results = self._zot.items(**api_params)
+            results = self.zot.items(**api_params)
 
             items.extend(results)
 
-            _next = self._zot.links.get("next")
+            _next = self.zot.links.get("next")
 
             # Try to get library version from response headers
-            if hasattr(self._zot, "request") and hasattr(self._zot.request, "headers"):
-                library_version = self._zot.request.headers.get("last-modified-version")
+            if hasattr(self.zot, "request") and hasattr(self.zot.request, "headers"):
+                library_version = self.zot.request.headers.get("last-modified-version")
                 if library_version:
                     library_version = int(library_version)
                     logger.debug(f"Current library version: {library_version}")
@@ -242,9 +244,9 @@ class ZotDownloader(BaseModel):
             if _next and not items:
                 try:
                     logger.debug(f"Following 'next' link for more Zotero items: {_next}")
-                    response = self._zot._retrieve_data(_next)
+                    response = self.zot._retrieve_data(_next)
                     items = response.json()
-                    _next = self._zot._extract_links().get("next")
+                    _next = self.zot._extract_links().get("next")
 
                     # Update library version from response headers
                     if hasattr(response, "headers"):
@@ -349,7 +351,7 @@ class ZotDownloader(BaseModel):
                 logger.info(
                     f"⬇️ Starting full-text download for {key} attachment {attachment_key} for '{title[:50]}'..."
                 )
-                fulltext = self._zot.fulltext_item(attachment_key)
+                fulltext = self.zot.fulltext_item(attachment_key)
 
                 # Here we check that the zotero index contains at least 90% of the PDF pages,
                 # otherwise we'll download the PDF instead.
@@ -387,7 +389,7 @@ class ZotDownloader(BaseModel):
                     )
                     # Zotero python library is synchronous.
                     # Don't try to get around it, it's not thread safe
-                    self._zot.dump(attachment_key, str(pdf_file))
+                    self.zot.dump(attachment_key, str(pdf_file))
                 else:
                     logger.debug(f"PDF file already exists: {pdf_file}")
                 try:
