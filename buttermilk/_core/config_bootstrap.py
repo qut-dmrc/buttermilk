@@ -46,7 +46,7 @@ class ConfigurationBootstrapper:
         self.config_path = config_path
         self.config_name = config_name
         self.overrides = overrides or []
-        self._config: DictConfig = self._load_configuration(config)
+        self.config: DictConfig = self._load_configuration(config)
         self._execution_context: ExecutionContext | None = None
 
         load_dotenv()
@@ -170,7 +170,7 @@ class ConfigurationBootstrapper:
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
             # Note: config is already instantiated
-            infrastructure_config = self._config.get("infrastructure", {})
+            infrastructure_config = self.config.get("infrastructure", {})
 
             # Clouds are already instantiated
             hydrated_clouds = infrastructure_config.get("clouds", [])
@@ -424,43 +424,44 @@ async def bootstrap_session_with_config_async(
 
     from buttermilk._core.dmrc import set_bm
 
-    # Resolve config directory - default to packaged config if not provided
-    if not config_dir:
-        config_dir = Path(__file__).parent.parent.resolve() / "conf"
-        config_dir = config_dir.as_posix()
-    else:
-        # If config_dir is provided, resolve it relative to the calling app's location
-        # Also expand user (~) and environment variables for convenience
-        expanded = os.path.expandvars(os.path.expanduser(config_dir))
-        cfg_path = Path(expanded)
-        if not cfg_path.is_absolute():
-            # Determine base directory for relative path resolution
-            if base_dir:
-                # Use explicitly provided base directory
-                base_path = Path(base_dir)
-            else:
-                # Auto-detect caller's directory from stack trace
-                import inspect
+    if config is None:  # we need to load it.
+        # Resolve config directory - default to packaged config if not provided
+        if not config_dir:
+            config_dir = Path(__file__).parent.parent.resolve() / "conf"
+            config_dir = config_dir.as_posix()
+        else:
+            # If config_dir is provided, resolve it relative to the calling app's location
+            # Also expand user (~) and environment variables for convenience
+            expanded = os.path.expandvars(os.path.expanduser(config_dir))
+            cfg_path = Path(expanded)
+            if not cfg_path.is_absolute():
+                # Determine base directory for relative path resolution
+                if base_dir:
+                    # Use explicitly provided base directory
+                    base_path = Path(base_dir)
+                else:
+                    # Auto-detect caller's directory from stack trace
+                    import inspect
 
-                frame = inspect.currentframe()
-                try:
-                    # Walk up the stack to find the first frame outside this module
-                    caller_frame = frame
-                    while caller_frame:
-                        caller_filename = caller_frame.f_code.co_filename
-                        if not caller_filename.endswith("config_bootstrap.py"):
-                            caller_dir = Path(caller_filename).parent
-                            base_path = caller_dir
-                            break
-                        caller_frame = caller_frame.f_back
-                    else:
-                        # Fallback to current working directory
-                        base_path = Path(os.getcwd())
-                finally:
-                    del frame
+                    frame = inspect.currentframe()
+                    try:
+                        # Walk up the stack to find the first frame outside this module
+                        caller_frame = frame
+                        while caller_frame:
+                            caller_filename = caller_frame.f_code.co_filename
+                            if not caller_filename.endswith("config_bootstrap.py"):
+                                caller_dir = Path(caller_filename).parent
+                                base_path = caller_dir
+                                break
+                            caller_frame = caller_frame.f_back
+                        else:
+                            # Fallback to current working directory
+                            base_path = Path(os.getcwd())
+                    finally:
+                        del frame
 
-            cfg_path = base_path / cfg_path
-        config_dir = cfg_path.resolve().as_posix()
+                cfg_path = base_path / cfg_path
+            config_dir = cfg_path.resolve().as_posix()
 
     # Prepare overrides
     bootstrap_overrides = (overrides or []).copy()
@@ -478,7 +479,7 @@ async def bootstrap_session_with_config_async(
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
 
     # Get the final resolved configuration to extract project/job BEFORE bootstrapping
-    final_config = bootstrapper._load_configuration()
+    final_config = bootstrapper.config
 
     # Extract job and project from config if not provided as parameters
     # This must happen BEFORE creating ExecutionContext so we can pass project_name
@@ -494,8 +495,11 @@ async def bootstrap_session_with_config_async(
     for path in template_paths:
         if not Path(path).is_absolute():
             # Resolve relative to config directory
-            resolved_path = Path(config_dir) / path
-            resolved_template_paths.append(str(resolved_path.resolve()))
+            if config_dir:
+                resolved_path = Path(config_dir) / path
+                resolved_template_paths.append(str(resolved_path.resolve()))
+            else:
+                resolved_template_paths.append(str(Path(path).resolve()))
         else:
             resolved_template_paths.append(path)
     template_paths = resolved_template_paths
