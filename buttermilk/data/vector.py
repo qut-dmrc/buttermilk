@@ -856,21 +856,29 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"Record {record.record_id} has no chunks to process. Ensure it was chunked before processing.",
                 )
 
-            # --- Try to load embeddings from cache first ---
-            cache_loaded = await self._load_embeddings_from_cache(record)
+            # --- Check if chunks already have embeddings (from EmbeddingGenerator) ---
+            chunks_already_embedded = all(chunk.embedding is not None for chunk in record.chunks)
 
-            if cache_loaded:
-                # Embeddings loaded from cache, skip API call
+            if chunks_already_embedded:
+                # Embeddings already present from previous processor (EmbeddingGenerator)
                 embedding_ok = True
-                logger.info(f"📋 [VECTORIZER-{record.record_id}] Using cached embeddings, skipping API call")
+                logger.info(f"✅ [VECTORIZER-{record.record_id}] Chunks already have embeddings, skipping generation")
             else:
-                # --- Embeddings (now with robust retry) ---
-                logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
-                embedding_ok = await self._embed_chunks(record.chunks)
+                # Try to load embeddings from cache first
+                cache_loaded = await self._load_embeddings_from_cache(record)
 
-                # Save embeddings to cache if successful
-                if embedding_ok:
-                    await self._save_embeddings_to_cache(record)
+                if cache_loaded:
+                    # Embeddings loaded from cache, skip API call
+                    embedding_ok = True
+                    logger.info(f"📋 [VECTORIZER-{record.record_id}] Using cached embeddings, skipping API call")
+                else:
+                    # --- Embeddings (now with robust retry) ---
+                    logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
+                    embedding_ok = await self._embed_chunks(record.chunks)
+
+                    # Save embeddings to cache if successful
+                    if embedding_ok:
+                        await self._save_embeddings_to_cache(record)
 
             if not embedding_ok:
                 # Persist failed record for later retry BEFORE returning
