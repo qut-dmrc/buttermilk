@@ -16,6 +16,8 @@ bm:
     project_name: zotmcp
     job: mcp_server
     cache_dir: ".cache"
+    template_paths:
+      - templates
 
 infrastructure:
   clouds:
@@ -58,69 +60,10 @@ storage:
   zotero_vectors:
     type: chromadb
     collection_name: prosocial_zot
-    persist_directory: /home/nic/src/writing/projects/zotmcp/.cache/zotero-prosocial-fulltext/files
+    persist_directory: "gs://prosocial-dev/data/zotero-prosocial-fulltext/files"
     embedding_model: gemini-embedding-001
     dimensionality: 3072
 
-
-# Metadata fields to extract from Zotero items
-zotero_fields:
-  bibliographic:
-    - title
-    - creators
-    - date
-    - publicationTitle
-    - publisher
-    - DOI
-    - url
-    - itemType
-    - abstractNote
-    - pages
-    - volume
-    - issue
-
-  technical:
-    - item_key
-    - document_id
-    - chunk_index
-    - embedding_model
-
-
-
-defaults:
-  - zotero
-  - _self_
-
-run:
-  mode: pipeline
-
-bm:
-  _target_: buttermilk._core.bm_init.BM
-  session_info:
-    project_name: zotmcp
-    job: vectorize_zotero
-    cache_dir: .cache
-    template_paths:
-      - templates
-
-storage:
-  zotero_vectors:
-    # Just change the persist_directory to point to the upstream authoritative versoin
-    # So that any changes we make will be synchronised.
-    persist_directory: "gs://prosocial-dev/data/zotero-prosocial-fulltext/files"
-
-infrastructure:
-  clouds:
-    - type: gcp
-      _target_: buttermilk._core.cloud_config.GCPConfig
-      project_id: prosocial-443205
-      region: us-central1
-      location: us-central1
-      storage_bucket: prosocial-dev
-
-  logging:
-    type: local
-    verbose: true
 
 vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings

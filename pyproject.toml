@@ -254,6 +254,10 @@ markers = [
   "scheduled: mark tests to run in scheduled testing",
   "slow: mark tests as slow (deselect with '-m \"not slow\"')",
 ]
+testpaths = [
+    "tests",
+    "examples/tests",
+]
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
@@ -270,6 +274,7 @@ addopts = [
     "--tb=short",
     "-m", "not endtoend",
 ]
+
 
 
 filterwarnings = [

@@ -31,8 +31,15 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         dimensionality: int = 3072,
     ):
         self.dimensionality = dimensionality
-        self.client: genai.Client = bm.genai
+        self._client: genai.Client | None = None
         self._embedding_model = embedding_model
+
+    @property
+    def client(self) -> genai.Client:
+        """Lazily initialize the Gemini client on first access."""
+        if self._client is None:
+            self._client = bm.genai
+        return self._client
 
     def __call__(self, input: Documents) -> Embeddings:
         response = self.client.models.embed_content(
