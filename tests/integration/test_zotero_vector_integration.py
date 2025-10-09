@@ -350,21 +350,18 @@ class TestZoteroVectorIntegration:
         save_dir, vector_dir = temp_dirs
         _, mock_collection = mock_chromadb
 
-        # Setup Zotero downloader with vector store
-        downloader = ZotDownloader(save_dir=save_dir, library="test_library")
-        downloader._zot = mock_zotero_api
-
+        # Link vector store to downloader for deduplication
         vector_store = ChromaDBEmbeddings(
             persist_directory=vector_dir,
             collection_name="test_resume",
             embedding_model="text-embedding-005",
             dimensionality=768,
         )
-
         await vector_store.ensure_cache_initialized()
 
-        # Link vector store to downloader for deduplication
-        downloader.set_vector_store(vector_store)
+        # Setup Zotero downloader with vector store
+        downloader = ZotDownloader(save_dir=save_dir, library="test_library", vector_store=vector_store)
+        downloader._zot = mock_zotero_api
 
         # First run - process some items
         mock_zotero_api.items.return_value = [{**MOCK_ZOTERO_ITEM, "key": f"ITEM{i}"} for i in range(5)]
@@ -484,10 +481,6 @@ async def test_full_pipeline_integration():
         # Example of what full integration would look like:
         """
         # Initialize components
-        downloader = ZotDownloader(
-            save_dir=str(save_dir),
-            library=os.environ.get("ZOTERO_LIBRARY_ID")
-        )
         
         vector_store = ChromaDBEmbeddings(
             persist_directory=str(vector_dir),
@@ -497,7 +490,12 @@ async def test_full_pipeline_integration():
         )
         
         await vector_store.ensure_cache_initialized()
-        downloader.set_vector_store(vector_store)
+        
+        downloader = ZotDownloader(
+            save_dir=str(save_dir),
+            library=os.environ.get("ZOTERO_LIBRARY_ID"),
+            vector_store=vector_store
+        )
         
         # Process records
         processed = 0

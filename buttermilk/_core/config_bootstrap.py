@@ -149,11 +149,14 @@ class ConfigurationBootstrapper:
         else:
             raise RuntimeError("No infrastructure configuration found in config")
 
-    async def bootstrap_full_context(self) -> ExecutionContext:
+    async def bootstrap_full_context(self, project_name: str | None = None) -> ExecutionContext:
         """Bootstrap complete execution context with all infrastructure (async).
 
         This method creates a baseline execution context for the application
         (e.g., API server) with all required infrastructure.
+
+        Args:
+            project_name: Optional project name to include in logging setup
 
         Returns:
             ExecutionContext: The configured execution context
@@ -181,10 +184,11 @@ class ConfigurationBootstrapper:
                     logger.error(f"Failed to instantiate cloud config {cloud_config}: {e}")
                     raise RuntimeError(f"Cannot instantiate cloud provider: {e}") from e
 
-            # Use async factory method
+            # Use async factory method with project_name
             from buttermilk._core.execution_context import get_or_create_execution_context_async
 
             self._execution_context = await get_or_create_execution_context_async(
+                project_name=project_name,
                 clouds=hydrated_clouds,
                 logging=infrastructure_config.get("logging"),
                 tracing=infrastructure_config.get("tracing", {}),
@@ -493,15 +497,16 @@ async def bootstrap_session_with_config_async(
     # Create bootstrapper with configuration
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
 
-    # Bootstrap async
-    execution_context = await bootstrapper.bootstrap_full_context()
-
-    # Get the final resolved configuration
+    # Get the final resolved configuration to extract project/job BEFORE bootstrapping
     final_config = bootstrapper.get_configuration()
 
     # Extract job and project from config if not provided as parameters
+    # This must happen BEFORE creating ExecutionContext so we can pass project_name
     resolved_job = job if job is not None else final_config.bm.session_info.job
     resolved_project = project_name if project_name is not None else final_config.bm.session_info.project_name
+
+    # Bootstrap async with project_name available
+    execution_context = await bootstrapper.bootstrap_full_context(project_name=resolved_project)
 
     # Extract template_paths from config and resolve relative paths
     template_paths = final_config.bm.session_info.get("template_paths", [])

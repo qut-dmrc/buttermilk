@@ -241,21 +241,22 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
     logger.debug(f"Console logging configured with verbose={verbose}")
 
 
-def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list[str]:
+def setup_file_logging(execution_context_id: str, verbose: bool = False, project_name: str | None = None) -> list[str]:
     """Set up structured JSON logging to files.
 
     Args:
         execution_context_id: Unique execution context identifier for log file naming
         verbose: If True, creates both INFO and DEBUG log files
+        project_name: Optional project name to include in log file name
 
     Returns:
         List of log file paths created
-        
+
     Raises:
         RuntimeError: If file logging has already been configured
     """
     global _file_logging_configured
-    
+
     if _file_logging_configured:
         raise RuntimeError(
             "File logging has already been configured. "
@@ -284,7 +285,13 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False) -> list
         structlog.contextvars.bind_contextvars(**non_null_context)
 
     # Create single JSON log file with level based on verbose setting
-    log_path = Path(f"/tmp/buttermilk_{execution_context_id}.jsonl")
+    # Use project_name in filename if available, otherwise fall back to generic name
+    if project_name:
+        log_filename = f"{project_name}_{execution_context_id}.jsonl"
+    else:
+        log_filename = f"buttermilk_{execution_context_id}.jsonl"
+
+    log_path = Path(f"/tmp/{log_filename}")
     file_handler = logging.FileHandler(log_path, mode="w")
     file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     # Since all logs come through structlog's stdlib bridge, they're already processed

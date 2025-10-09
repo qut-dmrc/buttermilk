@@ -160,15 +160,20 @@ class ExecutionContext(BaseModel):
         enable_console = getattr(self.logging, "console", True) if self.logging else True
         setup_console_logging(verbose=verbose, enable_console=enable_console)
 
-        # Set up structured JSON file logging
-        log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose)
+        # Set up structured JSON file logging with project name
+        log_files = setup_file_logging(
+            execution_context_id=self.execution_context_id,
+            verbose=verbose,
+            project_name=self.project_name
+        )
         for log_file in log_files:
             logger.info("ExecutionContext logging enabled", log_file=log_file)
 
         # Log initialization message
         logger.info(
             "ExecutionContext logging initialized",
-            execution_context_id=self.execution_context_id
+            execution_context_id=self.execution_context_id,
+            project_name=self.project_name
         )
 
     def _setup_gcp_environment(self) -> None:

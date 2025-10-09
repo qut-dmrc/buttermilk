@@ -42,7 +42,7 @@ class ZotDownloader(BaseModel):
     library: str = Field(..., description="Zotero library ID to sync from")
     local: bool = Field(default=False, description="Use local mode for Zotero API")
     download_concurrency: int = Field(default=20, description="Maximum concurrent downloads from Zotero")
-    vector_store: "ChromaDBEmbeddings | None" = Field(
+    vector_store: ChromaDBEmbeddings | None = Field(
         default=None,
         description="Vector store for deduplication - checks existence before downloading PDFs"
     )
@@ -66,15 +66,6 @@ class ZotDownloader(BaseModel):
         )
         os.makedirs(self.save_dir, exist_ok=True)
         return self
-
-    def set_vector_store(self, vectoriser: "ChromaDBEmbeddings") -> None:
-        """Stores the vectoriser instance to allow checking for existing documents.
-
-        DEPRECATED: Use vector_store constructor parameter instead.
-        This method is kept for backward compatibility.
-        """
-        self.vector_store = vectoriser
-        logger.info("Vector store instance set for ZotDownloader (deprecated method - use constructor parameter)")
 
     def _get_state_file_path(self) -> Path:
         """Get the path to the sync state file."""
