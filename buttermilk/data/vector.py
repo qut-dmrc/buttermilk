@@ -298,6 +298,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     _last_sync_time: float = PrivateAttr(default=0.0)
     _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
     _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
+    _cache_initialized: bool = PrivateAttr(default=False)  # Track if cache has been initialized
 
     @pydantic.model_validator(mode="after")
     def load_models(self) -> Self:
@@ -381,7 +382,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         - Initializes ChromaDB client
         - Creates collection if it doesn't exist
         - Validates existing collection compatibility
+
+        Uses a flag to ensure initialization only happens once per instance.
         """
+        # Skip if already initialized
+        if self._cache_initialized:
+            return
+
         # Step 1: Handle remote ChromaDB caching with smart cache management
         if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
             self._original_remote_path = self.persist_directory  # Store original remote path
@@ -398,6 +405,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Step 3: Ensure collection is ready (create or validate)
         await self._ensure_collection_ready()
+
+        # Mark as initialized
+        self._cache_initialized = True
 
     async def _smart_cache_management(self, remote_path: str) -> Path:
         """Smart cache management that prevents overwriting newer local changes.
