@@ -6,6 +6,8 @@ from buttermilk._core.bm_init import BM
 
 weave = importlib.import_module("weave")
 
+EXPECTED_PROJECT_NAME = "buttermilk"
+EXPECTED_JOB = "testing"
 
 @pytest.mark.anyio
 async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
@@ -100,9 +102,32 @@ async def test_unified_tracing_config_integration(real_bm: BM):
     # Verify we can retrieve the call
     retrieved_call = client.get_call(call.id)
     assert retrieved_call is not None, "Should be able to retrieve the completed call"
-    
+
     # This test confirms that:
     # 1. The unified tracing config works with existing BM infrastructure
     # 2. The fix for "'NoneType' object has no attribute 'create_call'" is working
     # 3. Config-based credential initialization is functional
     # 4. The delegation from BM.get_weave_client() to ExecutionContext works properly
+
+
+@pytest.mark.asyncio
+async def test_weave_collection_uses_project_name(real_bm):
+    """Test that weave initialization uses project name, not execution context ID.
+
+    Weave should ALWAYS use project_name for collection, never fall back to
+    'execution-context-{id}'.
+    """
+
+    try:
+        weave_client = real_bm.get_weave_client()
+    except Exception as e:
+        # If weave initialization fails (missing credentials, etc.),
+        # that's okay for this test - we're just checking the config
+        pytest.skip(f"Weave initialization failed: {e}")
+
+    # Verify the weave project name matches our project_name
+    # The weave project should be {entity}/{project_name}
+    assert EXPECTED_PROJECT_NAME in weave_client.project, f"Weave project should contain '{EXPECTED_PROJECT_NAME}', got: {weave_client.project}"
+
+    # Verify it does NOT use execution-context prefix
+    assert "execution-context" not in weave_client.project, f"Weave should not use 'execution-context' prefix, got: {weave_client.project}"

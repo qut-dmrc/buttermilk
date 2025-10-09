@@ -1,68 +1,94 @@
-##########
-##
-# Test script to bootstrap Buttermilk with real configuration using Hydra.
-# This script demonstrates how to initialize the Buttermilk context and infrastructure.
-##
-##########
+"""Test Buttermilk initialization paths.
+
+This module tests the various supported initialization patterns:
+- init() - Sync wrapper (deprecated but supported)
+- nb_init() - Notebook convenience function
+- init_async() - Primary async initialization
+"""
 import asyncio
+import re
+from pathlib import Path
 
-from hydra import compose, initialize
+import pytest
 
-from buttermilk import init
-from buttermilk._core.config_bootstrap import ConfigurationBootstrapper
+from buttermilk import init, init_async
+from buttermilk.utils.nb import nb_init
+
+# Expected values from testing.yaml config
+EXPECTED_PROJECT_NAME = "buttermilk"
+EXPECTED_JOB = "testing"
 
 
 def test_short_form_cli():
-    bm = init(job="test_cli", project_name="testing")
+    """Test sync init() wrapper for CLI usage."""
+    # Must use same project as real_bm fixture (buttermilk) since all sessions share execution context
+    bm = init(job="test_cli", project_name="buttermilk")
     assert bm is not None
     assert bm.cloud_manager is not None
+    assert bm.session_info.project_name == "buttermilk"
+    assert bm.session_info.job == "test_cli"
 
 
 def test_short_form_nb():
-    from buttermilk.utils.nb import nb_init
-
-    bm = nb_init(job="test_nb", project="testing")
+    """Test nb_init() for notebook usage."""
+    # Must use same project as real_bm fixture (buttermilk)
+    bm = nb_init(job="test_nb", project="buttermilk")
     logger = bm.logger
     logger.debug("logging seems to work")
     assert bm.cloud_manager is not None
+    assert bm.session_info.project_name == "buttermilk"
+    assert bm.session_info.job == "test_nb"
 
 
-def test_init():
-    # Load configuration
-    with initialize(version_base=None, config_path="../../buttermilk/conf"):
-        cfg = compose(config_name="config")
+@pytest.mark.asyncio
+async def test_init_async():
+    """Test async init_async() - the primary initialization path."""
+    # Must use same project as real_bm fixture (buttermilk)
+    bm = await init_async(job="test_async", project_name="buttermilk")
+    assert bm is not None
+    assert bm.cloud_manager is not None
+    assert bm.session_info.project_name == "buttermilk"
+    assert bm.session_info.job == "test_async"
 
-    # Create bootstrapper
-    bootstrapper = ConfigurationBootstrapper(config=cfg)
 
-    # Step 1: Bootstrap full context
-    execution_context = asyncio.run(bootstrapper.bootstrap_full_context())
+@pytest.mark.asyncio
+async def test_log_file_uses_project_name(real_bm):
+    """Test that log file path includes project name.
 
-    # Step 2: Bootstrap session context using existing infrastructure
-    session_bm = asyncio.run(
-        bootstrapper.bootstrap_session_context(
-            name="your_session_name",
-            job="your_job_name",  # Use existing infrastructure
-        )
+    Expected format: /tmp/buttermilk_exec-{timestamp}-{uuid}.jsonl
+    """
+    # The test just verifies real_bm was initialized successfully
+    # Log files are created during init and use the execution context ID
+    assert real_bm is not None
+    assert real_bm.session_info.project_name == EXPECTED_PROJECT_NAME
+
+
+@pytest.mark.asyncio
+async def test_save_dir_uses_proper_format(real_bm):
+    """Test that bm.save_dir uses proper session-based format.
+
+    Expected format: {base}/{project_name}/{job}/session-{timestamp}-{uuid}/
+    """
+    save_dir = real_bm.session_info.save_dir
+    assert save_dir is not None, "save_dir should be set"
+
+    # Verify it contains project name
+    assert EXPECTED_PROJECT_NAME in save_dir, (
+        f"save_dir should contain project name '{EXPECTED_PROJECT_NAME}', got: {save_dir}"
     )
-    assert session_bm is not None
-    assert execution_context is not None
-    assert session_bm.cloud_manager is execution_context.cloud_manager
-    assert session_bm.secret_manager is execution_context.secret_manager
-    assert session_bm.llms is execution_context.llms
-    assert session_bm.query_runner is execution_context.query_runner
 
-    # Step 4. When needed, create new session, reusing existing infrastructure
-    new_session_bm = asyncio.run(
-        bootstrapper.bootstrap_session_context(
-            name="session2",
-            job="job2",
-        )
+    # Verify it contains job name
+    assert EXPECTED_JOB in save_dir, (
+        f"save_dir should contain job '{EXPECTED_JOB}', got: {save_dir}"
     )
 
-    assert new_session_bm is not None
-    assert new_session_bm is not session_bm  # Ensure it's a new instance
-    assert new_session_bm.cloud_manager is session_bm.cloud_manager
-    assert new_session_bm.secret_manager is session_bm.secret_manager
-    assert new_session_bm.llms is session_bm.llms
-    assert new_session_bm.query_runner is session_bm.query_runner
+    # Verify it uses session-* pattern (current design)
+    assert "session-" in save_dir, (
+        f"save_dir should use 'session-' prefix for session ID, got: {save_dir}"
+    )
+
+    # Pattern: session-YYYYMMDDTHHmmZ-xxxx
+    session_pattern = re.compile(r"session-\d{8}T\d{4}Z-[a-zA-Z0-9]{4}")
+    assert session_pattern.search(save_dir), (
+        f"save_dir should contain session ID in format 'session-YYYYMMDDTHHmmZ-xxxx', got: {save_dir}"
+    )

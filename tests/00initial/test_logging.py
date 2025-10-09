@@ -213,3 +213,4 @@ class TestVerboseLogging:
         # Clean up handlers
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
+

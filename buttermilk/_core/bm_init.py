@@ -87,17 +87,17 @@ class SessionInfo(BaseModel):
         node_name (str): Network name of the machine.
         save_dir (str | None): Primary directory for saving session outputs.
         flow_api (str | None): URL or identifier for a flow API, if applicable.
-        
+
         # Observability fields
         status (str): Current session status.
         started_at (datetime | None): When the session started execution.
         completed_at (datetime | None): When the session completed.
         error_message (str | None): Error message if session failed.
-        
+
         # Metrics
         records_processed (int): Number of records processed.
         outputs_generated (int): Number of outputs generated.
-        
+
         # Configuration tracking
         agent_configs (dict): Agent configurations used in this session.
         flow_config (dict): Flow configuration for this session.
@@ -107,30 +107,32 @@ class SessionInfo(BaseModel):
     # Core identification
     session_id: str = Field(default_factory=_make_session_id, description="Unique identifier for this session.")
     batch_id: str | None = Field(default=None, description="Optional batch identifier for grouping related sessions.")
-    
+
     # Basic session info
     platform: str = Field(default="local", description="Platform where the session is running.")
     project_name: str = Field(..., description="Project name for this session.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
-    
+
     # System information
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
     node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
-    cache_dir: str = Field(default_factory=lambda: os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")), description="Directory for caching session data.")
+    cache_dir: str = Field(
+        default_factory=lambda: os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")), description="Directory for caching session data."
+    )
     sessions_dir: str = Field(default="data/sessions", description="Directory for storing session data files.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
-    
+
     # Enhanced observability fields
     status: str = Field(default="initializing", description="Current session status.")
     started_at: datetime.datetime | None = Field(default=None, description="When the session started execution.")
     completed_at: datetime.datetime | None = Field(default=None, description="When the session completed.")
     error_message: str | None = Field(default=None, description="Error message if session failed.")
-    
+
     # Metrics
     records_processed: int = Field(default=0, description="Number of records processed.")
     outputs_generated: int = Field(default=0, description="Number of outputs generated.")
-    
+
     # Configuration tracking
     agent_configs: dict[str, Any] = Field(default_factory=dict, description="Agent configurations used.")
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
@@ -141,62 +143,56 @@ class SessionInfo(BaseModel):
 
     def update_status(self, status: str, error_message: str | None = None) -> None:
         """Update the session status and timestamps.
-        
+
         Args:
             status: New status for the session.
             error_message: Error message if status indicates failure.
         """
         old_status = self.status
         self.status = status
-        
+
         current_time = datetime.datetime.now(datetime.UTC)
-        
+
         # Update timestamps based on status
         if status in ["active", "running"] and self.started_at is None:
             self.started_at = current_time
         elif status in ["completed", "failed", "error", "terminated"] and self.completed_at is None:
             self.completed_at = current_time
-            
+
         # Set error message if provided
         if error_message:
             self.error_message = error_message
-            
-        logger.info(
-            "Session status updated",
-            session_id=self.session_id,
-            old_status=old_status,
-            new_status=status,
-            batch_id=self.batch_id
-        )
-    
+
+        logger.info("Session status updated", session_id=self.session_id, old_status=old_status, new_status=status, batch_id=self.batch_id)
+
     def increment_records_processed(self, count: int = 1) -> None:
         """Increment the count of records processed.
-        
+
         Args:
             count: Number of records to add to the count.
         """
         self.records_processed += count
-        
+
     def increment_outputs_generated(self, count: int = 1) -> None:
         """Increment the count of outputs generated.
-        
+
         Args:
             count: Number of outputs to add to the count.
         """
         self.outputs_generated += count
-        
+
     def set_batch_context(self, batch_id: str | None = None) -> None:
         """Set the batch context identifier.
-        
+
         Args:
             batch_id: ID of the batch this session belongs to (if any).
         """
         if batch_id is not None:
             self.batch_id = batch_id
-            
+
     def get_session_summary(self) -> dict[str, Any]:
         """Get a comprehensive summary of the session.
-        
+
         Returns:
             Dict containing session summary information.
         """
@@ -205,7 +201,7 @@ class SessionInfo(BaseModel):
             duration = (self.completed_at - self.started_at).total_seconds()
         elif self.started_at:
             duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
-            
+
         return {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
@@ -261,7 +257,7 @@ class BM(BaseModel):
 
     # Session information
     session_info: SessionInfo = Field(..., description="Session information including session ID, batch ID, job name, etc.")
-    
+
     # Session-specific configuration
     datasets: dict[str, BaseStorageConfig] = Field(
         default_factory=dict,
@@ -384,7 +380,7 @@ class BM(BaseModel):
                 "Session initialized successfully",
                 session_id=self.session_info.session_id,
                 batch_id=self.session_info.batch_id,
-                save_dir=self.session_info.save_dir
+                save_dir=self.session_info.save_dir,
             )
         except Exception as e:
             logger.error(f"Error during session initialization: {e}")
@@ -394,30 +390,23 @@ class BM(BaseModel):
     def _setup_session_logging(self) -> None:
         """Sets up simplified session-specific logging context."""
         from buttermilk._core.context import set_logging_context
-        
+
         # Set simplified logging context for this session
         set_logging_context(
             session_id=self.session_info.session_id,
             batch_id=self.session_info.batch_id,
-            agent_id=None  # Will be set by agents when needed
+            agent_id=None,  # Will be set by agents when needed
         )
-        
+
         # Set up cloud logging if configured and cloud manager is available
         if self._logger_cfg and self._cloud_manager:
             try:
                 from buttermilk._core.log import setup_cloud_logging
+
                 setup_cloud_logging(self._logger_cfg, self._cloud_manager, self.session_info)
-                logger.info(
-                    "Cloud logging configured for session",
-                    session_id=self.session_info.session_id,
-                    logger_type=self._logger_cfg.type
-                )
+                logger.info("Cloud logging configured for session", session_id=self.session_info.session_id, logger_type=self._logger_cfg.type)
             except Exception as e:
-                logger.warning(
-                    "Failed to setup cloud logging for session",
-                    session_id=self.session_info.session_id,
-                    error=str(e)
-                )
+                logger.warning("Failed to setup cloud logging for session", session_id=self.session_info.session_id, error=str(e))
 
         # Set up structlog context variables for automatic injection into all log messages
         # This ensures all subsequent log messages include session context
@@ -438,7 +427,7 @@ class BM(BaseModel):
             batch_id=self.session_info.batch_id,
             platform=self.session_info.platform,
             project_name=self.session_info.project_name,
-            job=self.session_info.job
+            job=self.session_info.job,
         )
 
     def _finalize_save_dir(self) -> None:
@@ -548,20 +537,20 @@ class BM(BaseModel):
             raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
 
         if not gcp_config.pubsub:
-            raise RuntimeError("No Pub/Sub configuration found in GCP cloud config. "
-                              "Ensure pubsub is configured in your cloud configuration.")
+            raise RuntimeError("No Pub/Sub configuration found in GCP cloud config. Ensure pubsub is configured in your cloud configuration.")
 
         # Return the actual PubSubServiceConfig object
         return gcp_config.pubsub
 
     async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
         """Provide access to the Weights & Biases Weave client.
-        
+
         Delegates to ExecutionContext for proper weave initialization. The ExecutionContext
         handles unified tracing configuration, environment variables, and error handling.
         """
         try:
             from buttermilk._core.execution_context import get_execution_context
+
             execution_context = get_execution_context()
             return await execution_context.get_weave_client()
         except RuntimeError as e:
@@ -591,18 +580,15 @@ class BM(BaseModel):
 
     @property
     def cfg(self):
-        """Provides access to the full Hydra configuration."""
+        """Provides access to the instantiated Hydra configuration."""
         return self._config
 
     @property
     def logger(self):
         """Returns a contextualized logger with session information."""
         from buttermilk import logger as base_logger
-        return base_logger.bind(
-            session_id=self.session_info.session_id,
-            project=self.session_info.project_name,
-            job=self.session_info.job
-        )
+
+        return base_logger.bind(session_id=self.session_info.session_id, project=self.session_info.project_name, job=self.session_info.job)
 
     def start_fetch_ip_task(self) -> None:
         """Starts an asynchronous task to fetch the machine's external IP address.
@@ -664,9 +650,7 @@ class BM(BaseModel):
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
-            logger.warning(
-                f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}"
-            )
+            logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
 
         # Ensure extension starts with a dot if provided, otherwise default to .json
         effective_extension = extension or ".json"
@@ -687,9 +671,7 @@ class BM(BaseModel):
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
-            logger.error(
-                f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}"
-            )
+            logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
             return None  # Indicate save failure
 
     def run_query(
@@ -853,10 +835,7 @@ class BM(BaseModel):
 
             # Wait for tasks with timeout
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(*all_tasks, return_exceptions=True),
-                    timeout=timeout
-                )
+                await asyncio.wait_for(asyncio.gather(*all_tasks, return_exceptions=True), timeout=timeout)
                 logger.info("All background tasks completed successfully")
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout waiting for tasks after {timeout}s")
@@ -875,6 +854,7 @@ class BM(BaseModel):
 
 
 # Factory functions for creating session-scoped BM instances
+
 
 async def create_session_bm_async(
     project_name: str,
@@ -929,6 +909,7 @@ async def create_session_bm_async(
     # Use provided query_runner or create one if cloud_manager is available
     if query_runner is None and cloud_manager is not None:
         from buttermilk._core.query import QueryRunner
+
         query_runner = QueryRunner(bq_client=cloud_manager.bq)
 
     # Create BM instance with all dependencies passed to constructor
@@ -947,6 +928,9 @@ async def create_session_bm_async(
     bm = BM(**bm_data)
 
     # Store config on BM instance if provided
+    # Note: Config is stored as-is, not instantiated, because some objects
+    # (like pipeline) may have circular dependencies on BM existing first.
+    # Users should call hydra.utils.instantiate() on specific parts when needed.
     if config is not None:
         bm._config = config
 

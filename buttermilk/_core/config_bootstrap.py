@@ -12,6 +12,9 @@ from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
 
+import hydra
+from hydra import compose, initialize_config_dir
+from omegaconf import OmegaConf
 from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.log import logger
 from buttermilk.utils.utils import load_dotenv
@@ -56,36 +59,40 @@ class ConfigurationBootstrapper:
             Loaded and resolved configuration
         """
         if self._config is None:
+            config_to_instantiate = None
             try:
                 # Check if we're already in a Hydra context (like CLI)
                 from hydra.core.global_hydra import GlobalHydra
 
                 if GlobalHydra.instance().is_initialized():
                     # We're already in a Hydra context, get the existing config
-                    from hydra import compose
 
-                    self._config = compose(config_name=self.config_name, overrides=self.overrides)
-                    OmegaConf.resolve(self._config)
+                    config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
+                    OmegaConf.resolve(config_to_instantiate)
                     # logger.debug("Configuration loaded from existing Hydra context")  # Removed: logging not configured yet
+
                 else:
                     # Load configuration using Hydra compose API
                     from pathlib import Path
-
-                    from hydra import compose, initialize_config_dir
 
                     # Get absolute path to config directory
                     config_dir = Path(__file__).parent.parent / self.config_path
                     config_dir = config_dir.resolve()
 
                     with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
-                        self._config = compose(config_name=self.config_name, overrides=self.overrides)
-                        OmegaConf.resolve(self._config)
+                        config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
+                        OmegaConf.resolve(config_to_instantiate)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
+
+                    # Instantiate
+
             except Exception as e:
                 logger.error(f"Failed to load configuration: {e}")
                 raise
 
+            # Instantiate the config
+            self._config = hydra.utils.instantiate(config_to_instantiate)
         return self._config
 
     def setup_environment_variables(self) -> None:
@@ -166,23 +173,12 @@ class ConfigurationBootstrapper:
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
+            # Note: config is already instantiated by _load_configuration()
             config = self._load_configuration()
             infrastructure_config = config.get("infrastructure", {})
 
-            # Instantiate cloud configurations using Hydra
-            hydrated_clouds = []
-            for cloud_config in infrastructure_config.get("clouds", []):
-                try:
-                    if isinstance(cloud_config, DictConfig):
-                        import hydra
-
-                        hydrated_cloud = hydra.utils.instantiate(cloud_config)
-                        hydrated_clouds.append(hydrated_cloud)
-                    else:
-                        hydrated_clouds.append(cloud_config)
-                except Exception as e:
-                    logger.error(f"Failed to instantiate cloud config {cloud_config}: {e}")
-                    raise RuntimeError(f"Cannot instantiate cloud provider: {e}") from e
+            # Clouds are already instantiated by _load_configuration()
+            hydrated_clouds = infrastructure_config.get("clouds", [])
 
             # Use async factory method with project_name
             from buttermilk._core.execution_context import get_or_create_execution_context_async
@@ -466,6 +462,7 @@ async def bootstrap_session_with_config_async(
             else:
                 # Auto-detect caller's directory from stack trace
                 import inspect
+
                 frame = inspect.currentframe()
                 try:
                     # Walk up the stack to find the first frame outside this module
@@ -490,9 +487,14 @@ async def bootstrap_session_with_config_async(
     bootstrap_overrides = (overrides or []).copy()
     bootstrap_overrides.append(f"run={run_type}")
 
+    # Override project_name if provided (needed for interpolation in config)
+    if project_name is not None:
+        bootstrap_overrides.append(f"++project_name={project_name}")
+
     # Only override job if explicitly provided (otherwise use config default)
     if job is not None:
         bootstrap_overrides.append(f"++bm.session_info.job={job}")
+        bootstrap_overrides.append(f"++job={job}")
 
     # Create bootstrapper with configuration
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)

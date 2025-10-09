@@ -216,3 +216,6 @@ data/sessions
 .playwright-mcp/*png
 uv.lock
 test_health_data.json
+
+# messed up cloud storage reference
+gs:/

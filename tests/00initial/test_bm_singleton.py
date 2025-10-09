@@ -1,10 +1,14 @@
 """Test the BM singleton pattern."""
+import pytest
 
 from buttermilk import (
     logger,  # noqa
+    init_async,
 )
 from buttermilk._core.bm_init import BM
 from buttermilk._core.dmrc import get_bm
+
+from projects.buttermilk.tests.integration.test_tracing import EXPECTED_PROJECT_NAME
 
 
 def test_conf(real_bm):
@@ -31,8 +35,12 @@ def test_session_scoped_instances(real_bm):
     # Original singleton should be unchanged
     assert real_bm.session_info.job == "testing", "Original singleton should be unchanged"
 
+@pytest.fixture
+def second_module_access():
+    """Function simulating another module accessing BM."""
+    return get_bm()
 
-def test_singleton_between_modules(real_bm):
+def test_singleton_between_modules(real_bm, second_module_access):
     """Test that BM stays a singleton when accessed from different module functions."""
     # First initialize BM
     bm1 = real_bm
@@ -40,10 +48,6 @@ def test_singleton_between_modules(real_bm):
 
     # Now import a module that will access BM (this simulates another module using BM)
     # We'll use a function for simplicity
-    def second_module_access():
-        """Function simulating another module accessing BM."""
-        return get_bm()
-
     bm2 = second_module_access()
 
     # Both should be the same instance
@@ -53,3 +57,43 @@ def test_singleton_between_modules(real_bm):
     assert bm2.session_info.project_name == "buttermilk", "Property 'name' should be maintained across modules"
     assert bm2.session_info.job == "testing", "Property 'job' should be maintained across modules"
     assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
+
+
+@pytest.mark.asyncio
+async def test_multiple_sessions_same_project(real_bm):
+    """Test that multiple sessions in same project share project name but have unique run IDs.
+
+    All sessions should:
+    - Use same project_name in ExecutionContext
+    - Have unique session IDs with formatted job names
+    - Write to different save_dirs with job-timestamp format
+    """
+
+    # Create first session
+    bm1 = real_bm
+    assert bm1.session_info.job == "testing"
+
+    # Create second session
+    job2 = "analysis_v2"
+    bm2 = await init_async(
+        job=job2,
+    )
+
+    # Both should use same project
+    assert bm1.session_info.project_name == EXPECTED_PROJECT_NAME
+    assert bm2.session_info.project_name == EXPECTED_PROJECT_NAME
+
+    # But have different session IDs
+    assert bm1.session_info.session_id != bm2.session_info.session_id
+
+    # And different save_dirs with formatted job names
+    save_dir1 = bm1.session_info.save_dir
+    save_dir2 = bm2.session_info.save_dir
+
+    assert save_dir1 != save_dir2
+    assert job2 in save_dir1
+    assert job2 in save_dir2
+
+    # Verify they don't use session- prefix
+    assert "session-" not in save_dir1
+    assert "session-" not in save_dir2

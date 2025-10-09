@@ -1,226 +1,203 @@
 """Test BM async initialization behavior.
 
 This test verifies that:
-1. Logger is configured early and available
-2. Google Cloud authentication happens before first use
-3. Secrets are fetched and cached asynchronously
-4. GCS save_dir is properly set from config
+1. BM instance initializes properly with session info
+2. Async initialization completes correctly
+3. Session logging context is established
+4. Save directory is properly constructed
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from buttermilk._core.bm_init import BM
-from buttermilk._core.config import CloudProviderCfg
-
-
-@pytest.fixture
-def mock_cloud_config():
-    """Create mock cloud configuration."""
-    return CloudProviderCfg(
-        type="gcp",
-        project_id="test-project",
-        quota_project_id="test-project",
-    )
-
-
-@pytest.fixture
-def mock_logger_config():
-    """Create mock logger configuration."""
-    return {
-        "type": "gcp",
-        "project": "test-project",
-        "location": "us-central1",
-        "verbose": True,
-    }
-
-
-@pytest.fixture
-def mock_secret_config():
-    """Create mock secret provider configuration."""
-    return CloudProviderCfg(
-        type="gcp",
-        project="test-project",
-        models_secret="test_models",
-        credentials_secret="test_credentials",
-    )
+from buttermilk._core.bm_init import BM, SessionInfo, create_session_bm_async
 
 
 class TestBMAsyncInitialization:
     """Test BM async initialization behavior."""
 
     @pytest.mark.anyio
-    async def test_initialization_completes_before_use(self, mock_cloud_config, mock_logger_config, mock_secret_config):
+    async def test_initialization_completes_before_use(self):
         """Test that ensure_initialized waits for background tasks."""
-        with (
-            patch("buttermilk._core.bm_init.CloudManager"),
-            patch("buttermilk._core.bm_init.SecretsManager"),
-            patch("buttermilk._core.bm_init.logger") as mock_logger,
-        ):
+        # Create SessionInfo
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
 
-            # Create BM instance with GCS save_dir
-            bm = BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                save_dir_base="gs://test-bucket/runs",
-                clouds=[mock_cloud_config],
-                logger_cfg=mock_logger_config,
-                secret_provider=mock_secret_config,
-            )
+        # Create BM instance with minimal setup
+        bm = BM(session_info=session_info, save_dir_base="/tmp/test-runs")
 
-            # Verify initialization event is created
-            assert hasattr(bm, "_initialization_complete")
-            assert hasattr(bm, "_initialization_error")
+        # Perform async initialization
+        await bm._async_init()
 
-            # Wait for initialization
-            await bm.ensure_initialized()
+        # Verify initialization event is created
+        assert hasattr(bm, "_initialization_complete")
+        assert hasattr(bm, "_initialization_error")
 
-            # Verify logger was called during initialization
-            assert mock_logger.debug.called
-            assert mock_logger.info.called
+        # Wait for initialization
+        await bm.ensure_initialized()
 
-            # Verify save_dir includes GCS path
-            assert bm.session_info.save_dir.startswith("gs://test-bucket/runs")
-            assert "test/test-job" in bm.session_info.save_dir
+        # Verify initialization is complete
+        assert bm._initialization_complete.is_set()
+        assert bm._initialization_error is None
+
+        # Verify save_dir is properly set
+        assert bm.session_info.save_dir.startswith("/tmp/test-runs")
+        assert "test/test-job" in bm.session_info.save_dir
 
     @pytest.mark.anyio
-    async def test_initialization_error_handling(self, mock_cloud_config):
+    async def test_initialization_error_handling(self):
         """Test that initialization errors are properly propagated."""
-        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud_manager:
-            # Make cloud manager raise an error
-            mock_cloud_manager.side_effect = Exception("Cloud auth failed")
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
 
-            bm = BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                clouds=[mock_cloud_config],
-            )
+        bm = BM(session_info=session_info)
+
+        # Simulate an error during async init by patching a method
+        with patch.object(bm, "_finalize_save_dir", side_effect=Exception("Test error")):
+            await bm._async_init()
 
             # Should raise error when waiting for initialization
-            with pytest.raises(RuntimeError, match="BM initialization failed"):
+            with pytest.raises(RuntimeError, match="Session initialization failed"):
                 await bm.ensure_initialized()
-
-    def test_sync_initialization_fallback(self, mock_cloud_config, mock_secret_config):
-        """Test synchronous initialization when no event loop is running."""
-        with (
-            patch("buttermilk._core.bm_init.CloudManager"),
-            patch("buttermilk._core.bm_init.SecretsManager"),
-            patch("buttermilk._core.bm_init.logger") as mock_logger,
-            patch("asyncio.get_event_loop", side_effect=RuntimeError("No event loop")),
-        ):
-
-            # Create BM instance - should fall back to sync init
-            bm = BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                save_dir_base="gs://test-bucket/runs",
-                clouds=[mock_cloud_config],
-                secret_provider=mock_secret_config,
-            )
-
-            # Verify sync initialization was called
-            mock_logger.debug.assert_any_call("No event loop available, performing synchronous initialization")
-
-            # Initialization should be marked complete immediately
-            assert bm._initialization_complete.is_set()
-
-    @pytest.mark.anyio
-    async def test_cloud_manager_lazy_initialization(self, mock_cloud_config):
-        """Test that cloud manager is initialized on first access."""
-        with patch("buttermilk._core.bm_init.CloudManager") as mock_cloud_manager_class:
-            mock_instance = Mock()
-            mock_cloud_manager_class.return_value = mock_instance
-
-            bm = BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                clouds=[mock_cloud_config],
-            )
-
-            # Cloud manager should not be created yet
-            mock_cloud_manager_class.assert_not_called()
-
-            # Access cloud manager property
-            _ = bm.cloud_manager
-
-            # Now it should be created
-            mock_cloud_manager_class.assert_called_once()
-            mock_instance.login_clouds.assert_called_once()
-
-    @pytest.mark.anyio
-    async def test_secret_manager_early_initialization(self, mock_secret_config):
-        """Test that secret manager is initialized during background init."""
-        with (
-            patch("buttermilk._core.bm_init.SecretsManager") as mock_secret_manager_class,
-            patch("buttermilk._core.bm_init.CloudManager"),
-        ):
-
-            mock_instance = Mock()
-            mock_secret_manager_class.return_value = mock_instance
-
-            bm = BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                secret_provider=mock_secret_config,
-            )
-
-            # Wait for background initialization
-            await bm.ensure_initialized()
-
-            # Secret manager should have been created during init
-            mock_secret_manager_class.assert_called_once()
-
-    @pytest.mark.anyio
-    async def test_gcp_environment_variables_set_early(self, mock_cloud_config):
-        """Test that GCP environment variables are set immediately."""
-        import os
-        original_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-        original_quota = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT")
-
-        try:
-            BM(
-                platform="test",
-                project_name="test",
-                job="test-job",
-                clouds=[mock_cloud_config],
-            )
-
-            # Environment variables should be set immediately
-            assert os.environ.get("GOOGLE_CLOUD_PROJECT") == "test-project"
-            assert os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT") == "test-project"
-
-        finally:
-            # Restore original values
-            if original_project:
-                os.environ["GOOGLE_CLOUD_PROJECT"] = original_project
-            else:
-                os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
-
-            if original_quota:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = original_quota
-            else:
-                os.environ.pop("GOOGLE_CLOUD_QUOTA_PROJECT", None)
 
     @pytest.mark.anyio
     async def test_multiple_ensure_initialized_calls(self):
         """Test that ensure_initialized can be called multiple times safely."""
-        with patch("buttermilk._core.bm_init.CloudManager"), patch("buttermilk._core.bm_init.SecretsManager"):
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
 
-            bm = BM(platform="test", project_name="test", job="test-job")
+        bm = BM(session_info=session_info)
+        await bm._async_init()
 
-            # Call ensure_initialized multiple times
-            await bm.ensure_initialized()
-            await bm.ensure_initialized()
-            await bm.ensure_initialized()
+        # Call ensure_initialized multiple times
+        await bm.ensure_initialized()
+        await bm.ensure_initialized()
+        await bm.ensure_initialized()
 
-            # Should not raise any errors
-            assert bm._initialization_complete.is_set()
+        # Should not raise any errors
+        assert bm._initialization_complete.is_set()
+
+    @pytest.mark.anyio
+    async def test_create_session_bm_async_factory(self):
+        """Test the async factory function for creating BM instances."""
+        # Create mock managers
+        mock_cloud_manager = Mock()
+        mock_secret_manager = Mock()
+        mock_llms = Mock()
+        mock_query_runner = Mock()  # Provide query_runner to avoid auto-creation
+
+        bm = await create_session_bm_async(
+            project_name="test-project",
+            job="test-job",
+            platform="test",
+            cloud_manager=mock_cloud_manager,
+            secret_manager=mock_secret_manager,
+            llms_instance=mock_llms,
+            query_runner=mock_query_runner,  # Provide explicitly to avoid validation error
+        )
+
+        # Verify BM was created and initialized
+        assert bm.session_info.project_name == "test-project"
+        assert bm.session_info.job == "test-job"
+        assert bm.session_info.platform == "test"
+        assert bm._initialization_complete.is_set()
+
+        # Verify injected dependencies are accessible
+        assert bm._cloud_manager == mock_cloud_manager
+        assert bm._secret_manager == mock_secret_manager
+        assert bm._llms_instance == mock_llms
+        assert bm._query_runner == mock_query_runner
+
+    @pytest.mark.anyio
+    async def test_gcs_save_dir_construction(self):
+        """Test that GCS save_dir paths are properly constructed."""
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
+
+        bm = BM(session_info=session_info, save_dir_base="gs://test-bucket/runs")
+        await bm._async_init()
+
+        # Verify save_dir includes GCS path
+        assert bm.session_info.save_dir.startswith("gs://test-bucket/runs")
+        assert "test/test-job" in bm.session_info.save_dir
+
+    @pytest.mark.anyio
+    async def test_config_storage(self):
+        """Test that config is properly stored on BM instance."""
+        from omegaconf import DictConfig
+
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
+
+        test_config = DictConfig({"test_key": "test_value"})
+
+        bm = await create_session_bm_async(
+            project_name="test",
+            job="test-job",
+            config=test_config,
+        )
+
+        # Config should be auto-instantiated and stored
+        assert bm._config is not None
+        # After instantiation, config is converted to plain dict/object
+        assert bm.cfg["test_key"] == "test_value"
+
+    @pytest.mark.anyio
+    async def test_session_info_creation(self):
+        """Test SessionInfo creation and auto-generated fields."""
+        session_info = SessionInfo(
+            project_name="test-project",
+            job="test-job",
+        )
+
+        # Verify auto-generated session_id
+        assert session_info.session_id is not None
+        assert session_info.session_id.startswith("session-")
+
+        # Verify default values
+        assert session_info.platform == "local"
+        assert session_info.status == "initializing"
+        assert session_info.records_processed == 0
+        assert session_info.outputs_generated == 0
+
+    @pytest.mark.anyio
+    async def test_cloud_manager_property_error_when_not_injected(self):
+        """Test that accessing cloud_manager raises error when not injected."""
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
+
+        bm = BM(session_info=session_info)
+
+        # Should raise error when accessing cloud_manager without injection
+        with pytest.raises(RuntimeError, match="CloudManager not available"):
+            _ = bm.cloud_manager
+
+    @pytest.mark.anyio
+    async def test_secret_manager_property_error_when_not_injected(self):
+        """Test that accessing secret_manager raises error when not injected."""
+        session_info = SessionInfo(
+            project_name="test",
+            job="test-job",
+        )
+
+        bm = BM(session_info=session_info)
+
+        # Should raise error when accessing secret_manager without injection
+        with pytest.raises(RuntimeError, match="SecretsManager not available"):
+            _ = bm.secret_manager
 
 
 if __name__ == "__main__":
