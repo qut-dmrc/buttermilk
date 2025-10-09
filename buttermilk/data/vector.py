@@ -29,7 +29,7 @@ from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache, generate_cache_key
+from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -268,12 +268,15 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     embeddings_cache_dir: str = Field(default=".cache/embeddings", description="Directory to cache embeddings")
 
     # New sync configuration options
-    sync_batch_size: int = Field(default=50, description="Sync every N records")
-    sync_interval_minutes: int = Field(default=10, description="Sync every N minutes")
+    sync_batch_size: int = Field(default=100, description="Sync every N records")
+    sync_interval_minutes: int = Field(default=60, description="Sync every N minutes")
     disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing (manual only)")
 
     # New deduplication configuration (Breaking Change)
     deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(default="both")
+
+    # Read-only mode (for deduplication checking only, no writes/sync)
+    read_only: bool = Field(default=False, description="Read-only mode disables all write and sync operations")
 
     # Retry configuration for embedding API calls
     embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
@@ -301,32 +304,44 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """Initializes the embedding model, ChromaDB client, and text splitter."""
         import time
 
+        # Log mode
+        if self.read_only:
+            logger.info("📖 ChromaDBEmbeddings initialized in READ-ONLY mode (deduplication only, no writes/sync)")
+
         # Initialize sync timing and configure sync behavior
         self._last_sync_time = time.time()
         self._sync_batch_size = self.sync_batch_size
         self._sync_interval_seconds = self.sync_interval_minutes * 60
 
-        from buttermilk.processors.embeddings import GeminiEmbeddingFunction
+        # Skip embedding infrastructure initialization in read_only mode
+        if not self.read_only:
+            from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 
-        logger.info(f"Loading embedding model: {self.embedding_model}")
-        self._embedding_model = self.embedding_model  # Store the model name
+            logger.info(f"Loading embedding model: {self.embedding_model}")
+            self._embedding_model = self.embedding_model  # Store the model name
 
-        self._embedding_function = GeminiEmbeddingFunction(
-            embedding_model=self.embedding_model,
-            dimensionality=self.dimensionality,
-        )
-        # Wrap embedding model with retry logic
-        self._retry_wrapper = RetryWrapper(
-            client=self._embedding_function,
-            max_retries=self.embedding_max_retries,
-            min_wait_seconds=self.embedding_min_wait_seconds,
-            max_wait_seconds=self.embedding_max_wait_seconds,
-            cooldown_seconds=self.embedding_cooldown_seconds,
-            jitter_seconds=2.0,  # Add some jitter for quota management
-        )
-        logger.info(
-            f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff"
-        )
+            self._embedding_function = GeminiEmbeddingFunction(
+                embedding_model=self.embedding_model,
+                dimensionality=self.dimensionality,
+            )
+            # Wrap embedding model with retry logic
+            self._retry_wrapper = RetryWrapper(
+                client=self._embedding_function,
+                max_retries=self.embedding_max_retries,
+                min_wait_seconds=self.embedding_min_wait_seconds,
+                max_wait_seconds=self.embedding_max_wait_seconds,
+                cooldown_seconds=self.embedding_cooldown_seconds,
+                jitter_seconds=2.0,  # Add some jitter for quota management
+            )
+            logger.info(
+                f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff"
+            )
+        else:
+            # In read_only mode, set minimal placeholders
+            self._embedding_model = self.embedding_model
+            self._embedding_function = None
+            self._retry_wrapper = None
+            logger.info("⏩ Skipping embedding infrastructure initialization (read-only mode)")
 
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
@@ -339,7 +354,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
 
         # Log sync configuration
-        if not self.disable_auto_sync:
+        if self.read_only:
+            logger.info("🔒 Sync disabled (read-only mode)")
+        elif not self.disable_auto_sync:
             logger.info(f"🔄 Auto-sync enabled: every {self.sync_batch_size} records OR every {self.sync_interval_minutes} minutes")
         else:
             logger.info("🔒 Auto-sync disabled - manual sync only")
@@ -347,10 +364,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         # Log deduplication strategy
         logger.info(f"🔍 Deduplication strategy: {self.deduplication_strategy}")
 
-        Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
-        if self.arrow_save_dir:
-            Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
-        Path(self.embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
+        # Skip directory creation in read-only mode
+        if not self.read_only:
+            Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
+            if self.arrow_save_dir:
+                Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
+            Path(self.embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
+
         return self
 
     async def ensure_cache_initialized(self) -> None:
@@ -391,9 +411,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         import time
 
-        # Get local cache path using same logic as utils.py for consistency
-        cache_key = generate_cache_key(remote_path)
-        cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
+        # Get local cache path using SessionInfo for consistency
+        cache_key = bm.session_info.generate_cache_key(remote_path)
+        cache_path = bm.session_info.get_chromadb_cache_dir() / cache_key
 
         # Check if local cache exists and has recent modifications
         local_exists = cache_path.exists() and (cache_path / "chroma.sqlite3").exists()
@@ -422,6 +442,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         This method should be called after embedding operations to ensure
         local changes are persisted to the remote storage.
         """
+        # Skip sync in read-only mode
+        if self.read_only:
+            logger.debug("Skipping sync (read-only mode)")
+            return
+
         # Use original remote path if available, otherwise check current persist_directory
         remote_path = self._original_remote_path or self.persist_directory
 
@@ -617,6 +642,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         Yields:
             Record: The input record (passthrough after embedding)
         """
+        # Prevent processing in read-only mode
+        if self.read_only:
+            logger.error(f"Cannot process record {record.record_id} in read-only mode")
+            raise RuntimeError("ChromaDBEmbeddings is in read-only mode, processing not allowed")
+
         try:
             # Ensure cache is initialized before processing (required for remote storage)
             await self.ensure_cache_initialized()
@@ -780,6 +810,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         NOTE: Assumes prior pipeline stage already chunked (SemanticSplitter).
         """
+        # Prevent processing in read-only mode
+        if self.read_only:
+            logger.error(f"Cannot process_record in read-only mode for {record.record_id}")
+            raise RuntimeError("ChromaDBEmbeddings is in read-only mode, processing not allowed")
+
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
         logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
@@ -995,6 +1030,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             record: Record with chunks and embeddings to store
 
         """
+        # Prevent writes in read-only mode
+        if self.read_only:
+            logger.error(f"Cannot store chunks in read-only mode for record {record.record_id}")
+            raise RuntimeError("ChromaDBEmbeddings is in read-only mode, write operations not allowed")
+
         try:
             if not record.chunks:
                 logger.warning(f"No chunks to store for record {record.record_id}")
@@ -1699,6 +1739,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         doc_iterator: AsyncIterator[Record],
     ) -> tuple[int, int]:
         """Upserts all chunks for each Record from the iterator into ChromaDB."""
+        # Prevent upserts in read-only mode
+        if self.read_only:
+            logger.error("Cannot upsert documents in read-only mode")
+            raise RuntimeError("ChromaDBEmbeddings is in read-only mode, write operations not allowed")
+
         total_docs_processed = 0
         successful_docs_upserted = 0
         failed_docs_upserted = 0

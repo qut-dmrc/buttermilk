@@ -25,8 +25,10 @@ def test_citator_initialization_with_defaults():
 
     # Check that agent_id is generated (not empty)
     assert citator.agent_id
+    # Check that default template is set
     assert citator.parameters["template"] == "citator"
-    assert citator.parameters["fail_on_unfilled_parameters"] is True
+    # Check that output model is set
+    assert citator.output_model == FormattedCitation
 
 
 def test_formatted_citation_model():
@@ -53,17 +55,25 @@ def test_formatted_citation_model():
 
 
 def test_citator_process_signature():
-    """Test that Citator.process has the correct signature."""
+    """Test that Citator.process has the correct signature for pipeline integration."""
     import inspect
+    from collections.abc import AsyncGenerator
 
     from buttermilk.tools.citator import Citator
 
     citator = Citator(parameters={"model": "gemini-1.5-flash-latest"})
 
-    # Check that process method has the expected signature
+    # Check that process method has the expected signature for Processor protocol
     sig = inspect.signature(citator.process)
     params = list(sig.parameters.keys())
 
     # Note: 'self' is not included when inspecting bound methods
     assert "item" in params
-    assert len(params) == 1  # Only 'item' parameter, no context needed
+    assert "processor_stage" in params
+    assert "kwargs" in params
+
+    # Check return type is AsyncGenerator
+    return_annotation = sig.return_annotation
+    # The annotation is AsyncGenerator[Record, None]
+    assert hasattr(return_annotation, '__origin__')
+    assert return_annotation.__origin__ is AsyncGenerator

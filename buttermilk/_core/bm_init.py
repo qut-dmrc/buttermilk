@@ -232,6 +232,35 @@ class SessionInfo(BaseModel):
         """Expand user home directory and environment variables in cache_dir path."""
         return os.path.expandvars(os.path.expanduser(v))
 
+    def get_chromadb_cache_dir(self) -> Path:
+        """Get the ChromaDB-specific cache directory.
+
+        Returns:
+            Path: The ChromaDB cache directory within the session cache.
+        """
+        cache_path = Path(self.cache_dir) / "chromadb"
+        cache_path.mkdir(parents=True, exist_ok=True)
+        return cache_path
+
+    @staticmethod
+    def generate_cache_key(path_or_identifier: str) -> str:
+        """Generate a consistent cache key from any path or identifier.
+
+        This is the single source of truth for cache key generation to ensure
+        consistency across all caching operations (ChromaDB, embeddings, records, etc.).
+
+        Args:
+            path_or_identifier: Any path (e.g., "gs://bucket/path") or identifier to convert to cache key
+
+        Returns:
+            str: Cache key suitable for use as directory/file name
+        """
+        # Handle protocol separators first to avoid double underscores
+        result = path_or_identifier.replace("://", "_")
+        # Then handle remaining special characters
+        result = result.replace("/", "_").replace(":", "_").replace(".", "_")
+        return result
+
     class Config:
         """Pydantic model configuration for SessionInfo."""
 
@@ -569,14 +598,14 @@ class BM(BaseModel):
         """
         # Check if secret manager is available
         if self._secret_manager is None:
-            logger.debug("No secret manager configured, returning empty credentials dict")
-            return {}
+            logger.debug("No secret manager configured, returning only environment variables as credentials.")
+            return os.environ.copy()  # Return environment variables as fallback
 
         try:
             return self.secret_manager.get_secret(cfg_key="credentials_secret")
         except Exception as e:
-            logger.warning(f"Failed to fetch credentials from secret manager: {e}. Returning empty credentials dict.")
-            return {}
+            logger.warning(f"Failed to fetch credentials from secret manager: {e}. Returning only environment variables as credentials.")
+            return os.environ.copy()  # Return environment variables as fallback
 
     @property
     def cfg(self):

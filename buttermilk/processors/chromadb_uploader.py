@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import bm, logger
 from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import ChunkedDocument, _sanitize_metadata_for_chroma
-from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache, generate_cache_key
+from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
 
 
 class ChromaDBUploader(BaseModel):
@@ -176,9 +176,9 @@ class ChromaDBUploader(BaseModel):
 
     async def _setup_local_cache(self, remote_path: str) -> Path:
         """Setup local cache for remote ChromaDB."""
-        # Use same cache key generation as utils.py for consistency
-        cache_key = generate_cache_key(remote_path)
-        local_cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
+        # Use SessionInfo for consistent cache key generation
+        cache_key = bm.session_info.generate_cache_key(remote_path)
+        local_cache_path = bm.session_info.get_chromadb_cache_dir() / cache_key
         local_cache_path.mkdir(parents=True, exist_ok=True)
 
         # For production, you'd implement proper sync logic here
@@ -312,9 +312,9 @@ class ChromaDBUploader(BaseModel):
         if not self._original_remote_path:
             return None
 
-        # Recreate the cache path logic from _setup_local_cache (must match utils.py)
-        cache_key = generate_cache_key(self._original_remote_path)
-        local_cache_path = Path.home() / ".cache" / "buttermilk" / "chromadb" / cache_key
+        # Recreate the cache path logic from _setup_local_cache (must match SessionInfo)
+        cache_key = bm.session_info.generate_cache_key(self._original_remote_path)
+        local_cache_path = bm.session_info.get_chromadb_cache_dir() / cache_key
 
         if local_cache_path.exists():
             return local_cache_path

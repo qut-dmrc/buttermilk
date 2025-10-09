@@ -4,6 +4,7 @@ import datetime
 import itertools
 import math
 import mimetypes
+import os
 import pathlib
 import shutil
 import tempfile
@@ -11,9 +12,10 @@ import threading
 import uuid
 from collections.abc import Mapping, Sequence
 from io import IOBase
+from pathlib import Path
 from typing import Any, TypeVar
 from urllib.parse import urlparse
-import os
+
 import fsspec
 import httpx
 import numpy as np
@@ -26,7 +28,7 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from pathlib import Path
+
 from buttermilk._core.exceptions import ProcessingError
 
 # Optional PDF imports - fail gracefully if not available
@@ -43,10 +45,11 @@ from .._core.log import logger
 
 T = TypeVar("T")
 
+
 def load_dotenv() -> None:
     """Load environment variables from a .env file into os.environ."""
     try:
-        from dotenv import load_dotenv as _load_dotenv, dotenv_values as _dotenv_values
+        from dotenv import dotenv_values as _dotenv_values, load_dotenv as _load_dotenv
     except ImportError:
         logger.warning("python-dotenv not installed, cannot load .env files")
         return
@@ -293,7 +296,7 @@ def scrub_serializable(d) -> T:
         return new_val
 
     # Handle dict-like objects (DataDict, DictConfig, etc.) that aren't regular dicts
-    if hasattr(d, 'items') and hasattr(d, 'keys') and hasattr(d, 'values'):
+    if hasattr(d, "items") and hasattr(d, "keys") and hasattr(d, "values"):
         try:
             # Convert dict-like object to a regular dict
             new_val = {key: scrub_serializable(value) for key, value in d.items()}
@@ -304,7 +307,7 @@ def scrub_serializable(d) -> T:
             # If conversion fails, fall through to other handlers
             pass
     # Handle objects with __dict__ (like RequestUsage from autogen_core)
-    if hasattr(d, '__dict__') and not isinstance(d, (str, int, float, bool)):
+    if hasattr(d, "__dict__") and not isinstance(d, (str, int, float, bool)):
         try:
             # Convert object to dict using its __dict__ attribute
             new_val = {key: scrub_serializable(value) for key, value in d.__dict__.items()}
@@ -772,11 +775,6 @@ _download_locks: dict[str, threading.Lock] = {}
 _download_locks_lock = threading.Lock()
 
 
-def _get_cache_dir() -> pathlib.Path:
-    """Get the cache directory for ChromaDB databases."""
-    cache_dir = pathlib.Path.home() / ".cache" / "buttermilk" / "chromadb"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
 
 
 def _get_download_lock(persist_directory: str) -> threading.Lock:
@@ -787,23 +785,6 @@ def _get_download_lock(persist_directory: str) -> threading.Lock:
         return _download_locks[persist_directory]
 
 
-def generate_cache_key(path_or_identifier: str) -> str:
-    """Generate a consistent cache key from any path or identifier.
-
-    This is the single source of truth for cache key generation to ensure
-    consistency across all caching operations (ChromaDB, embeddings, records, etc.).
-
-    Args:
-        path_or_identifier: Any path (e.g., "gs://bucket/path") or identifier to convert to cache key
-
-    Returns:
-        str: Cache key suitable for use as directory/file name
-    """
-    # Handle protocol separators first to avoid double underscores
-    result = path_or_identifier.replace("://", "_")
-    # Then handle remaining special characters
-    result = result.replace("/", "_").replace(":", "_").replace(".", "_")
-    return result
 
 
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
@@ -825,6 +806,8 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
         OSError: If download fails or files are corrupted
 
     """
+    from buttermilk import bm
+
     # If it's already a local path, return as-is
     try:
         local_path = pathlib.Path(persist_directory)
@@ -835,8 +818,8 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
         pass  # Not a valid local path, treat as remote
 
     # Generate cache key from persist_directory
-    cache_key = generate_cache_key(persist_directory)
-    cache_dir = _get_cache_dir()
+    cache_key = bm.session_info.generate_cache_key(persist_directory)
+    cache_dir = bm.session_info.get_chromadb_cache_dir()
     local_cache_path = cache_dir / cache_key
 
     # Check if we already have cached data
@@ -946,8 +929,10 @@ async def get_chromadb_cache_size(persist_directory: str) -> int:
         int: Size in bytes, or 0 if cache doesn't exist
 
     """
-    cache_key = generate_cache_key(persist_directory)
-    cache_dir = _get_cache_dir()
+    from buttermilk import bm
+
+    cache_key = bm.session_info.generate_cache_key(persist_directory)
+    cache_dir = bm.session_info.get_chromadb_cache_dir()
     local_cache_path = cache_dir / cache_key
 
     if not local_cache_path.exists():
@@ -973,7 +958,9 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
         int: Number of bytes freed
 
     """
-    cache_dir = _get_cache_dir()
+    from buttermilk import bm
+
+    cache_dir = bm.session_info.get_chromadb_cache_dir()
 
     if persist_directory is None:
         # Clear all caches
@@ -992,7 +979,7 @@ async def clear_chromadb_cache(persist_directory: str | None = None) -> int:
 
         return await asyncio.to_thread(_clear_all)
     # Clear specific cache
-    cache_key = generate_cache_key(persist_directory)
+    cache_key = bm.session_info.generate_cache_key(persist_directory)
     local_cache_path = cache_dir / cache_key
 
     if not local_cache_path.exists():

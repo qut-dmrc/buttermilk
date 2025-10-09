@@ -44,7 +44,6 @@ class TestChromaDBSyncFix:
         assert "_original_remote_path = self.persist_directory" in init_source
 
     @patch("buttermilk.data.vector.TextEmbeddingModel")
-    @patch("buttermilk.data.vector.VertexAIEmbeddingFunction")
     @patch("buttermilk.data.vector.chromadb")
     def test_path_preservation_logic(self, mock_chromadb, mock_embedding_func, mock_text_model):
         """Test the path preservation logic without actual model loading."""
