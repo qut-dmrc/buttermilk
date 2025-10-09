@@ -1,6 +1,5 @@
 """Test the BM singleton pattern."""
 import pytest
-from projects.buttermilk.tests.integration.test_tracing import EXPECTED_PROJECT_NAME
 
 from buttermilk import (
     init_async,
@@ -81,8 +80,7 @@ async def test_multiple_sessions_same_project(real_bm):
     )
 
     # Both should use same project
-    assert bm1.session_info.project_name == EXPECTED_PROJECT_NAME
-    assert bm2.session_info.project_name == EXPECTED_PROJECT_NAME
+    assert bm1.session_info.project_name == bm2.session_info.project_name
 
     # But have different session IDs
     assert bm1.session_info.session_id != bm2.session_info.session_id

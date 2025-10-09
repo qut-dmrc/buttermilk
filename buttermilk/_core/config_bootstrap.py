@@ -46,19 +46,20 @@ class ConfigurationBootstrapper:
         self.config_path = config_path
         self.config_name = config_name
         self.overrides = overrides or []
-        self._config: DictConfig | None = config
+        self._config: DictConfig = self._load_configuration(config)
         self._execution_context: ExecutionContext | None = None
 
         load_dotenv()
 
-    def _load_configuration(self) -> DictConfig:
+    def _load_configuration(self, config: DictConfig | None = None) -> DictConfig:
         """Load configuration via Hydra (single initialization).
 
         Returns:
             Loaded and resolved configuration
         """
-        if self._config is None:
-            config_to_instantiate = None
+        if config is not None:
+            config_to_instantiate = config
+        else:
             try:
                 # Check if we're already in a Hydra context (like CLI)
                 from hydra.core.global_hydra import GlobalHydra
@@ -67,8 +68,6 @@ class ConfigurationBootstrapper:
                     # We're already in a Hydra context, get the existing config
 
                     config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
-                    OmegaConf.resolve(config_to_instantiate)
-                    # logger.debug("Configuration loaded from existing Hydra context")  # Removed: logging not configured yet
 
                 else:
                     # Load configuration using Hydra compose API
@@ -80,7 +79,6 @@ class ConfigurationBootstrapper:
 
                     with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
                         config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
-                        OmegaConf.resolve(config_to_instantiate)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
 
@@ -88,9 +86,10 @@ class ConfigurationBootstrapper:
                 logger.error(f"Failed to load configuration: {e}")
                 raise
 
-            # Instantiate the config
-            self._config = hydra.utils.instantiate(config_to_instantiate)
-        return self._config
+        # Instantiate the config
+        OmegaConf.resolve(config_to_instantiate)
+        instantiated_config = hydra.utils.instantiate(config_to_instantiate)
+        return instantiated_config
 
     def setup_environment_variables(self) -> None:
         """Set all required environment variables in one place.
@@ -170,11 +169,10 @@ class ConfigurationBootstrapper:
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
-            # Note: config is already instantiated by _load_configuration()
-            config = self._load_configuration()
-            infrastructure_config = config.get("infrastructure", {})
+            # Note: config is already instantiated
+            infrastructure_config = self._config.get("infrastructure", {})
 
-            # Clouds are already instantiated by _load_configuration()
+            # Clouds are already instantiated
             hydrated_clouds = infrastructure_config.get("clouds", [])
 
             # Use async factory method with project_name
@@ -243,14 +241,6 @@ class ConfigurationBootstrapper:
         logger.info(f"Session context bootstrap complete: {session_bm.session_info.session_id}")
 
         return session_bm
-
-    def get_configuration(self) -> DictConfig:
-        """Get the loaded configuration.
-
-        Returns:
-            Loaded Hydra configuration
-        """
-        return self._load_configuration()
 
 
 def create_configuration_bootstrapper(
@@ -488,7 +478,7 @@ async def bootstrap_session_with_config_async(
     bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
 
     # Get the final resolved configuration to extract project/job BEFORE bootstrapping
-    final_config = bootstrapper.get_configuration()
+    final_config = bootstrapper._load_configuration()
 
     # Extract job and project from config if not provided as parameters
     # This must happen BEFORE creating ExecutionContext so we can pass project_name

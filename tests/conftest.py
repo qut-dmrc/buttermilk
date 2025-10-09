@@ -34,20 +34,16 @@ def anyio_backend():
     return "asyncio"
 
 
-"""Real ExecutionContext created from testing.yaml configuration."""
-bm = init(config_dir="../buttermilk/conf")
-
-
-@pytest.fixture(scope="session")
-def real_conf():
-    """Real configuration dictionary from testing.yaml."""
-    return resolved_conf
-
-
 @pytest.fixture(scope="session")
 def real_bm():
     """Real BM instance created from testing.yaml configuration."""
-    return bm
+    return init(config_dir="../buttermilk/conf")
+
+
+@pytest.fixture(scope="session")
+def real_conf(real_bm):
+    """Real configuration dictionary from testing.yaml."""
+    return real_bm.cfg
 
 
 @pytest.fixture(scope="session")
