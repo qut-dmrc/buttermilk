@@ -21,6 +21,49 @@ PIPELINE DESIGN
 
 2. Processors must acccept a BaseRecord and yield zero or more BaseRecord objects.
 
+SOURCE CONTRACT
+
+Sources are async iterators that yield BaseRecord objects to be processed by the pipeline.
+
+**Requirements**:
+- Must implement `__aiter__()` returning an AsyncIterator[BaseRecord]
+- Must yield BaseRecord objects (or subclasses like Record)
+- Should handle errors internally and either:
+  - Silently skip failed records (for optional/best-effort sources)
+  - Yield error records with metadata indicating failure (for auditable sources)
+  - Raise exceptions to halt pipeline (for critical failures)
+
+**Filtering Pattern**:
+Sources should use the `RecordFilter` protocol from `buttermilk.storage.base` for
+consistency. This allows reusable filters like existence checks, date ranges, etc.
+
+**Example Source**:
+```python
+class ZoteroSource(BaseModel):
+    library_id: str
+    filter: RecordFilter | None = None
+
+    def __aiter__(self):
+        return self.fetch_records()
+
+    async def fetch_records(self) -> AsyncGenerator[BaseRecord, None]:
+        for item in self.api.fetch():
+            # Create minimal record with just ID and metadata
+            record = BaseRecord(record_id=item['key'], metadata=item)
+
+            # Apply filter if provided
+            if self.filter and not await self.filter.should_include(record):
+                continue
+
+            yield record
+```
+
+**Best Practices**:
+- Keep sources simple - they should only fetch and yield IDs/metadata
+- Use processors for expensive operations (downloads, extraction, transformation)
+- Apply filters at source level to minimize unnecessary processing
+- Return records in a deterministic order for incremental sync support
+
 NON-GOALS
 - Pipeline will NOT validate processor-specific data shapes
 - Pipeline will NOT handle type conversions for processors

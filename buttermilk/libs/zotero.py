@@ -1,465 +1,374 @@
+"""Clean separation of Zotero source and processing logic.
+
+This module provides:
+- ZoteroSource: Yields BaseRecord objects with Zotero item IDs and metadata
+- ZoteroDownloadProcessor: Downloads PDFs and extracts full text for each item
+"""
+
 import asyncio
-import json  # Import json module
-import os
-from collections.abc import AsyncIterator
+import json
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import Any
 
-import pydantic
-from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
 from pyzotero import zotero, zotero_errors
 
-# Import bm for credentials access
 from buttermilk import bm, logger
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord, Record
+from buttermilk.storage.base import RecordFilter
 from buttermilk.utils.utils import get_pdf_text
 
-from buttermilk.data.vector import ChromaDBEmbeddings
+
+class VectorStoreExistenceFilter(RecordFilter):
+    """Filter that checks if a record already exists in a vector store."""
+
+    def __init__(self, vector_store: Any):
+        """Initialize with a vector store that has check_document_exists() method.
+
+        Args:
+            vector_store: Vector store with check_document_exists(record_id: str) -> bool
+        """
+        self.vector_store = vector_store
+
+    async def should_include(self, record: BaseRecord) -> bool:
+        """Check if record should be included (i.e., does NOT already exist).
+
+        Args:
+            record: Record to check
+
+        Returns:
+            True if record should be included (doesn't exist), False to skip (exists)
+        """
+        if not hasattr(record, "record_id"):
+            return True
+
+        # Synchronous check - vector_store.check_document_exists is sync
+        exists = self.vector_store.check_document_exists(record.record_id)
+        return not exists
 
 
-class ZotDownloader(BaseModel):
-    """Downloads and processes items from a Zotero library with incremental sync support.
+class ZoteroSource(BaseModel):
+    """Source that yields BaseRecord objects with Zotero item IDs and metadata.
 
-    This class handles:
-    - Incremental synchronization using Zotero's version tracking
-    - PDF and full-text download from Zotero attachments
-    - Conversion to Record objects for downstream processing
-    - Integration with vector stores for duplicate detection
+    This source:
+    - Fetches items from Zotero API in strict ascending date order
+    - Tracks version state for incremental sync
+    - Filters items using the RecordFilter protocol
+    - Yields minimal BaseRecord objects (ID + metadata only)
 
-    The incremental sync feature tracks the library version from the last successful
-    sync and only fetches items that have been modified since then. This significantly
-    reduces API calls and processing time for large libraries.
-
-    Attributes:
-        save_dir: Directory path for saving downloaded files and sync state
-        library: Zotero library ID to sync from
-        vector_store: Optional ChromaDBEmbeddings instance for deduplication checks before downloading
-
+    The heavy lifting (downloads, extraction) is delegated to ZoteroDownloadProcessor.
     """
 
-    save_dir: str = Field(..., description="Directory to save downloaded files and sync state")
-    library: str = Field(..., description="Zotero library ID to sync from")
-    local: bool = Field(default=False, description="Use local mode for Zotero API")
-    download_concurrency: int = Field(default=20, description="Maximum concurrent downloads from Zotero")
-    vector_store: ChromaDBEmbeddings | None = Field(
-        default=None,
-        description="Vector store for deduplication - checks existence before downloading PDFs"
-    )
+    model_config = {"arbitrary_types_allowed": True}
+
+    save_dir: str = Field(..., description="Directory to save sync state")
+    library_id: str = Field(..., description="Zotero library ID")
+    filter: Any = Field(default=None, description="Optional RecordFilter implementation")
+    force_full_sync: bool = Field(default=False, description="Bypass incremental sync")
+    max_items: int | None = Field(default=None, description="Maximum items to yield")
 
     _zot: zotero.Zotero | None = PrivateAttr(default=None)
 
-    @pydantic.field_validator("local")
-    @classmethod
-    def validate_local(cls, v) -> bool:
-        if v is None:
-            return False
-        return TypeAdapter(bool).validate_python(v)
-
     @property
     def zot(self) -> zotero.Zotero:
-        """Lazily initialize the Zotero client on first access."""
+        """Lazily initialize the Zotero client."""
         if self._zot is None:
             self._zot = zotero.Zotero(
-                library_id=self.library,
+                library_id=self.library_id,
                 library_type="group",
                 api_key=bm.credentials.get("ZOTERO_API_KEY"),
-                local=self.local,  # Use local mode if specified
             )
-            os.makedirs(self.save_dir, exist_ok=True)
+            Path(self.save_dir).mkdir(parents=True, exist_ok=True)
         return self._zot
 
-    def _get_state_file_path(self) -> Path:
-        """Get the path to the sync state file."""
+    def _state_file_path(self) -> Path:
+        """Get path to sync state file."""
         return Path(self.save_dir) / ".zotero_sync_state.json"
 
-    def _load_version_state(self) -> dict:
-        """Load the last sync version state from file.
-        
+    def _load_sync_state(self) -> dict[str, Any]:
+        """Load last sync state.
+
         Returns:
-            dict: Dictionary with 'last_version' and 'last_sync_timestamp'
-
+            dict: {'last_version': int|None, 'last_sync_timestamp': str|None}
         """
-        state_file = self._get_state_file_path()
-        if state_file.exists():
-            try:
-                with state_file.open("r") as f:
-                    return json.load(f)
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Error loading sync state: {e}. Starting fresh.")
-
-        return {"last_version": None, "last_sync_timestamp": None}
-
-    def _save_version_state(self, version: int, timestamp: str) -> None:
-        """Save the current sync version state to file.
-        
-        Args:
-            version: The last successfully processed library version
-            timestamp: ISO format timestamp of the sync
-
-        """
-        state_file = self._get_state_file_path()
-        state = {
-            "last_version": version,
-            "last_sync_timestamp": timestamp,
-        }
+        state_file = self._state_file_path()
+        if not state_file.exists():
+            return {"last_version": None, "last_sync_timestamp": None}
 
         try:
-            with state_file.open("w") as f:
+            with state_file.open("r") as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Error loading sync state: {e}. Starting fresh.")
+            return {"last_version": None, "last_sync_timestamp": None}
+
+    def _save_sync_state(self, version: int, timestamp: str) -> None:
+        """Save current sync state.
+
+        Args:
+            version: Last processed item version
+            timestamp: ISO format timestamp
+        """
+        state = {"last_version": version, "last_sync_timestamp": timestamp}
+        try:
+            with self._state_file_path().open("w") as f:
                 json.dump(state, f, indent=2)
             logger.debug(f"Saved sync state: version={version}")
         except OSError as e:
             logger.error(f"Failed to save sync state: {e}")
 
-    def reset_sync_state(self) -> None:
-        """Reset sync state to force a full re-sync on next run."""
-        state_file = self._get_state_file_path()
-        if state_file.exists():
-            state_file.unlink()
-            logger.info("Sync state reset. Next sync will fetch all items.")
-
     def __aiter__(self):
-        """Enable async iteration over ZotDownloader."""
-        return self.get_all_records()
+        """Enable async iteration."""
+        return self.fetch_items()
 
-    async def get_all_records(
-        self, force_full_sync: bool = False, max_docs: int | None = None, start: int | None = None, **kwargs
-    ) -> AsyncIterator[Record]:
-        """Fetches Zotero items, checks existence, downloads, extracts, and yields Records.
+    async def fetch_items(self) -> AsyncGenerator[BaseRecord, None]:
+        """Fetch Zotero items and yield BaseRecord objects with IDs and metadata.
 
-        This method implements incremental sync by default, only fetching items that have
-        been modified since the last successful sync. The sync state is persisted to disk.
-
-        Args:
-            force_full_sync: If True, bypasses incremental sync and fetches all items
-            start: Starting index for pagination (default: None, fetches all)
-            max_docs: Maximum number of records to yield before stopping (None = no limit)
-            **kwargs: Additional parameters to pass to the Zotero API
+        This method:
+        - Implements incremental sync using version tracking
+        - Returns items in strict ascending date order
+        - Applies filters before yielding
+        - Tracks the highest version processed for next sync
 
         Yields:
-            Record: Processed records from Zotero items
-
+            BaseRecord: Minimal records with record_id and metadata
         """
-        # Initialize vector store cache if present (required for remote ChromaDB)
-        if self.vector_store:
-            await self.vector_store.ensure_cache_initialized()
-            logger.debug("Vector store cache initialized for deduplication checks")
-
-        # Load sync state for incremental sync
-        sync_state = self._load_version_state()
+        # Load sync state
+        sync_state = self._load_sync_state()
         last_version = sync_state["last_version"]
 
         # Prepare API parameters
         api_params = {
-            # Exclude attachments, notes, annotations
-            "itemType": "-attachment",
+            "itemType": "-attachment",  # Exclude attachments
             "limit": 100,
             "sort": "dateModified",
-            "direction": "asc",  # Always use ascending order for consistent incremental tracking
-            **kwargs,  # Allow override of any parameters
+            "direction": "asc",  # Ascending order for incremental sync
         }
-        if start is not None:
-            api_params["start"] = start
 
-        # Add incremental sync parameters if not forcing full sync
-        if not force_full_sync and last_version is not None:
+        # Add incremental sync parameter
+        if not self.force_full_sync and last_version is not None:
             api_params["since"] = last_version
-            logger.info(f"🔄 Starting incremental sync from item version {last_version}")
+            logger.info(f"🔄 Incremental sync from version {last_version}")
         else:
-            logger.info("🔄 Starting full sync of Zotero library")
+            logger.info("🔄 Full sync of Zotero library")
 
-        items = []
-        library_version = None  # Will store the current library version
-
+        # Fetch items
         try:
-            # Fetch only parent items (books, articles, ...), not attachments directly
             results = self.zot.items(**api_params)
-
-            items.extend(results)
-
-            _next = self.zot.links.get("next")
-
-            # Try to get library version from response headers
-            if hasattr(self.zot, "request") and hasattr(self.zot.request, "headers"):
-                library_version = self.zot.request.headers.get("last-modified-version")
-                if library_version:
-                    library_version = int(library_version)
-                    logger.debug(f"Current library version: {library_version}")
-
+            items = list(results)
+            logger.debug(f"Fetched {len(items)} items from Zotero")
         except Exception as e:
-            logger.error(
-                f"Error fetching initial items from Zotero: {e} {e.args=}",
-            )
+            logger.error(f"Error fetching items from Zotero: {e}")
             return
 
-        processed_count = 0
-        skipped_count = 0
-        attempted_count = 0  # Track total attempts including failures
-        max_item_version = 0  # Track the highest version of successfully processed items
+        # Track stats
+        yielded_count = 0
+        filtered_count = 0
+        max_item_version = last_version or 0
 
-        # Use a dict to track pending tasks with their item metadata
-        pending_tasks = {}  # task -> item mapping
-        max_concurrent = self.download_concurrency  # Limit concurrent downloads
-        items_exhausted = False  # Track when we've fetched all items
-
-        while not items_exhausted or pending_tasks:
-            # Stop creating new tasks if we're at max_docs limit (based on attempts, not just successes)
-            if max_docs is not None and attempted_count >= max_docs:
-                # Cancel any remaining pending tasks
-                for pending_task in pending_tasks:
-                    pending_task.cancel()
+        # Process items
+        for item in items:
+            # Stop if we hit max_items
+            if self.max_items is not None and yielded_count >= self.max_items:
+                logger.info(f"Reached max_items limit ({self.max_items})")
                 break
 
-            # Create new download tasks while we have items and capacity
-            while items and len(pending_tasks) < max_concurrent:
-                # Check if we would exceed max_docs with new tasks
-                if max_docs is not None and (attempted_count + len(pending_tasks)) >= max_docs:
-                    break
+            # Skip invalid items
+            key = item.get("key")
+            if not key:
+                logger.warning(f"Item missing key: {item.get('data', {}).get('title', 'N/A')}")
+                continue
 
-                item = items.pop(0)  # Process in order
-                key = item.get("key")
+            item_type = item.get("data", {}).get("itemType")
+            if item_type in {"attachment", "note", "annotation"}:
+                continue
 
-                if not key:
-                    logger.warning(
-                        f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
-                    )
-                    continue
+            # Create minimal BaseRecord with ID and metadata
+            record = BaseRecord(
+                record_id=key,
+                metadata={
+                    "zotero_item": item.get("data", {}),
+                    "zotero_version": item.get("version", 0),
+                    "zotero_links": item.get("links", {}),
+                },
+            )
 
-                if item.get("data", {}).get("itemType") in {"attachment", "note", "annotation"}:
-                    logger.debug(f"Skipping item {key} of type {item.get('data', {}).get('itemType')}.")
-                    continue
-                # --- Check for existence using the vector_store ---
-                if self.vector_store and self.vector_store.check_document_exists(key):
-                    logger.debug(
-                        f"Document {key} already exists in vector store, skipping.",
-                    )
-                    skipped_count += 1
-                    continue
-                # --- End existence check ---
+            # Apply filter
+            if self.filter and not await self.filter.should_include(record):
+                filtered_count += 1
+                continue
 
-                # Create task for this item
-                try:
-                    title = item.get("data", {}).get("title", "Unknown")[:50]
-                    item_version = item.get("version", 0)
-                    logger.debug(f"🔵 Creating download task for {key} '{title}' (v{item_version}, attempted: {attempted_count}, pending: {len(pending_tasks)})")
-                    task = asyncio.create_task(self.download_record(item))
-                    pending_tasks[task] = item  # Store item metadata with task
-                    attempted_count += 1  # Count as attempted when task is created
-                except Exception as e:
-                    logger.error(
-                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
-                    )
+            # Track version
+            item_version = item.get("version", 0)
+            max_item_version = max(max_item_version, item_version)
 
-            # Fetch next page if we need more items and have capacity
-            if _next and not items:
-                try:
-                    logger.debug(f"Following 'next' link for more Zotero items: {_next}")
-                    response = self.zot._retrieve_data(_next)
-                    items = response.json()
-                    _next = self.zot._extract_links().get("next")
+            yielded_count += 1
+            yield record
 
-                    # Update library version from response headers
-                    if hasattr(response, "headers"):
-                        new_version = response.headers.get("last-modified-version")
-                        if new_version:
-                            library_version = int(new_version)
-                            logger.debug(f"Updated library version: {library_version}")
-
-                except Exception as e:
-                    logger.error(
-                        f"Error fetching next page from Zotero: {e} {e.args=}",
-                    )
-                    items_exhausted = True  # Mark as exhausted on error
-            elif not _next and not items:
-                items_exhausted = True  # No more items to fetch
-                logger.debug("No more items to fetch from Zotero API")
-
-            # If we have pending tasks, wait for at least one to complete
-            if pending_tasks:
-                done, pending = await asyncio.wait(
-                    pending_tasks.keys(),
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                # Process completed tasks immediately and yield results
-                for task in done:
-                    # Get the original item metadata for this task
-                    item = pending_tasks.pop(task)
-                    item_version = item.get("version", 0)
-
-                    try:
-                        result = await task
-                        if result:
-                            # Track the max version of successfully processed items
-                            max_item_version = max(max_item_version, item_version)
-                            processed_count += 1
-                            logger.debug(
-                                f"🟢 Yielding record {result.record_id} '{result.title[:50] if result.title else 'Unknown'}' (v{item_version}) to pipeline"
-                            )
-                            yield result
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing download/convert result for item v{item_version}: {e} {e.args=}",
-                        )
-
-                # Update pending_tasks dict with remaining tasks
-                pending_tasks = {t: pending_tasks[t] for t in pending if t in pending_tasks}
-
-        logger.info(
-            f"Finished Zotero processing. Processed: {processed_count}, Skipped (already exist): {skipped_count}",
-        )
-
-        # Save sync state based on the highest item version we successfully processed
+        # Save sync state
         timestamp = datetime.now(UTC).isoformat()
-
         if max_item_version > 0:
-            # We processed at least one item successfully - save that item's version
-            self._save_version_state(max_item_version, timestamp)
-            logger.info(f"✅ Sync completed. Last processed item version: {max_item_version} ({processed_count} items)")
-        elif processed_count == 0 and library_version is not None:
-            # No items were processed (either all existed or query returned nothing)
-            # Save library version to mark this sync point
-            self._save_version_state(library_version, timestamp)
-            logger.info(f"✅ Sync completed (no new items). Library version: {library_version}")
+            self._save_sync_state(max_item_version, timestamp)
+            logger.info(f"✅ Sync complete: {yielded_count} items yielded, {filtered_count} filtered (max version: {max_item_version})")
 
-    async def download_record(self, item) -> Record | None:
-        """Downloads PDF/full text, saves item JSON, and creates a Record.
 
-        Tries first to download the full text if available, otherwise downloads the PDF.
-        Returns a Record if successful, None if not.
+class ZoteroDownloadProcessor(BaseModel):
+    """Processor that downloads PDFs and extracts full text from Zotero items.
+
+    This processor:
+    - Takes a BaseRecord with Zotero item metadata
+    - Downloads full text from Zotero API if available
+    - Falls back to PDF download + extraction if needed
+    - Yields a full Record with content, or raises an error if download fails
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    save_dir: str = Field(..., description="Directory to save downloaded files")
+    library_id: str = Field(..., description="Zotero library ID")
+
+    _zot: zotero.Zotero | None = PrivateAttr(default=None)
+
+    @property
+    def zot(self) -> zotero.Zotero:
+        """Lazily initialize the Zotero client."""
+        if self._zot is None:
+            self._zot = zotero.Zotero(
+                library_id=self.library_id,
+                library_type="group",
+                api_key=bm.credentials.get("ZOTERO_API_KEY"),
+            )
+            Path(self.save_dir).mkdir(parents=True, exist_ok=True)
+        return self._zot
+
+    async def process(
+        self,
+        record: BaseRecord,
+        *,
+        pipeline_stage: str,
+        parent_trace_id: str | None = None,
+        component_name: str = "LLMCore",
+        cancellation_token: Any | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[Record, None]:
+        """Process a Zotero item: download and extract full text.
+
+        Args:
+            record: BaseRecord with Zotero item metadata
+
+        Yields:
+            Record: Full Record with extracted text content
+
+        Raises:
+            Exception: If download or extraction fails
         """
-        key = item.get("key")
-        title = item.get("data", {}).get("title", "Unknown Title")
-        # Try to populate title with first hit from item["data"] fields: title, shortTitle, nameOfAct, caseName,
-        doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
-        zotero_data = item.get("data", {})
+        # Extract Zotero metadata from record
+        zotero_item = record.metadata.get("zotero_item", {})
+        zotero_links = record.metadata.get("zotero_links", {})
+        key = record.record_id
+        title = zotero_item.get("title", "Unknown Title")
+        doi_or_url = zotero_item.get("DOI") or zotero_item.get("url")
 
         # Define file paths
         pdf_file = Path(self.save_dir) / f"{key}.pdf"
         json_file = Path(self.save_dir) / f"{key}.json"
 
-        # Check if the item already exists in the cache
+        # Check cache first
         if json_file.exists():
-            # Load existing item from cache
             try:
                 with json_file.open("r", encoding="utf-8") as f:
-                    item = json.load(f)
-                if item.get("content"):
-                    logger.debug(f"✅ Read fulltext from cache for {key}  '{title[:50]}'")
-
-                    metadata = {"title": title, "doi_or_url": doi_or_url, "uri": json_file.as_posix(), "zotero_data": zotero_data}
-
-                    record = Record(
+                    cached_item = json.load(f)
+                if cached_item.get("content"):
+                    logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
+                    yield Record(
                         record_id=key,
-                        content=item.get("content", ""),
+                        content=cached_item["content"],
                         file_path=pdf_file.as_posix(),
-                        metadata=metadata,
-
+                        metadata={
+                            "title": title,
+                            "doi_or_url": doi_or_url,
+                            "uri": json_file.as_posix(),
+                            "zotero_data": zotero_item,
+                        },
                     )
-                    return record
+                    return
             except Exception as e:
-                # If reading fails, proceed to download again
-                logger.error(
-                    f"Failed to read cached item JSON for {key}: {e} {e.args=}",
-                )
+                logger.warning(f"Failed to read cached item {key}: {e}")
 
-        if not key:
-            logger.warning(f"Item missing key: {item}")
-            return None
-        fulltext = None
-        # Find the PDF attachment link
-        attachment = item["links"].get("attachment", {})
-        if (attachment.get("attachmentType") == "application/pdf") and (pdf_attachment := attachment.get("href")):
-            attachment_key = pdf_attachment.split("/")[-1]
+        # Download full text or PDF
+        content = None
+        attachment = zotero_links.get("attachment", {})
+
+        if attachment.get("attachmentType") == "application/pdf" and (pdf_href := attachment.get("href")):
+            attachment_key = pdf_href.split("/")[-1]
+
+            # Try full text from Zotero API first
             try:
-                # --- Download full text from Zotero ---
-                logger.info(
-                    f"⬇️ Starting full-text download for {key} attachment {attachment_key} for '{title[:50]}'..."
-                )
+                logger.info(f"⬇️  Downloading full text for {key} '{title[:50]}'")
                 fulltext = self.zot.fulltext_item(attachment_key)
 
-                # Here we check that the zotero index contains at least 90% of the PDF pages,
-                # otherwise we'll download the PDF instead.
-                # (By default Zotero indexes the first 100 pages.)
+                # Check if Zotero indexed enough pages (>90%)
                 if (
                     fulltext
-                    and fulltext["indexedPages"] > 0
-                    and fulltext["indexedPages"] >= (fulltext["totalPages"] * 0.9)
+                    and fulltext.get("indexedPages", 0) > 0
+                    and fulltext["indexedPages"] >= (fulltext.get("totalPages", 0) * 0.9)
                 ):
-                    item["content"] = fulltext["content"]
+                    content = fulltext["content"]
                     logger.debug(
-                        f"Full text downloaded for item {key}; {fulltext['indexedPages']} pages indexed by zotero out of {fulltext['totalPages']} total."
+                        f"Full text retrieved: {fulltext['indexedPages']}/{fulltext['totalPages']} pages"
                     )
-                else:
-                    fulltext = None
-                    logger.debug(
-                        f"Full text not sufficient for item {key}; indexed pages: {fulltext['indexedPages'] if fulltext else 'N/A'}, total pages: {fulltext['totalPages'] if fulltext else 'N/A'}"
-                    )
-
-            except zotero_errors.ResourceNotFoundError as e:
-                logger.debug(
-                    f"Parsed full-text not found for item {key}: {e} {e.args=}",
-                )
+            except zotero_errors.ResourceNotFoundError:
+                logger.debug(f"Full text not available for {key}")
             except Exception as e:
-                logger.error(
-                    f"Error during download/convert for {key}: {e} {e.args=}",
-                )
-                return None
+                logger.warning(f"Error fetching full text for {key}: {e}")
 
-            if not fulltext:
-                # --- Download PDF ---
+            # Fall back to PDF download + extraction
+            if not content:
                 if not pdf_file.exists():
-                    logger.debug(
-                        f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
-                    )
-                    # Zotero python library is synchronous.
-                    # Don't try to get around it, it's not thread safe
+                    logger.debug(f"Downloading PDF for {key} to {pdf_file}")
+                    # Zotero library is synchronous, don't try to async it
                     self.zot.dump(attachment_key, str(pdf_file))
-                else:
-                    logger.debug(f"PDF file already exists: {pdf_file}")
+
                 try:
-                    fulltext = get_pdf_text(pdf_file.as_posix())
-                    item["content"] = fulltext
+                    content = get_pdf_text(pdf_file.as_posix())
                 except Exception as e:
-                    logger.error(
-                        f"Failed to extract fulltext for {key} {attachment_key} from pdf {pdf_file}: {e} {e.args=}",
-                    )
+                    # PDF extraction failed - raise error
+                    error_msg = f"Failed to extract text from PDF for {key}: {e}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
 
-            # --- Save Item JSON ---
-            try:
-                with json_file.open("w", encoding="utf-8") as f:
-                    json.dump(item, f, ensure_ascii=False, indent=4)
-                logger.debug(f"Saved item data to {json_file}")
-            except Exception as json_e:
-                logger.error(
-                    f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
-                )
+        else:
+            # No PDF attachment found
+            error_msg = f"No PDF attachment found for {key}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
 
-            # --- Prepare Record ---
-            metadata = {
+        # Save to cache
+        cache_data = {
+            "key": key,
+            "data": zotero_item,
+            "links": zotero_links,
+            "content": content,
+        }
+        try:
+            with json_file.open("w", encoding="utf-8") as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            logger.debug(f"Saved to cache: {json_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save cache for {key}: {e}")
+
+        # Yield full Record
+        logger.debug(f"✅ Download complete: {key} '{title[:50]}'")
+        yield Record(
+            record_id=key,
+            content=content,
+            file_path=pdf_file.as_posix(),
+            metadata={
                 "title": title,
                 "doi_or_url": doi_or_url,
                 "uri": json_file.as_posix(),
-                "zotero_data": zotero_data,
-            }
-            record = Record(
-                record_id=key,
-                content=item.get("content", ""),
-                file_path=pdf_file.as_posix(),
-                metadata=metadata,
-            )
-
-            logger.debug(f"✅ Download complete for {key} '{title[:50]}'")
-            return record
-        else:
-            logger.debug(f"Skipping item {key}: No PDF attachment found.")
-            # --- Save Item JSON even if no PDF ---
-            try:
-                with json_file.open("w", encoding="utf-8") as f:
-                    json.dump(item, f, ensure_ascii=False, indent=4)
-                logger.debug(f"Saved item metadata (no PDF) to {json_file}")
-            except Exception as json_e:
-                logger.error(
-                    f"Failed to save item JSON for {key} (no PDF) to {json_file}: {json_e} {json_e.args=}",
-                )
-            return None  # Return None as no PDF means no Record for embedding pipeline
+                "zotero_data": zotero_item,
+            },
+        )

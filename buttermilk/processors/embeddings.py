@@ -168,38 +168,53 @@ class EmbeddingGenerator(BaseModel):
         if not chunks:
             return False
 
-        # Convert chunks to dicts if needed, consistently
-        for i, chunk in enumerate(chunks):
-            if hasattr(chunk, 'model_dump'):
-                # Convert ChunkedDocument to dict
-                chunks[i] = chunk.model_dump()
-            elif not isinstance(chunk, dict):
-                # Skip unsupported chunk types
-                logger.warning(f"Unsupported chunk type: {type(chunk)}")
-                continue
-
+        # Work with ChunkedDocument objects directly - don't convert to dicts
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
-            if not isinstance(chunk, dict):
-                continue
-            embeddings_input.append(
-                (
-                    i,
-                    TextEmbeddingInput(
-                        text=chunk['chunk_text'],
-                        task_type=self.task,
-                        title=f"{chunk['document_title']}_{chunk['chunk_index']}",  # chunk_title equivalent
+            # Support both ChunkedDocument objects and dicts
+            if hasattr(chunk, 'chunk_text'):
+                # ChunkedDocument object
+                embeddings_input.append(
+                    (
+                        i,
+                        TextEmbeddingInput(
+                            text=chunk.chunk_text,
+                            task_type=self.task,
+                            title=f"{chunk.document_title}_{chunk.chunk_index}",
+                        ),
                     ),
-                ),
-            )
+                )
+            elif isinstance(chunk, dict):
+                # Dict representation
+                embeddings_input.append(
+                    (
+                        i,
+                        TextEmbeddingInput(
+                            text=chunk['chunk_text'],
+                            task_type=self.task,
+                            title=f"{chunk['document_title']}_{chunk['chunk_index']}",
+                        ),
+                    ),
+                )
+            else:
+                logger.warning(f"Unsupported chunk type: {type(chunk)}")
+                continue
 
         embedding_results = await self._embed(embeddings_input)
 
         success_count = 0
         for idx, embedding in embedding_results:
-            if embedding is not None and idx < len(chunks) and isinstance(chunks[idx], dict):
-                chunks[idx]['embedding'] = embedding
-                success_count += 1
+            if embedding is not None and idx < len(chunks):
+                chunk = chunks[idx]
+                # Set embedding based on chunk type
+                if hasattr(chunk, 'embedding'):
+                    # ChunkedDocument object - set attribute
+                    chunk.embedding = embedding
+                    success_count += 1
+                elif isinstance(chunk, dict):
+                    # Dict - set key
+                    chunk['embedding'] = embedding
+                    success_count += 1
 
         if success_count == 0:
             logger.error("All embeddings failed for this record")
@@ -209,7 +224,10 @@ class EmbeddingGenerator(BaseModel):
             logger.warning("Partial embedding failure", succeeded=success_count, total=len(chunks))
             # Clear embeddings so we don't have partial state
             for c in chunks:
-                c.embedding = None
+                if hasattr(c, 'embedding'):
+                    c.embedding = None
+                elif isinstance(c, dict):
+                    c['embedding'] = None
             return False
 
         logger.debug("Generated embeddings", count=success_count)
