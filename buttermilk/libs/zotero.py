@@ -155,6 +155,7 @@ class ZotDownloader(BaseModel):
             "itemType": "-attachment",
             "limit": 100,
             "sort": "dateModified",
+            "direction": "asc",  # Always use ascending order for consistent incremental tracking
             **kwargs,  # Allow override of any parameters
         }
         if start is not None:
@@ -162,14 +163,10 @@ class ZotDownloader(BaseModel):
 
         # Add incremental sync parameters if not forcing full sync
         if not force_full_sync and last_version is not None:
-            api_params.update({
-                "since": last_version,
-                "sort": "dateModified",
-                "direction": "asc",
-            })
-            logger.info(f"Starting incremental sync from version {last_version}")
+            api_params["since"] = last_version
+            logger.info(f"🔄 Starting incremental sync from item version {last_version}")
         else:
-            logger.info("Starting full sync of Zotero library")
+            logger.info("🔄 Starting full sync of Zotero library")
 
         items = []
         library_version = None  # Will store the current library version
@@ -198,9 +195,10 @@ class ZotDownloader(BaseModel):
         processed_count = 0
         skipped_count = 0
         attempted_count = 0  # Track total attempts including failures
+        max_item_version = 0  # Track the highest version of successfully processed items
 
-        # Use a set to track pending tasks across all batches
-        pending_tasks = set()
+        # Use a dict to track pending tasks with their item metadata
+        pending_tasks = {}  # task -> item mapping
         max_concurrent = self.download_concurrency  # Limit concurrent downloads
         items_exhausted = False  # Track when we've fetched all items
 
@@ -242,9 +240,10 @@ class ZotDownloader(BaseModel):
                 # Create task for this item
                 try:
                     title = item.get("data", {}).get("title", "Unknown")[:50]
-                    logger.debug(f"🔵 Creating download task for {key} '{title}' (attempted: {attempted_count}, pending: {len(pending_tasks)})")
+                    item_version = item.get("version", 0)
+                    logger.debug(f"🔵 Creating download task for {key} '{title}' (v{item_version}, attempted: {attempted_count}, pending: {len(pending_tasks)})")
                     task = asyncio.create_task(self.download_record(item))
-                    pending_tasks.add(task)
+                    pending_tasks[task] = item  # Store item metadata with task
                     attempted_count += 1  # Count as attempted when task is created
                 except Exception as e:
                     logger.error(
@@ -277,36 +276,51 @@ class ZotDownloader(BaseModel):
 
             # If we have pending tasks, wait for at least one to complete
             if pending_tasks:
-                done, pending_tasks = await asyncio.wait(
-                    pending_tasks,
+                done, pending = await asyncio.wait(
+                    pending_tasks.keys(),
                     return_when=asyncio.FIRST_COMPLETED,
                 )
 
                 # Process completed tasks immediately and yield results
                 for task in done:
+                    # Get the original item metadata for this task
+                    item = pending_tasks.pop(task)
+                    item_version = item.get("version", 0)
+
                     try:
                         result = await task
                         if result:
+                            # Track the max version of successfully processed items
+                            max_item_version = max(max_item_version, item_version)
                             processed_count += 1
                             logger.debug(
-                                f"🟢 Yielding record {result.record_id} '{result.title[:50] if result.title else 'Unknown'}' to pipeline"
+                                f"🟢 Yielding record {result.record_id} '{result.title[:50] if result.title else 'Unknown'}' (v{item_version}) to pipeline"
                             )
                             yield result
                     except Exception as e:
                         logger.error(
-                            f"Error processing download/convert result: {e} {e.args=}",
+                            f"Error processing download/convert result for item v{item_version}: {e} {e.args=}",
                         )
+
+                # Update pending_tasks dict with remaining tasks
+                pending_tasks = {t: pending_tasks[t] for t in pending if t in pending_tasks}
 
         logger.info(
             f"Finished Zotero processing. Processed: {processed_count}, Skipped (already exist): {skipped_count}",
         )
 
-        # Save sync state if we have a library version (even if no items were processed,
-        # we want to update the version to avoid re-checking the same items)
-        if library_version is not None:
-            timestamp = datetime.now(UTC).isoformat()
+        # Save sync state based on the highest item version we successfully processed
+        timestamp = datetime.now(UTC).isoformat()
+
+        if max_item_version > 0:
+            # We processed at least one item successfully - save that item's version
+            self._save_version_state(max_item_version, timestamp)
+            logger.info(f"✅ Sync completed. Last processed item version: {max_item_version} ({processed_count} items)")
+        elif processed_count == 0 and library_version is not None:
+            # No items were processed (either all existed or query returned nothing)
+            # Save library version to mark this sync point
             self._save_version_state(library_version, timestamp)
-            logger.info(f"Sync completed successfully. Library version: {library_version}")
+            logger.info(f"✅ Sync completed (no new items). Library version: {library_version}")
 
     async def download_record(self, item) -> Record | None:
         """Downloads PDF/full text, saves item JSON, and creates a Record.
