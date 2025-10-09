@@ -34,11 +34,13 @@ class Citator(LLMAgent):
         # Initialize parent class with all kwargs
         super().__init__(output_model=output_model, parameters=kwargs)
 
-    async def process(self, item: Record) -> Record | None:
+    async def process(self, item: Record, *, processor_stage: str = "cite", **kwargs) -> Record | None:
         """
         Process a Record to generate a citation using the LLM.
         Args:
             item (Record): The Record containing the text to cite.
+            processor_stage: Stage name for metadata tracking (default: "cite")
+            **kwargs: Additional keyword arguments (ignored, for compatibility)
         Returns:
             Record | None: The updated Record with the generated citation or None if processing failed.
         """

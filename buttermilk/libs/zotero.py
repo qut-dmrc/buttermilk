@@ -197,6 +197,7 @@ class ZotDownloader(BaseModel):
 
         processed_count = 0
         skipped_count = 0
+        attempted_count = 0  # Track total attempts including failures
 
         # Use a set to track pending tasks across all batches
         pending_tasks = set()
@@ -204,8 +205,8 @@ class ZotDownloader(BaseModel):
         items_exhausted = False  # Track when we've fetched all items
 
         while not items_exhausted or pending_tasks:
-            # Stop creating new tasks if we're at max_docs limit
-            if max_docs is not None and processed_count >= max_docs:
+            # Stop creating new tasks if we're at max_docs limit (based on attempts, not just successes)
+            if max_docs is not None and attempted_count >= max_docs:
                 # Cancel any remaining pending tasks
                 for pending_task in pending_tasks:
                     pending_task.cancel()
@@ -214,7 +215,7 @@ class ZotDownloader(BaseModel):
             # Create new download tasks while we have items and capacity
             while items and len(pending_tasks) < max_concurrent:
                 # Check if we would exceed max_docs with new tasks
-                if max_docs is not None and (processed_count + len(pending_tasks)) >= max_docs:
+                if max_docs is not None and (attempted_count + len(pending_tasks)) >= max_docs:
                     break
 
                 item = items.pop(0)  # Process in order
@@ -241,9 +242,10 @@ class ZotDownloader(BaseModel):
                 # Create task for this item
                 try:
                     title = item.get("data", {}).get("title", "Unknown")[:50]
-                    logger.debug(f"🔵 Creating download task for {key} '{title}' (pending: {len(pending_tasks)})")
+                    logger.debug(f"🔵 Creating download task for {key} '{title}' (attempted: {attempted_count}, pending: {len(pending_tasks)})")
                     task = asyncio.create_task(self.download_record(item))
                     pending_tasks.add(task)
+                    attempted_count += 1  # Count as attempted when task is created
                 except Exception as e:
                     logger.error(
                         f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
