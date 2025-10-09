@@ -87,7 +87,8 @@ class ConfigurationBootstrapper:
                 raise
 
         # Instantiate the config
-        OmegaConf.resolve(config_to_instantiate)
+        # Note: hydra.utils.instantiate() calls OmegaConf.resolve() internally,
+        # so we don't need to call it explicitly here
         instantiated_config = hydra.utils.instantiate(config_to_instantiate)
         return instantiated_config
 
