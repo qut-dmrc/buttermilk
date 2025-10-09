@@ -1,3 +1,5 @@
+from typing import Any
+
 import pydantic
 from pydantic import BaseModel
 
@@ -21,29 +23,16 @@ class FormattedCitation(BaseModel):
 class Citator(LLMAgent):
     """Generates a citation for a given text using an LLM."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, output_model: type[pydantic.BaseModel] = None, **kwargs: Any):
         # Set defaults for agent configuration
         kwargs["agent_id"] = kwargs.get("agent_id", "citator")
         kwargs["description"] = kwargs.get("description", "Generates a citation for a given text using an LLM.")
 
-        # Ensure we have the required inputs
-        if "inputs" not in kwargs:
-            kwargs["inputs"] = {}
-        kwargs["inputs"]["text_extract"] = "text_extract"
-
-        # Ensure we have the required parameters with defaults
-        if "parameters" not in kwargs:
-            kwargs["parameters"] = {}
-        kwargs["parameters"]["template"] = kwargs["parameters"].get("template", "citator")
-        kwargs["parameters"]["fail_on_unfilled_parameters"] = kwargs["parameters"].get(
-            "fail_on_unfilled_parameters", True
-        )
+        # Set the expected output model for the LLM's response
+        output_model = output_model or FormattedCitation
 
         # Initialize parent class with all kwargs
-        super().__init__(**kwargs)
-
-        # Set the expected output model for the LLM's response
-        self.output_model = FormattedCitation
+        super().__init__(output_model=output_model, parameters=kwargs)
 
     async def process(self, item: Record) -> Record | None:
         """

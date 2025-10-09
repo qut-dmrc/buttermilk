@@ -96,6 +96,8 @@ pipeline:
     - _target_: buttermilk.tools.citator.Citator
       model: gemini25flash
       template: citation
+      inputs:
+        - text_extract: text_extract
 
     # 2. Chunk text semantically
     - _target_: buttermilk.data.vector.SemanticSplitter

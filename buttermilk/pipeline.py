@@ -193,34 +193,30 @@ class PipelineOrchestrator(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self):
-        """Initialize semaphore and record cache."""
+        """Initialize semaphore. Cache is initialized lazily on first use."""
         self._semaphore = asyncio.Semaphore(self.concurrency)
-
-        # Initialize record cache
-        logger.info(
-            "🗂️  Pipeline cache initialization",
-            pipeline_name=self.pipeline_name,
-            enable_record_cache=self.enable_record_cache,
-            cache_dir_param=self.cache_dir,
-            session_cache_dir=getattr(bm.session_info, "cache_dir", None),
-        )
-
-        if self.enable_record_cache:
-            try:
-                from buttermilk._core.record_cache import RecordCache
-
-                # Use cache_dir from session_info if available, otherwise use parameter or let RecordCache use defaults
-                cache_base_dir = self.cache_dir or bm.session_info.cache_dir
-
-                logger.info("🗂️  Creating RecordCache", cache_base_dir=cache_base_dir, pipeline_name=self.pipeline_name)
-                self._record_cache = RecordCache(base_dir=cache_base_dir)
-            except Exception as e:
-                logger.warning("Failed to initialize RecordCache, continuing without caching", error=str(e))
-                self._record_cache = None
-        else:
-            logger.info("🚫 Record cache disabled for pipeline stage", pipeline_name=self.pipeline_name)
-
+        # Cache will be initialized lazily in _ensure_cache_initialized()
         return self
+
+    def _ensure_cache_initialized(self):
+        """Lazily initialize the record cache on first use."""
+        if not self.enable_record_cache:
+            return
+
+        if self._record_cache is not None:
+            return  # Already initialized
+
+        try:
+            from buttermilk._core.record_cache import RecordCache
+
+            # Use cache_dir from session_info if available, otherwise use parameter or let RecordCache use defaults
+            cache_base_dir = self.cache_dir or bm.session_info.cache_dir
+
+            logger.info("🗂️  Creating RecordCache", cache_base_dir=cache_base_dir, pipeline_name=self.pipeline_name)
+            self._record_cache = RecordCache(base_dir=cache_base_dir)
+        except Exception as e:
+            logger.warning("Failed to initialize RecordCache, continuing without caching", error=str(e))
+            self._record_cache = None
 
     @weave.op
     async def _process_single_record(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
@@ -272,7 +268,6 @@ class PipelineOrchestrator(BaseModel):
                 span.set_attribute("outputs.count", len(processed_results))
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
-                # Note: Caching is now handled per-processor in _process_without_cache
 
             except GeneratorExit:
                 # Handle early generator termination gracefully
@@ -673,7 +668,12 @@ class PipelineOrchestrator(BaseModel):
 
     async def _check_processor_cache(self, record: BaseRecord, processor_stage_name: str) -> list[BaseRecord] | None:
         """Check cache for processor-specific outputs."""
-        if not self.enable_record_cache or not self._record_cache or self.force_reprocess or not hasattr(record, "record_id"):
+        if not self.enable_record_cache or self.force_reprocess or not hasattr(record, "record_id"):
+            return None
+
+        # Lazily initialize cache on first use
+        self._ensure_cache_initialized()
+        if not self._record_cache:
             return None
 
         logger.debug("🔍 Checking processor cache", record_id=record.record_id, processor_stage=processor_stage_name)
@@ -740,7 +740,12 @@ class PipelineOrchestrator(BaseModel):
 
     async def _save_processor_cache(self, input_record: BaseRecord, outputs: list[BaseRecord], processor_stage_name: str) -> None:
         """Save processor outputs to cache."""
-        if not self.enable_record_cache or not self._record_cache or not outputs or not hasattr(input_record, "record_id"):
+        if not self.enable_record_cache or not outputs or not hasattr(input_record, "record_id"):
+            return
+
+        # Lazily initialize cache on first use
+        self._ensure_cache_initialized()
+        if not self._record_cache:
             return
 
         logger.debug(
