@@ -244,23 +244,8 @@ class TestMainScriptContractValidation:
         # Verify project parameter is optional (has default)
         assert sig.parameters["project"].default is None
 
-    def test_bootstrap_session_function_signature(self):
-        """Test that bootstrap_session has the expected signature."""
-        import inspect
-
-        from buttermilk._core.config_bootstrap import bootstrap_session
-
-        sig = inspect.signature(bootstrap_session)
-        params = list(sig.parameters.keys())
-
-        # Verify expected parameters
-        assert "job" in params
-        assert "project" in params
-        assert "run_type" in params
-
-        # Verify defaults
-        assert sig.parameters["project"].default is None
-        assert sig.parameters["run_type"].default == "cli"
+    # Note: bootstrap_session function has been removed in favor of init/init_async
+    # The test for that function signature is no longer needed
 
     def test_execution_context_validate_method_signature(self):
         """Test that ExecutionContext.validate_and_set_project has expected signature."""

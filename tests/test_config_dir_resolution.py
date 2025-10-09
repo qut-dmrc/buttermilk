@@ -58,9 +58,8 @@ def test_relative_config_dir_resolves_against_cwd(monkeypatch, tmp_path):
     cb.bootstrap_session_with_config(
         job="j",
         project="p",
-        run_type="cli",
         config_dir="myconf",  # relative path should resolve against project_dir (cwd)
-        overrides=None,
+        overrides=["run=cli"],
         config=None,
     )
 

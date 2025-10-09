@@ -1,11 +1,15 @@
+import asyncio
 import tempfile
 from pathlib import Path
 
-from buttermilk._core.config_bootstrap import bootstrap_session_with_config
+import pytest
+
+from buttermilk._core.config_bootstrap import bootstrap_session_with_config_async
 from buttermilk.utils.templating import load_template
 
 
-def test_external_template_loading_and_priority():
+@pytest.mark.asyncio
+async def test_external_template_loading_and_priority():
     """Tests that an external template path can be configured and is prioritized."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -17,8 +21,8 @@ def test_external_template_loading_and_priority():
         (temp_path / "summarise.jinja2").write_text(external_template_content)
 
         # 2. Bootstrap buttermilk with the external template path
-        bm, cfg = bootstrap_session_with_config(
-            job="test_templating", project="buttermilk_testing", overrides=[f'bm.session_info.template_paths=["{str(temp_path)}"]']
+        bm, cfg = await bootstrap_session_with_config_async(
+            job="test_templating", project_name="buttermilk_testing", overrides=[f'bm.session_info.template_paths=["{str(temp_path)}"]']
         )
 
         # 3. Load the template

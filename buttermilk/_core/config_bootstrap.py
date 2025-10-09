@@ -277,7 +277,6 @@ async def init_async(
     job: str | None = None,
     project_name: str | None = None,
     *,
-    run_type: str = "cli",
     config_dir: str | None = None,
     config_name: str = "config",
     overrides: list[str] | None = None,
@@ -292,10 +291,9 @@ async def init_async(
     Args:
         job: Name for the specific job or task (defaults to "default" or from config)
         project: Project name (auto-detected from directory or config if not provided)
-        run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (auto-discovered if not provided)
         config_name: Name of the configuration file to load (without .yaml extension)
-        overrides: List of Hydra override strings for customization
+        overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
         base_dir: Base directory for resolving relative config paths
 
@@ -311,7 +309,6 @@ async def init_async(
     bm, config = await bootstrap_session_with_config_async(
         job=job,
         project_name=project_name,
-        run_type=run_type,
         config_dir=config_dir,
         config_name=config_name,
         overrides=overrides,
@@ -363,7 +360,6 @@ def init(
     job: str | None = None,
     project_name: str | None = None,
     *,
-    run_type: str = "cli",
     config_dir: str | None = None,
     config_name: str = "config",
     overrides: list[str] | None = None,
@@ -378,10 +374,9 @@ def init(
     Args:
         job: Name for the specific job or task (defaults to "default" or from config)
         project_name: Project name (auto-detected from directory or config if not provided)
-        run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (auto-discovered if not provided)
         config_name: Name of the configuration file to load (without .yaml extension)
-        overrides: List of Hydra override strings for customization
+        overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
         base_dir: Base directory for resolving relative config paths
 
@@ -399,7 +394,6 @@ def init(
         init_async(
             job=job,
             project_name=project_name,
-            run_type=run_type,
             config_dir=config_dir,
             config_name=config_name,
             overrides=overrides,
@@ -412,7 +406,6 @@ def init(
 async def bootstrap_session_with_config_async(
     job: str | None = None,
     project_name: str | None = None,
-    run_type: str = "cli",
     config_dir: str | None = None,
     config_name: str = "config",
     overrides: list[str] | None = None,
@@ -427,10 +420,9 @@ async def bootstrap_session_with_config_async(
     Args:
         job: Name for the specific job or task
         project: Project name (required for first session, optional for subsequent sessions)
-        run_type: Type of run ("cli", "notebook", etc.) for override management
         config_dir: Path to configuration directory (defaults to packaged config)
         config_name: Name of the configuration file to load (without .yaml extension)
-        overrides: List of Hydra override strings for customization
+        overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
         base_dir: Base directory for resolving relative config paths
 
@@ -483,9 +475,8 @@ async def bootstrap_session_with_config_async(
             cfg_path = base_path / cfg_path
         config_dir = cfg_path.resolve().as_posix()
 
-    # Prepare overrides with run-specific settings
+    # Prepare overrides
     bootstrap_overrides = (overrides or []).copy()
-    bootstrap_overrides.append(f"run={run_type}")
 
     # Override project_name if provided (needed for interpolation in config)
     if project_name is not None:
@@ -511,7 +502,7 @@ async def bootstrap_session_with_config_async(
     execution_context = await bootstrapper.bootstrap_full_context(project_name=resolved_project)
 
     # Extract template_paths from config and resolve relative paths
-    template_paths = final_config.bm.session_info.get("template_paths", [])
+    template_paths = getattr(final_config.bm.session_info, "template_paths", [])
     resolved_template_paths = []
     for path in template_paths:
         if not Path(path).is_absolute():
@@ -531,50 +522,8 @@ async def bootstrap_session_with_config_async(
     # Set the singleton BM instance
     set_bm(bm)
 
-    logger.info(f"Starting {run_type} run for {bm.session_info.project_name} job {bm.session_info.job}")
+    # Extract run type from config if present, otherwise use generic message
+    run_type_str = final_config.get("run", {}).get("_target_", "").split(".")[-1] if "run" in final_config else "session"
+    logger.info(f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}")
 
     return bm, final_config
-
-
-def bootstrap_session_with_config(
-    job: str | None = None,
-    project: str | None = None,
-    run_type: str = "cli",
-    config_dir: str | None = None,
-    config_name: str = "config",
-    overrides: list[str] | None = None,
-    config: DictConfig | None = None,
-    base_dir: str | None = None,
-):
-    """Sync wrapper for bootstrap_session_with_config_async - DEPRECATED.
-
-    This is a lightweight sync wrapper that exists for backward compatibility.
-    New code should use bootstrap_session_with_config_async() or init_async() directly.
-
-    Args:
-        job: Name for the specific job or task
-        project: Project name (required for first session, optional for subsequent sessions)
-        run_type: Type of run ("cli", "notebook", etc.) for override management
-        config_dir: Path to configuration directory (defaults to packaged config)
-        config_name: Name of the configuration file to load (without .yaml extension)
-        overrides: List of Hydra override strings for customization
-        config: Pre-loaded configuration (if already available from Hydra context)
-        base_dir: Base directory for resolving relative config paths
-
-    Returns:
-        Tuple of (Buttermilk instance, configuration object)
-    """
-    import asyncio
-
-    return asyncio.run(
-        bootstrap_session_with_config_async(
-            job=job,
-            project_name=project,
-            run_type=run_type,
-            config_dir=config_dir,
-            config_name=config_name,
-            overrides=overrides,
-            config=config,
-            base_dir=base_dir,
-        )
-    )

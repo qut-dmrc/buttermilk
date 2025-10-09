@@ -1,14 +1,13 @@
 """Test the BM singleton pattern."""
 import pytest
+from projects.buttermilk.tests.integration.test_tracing import EXPECTED_PROJECT_NAME
 
 from buttermilk import (
-    logger,  # noqa
     init_async,
+    logger,  # noqa
 )
 from buttermilk._core.bm_init import BM
 from buttermilk._core.dmrc import get_bm
-
-from projects.buttermilk.tests.integration.test_tracing import EXPECTED_PROJECT_NAME
 
 
 def test_conf(real_bm):
@@ -35,10 +34,12 @@ def test_session_scoped_instances(real_bm):
     # Original singleton should be unchanged
     assert real_bm.session_info.job == "testing", "Original singleton should be unchanged"
 
+
 @pytest.fixture
 def second_module_access():
     """Function simulating another module accessing BM."""
     return get_bm()
+
 
 def test_singleton_between_modules(real_bm, second_module_access):
     """Test that BM stays a singleton when accessed from different module functions."""

@@ -24,8 +24,8 @@ class MockRecord(BaseRecord):
     content: str
 
 
-class TestStorage:
-    """Mock storage that yields the new dict format."""
+class FakeStorage:
+    """Fake storage that yields the new dict format."""
 
     def __init__(self, records):
         self.records = records
@@ -65,7 +65,7 @@ async def test_storage_to_pipeline():
 
     # Test storage format directly first
     print("Testing storage format:")
-    storage = TestStorage(records)
+    storage = FakeStorage(records)
     async for inputs in storage:
         record = inputs["record"]
         print(f"✅ Storage yields: record={record.title}")
@@ -80,13 +80,7 @@ async def test_storage_to_pipeline():
 
     print("\nTesting complete pipeline:")
     # Create pipeline with minimal complexity
-    pipeline = PipelineOrchestrator(
-        stage_name="test",
-        source=TestStorage(records),
-        processors=[TestProcessor()],
-        concurrency=1,
-        max_records=None
-    )
+    pipeline = PipelineOrchestrator(stage_name="test", source=FakeStorage(records), processors=[TestProcessor()], concurrency=1, max_records=None)
 
     # Run pipeline and collect results
     results = []
@@ -229,12 +223,7 @@ async def test_end_to_end_with_llm():
                 )
 
                 # Create pipeline with storage → LLM processor
-                pipeline = PipelineOrchestrator(
-                    stage_name="llm_pipeline",
-                    source=TestStorage(records),
-                    processors=[llm_processor],
-                    concurrency=1
-                )
+                pipeline = PipelineOrchestrator(stage_name="llm_pipeline", source=FakeStorage(records), processors=[llm_processor], concurrency=1)
 
                 # Run end-to-end
                 results = []

@@ -5,11 +5,9 @@ from pathlib import Path
 
 import pytest
 import weave  # noqa
-from hydra import compose, initialize
 from pytest import MarkDecorator
 
-from buttermilk._core.bm_init import BM
-from buttermilk._core.config_bootstrap import bootstrap_session_with_config
+from buttermilk import BM, init
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
@@ -30,20 +28,14 @@ def pytest_collection_modifyitems(items):
         if "integration" in p.parts:
             item.add_marker(pytest.mark.integration)
 
+
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
 
 
-def init():
-    """Real ExecutionContext created from testing.yaml configuration."""
-    with initialize(version_base=None, config_path="../buttermilk/conf"):
-        cfg = compose(config_name="testing")
-    bm, resolved_conf = bootstrap_session_with_config(config=cfg)
-    return bm, resolved_conf
-
-
-bm, resolved_conf = init()
+"""Real ExecutionContext created from testing.yaml configuration."""
+bm = init(config_dir="../buttermilk/conf")
 
 
 @pytest.fixture(scope="session")
