@@ -176,56 +176,88 @@ class ZoteroSource(BaseModel):
         skipped_count = 0  # Track items skipped due to type filtering
         max_item_version = last_version or 0
 
-        # Fetch items with automatic pagination using makeiter() generator
-        # This maintains streaming and doesn't load everything into memory
-        try:
-            # makeiter() returns a generator that automatically handles pagination
-            items_generator = self.zot.makeiter(self.zot.items(**api_params))
-            logger.info(f"🔄 Streaming items from Zotero API with automatic pagination")
-        except Exception as e:
-            logger.error(f"Error fetching items from Zotero: {e}")
-            return
+        # Manual pagination to maintain async control and avoid blocking
+        # Fetch items page by page (100 items per page)
+        start = 0
+        page_num = 0
 
-        # Process items as they stream in (one page at a time)
-        for item in items_generator:
-            fetched_count += 1
-            # Stop if we hit max_items
-            if self.max_items is not None and yielded_count >= self.max_items:
-                logger.info(f"Reached max_items limit ({self.max_items})")
+        while True:
+            page_num += 1
+
+            # Add pagination parameters
+            page_params = {**api_params, "start": start}
+
+            try:
+                # Fetch one page of results
+                items = list(self.zot.items(**page_params))
+                page_size = len(items)
+
+                if page_num == 1:
+                    logger.info(f"📥 Fetching from Zotero API (page size: {page_size})")
+                else:
+                    logger.debug(f"📥 Page {page_num}: {page_size} items (start={start})")
+
+                # If no items, we're done
+                if not items:
+                    break
+
+            except Exception as e:
+                logger.error(f"Error fetching items from Zotero (page {page_num}, start={start}): {e}")
                 break
 
-            # Skip invalid items
-            key = item.get("key")
-            if not key:
-                logger.warning(f"Item missing key: {item.get('data', {}).get('title', 'N/A')}")
-                continue
+            # Process items from this page
+            for item in items:
+                fetched_count += 1
 
-            item_type = item.get("data", {}).get("itemType")
-            if item_type in {"attachment", "note", "annotation"}:
-                skipped_count += 1
-                continue
+                # Stop if we hit max_items
+                if self.max_items is not None and yielded_count >= self.max_items:
+                    logger.info(f"Reached max_items limit ({self.max_items})")
+                    break
 
-            # Create minimal BaseRecord with ID and metadata
-            record = BaseRecord(
-                record_id=key,
-                metadata={
-                    "zotero_item": item.get("data", {}),
-                    "zotero_version": item.get("version", 0),
-                    "zotero_links": item.get("links", {}),
-                },
-            )
+                # Skip invalid items
+                key = item.get("key")
+                if not key:
+                    logger.warning(f"Item missing key: {item.get('data', {}).get('title', 'N/A')}")
+                    continue
 
-            # Apply filter
-            if self.filter and not await self.filter.should_include(record):
-                filtered_count += 1
-                continue
+                item_type = item.get("data", {}).get("itemType")
+                if item_type in {"attachment", "note", "annotation"}:
+                    skipped_count += 1
+                    continue
 
-            # Track version
-            item_version = item.get("version", 0)
-            max_item_version = max(max_item_version, item_version)
+                # Create minimal BaseRecord with ID and metadata
+                record = BaseRecord(
+                    record_id=key,
+                    metadata={
+                        "zotero_item": item.get("data", {}),
+                        "zotero_version": item.get("version", 0),
+                        "zotero_links": item.get("links", {}),
+                    },
+                )
 
-            yielded_count += 1
-            yield record
+                # Apply filter
+                if self.filter and not await self.filter.should_include(record):
+                    filtered_count += 1
+                    continue
+
+                # Track version
+                item_version = item.get("version", 0)
+                max_item_version = max(max_item_version, item_version)
+
+                yielded_count += 1
+                yield record
+
+            # Check if we should continue to next page
+            if self.max_items is not None and yielded_count >= self.max_items:
+                break
+
+            # If we got fewer items than the limit, we're done
+            if page_size < api_params["limit"]:
+                logger.debug(f"Last page received (only {page_size} items)")
+                break
+
+            # Move to next page
+            start += page_size
 
         # Save sync state
         timestamp = datetime.now(UTC).isoformat()
