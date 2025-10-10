@@ -169,11 +169,11 @@ class ZoteroSource(BaseModel):
         else:
             logger.info("🔄 Full sync of Zotero library")
 
-        # Fetch items
+        # Fetch items with automatic pagination
         try:
-            results = self.zot.items(**api_params)
-            items = list(results)
-            logger.info(f"📥 Fetched {len(items)} items from Zotero API")
+            # Use everything() to automatically handle pagination beyond 100 items
+            items = self.zot.everything(self.zot.items(**api_params))
+            logger.info(f"📥 Fetched {len(items)} items from Zotero API (with automatic pagination)")
         except Exception as e:
             logger.error(f"Error fetching items from Zotero: {e}")
             return
