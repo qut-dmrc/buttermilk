@@ -169,24 +169,26 @@ class ZoteroSource(BaseModel):
         else:
             logger.info("🔄 Full sync of Zotero library")
 
-        # Fetch items with automatic pagination
-        try:
-            # Use everything() to automatically handle pagination beyond 100 items
-            items = self.zot.everything(self.zot.items(**api_params))
-            logger.info(f"📥 Fetched {len(items)} items from Zotero API (with automatic pagination)")
-        except Exception as e:
-            logger.error(f"Error fetching items from Zotero: {e}")
-            return
-
         # Track stats
-        fetched_count = len(items)
+        fetched_count = 0
         yielded_count = 0
         filtered_count = 0
         skipped_count = 0  # Track items skipped due to type filtering
         max_item_version = last_version or 0
 
-        # Process items
-        for item in items:
+        # Fetch items with automatic pagination using makeiter() generator
+        # This maintains streaming and doesn't load everything into memory
+        try:
+            # makeiter() returns a generator that automatically handles pagination
+            items_generator = self.zot.makeiter(self.zot.items(**api_params))
+            logger.info(f"🔄 Streaming items from Zotero API with automatic pagination")
+        except Exception as e:
+            logger.error(f"Error fetching items from Zotero: {e}")
+            return
+
+        # Process items as they stream in (one page at a time)
+        for item in items_generator:
+            fetched_count += 1
             # Stop if we hit max_items
             if self.max_items is not None and yielded_count >= self.max_items:
                 logger.info(f"Reached max_items limit ({self.max_items})")
