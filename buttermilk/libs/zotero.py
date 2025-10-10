@@ -31,6 +31,18 @@ class VectorStoreExistenceFilter(RecordFilter):
             vector_store: Vector store with check_document_exists(record_id: str) -> bool
         """
         self.vector_store = vector_store
+        self._initialized = False
+
+    async def _ensure_initialized(self) -> None:
+        """Ensure vector store cache is initialized (lazy, once-only)."""
+        if self._initialized:
+            return
+
+        # Initialize cache if vector store has ensure_cache_initialized method
+        if hasattr(self.vector_store, "ensure_cache_initialized"):
+            await self.vector_store.ensure_cache_initialized()
+
+        self._initialized = True
 
     async def should_include(self, record: BaseRecord) -> bool:
         """Check if record should be included (i.e., does NOT already exist).
@@ -43,6 +55,9 @@ class VectorStoreExistenceFilter(RecordFilter):
         """
         if not hasattr(record, "record_id"):
             return True
+
+        # Ensure cache is initialized before checking
+        await self._ensure_initialized()
 
         # Synchronous check - vector_store.check_document_exists is sync
         exists = self.vector_store.check_document_exists(record.record_id)
