@@ -173,14 +173,16 @@ class ZoteroSource(BaseModel):
         try:
             results = self.zot.items(**api_params)
             items = list(results)
-            logger.debug(f"Fetched {len(items)} items from Zotero")
+            logger.info(f"📥 Fetched {len(items)} items from Zotero API")
         except Exception as e:
             logger.error(f"Error fetching items from Zotero: {e}")
             return
 
         # Track stats
+        fetched_count = len(items)
         yielded_count = 0
         filtered_count = 0
+        skipped_count = 0  # Track items skipped due to type filtering
         max_item_version = last_version or 0
 
         # Process items
@@ -198,6 +200,7 @@ class ZoteroSource(BaseModel):
 
             item_type = item.get("data", {}).get("itemType")
             if item_type in {"attachment", "note", "annotation"}:
+                skipped_count += 1
                 continue
 
             # Create minimal BaseRecord with ID and metadata
@@ -226,7 +229,14 @@ class ZoteroSource(BaseModel):
         timestamp = datetime.now(UTC).isoformat()
         if max_item_version > 0:
             self._save_sync_state(max_item_version, timestamp)
-            logger.info(f"✅ Sync complete: {yielded_count} items yielded, {filtered_count} filtered (max version: {max_item_version})")
+
+        # Log comprehensive summary
+        logger.info(
+            f"✅ Sync complete: {fetched_count} fetched from API, "
+            f"{skipped_count} skipped (attachments/notes/annotations), "
+            f"{filtered_count} filtered (already in vector store), "
+            f"{yielded_count} yielded to pipeline (max version: {max_item_version})"
+        )
 
 
 class ZoteroDownloadProcessor(BaseModel):
