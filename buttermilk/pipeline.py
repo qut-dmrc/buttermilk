@@ -231,7 +231,7 @@ class PipelineOrchestrator(BaseModel):
                 self._record_cache = RecordCache(base_dir=self.cache_dir)
                 logger.info("🗂️  RecordCache created", pipeline_name=self.pipeline_name, cache_dir_param=self.cache_dir)
             except Exception as e:
-                logger.warning("Failed to initialize RecordCache, continuing without caching", error=str(e))
+                logger.warning(f"Failed to initialize RecordCache, continuing without caching", error=str(e))
                 self._record_cache = None
         else:
             logger.info("🚫 Record cache disabled for pipeline stage", pipeline_name=self.pipeline_name)
@@ -288,7 +288,6 @@ class PipelineOrchestrator(BaseModel):
                 span.set_attribute("outputs.count", len(processed_results))
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
-
             except GeneratorExit:
                 # Handle early generator termination gracefully
                 span.set_status(trace.Status(trace.StatusCode.OK))
@@ -309,21 +308,20 @@ class PipelineOrchestrator(BaseModel):
         start_time = time.time()
         tracer = trace.get_tracer("buttermilk.pipeline")
         record_id = getattr(record, "record_id", "unknown")
-
-        # Log processing start
-        if hasattr(record, "record_id"):
-            title = getattr(record, "title", None)
-            record_title = (title[:50] if title else "Unknown") if hasattr(record, "title") else "Unknown"
-            logger.info(f"🔷 {self.pipeline_name} Processing record ID: {record.record_id} - '{record_title}'")
+        title = getattr(record, "title", None)
+        record_title = (title[:50] if title else "Unknown") if hasattr(record, "title") else "Unknown"
 
         # Build span attributes for processor chain
         span_attributes = {
             "record.id": record_id,
             "pipeline.name": self.pipeline_name,
             "processor.count": len(self.processors),
+            "record.title": record_title,
         }
 
         with tracer.start_as_current_span("pipeline.process_chain", attributes=span_attributes) as chain_span:
+            # Log processing start
+            logger.debug(f"🔷 {self.pipeline_name} Processing record ID: {record.record_id} - '{record_title}'", pipeline_name=self.pipeline_name, record_id=record.record_id, record_title=record_title)
             try:
                 # Start with the record as a single item in a processing queue
                 processing_queue = [record]
@@ -356,7 +354,7 @@ class PipelineOrchestrator(BaseModel):
                             # Check processor-specific cache first (unless processor opts out)
                             cached_outputs = None
                             if getattr(processor, "skip_cache", False):
-                                logger.debug(f"🚫 Skipping cache for {processor_class} (skip_cache=True)")
+                                logger.debug(f"🚫 Skipping cache for {processor_class} (skip_cache=True)", processor_class=processor_class)
                             else:
                                 cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
 
@@ -365,6 +363,7 @@ class PipelineOrchestrator(BaseModel):
                                     f"⚡ Processor {processor_stage_name} cache hit",
                                     record_id=getattr(current_record, "record_id", "unknown"),
                                     processor_stage=processor_stage_name,
+                                    processor_stage_name=processor_stage_name,
                                     cached_outputs_count=len(cached_outputs),
                                 )
                                 # Trace cached outputs
@@ -396,7 +395,7 @@ class PipelineOrchestrator(BaseModel):
 
                                 # Cache the processor outputs (unless processor opts out)
                                 if getattr(processor, "skip_cache", False):
-                                    logger.debug(f"🚫 Skipping cache save for {processor_class} (skip_cache=True)")
+                                    logger.debug(f"🚫 Skipping cache save for {processor_class} (skip_cache=True)", processor_class=processor_class)
                                 else:
                                     await self._save_processor_cache(current_record, outputs, processor_stage_name)
                                 # Add all outputs to the next processing queue
@@ -459,7 +458,7 @@ class PipelineOrchestrator(BaseModel):
         Uses TaskGroup for natural error collection and concurrency management.
         """
         if self.source is None:
-            logger.error(f"[{self.pipeline_name}] No source iterator configured")
+            logger.error(f"[{self.pipeline_name}] No source iterator configured", pipeline_name=self.pipeline_name)
             return
 
         tracer = trace.get_tracer("buttermilk.pipeline")
@@ -543,7 +542,7 @@ class PipelineOrchestrator(BaseModel):
                         task_span.set_attribute("skip_reason", str(e))
                         task_span.set_status(trace.Status(trace.StatusCode.OK))
                         # Record was intentionally skipped, no error logging needed
-                        logger.debug(f"Record {record_id} skipped in stage {self.pipeline_name}: {e}")
+                        logger.debug(f"Record {record_id} skipped in stage {self.pipeline_name}: {e}", record_id=record_id, pipeline_name=self.pipeline_name, error=str(e))
                         # For now we just drop skipped records, don't put them in queue
 
                     except Exception as e:
@@ -551,11 +550,10 @@ class PipelineOrchestrator(BaseModel):
                         task_span.set_attribute("status", "failed")
                         task_span.set_attribute("error_type", type(e).__name__)
                         task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                        # Log error but don't stop processing other records
-                        # Use warning level for expected errors like missing PDFs
-                        log_level = logger.warning if "No PDF attachment" in str(e) else logger.error
-                        log_level(
+                        # Log failure but don't stop processing other records
+                        logger.debug(
                             f"Failed to process record {record_id}",
+                            record_id=record_id,
                             pipeline=self.pipeline_name,
                             error=str(e),
                             error_type=type(e).__name__,
@@ -584,7 +582,7 @@ class PipelineOrchestrator(BaseModel):
 
                     # Check if we've hit max_records
                     if self.max_records is not None and (self._processed + self._failed + self._skipped) >= self.max_records:
-                        logger.info(f"🔚 Stage '{self.pipeline_name}' reached max_records ({self._attempted}/{self.max_records}) – stopping")
+                        logger.info(f"🔚 Stage '{self.pipeline_name}' reached max_records ({self._attempted}/{self.max_records}) – stopping", pipeline_name=self.pipeline_name, attempted=self._attempted, max_records=self.max_records)
                         break
 
                     # Maintain concurrency limit
@@ -653,7 +651,7 @@ class PipelineOrchestrator(BaseModel):
 
         except Exception as e:
             stage_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-            logger.error(f"Pipeline error in stage '{self.pipeline_name}': {e}")
+            logger.error(f"Pipeline error in stage '{self.pipeline_name}': {e}", pipeline_name=self.pipeline_name, error=str(e))
             # Cancel all pending tasks
             for task in pending_tasks:
                 if not task.done():
@@ -665,7 +663,7 @@ class PipelineOrchestrator(BaseModel):
             try:
                 await self._finalize_all_processors()
             except Exception as finalize_error:
-                logger.error(f"Error during finalization after pipeline error: {finalize_error}")
+                logger.error(f"Error during finalization after pipeline error: {finalize_error}", error=str(finalize_error))
             raise
         finally:
             logger.info(
@@ -774,23 +772,23 @@ class PipelineOrchestrator(BaseModel):
         This ensures proper cleanup and final sync operations for processors
         like ChromaDBUploader and ChromaDBEmbeddings.
         """
-        logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.pipeline_name}'")
+        logger.debug(f"🔄 Finalizing {len(self.processors)} processors in stage '{self.pipeline_name}'", processor_count=len(self.processors), pipeline_name=self.pipeline_name)
 
         for i, processor in enumerate(self.processors):
             if hasattr(processor, "finalize_processing"):
                 try:
-                    logger.debug(f"🔄 Finalizing processor {i}: {type(processor).__name__}")
+                    logger.debug(f"🔄 Finalizing processor {i}: {type(processor).__name__}", processor_index=i, processor_name=type(processor).__name__)
                     result = await processor.finalize_processing()
                     if result:
-                        logger.info(f"✅ Successfully finalized processor {i}: {type(processor).__name__}")
+                        logger.info(f"✅ Successfully finalized processor {i}: {type(processor).__name__}", processor_index=i, processor_name=type(processor).__name__)
                     else:
-                        logger.warning(f"⚠️ Processor {i} finalization reported issues: {type(processor).__name__}")
+                        logger.warning(f"⚠️ Processor {i} finalization reported issues: {type(processor).__name__}", processor_index=i, processor_name=type(processor).__name__)
                 except Exception as e:
-                    logger.error(f"❌ Failed to finalize processor {i} ({type(processor).__name__}): {e}")
+                    logger.error(f"❌ Failed to finalize processor {i} ({type(processor).__name__}): {e}", processor_index=i, processor_name=type(processor).__name__, error=str(e))
             else:
-                logger.debug(f"⏭️ Processor {i} has no finalize_processing method: {type(processor).__name__}")
+                logger.debug(f"⏭️ Processor {i} has no finalize_processing method: {type(processor).__name__}", processor_index=i, processor_name=type(processor).__name__)
 
-        logger.debug(f"✅ Completed finalization for stage '{self.pipeline_name}'")
+        logger.debug(f"✅ Completed finalization for stage '{self.pipeline_name}'", pipeline_name=self.pipeline_name)
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:

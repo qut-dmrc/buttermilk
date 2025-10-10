@@ -80,7 +80,7 @@ pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   pipeline_name: zotero_vectorization
   concurrency: 5
-  max_records: 50000
+  max_records: -1
 
   # Source: Zotero library with deduplication
   source:

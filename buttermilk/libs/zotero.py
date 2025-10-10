@@ -5,14 +5,13 @@ This module provides:
 - ZoteroDownloadProcessor: Downloads PDFs and extracts full text for each item
 """
 
-import asyncio
 import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, Field, PrivateAttr
 from pyzotero import zotero, zotero_errors
 
 from buttermilk import bm, logger
@@ -192,10 +191,17 @@ class ZoteroSource(BaseModel):
                 items = list(self.zot.items(**page_params))
                 page_size = len(items)
 
-                if page_num == 1:
-                    logger.info(f"📥 Fetching from Zotero API (page size: {page_size})")
-                else:
-                    logger.debug(f"📥 Page {page_num}: {page_size} items (start={start})")
+                logger.info(
+                    f"📥 Fetching from Zotero API, page {page_num}: {page_size} items (start={start}, fetched={fetched_count}, max={max_item_version})",
+                    fetched_count=fetched_count,
+                    filtered_count=filtered_count,
+                    yielded_count=yielded_count,
+                    skipped_count=skipped_count,
+                    start=start,
+                    max_item_version=max_item_version,
+                    page_num=page_num,
+                    page_size=page_size,
+                )
 
                 # If no items, we're done
                 if not items:
@@ -368,7 +374,7 @@ class ZoteroDownloadProcessor(BaseModel):
 
             # Try full text from Zotero API first
             try:
-                logger.info(f"⬇️  Downloading full text for {key} '{title[:50]}'")
+                logger.debug(f"⬇️  Downloading full text for {key} '{title[:50]}'")
                 fulltext = self.zot.fulltext_item(attachment_key)
 
                 # Check if Zotero indexed enough pages (>90%)
@@ -404,7 +410,7 @@ class ZoteroDownloadProcessor(BaseModel):
         else:
             # No PDF attachment found - this is expected for some items
             error_msg = f"No PDF attachment found for {key}"
-            logger.warning(error_msg, key=key, title=title[:50] if title else "Unknown", doi_or_url=doi_or_url)
+            logger.debug(error_msg, key=key, title=title[:50] if title else "Unknown", doi_or_url=doi_or_url)
             raise Exception(error_msg)
 
         # Save to cache
