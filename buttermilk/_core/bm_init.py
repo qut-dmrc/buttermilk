@@ -232,15 +232,40 @@ class SessionInfo(BaseModel):
         """Expand user home directory and environment variables in cache_dir path."""
         return os.path.expandvars(os.path.expanduser(v))
 
+    def get_cache_subdir(self, subdir: str, create: bool = True) -> Path:
+        """Get a cache subdirectory path.
+
+        This is the single method for accessing cache subdirectories.
+        Use cache constants from buttermilk._core.constants for consistency.
+
+        Args:
+            subdir: Subdirectory name (use cache.CHROMADB, cache.ZOTERO, etc.)
+            create: Whether to create the directory if it doesn't exist
+
+        Returns:
+            Path: The cache subdirectory path
+
+        Example:
+            from buttermilk._core.constants import cache
+            chromadb_path = bm.session_info.get_cache_subdir(cache.CHROMADB)
+        """
+        cache_path = Path(self.cache_dir) / subdir
+        if create:
+            cache_path.mkdir(parents=True, exist_ok=True)
+        return cache_path
+
     def get_chromadb_cache_dir(self) -> Path:
         """Get the ChromaDB-specific cache directory.
+
+        DEPRECATED: Use get_cache_subdir(cache.CHROMADB) instead.
+        This method is kept for backward compatibility.
 
         Returns:
             Path: The ChromaDB cache directory within the session cache.
         """
-        cache_path = Path(self.cache_dir) / "chromadb"
-        cache_path.mkdir(parents=True, exist_ok=True)
-        return cache_path
+        from buttermilk._core.constants import cache
+
+        return self.get_cache_subdir(cache.CHROMADB)
 
     @staticmethod
     def generate_cache_key(path_or_identifier: str) -> str:

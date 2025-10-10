@@ -97,5 +97,35 @@ WAIT = "WAIT"
 wait for further input, or await the completion of another process.
 """
 
+# --- Cache Subdirectories ---
+# These constants define subdirectories within the cache directory structure.
+# Usage: bm.session_info.cache_dir / cache.CHROMADB returns a Path object.
+# This provides a single source of truth for cache organization.
+
+class cache:
+    """Cache subdirectory constants.
+
+    All cache subdirectories should be defined here to provide a single
+    source of truth for cache organization. Use with bm.session_info.cache_dir:
+
+    Example:
+        cache_path = bm.session_info.cache_dir / cache.CHROMADB
+    """
+
+    CHROMADB = "chromadb"
+    """ChromaDB vector store cache directory."""
+
+    EMBEDDINGS = "embeddings"
+    """Embeddings cache directory for storing computed embeddings."""
+
+    ZOTERO = "zotero"
+    """Zotero data cache directory for PDFs, metadata, and sync state."""
+
+    MODELS = "models"
+    """Model configurations and cached model data."""
+
+    RECORDS = "records"
+    """Pipeline record cache for processor outputs."""
+
 # Add any other constants used across the codebase here.
 # Ensure they are well-documented with their purpose and usage context.
