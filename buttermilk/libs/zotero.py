@@ -173,7 +173,6 @@ class ZoteroSource(BaseModel):
         yielded_count = 0
         filtered_count = 0
         skipped_count = 0  # Track items skipped due to type filtering
-        max_item_version = last_version or 0
 
         # Manual pagination to maintain async control and avoid blocking
         # Fetch items page by page (100 items per page)
@@ -192,13 +191,12 @@ class ZoteroSource(BaseModel):
                 page_size = len(items)
 
                 logger.info(
-                    f"📥 Fetching from Zotero API, page {page_num}: {page_size} items (start={start}, fetched={fetched_count}, max={max_item_version})",
+                    f"📥 Fetching from Zotero API, page {page_num}: {page_size} items (start={start}, fetched={fetched_count})",
                     fetched_count=fetched_count,
                     filtered_count=filtered_count,
                     yielded_count=yielded_count,
                     skipped_count=skipped_count,
                     start=start,
-                    max_item_version=max_item_version,
                     page_num=page_num,
                     page_size=page_size,
                 )
@@ -246,10 +244,6 @@ class ZoteroSource(BaseModel):
                     filtered_count += 1
                     continue
 
-                # Track version
-                item_version = item.get("version", 0)
-                max_item_version = max(max_item_version, item_version)
-
                 yielded_count += 1
                 yield record
 
@@ -265,17 +259,18 @@ class ZoteroSource(BaseModel):
             # Move to next page
             start += page_size
 
-        # Save sync state
+        # Save sync state using library version (not max item version)
+        # This is the correct approach per Zotero API docs
         timestamp = datetime.now(UTC).isoformat()
-        if max_item_version > 0:
-            self._save_sync_state(max_item_version, timestamp)
+        library_version = self.zot.last_modified_version()
+        self._save_sync_state(library_version, timestamp)
 
         # Log comprehensive summary
         logger.info(
             f"✅ Sync complete: {fetched_count} fetched from API, "
             f"{skipped_count} skipped (attachments/notes/annotations), "
             f"{filtered_count} filtered (already in vector store), "
-            f"{yielded_count} yielded to pipeline (max version: {max_item_version})"
+            f"{yielded_count} yielded to pipeline (library version: {library_version})"
         )
 
 

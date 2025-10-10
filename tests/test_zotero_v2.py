@@ -54,6 +54,9 @@ def mock_zotero_api():
         },
     ]
 
+    # Mock last_modified_version() - library version (different from item versions)
+    mock_api.last_modified_version.return_value = 200
+
     # Mock fulltext_item() response
     mock_api.fulltext_item.return_value = {
         "content": "This is the full text from Zotero API",
@@ -98,6 +101,197 @@ class TestZoteroSource:
         assert "zotero_item" in records[0].metadata
         assert records[0].metadata["zotero_item"]["title"] == "Test Article 1"
         assert records[0].metadata["zotero_version"] == 100
+
+    @pytest.mark.asyncio
+    async def test_library_version_saved_not_max_item_version(self, temp_save_dir):
+        """Test that library version is saved to state, not max item version.
+
+        This test verifies the fix for issue #91:
+        - WRONG: Tracking max(item.version) across all items
+        - RIGHT: Using zot.last_modified_version() for library version
+        """
+        # Create mock API with items that have different versions
+        mock_api = Mock()
+        mock_api.items.return_value = [
+            {
+                "key": "ITEM001",
+                "version": 51050,  # Item version
+                "data": {"itemType": "journalArticle", "title": "Article 1"},
+                "links": {},
+            },
+            {
+                "key": "ITEM002",
+                "version": 51055,  # Item version
+                "data": {"itemType": "book", "title": "Book 1"},
+                "links": {},
+            },
+            {
+                "key": "ITEM003",
+                "version": 51061,  # Max item version
+                "data": {"itemType": "journalArticle", "title": "Article 2"},
+                "links": {},
+            },
+        ]
+        # Mock library version (different from max item version)
+        mock_api.last_modified_version.return_value = 51100  # Library version is higher
+
+        source = ZoteroSource(
+            library_id="123",
+            save_dir=str(temp_save_dir),
+        )
+
+        with patch.object(ZoteroSource, "zot", new_callable=lambda: property(lambda self: mock_api)):
+            records = []
+            async for record in source.fetch_items():
+                records.append(record)
+
+        # Verify we got records
+        assert len(records) == 3
+
+        # Check state file
+        state_file = temp_save_dir / ".zotero_sync_state.json"
+        assert state_file.exists()
+
+        with state_file.open("r") as f:
+            state = json.load(f)
+
+        # EXPECTED: State should contain library version (51100), not max item version (51061)
+        # This will FAIL with current implementation
+        assert state["last_version"] == 51100, (
+            f"Expected library version 51100, "
+            f"but got {state['last_version']} (max item version is 51061)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_items_returned_in_date_order(self, temp_save_dir):
+        """Test that items are returned sorted by dateModified in ascending order.
+
+        Verifies that API is called with correct sort parameters:
+        - sort: "dateModified"
+        - direction: "asc"
+        """
+        mock_api = Mock()
+        mock_api.items.return_value = [
+            {
+                "key": "ITEM001",
+                "version": 100,
+                "data": {
+                    "itemType": "journalArticle",
+                    "title": "Oldest",
+                    "dateModified": "2020-01-01T00:00:00Z",
+                },
+                "links": {},
+            },
+            {
+                "key": "ITEM002",
+                "version": 101,
+                "data": {
+                    "itemType": "book",
+                    "title": "Middle",
+                    "dateModified": "2021-01-01T00:00:00Z",
+                },
+                "links": {},
+            },
+            {
+                "key": "ITEM003",
+                "version": 102,
+                "data": {
+                    "itemType": "journalArticle",
+                    "title": "Newest",
+                    "dateModified": "2022-01-01T00:00:00Z",
+                },
+                "links": {},
+            },
+        ]
+        mock_api.last_modified_version.return_value = 102
+
+        source = ZoteroSource(
+            library_id="123",
+            save_dir=str(temp_save_dir),
+        )
+
+        with patch.object(ZoteroSource, "zot", new_callable=lambda: property(lambda self: mock_api)):
+            records = []
+            async for record in source.fetch_items():
+                records.append(record)
+
+        # Verify API was called with correct sort parameters
+        mock_api.items.assert_called()
+        call_kwargs = mock_api.items.call_args[1]
+        assert call_kwargs["sort"] == "dateModified"
+        assert call_kwargs["direction"] == "asc"
+
+        # Verify records are in date order
+        dates = [r.metadata["zotero_item"]["dateModified"] for r in records]
+        assert dates == sorted(dates), "Items not in ascending date order"
+
+    @pytest.mark.asyncio
+    async def test_incremental_sync_uses_since_parameter(self, temp_save_dir):
+        """Test that incremental sync uses 'since' parameter with library version.
+
+        Verifies that:
+        1. When sync state exists, API is called with since=<last_version>
+        2. The since parameter uses library version, not item version
+        """
+        mock_api = Mock()
+
+        # First call (with since parameter) returns newer items
+        mock_api.items.return_value = [
+            {
+                "key": "ITEM_NEW",
+                "version": 51100,
+                "data": {"itemType": "journalArticle", "title": "New Article"},
+                "links": {},
+            }
+        ]
+        mock_api.last_modified_version.return_value = 51100
+
+        source = ZoteroSource(
+            library_id="123",
+            save_dir=str(temp_save_dir),
+        )
+
+        # Simulate previous sync at library version 51000
+        source._save_sync_state(51000, "2025-01-01T00:00:00Z")
+
+        with patch.object(ZoteroSource, "zot", new_callable=lambda: property(lambda self: mock_api)):
+            records = []
+            async for record in source.fetch_items():
+                records.append(record)
+
+        # Verify API was called with since parameter
+        mock_api.items.assert_called()
+        call_kwargs = mock_api.items.call_args[1]
+        assert "since" in call_kwargs
+        assert call_kwargs["since"] == 51000  # Should use library version from state
+
+    @pytest.mark.asyncio
+    async def test_no_items_returned_when_library_unchanged(self, temp_save_dir):
+        """Test that no items are returned when library hasn't changed since last sync.
+
+        When since=<current_library_version>, API should return empty list.
+        """
+        mock_api = Mock()
+
+        # Mock returns empty list (no changes)
+        mock_api.items.return_value = []
+        mock_api.last_modified_version.return_value = 51100
+
+        source = ZoteroSource(
+            library_id="123",
+            save_dir=str(temp_save_dir),
+        )
+
+        # Simulate sync at current library version (nothing should have changed)
+        source._save_sync_state(51100, "2025-01-01T00:00:00Z")
+
+        with patch.object(ZoteroSource, "zot", new_callable=lambda: property(lambda self: mock_api)):
+            records = []
+            async for record in source.fetch_items():
+                records.append(record)
+
+        # Should get 0 records
+        assert len(records) == 0, "Expected no records when library unchanged"
 
     @pytest.mark.asyncio
     async def test_filter_applied_correctly(self, mock_zotero_api, temp_save_dir):
@@ -145,7 +339,8 @@ class TestZoteroSource:
         with state_file.open("r") as f:
             state = json.load(f)
 
-        assert state["last_version"] == 101  # Highest version from mock data
+        # Should save library version (200), not max item version (101)
+        assert state["last_version"] == 200  # Library version from mock
         assert state["last_sync_timestamp"] is not None
 
 
