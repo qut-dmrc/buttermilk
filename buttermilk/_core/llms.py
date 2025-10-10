@@ -48,7 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 from buttermilk import bm, logger
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import CONFIG_CACHE_PATH  # Path to models.json cache
+from buttermilk._core.constants import cache, CONFIG_CACHE_FILENAME  # Models cache constants
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -811,7 +811,9 @@ class LLMs(BaseModel):
         if self.model_registry_cache and not force:
             return self.model_registry_cache
 
-        models_json_path = Path(CONFIG_CACHE_PATH)
+        # Use centralized cache directory
+        cache_dir = Path.home() / ".cache/buttermilk" / cache.MODELS
+        models_json_path = cache_dir / CONFIG_CACHE_FILENAME
         try:
             text = models_json_path.read_text(encoding="utf-8")
         except FileNotFoundError:

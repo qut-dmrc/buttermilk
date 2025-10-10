@@ -24,10 +24,11 @@ TEMPLATES_PATH = BASE_DIR / "templates"
 """Directory containing BigQuery schema files for data validation and structure."""
 BQ_SCHEMA_DIR = BASE_DIR / "schemas"
 
-"""Path to the local cache file for storing LLM (Language Model) configurations.
+"""Filename for LLM configuration cache within the models cache directory.
+Full path: bm.session_info.cache_dir / cache.MODELS / CONFIG_CACHE_FILENAME
 This cache helps in faster startup by avoiding repeated fetching of configurations.
 """
-CONFIG_CACHE_PATH = ".cache/models.json"
+CONFIG_CACHE_FILENAME = "models.json"
 
 """Key used to retrieve LLM (Language Model) configurations from a secret manager.
 This allows sensitive or complex model configurations to be stored securely.

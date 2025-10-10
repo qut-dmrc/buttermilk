@@ -265,7 +265,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=100)
     arrow_save_dir: str = Field(default="")
-    embeddings_cache_dir: str = Field(default=".cache/embeddings", description="Directory to cache embeddings")
+    embeddings_cache_dir: str = Field(
+        default="embeddings",
+        description="Subdirectory within cache_dir for embeddings (or absolute path). "
+        "Use cache.EMBEDDINGS constant for consistency."
+    )
 
     # New sync configuration options
     sync_batch_size: int = Field(default=100, description="Sync every N records")
