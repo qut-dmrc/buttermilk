@@ -358,9 +358,9 @@ class ZoteroDownloadProcessor(BaseModel):
                     raise Exception(error_msg)
 
         else:
-            # No PDF attachment found
+            # No PDF attachment found - this is expected for some items
             error_msg = f"No PDF attachment found for {key}"
-            logger.error(error_msg, key=key, title=title, json_file=json_file.as_posix(), doi_or_url=doi_or_url, zotero_links=zotero_links.get("self"))
+            logger.warning(error_msg, key=key, title=title[:50] if title else "Unknown", doi_or_url=doi_or_url)
             raise Exception(error_msg)
 
         # Save to cache

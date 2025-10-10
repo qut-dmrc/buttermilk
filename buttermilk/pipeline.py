@@ -379,19 +379,8 @@ class PipelineOrchestrator(BaseModel):
                                 async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
                                     outputs.append(output_record)
                             except Exception as e:
-                                # Log with processor-specific stage name using structured logging
-                                record_id = getattr(current_record, "record_id", "unknown")
-                                processor_type = type(processor).__name__
-                                logger.error(
-                                    f"Error processing record in pipeline processor {processor_stage_name}",
-                                    record_id=record_id,
-                                    pipeline_name=self.pipeline_name,
-                                    processor_stage=processor_stage_name,
-                                    processor_type=processor_type,
-                                    processor_index=processor_index,
-                                    error=str(e),
-                                    error_type=type(e).__name__,
-                                )
+                                # Don't log here - let the task wrapper handle error logging
+                                # to avoid duplicate error messages
                                 processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                                 raise
 
@@ -460,16 +449,7 @@ class PipelineOrchestrator(BaseModel):
                 raise
             except Exception as e:
                 chain_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                # Let exception bubble up - TaskGroup will handle error collection
-                record_id = getattr(record, "record_id", "unknown")
-                logger.error(
-                    "Error processing record in pipeline chain",
-                    record_id=record_id,
-                    pipeline_name=self.pipeline_name,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    processor_count=len(self.processors),
-                )
+                # Let exception bubble up - task wrapper will handle error logging
                 raise
 
     async def __call__(self) -> AsyncIterator[BaseRecord]:
@@ -572,7 +552,14 @@ class PipelineOrchestrator(BaseModel):
                         task_span.set_attribute("error_type", type(e).__name__)
                         task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                         # Log error but don't stop processing other records
-                        logger.error(f"Error processing record {record_id} in pipeline {self.pipeline_name}: {e}")
+                        # Use warning level for expected errors like missing PDFs
+                        log_level = logger.warning if "No PDF attachment" in str(e) else logger.error
+                        log_level(
+                            f"Failed to process record {record_id}",
+                            pipeline=self.pipeline_name,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
 
                         # Add error metadata to record and put in queue
                         existing_metadata = getattr(record, "metadata", None) or {}
