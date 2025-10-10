@@ -214,7 +214,7 @@ class TestZoteroDownloadProcessor:
 
         with patch.object(ZoteroDownloadProcessor, "zot", new_callable=lambda: property(lambda self: mock_zotero_api)):
             results = []
-            async for record in processor.process(input_record, pipeline_stage="test"):
+            async for record in processor.process(input_record, processor_stage="test"):
                 results.append(record)
 
         # Should yield exactly one Record
@@ -246,7 +246,7 @@ class TestZoteroDownloadProcessor:
 
         with patch.object(ZoteroDownloadProcessor, "zot", new_callable=lambda: property(lambda self: mock_zotero_api)):
             with pytest.raises(Exception, match="No PDF attachment found"):
-                async for _ in processor.process(input_record, pipeline_stage="test"):
+                async for _ in processor.process(input_record, processor_stage="test"):
                     pass
 
     @pytest.mark.asyncio
@@ -283,7 +283,7 @@ class TestZoteroDownloadProcessor:
         # Mock should NOT be called if cache works
         with patch.object(ZoteroDownloadProcessor, "zot", new_callable=lambda: property(lambda self: mock_zotero_api)):
             results = []
-            async for record in processor.process(input_record, pipeline_stage="test"):
+            async for record in processor.process(input_record, processor_stage="test"):
                 results.append(record)
 
         # Should use cached content

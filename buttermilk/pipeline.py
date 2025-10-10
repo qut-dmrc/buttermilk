@@ -112,7 +112,7 @@ class Processor(Protocol):
         self,
         record: Any = BaseRecord,
         *,
-        pipeline_stage: str,
+        processor_stage: str,
         parent_trace_id: Optional[str] = None,
         component_name: str = "LLMCore",
         cancellation_token: Optional[Any] = None,
@@ -376,7 +376,7 @@ class PipelineOrchestrator(BaseModel):
 
                             outputs = []
                             try:
-                                async for output_record in processor.process(current_record, pipeline_stage=processor_stage_name):
+                                async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
                                     outputs.append(output_record)
                             except Exception as e:
                                 # Log with processor-specific stage name using structured logging

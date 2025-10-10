@@ -262,7 +262,7 @@ class ZoteroDownloadProcessor(BaseModel):
         self,
         record: BaseRecord,
         *,
-        pipeline_stage: str,
+        processor_stage: str,
         parent_trace_id: str | None = None,
         component_name: str = "LLMCore",
         cancellation_token: Any | None = None,
