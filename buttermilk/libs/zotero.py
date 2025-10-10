@@ -297,6 +297,8 @@ class ZoteroDownloadProcessor(BaseModel):
                     cached_item = json.load(f)
                 if cached_item.get("content"):
                     logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
+                    # Get links from cache if available
+                    cached_links = cached_item.get("links", {})
                     yield Record(
                         record_id=key,
                         content=cached_item["content"],
@@ -306,6 +308,7 @@ class ZoteroDownloadProcessor(BaseModel):
                             "doi_or_url": doi_or_url,
                             "uri": json_file.as_posix(),
                             "zotero_data": zotero_item,
+                            "zotero_links": cached_links,
                         },
                     )
                     return
@@ -357,7 +360,7 @@ class ZoteroDownloadProcessor(BaseModel):
         else:
             # No PDF attachment found
             error_msg = f"No PDF attachment found for {key}"
-            logger.error(error_msg)
+            logger.error(error_msg, key=key, title=title, json_file=json_file.as_posix(), doi_or_url=doi_or_url, zotero_links=zotero_links.get("self"))
             raise Exception(error_msg)
 
         # Save to cache
@@ -385,5 +388,6 @@ class ZoteroDownloadProcessor(BaseModel):
                 "doi_or_url": doi_or_url,
                 "uri": json_file.as_posix(),
                 "zotero_data": zotero_item,
+                "zotero_links": zotero_links,
             },
         )
