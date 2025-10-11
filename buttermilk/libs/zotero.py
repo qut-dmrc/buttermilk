@@ -5,6 +5,7 @@ This module provides:
 - ZoteroDownloadProcessor: Downloads PDFs and extracts full text for each item
 """
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from pyzotero import zotero, zotero_errors
 
 from buttermilk import bm, logger
+from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.storage.base import RecordFilter
 from buttermilk.utils.utils import get_pdf_text
@@ -77,29 +79,41 @@ class ZoteroSource(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    save_dir: str = Field(..., description="Directory to save sync state")
     library_id: str = Field(..., description="Zotero library ID")
     filter: Any = Field(default=None, description="Optional RecordFilter implementation")
     force_full_sync: bool = Field(default=False, description="Bypass incremental sync")
-    max_items: int | None = Field(default=None, description="Maximum items to yield")
+    start: int = Field(default=0, description="Item offset to start fetching from (0-based)")
+    max_records: int | None = Field(default=None, description="Maximum items to yield")
 
-    _zot: zotero.Zotero | None = PrivateAttr(default=None)
+    _zot: RetryWrapper | None = PrivateAttr(default=None)
 
     @property
-    def zot(self) -> zotero.Zotero:
-        """Lazily initialize the Zotero client."""
+    def zot(self) -> RetryWrapper:
+        """Lazily initialize the Zotero client wrapped in RetryWrapper."""
         if self._zot is None:
-            self._zot = zotero.Zotero(
+            from buttermilk._core.constants import cache
+
+            zot_client = zotero.Zotero(
                 library_id=self.library_id,
                 library_type="group",
                 api_key=bm.credentials.get("ZOTERO_API_KEY"),
             )
-            Path(self.save_dir).mkdir(parents=True, exist_ok=True)
+            self._zot = RetryWrapper(
+                client=zot_client,
+                max_retries=3,
+                min_wait_seconds=5.0,
+                max_wait_seconds=60.0,
+                jitter_seconds=5.0,
+            )
+            # Ensure cache directory exists
+            bm.session_info.get_cache_subdir(cache.ZOTERO, create=True)
         return self._zot
 
     def _state_file_path(self) -> Path:
-        """Get path to sync state file."""
-        return Path(self.save_dir) / ".zotero_sync_state.json"
+        """Get path to sync state file in centralized cache."""
+        from buttermilk._core.constants import cache
+
+        return bm.session_info.get_cache_subdir(cache.ZOTERO) / ".zotero_sync_state.json"
 
     def _load_sync_state(self) -> dict[str, Any]:
         """Load last sync state.
@@ -166,7 +180,10 @@ class ZoteroSource(BaseModel):
             api_params["since"] = last_version
             logger.info(f"🔄 Incremental sync from version {last_version}")
         else:
-            logger.info("🔄 Full sync of Zotero library")
+            if self.start > 0:
+                logger.info(f"🔄 Full sync of Zotero library starting from item {self.start}")
+            else:
+                logger.info("🔄 Full sync of Zotero library")
 
         # Track stats
         fetched_count = 0
@@ -176,7 +193,7 @@ class ZoteroSource(BaseModel):
 
         # Manual pagination to maintain async control and avoid blocking
         # Fetch items page by page (100 items per page)
-        start = 0
+        start = self.start
         page_num = 0
 
         while True:
@@ -186,8 +203,16 @@ class ZoteroSource(BaseModel):
             page_params = {**api_params, "start": start}
 
             try:
-                # Fetch one page of results
-                items = list(self.zot.items(**page_params))
+                # Fetch one page of results with retry logic
+                # Use RetryWrapper's _execute_with_retry with async wrapper for sync function
+                async def _fetch_items():
+                    """Async wrapper for synchronous zot.items() call."""
+                    return await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: list(self.zot.client.items(**page_params))
+                    )
+
+                items = await self.zot._execute_with_retry(_fetch_items)
                 page_size = len(items)
 
                 logger.info(
@@ -206,16 +231,17 @@ class ZoteroSource(BaseModel):
                     break
 
             except Exception as e:
-                logger.error(f"Error fetching items from Zotero (page {page_num}, start={start}): {e}")
-                break
+                # RetryWrapper already attempted retries, so if we're here, all retries failed
+                logger.error(f"All retry attempts failed for Zotero API (page {page_num}, start={start}): {e}")
+                raise  # Re-raise to fail the pipeline (don't silently continue with partial results)
 
             # Process items from this page
             for item in items:
                 fetched_count += 1
 
-                # Stop if we hit max_items
-                if self.max_items is not None and yielded_count >= self.max_items:
-                    logger.info(f"Reached max_items limit ({self.max_items})")
+                # Stop if we hit max_records
+                if self.max_records is not None and yielded_count >= self.max_records:
+                    logger.info(f"Reached max_records limit ({self.max_records})")
                     break
 
                 # Skip invalid items
@@ -248,7 +274,7 @@ class ZoteroSource(BaseModel):
                 yield record
 
             # Check if we should continue to next page
-            if self.max_items is not None and yielded_count >= self.max_items:
+            if self.max_records is not None and yielded_count >= self.max_records:
                 break
 
             # If we got fewer items than the limit, we're done
@@ -286,22 +312,37 @@ class ZoteroDownloadProcessor(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    save_dir: str = Field(..., description="Directory to save downloaded files")
     library_id: str = Field(..., description="Zotero library ID")
 
-    _zot: zotero.Zotero | None = PrivateAttr(default=None)
+    _zot: RetryWrapper | None = PrivateAttr(default=None)
 
     @property
-    def zot(self) -> zotero.Zotero:
-        """Lazily initialize the Zotero client."""
+    def zot(self) -> RetryWrapper:
+        """Lazily initialize the Zotero client wrapped in RetryWrapper."""
         if self._zot is None:
-            self._zot = zotero.Zotero(
+            from buttermilk._core.constants import cache
+
+            zot_client = zotero.Zotero(
                 library_id=self.library_id,
                 library_type="group",
                 api_key=bm.credentials.get("ZOTERO_API_KEY"),
             )
-            Path(self.save_dir).mkdir(parents=True, exist_ok=True)
+            self._zot = RetryWrapper(
+                client=zot_client,
+                max_retries=3,
+                min_wait_seconds=5.0,
+                max_wait_seconds=60.0,
+                jitter_seconds=5.0,
+            )
+            # Ensure cache directory exists
+            bm.session_info.get_cache_subdir(cache.ZOTERO, create=True)
         return self._zot
+
+    def _get_cache_dir(self) -> Path:
+        """Get the centralized Zotero cache directory."""
+        from buttermilk._core.constants import cache
+
+        return bm.session_info.get_cache_subdir(cache.ZOTERO)
 
     async def process(
         self,
@@ -309,7 +350,7 @@ class ZoteroDownloadProcessor(BaseModel):
         *,
         processor_stage: str,
         parent_trace_id: str | None = None,
-        component_name: str = "LLMCore",
+        component_name: str = "ZoteroDownloadProcessor",
         cancellation_token: Any | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[Record, None]:
@@ -331,9 +372,10 @@ class ZoteroDownloadProcessor(BaseModel):
         title = zotero_item.get("title", "Unknown Title")
         doi_or_url = zotero_item.get("DOI") or zotero_item.get("url")
 
-        # Define file paths
-        pdf_file = Path(self.save_dir) / f"{key}.pdf"
-        json_file = Path(self.save_dir) / f"{key}.json"
+        # Define file paths using centralized cache
+        cache_dir = self._get_cache_dir()
+        pdf_file = cache_dir / f"{key}.pdf"
+        json_file = cache_dir / f"{key}.json"
 
         # Check cache first
         if json_file.exists():
@@ -373,15 +415,9 @@ class ZoteroDownloadProcessor(BaseModel):
                 fulltext = self.zot.fulltext_item(attachment_key)
 
                 # Check if Zotero indexed enough pages (>90%)
-                if (
-                    fulltext
-                    and fulltext.get("indexedPages", 0) > 0
-                    and fulltext["indexedPages"] >= (fulltext.get("totalPages", 0) * 0.9)
-                ):
+                if fulltext and fulltext.get("indexedPages", 0) > 0 and fulltext["indexedPages"] >= (fulltext.get("totalPages", 0) * 0.9):
                     content = fulltext["content"]
-                    logger.debug(
-                        f"Full text retrieved: {fulltext['indexedPages']}/{fulltext['totalPages']} pages"
-                    )
+                    logger.debug(f"Full text retrieved: {fulltext['indexedPages']}/{fulltext['totalPages']} pages")
             except zotero_errors.ResourceNotFoundError:
                 logger.debug(f"Full text not available for {key}")
             except Exception as e:
@@ -403,10 +439,14 @@ class ZoteroDownloadProcessor(BaseModel):
                     raise Exception(error_msg)
 
         else:
-            # No PDF attachment found - this is expected for some items
-            error_msg = f"No PDF attachment found for {key}"
-            logger.debug(error_msg, key=key, title=title[:50] if title else "Unknown", doi_or_url=doi_or_url)
-            raise Exception(error_msg)
+            # No PDF attachment found - skip this record (don't mark as failed)
+            logger.debug(
+                f"No PDF attachment found for {key} - skipping",
+                key=key,
+                title=title[:50] if title else "Unknown",
+                doi_or_url=doi_or_url,
+            )
+            return  # Yield nothing - pipeline will mark as "skipped"
 
         # Save to cache
         cache_data = {

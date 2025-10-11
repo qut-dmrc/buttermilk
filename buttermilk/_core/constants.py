@@ -98,18 +98,34 @@ WAIT = "WAIT"
 wait for further input, or await the completion of another process.
 """
 
-# --- Cache Subdirectories ---
-# These constants define subdirectories within the cache directory structure.
-# Usage: bm.session_info.cache_dir / cache.CHROMADB returns a Path object.
-# This provides a single source of truth for cache organization.
+# --- Cache Management ---
+# Single source of truth for cache directory location and organization.
+
+import os
+
+def get_base_cache_dir() -> Path:
+    """Get the base cache directory for Buttermilk.
+
+    Returns the centralized cache location used across all Buttermilk components.
+    This provides a single source of truth for the cache directory location.
+
+    Returns:
+        Path: The base cache directory (~/.cache/buttermilk by default)
+    """
+    return Path(os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")))
+
 
 class cache:
     """Cache subdirectory constants.
 
     All cache subdirectories should be defined here to provide a single
-    source of truth for cache organization. Use with bm.session_info.cache_dir:
+    source of truth for cache organization. Use with get_base_cache_dir():
 
     Example:
+        from buttermilk._core.constants import cache, get_base_cache_dir
+        cache_path = get_base_cache_dir() / cache.MODELS
+
+    Or with bm.session_info for session-specific caching:
         cache_path = bm.session_info.cache_dir / cache.CHROMADB
     """
 

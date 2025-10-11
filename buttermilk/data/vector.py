@@ -24,6 +24,7 @@ from vertexai.language_models import (
 )
 
 from buttermilk import bm, logger
+from buttermilk._core.constants import cache
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
@@ -266,9 +267,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     embedding_batch_size: int = Field(default=100)
     arrow_save_dir: str = Field(default="")
     embeddings_cache_dir: str = Field(
-        default="embeddings",
-        description="Subdirectory within cache_dir for embeddings (or absolute path). "
-        "Use cache.EMBEDDINGS constant for consistency."
+        default=cache.EMBEDDINGS,
+        description="Subdirectory within cache_dir for embeddings. "
+        "Defaults to cache.EMBEDDINGS constant for consistency."
     )
 
     # New sync configuration options
@@ -374,7 +375,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
             if self.arrow_save_dir:
                 Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
-            Path(self.embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
+            # Embeddings cache directory creation handled by get_cache_subdir(create=True)
 
         return self
 
@@ -1299,10 +1300,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     def _get_embeddings_cache_path(self, record: Record) -> Path:
         """Get the path to the embeddings cache file for a record.
 
-        Returns the cache file path using the configured embeddings cache directory.
+        Returns the cache file path using the centralized cache directory.
         """
-        cache_dir = Path(self.embeddings_cache_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir = bm.session_info.get_cache_subdir(self.embeddings_cache_dir, create=True)
         return cache_dir / f"{record.record_id}_embeddings.json"
 
     async def _save_embeddings_to_cache(self, record: Record) -> bool:

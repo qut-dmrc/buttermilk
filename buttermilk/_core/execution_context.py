@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.cloud import CloudManager
 from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import LoggerConfig, Tracing
-from buttermilk._core.constants import cache, CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY
+from buttermilk._core.constants import cache, CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, get_base_cache_dir
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
@@ -323,7 +323,7 @@ class ExecutionContext(BaseModel):
         if self._llms_instance is None:
             connections_data: dict[str, Any] | None = None
             # Use centralized cache directory
-            cache_dir = Path.home() / ".cache/buttermilk" / cache.MODELS
+            cache_dir = get_base_cache_dir() / cache.MODELS
             cache_path = cache_dir / CONFIG_CACHE_FILENAME
 
             # Try to load from local cache first
