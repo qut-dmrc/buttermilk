@@ -22,6 +22,41 @@ from buttermilk.storage.base import RecordFilter
 from buttermilk.utils.utils import get_pdf_text
 
 
+def extract_citation_key(extra_field: str | None) -> str | None:
+    """Extract BetterBibTeX citation key from Zotero 'extra' field.
+
+    Looks for pattern 'Citation Key: <key>' on its own line in the extra field.
+
+    Args:
+        extra_field: String content of Zotero item's 'extra' field, or None
+
+    Returns:
+        Citation key string if found, None otherwise
+
+    Examples:
+        >>> extract_citation_key("Citation Key: suzor2019digital")
+        'suzor2019digital'
+
+        >>> extract_citation_key("Publisher: Routledge\\nCitation Key: abbate2017")
+        'abbate2017'
+
+        >>> extract_citation_key("No key here")
+        None
+    """
+    if not extra_field:
+        return None
+
+    # Split by newlines and check each line
+    for line in extra_field.split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('Citation Key:'):
+            # Extract everything after the colon and strip whitespace
+            key = stripped.split(':', 1)[1].strip()
+            return key if key else None
+
+    return None
+
+
 class VectorStoreExistenceFilter(RecordFilter):
     """Filter that checks if a record already exists in a vector store."""
 
@@ -255,13 +290,18 @@ class ZoteroSource(BaseModel):
                     skipped_count += 1
                     continue
 
+                # Extract citation key from 'extra' field
+                zotero_data = item.get("data", {})
+                citation_key = extract_citation_key(zotero_data.get("extra"))
+
                 # Create minimal BaseRecord with ID and metadata
                 record = BaseRecord(
                     record_id=key,
                     metadata={
-                        "zotero_item": item.get("data", {}),
+                        "zotero_item": zotero_data,
                         "zotero_version": item.get("version", 0),
                         "zotero_links": item.get("links", {}),
+                        "citation_key": citation_key,  # Add citation_key to metadata
                     },
                 )
 
@@ -368,6 +408,7 @@ class ZoteroDownloadProcessor(BaseModel):
         # Extract Zotero metadata from record
         zotero_item = record.metadata.get("zotero_item", {})
         zotero_links = record.metadata.get("zotero_links", {})
+        citation_key = record.metadata.get("citation_key")
         key = record.record_id
         title = zotero_item.get("title", "Unknown Title")
         doi_or_url = zotero_item.get("DOI") or zotero_item.get("url")
@@ -396,6 +437,7 @@ class ZoteroDownloadProcessor(BaseModel):
                             "uri": json_file.as_posix(),
                             "zotero_data": zotero_item,
                             "zotero_links": cached_links,
+                            "citation_key": citation_key,
                         },
                     )
                     return
@@ -474,5 +516,6 @@ class ZoteroDownloadProcessor(BaseModel):
                 "uri": json_file.as_posix(),
                 "zotero_data": zotero_item,
                 "zotero_links": zotero_links,
+                "citation_key": citation_key,
             },
         )
