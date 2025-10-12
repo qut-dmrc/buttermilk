@@ -233,18 +233,28 @@ class TestZoteroAPIDataFormat:
 
     These tests call the REAL Zotero API to verify our implementation assumptions.
     Uses REAL configuration from hydra.
+
+    CRITICAL: These tests validate that the API returns data in the format our code expects.
+    If these tests fail, our implementation needs to be updated to match the actual API format.
     """
 
     @pytest.mark.integration
-    async def test_extra_field_is_string_not_dict(self, real_bm):
-        """Verify Zotero API returns 'extra' field as string, not dict.
+    async def test_api_returns_complete_item_structure(self, real_bm):
+        """Verify Zotero API returns items with ALL required fields in expected format.
 
-        This test ensures our string parsing logic in extract_citation_key()
-        is appropriate for the actual API response format.
+        This test validates the complete item structure for a full page of items to ensure:
+        1. Required top-level fields exist ('key', 'version', 'data', 'links')
+        2. Fields have expected types (string, int, dict)
+        3. Nested 'data' dict contains required metadata fields
+        4. 'links' dict structure matches our expectations
+        5. 'extra' field is always a string (for citation key parsing)
+
+        Tests with ~50-100 items (one full API page) to verify consistency across items.
         """
         from pyzotero import zotero
+        import random
 
-        # Get credentials from BM (NO direct os.getenv)
+        # Get credentials from BM
         api_key = real_bm.credentials.get("ZOTERO_API_KEY")
         library_id = real_bm.cfg.zotero.library
 
@@ -255,35 +265,167 @@ class TestZoteroAPIDataFormat:
             api_key=api_key,
         )
 
-        # Fetch a small sample
-        items = zot.items(limit=5)
+        # Fetch a full page of items (limit=100 is typical page size)
+        # To get somewhat random items, we can fetch from a random starting offset
+        # Get total items first
+        total_items = zot.num_items()
 
-        assert len(items) > 0, "No items returned from Zotero API"
+        # Calculate a random start point (avoid last 100 items to ensure full page)
+        max_start = max(0, total_items - 100)
+        random_start = random.randint(0, max_start) if max_start > 0 else 0
 
-        # Check format of 'extra' field
+        print(f"\n📊 Fetching page of items from Zotero API (start={random_start}, total={total_items})")
+
+        # Fetch one page with random offset for variety
+        items = zot.items(
+            limit=100,
+            start=random_start,
+            itemType="-attachment",  # Exclude attachments like we do in ZoteroSource
+        )
+
+        assert len(items) > 0, f"No items returned from Zotero API (start={random_start})"
+
+        print(f"✓ Retrieved {len(items)} items for validation")
+
+        # Track statistics
+        items_checked = 0
+        items_with_extra = 0
+        items_with_citation_key = 0
+        items_with_attachments = 0
+        items_with_doi = 0
+        items_with_url = 0
+
+        # Validate EVERY item in the page
         for item in items:
-            if "data" in item and "extra" in item["data"]:
-                extra_field = item["data"]["extra"]
+            items_checked += 1
 
-                # CRITICAL: Verify 'extra' is a string
+            # CRITICAL: Validate top-level structure
+            assert "key" in item, f"Item missing 'key' field: {item}"
+            assert isinstance(item["key"], str), f"Item 'key' should be string, got {type(item['key'])}"
+            assert len(item["key"]) > 0, f"Item 'key' should not be empty"
+
+            assert "version" in item, f"Item {item.get('key')} missing 'version' field"
+            assert isinstance(item["version"], int), f"Item 'version' should be int, got {type(item['version'])}"
+
+            assert "data" in item, f"Item {item.get('key')} missing 'data' field"
+            assert isinstance(item["data"], dict), f"Item 'data' should be dict, got {type(item['data'])}"
+
+            assert "links" in item, f"Item {item.get('key')} missing 'links' field"
+            assert isinstance(item["links"], dict), f"Item 'links' should be dict, got {type(item['links'])}"
+
+            # Validate 'data' dict structure (this is what we store in zotero_item)
+            data = item["data"]
+
+            # itemType is required and used to filter attachments/notes/annotations
+            assert "itemType" in data, f"Item {item['key']} data missing 'itemType'"
+            assert isinstance(data["itemType"], str), f"itemType should be string"
+
+            # title is used extensively in logging and metadata
+            if "title" in data:
+                assert isinstance(data["title"], str), f"title should be string when present"
+
+            # extra field is CRITICAL for citation key extraction
+            if "extra" in data:
+                items_with_extra += 1
+                extra_field = data["extra"]
+
+                # CRITICAL: Must be string for our parsing logic
                 assert isinstance(extra_field, str), (
-                    f"Expected 'extra' field to be string, got {type(extra_field).__name__}. "
-                    f"Item key: {item.get('key')}, extra value: {extra_field}"
+                    f"Item {item['key']}: 'extra' field must be string, got {type(extra_field).__name__}. "
+                    f"Value: {extra_field}"
                 )
 
-                # If it contains "Citation Key:", verify we can parse it
+                # If contains citation key, verify we can extract it
                 if "Citation Key:" in extra_field:
+                    items_with_citation_key += 1
                     from buttermilk.libs.zotero import extract_citation_key
                     citation_key = extract_citation_key(extra_field)
                     assert citation_key is not None, (
-                        f"Failed to extract citation key from: {extra_field}"
+                        f"Item {item['key']}: Failed to extract citation key from: {extra_field}"
                     )
+                    assert isinstance(citation_key, str), "Citation key must be string"
+                    assert len(citation_key) > 0, "Citation key must not be empty"
 
-                # Log for inspection
-                print(f"\n✓ Item {item.get('key')} extra field format:")
-                print(f"  Type: {type(extra_field).__name__}")
-                print(f"  Value preview: {extra_field[:100] if len(extra_field) > 100 else extra_field}")
-                break  # Only need to check one item
+            # DOI and URL are used for metadata
+            if "DOI" in data:
+                items_with_doi += 1
+                assert isinstance(data["DOI"], str), f"DOI should be string when present"
+
+            if "url" in data:
+                items_with_url += 1
+                assert isinstance(data["url"], str), f"url should be string when present"
+
+            # Validate 'links' dict structure (used for PDF attachments)
+            links = item["links"]
+
+            if "attachment" in links:
+                items_with_attachments += 1
+                attachment = links["attachment"]
+
+                assert isinstance(attachment, dict), (
+                    f"Item {item['key']}: attachment should be dict, got {type(attachment)}"
+                )
+
+                # If attachment exists, should have href and attachmentType
+                if "href" in attachment:
+                    assert isinstance(attachment["href"], str), "attachment href should be string"
+
+                if "attachmentType" in attachment:
+                    assert isinstance(attachment["attachmentType"], str), "attachmentType should be string"
+
+        # Log statistics
+        print(f"\n📈 Validation Statistics:")
+        print(f"  Items checked: {items_checked}")
+        print(f"  Items with 'extra' field: {items_with_extra}")
+        print(f"  Items with citation keys: {items_with_citation_key}")
+        print(f"  Items with attachments: {items_with_attachments}")
+        print(f"  Items with DOI: {items_with_doi}")
+        print(f"  Items with URL: {items_with_url}")
+
+        # Ensure we actually tested a meaningful sample
+        assert items_checked >= 10, f"Should check at least 10 items, only checked {items_checked}"
+
+        print(f"\n✅ All {items_checked} items passed structure validation")
+
+    @pytest.mark.integration
+    async def test_extra_field_is_always_string(self, real_bm):
+        """Focused test: Verify 'extra' field is ALWAYS a string, never dict.
+
+        This is critical because we parse it as a string in extract_citation_key().
+        Tests a full page of items to ensure consistency.
+        """
+        from pyzotero import zotero
+
+        api_key = real_bm.credentials.get("ZOTERO_API_KEY")
+        library_id = real_bm.cfg.zotero.library
+
+        zot = zotero.Zotero(
+            library_id=library_id,
+            library_type="group",
+            api_key=api_key,
+        )
+
+        # Fetch full page
+        items = zot.items(limit=100, itemType="-attachment")
+
+        assert len(items) > 0, "No items returned from Zotero API"
+
+        extra_field_count = 0
+
+        # Check EVERY item
+        for item in items:
+            if "data" in item and "extra" in item["data"]:
+                extra_field = item["data"]["extra"]
+                extra_field_count += 1
+
+                # CRITICAL: Must always be string
+                assert isinstance(extra_field, str), (
+                    f"Item {item.get('key')}: 'extra' field must be string, "
+                    f"got {type(extra_field).__name__}. Value: {extra_field}"
+                )
+
+        print(f"\n✓ Checked {len(items)} items, found {extra_field_count} with 'extra' field")
+        print(f"✓ All 'extra' fields are strings (required for citation key parsing)")
 
 
 class TestZoteroSourceBehavior:
