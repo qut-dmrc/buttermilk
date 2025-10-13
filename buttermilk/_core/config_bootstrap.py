@@ -208,23 +208,19 @@ class ConfigurationBootstrapper:
                     config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                 else:
-                    # Register library configs in ConfigStore BEFORE initialization
-                    # This provides fallback for any configs not in project directory
+                    # Determine library and project config directories
                     library_config_dir = Path(__file__).parent.parent / "conf"
                     library_config_dir = library_config_dir.resolve()
-
-                    # Determine if we're using a custom project config
                     project_config_dir = Path(self.config_path).resolve()
                     is_custom_config = project_config_dir != library_config_dir
 
-                    if is_custom_config:
-                        # Register library configs for fallback
-                        register_library_configs_in_store(library_config_dir)
-
                     # Load configuration using Hydra compose API
-                    config_dir = Path(self.config_path).resolve()
+                    with initialize_config_dir(config_dir=str(project_config_dir), version_base="1.3"):
+                        # Register library configs INSIDE the Hydra context for fallback
+                        # This must happen AFTER initialize but BEFORE compose
+                        if is_custom_config:
+                            register_library_configs_in_store(library_config_dir)
 
-                    with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
                         config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet

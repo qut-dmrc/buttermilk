@@ -9,6 +9,7 @@ Based on the configuration, this script can:
 - Start a FastAPI web server to expose Buttermilk flows via an HTTP API (`api` mode).
 - Create batch jobs by adding multiple `RunRequest` instances to a queue (`batch` mode).
 - Process jobs from a queue in a worker-like fashion (`batch_run` mode).
+- Combined batch operations: enqueue and/or process jobs (`batch_all` mode).
 - Launch a Streamlit web application for a graphical user interface (`streamlit` mode).
 - Start a Google Cloud Pub/Sub listener for message-driven flow execution (`pub/sub` mode,
   potentially delegating to `batch_cli.main`).
@@ -133,6 +134,50 @@ def main(conf: DictConfig) -> None:
 
             async def run_with_shutdown():
                 await flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                await bm.graceful_shutdown()
+
+            asyncio.run(run_with_shutdown())
+
+        case "batch_all":
+            # Combined batch mode: enqueue and/or process jobs
+            # Supports enqueue_only, process_only, or both (default)
+            enqueue_only = conf.get("enqueue_only", False)
+            process_only = conf.get("process_only", False)
+
+            # Validate mutually exclusive options
+            if enqueue_only and process_only:
+                raise ValueError("enqueue_only and process_only are mutually exclusive")
+
+            # Determine what operations to run
+            should_enqueue = not process_only
+            should_process = not enqueue_only
+
+            logger.info(f"Batch all mode: enqueue={should_enqueue}, process={should_process}")
+
+            async def run_with_shutdown():
+                # Enqueue phase
+                if should_enqueue:
+                    logger.info("Enqueueing batch jobs...")
+                    storage_config = conf.get("storage_config") or conf.get("dataset_key") or None
+                    await flow_runner.create_batch(
+                        flow_name=conf.get("flow"),
+                        storage_config=storage_config,
+                        max_records=conf.get("max_records", None)
+                    )
+                    logger.info("Batch jobs enqueued successfully")
+
+                # Process phase
+                if should_process:
+                    max_jobs = conf.get("max_jobs", 999)  # Process all by default
+                    ui = CLIUserAgent()
+                    logger.info(f"Processing batch jobs (max: {max_jobs})...")
+                    await flow_runner.run_batch_job(
+                        max_jobs=max_jobs,
+                        callback_to_ui=ui.make_callback(),
+                        wait_for_completion=True
+                    )
+                    logger.info("Batch processing completed successfully")
+
                 await bm.graceful_shutdown()
 
             asyncio.run(run_with_shutdown())
