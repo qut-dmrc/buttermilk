@@ -865,3 +865,154 @@ class TestMetadataUpdateBehavior:
         # But content should be the same (reused from cache)
         assert updated_cache.get("content") == original_cache.get("content"), \
             "Content should be reused from existing PDF cache"
+
+    @pytest.mark.integration
+    @pytest.mark.anyio
+    async def test_attachment_version_checked_independently(self, real_bm):
+        """Test that attachment version is checked separately from parent item version.
+
+        Critical scenario:
+        - Parent item metadata changes (title, tags, etc.) → parent version increments
+        - Attachment (PDF) itself hasn't changed → attachment version stays same
+        - Processor should NOT re-download the PDF (same attachment version)
+        - Processor SHOULD update metadata (new parent version)
+
+        This is essential for efficient incremental sync when users edit item metadata
+        but PDFs remain unchanged.
+        """
+        from pathlib import Path
+        import json
+        import os
+
+        library_id = real_bm.cfg.zotero.library_id
+
+        # Get a test item with PDF attachment
+        source = ZoteroSource(
+            library_id=library_id,
+            max_records=5,
+            force_full_sync=True,
+        )
+
+        test_record = None
+        async for record in source.fetch_items():
+            links = record.metadata.get("zotero_links", {})
+            attachment = links.get("attachment", {})
+            if attachment.get("attachmentType") == "application/pdf":
+                test_record = record
+                break
+
+        if test_record is None:
+            pytest.skip("No items with PDF attachments found")
+
+        # First: Process to create initial cache
+        processor = ZoteroDownloadProcessor(library_id=library_id)
+        results = []
+        async for result in processor.process(test_record, processor_stage="test"):
+            results.append(result)
+
+        assert len(results) == 1
+
+        # Get cache paths
+        cache_dir = Path(real_bm.session_info.get_cache_subdir("zotero"))
+        pdf_file = cache_dir / f"{test_record.record_id}.pdf"
+        json_file = cache_dir / f"{test_record.record_id}.json"
+
+        assert pdf_file.exists(), "PDF should be cached"
+        assert json_file.exists(), "JSON cache should exist"
+
+        # Record PDF file modification time
+        pdf_mtime_before = os.path.getmtime(pdf_file)
+
+        # Read original cache
+        with json_file.open("r") as f:
+            original_cache = json.load(f)
+
+        original_item_version = original_cache.get("data", {}).get("version", 0)
+        original_attachment = original_cache.get("links", {}).get("attachment", {})
+
+        # Extract attachment version from href (Zotero API format)
+        # href typically looks like: "/groups/{id}/items/{key}/file?version={version}"
+        # OR attachment may have its own version field
+        original_attachment_href = original_attachment.get("href", "")
+        original_attachment_version = None
+
+        # Try to extract version from href query parameter
+        if "version=" in original_attachment_href:
+            import re
+            match = re.search(r'version=(\d+)', original_attachment_href)
+            if match:
+                original_attachment_version = int(match.group(1))
+
+        # If attachment has explicit version field, use that
+        if "version" in original_attachment:
+            original_attachment_version = original_attachment["version"]
+
+        print(f"\n📊 Original state:")
+        print(f"  Parent item version: {original_item_version}")
+        print(f"  Attachment version: {original_attachment_version}")
+        print(f"  Attachment href: {original_attachment_href[:100]}...")
+
+        # Simulate parent metadata change WITHOUT attachment change
+        # This is what happens when user edits title, tags, etc. in Zotero
+        updated_metadata = {
+            **test_record.metadata,
+            "citation_key": "test2025attachmentcheck",  # New metadata
+            "zotero_version": original_item_version + 1,  # Parent version incremented
+        }
+
+        # CRITICAL: Keep attachment version the same (unchanged PDF)
+        updated_links = updated_metadata.get("zotero_links", {}).copy()
+        if "attachment" in updated_links:
+            # Attachment href and version stay the same
+            updated_links["attachment"] = original_attachment.copy()
+
+        updated_metadata["zotero_links"] = updated_links
+
+        updated_record = BaseRecord(
+            record_id=test_record.record_id,
+            metadata=updated_metadata
+        )
+
+        # Second: Process with updated parent metadata but same attachment version
+        results2 = []
+        async for result in processor.process(updated_record, processor_stage="test"):
+            results2.append(result)
+
+        assert len(results2) == 1
+        updated_result = results2[0]
+
+        # Verify parent metadata was updated
+        assert updated_result.metadata.get("citation_key") == "test2025attachmentcheck"
+
+        # CRITICAL: Verify PDF was NOT re-downloaded
+        # Since attachment version didn't change, PDF should be reused from cache
+        pdf_mtime_after = os.path.getmtime(pdf_file)
+        assert pdf_mtime_after == pdf_mtime_before, (
+            f"PDF should NOT be re-downloaded when attachment version unchanged. "
+            f"Parent version: {original_item_version} → {original_item_version + 1}, "
+            f"Attachment version: {original_attachment_version} (unchanged)"
+        )
+
+        print(f"\n✅ PDF not re-downloaded (attachment version unchanged)")
+
+        # Verify cache was updated with new parent metadata
+        with json_file.open("r") as f:
+            updated_cache = json.load(f)
+
+        updated_item_version = updated_cache.get("data", {}).get("version", 0)
+        assert updated_item_version == original_item_version + 1, \
+            "Parent item version should be updated in cache"
+
+        # Verify attachment version stayed the same
+        updated_attachment = updated_cache.get("links", {}).get("attachment", {})
+        updated_attachment_href = updated_attachment.get("href", "")
+
+        # Attachment href/version should be identical (unchanged)
+        assert updated_attachment_href == original_attachment_href, \
+            "Attachment href should be unchanged when PDF unchanged"
+
+        # Content should be reused (same PDF)
+        assert updated_cache.get("content") == original_cache.get("content"), \
+            "Content should be reused when attachment version unchanged"
+
+        print(f"✅ Cache updated with new parent metadata but same attachment/content")

@@ -430,12 +430,21 @@ class ZoteroDownloadProcessor(BaseModel):
                     cached_version = cached_item.get("data", {}).get("version", 0)
                     current_version = record.metadata.get("zotero_version", 0)
 
-                    # If metadata has changed (version increased), update cache with new metadata
-                    # but reuse existing content (don't re-download PDF)
-                    if current_version > cached_version:
+                    # CRITICAL: Check attachment version separately from parent item version
+                    # Parent item version increments when metadata changes (title, tags, etc.)
+                    # but attachment version only increments when the PDF itself changes
+                    cached_attachment_href = cached_item.get("links", {}).get("attachment", {}).get("href", "")
+                    current_attachment_href = zotero_links.get("attachment", {}).get("href", "")
+
+                    # Compare attachment hrefs - these contain version info and change only when PDF changes
+                    attachment_changed = (current_attachment_href != cached_attachment_href) if current_attachment_href else False
+
+                    # If metadata has changed (version increased) but attachment hasn't,
+                    # update cache with new metadata but reuse existing content (don't re-download PDF)
+                    if current_version > cached_version and not attachment_changed:
                         logger.debug(
                             f"📝 Metadata updated for {key}: v{cached_version} → v{current_version}. "
-                            f"Updating cache without re-downloading PDF."
+                            f"Attachment unchanged - updating cache without re-downloading PDF."
                         )
 
                         # Update cache with new metadata but keep existing content
@@ -468,24 +477,33 @@ class ZoteroDownloadProcessor(BaseModel):
                         )
                         return
 
-                    # No version change - return cached item as-is
-                    logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
-                    # Get links from cache if available
-                    cached_links = cached_item.get("links", {})
-                    yield Record(
-                        record_id=key,
-                        content=cached_item["content"],
-                        file_path=pdf_file.as_posix(),
-                        metadata={
-                            "title": title,
-                            "doi_or_url": doi_or_url,
-                            "uri": json_file.as_posix(),
-                            "zotero_data": zotero_item,
-                            "zotero_links": cached_links,
-                            "citation_key": citation_key,
-                        },
-                    )
-                    return
+                    # If attachment changed (href different), invalidate cache and re-download
+                    if attachment_changed:
+                        logger.debug(
+                            f"📎 Attachment changed for {key}: '{cached_attachment_href[:80]}...' → "
+                            f"'{current_attachment_href[:80]}...'. Re-downloading PDF."
+                        )
+                        # Fall through to download logic below
+
+                    # If both item and attachment versions unchanged - return cached item as-is
+                    elif current_version == cached_version:
+                        logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
+                        # Get links from cache if available
+                        cached_links = cached_item.get("links", {})
+                        yield Record(
+                            record_id=key,
+                            content=cached_item["content"],
+                            file_path=pdf_file.as_posix(),
+                            metadata={
+                                "title": title,
+                                "doi_or_url": doi_or_url,
+                                "uri": json_file.as_posix(),
+                                "zotero_data": zotero_item,
+                                "zotero_links": cached_links,
+                                "citation_key": citation_key,
+                            },
+                        )
+                        return
             except Exception as e:
                 logger.warning(f"Failed to read cached item {key}: {e}")
 
