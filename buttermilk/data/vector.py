@@ -29,6 +29,7 @@ from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
+
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
 
@@ -234,7 +235,7 @@ class SemanticSplitter(BaseModel):
                     "SemanticSplitter yielding record with chunks",
                     record_id=doc.record_id,
                     chunks_attached=len(chunked_doc.chunks),
-                    first_chunk_preview=chunked_doc.chunks[0].chunk_text[:100] + "..." if chunked_doc.chunks else "N/A"
+                    first_chunk_preview=chunked_doc.chunks[0].chunk_text[:100] + "..." if chunked_doc.chunks else "N/A",
                 )
 
                 yield chunked_doc
@@ -247,8 +248,6 @@ class SemanticSplitter(BaseModel):
             logger.error(
                 f"Error splitting text for doc {doc.record_id}: {e} {e.args=}",
             )
-
-
 
 
 # --- Core Embedding and DB Interaction Class ---
@@ -267,9 +266,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     embedding_batch_size: int = Field(default=100)
     arrow_save_dir: str = Field(default="")
     embeddings_cache_dir: str = Field(
-        default=cache.EMBEDDINGS,
-        description="Subdirectory within cache_dir for embeddings. "
-        "Defaults to cache.EMBEDDINGS constant for consistency."
+        default=cache.EMBEDDINGS, description="Subdirectory within cache_dir for embeddings. Defaults to cache.EMBEDDINGS constant for consistency."
     )
 
     # New sync configuration options
@@ -669,34 +666,25 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # Process the record to create embeddings
             result = await self.process_record(record)
 
-            if result and hasattr(result, 'status') and result.status == 'processed':
+            if result and hasattr(result, "status") and result.status == "processed":
                 # Update metadata to track processing
                 metadata = record.metadata.copy() if record.metadata else {}
                 metadata[processor_stage] = {
-                    'status': 'processed',
-                    'timestamp': __import__('time').time(),
-                    'processor': 'ChromaDBEmbeddings',
-                    'chunks_embedded': getattr(result, 'chunks_created', 0)
+                    "status": "processed",
+                    "timestamp": __import__("time").time(),
+                    "processor": "ChromaDBEmbeddings",
+                    "chunks_embedded": getattr(result, "chunks_created", 0),
                 }
 
                 # Return the original record with updated metadata
-                processed_record = record.model_copy(update={'metadata': metadata})
+                processed_record = record.model_copy(update={"metadata": metadata})
                 yield processed_record
             else:
-                logger.warning(
-                    "Failed to embed record in process method",
-                    record_id=record.record_id,
-                    reason="process_record returned falsy result"
-                )
+                logger.warning("Failed to embed record in process method", record_id=record.record_id, reason="process_record returned falsy result")
                 return
 
         except Exception as e:
-            logger.error(
-                "Error embedding record in process method",
-                record_id=record.record_id,
-                error=str(e),
-                error_type=type(e).__name__
-            )
+            logger.error("Error embedding record in process method", record_id=record.record_id, error=str(e), error_type=type(e).__name__)
             return
 
     async def _ensure_collection_ready(self) -> None:
@@ -896,22 +884,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         await self._save_embeddings_to_cache(record)
 
             if not embedding_ok:
-                # Persist failed record for later retry BEFORE returning
-                try:
-                    failed_path = Path(FAILED_BATCH_DIR) / f"failed_embedding_record_{record.record_id}_{uuid.uuid4()}.json"
-                    failed_payload = {
-                        "record_id": record.record_id,
-                        "title": record.title,
-                        "reason": "embedding_failed",
-                        "chunk_count": len(record.chunks),
-                        "metadata": record.metadata,
-                        "content_hash": self._get_content_hash(record),
-                        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
-                    }
-                    failed_path.write_text(json.dumps(failed_payload, ensure_ascii=False, indent=2))
-                    logger.warning(f"💾 Saved failed embedding record {record.record_id}: {failed_path}")
-                except Exception as save_e:
-                    logger.error(f"Could not save failed embedding record {record.record_id}: {save_e}")
+                logger.warning(f"Embedding record {record.record_id} failed after retries.")
 
                 processing_time_ms = (time.time() - start_time) * 1000
                 return ProcessingResult(
@@ -927,10 +900,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             # --- Metadata enhancement ---
             content_hash = self._get_content_hash(record)
             current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
-            try:
-                session_id = bm.session_info.session_id if bm and bm.session_info else None
-            except:
-                session_id = None
+            session_id = bm.session_info.session_id if bm and bm.session_info else None
 
             for chunk in record.chunks:
                 chunk.metadata.update(
@@ -939,10 +909,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                         "content_hash": content_hash,
                         "created_timestamp": current_timestamp,
                         "deduplication_strategy": self.deduplication_strategy,
+                        "processing_session_id": session_id,
                     },
                 )
-                if session_id:
-                    chunk.metadata["processing_session_id"] = session_id
 
             logger.debug(f"💾 [VECTORIZER-{record.record_id}] Storing chunks in ChromaDB...")
             await self._store_chunks_for_record(record)
@@ -968,7 +937,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 record_type=str(type(record)),
                 is_record_instance=isinstance(record, Record),
                 chunks_count=len(record.chunks),
-                chunk_types=chunk_types
+                chunk_types=chunk_types,
             )
 
             try:
@@ -992,30 +961,26 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     error=str(validation_error),
                     error_type=type(validation_error).__name__,
                     record_type=str(type(record)),
-                    has_model_dump=hasattr(record, 'model_dump'),
-                    chunks_count=len(record.chunks) if hasattr(record, 'chunks') else 0
+                    has_model_dump=hasattr(record, "model_dump"),
+                    chunks_count=len(record.chunks) if hasattr(record, "chunks") else 0,
                 )
-                if hasattr(record, 'model_dump'):
+                if hasattr(record, "model_dump"):
                     try:
                         record_dict = record.model_dump()
                         logger.debug(
                             "Record model dump for debugging",
                             record_id=record.record_id,
                             record_dict_keys=list(record_dict.keys()),
-                            record_dict_size=len(str(record_dict))
+                            record_dict_size=len(str(record_dict)),
                         )
                     except Exception as dump_error:
-                        logger.error(
-                            "Failed to dump record model",
-                            record_id=record.record_id,
-                            dump_error=str(dump_error)
-                        )
+                        logger.error("Failed to dump record model", record_id=record.record_id, dump_error=str(dump_error))
                 # Fallback to None record to avoid complete failure
                 return ProcessingResult(
                     record=None,
                     status="failed",
                     reason=f"ProcessingResult validation failed: {validation_error}",
-                    chunks_created=len(record.chunks) if hasattr(record, 'chunks') else 0,
+                    chunks_created=len(record.chunks) if hasattr(record, "chunks") else 0,
                     embedding_model=effective_embedding_model,
                     processing_time_ms=processing_time_ms,
                     metadata={
@@ -1034,7 +999,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 error=str(e),
                 error_type=type(e).__name__,
                 processing_time_ms=processing_time_ms,
-                embedding_model=effective_embedding_model
+                embedding_model=effective_embedding_model,
             )
             return ProcessingResult(
                 record=None,
@@ -1880,4 +1845,3 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Return the count of unique identifiers
         return len(unique_doc_identifiers)
-
