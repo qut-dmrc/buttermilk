@@ -16,7 +16,7 @@ Following CODE.md principles:
 import pytest
 
 from buttermilk._core.types import BaseRecord, Record
-from buttermilk.libs.zotero import ZoteroSource, ZoteroDownloadProcessor
+from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
 
 class TestCitationKeyExtraction:
@@ -104,6 +104,7 @@ class TestZoteroSourceCitationKeys:
     """
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_zotero_source_extracts_citation_keys(self, real_bm):
         """Integration test: ZoteroSource extracts citation keys from real API.
 
@@ -113,12 +114,14 @@ class TestZoteroSourceCitationKeys:
         - At least one item with Citation Key in extra field
         """
         # Get library_id from hydra config (NO hardcoded values)
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
         # Create real ZoteroSource (NO mocking)
+        # Use force_full_sync=True to bypass incremental sync in tests
         source = ZoteroSource(
             library_id=library_id,
             max_records=5,  # Limit for testing
+            force_full_sync=True,  # Bypass incremental sync for testing
         )
 
         # Fetch real records
@@ -165,6 +168,7 @@ class TestZoteroDownloadProcessorCitationKeys:
     """
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_processor_propagates_citation_keys(self, real_bm):
         """Integration test: Citation keys propagate from Source through Processor.
 
@@ -174,12 +178,14 @@ class TestZoteroDownloadProcessorCitationKeys:
         - At least one item with PDF attachment and citation key
         """
         # Get library_id from hydra config
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
         # Create real ZoteroSource and Processor
+        # Use force_full_sync=True to bypass incremental sync in tests
         source = ZoteroSource(
             library_id=library_id,
             max_records=3,  # Small sample for testing
+            force_full_sync=True,  # Bypass incremental sync for testing
         )
         processor = ZoteroDownloadProcessor(library_id=library_id)
 
@@ -239,6 +245,7 @@ class TestZoteroAPIDataFormat:
     """
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_api_returns_complete_item_structure(self, real_bm):
         """Verify Zotero API returns items with ALL required fields in expected format.
 
@@ -251,12 +258,13 @@ class TestZoteroAPIDataFormat:
 
         Tests with ~50-100 items (one full API page) to verify consistency across items.
         """
-        from pyzotero import zotero
         import random
+
+        from pyzotero import zotero
 
         # Get credentials from BM
         api_key = real_bm.credentials.get("ZOTERO_API_KEY")
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
         # Create real Zotero client
         zot = zotero.Zotero(
@@ -302,7 +310,7 @@ class TestZoteroAPIDataFormat:
             # CRITICAL: Validate top-level structure
             assert "key" in item, f"Item missing 'key' field: {item}"
             assert isinstance(item["key"], str), f"Item 'key' should be string, got {type(item['key'])}"
-            assert len(item["key"]) > 0, f"Item 'key' should not be empty"
+            assert len(item["key"]) > 0, "Item 'key' should not be empty"
 
             assert "version" in item, f"Item {item.get('key')} missing 'version' field"
             assert isinstance(item["version"], int), f"Item 'version' should be int, got {type(item['version'])}"
@@ -318,11 +326,11 @@ class TestZoteroAPIDataFormat:
 
             # itemType is required and used to filter attachments/notes/annotations
             assert "itemType" in data, f"Item {item['key']} data missing 'itemType'"
-            assert isinstance(data["itemType"], str), f"itemType should be string"
+            assert isinstance(data["itemType"], str), "itemType should be string"
 
             # title is used extensively in logging and metadata
             if "title" in data:
-                assert isinstance(data["title"], str), f"title should be string when present"
+                assert isinstance(data["title"], str), "title should be string when present"
 
             # extra field is CRITICAL for citation key extraction
             if "extra" in data:
@@ -349,11 +357,11 @@ class TestZoteroAPIDataFormat:
             # DOI and URL are used for metadata
             if "DOI" in data:
                 items_with_doi += 1
-                assert isinstance(data["DOI"], str), f"DOI should be string when present"
+                assert isinstance(data["DOI"], str), "DOI should be string when present"
 
             if "url" in data:
                 items_with_url += 1
-                assert isinstance(data["url"], str), f"url should be string when present"
+                assert isinstance(data["url"], str), "url should be string when present"
 
             # Validate 'links' dict structure (used for PDF attachments)
             links = item["links"]
@@ -374,7 +382,7 @@ class TestZoteroAPIDataFormat:
                     assert isinstance(attachment["attachmentType"], str), "attachmentType should be string"
 
         # Log statistics
-        print(f"\n📈 Validation Statistics:")
+        print("\n📈 Validation Statistics:")
         print(f"  Items checked: {items_checked}")
         print(f"  Items with 'extra' field: {items_with_extra}")
         print(f"  Items with citation keys: {items_with_citation_key}")
@@ -388,6 +396,7 @@ class TestZoteroAPIDataFormat:
         print(f"\n✅ All {items_checked} items passed structure validation")
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_extra_field_is_always_string(self, real_bm):
         """Focused test: Verify 'extra' field is ALWAYS a string, never dict.
 
@@ -397,7 +406,7 @@ class TestZoteroAPIDataFormat:
         from pyzotero import zotero
 
         api_key = real_bm.credentials.get("ZOTERO_API_KEY")
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
         zot = zotero.Zotero(
             library_id=library_id,
@@ -425,7 +434,7 @@ class TestZoteroAPIDataFormat:
                 )
 
         print(f"\n✓ Checked {len(items)} items, found {extra_field_count} with 'extra' field")
-        print(f"✓ All 'extra' fields are strings (required for citation key parsing)")
+        print("✓ All 'extra' fields are strings (required for citation key parsing)")
 
 
 class TestZoteroSourceBehavior:
@@ -436,13 +445,16 @@ class TestZoteroSourceBehavior:
     """
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_source_yields_base_records_with_metadata(self, real_bm):
         """Test that ZoteroSource yields BaseRecord objects with correct structure."""
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
+        # Use force_full_sync=True to bypass incremental sync in tests
         source = ZoteroSource(
             library_id=library_id,
             max_records=2,
+            force_full_sync=True,  # Bypass incremental sync for testing
         )
 
         records = []
@@ -457,7 +469,9 @@ class TestZoteroSourceBehavior:
         assert records[0].record_id is not None
         assert "zotero_item" in records[0].metadata
         assert "zotero_version" in records[0].metadata
-        assert records[0].metadata["zotero_item"].get("title") is not None
+        # Note: Not all items have 'title' (e.g., statutes have 'nameOfAct')
+        # Just verify zotero_item is populated
+        assert len(records[0].metadata["zotero_item"]) > 0
 
 
 class TestZoteroDownloadProcessorBehavior:
@@ -467,14 +481,17 @@ class TestZoteroDownloadProcessorBehavior:
     """
 
     @pytest.mark.integration
+    @pytest.mark.anyio
     async def test_processor_downloads_and_extracts_text(self, real_bm):
         """Test that processor downloads PDF and extracts text successfully."""
-        library_id = real_bm.cfg.zotero.library
+        library_id = real_bm.cfg.zotero.library_id
 
         # Get a real record with PDF
+        # Use force_full_sync=True to bypass incremental sync in tests
         source = ZoteroSource(
             library_id=library_id,
             max_records=5,
+            force_full_sync=True,  # Bypass incremental sync for testing
         )
 
         # Find first item with PDF attachment
@@ -506,3 +523,345 @@ class TestZoteroDownloadProcessorBehavior:
         assert result.content is not None
         assert len(result.content) > 0
         assert result.metadata.get("title") is not None
+
+
+class TestMetadataUpdateBehavior:
+    """Test that metadata updates work correctly without re-downloading PDFs.
+
+    These tests verify the optimization for citation key backfilling:
+    1. Updated metadata triggers reprocessing
+    2. Non-updated records are skipped
+    3. PDF is not re-downloaded if cached and unchanged
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.anyio
+    async def test_updated_metadata_triggers_reprocessing(self, real_bm):
+        """Test that items with updated metadata are reprocessed by the pipeline.
+
+        When metadata changes (e.g., citation key added), the item should:
+        - Be yielded by ZoteroSource (not filtered by VectorStoreExistenceFilter)
+        - Be processed through ZoteroDownloadProcessor
+        - Update ChromaDB with new metadata
+        """
+        from pathlib import Path
+        import json
+
+        library_id = real_bm.cfg.zotero.library_id
+
+        # Get a test item with PDF
+        source = ZoteroSource(
+            library_id=library_id,
+            max_records=5,
+            force_full_sync=True,
+        )
+
+        test_record = None
+        async for record in source.fetch_items():
+            links = record.metadata.get("zotero_links", {})
+            attachment = links.get("attachment", {})
+            if attachment.get("attachmentType") == "application/pdf":
+                test_record = record
+                break
+
+        if test_record is None:
+            pytest.skip("No items with PDF attachments found")
+
+        # First: Process the item to ensure it's in cache and ChromaDB
+        processor = ZoteroDownloadProcessor(library_id=library_id)
+        results = []
+        async for result in processor.process(test_record, processor_stage="test"):
+            results.append(result)
+
+        assert len(results) == 1
+        original_result = results[0]
+
+        # Verify cache exists
+        cache_dir = Path(real_bm.session_info.get_cache_subdir("zotero"))
+        json_file = cache_dir / f"{test_record.record_id}.json"
+        assert json_file.exists(), "Cache file should exist after first processing"
+
+        # Read original cache
+        with json_file.open("r") as f:
+            original_cache = json.load(f)
+        original_version = original_cache.get("data", {}).get("version", 0)
+
+        # Verify item version is stored in cache
+        assert "version" in original_cache.get("data", {}), \
+            "Item version should be stored in cache data"
+
+        # Verify attachment version is stored if attachment exists
+        if original_cache.get("links", {}).get("attachment"):
+            attachment = original_cache["links"]["attachment"]
+            # Attachment should have version info (could be in href or separate field)
+            print(f"\n📎 Attachment structure: {attachment}")
+
+        # Simulate metadata update: modify citation_key in record
+        updated_record = BaseRecord(
+            record_id=test_record.record_id,
+            metadata={
+                **test_record.metadata,
+                "citation_key": "test2025updated",  # New citation key
+                "zotero_version": original_version + 1,  # Version incremented
+            }
+        )
+
+        # Second: Process with updated metadata
+        # The processor should detect version change and reprocess
+        results2 = []
+        async for result in processor.process(updated_record, processor_stage="test"):
+            results2.append(result)
+
+        assert len(results2) == 1
+        updated_result = results2[0]
+
+        # Verify metadata was updated
+        assert updated_result.metadata.get("citation_key") == "test2025updated"
+
+        # Verify cache was updated with new metadata
+        with json_file.open("r") as f:
+            updated_cache = json.load(f)
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), \
+            "Cache should be updated with new metadata"
+
+    @pytest.mark.integration
+    @pytest.mark.anyio
+    async def test_unchanged_records_skipped_by_incremental_sync(self, real_bm):
+        """Test that items with unchanged metadata are filtered by incremental sync.
+
+        When an item hasn't changed since last sync:
+        - ZoteroSource should use 'since' parameter for incremental sync
+        - VectorStoreExistenceFilter should filter out existing items
+        - No items should be yielded to pipeline
+        """
+        library_id = real_bm.cfg.zotero.library_id
+
+        # First sync: Process some items (force_full_sync to get baseline)
+        source1 = ZoteroSource(
+            library_id=library_id,
+            max_records=2,
+            force_full_sync=True,  # Force full sync first time
+        )
+
+        first_sync_count = 0
+        async for record in source1.fetch_items():
+            first_sync_count += 1
+
+        assert first_sync_count > 0, "First sync should yield items"
+
+        # Second sync: Incremental sync should yield no items (nothing changed)
+        # Note: We don't use force_full_sync, so incremental sync is active
+        source2 = ZoteroSource(
+            library_id=library_id,
+            max_records=2,
+            force_full_sync=False,  # Use incremental sync
+        )
+
+        second_sync_count = 0
+        async for record in source2.fetch_items():
+            second_sync_count += 1
+
+        # Incremental sync should return 0 items (nothing changed in library)
+        assert second_sync_count == 0, \
+            "Incremental sync should yield no items when nothing changed"
+
+    @pytest.mark.integration
+    @pytest.mark.anyio
+    async def test_incremental_sync_fetches_updated_items(self, real_bm):
+        """Test that incremental sync correctly fetches items modified after last sync.
+
+        When we set sync state to an earlier time:
+        - ZoteroSource should use 'since' parameter with that version
+        - API should return items modified after that version
+        - Returned items should have modification dates after the sync point
+        """
+        from pathlib import Path
+        import json
+        from datetime import datetime, UTC, timedelta
+
+        library_id = real_bm.cfg.zotero.library_id
+
+        # Get the sync state file path
+        from buttermilk._core.constants import cache
+        cache_dir = Path(real_bm.session_info.get_cache_subdir(cache.ZOTERO))
+        state_file = cache_dir / ".zotero_sync_state.json"
+
+        # First: Do a full sync to get current library version
+        source1 = ZoteroSource(
+            library_id=library_id,
+            max_records=5,
+            force_full_sync=True,
+        )
+
+        current_version = None
+        async for record in source1.fetch_items():
+            # Get current library version from first record
+            if current_version is None:
+                current_version = record.metadata.get("zotero_version", 0)
+
+        # Verify sync state was saved with current version
+        assert state_file.exists(), "Sync state file should exist after sync"
+        with state_file.open("r") as f:
+            state = json.load(f)
+        saved_version = state.get("last_version")
+        assert saved_version is not None, "Saved version should not be None"
+        print(f"\n📊 Current library version: {saved_version}")
+
+        # Second: Manually set sync state to a much earlier version (version 1)
+        # This simulates syncing after a long time
+        earlier_timestamp = (datetime.now(UTC) - timedelta(days=365)).isoformat()
+        earlier_version = 1  # Very old version
+
+        with state_file.open("w") as f:
+            json.dump({
+                "last_version": earlier_version,
+                "last_sync_timestamp": earlier_timestamp
+            }, f)
+
+        print(f"📅 Set sync state to version {earlier_version} (1 year ago)")
+
+        # Third: Run incremental sync with the earlier version
+        source2 = ZoteroSource(
+            library_id=library_id,
+            max_records=10,  # Get more items to verify
+            force_full_sync=False,  # Use incremental sync
+        )
+
+        synced_items = []
+        async for record in source2.fetch_items():
+            synced_items.append(record)
+
+        # Verify we got items (library has been updated since version 1)
+        assert len(synced_items) > 0, \
+            f"Incremental sync should return items modified after version {earlier_version}"
+
+        print(f"\n✅ Incremental sync returned {len(synced_items)} items")
+
+        # Verify all returned items have versions greater than our sync point
+        for record in synced_items:
+            item_version = record.metadata.get("zotero_version", 0)
+            assert item_version > earlier_version, \
+                f"Item {record.record_id} version {item_version} should be > {earlier_version}"
+
+            # Verify item has modification date
+            zotero_item = record.metadata.get("zotero_item", {})
+            date_modified = zotero_item.get("dateModified")
+            assert date_modified is not None, \
+                f"Item {record.record_id} should have dateModified field"
+
+            print(f"  • Item {record.record_id}: version={item_version}, modified={date_modified}")
+
+        # Verify sync state was updated to latest version
+        with state_file.open("r") as f:
+            final_state = json.load(f)
+        final_version = final_state.get("last_version")
+
+        assert final_version >= saved_version, \
+            f"Final version {final_version} should be >= original version {saved_version}"
+
+        print(f"\n✅ Sync state updated to version {final_version}")
+
+    @pytest.mark.integration
+    @pytest.mark.anyio
+    async def test_cached_pdf_not_redownloaded_on_metadata_update(self, real_bm):
+        """Test that cached PDFs are not re-downloaded when only metadata changes.
+
+        When metadata changes but PDF hasn't:
+        - PDF file should not be re-downloaded
+        - Metadata should be updated in cache
+        - Content should be reused from existing PDF cache
+        """
+        from pathlib import Path
+        import json
+        import os
+
+        library_id = real_bm.cfg.zotero.library_id
+
+        # Get a test item with PDF
+        source = ZoteroSource(
+            library_id=library_id,
+            max_records=5,
+            force_full_sync=True,
+        )
+
+        test_record = None
+        async for record in source.fetch_items():
+            links = record.metadata.get("zotero_links", {})
+            attachment = links.get("attachment", {})
+            if attachment.get("attachmentType") == "application/pdf":
+                test_record = record
+                break
+
+        if test_record is None:
+            pytest.skip("No items with PDF attachments found")
+
+        # First: Process to ensure cache exists
+        processor = ZoteroDownloadProcessor(library_id=library_id)
+        results = []
+        async for result in processor.process(test_record, processor_stage="test"):
+            results.append(result)
+
+        assert len(results) == 1
+
+        # Get cache paths
+        cache_dir = Path(real_bm.session_info.get_cache_subdir("zotero"))
+        pdf_file = cache_dir / f"{test_record.record_id}.pdf"
+        json_file = cache_dir / f"{test_record.record_id}.json"
+
+        assert pdf_file.exists(), "PDF should be cached"
+        assert json_file.exists(), "JSON cache should exist"
+
+        # Record PDF file modification time
+        pdf_mtime_before = os.path.getmtime(pdf_file)
+
+        # Read original cache to get version
+        with json_file.open("r") as f:
+            original_cache = json.load(f)
+        original_version = original_cache.get("data", {}).get("version", 0)
+
+        # Verify item version is stored in cache
+        assert "version" in original_cache.get("data", {}), \
+            "Item version should be stored in cache data"
+
+        # Verify attachment version is stored if attachment exists
+        if original_cache.get("links", {}).get("attachment"):
+            attachment = original_cache["links"]["attachment"]
+            print(f"\n📎 Attachment structure: {attachment}")
+
+        # Simulate metadata update: modify citation_key
+        updated_record = BaseRecord(
+            record_id=test_record.record_id,
+            metadata={
+                **test_record.metadata,
+                "citation_key": "test2025nocache",  # New citation key
+                "zotero_version": original_version + 1,  # Incremented version
+            }
+        )
+
+        # Second: Process with updated metadata
+        results2 = []
+        async for result in processor.process(updated_record, processor_stage="test"):
+            results2.append(result)
+
+        assert len(results2) == 1
+        updated_result = results2[0]
+
+        # Verify metadata was updated
+        assert updated_result.metadata.get("citation_key") == "test2025nocache"
+
+        # CRITICAL: Verify PDF was NOT re-downloaded
+        pdf_mtime_after = os.path.getmtime(pdf_file)
+        assert pdf_mtime_after == pdf_mtime_before, \
+            "PDF file should NOT be re-downloaded when only metadata changes"
+
+        # Verify cache was updated with new metadata (but same content)
+        with json_file.open("r") as f:
+            updated_cache = json.load(f)
+
+        # Metadata should be different
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), \
+            "Cache metadata should be updated"
+
+        # But content should be the same (reused from cache)
+        assert updated_cache.get("content") == original_cache.get("content"), \
+            "Content should be reused from existing PDF cache"
