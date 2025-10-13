@@ -1,7 +1,5 @@
 type: bigquery
-randomize: false
-#path: gs://prosocial-dev/data/tja_train.parquet
-# path: gs://prosocial-dev/data/tja_train-20250901.parquet
+randomize: true
 full_table_id: prosocial-443205.testing.records_tja
 dataset_name: tja
 split_type: train

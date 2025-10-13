@@ -30,8 +30,9 @@ def run_command() -> typer.Typer:
     """Create the 'run' subcommand group."""
     run_app = typer.Typer(help="Run Buttermilk workflows")
 
-    @run_app.command("batch")
+    @run_app.command("batch", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
     def batch(
+        ctx: typer.Context,
         flow: Annotated[str, typer.Argument(help="Name of the flow to run")],
         enqueue_only: Annotated[bool, typer.Option("--enqueue-only", help="Only enqueue jobs, don't process")] = False,
         process_only: Annotated[bool, typer.Option("--process-only", help="Only process jobs, don't enqueue")] = False,
@@ -42,10 +43,14 @@ def run_command() -> typer.Typer:
         """
         Run a batch workflow: enqueue and/or process jobs.
 
+        Supports Hydra-style overrides for config composition:
+            bm run batch trans flows=trans llms=flash
+            bm run batch trans flows=[trans,judge] storage=tja
+
         Examples:
             bm run batch trans                    # Enqueue and process all
             bm run batch trans --enqueue-only     # Only enqueue
-            bm run batch trans --process-only     # Only process
+            bm run batch trans flows=trans        # With Hydra override
             bm run batch trans --max-records 100  # Limit to 100 records
         """
         # Validate mutually exclusive options
@@ -61,6 +66,9 @@ def run_command() -> typer.Typer:
         else:
             mode = "all"
 
+        # Extract Hydra overrides from extra args (e.g., flows=trans, llms=flash)
+        hydra_overrides = ctx.args if ctx.args else []
+
         # Run async batch operation
         try:
             asyncio.run(run_batch_async(
@@ -68,7 +76,8 @@ def run_command() -> typer.Typer:
                 mode=mode,
                 max_records=max_records,
                 max_jobs=max_jobs,
-                config_dir=config_dir
+                config_dir=config_dir,
+                overrides=hydra_overrides
             ))
         except ValueError as e:
             typer.echo(f"Error: {e}", err=True)
@@ -183,9 +192,10 @@ async def run_batch_async(
     max_records: Optional[int] = None,
     max_jobs: Optional[int] = None,
     config_dir: Optional[str] = None,
+    overrides: Optional[list[str]] = None,
 ) -> None:
     """
-    Execute batch processing asynchronously.
+    Execute batch processing asynchronously with Hydra composition support.
 
     Args:
         flow_name: Name of the flow to run
@@ -193,8 +203,9 @@ async def run_batch_async(
         max_records: Maximum records to enqueue
         max_jobs: Maximum jobs to process
         config_dir: Optional config directory path
+        overrides: Hydra-style config overrides (e.g., ['flows=trans', 'llms=flash'])
     """
-    # Initialize Buttermilk
+    # Initialize Buttermilk with Hydra composition
     init_kwargs = {
         "job": f"batch_{flow_name}",
         "project_name": "batch",
@@ -202,6 +213,9 @@ async def run_batch_async(
 
     if config_dir:
         init_kwargs["config_dir"] = config_dir
+
+    if overrides:
+        init_kwargs["overrides"] = overrides
 
     bm = await init_async(**init_kwargs)
 

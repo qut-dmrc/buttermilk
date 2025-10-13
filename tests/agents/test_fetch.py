@@ -131,18 +131,8 @@ class TestFetch:
 @pytest.fixture
 def fetch_agent_cfg() -> AgentConfig:
     return AgentConfig(
-        id="testing",
         role="fetch",
-        name="fetch",
         description="fetch stuff",
-        data={
-            "tja_train": {
-                "type": "file",
-                "name": "tja_train",
-                "path": "gs://prosocial-dev/data/tja_train.jsonl",
-                "index": ["record_id"],
-            },
-        },
     )
 
 
