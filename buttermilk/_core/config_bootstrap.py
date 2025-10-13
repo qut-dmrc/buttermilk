@@ -142,33 +142,14 @@ class ConfigurationBootstrapper:
                     config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                 else:
-                    # Build config search path for fallback behavior
+                    # Load configuration using Hydra compose API
                     from pathlib import Path
 
-                    # Library config directory (always included as fallback)
-                    library_config_dir = Path(__file__).parent.parent / "conf"
-                    library_config_dir = library_config_dir.resolve()
+                    # Get absolute path to config directory
+                    config_dir = Path(self.config_path).resolve()
 
-                    # Determine if we have a custom project config path
-                    project_config_dir = Path(self.config_path).resolve()
-                    is_custom_config = project_config_dir != library_config_dir
-
-                    if is_custom_config:
-                        # Initialize with project config first
-                        with initialize_config_dir(config_dir=str(project_config_dir), version_base="1.3"):
-                            # Add library config to search path as fallback
-                            from hydra.core.global_hydra import GlobalHydra
-
-                            gh = GlobalHydra.instance()
-                            if gh.config_loader is not None:
-                                # Append library config dir to search path
-                                gh.config_loader.config_search_path.append("file", str(library_config_dir))
-
-                            config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
-                    else:
-                        # Use single directory initialization (library config only)
-                        with initialize_config_dir(config_dir=str(library_config_dir), version_base="1.3"):
-                            config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
+                    with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
+                        config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
 
