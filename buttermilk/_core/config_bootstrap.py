@@ -28,12 +28,16 @@ def resolve_config_dir(config_dir: str | None = None) -> str:
        - Try cwd/buttermilk/conf (if exists)
        - Else use packaged config: <package>/buttermilk/conf
     2. If config_dir is relative:
-       - Resolve relative to CWD
+       - Resolve relative to current working directory (CWD)
+       - NOT relative to the calling script's directory
     3. If config_dir is absolute:
        - Expand ~ and $VAR, return as-is
 
     Args:
-        config_dir: Optional path to configuration directory
+        config_dir: Optional path to configuration directory.
+            Relative paths are resolved against the current working directory,
+            not the script's directory. Use Path(__file__).parent / "conf"
+            if you need paths relative to your script.
 
     Returns:
         Absolute path to configuration directory as string
@@ -41,10 +45,15 @@ def resolve_config_dir(config_dir: str | None = None) -> str:
     Example:
         >>> resolve_config_dir()  # Returns cwd/buttermilk/conf or package conf
         '/home/user/myproject/buttermilk/conf'
-        >>> resolve_config_dir("conf")  # Returns cwd/conf
+        >>> resolve_config_dir("conf")  # Returns cwd/conf (NOT script_dir/conf)
         '/home/user/myproject/conf'
         >>> resolve_config_dir("~/myconf")  # Returns expanded home path
         '/home/user/myconf'
+        >>> # For script-relative paths:
+        >>> from pathlib import Path
+        >>> script_dir = Path(__file__).parent
+        >>> resolve_config_dir(str(script_dir / "conf"))
+        '/home/user/myproject/scripts/conf'
     """
     if config_dir is None:
         # Try CWD/buttermilk/conf first
@@ -60,8 +69,21 @@ def resolve_config_dir(config_dir: str | None = None) -> str:
     expanded = os.path.expandvars(os.path.expanduser(config_dir))
     config_path = Path(expanded)
 
-    # Resolve and return as absolute path
-    return str(config_path.resolve())
+    # Resolve to absolute path (relative paths are resolved against CWD)
+    resolved_path = config_path.resolve()
+
+    # Provide helpful error message if path doesn't exist
+    if not resolved_path.exists():
+        # Try to give helpful context about CWD vs script directory
+        logger.warning(
+            f"Config directory does not exist: {resolved_path}\n"
+            f"  Original path: {config_dir}\n"
+            f"  Current working directory: {Path.cwd()}\n"
+            f"  Note: Relative paths are resolved relative to CWD, not the script's directory.\n"
+            f"  If you need script-relative paths, use: Path(__file__).parent / 'conf'"
+        )
+
+    return str(resolved_path)
 
 
 class ConfigurationBootstrapper:
@@ -321,12 +343,19 @@ async def init_async(
 
     Args:
         job: Name for the specific job or task (defaults to "default" or from config)
-        project: Project name (auto-detected from directory or config if not provided)
-        config_dir: Path to configuration directory (auto-discovered if not provided)
+        project_name: Project name (auto-detected from directory or config if not provided)
+        config_dir: Path to configuration directory. Can be:
+            - None: Auto-discover (tries cwd/buttermilk/conf, then package conf)
+            - Relative path: Resolved relative to current working directory (CWD)
+            - Absolute path: Used as-is (with ~ and $VAR expansion)
+            Note: Relative paths are NOT resolved relative to the calling script's
+            directory. For script-relative paths, use:
+                from pathlib import Path
+                config_dir = str(Path(__file__).parent / "conf")
         config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
-        base_dir: Base directory for resolving relative config paths
+        base_dir: DEPRECATED - no longer used, kept for backward compatibility
 
     Returns:
         Buttermilk instance ready to use with config accessible via bm.cfg
@@ -336,6 +365,14 @@ async def init_async(
         >>> _ = await init_async()  # Primary async pathway
         >>> cfg = bm.cfg  # Access config
         >>> logger = bm.logger  # Contextualized logger
+
+        >>> # With explicit config directory (relative to CWD)
+        >>> _ = await init_async(config_dir="conf")
+
+        >>> # With script-relative config directory
+        >>> from pathlib import Path
+        >>> script_dir = Path(__file__).parent
+        >>> _ = await init_async(config_dir=str(script_dir / "conf"))
     """
     bm, config = await bootstrap_session_with_config_async(
         job=job,
@@ -405,11 +442,18 @@ def init(
     Args:
         job: Name for the specific job or task (defaults to "default" or from config)
         project_name: Project name (auto-detected from directory or config if not provided)
-        config_dir: Path to configuration directory (auto-discovered if not provided)
+        config_dir: Path to configuration directory. Can be:
+            - None: Auto-discover (tries cwd/buttermilk/conf, then package conf)
+            - Relative path: Resolved relative to current working directory (CWD)
+            - Absolute path: Used as-is (with ~ and $VAR expansion)
+            Note: Relative paths are NOT resolved relative to the calling script's
+            directory. For script-relative paths, use:
+                from pathlib import Path
+                config_dir = str(Path(__file__).parent / "conf")
         config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
-        base_dir: Base directory for resolving relative config paths
+        base_dir: DEPRECATED - no longer used, kept for backward compatibility
 
     Returns:
         Buttermilk instance ready to use with config accessible via bm.cfg
@@ -418,6 +462,11 @@ def init(
         >>> from buttermilk import init, bm
         >>> _ = init()  # Sync wrapper (not recommended for new code)
         >>> cfg = bm.cfg  # Access config
+
+        >>> # With script-relative config directory
+        >>> from pathlib import Path
+        >>> script_dir = Path(__file__).parent
+        >>> _ = init(config_dir=str(script_dir / "../../conf"))
     """
 
     # Run directly if no loop; otherwise run in a background thread loop

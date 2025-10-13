@@ -78,3 +78,14 @@ gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 ```
 
 Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
+
+## Usage
+
+```python
+from pathlib import Path
+
+script_dir = Path(__file__).parent
+bm = init(config_dir=str(script_dir / "../conf"), job="my job")
+logger = bm.logger
+logger.info("structured logging available", job=bm.cfg.job)
+```
