@@ -423,7 +423,52 @@ class ZoteroDownloadProcessor(BaseModel):
             try:
                 with json_file.open("r", encoding="utf-8") as f:
                     cached_item = json.load(f)
+
+                # Check if we have cached content
                 if cached_item.get("content"):
+                    # Compare versions to detect metadata updates
+                    cached_version = cached_item.get("data", {}).get("version", 0)
+                    current_version = record.metadata.get("zotero_version", 0)
+
+                    # If metadata has changed (version increased), update cache with new metadata
+                    # but reuse existing content (don't re-download PDF)
+                    if current_version > cached_version:
+                        logger.debug(
+                            f"📝 Metadata updated for {key}: v{cached_version} → v{current_version}. "
+                            f"Updating cache without re-downloading PDF."
+                        )
+
+                        # Update cache with new metadata but keep existing content
+                        cache_data = {
+                            "key": key,
+                            "data": zotero_item,
+                            "links": zotero_links,
+                            "content": cached_item["content"],  # Reuse existing content
+                        }
+                        try:
+                            with json_file.open("w", encoding="utf-8") as f:
+                                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+                            logger.debug(f"Updated cache metadata: {json_file}")
+                        except Exception as e:
+                            logger.warning(f"Failed to update cache for {key}: {e}")
+
+                        # Yield Record with updated metadata and existing content
+                        yield Record(
+                            record_id=key,
+                            content=cached_item["content"],
+                            file_path=pdf_file.as_posix(),
+                            metadata={
+                                "title": title,
+                                "doi_or_url": doi_or_url,
+                                "uri": json_file.as_posix(),
+                                "zotero_data": zotero_item,
+                                "zotero_links": zotero_links,
+                                "citation_key": citation_key,
+                            },
+                        )
+                        return
+
+                    # No version change - return cached item as-is
                     logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
                     # Get links from cache if available
                     cached_links = cached_item.get("links", {})
