@@ -1,11 +1,11 @@
 """
 Unified Buttermilk CLI using Typer.
 
-Provides a user-friendly command-line interface for all Buttermilk modes:
-    bm run <flow>          # Run a single flow (console mode)
-    bm run batch <flow>    # Run batch workflows
-    bm api                 # Start API server
-    bm pipeline            # Run pipeline
+Simple top-level commands for all Buttermilk modes:
+    bm batch <flow>    # Run batch workflows
+    bm console <flow>  # Run a single flow (console mode)
+    bm api             # Start API server
+    bm pipeline        # Run pipeline
 
 This wraps the existing infrastructure with a simpler, more intuitive interface.
 """
@@ -26,113 +26,95 @@ from buttermilk.runner.flowrunner import FlowRunner
 app = typer.Typer(help="Buttermilk: LLM workflows for research")
 
 
-def run_command() -> typer.Typer:
-    """Create the 'run' subcommand group."""
-    run_app = typer.Typer(help="Run Buttermilk workflows")
+@app.command("batch", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def batch(
+    ctx: typer.Context,
+    flow: Annotated[str, typer.Argument(help="Name of the flow to run")],
+    enqueue_only: Annotated[bool, typer.Option("--enqueue-only", help="Only enqueue jobs, don't process")] = False,
+    process_only: Annotated[bool, typer.Option("--process-only", help="Only process jobs, don't enqueue")] = False,
+    max_records: Annotated[Optional[int], typer.Option("--max-records", help="Maximum number of records to process")] = None,
+    max_jobs: Annotated[Optional[int], typer.Option("--max-jobs", help="Maximum number of jobs to process")] = None,
+    config_dir: Annotated[Optional[str], typer.Option("--config-dir", help="Path to config directory")] = None,
+):
+    """
+    Run a batch workflow: enqueue and/or process jobs.
 
-    @run_app.command("batch", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-    def batch(
-        ctx: typer.Context,
-        flow: Annotated[str, typer.Argument(help="Name of the flow to run")],
-        enqueue_only: Annotated[bool, typer.Option("--enqueue-only", help="Only enqueue jobs, don't process")] = False,
-        process_only: Annotated[bool, typer.Option("--process-only", help="Only process jobs, don't enqueue")] = False,
-        max_records: Annotated[Optional[int], typer.Option("--max-records", help="Maximum number of records to process")] = None,
-        max_jobs: Annotated[Optional[int], typer.Option("--max-jobs", help="Maximum number of jobs to process")] = None,
-        config_dir: Annotated[Optional[str], typer.Option("--config-dir", help="Path to config directory")] = None,
-    ):
-        """
-        Run a batch workflow: enqueue and/or process jobs.
+    Supports Hydra-style overrides for config composition:
+        bm batch trans flows=trans llms=flash
+        bm batch trans flows=[trans,judge] storage=tja
 
-        Supports Hydra-style overrides for config composition:
-            bm run batch trans flows=trans llms=flash
-            bm run batch trans flows=[trans,judge] storage=tja
+    Examples:
+        bm batch trans                    # Enqueue and process all
+        bm batch trans --enqueue-only     # Only enqueue
+        bm batch trans flows=trans        # With Hydra override
+        bm batch trans --max-records 100  # Limit to 100 records
+    """
+    # Validate mutually exclusive options
+    if enqueue_only and process_only:
+        typer.echo("Error: --enqueue-only and --process-only are mutually exclusive. Cannot use both.", err=True)
+        raise typer.Exit(1)
 
-        Examples:
-            bm run batch trans                    # Enqueue and process all
-            bm run batch trans --enqueue-only     # Only enqueue
-            bm run batch trans flows=trans        # With Hydra override
-            bm run batch trans --max-records 100  # Limit to 100 records
-        """
-        # Validate mutually exclusive options
-        if enqueue_only and process_only:
-            typer.echo("Error: --enqueue-only and --process-only are mutually exclusive. Cannot use both.", err=True)
-            raise typer.Exit(1)
+    # Determine mode
+    if enqueue_only:
+        mode = "enqueue"
+    elif process_only:
+        mode = "process"
+    else:
+        mode = "all"
 
-        # Determine mode
-        if enqueue_only:
-            mode = "enqueue"
-        elif process_only:
-            mode = "process"
-        else:
-            mode = "all"
+    # Extract Hydra overrides from extra args (e.g., flows=trans, llms=flash)
+    hydra_overrides = ctx.args if ctx.args else []
 
-        # Extract Hydra overrides from extra args (e.g., flows=trans, llms=flash)
-        hydra_overrides = ctx.args if ctx.args else []
-
-        # Run async batch operation
-        try:
-            asyncio.run(run_batch_async(
-                flow_name=flow,
-                mode=mode,
-                max_records=max_records,
-                max_jobs=max_jobs,
-                config_dir=config_dir,
-                overrides=hydra_overrides
-            ))
-        except ValueError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
-        except Exception as e:
-            typer.echo(f"Fatal error: {e}", err=True)
-            logger.exception("Batch processing failed")
-            raise typer.Exit(1)
-
-    @run_app.callback(invoke_without_command=True)
-    def run_flow_callback(
-        ctx: typer.Context,
-        flow: Annotated[Optional[str], typer.Argument(help="Name of the flow to run")] = None,
-        record_id: Annotated[Optional[str], typer.Option("--record-id", help="Record ID to process")] = None,
-        prompt: Annotated[Optional[str], typer.Option("--prompt", help="Prompt to use")] = None,
-        uri: Annotated[Optional[str], typer.Option("--uri", help="URI to fetch")] = None,
-        config_dir: Annotated[Optional[str], typer.Option("--config-dir", help="Path to config directory")] = None,
-    ):
-        """
-        Run a single flow in console mode.
-
-        Examples:
-            bm run trans                          # Run flow 'trans'
-            bm run trans --record-id 123          # Run with specific record
-            bm run trans --prompt "analyze this"  # Run with prompt
-        """
-        # If invoked with a subcommand, don't run this
-        if ctx.invoked_subcommand is not None:
-            return
-
-        if not flow:
-            typer.echo("Error: Flow name required. Usage: bm run <flow>", err=True)
-            raise typer.Exit(1)
-
-        try:
-            asyncio.run(run_flow_console_async(
-                flow_name=flow,
-                record_id=record_id,
-                prompt=prompt,
-                uri=uri,
-                config_dir=config_dir
-            ))
-        except ValueError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
-        except Exception as e:
-            typer.echo(f"Fatal error: {e}", err=True)
-            logger.exception("Flow execution failed")
-            raise typer.Exit(1)
-
-    return run_app
+    # Run async batch operation
+    try:
+        asyncio.run(run_batch_async(
+            flow_name=flow,
+            mode=mode,
+            max_records=max_records,
+            max_jobs=max_jobs,
+            config_dir=config_dir,
+            overrides=hydra_overrides
+        ))
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        typer.echo(f"Fatal error: {e}", err=True)
+        logger.exception("Batch processing failed")
+        raise typer.Exit(1)
 
 
-# Register the run command group
-app.add_typer(run_command(), name="run")
+@app.command("console")
+def console(
+    flow: Annotated[str, typer.Argument(help="Name of the flow to run")],
+    record_id: Annotated[Optional[str], typer.Option("--record-id", help="Record ID to process")] = None,
+    prompt: Annotated[Optional[str], typer.Option("--prompt", help="Prompt to use")] = None,
+    uri: Annotated[Optional[str], typer.Option("--uri", help="URI to fetch")] = None,
+    config_dir: Annotated[Optional[str], typer.Option("--config-dir", help="Path to config directory")] = None,
+):
+    """
+    Run a single flow in console mode.
+
+    Examples:
+        bm console trans                          # Run flow 'trans'
+        bm console trans --record-id 123          # Run with specific record
+        bm console trans --prompt "analyze this"  # Run with prompt
+    """
+    try:
+        asyncio.run(run_flow_console_async(
+            flow_name=flow,
+            record_id=record_id,
+            prompt=prompt,
+            uri=uri,
+            config_dir=config_dir
+        ))
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        typer.echo(f"Fatal error: {e}", err=True)
+        logger.exception("Flow execution failed")
+        raise typer.Exit(1)
 
 
 @app.command()

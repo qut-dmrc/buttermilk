@@ -1,5 +1,5 @@
 """
-Tests for simplified batch CLI: bm run batch <flow>
+Tests for simplified batch CLI: bm batch <flow>
 
 Test the Typer-based CLI wrapper that provides a simplified interface
 to the batch processing functionality.
@@ -44,32 +44,32 @@ class TestBatchCLI:
     """Test suite for batch CLI commands."""
 
     def test_batch_all_mode_enqueues_and_processes(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm run batch trans - should enqueue AND process jobs."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans"])
+        """Test: bm batch trans - should enqueue AND process jobs."""
+        result = cli_runner.invoke(app, ["batch", "trans"])
 
         assert result.exit_code == 0
         mock_flow_runner.create_batch.assert_called_once()
         mock_flow_runner.run_batch_job.assert_called_once()
 
     def test_batch_enqueue_only_mode(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm run batch trans --enqueue-only - should only enqueue."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans", "--enqueue-only"])
+        """Test: bm batch trans --enqueue-only - should only enqueue."""
+        result = cli_runner.invoke(app, ["batch", "trans", "--enqueue-only"])
 
         assert result.exit_code == 0
         mock_flow_runner.create_batch.assert_called_once()
         mock_flow_runner.run_batch_job.assert_not_called()
 
     def test_batch_process_only_mode(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm run batch trans --process-only - should only process."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans", "--process-only"])
+        """Test: bm batch trans --process-only - should only process."""
+        result = cli_runner.invoke(app, ["batch", "trans", "--process-only"])
 
         assert result.exit_code == 0
         mock_flow_runner.create_batch.assert_not_called()
         mock_flow_runner.run_batch_job.assert_called_once()
 
     def test_batch_with_max_records(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm run batch trans --max-records 100 - should pass max_records."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans", "--max-records", "100"])
+        """Test: bm batch trans --max-records 100 - should pass max_records."""
+        result = cli_runner.invoke(app, ["batch", "trans", "--max-records", "100"])
 
         assert result.exit_code == 0
         # Verify max_records was passed to create_batch
@@ -77,8 +77,8 @@ class TestBatchCLI:
         assert call_args.kwargs.get("max_records") == 100
 
     def test_batch_with_max_jobs(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm run batch trans --max-jobs 10 - should pass max_jobs."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans", "--max-jobs", "10"])
+        """Test: bm batch trans --max-jobs 10 - should pass max_jobs."""
+        result = cli_runner.invoke(app, ["batch", "trans", "--max-jobs", "10"])
 
         assert result.exit_code == 0
         # Verify max_jobs was passed to run_batch_job
@@ -87,7 +87,7 @@ class TestBatchCLI:
 
     def test_batch_auto_discovers_storage(self, cli_runner, mock_flow_runner, mock_bm):
         """Test: Storage should be auto-discovered from flow config."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans"])
+        result = cli_runner.invoke(app, ["batch", "trans"])
 
         assert result.exit_code == 0
         # Verify create_batch was called without explicit storage_config
@@ -99,7 +99,7 @@ class TestBatchCLI:
         """Test: Invalid flow name should fail gracefully."""
         mock_flow_runner.create_batch.side_effect = ValueError("Flow 'invalid' not found")
 
-        result = cli_runner.invoke(app, ["run", "batch", "invalid"])
+        result = cli_runner.invoke(app, ["batch", "invalid"])
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower()
@@ -108,7 +108,7 @@ class TestBatchCLI:
         """Test: --enqueue-only and --process-only are mutually exclusive."""
         result = cli_runner.invoke(
             app,
-            ["run", "batch", "trans", "--enqueue-only", "--process-only"]
+            ["batch", "trans", "--enqueue-only", "--process-only"]
         )
 
         assert result.exit_code != 0
@@ -120,14 +120,14 @@ class TestBatchCLIIntegration:
 
     def test_batch_calls_bm_graceful_shutdown(self, cli_runner, mock_flow_runner, mock_bm):
         """Test: BM graceful_shutdown is called after batch completion."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans"])
+        result = cli_runner.invoke(app, ["batch", "trans"])
 
         assert result.exit_code == 0
         mock_bm.graceful_shutdown.assert_called_once()
 
     def test_batch_uses_session_scoped_bm(self, cli_runner, mock_flow_runner, mock_bm):
         """Test: FlowRunner receives session-scoped BM instance."""
-        result = cli_runner.invoke(app, ["run", "batch", "trans"])
+        result = cli_runner.invoke(app, ["batch", "trans"])
 
         assert result.exit_code == 0
         # Verify set_session_bm was called with the BM instance

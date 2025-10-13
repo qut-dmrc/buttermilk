@@ -119,7 +119,13 @@ class ConfigurationBootstrapper:
         load_dotenv()
 
     def _load_configuration(self, config: DictConfig | None = None) -> DictConfig:
-        """Load configuration via Hydra (single initialization).
+        """Load configuration via Hydra with search path support for fallback.
+
+        If a config_path is provided, Hydra will search:
+        1. Project config directory (config_path)
+        2. Library config directory (fallback)
+
+        This allows project-specific configs to override library defaults.
 
         Returns:
             Loaded and resolved configuration
@@ -133,19 +139,36 @@ class ConfigurationBootstrapper:
 
                 if GlobalHydra.instance().is_initialized():
                     # We're already in a Hydra context, get the existing config
-
                     config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                 else:
-                    # Load configuration using Hydra compose API
+                    # Build config search path for fallback behavior
                     from pathlib import Path
 
-                    # Get absolute path to config directory
-                    config_dir = Path(__file__).parent.parent / self.config_path
-                    config_dir = config_dir.resolve()
+                    # Library config directory (always included as fallback)
+                    library_config_dir = Path(__file__).parent.parent / "conf"
+                    library_config_dir = library_config_dir.resolve()
 
-                    with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
-                        config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
+                    # Determine if we have a custom project config path
+                    project_config_dir = Path(self.config_path).resolve()
+                    is_custom_config = project_config_dir != library_config_dir
+
+                    if is_custom_config:
+                        # Initialize with project config first
+                        with initialize_config_dir(config_dir=str(project_config_dir), version_base="1.3"):
+                            # Add library config to search path as fallback
+                            from hydra.core.global_hydra import GlobalHydra
+
+                            gh = GlobalHydra.instance()
+                            if gh.config_loader is not None:
+                                # Append library config dir to search path
+                                gh.config_loader.config_search_path.append("file", str(library_config_dir))
+
+                            config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
+                    else:
+                        # Use single directory initialization (library config only)
+                        with initialize_config_dir(config_dir=str(library_config_dir), version_base="1.3"):
+                            config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                     # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
 
