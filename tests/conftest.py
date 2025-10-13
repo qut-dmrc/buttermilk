@@ -37,7 +37,8 @@ def anyio_backend():
 @pytest.fixture(scope="session")
 def real_bm():
     """Real BM instance created from testing.yaml configuration."""
-    return init(config_dir="../buttermilk/conf")
+    # Config dir resolution will find buttermilk/conf, testing.yaml has project_name and job
+    return init(config_name="testing")
 
 
 @pytest.fixture(scope="session")

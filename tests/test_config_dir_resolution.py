@@ -1,129 +1,151 @@
-import importlib
-import types
+"""Unit tests for config directory resolution logic.
 
-# Import module under test at top-level to satisfy linters
-cb = importlib.import_module("buttermilk._core.config_bootstrap")
+Tests the resolve_config_dir() function that determines where to find
+configuration files based on the provided config_dir argument.
+"""
+
+import os
+from pathlib import Path
+
+import pytest
+
+from buttermilk._core.config_bootstrap import resolve_config_dir
 
 
-def test_relative_config_dir_resolves_against_cwd(monkeypatch, tmp_path):
-    """Ensure relative config_dir is resolved relative to caller's CWD."""
+def test_none_finds_cwd_buttermilk_conf(tmp_path, monkeypatch):
+    """When config_dir=None and cwd/buttermilk/conf exists, use it."""
+    # Arrange: Create cwd/buttermilk/conf
+    project_dir = tmp_path / "myproject"
+    bm_conf = project_dir / "buttermilk" / "conf"
+    bm_conf.mkdir(parents=True)
+    monkeypatch.chdir(project_dir)
+
+    # Act
+    result = resolve_config_dir(config_dir=None)
+
+    # Assert
+    assert result == str(bm_conf.resolve())
+
+
+def test_none_falls_back_to_packaged_conf(tmp_path, monkeypatch):
+    """When config_dir=None and cwd/buttermilk/conf missing, use package conf."""
+    # Arrange: Set CWD to directory without buttermilk/conf
+    project_dir = tmp_path / "empty_project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    # Act
+    result = resolve_config_dir(config_dir=None)
+
+    # Assert: Should return packaged config path
+    # The packaged path is relative to config_bootstrap.py
+    expected = Path(__file__).parent.parent / "buttermilk" / "conf"
+    assert result == str(expected.resolve())
+
+
+def test_relative_path_resolves_against_cwd(tmp_path, monkeypatch):
+    """When config_dir='myconf', resolve to cwd/myconf."""
     # Arrange
-
-    # Switch CWD to a temp project directory
-    project_dir = tmp_path / "proj"
+    project_dir = tmp_path / "project"
     conf_dir = project_dir / "myconf"
     conf_dir.mkdir(parents=True)
     monkeypatch.chdir(project_dir)
 
-    captured = {}
-
-    class DummyBootstrapper:
-        def __init__(self, *, config_path: str, overrides=None, config=None):
-            captured["config_path"] = config_path
-
-        @staticmethod
-        async def bootstrap_full_context():
-            return Dummy()
-
-        @staticmethod
-        async def bootstrap_session_context(name: str, job: str, **kwargs):
-            return Dummy()
-
-        @staticmethod
-        def get_configuration():
-            session_info = types.SimpleNamespace(job="cfgjob", name="cfgproj")
-            bm = types.SimpleNamespace(session_info=session_info)
-            return types.SimpleNamespace(bm=bm)
-
-    class Dummy:
-        class _SI:
-            project_name = "proj"
-            job = "job"
-
-        session_info = _SI()
-
-        @staticmethod
-        def validate_and_set_project(name):
-            return name
-
-    # Make set_bm a no-op and replace the bootstrapper class
-    monkeypatch.setattr(cb, "ConfigurationBootstrapper", DummyBootstrapper)
-    # Patch import target for set_bm, since function imports it inside
-    monkeypatch.setattr("buttermilk._core.config_bootstrap.set_bm", lambda _: None, raising=False)
-
-    # Replace asyncio.run globally to avoid running async code
-    monkeypatch.setattr("asyncio.run", lambda _: Dummy(), raising=False)
-
     # Act
-    cb.bootstrap_session_with_config(
-        job="j",
-        project="p",
-        config_dir="myconf",  # relative path should resolve against project_dir (cwd)
-        overrides=["run=cli"],
-        config=None,
-    )
+    result = resolve_config_dir(config_dir="myconf")
 
     # Assert
-    expected = conf_dir.resolve().as_posix()
-    assert captured.get("config_path") == expected
+    assert result == str(conf_dir.resolve())
 
 
-def test_tilde_and_env_expansion(monkeypatch, tmp_path):
-    """Ensure ~ and $VARS are expanded and resolved."""
-
-    # Create a fake HOME and set CWD elsewhere
-    fake_home = tmp_path / "homeuser"
-    fake_home.mkdir()
-    monkeypatch.setenv("HOME", str(fake_home))
-
-    project_dir = tmp_path / "another_proj"
-    project_dir.mkdir()
+def test_relative_nested_path_resolves_against_cwd(tmp_path, monkeypatch):
+    """When config_dir='config/hydra', resolve to cwd/config/hydra."""
+    # Arrange
+    project_dir = tmp_path / "project"
+    conf_dir = project_dir / "config" / "hydra"
+    conf_dir.mkdir(parents=True)
     monkeypatch.chdir(project_dir)
 
-    # Create dir under ~ and refer via env var
-    home_conf = fake_home / "bmconf"
+    # Act
+    result = resolve_config_dir(config_dir="config/hydra")
+
+    # Assert
+    assert result == str(conf_dir.resolve())
+
+
+def test_absolute_path_used_directly(tmp_path):
+    """When config_dir='/abs/path', use it directly."""
+    # Arrange
+    abs_conf = tmp_path / "absolute" / "config"
+    abs_conf.mkdir(parents=True)
+
+    # Act
+    result = resolve_config_dir(config_dir=str(abs_conf))
+
+    # Assert
+    assert result == str(abs_conf.resolve())
+
+
+def test_tilde_expansion(tmp_path, monkeypatch):
+    """When config_dir='~/conf', expand ~ to HOME."""
+    # Arrange
+    fake_home = tmp_path / "home" / "user"
+    fake_home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    home_conf = fake_home / "conf"
     home_conf.mkdir()
-    monkeypatch.setenv("BM_CONF", "bmconf")
 
-    captured = {}
+    # Act
+    result = resolve_config_dir(config_dir="~/conf")
 
-    class DummyBootstrapper:
-        def __init__(self, *, config_path: str, overrides=None, config=None):
-            captured["config_path"] = config_path
+    # Assert
+    assert result == str(home_conf.resolve())
 
-        @staticmethod
-        async def bootstrap_full_context():
-            return Dummy()
 
-        @staticmethod
-        async def bootstrap_session_context(name: str, job: str, **kwargs):
-            return Dummy()
+def test_env_var_expansion(tmp_path, monkeypatch):
+    """When config_dir='$MYCONF', expand $MYCONF."""
+    # Arrange
+    conf_dir = tmp_path / "myconfig"
+    conf_dir.mkdir()
+    monkeypatch.setenv("MYCONF", str(conf_dir))
 
-        @staticmethod
-        def get_configuration():
-            session_info = types.SimpleNamespace(job="cfgjob", name="cfgproj")
-            bm = types.SimpleNamespace(session_info=session_info)
-            return types.SimpleNamespace(bm=bm)
+    # Act
+    result = resolve_config_dir(config_dir="$MYCONF")
 
-    class Dummy:
-        class _SI:
-            project_name = "proj"
-            job = "job"
+    # Assert
+    assert result == str(conf_dir.resolve())
 
-        session_info = _SI()
 
-        @staticmethod
-        def validate_and_set_project(name):
-            return name
+def test_env_var_and_tilde_expansion_combined(tmp_path, monkeypatch):
+    """When config_dir='$HOME/myconf', expand both."""
+    # Arrange
+    fake_home = tmp_path / "home" / "user"
+    fake_home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(fake_home))
 
-    monkeypatch.setattr(cb, "ConfigurationBootstrapper", DummyBootstrapper)
-    monkeypatch.setattr("buttermilk._core.config_bootstrap.set_bm", lambda _: None, raising=False)
-    monkeypatch.setattr("asyncio.run", lambda _: Dummy(), raising=False)
+    home_conf = fake_home / "myconf"
+    home_conf.mkdir()
 
-    # ~ expansion
-    cb.bootstrap_session_with_config(config_dir="~/bmconf")
-    assert captured.get("config_path") == home_conf.resolve().as_posix()
+    # Act
+    result = resolve_config_dir(config_dir="$HOME/myconf")
 
-    # $VARS expansion
-    cb.bootstrap_session_with_config(config_dir="$HOME/$BM_CONF")
-    assert captured.get("config_path") == home_conf.resolve().as_posix()
+    # Assert
+    assert result == str(home_conf.resolve())
+
+
+def test_relative_path_with_tilde_expands_first(tmp_path, monkeypatch):
+    """When config_dir='~/relative/path', expand ~ then resolve."""
+    # Arrange
+    fake_home = tmp_path / "home" / "user"
+    fake_home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    conf_path = fake_home / "relative" / "path"
+    conf_path.mkdir(parents=True)
+
+    # Act
+    result = resolve_config_dir(config_dir="~/relative/path")
+
+    # Assert
+    assert result == str(conf_path.resolve())

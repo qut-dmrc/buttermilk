@@ -8,6 +8,7 @@ variable access and configuration initialization throughout the codebase.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import hydra
@@ -17,6 +18,50 @@ from omegaconf import DictConfig, OmegaConf
 from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.log import logger
 from buttermilk.utils.utils import load_dotenv
+
+
+def resolve_config_dir(config_dir: str | None = None) -> str:
+    """Resolve configuration directory path with intelligent defaults.
+
+    Resolution logic:
+    1. If config_dir is None:
+       - Try cwd/buttermilk/conf (if exists)
+       - Else use packaged config: <package>/buttermilk/conf
+    2. If config_dir is relative:
+       - Resolve relative to CWD
+    3. If config_dir is absolute:
+       - Expand ~ and $VAR, return as-is
+
+    Args:
+        config_dir: Optional path to configuration directory
+
+    Returns:
+        Absolute path to configuration directory as string
+
+    Example:
+        >>> resolve_config_dir()  # Returns cwd/buttermilk/conf or package conf
+        '/home/user/myproject/buttermilk/conf'
+        >>> resolve_config_dir("conf")  # Returns cwd/conf
+        '/home/user/myproject/conf'
+        >>> resolve_config_dir("~/myconf")  # Returns expanded home path
+        '/home/user/myconf'
+    """
+    if config_dir is None:
+        # Try CWD/buttermilk/conf first
+        cwd_conf = Path.cwd() / "buttermilk" / "conf"
+        if cwd_conf.exists():
+            return str(cwd_conf.resolve())
+
+        # Fall back to packaged config
+        package_conf = Path(__file__).parent.parent / "conf"
+        return str(package_conf.resolve())
+
+    # Expand ~ and environment variables
+    expanded = os.path.expandvars(os.path.expanduser(config_dir))
+    config_path = Path(expanded)
+
+    # Resolve and return as absolute path
+    return str(config_path.resolve())
 
 
 class ConfigurationBootstrapper:
@@ -87,8 +132,6 @@ class ConfigurationBootstrapper:
                 raise
 
         # Instantiate the config
-        # Note: hydra.utils.instantiate() calls OmegaConf.resolve() internally,
-        # so we don't need to call it explicitly here
         instantiated_config = hydra.utils.instantiate(config_to_instantiate)
         return instantiated_config
 
@@ -407,12 +450,15 @@ async def bootstrap_session_with_config_async(
 
     Args:
         job: Name for the specific job or task
-        project: Project name (required for first session, optional for subsequent sessions)
-        config_dir: Path to configuration directory (defaults to packaged config)
+        project_name: Project name (required for first session, optional for subsequent sessions)
+        config_dir: Path to configuration directory. Can be:
+            - None: Try cwd/buttermilk/conf, else use packaged conf
+            - Relative path: Resolved against CWD
+            - Absolute path: Used as-is (with ~ and $VAR expansion)
         config_name: Name of the configuration file to load (without .yaml extension)
         overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
-        base_dir: Base directory for resolving relative config paths
+        base_dir: DEPRECATED - no longer used, kept for backward compatibility
 
     Returns:
         Tuple of (Buttermilk instance, configuration object)
@@ -426,43 +472,8 @@ async def bootstrap_session_with_config_async(
     from buttermilk._core.dmrc import set_bm
 
     if config is None:  # we need to load it.
-        # Resolve config directory - default to packaged config if not provided
-        if not config_dir:
-            config_dir = Path(__file__).parent.parent.resolve() / "conf"
-            config_dir = config_dir.as_posix()
-        else:
-            # If config_dir is provided, resolve it relative to the calling app's location
-            # Also expand user (~) and environment variables for convenience
-            expanded = os.path.expandvars(os.path.expanduser(config_dir))
-            cfg_path = Path(expanded)
-            if not cfg_path.is_absolute():
-                # Determine base directory for relative path resolution
-                if base_dir:
-                    # Use explicitly provided base directory
-                    base_path = Path(base_dir)
-                else:
-                    # Auto-detect caller's directory from stack trace
-                    import inspect
-
-                    frame = inspect.currentframe()
-                    try:
-                        # Walk up the stack to find the first frame outside this module
-                        caller_frame = frame
-                        while caller_frame:
-                            caller_filename = caller_frame.f_code.co_filename
-                            if not caller_filename.endswith("config_bootstrap.py"):
-                                caller_dir = Path(caller_filename).parent
-                                base_path = caller_dir
-                                break
-                            caller_frame = caller_frame.f_back
-                        else:
-                            # Fallback to current working directory
-                            base_path = Path(os.getcwd())
-                    finally:
-                        del frame
-
-                cfg_path = base_path / cfg_path
-            config_dir = cfg_path.resolve().as_posix()
+        # Resolve config directory using centralized resolution logic
+        config_dir = resolve_config_dir(config_dir)
 
     # Prepare overrides
     bootstrap_overrides = (overrides or []).copy()

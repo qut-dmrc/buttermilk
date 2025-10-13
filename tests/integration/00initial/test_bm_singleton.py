@@ -96,3 +96,94 @@ async def test_multiple_sessions_same_project(real_bm):
     # Verify they don't use session- prefix
     assert "session-" not in save_dir1
     assert "session-" not in save_dir2
+
+
+@pytest.mark.asyncio
+async def test_init_async_without_config_dir_uses_default():
+    """Test that init_async() without config_dir uses the default resolution."""
+    # Act: Initialize without config_dir
+    bm = await init_async(job="test_default_config", project_name="buttermilk")
+
+    # Assert: Should successfully initialize with default config
+    assert bm is not None
+    assert bm.session_info.job == "test_default_config"
+    assert bm.session_info.project_name == "buttermilk"
+
+
+@pytest.mark.asyncio
+async def test_init_async_with_relative_config_dir(tmp_path, monkeypatch):
+    """Test that init_async(config_dir='conf') resolves against CWD."""
+    # Arrange: Create custom config in temp directory
+    project_dir = tmp_path / "myproject"
+    project_dir.mkdir()
+    conf_dir = project_dir / "conf"
+    conf_dir.mkdir()
+
+    # Copy minimal config to test location
+    import shutil
+    from pathlib import Path
+
+    src_conf = Path(__file__).parent.parent.parent.parent / "buttermilk" / "conf"
+    shutil.copytree(src_conf, conf_dir, dirs_exist_ok=True)
+
+    # Change to project directory
+    monkeypatch.chdir(project_dir)
+
+    # Act: Initialize with relative path
+    bm = await init_async(job="test_relative", project_name="buttermilk", config_dir="conf")
+
+    # Assert: Should use the config from CWD/conf
+    assert bm is not None
+    assert bm.session_info.job == "test_relative"
+
+
+@pytest.mark.asyncio
+async def test_init_async_with_absolute_config_dir(tmp_path):
+    """Test that init_async(config_dir='/abs/path') uses absolute path."""
+    # Arrange: Create custom config at absolute path
+    abs_conf_dir = tmp_path / "absolute_config" / "conf"
+    abs_conf_dir.mkdir(parents=True)
+
+    # Copy minimal config to test location
+    import shutil
+    from pathlib import Path
+
+    src_conf = Path(__file__).parent.parent.parent.parent / "buttermilk" / "conf"
+    shutil.copytree(src_conf, abs_conf_dir, dirs_exist_ok=True)
+
+    # Act: Initialize with absolute path
+    bm = await init_async(job="test_absolute", project_name="buttermilk", config_dir=str(abs_conf_dir))
+
+    # Assert: Should use the specified absolute config path
+    assert bm is not None
+    assert bm.session_info.job == "test_absolute"
+
+
+@pytest.mark.asyncio
+async def test_multiple_sessions_different_config_dirs(tmp_path, monkeypatch):
+    """Test that different sessions can use different config directories."""
+    # Arrange: Create two config directories
+    import shutil
+    from pathlib import Path
+
+    src_conf = Path(__file__).parent.parent.parent.parent / "buttermilk" / "conf"
+
+    conf1 = tmp_path / "config1"
+    conf1.mkdir()
+    shutil.copytree(src_conf, conf1 / "conf", dirs_exist_ok=True)
+
+    conf2 = tmp_path / "config2"
+    conf2.mkdir()
+    shutil.copytree(src_conf, conf2 / "conf", dirs_exist_ok=True)
+
+    # Act: Create sessions with different configs
+    monkeypatch.chdir(conf1)
+    bm1 = await init_async(job="session1", project_name="buttermilk", config_dir="conf")
+
+    monkeypatch.chdir(conf2)
+    bm2 = await init_async(job="session2", project_name="buttermilk", config_dir="conf")
+
+    # Assert: Both should be initialized successfully with different session IDs
+    assert bm1.session_info.job == "session1"
+    assert bm2.session_info.job == "session2"
+    assert bm1.session_info.session_id != bm2.session_info.session_id

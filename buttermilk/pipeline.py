@@ -186,7 +186,7 @@ class PipelineOrchestrator(BaseModel):
     """
 
     concurrency: int = Field(default=1, description="Max concurrent record processing")
-    max_records: Optional[int] = Field(default=None, description="Maximum records to process")
+    max_records: Optional[int]|None = Field(default=None, description="Maximum records to process")
     pipeline_name: str = Field(..., description="Name for this processing pipeline")
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
     enable_record_cache: bool = Field(default=True, description="Enable per-processor Record caching")

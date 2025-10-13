@@ -43,6 +43,7 @@ infrastructure:
         credentials_secret: dev__shared_credentials
       logging:
         _target_: buttermilk._core.cloud_config.LoggingServiceConfig
+        enabled: true
         verbose: true
       pubsub:
         _target_: buttermilk._core.cloud_config.PubSubServiceConfig
@@ -70,16 +71,28 @@ infrastructure:
       otlp_headers: {}
       
   logging:
-    type: local
+    type: gcp
     verbose: ${verbose}
+    project_id: prosocial-443205
+    location: us-central1
 
 run:
   mode: pytest
 
-pipeline:
-  _target_: buttermilk.pipeline.PipelineOrchestrator
-  stage_name: testing_processor
-  source: ${storage.titles}
-  concurrency: 1
-  processors: {}
+zotero:
+  _target_: buttermilk.libs.zotero.ZoteroSource
+  library_id: ${oc.env:ZOTERO_LIBRARY_ID}
+  save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/state
+  filter:
+    _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
+    vector_store: 
+      type: chromadb
+      collection_name: prosocial_zot
+      read_only: true
+      persist_directory: gs_prosocial-dev_data_zotero-prosocial-fulltext_files
+      embedding_model: gemini-embedding-001
+      dimensionality: 3072
+
+  force_full_sync: false
+  max_records: 10
 

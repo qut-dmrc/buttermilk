@@ -19,6 +19,7 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 from pydantic import BaseModel
+from pyzotero import zotero_errors
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -80,6 +81,8 @@ class RetryWrapper(BaseModel):
                     ConnectionError,
                     ConnectionAbortedError,
                     aiohttp.ClientError,
+                    zotero_errors.HTTPError,
+                    zotero_errors.TooManyRequestsError,
                 ),
             ),
             "stop": stop_after_attempt(self.max_retries),
