@@ -226,6 +226,10 @@ class ZoteroSource(BaseModel):
         filtered_count = 0
         skipped_count = 0  # Track items skipped due to type filtering
 
+        # Track versions for safe incremental sync
+        # We'll save the second-highest to avoid missing items at version boundaries
+        seen_versions: list[int] = []
+
         # Manual pagination to maintain async control and avoid blocking
         # Fetch items page by page (100 items per page)
         start = self.start
@@ -294,12 +298,16 @@ class ZoteroSource(BaseModel):
                 zotero_data = item.get("data", {})
                 citation_key = extract_citation_key(zotero_data.get("extra"))
 
+                # Track item version for safe sync state
+                item_version = item.get("version", 0)
+                seen_versions.append(item_version)
+
                 # Create minimal BaseRecord with ID and metadata
                 record = BaseRecord(
                     record_id=key,
                     metadata={
                         "zotero_item": zotero_data,
-                        "zotero_version": item.get("version", 0),
+                        "zotero_version": item_version,
                         "zotero_links": item.get("links", {}),
                         "citation_key": citation_key,  # Add citation_key to metadata
                     },
@@ -325,18 +333,41 @@ class ZoteroSource(BaseModel):
             # Move to next page
             start += page_size
 
-        # Save sync state using library version (not max item version)
-        # This is the correct approach per Zotero API docs
+        # Save sync state using second-highest version to avoid missing boundary items
+        # CRITICAL: If we save the highest version and sync gets interrupted,
+        # next sync with since=highest might miss items at that exact version
         timestamp = datetime.now(UTC).isoformat()
-        library_version = self.zot.last_modified_version()
-        self._save_sync_state(library_version, timestamp)
+
+        # Calculate safe version to save
+        if seen_versions:
+            unique_versions = sorted(set(seen_versions), reverse=True)
+            if len(unique_versions) >= 2:
+                # Use second-highest version for safety
+                safe_version = unique_versions[1]
+                logger.debug(
+                    f"Saving second-highest version {safe_version} "
+                    f"(highest was {unique_versions[0]}, {len(unique_versions)} unique versions)"
+                )
+            else:
+                # Only one unique version - use it but log warning
+                safe_version = unique_versions[0]
+                logger.warning(
+                    f"Only one unique version ({safe_version}) seen during sync. "
+                    f"Cannot use second-highest for safety."
+                )
+        else:
+            # No items processed - use library version from API
+            safe_version = self.zot.last_modified_version()
+            logger.debug(f"No items processed, using library version {safe_version}")
+
+        self._save_sync_state(safe_version, timestamp)
 
         # Log comprehensive summary
         logger.info(
             f"✅ Sync complete: {fetched_count} fetched from API, "
             f"{skipped_count} skipped (attachments/notes/annotations), "
             f"{filtered_count} filtered (already in vector store), "
-            f"{yielded_count} yielded to pipeline (library version: {library_version})"
+            f"{yielded_count} yielded to pipeline (saved version: {safe_version})"
         )
 
 
