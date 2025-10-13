@@ -1,5 +1,11 @@
+#@package _global_
 defaults:
   - _self_
 
-mode: console
-human_in_loop: false
+run:
+  mode: console
+  human_in_loop: false
+
+project_name: buttermilk
+job: cli
+verbose: true
