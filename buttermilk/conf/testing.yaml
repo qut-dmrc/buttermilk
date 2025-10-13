@@ -23,11 +23,12 @@ storage:
     schema_path: traces.schema.json
 
 
-bm:
-  _target_: buttermilk._core.bm_init.BM
-  session_info:
-    project_name: buttermilk
-    job: testing
+session:
+  project_name: buttermilk
+  job: testing
+  template_paths: []
+  sessions_dir: "data/sessions"
+  cache_dir: "~/.cache/buttermilk"
 
 infrastructure:
   clouds:
@@ -94,5 +95,4 @@ zotero:
       dimensionality: 3072
 
   force_full_sync: false
-  max_records: 10
 

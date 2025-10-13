@@ -186,9 +186,9 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch_run",
-        "+max_jobs=50",
-        "+flows=[trans,zot,osb]",
+        "+run=batch",
+        "+flow=trans",
+        "+flows=[trans]",
         "verbose=true",
         "+llms=${input:llms}",
       ],

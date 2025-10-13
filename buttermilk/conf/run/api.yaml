@@ -4,7 +4,6 @@ defaults:
 
 run:
     mode: api
-    ui: web
     human_in_loop: false
     flows: ${flows}
 

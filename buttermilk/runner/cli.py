@@ -62,11 +62,11 @@ def main(conf: DictConfig) -> None:
             config=conf  # Pass the existing Hydra configuration
         )
     )
-    conf = bm.cfg  # Use the resolved config from BM
+    conf = bm.cfg  # Use the typed config from BM
     logger.info("Unified bootstrap complete - BM and config ready")
 
     # Get the mode from config to determine if we need FlowRunner
-    mode = conf.run.get("mode", "console")
+    mode = conf.run.mode
 
     flow_runner = FlowRunner(flows=conf.flows)
 
@@ -79,21 +79,17 @@ def main(conf: DictConfig) -> None:
             ui = CLIUserAgent()
             # Prepare the RunRequest with command-line parameters
             parameters = {}
-            if conf.get("record_id"):
-                parameters["record_id"] = conf.get("record_id")
-            if conf.get("prompt"):
-                parameters["prompt"] = conf.get("prompt")
-            if conf.get("uri"):
-                parameters["uri"] = conf.get("uri")
+            if conf.run.record_id:
+                parameters["record_id"] = conf.run.record_id
 
             run_request = RunRequest(
-                flow=conf.get("flow"),
+                flow=conf.run.flow,
                 inputs=parameters,
                 callback_to_ui=ui.callback_to_ui,
             )
 
             # Run the flow synchronously
-            logger.info(f"Running flow '{conf.flow}' in console mode...")
+            logger.info(f"Running flow '{run_request.flow}' in console mode...")
 
             async def run_with_shutdown():
                 await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
@@ -106,16 +102,13 @@ def main(conf: DictConfig) -> None:
             logger.info("Creating batch jobs...")
 
             async def run_with_shutdown():
-                # Support multiple ways to specify storage:
-                # 1. storage_config: Direct storage config dict (pipeline style)
-                # 2. dataset_key: Legacy key lookup in flow.storage (backward compat)
-                # 3. None: Auto-discover from flow.storage
-                storage_config = conf.get("storage_config") or conf.get("dataset_key") or None
+                # Get storage config from run section
+                storage_config = conf.run.storage_config or None
 
                 await flow_runner.create_batch(
-                    flow_name=conf.get("flow"),
+                    flow_name=conf.run.flow,
                     storage_config=storage_config,
-                    max_records=conf.get("max_records", None)
+                    max_records=conf.run.limit
                 )
                 await bm.graceful_shutdown()
 
@@ -123,60 +116,47 @@ def main(conf: DictConfig) -> None:
 
         case "batch_run":
             # Run batch jobs from the queue
-            # max_jobs controls how many jobs to process before exiting
+            # limit controls how many jobs to process before exiting
             # Each job gets a completely fresh orchestrator instance to ensure
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
-            max_jobs = conf.get("max_jobs", 5)  # Get max_jobs from config or default to 5
+            limit = conf.run.limit or 5  # Get limit from config or default to 5
             ui = CLIUserAgent()
 
-            logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
+            logger.info(f"Running in batch mode with limit={limit}...")
 
             async def run_with_shutdown():
-                await flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
                 await bm.graceful_shutdown()
 
             asyncio.run(run_with_shutdown())
 
         case "batch_all":
             # Combined batch mode: enqueue and/or process jobs
-            # Supports enqueue_only, process_only, or both (default)
-            enqueue_only = conf.get("enqueue_only", False)
-            process_only = conf.get("process_only", False)
-
-            # Validate mutually exclusive options
-            if enqueue_only and process_only:
-                raise ValueError("enqueue_only and process_only are mutually exclusive")
-
-            # Determine what operations to run
-            should_enqueue = not process_only
-            should_process = not enqueue_only
-
-            logger.info(f"Batch all mode: enqueue={should_enqueue}, process={should_process}")
+            # Use limit to control how many jobs to enqueue or process
+            logger.info("Batch all mode: enqueue and process")
 
             async def run_with_shutdown():
                 # Enqueue phase
-                if should_enqueue:
-                    logger.info("Enqueueing batch jobs...")
-                    storage_config = conf.get("storage_config") or conf.get("dataset_key") or None
-                    await flow_runner.create_batch(
-                        flow_name=conf.get("flow"),
-                        storage_config=storage_config,
-                        max_records=conf.get("max_records", None)
-                    )
-                    logger.info("Batch jobs enqueued successfully")
+                logger.info("Enqueueing batch jobs...")
+                storage_config = conf.run.storage_config or None
+                await flow_runner.create_batch(
+                    flow_name=conf.run.flow,
+                    storage_config=storage_config,
+                    max_records=conf.run.limit
+                )
+                logger.info("Batch jobs enqueued successfully")
 
                 # Process phase
-                if should_process:
-                    max_jobs = conf.get("max_jobs", 999)  # Process all by default
-                    ui = CLIUserAgent()
-                    logger.info(f"Processing batch jobs (max: {max_jobs})...")
-                    await flow_runner.run_batch_job(
-                        max_jobs=max_jobs,
-                        callback_to_ui=ui.make_callback(),
-                        wait_for_completion=True
-                    )
-                    logger.info("Batch processing completed successfully")
+                limit = conf.run.limit or 999  # Process all by default
+                ui = CLIUserAgent()
+                logger.info(f"Processing batch jobs (limit: {limit})...")
+                await flow_runner.run_batch_job(
+                    max_jobs=limit,
+                    callback_to_ui=ui.make_callback(),
+                    wait_for_completion=True
+                )
+                logger.info("Batch processing completed successfully")
 
                 await bm.graceful_shutdown()
 
@@ -215,12 +195,12 @@ def main(conf: DictConfig) -> None:
             logger.info("Configuring Uvicorn server for FastAPI app...")
             uvicorn_config = uvicorn.Config(
                 app=fastapi_app,
-                host=str(conf.get("host", "0.0.0.0")),  # Host from config or default
-                port=int(conf.get("port", 8000)),  # Port from config or default
-                reload=bool(conf.get("reload", False)),  # Hot reloading (dev only)
-                log_level=str(conf.get("log_level", "info")).lower(),
+                host=str(conf.run.host or "0.0.0.0"),  # Host from config or default
+                port=int(conf.run.port or 8000),  # Port from config or default
+                reload=bool(conf.run.reload or False),  # Hot reloading (dev only)
+                log_level=str(conf.run.log_level or "info").lower(),
                 access_log=True,  # Enable access logs
-                workers=int(conf.get("workers", 1)),  # Number of worker processes
+                workers=int(conf.run.workers or 1),  # Number of worker processes
                 log_config=None,  # Preserve existing logging configuration
             )
             api_server = uvicorn.Server(config=uvicorn_config)
@@ -365,13 +345,13 @@ def main(conf: DictConfig) -> None:
 
             # Use PipelineOrchestrator for processing
             concurrency = pipeline_conf.get("concurrency", 1)
-            max_records = pipeline_conf.get("max_records")
+            limit = pipeline_conf.get("limit")
 
             # Create single orchestrator with all processors
             orchestrator = PipelineOrchestrator(
                 stage_name="pipeline",
                 concurrency=concurrency,
-                max_records=max_records,
+                max_records=limit,
                 source=source_storage,
                 processors=processors,  # Pass all processors as a list
             )

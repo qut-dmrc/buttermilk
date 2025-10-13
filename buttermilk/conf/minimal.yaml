@@ -10,18 +10,15 @@ hydra.job.chdir: false
 verbose: false
 flows: {}
 
-bm:
-  _target_: buttermilk._core.bm_init.BM
-  session_info:
-    project_name: buttermilk
-    job: local_test
-    template_paths: []
-    sessions_dir: "data/sessions"
-    cache_dir: ".cache/buttermilk"
-    session:
-      timeout_minutes: 60
-      cleanup_interval_minutes: 15
-      max_concurrent_sessions: 50
+session:
+  project_name: buttermilk
+  job: local_test
+  template_paths: []
+  sessions_dir: "data/sessions"
+  cache_dir: ".cache/buttermilk"
+  timeout_minutes: 60
+  cleanup_interval_minutes: 15
+  max_concurrent_sessions: 50
 
 infrastructure:
   # No cloud configuration - purely local
@@ -46,7 +43,6 @@ infrastructure:
 
 run:
   mode: local
-  ui: console
   human_in_loop: false
 
 # Minimal storage - only local file system

@@ -2,14 +2,14 @@ host: gemini25flash
 
 general:
   - gemini25flash
-  - sonnet
+  - claude45sonnet
 
 judgers:
   - gemini25pro
   - gemini25flash
-  - sonnet
+  - claude45sonnet
 
 synthesisers:
   - gemini25pro
   - gemini25flash
-  - sonnet
+  - claude45sonnet

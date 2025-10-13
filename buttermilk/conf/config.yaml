@@ -8,20 +8,17 @@ hydra.job.chdir: false
 verbose: false
 flows: {}
 
-bm:
-  _target_: buttermilk._core.bm_init.BM
-  session_info:
-    project_name: ${project_name}
-    job: ${job}
-    template_paths: []
-    # Session storage configuration
-    sessions_dir: "data/sessions"
-    cache_dir: "~/.cache/buttermilk"
-    # These defaults are currently not loaded properly.
-    session:
-      timeout_minutes: 60
-      cleanup_interval_minutes: 15
-      max_concurrent_sessions: 50
+session:
+  project_name: ${project_name}
+  job: ${job}
+  template_paths: []
+  # Session storage configuration
+  sessions_dir: "data/sessions"
+  cache_dir: "~/.cache/buttermilk"
+  # Session timeout and cleanup settings
+  timeout_minutes: 60
+  cleanup_interval_minutes: 15
+  max_concurrent_sessions: 50
 
 infrastructure:
   llms: {}

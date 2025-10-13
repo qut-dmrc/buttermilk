@@ -456,7 +456,7 @@ class HostAgent(Agent):
 
                 dynamic_timeout = max(120, min(calculated_timeout, 300))
 
-                logger.info("Using dynamic timeout", timeout=f"{dynamic_timeout:.0f}s", pending_tasks=total_pending_tasks)
+                logger.debug("Using dynamic timeout", timeout=f"{dynamic_timeout:.0f}s", pending_tasks=total_pending_tasks)
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
@@ -695,7 +695,6 @@ class HostAgent(Agent):
             self._failed_tasks_by_agent.clear()
             self._total_tasks_in_step = 0
 
-        logger.info("Current step completed, clear to proceed.")
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:

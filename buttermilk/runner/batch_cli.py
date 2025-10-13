@@ -32,8 +32,7 @@ def batch(
     flow: Annotated[str, typer.Argument(help="Name of the flow to run")],
     enqueue_only: Annotated[bool, typer.Option("--enqueue-only", help="Only enqueue jobs, don't process")] = False,
     process_only: Annotated[bool, typer.Option("--process-only", help="Only process jobs, don't enqueue")] = False,
-    max_records: Annotated[Optional[int], typer.Option("--max-records", help="Maximum number of records to process")] = None,
-    max_jobs: Annotated[Optional[int], typer.Option("--max-jobs", help="Maximum number of jobs to process")] = None,
+    limit: Annotated[Optional[int], typer.Option("--limit", help="Maximum number of records/jobs to process")] = None,
     config_dir: Annotated[Optional[str], typer.Option("--config-dir", help="Path to config directory")] = None,
 ):
     """
@@ -47,7 +46,7 @@ def batch(
         bm batch trans                    # Enqueue and process all
         bm batch trans --enqueue-only     # Only enqueue
         bm batch trans flows=trans        # With Hydra override
-        bm batch trans --max-records 100  # Limit to 100 records
+        bm batch trans --limit 100        # Limit to 100 records
     """
     # Validate mutually exclusive options
     if enqueue_only and process_only:
@@ -70,8 +69,7 @@ def batch(
         asyncio.run(run_batch_async(
             flow_name=flow,
             mode=mode,
-            max_records=max_records,
-            max_jobs=max_jobs,
+            limit=limit,
             config_dir=config_dir,
             overrides=hydra_overrides
         ))
@@ -171,8 +169,7 @@ def pipeline(
 async def run_batch_async(
     flow_name: str,
     mode: str = "all",
-    max_records: Optional[int] = None,
-    max_jobs: Optional[int] = None,
+    limit: Optional[int] = None,
     config_dir: Optional[str] = None,
     overrides: Optional[list[str]] = None,
 ) -> None:
@@ -182,8 +179,7 @@ async def run_batch_async(
     Args:
         flow_name: Name of the flow to run
         mode: Operation mode - 'all', 'enqueue', or 'process'
-        max_records: Maximum records to enqueue
-        max_jobs: Maximum jobs to process
+        limit: Maximum records to enqueue or jobs to process
         config_dir: Optional config directory path
         overrides: Hydra-style config overrides (e.g., ['flows=trans', 'llms=flash'])
     """
@@ -219,15 +215,15 @@ async def run_batch_async(
             await flow_runner.create_batch(
                 flow_name=flow_name,
                 storage_config=None,  # Auto-discover from flow config
-                max_records=max_records
+                max_records=limit
             )
             logger.info("Batch jobs enqueued successfully")
 
         if mode in ["all", "process"]:
             ui = CLIUserAgent()
-            jobs_to_process = max_jobs or 999  # Process all if not specified
+            jobs_to_process = limit or 999  # Process all if not specified
 
-            logger.info(f"Processing batch jobs (max: {jobs_to_process})...")
+            logger.info(f"Processing batch jobs (limit: {jobs_to_process})...")
             await flow_runner.run_batch_job(
                 callback_to_ui=ui.callback_to_ui,
                 max_jobs=jobs_to_process,
@@ -429,12 +425,12 @@ async def run_pipeline_async(config_dir: Optional[str] = None) -> None:
 
         # Create orchestrator
         concurrency = pipeline_conf.get("concurrency", 1)
-        max_records = pipeline_conf.get("max_records")
+        limit = pipeline_conf.get("limit")
 
         orchestrator = PipelineOrchestrator(
             stage_name="pipeline",
             concurrency=concurrency,
-            max_records=max_records,
+            max_records=limit,
             source=source_storage,
             processors=processors,
         )

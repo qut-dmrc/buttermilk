@@ -609,7 +609,7 @@ async def bootstrap_session_with_config_async(
 
     # Only override job if explicitly provided (otherwise use config default)
     if job is not None:
-        bootstrap_overrides.append(f"++bm.session_info.job={job}")
+        bootstrap_overrides.append(f"++session.job={job}")
         bootstrap_overrides.append(f"++job={job}")
 
     # Create bootstrapper with configuration
@@ -618,16 +618,20 @@ async def bootstrap_session_with_config_async(
     # Get the final resolved configuration to extract project/job BEFORE bootstrapping
     final_config = bootstrapper.config
 
+    # Convert to typed config
+    from buttermilk._core.main_config import create_config_from_hydra
+    typed_config = create_config_from_hydra(final_config)
+
     # Extract job and project from config if not provided as parameters
     # This must happen BEFORE creating ExecutionContext so we can pass project_name
-    resolved_job = job if job is not None else final_config.bm.session_info.job
-    resolved_project = project_name if project_name is not None else final_config.bm.session_info.project_name
+    resolved_job = job if job is not None else typed_config.session.job
+    resolved_project = project_name if project_name is not None else typed_config.session.project_name
 
     # Bootstrap async with project_name available
     execution_context = await bootstrapper.bootstrap_full_context(project_name=resolved_project)
 
     # Extract template_paths from config and resolve relative paths
-    template_paths = getattr(final_config.bm.session_info, "template_paths", [])
+    template_paths = getattr(typed_config.session, "template_paths", [])
     resolved_template_paths = []
     for path in template_paths:
         if not Path(path).is_absolute():
@@ -645,13 +649,13 @@ async def bootstrap_session_with_config_async(
     validated_project = execution_context.validate_and_set_project(resolved_project)
 
     # Create session BM instance with validated project
-    bm = await bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job, template_paths=template_paths, config=final_config)
+    bm = await bootstrapper.bootstrap_session_context(name=validated_project, job=resolved_job, template_paths=template_paths, config=typed_config)
 
     # Set the singleton BM instance
     set_bm(bm)
 
     # Extract run type from config if present, otherwise use generic message
-    run_type_str = final_config.get("run", {}).get("_target_", "").split(".")[-1] if "run" in final_config else "session"
+    run_type_str = typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
     logger.info(f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}")
 
-    return bm, final_config
+    return bm, typed_config

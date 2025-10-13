@@ -11,5 +11,4 @@ job: recovery
 run:
   _target_: buttermilk.runner.recoveryrunner.RecoveryRunner
   mode: recovery
-  ui: console
   backup_dir: ${oc.env:BM_BACKUP_DIR,~/.buttermilk/backups}
