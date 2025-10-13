@@ -12,12 +12,77 @@ from pathlib import Path
 from typing import Any
 
 import hydra
+import yaml
 from hydra import compose, initialize_config_dir
+from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext
 from buttermilk._core.log import logger
 from buttermilk.utils.utils import load_dotenv
+
+
+def register_library_configs_in_store(library_config_dir: Path) -> None:
+    """Register library configs in ConfigStore for fallback during Hydra composition.
+
+    This function scans the library config directory and registers all YAML configs
+    in Hydra's ConfigStore. When Hydra composes configs, it will:
+    1. First look for config files in the project directory
+    2. Fall back to ConfigStore (library configs) if not found
+
+    This provides automatic fallback from project → library configs.
+
+    Args:
+        library_config_dir: Path to Buttermilk's library config directory
+    """
+    cs = ConfigStore.instance()
+
+    # Scan library config directory for all YAML files
+    for config_file in library_config_dir.rglob("*.yaml"):
+        # Skip config.yaml in root (it's the main config, not a group)
+        if config_file.name == "config.yaml" and config_file.parent == library_config_dir:
+            continue
+
+        # Determine group from directory structure
+        # e.g., conf/flows/trans.yaml -> group="flows", name="trans"
+        relative_path = config_file.relative_to(library_config_dir)
+        parts = relative_path.parts
+
+        if len(parts) == 1:
+            # Top-level config (no group)
+            group = None
+            name = config_file.stem
+        else:
+            # Config in a group directory
+            group = "/".join(parts[:-1])  # Join all parent dirs as group
+            name = config_file.stem
+
+        try:
+            # Load YAML config
+            with open(config_file, "r") as f:
+                config_dict = yaml.safe_load(f)
+
+            # Register in ConfigStore
+            # Use library provider name for clarity
+            if group:
+                cs.store(
+                    group=group,
+                    name=name,
+                    node=config_dict,
+                    provider="buttermilk-library"
+                )
+                logger.debug(f"Registered library config: {group}/{name}")
+            else:
+                cs.store(
+                    name=name,
+                    node=config_dict,
+                    provider="buttermilk-library"
+                )
+                logger.debug(f"Registered library config: {name}")
+
+        except Exception as e:
+            # Don't fail initialization if a single config fails to register
+            logger.warning(f"Failed to register library config {config_file}: {e}")
 
 
 def resolve_config_dir(config_dir: str | None = None) -> str:
@@ -119,11 +184,12 @@ class ConfigurationBootstrapper:
         load_dotenv()
 
     def _load_configuration(self, config: DictConfig | None = None) -> DictConfig:
-        """Load configuration via Hydra with search path support for fallback.
+        """Load configuration via Hydra with ConfigStore fallback.
 
-        If a config_path is provided, Hydra will search:
-        1. Project config directory (config_path)
-        2. Library config directory (fallback)
+        This method implements project → library config fallback by:
+        1. Registering library configs in ConfigStore (fallback)
+        2. Initializing Hydra with project config directory (priority)
+        3. Hydra naturally falls back to ConfigStore if files not found
 
         This allows project-specific configs to override library defaults.
 
@@ -142,10 +208,20 @@ class ConfigurationBootstrapper:
                     config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
                 else:
-                    # Load configuration using Hydra compose API
-                    from pathlib import Path
+                    # Register library configs in ConfigStore BEFORE initialization
+                    # This provides fallback for any configs not in project directory
+                    library_config_dir = Path(__file__).parent.parent / "conf"
+                    library_config_dir = library_config_dir.resolve()
 
-                    # Get absolute path to config directory
+                    # Determine if we're using a custom project config
+                    project_config_dir = Path(self.config_path).resolve()
+                    is_custom_config = project_config_dir != library_config_dir
+
+                    if is_custom_config:
+                        # Register library configs for fallback
+                        register_library_configs_in_store(library_config_dir)
+
+                    # Load configuration using Hydra compose API
                     config_dir = Path(self.config_path).resolve()
 
                     with initialize_config_dir(config_dir=str(config_dir), version_base="1.3"):
