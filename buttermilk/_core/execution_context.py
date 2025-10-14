@@ -663,3 +663,110 @@ def get_or_create_execution_context(**kwargs) -> ExecutionContext:
         ExecutionContext: The existing or newly created ExecutionContext
     """
     return asyncio.run(get_or_create_execution_context_async(**kwargs))
+
+
+# Factory methods for creating ExecutionContext from typed config
+
+
+async def from_config_async(infrastructure, project_name: str | None = None):
+    """Create ExecutionContext from typed infrastructure config.
+
+    This is the recommended factory method that takes the typed
+    InfrastructureConfig from ButtermilkConfig.
+
+    Args:
+        infrastructure: Typed InfrastructureConfig from ButtermilkConfig
+        project_name: Optional project name
+
+    Returns:
+        Initialized ExecutionContext ready for creating sessions
+
+    Example:
+        >>> from buttermilk._core.config_bootstrap import load_typed_config_async
+        >>> from buttermilk._core.execution_context import from_config_async
+        >>>
+        >>> typed_cfg = await load_typed_config_async()
+        >>> ctx = await from_config_async(
+        ...     typed_cfg.infrastructure,
+        ...     project_name="my_project"
+        ... )
+    """
+    # Convert TracingConfig to dict format if needed
+    tracing_dict = infrastructure.tracing
+    if hasattr(tracing_dict, "model_dump"):
+        # It's a Pydantic model, convert to dict
+        tracing_dict = tracing_dict.model_dump()
+
+    # Convert LoggerConfig to dict format if needed
+    logging_config = infrastructure.logging
+    if logging_config and hasattr(logging_config, "model_dump"):
+        # It's a Pydantic model, convert to dict
+        logging_config = logging_config.model_dump()
+
+    # Extract components from typed config
+    context = await get_or_create_execution_context_async(
+        project_name=project_name,
+        clouds=infrastructure.clouds,
+        logging=logging_config,
+        tracing=tracing_dict,
+        datasets=infrastructure.datasets,
+    )
+
+    await context.ensure_initialized()
+    return context
+
+
+async def create_session_from_context_async(
+    execution_context: ExecutionContext,
+    session,
+    storage_configs: dict | None = None,
+    full_config = None,
+):
+    """Create a new session-scoped BM instance from ExecutionContext.
+
+    This allows creating multiple sessions within the same ExecutionContext,
+    perfect for API servers where each request gets its own session.
+
+    Args:
+        execution_context: The ExecutionContext to use for infrastructure
+        session: Session configuration (SessionInfo from ButtermilkConfig)
+        storage_configs: Optional storage configs from ButtermilkConfig.storage
+        full_config: Optional full ButtermilkConfig to store on BM._config
+
+    Returns:
+        Fully initialized BM instance with infrastructure from this context
+
+    Example:
+        >>> # Application startup (once)
+        >>> ctx = await from_config_async(typed_cfg.infrastructure)
+        >>>
+        >>> # Per request (many times, shared infrastructure)
+        >>> bm1 = await create_session_from_context_async(ctx, typed_cfg.session)
+        >>> bm2 = await create_session_from_context_async(ctx, typed_cfg.session)
+    """
+    from buttermilk._core.bm_init import create_session_bm_async
+
+    # Validate project consistency
+    validated_project = execution_context.validate_and_set_project(session.project_name)
+
+    # Create BM with injected infrastructure
+    bm = await create_session_bm_async(
+        project_name=validated_project,
+        job=session.job,
+        batch_id=session.batch_id,
+        platform=session.platform,
+        template_paths=session.template_paths,
+        cloud_manager=execution_context.cloud_manager if execution_context.clouds else None,
+        secret_manager=execution_context.secret_manager if execution_context._find_cloud_with_service("secrets") else None,
+        llms_instance=execution_context.llms,
+        query_runner=execution_context.query_runner if execution_context.clouds else None,
+        logger_cfg=execution_context.logging,
+        config=full_config,  # Store full typed config
+    )
+
+    # Attach storage configs if provided
+    if storage_configs:
+        bm.datasets = storage_configs
+
+    await bm.ensure_initialized()
+    return bm

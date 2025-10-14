@@ -41,12 +41,3 @@ infrastructure:
     type: local
     verbose: ${verbose}
 
-run:
-  mode: local
-  human_in_loop: false
-
-# Minimal storage - only local file system
-storage: {}
-
-# No pipeline by default
-pipeline: null

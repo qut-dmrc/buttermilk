@@ -115,9 +115,7 @@ infrastructure:
   datasets: {}
 
 run:
-  _target_: buttermilk.runner.runner.LocalRunner
-  mode: local
-  ui: console
+  mode: console
   human_in_loop: false
 
 flows: {}
