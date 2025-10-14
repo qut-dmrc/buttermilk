@@ -18,7 +18,6 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 
 from buttermilk._core.execution_context import ExecutionContext
-from buttermilk._core.log import logger
 from buttermilk.utils.utils import load_dotenv
 
 
@@ -65,24 +64,14 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
             # Register in ConfigStore
             # Use library provider name for clarity
             if group:
-                cs.store(
-                    group=group,
-                    name=name,
-                    node=config_dict,
-                    provider="buttermilk-library"
-                )
-                logger.debug(f"Registered library config: {group}/{name}")
+                cs.store(group=group, name=name, node=config_dict, provider="buttermilk-library")
             else:
-                cs.store(
-                    name=name,
-                    node=config_dict,
-                    provider="buttermilk-library"
-                )
-                logger.debug(f"Registered library config: {name}")
+                cs.store(name=name, node=config_dict, provider="buttermilk-library")
 
         except Exception as e:
             # Don't fail initialization if a single config fails to register
-            logger.warning(f"Failed to register library config {config_file}: {e}")
+            # Can't use logger at this stage before we are initialised properly.
+            print(f"Failed to register library config {config_file}: {e}")
 
 
 def resolve_config_dir(config_dir: str | None = None) -> str:
@@ -140,7 +129,7 @@ def resolve_config_dir(config_dir: str | None = None) -> str:
     # Provide helpful error message if path doesn't exist
     if not resolved_path.exists():
         # Try to give helpful context about CWD vs script directory
-        logger.warning(
+        print(
             f"Config directory does not exist: {resolved_path}\n"
             f"  Original path: {config_dir}\n"
             f"  Current working directory: {Path.cwd()}\n"
@@ -223,10 +212,8 @@ class ConfigurationBootstrapper:
 
                         config_to_instantiate = compose(config_name=self.config_name, overrides=self.overrides)
 
-                    # logger.debug("Configuration loaded via new Hydra initialization")  # Removed: logging not configured yet
-
             except Exception as e:
-                logger.error(f"Failed to load configuration: {e}")
+                print(f"Failed to load configuration: {e}")
                 raise
 
         # Instantiate the config
@@ -271,10 +258,6 @@ class ConfigurationBootstrapper:
         # Apply all environment variables
         for key, value in env_vars.items():
             os.environ[key] = str(value)
-            logger.debug(f"Set environment variable: {key}")
-
-        if env_vars:
-            logger.info(f"Configured {len(env_vars)} environment variables")
 
     def get_infrastructure_config(self) -> DictConfig:
         """Get configuration for all infrastructure components.
@@ -289,7 +272,7 @@ class ConfigurationBootstrapper:
             return config.infrastructure
         elif hasattr(config, "bm"):
             # Fallback: migrate old BM configuration to infrastructure format
-            logger.warning("Using legacy 'bm' configuration - consider migrating to 'infrastructure'")
+            print("Using legacy 'bm' configuration - consider migrating to 'infrastructure'")
             return config.bm
         else:
             raise RuntimeError("No infrastructure configuration found in config")
@@ -306,8 +289,6 @@ class ConfigurationBootstrapper:
         Returns:
             ExecutionContext: The configured execution context
         """
-        # logger.debug("Bootstrapping full application context...")  # Removed: logging not configured yet
-
         # Create baseline execution context FIRST to ensure structured logging
         if self._execution_context is None:
             # Get infrastructure configuration to create ExecutionContext with full infrastructure
@@ -328,20 +309,15 @@ class ConfigurationBootstrapper:
                 datasets=infrastructure_config.get("datasets", {}),
             )
             await self._execution_context.ensure_initialized()
-            logger.info(
-                "ExecutionContext created with full infrastructure configuration", execution_context_id=self._execution_context.execution_context_id
-            )
 
         # Initialize tracing now that infrastructure is ready
         try:
             await self._execution_context._initialize_all_tracing_providers()
-            logger.info("Tracing providers initialized successfully")
         except Exception as e:
             # Log and fail the bootstrap - tracing is critical
-            logger.exception("Failed to initialize tracing providers", error=str(e))
+            print("Failed to initialize tracing providers", error=str(e))
             raise RuntimeError(f"Tracing initialization failed: {e}") from e
 
-        logger.info("Full application context bootstrap complete", execution_context_id=self._execution_context.execution_context_id)
         return self._execution_context
 
     async def bootstrap_session_context(self, name: str, job: str, template_paths: list[str] | None = None, config=None, **kwargs) -> Any:
@@ -356,7 +332,6 @@ class ConfigurationBootstrapper:
         Returns:
             Session-scoped BM instance
         """
-        logger.info("Bootstrapping session context", name=name, job=job)
 
         if self._execution_context is None:
             raise RuntimeError("ExecutionContext not initialized. Call bootstrap_full_context() first.")
@@ -380,7 +355,7 @@ class ConfigurationBootstrapper:
 
         # Ensure session BM is fully initialized
         await session_bm.ensure_initialized()
-        logger.info(f"Session context bootstrap complete: {session_bm.session_info.session_id}")
+        session_bm.logger.info(f"Session context bootstrap complete: {session_bm.session_info.session_id}")
 
         return session_bm
 
@@ -624,8 +599,9 @@ async def bootstrap_session_with_config_async(
 
     # Extract job and project from config if not provided as parameters
     # This must happen BEFORE creating ExecutionContext so we can pass project_name
-    resolved_job = job if job is not None else typed_config.session.job
-    resolved_project = project_name if project_name is not None else typed_config.session.project_name
+    # Note: project_name and job are now at root level, not in session config
+    resolved_job = job if job is not None else typed_config.job
+    resolved_project = project_name if project_name is not None else typed_config.project_name
 
     # Bootstrap async with project_name available
     execution_context = await bootstrapper.bootstrap_full_context(project_name=resolved_project)
@@ -656,6 +632,6 @@ async def bootstrap_session_with_config_async(
 
     # Extract run type from config if present, otherwise use generic message
     run_type_str = typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
-    logger.info(f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}")
+    bm.logger.info(f"Starting {run_type_str} for {bm.project_name} job {bm.job}")
 
     return bm, typed_config

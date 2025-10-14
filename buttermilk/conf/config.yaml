@@ -9,8 +9,6 @@ verbose: false
 flows: {}
 
 session:
-  project_name: ${project_name}
-  job: ${job}
   template_paths: []
   # Session storage configuration
   sessions_dir: "data/sessions"

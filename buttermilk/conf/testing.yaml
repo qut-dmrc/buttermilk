@@ -5,6 +5,8 @@ defaults:
   - llms: debug
   - _self_
 
+project_name: buttermilk
+job: testing
 verbose: true
 
 #  Testing paths for bigquery datasets
@@ -24,8 +26,6 @@ storage:
 
 
 session:
-  project_name: buttermilk
-  job: testing
   template_paths: []
   sessions_dir: "data/sessions"
   cache_dir: "~/.cache/buttermilk"

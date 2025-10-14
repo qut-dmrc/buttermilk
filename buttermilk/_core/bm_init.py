@@ -77,6 +77,9 @@ class SessionInfo(BaseModel):
     This approach eliminates artificial complexity while providing proper session
     isolation and optional task grouping when needed.
 
+    Note: project_name and job are stored at the root config level by default. We still
+    store them here.
+
     Attributes:
         session_id (str): Unique identifier for this session.
         batch_id (str | None): Optional batch identifier for grouping related sessions.
@@ -202,7 +205,7 @@ class SessionInfo(BaseModel):
         elif self.started_at:
             duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
 
-        return {
+        summary = {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
             "project_name": self.project_name,

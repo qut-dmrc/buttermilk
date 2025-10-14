@@ -4,6 +4,8 @@
 defaults:
   - _self_
 
+project_name: buttermilk
+job: local_test
 # Reduce path-induced surprises
 hydra.job.chdir: false
 
@@ -11,8 +13,6 @@ verbose: false
 flows: {}
 
 session:
-  project_name: buttermilk
-  job: local_test
   template_paths: []
   sessions_dir: "data/sessions"
   cache_dir: ".cache/buttermilk"
