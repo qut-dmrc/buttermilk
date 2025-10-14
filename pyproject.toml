@@ -243,10 +243,7 @@ buttermilk = { workspace = true }
 line-length = 150
 
 [project.scripts]
-bm = "buttermilk.runner.batch_cli:main"
-bm-chat = "buttermilk.runner.cli:main"
-bm-test-agent = "buttermilk.runner.agent_tester:main"
-buttermilk-assess-journalism = "buttermilk.scripts.run_trans_flow:run"
+bm = "buttermilk.runner.cli:main"
 
 [tool.pytest.ini_options]
 markers = [
