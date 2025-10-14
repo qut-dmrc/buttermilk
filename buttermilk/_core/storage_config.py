@@ -107,6 +107,7 @@ class BaseStorageConfig(BaseModel):
         default=None,
         description="URI for data source (alternative to path for some storage types)",
     )
+    read_only: bool = Field(default=False, description="Open the database in RO mode.")
 
     # Provider-specific configuration
     db: dict[str, Any] = Field(
@@ -349,12 +350,8 @@ class DuckDBStorageConfig(BaseStorageConfig):
     )
     custom_query: str | None = Field(
         default=None,
-        description=(
-            "Complete custom SQL query to override default query generation. "
-            "Cannot be used with write operations."
-        ),
+        description=("Complete custom SQL query to override default query generation. Cannot be used with write operations."),
     )
-    read_only: bool = Field(default=False, description="Open the database in RO mode.")
 
 
 # Discriminated union for all storage config types
