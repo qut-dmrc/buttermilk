@@ -510,12 +510,34 @@ class BM(BaseModel):
         logger.debug("Session initialization verified complete")
 
     def _save_initial_config(self) -> None:
-        """Save the initial BM configuration to disk."""
-        # Data to save: BM config and session_info
-        config_data_to_save = [
-            self.model_dump(exclude_none=True),
-            self.session_info.model_dump(exclude_none=True),
-        ]
+        """Save the initial BM configuration to disk including the full .cfg object.
+
+        Saves three top-level keys:
+        - cfg: The complete Hydra configuration (infrastructure, agents, pipelines, etc.)
+        - bm: BM instance state (includes session_info nested within)
+        - session_info: Direct reference to session_info for convenience (also in bm.session_info)
+
+        Note: session_info appears both at top level and nested in bm for ease of access.
+        """
+        from omegaconf import OmegaConf
+
+        # Convert the entire .cfg object to a plain dict for saving
+        cfg_dict = None
+        if self._config is not None:
+            # Use OmegaConf.to_container to convert DictConfig to plain dict
+            # resolve=True resolves any interpolations
+            # throw_on_missing=False allows missing values to be included as None
+            cfg_dict = OmegaConf.to_container(self._config, resolve=True, throw_on_missing=False)
+
+        # Data to save: full config object
+        # Note: In typical usage, cfg contains the Hydra configuration tree,
+        # which is separate from the BM instance state and session_info
+        config_data_to_save = {
+            "cfg": cfg_dict,
+            "bm": self.model_dump(exclude_none=True),
+            "session_info": self.session_info.model_dump(exclude_none=True),
+        }
+
         self.save(
             data=config_data_to_save,
             basename="initial_bm_config",

@@ -199,6 +199,62 @@ class TestBMAsyncInitialization:
         with pytest.raises(RuntimeError, match="SecretsManager not available"):
             _ = bm.secret_manager
 
+    @pytest.mark.anyio
+    async def test_save_initial_config_saves_full_cfg(self, tmp_path):
+        """Test that _save_initial_config saves the entire .cfg object."""
+        import json
+        from pathlib import Path
+        from omegaconf import DictConfig
+
+        # Create a test config with nested structure
+        test_config = DictConfig({
+            "project_name": "test-project",
+            "job": "test-job",
+            "nested": {
+                "key1": "value1",
+                "key2": 42,
+                "deep": {
+                    "key3": "value3"
+                }
+            },
+            "list_field": [1, 2, 3]
+        })
+
+        # Create BM instance with config
+        bm = await create_session_bm_async(
+            project_name="test-project",
+            job="test-job",
+            save_dir_base=str(tmp_path),
+            config=test_config,
+        )
+
+        # Find the saved config file (currently saved as tmp*.json due to dump_to_disk behavior)
+        save_dir = Path(bm.session_info.save_dir)
+        config_files = list(save_dir.glob("*.json"))
+        assert len(config_files) == 1, f"Should have exactly one JSON file, found: {config_files}"
+
+        # Read the saved config
+        with open(config_files[0]) as f:
+            saved_data = json.load(f)
+
+        # Debug: print what's actually saved
+        import pprint
+        print("\n=== Saved data structure ===")
+        pprint.pprint(saved_data, depth=2)
+        print("\n=== Keys in saved_data ===")
+        print(list(saved_data.keys()))
+        if "cfg" in saved_data and saved_data["cfg"]:
+            print("\n=== Keys in cfg ===")
+            print(list(saved_data["cfg"].keys()))
+
+        # Verify the saved data contains the full config
+        assert isinstance(saved_data, dict), f"Saved data should be a dict, got: {type(saved_data)}"
+        assert "cfg" in saved_data, "Saved data should contain 'cfg' key"
+        assert saved_data["cfg"]["project_name"] == "test-project"
+        assert saved_data["cfg"]["nested"]["key1"] == "value1"
+        assert saved_data["cfg"]["nested"]["deep"]["key3"] == "value3"
+        assert saved_data["cfg"]["list_field"] == [1, 2, 3]
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
