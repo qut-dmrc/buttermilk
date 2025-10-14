@@ -119,8 +119,6 @@ class ButtermilkConfig(BaseModel):
     """
 
     # Root level: Universal essentials only
-    project_name: str = Field(description="Project name for this Buttermilk instance")
-    job: str = Field(description="Job identifier for this execution")
     verbose: bool = Field(default=False, description="Enable verbose logging output")
 
     # Run configuration: All execution parameters (including mode)
