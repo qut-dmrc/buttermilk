@@ -187,7 +187,8 @@
       "justMyCode": false,
       "args": [
         "+run=batch",
-        "+flow=trans",
+        "run.mode=batch_all",
+        "+run.flow=trans",
         "+flows=[trans]",
         "verbose=true",
         "+llms=${input:llms}",

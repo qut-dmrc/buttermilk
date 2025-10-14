@@ -77,8 +77,6 @@ infrastructure:
     project_id: prosocial-443205
     location: us-central1
 
-run:
-  mode: console
 
 zotero:
   _target_: buttermilk.libs.zotero.ZoteroSource

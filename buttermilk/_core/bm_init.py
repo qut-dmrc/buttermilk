@@ -519,15 +519,11 @@ class BM(BaseModel):
 
         Note: session_info appears both at top level and nested in bm for ease of access.
         """
-        from omegaconf import OmegaConf
 
         # Convert the entire .cfg object to a plain dict for saving
         cfg_dict = None
         if self._config is not None:
-            # Use OmegaConf.to_container to convert DictConfig to plain dict
-            # resolve=True resolves any interpolations
-            # throw_on_missing=False allows missing values to be included as None
-            cfg_dict = OmegaConf.to_container(self._config, resolve=True, throw_on_missing=False)
+            cfg_dict = self._config.model_dump()
 
         # Data to save: full config object
         # Note: In typical usage, cfg contains the Hydra configuration tree,
