@@ -73,16 +73,10 @@ class HostAgent(Agent):
         self._user_feedback: list[str] = []
         self._progress_reporter_task: asyncio.Task | None = None
 
-        # Maximum time to wait for agent responses in seconds
-        self._max_wait_time: int = kwargs.get("max_wait_time", 240)
-
-        # Maximum time to wait for agent responses in seconds
-        self._max_user_confirmation_time: int = kwargs.get("max_user_confirmation_time", 1220)
-
-        # Error tolerance: what fraction of tasks can fail before stopping the flow
-        # Default to 0.5 (50% failure threshold)
-        # Read from parameters (like human_in_loop) to support Hydra config
-        self._error_threshold: float = self.parameters.get("error_threshold", 0.5)
+        # Configuration parameters - stored internally, accessed via properties
+        self._max_wait_time_value: int | None = None
+        self._max_user_confirmation_time_value: int | None = None
+        self._error_threshold_value: float | None = None
 
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
@@ -99,6 +93,48 @@ class HostAgent(Agent):
     def human_in_loop(self, value: bool) -> None:
         """Set the human_in_loop value in parameters."""
         self.parameters["human_in_loop"] = value
+
+    @property
+    def _max_wait_time(self) -> int:
+        """Maximum time to wait for agent responses in seconds.
+
+        Must be explicitly configured in parameters - no defaults allowed.
+        """
+        if self._max_wait_time_value is None:
+            if "max_wait_time" not in self.parameters:
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'max_wait_time' must be explicitly set in parameters"
+                )
+            self._max_wait_time_value = self.parameters["max_wait_time"]
+        return self._max_wait_time_value
+
+    @property
+    def _max_user_confirmation_time(self) -> int:
+        """Maximum time to wait for user confirmation in seconds.
+
+        Must be explicitly configured in parameters - no defaults allowed.
+        """
+        if self._max_user_confirmation_time_value is None:
+            if "max_user_confirmation_time" not in self.parameters:
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'max_user_confirmation_time' must be explicitly set in parameters"
+                )
+            self._max_user_confirmation_time_value = self.parameters["max_user_confirmation_time"]
+        return self._max_user_confirmation_time_value
+
+    @property
+    def _error_threshold(self) -> float:
+        """Error tolerance: fraction of tasks that can fail before stopping flow.
+
+        Must be explicitly configured in parameters - no defaults allowed.
+        """
+        if self._error_threshold_value is None:
+            if "error_threshold" not in self.parameters:
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'error_threshold' must be explicitly set in parameters"
+                )
+            self._error_threshold_value = self.parameters["error_threshold"]
+        return self._error_threshold_value
 
     @message_handler
     async def handle_conductor_request(  # type: ignore
