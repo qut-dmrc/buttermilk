@@ -81,7 +81,8 @@ class HostAgent(Agent):
 
         # Error tolerance: what fraction of tasks can fail before stopping the flow
         # Default to 0.5 (50% failure threshold)
-        self._error_threshold: float = kwargs.get("error_threshold", 0.5)
+        # Read from parameters (like human_in_loop) to support Hydra config
+        self._error_threshold: float = self.parameters.get("error_threshold", 0.5)
 
     # human_in_loop is now read from self.parameters instead of being a direct field
     @property
@@ -575,12 +576,17 @@ class HostAgent(Agent):
             self._step_generator = self._sequence()
             logger.info("Host participants initialized", participants=list(self._participants.keys()))
 
+            flow_stopped_early = False
+            early_stop_reason = ""
+
             async for next_step in self._step_generator:
                 logger.info(f"Host processing step {next_step.role}", agent_name=self.agent_name, step_role=next_step.role)
 
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
                     logger.info("User rejected step or timed out, stopping flow", agent_name=self.agent_name)
+                    flow_stopped_early = True
+                    early_stop_reason = "Flow stopped: user rejected or timed out"
                     break
 
                 # Execute the current step
@@ -590,10 +596,18 @@ class HostAgent(Agent):
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
                     if not await self.wait_check_current_step_completions():
+                        logger.info("Step completion check failed - stopping flow", agent_name=self.agent_name)
+                        flow_stopped_early = True
+                        early_stop_reason = "Flow stopped: error threshold exceeded or step failed"
                         break
 
             # --- Sequence finished ---
             logger.info("Host flow execution finished.", agent_name=self.agent_name)
+
+            # Send END message if we stopped early
+            if flow_stopped_early:
+                logger.info("Sending END message due to early termination", agent_name=self.agent_name, reason=early_stop_reason)
+                await self._publish(StepRequest(role=END, content=early_stop_reason))
 
             # Send final progress update before any cleanup begins
             final_progress_message = FlowProgressUpdate(
@@ -693,6 +707,7 @@ class HostAgent(Agent):
         # Clear error tracking for the next step
         async with self._tasks_condition:
             self._failed_tasks_by_agent.clear()
+            self._pending_tasks_by_agent.clear()  # Defensive: should already be empty
             self._total_tasks_in_step = 0
 
         return True
