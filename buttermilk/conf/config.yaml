@@ -40,10 +40,9 @@ infrastructure:
   # Unified tracing configuration for all tracing providers
   tracing:
     weave: 
-      enabled: false
+      enabled: true
       # project_id is WANDB_ENTITY for weave
       project_id: dmrc
-      api_key: 
     traceloop:
       enabled: false
       api_key: 

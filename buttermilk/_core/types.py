@@ -8,6 +8,7 @@ different components of Buttermilk.
 
 import datetime
 import json  # For JSON parsing in validators
+import time  # For timestamp tracking
 from collections.abc import Sequence  # For type hinting sequences
 from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
@@ -765,3 +766,95 @@ class BatchProcessingResult:
     validation_result: dict[str, Any] | None
     failed_records: list[tuple[str, str]]  # (record_id, error_message)
     metadata: dict[str, Any]
+
+
+class ProcessingSummary(BaseModel):
+    """Reusable processing statistics tracker for batch operations and pipelines.
+
+    Tracks counts of attempted, processed, skipped, and failed items with timing.
+    Provides formatted output for console display and metrics export.
+
+    Usage:
+        summary = ProcessingSummary()
+        summary.increment_attempted()
+        summary.increment_processed()
+        print(summary.format_for_console())
+    """
+
+    attempted: int = Field(default=0, description="Number of items attempted")
+    processed: int = Field(default=0, description="Number of items successfully processed")
+    skipped: int = Field(default=0, description="Number of items intentionally skipped")
+    failed: int = Field(default=0, description="Number of items that failed processing")
+    start_time: float = Field(default_factory=lambda: time.time(), description="Unix timestamp when processing started")
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def increment_attempted(self) -> None:
+        """Increment attempted counter."""
+        object.__setattr__(self, "attempted", self.attempted + 1)
+
+    def increment_processed(self) -> None:
+        """Increment processed counter."""
+        object.__setattr__(self, "processed", self.processed + 1)
+
+    def increment_skipped(self) -> None:
+        """Increment skipped counter."""
+        object.__setattr__(self, "skipped", self.skipped + 1)
+
+    def increment_failed(self) -> None:
+        """Increment failed counter."""
+        object.__setattr__(self, "failed", self.failed + 1)
+
+    def duration_ms(self) -> int:
+        """Calculate duration in milliseconds from start_time to now.
+
+        Returns:
+            int: Duration in milliseconds
+        """
+        import time
+
+        return int((time.time() - self.start_time) * 1000)
+
+    def success_rate(self) -> float:
+        """Calculate success rate as processed / attempted.
+
+        Returns:
+            float: Success rate between 0.0 and 1.0, or 0.0 if nothing attempted
+        """
+        if self.attempted == 0:
+            return 0.0
+        return self.processed / self.attempted
+
+    def format_for_console(self) -> str:
+        """Format summary for readable console output.
+
+        Returns:
+            str: Formatted summary string
+        """
+        duration_sec = self.duration_ms() / 1000.0
+        success_pct = self.success_rate() * 100
+
+        return (
+            f"✅ Processing complete: "
+            f"attempted={self.attempted} "
+            f"processed={self.processed} "
+            f"skipped={self.skipped} "
+            f"failed={self.failed} "
+            f"(success={success_pct:.1f}%, duration={duration_sec:.2f}s)"
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        """Export summary as dictionary with computed fields.
+
+        Returns:
+            dict: Summary data including computed metrics
+        """
+        return {
+            "attempted": self.attempted,
+            "processed": self.processed,
+            "skipped": self.skipped,
+            "failed": self.failed,
+            "start_time": self.start_time,
+            "duration_ms": self.duration_ms(),
+            "success_rate": self.success_rate(),
+        }

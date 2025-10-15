@@ -480,3 +480,53 @@ class TestLLMCore:
                 assert inputs_dict["records"] == [record1, record2]
 
                 assert result.content == "Processed records"
+
+    @pytest.mark.asyncio
+    async def test_template_metadata_preserved_in_result(self):
+        """Test that template metadata (including template_hash) is preserved in LLMResult.
+
+        Regression test for bug where template_hash was calculated but then
+        overwritten when metadata dict was replaced instead of updated.
+        """
+        params = {
+            "model": "gpt-4",
+            "template": "test_template"
+        }
+        core = LLMCore(
+            model=params["model"],
+            template=params["template"]
+        )
+
+        # Mock template filling to set template_metadata
+        with patch.object(core, "_fill_template") as mock_fill:
+            mock_fill.return_value = [UserMessage(content="Test", source="test")]
+            # Simulate what _fill_template does - sets core.template_metadata
+            core.template_metadata = {
+                "template_name": "test_template",
+                "template_hash": "abc123def456",
+                "unfilled_vars": []
+            }
+
+            with patch.object(core, "_call_llm_with_trace") as mock_call:
+                from autogen_core.models import RequestUsage
+                mock_call.return_value = CreateResult(
+                    content="LLM response",
+                    finish_reason="stop",
+                    usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
+                    cached=False
+                )
+
+                result = await core.process_with_llm(
+                    inputs={"text": "test input"}
+                )
+
+                # The bug: template metadata should be in result.metadata
+                # but was being overwritten when metadata dict was replaced
+                assert "template" in result.metadata, "Template metadata should be present in result"
+                assert result.metadata["template"]["template_name"] == "test_template"
+                assert result.metadata["template"]["template_hash"] == "abc123def456"
+                assert result.metadata["template"]["unfilled_vars"] == []
+
+                # Also verify other metadata is still there
+                assert result.metadata["model"] == "gpt-4"
+                assert result.metadata["finish_reason"] == "stop"

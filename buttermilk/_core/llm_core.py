@@ -360,8 +360,9 @@ class LLMCore:
                         AssistantMessage(content=content_str, source=self.model)
                     )
 
-                # Collect metadata
+                # Collect metadata (preserve existing template metadata)
                 result.metadata = {
+                    **result.metadata,  # Keep template metadata added earlier
                     "model": self.model,
                     "finish_reason": llm_result.finish_reason,
                     "usage": llm_result.usage,

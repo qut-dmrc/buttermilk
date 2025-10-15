@@ -187,7 +187,7 @@
       "justMyCode": false,
       "args": [
         "+run=batch",
-        "run.mode=batch_all",
+        "run.mode=batch_run",
         "+run.flow=trans",
         "+flows=[trans]",
         "verbose=true",
