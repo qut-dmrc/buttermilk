@@ -247,13 +247,14 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
     Args:
         execution_context_id: Unique execution context identifier for log file naming
         verbose: If True, creates both INFO and DEBUG log files
-        project_name: Optional project name to include in log file name
+        project_name: Project name to include in log file name (REQUIRED)
 
     Returns:
         List of log file paths created
 
     Raises:
         RuntimeError: If file logging has already been configured
+        ValueError: If project_name is None or empty
     """
     global _file_logging_configured
 
@@ -263,15 +264,24 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
             "Multiple calls to setup_file_logging() can break verbose logging functionality "
             "and create conflicting log file handlers. This indicates a problematic initialization sequence."
         )
+
+    # Fail fast if project_name is not provided
+    if not project_name:
+        raise ValueError(
+            "project_name is required for log file naming. "
+            "Log files must follow the format: bm_{project_name}_{execution_context_id}.jsonl. "
+            "This ensures proper identification and filtering of Buttermilk log files."
+        )
+
     # Configure structlog if not already done
     struct_level = logging.DEBUG if verbose else logging.INFO
     configure_structlog(min_level=struct_level)
-    
+
     # Ensure root logger level allows DEBUG messages when verbose
     root_logger = logging.getLogger()
     if verbose:
         root_logger.setLevel(logging.DEBUG)
-    
+
     # Ensure buttermilk logger respects verbose setting
     logging.getLogger(_LOGGER_NAME).setLevel(logging.DEBUG if verbose else logging.INFO)
 
@@ -284,12 +294,8 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
     if non_null_context:
         structlog.contextvars.bind_contextvars(**non_null_context)
 
-    # Create single JSON log file with level based on verbose setting
-    # Use project_name in filename if available, otherwise fall back to generic name
-    if project_name:
-        log_filename = f"{project_name}_{execution_context_id}.jsonl"
-    else:
-        log_filename = f"buttermilk_{execution_context_id}.jsonl"
+    # Create single JSON log file with bm_ prefix for easy identification
+    log_filename = f"bm_{project_name}_{execution_context_id}.jsonl"
 
     log_path = Path(f"/tmp/{log_filename}")
     file_handler = logging.FileHandler(log_path, mode="w")

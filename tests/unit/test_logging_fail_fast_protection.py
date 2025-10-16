@@ -118,17 +118,17 @@ class TestSetupFileLoggingFailFast:
     def test_setup_file_logging_first_call_succeeds(self):
         """Test that the first call to setup_file_logging succeeds."""
         execution_context_id = f"test_first_call_{uuid.uuid4().hex[:8]}"
-        
+
         # Should work without error
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
-        
+        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test_project")
+
         # Verify logging is configured
         assert _file_logging_configured is True
-        
+
         # Verify log file was created
         assert len(log_files) == 1
         assert execution_context_id in log_files[0]
-        
+
         # Verify handlers were added
         root_logger = logging.getLogger()
         file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
@@ -137,14 +137,14 @@ class TestSetupFileLoggingFailFast:
     def test_setup_file_logging_second_call_fails_fast(self):
         """Test that second call to setup_file_logging raises RuntimeError."""
         execution_context_id = f"test_second_call_{uuid.uuid4().hex[:8]}"
-        
+
         # First call should succeed
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test_project")
+
         # Second call should fail fast
         with pytest.raises(RuntimeError) as exc_info:
-            setup_file_logging(execution_context_id=f"different_{execution_context_id}", verbose=True)
-            
+            setup_file_logging(execution_context_id=f"different_{execution_context_id}", verbose=True, project_name="test_project")
+
         error_msg = str(exc_info.value)
         assert "File logging has already been configured" in error_msg
         assert "Multiple calls to setup_file_logging()" in error_msg
@@ -155,19 +155,19 @@ class TestSetupFileLoggingFailFast:
     def test_setup_file_logging_verbose_creates_debug_file(self):
         """Test that verbose=True creates file with DEBUG level."""
         execution_context_id = f"test_verbose_debug_{uuid.uuid4().hex[:8]}"
-        
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
-        
+
+        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test_project")
+
         # Verify file was created
         assert len(log_files) == 1
-        
+
         # Verify DEBUG level is configured
         root_logger = logging.getLogger()
         buttermilk_logger = logging.getLogger("buttermilk")
-        
+
         assert root_logger.getEffectiveLevel() == logging.DEBUG
         assert buttermilk_logger.getEffectiveLevel() == logging.DEBUG
-        
+
         # Find file handler and verify its level
         file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) > 0
@@ -177,19 +177,68 @@ class TestSetupFileLoggingFailFast:
         """Test that verbose=False creates file with INFO level."""
         # Reset state
         self.setup_method()
-        
+
         execution_context_id = f"test_non_verbose_info_{uuid.uuid4().hex[:8]}"
-        
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
-        
+
+        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test_project")
+
         # Verify file was created
         assert len(log_files) == 1
-        
+
         # Find file handler and verify its level
         root_logger = logging.getLogger()
         file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) > 0
         assert file_handlers[0].level == logging.INFO
+
+    def test_setup_file_logging_requires_project_name(self):
+        """Test that setup_file_logging fails fast when project_name is missing."""
+        execution_context_id = f"test_no_project_{uuid.uuid4().hex[:8]}"
+
+        # Should fail with ValueError when project_name is None
+        with pytest.raises(ValueError) as exc_info:
+            setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name=None)
+
+        error_msg = str(exc_info.value)
+        assert "project_name is required for log file naming" in error_msg
+        assert "bm_{project_name}_{execution_context_id}.jsonl" in error_msg
+        assert "proper identification and filtering" in error_msg
+
+    def test_setup_file_logging_requires_non_empty_project_name(self):
+        """Test that setup_file_logging fails fast when project_name is empty string."""
+        execution_context_id = f"test_empty_project_{uuid.uuid4().hex[:8]}"
+
+        # Should fail with ValueError when project_name is empty
+        with pytest.raises(ValueError) as exc_info:
+            setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="")
+
+        error_msg = str(exc_info.value)
+        assert "project_name is required for log file naming" in error_msg
+
+    def test_setup_file_logging_creates_file_with_bm_prefix(self):
+        """Test that log files are created with bm_ prefix."""
+        execution_context_id = f"test_bm_prefix_{uuid.uuid4().hex[:8]}"
+        project_name = "test_project"
+
+        log_files = setup_file_logging(
+            execution_context_id=execution_context_id,
+            verbose=False,
+            project_name=project_name
+        )
+
+        # Verify file was created
+        assert len(log_files) == 1
+        log_file = log_files[0]
+
+        # Verify filename has bm_ prefix and correct format
+        assert "bm_" in log_file
+        assert project_name in log_file
+        assert execution_context_id in log_file
+        assert log_file.endswith(".jsonl")
+
+        # Verify the format is exactly: /tmp/bm_{project_name}_{execution_context_id}.jsonl
+        expected_filename = f"bm_{project_name}_{execution_context_id}.jsonl"
+        assert log_file.endswith(expected_filename)
 
 
 class TestCloudLoggingDeduplication:
@@ -530,20 +579,20 @@ class TestIntegrationScenarios:
         # First session setup (should succeed)
         setup_console_logging(verbose=True)
         execution_context_id_1 = f"session1_{uuid.uuid4().hex[:8]}"
-        log_files_1 = setup_file_logging(execution_context_id=execution_context_id_1, verbose=True)
-        
+        log_files_1 = setup_file_logging(execution_context_id=execution_context_id_1, verbose=True, project_name="test_project")
+
         # Verify first session setup worked
         assert len(log_files_1) == 1
         validation_1 = validate_logging_state(verbose_expected=True)
         assert validation_1["valid"] is True
-        
+
         # Second session setup (should fail fast on logging)
         with pytest.raises(RuntimeError) as exc_info:
             setup_console_logging(verbose=True)
         assert "Console logging has already been configured" in str(exc_info.value)
-        
+
         with pytest.raises(RuntimeError) as exc_info:
-            setup_file_logging(execution_context_id="session2", verbose=True)
+            setup_file_logging(execution_context_id="session2", verbose=True, project_name="test_project")
         assert "File logging has already been configured" in str(exc_info.value)
         
         # But validation should still pass for the original setup
@@ -580,27 +629,27 @@ class TestIntegrationScenarios:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_test_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test_project")
+
         # Verify verbose logging is properly configured
         validation = validate_logging_state(verbose_expected=True)
         assert validation["valid"] is True
         assert validation["console_configured"] is True
         assert validation["file_configured"] is True
-        
+
         # Verify DEBUG level is set
         buttermilk_logger = logging.getLogger("buttermilk")
         root_logger = logging.getLogger()
         assert buttermilk_logger.getEffectiveLevel() == logging.DEBUG
         assert root_logger.getEffectiveLevel() == logging.DEBUG
-        
+
         # Verify any attempt to reconfigure fails fast
         with pytest.raises(RuntimeError):
             setup_console_logging(verbose=False)  # Would break verbose mode
-            
+
         with pytest.raises(RuntimeError):
-            setup_file_logging(execution_context_id="different", verbose=False)  # Would break verbose mode
-        
+            setup_file_logging(execution_context_id="different", verbose=False, project_name="test_project")  # Would break verbose mode
+
         # Verify verbose logging is still intact after failed attempts
         final_validation = validate_logging_state(verbose_expected=True)
         assert final_validation["valid"] is True
@@ -610,22 +659,22 @@ class TestIntegrationScenarios:
         """Test that error messages provide clear guidance."""
         # Test console logging error message
         setup_console_logging(verbose=False)
-        
+
         with pytest.raises(RuntimeError) as exc_info:
             setup_console_logging(verbose=True)
-            
+
         console_error = str(exc_info.value)
         assert "Multiple calls to setup_console_logging()" in console_error
         assert "break verbose logging functionality" in console_error
         assert "problematic initialization sequence" in console_error
-        
+
         # Test file logging error message
         execution_context_id = f"error_msg_test_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test_project")
+
         with pytest.raises(RuntimeError) as exc_info:
-            setup_file_logging(execution_context_id="different", verbose=True)
-            
+            setup_file_logging(execution_context_id="different", verbose=True, project_name="test_project")
+
         file_error = str(exc_info.value)
         assert "Multiple calls to setup_file_logging()" in file_error
         assert "break verbose logging functionality" in file_error
@@ -687,19 +736,19 @@ class TestFailFastProtectionExamples:
         """Example of correct usage pattern that should work."""
         # Step 1: Set up console logging once
         setup_console_logging(verbose=True)
-        
+
         # Step 2: Set up file logging once
         execution_context_id = f"correct_usage_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test_project")
+
         # Step 3: Validate the setup is correct
         validation = validate_logging_state(verbose_expected=True)
         assert validation["valid"] is True
-        
+
         # Step 4: Use logging normally
         logger.debug("This is a debug message")
         logger.info("This is an info message")
-        
+
         # Step 5: Validation continues to pass
         ensure_logging_properly_initialized()
 
@@ -729,17 +778,17 @@ class TestFailFastProtectionExamples:
         # Set up initial logging
         setup_console_logging(verbose=True)
         execution_context_id = f"problematic_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test_project")
+
         # These problematic patterns should all fail fast:
-        
+
         # 1. Trying to reconfigure console logging
         with pytest.raises(RuntimeError, match="Console logging has already been configured"):
             setup_console_logging(verbose=False)
-        
+
         # 2. Trying to reconfigure file logging
         with pytest.raises(RuntimeError, match="File logging has already been configured"):
-            setup_file_logging(execution_context_id="different", verbose=False)
+            setup_file_logging(execution_context_id="different", verbose=False, project_name="test_project")
         
         # 3. Trying to create multiple ExecutionContexts
         import buttermilk._core.execution_context as ec_module
@@ -775,11 +824,11 @@ class TestFailFastProtectionExamples:
         # After fixing the logging setup
         setup_console_logging(verbose=True)
         execution_context_id = f"debug_fixed_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
-        
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test_project")
+
         # Validation should now pass
         validation_fixed = validate_logging_state(verbose_expected=True)
         assert validation_fixed["valid"] is True
-        
+
         # ensure_logging_properly_initialized should now succeed
         ensure_logging_properly_initialized()  # Should not raise

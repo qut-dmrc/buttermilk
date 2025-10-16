@@ -14,9 +14,6 @@ This is the only debugging guide you need - all commands have been validated and
 
 **Available Flows**: 
 - `trans` - Transgender journalist ethics research flow
-- `transllm` - LLM-based trans journalism analysis 
-- `zot` - Zotero integration flow
-- `osb` - Online Safety Benchmark flow
 
 **Valid Criteria Templates**:
 - `tja` - Trans Journalists Association stylebook criteria
@@ -204,15 +201,27 @@ await debug_agent.stop_puppet_mode()
     
     **❌ CRITICAL**: Flows WILL FAIL with arbitrary parameters. Do NOT use placeholder values - parameters must match existing live data configuration.
 
+*   **List Recent Log Files (NEW):**
+    ```bash
+    uv run python -m buttermilk.debug.ws_debug_cli list-logs -n 5
+    ```
+    **Expected Evidence**: Shows the 5 most recent Buttermilk log files with timestamps and sizes
+
 *   **View Recent Logs (VALIDATED):**
     ```bash
+    # Default: reads from most recent bm_*.jsonl file
     uv run python -m buttermilk.debug.ws_debug_cli logs -n 20
+
+    # Specify a specific log file
+    uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 --file /tmp/bm_project_session-id.jsonl
     ```
-    **Expected Evidence**: Shows structured JSONL log entries from `/tmp/buttermilk_exec-*.jsonl`
+    **Expected Evidence**: Shows structured JSONL log entries from `/tmp/bm_*.jsonl` files
+
+    **Note**: Log files now use the prefix `bm_` and follow the format: `bm_{project_name}_{execution_context_id}.jsonl`
 
 *   **Monitor Structured Logs Directly (VALIDATED):**
     ```bash
-    tail -f /tmp/buttermilk_exec-*.jsonl
+    tail -f /tmp/bm_*.jsonl
     ```
     **Expected Evidence**: Real-time JSONL log entries with proper timestamps
 
@@ -243,7 +252,9 @@ This ensures no orphaned processes are left running.
 ### Simplified Debugging Rules
 
 **✅ DO (VALIDATED WORKFLOW):**
-- Use `ws_debug_cli logs` for all log access (✅ Accesses `/tmp/buttermilk_exec-*.jsonl`)
+- Use `ws_debug_cli list-logs` to see recent log files (✅ Shows 5 most recent `bm_*.jsonl` files)
+- Use `ws_debug_cli logs` for log access (✅ Accesses `/tmp/bm_*.jsonl` files with `bm_` prefix)
+- Use `ws_debug_cli logs --file <path>` to read specific log files (✅ Accepts file parameter)
 - Use `ws_debug_cli test-connection` before debugging flows (✅ Validates WebSocket)
 - Use `curl http://localhost:8000/health` to verify API status (✅ Returns expected JSON)
 - Check structured logs first for setup issues (✅ ConfigurationBootstrapper creates them)

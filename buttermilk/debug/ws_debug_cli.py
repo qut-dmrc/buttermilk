@@ -280,14 +280,31 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def get_logs(self, lines: int = 50, min_level: str = "INFO") -> dict:
-        """Get recent log lines, with an optional minimum level filter."""
-        log_files = glob.glob("/tmp/buttermilk_*.jsonl")
-        if not log_files:
-            return {"error": "No log files found in /tmp/"}
+    async def get_logs(self, lines: int = 50, min_level: str = "INFO", log_file: str | None = None) -> dict:
+        """Get recent log lines, with an optional minimum level filter.
 
-        # Get the most recent log file
-        latest_log = max(log_files, key=os.path.getmtime)
+        Args:
+            lines: Number of lines to retrieve
+            min_level: Minimum log level to filter
+            log_file: Specific log file path to read (optional). If not provided,
+                     uses the most recent bm_*.jsonl file in /tmp/
+        """
+        if log_file:
+            # Use specified log file
+            if not os.path.exists(log_file):
+                return {"error": f"Log file not found: {log_file}"}
+            latest_log = log_file
+        else:
+            # Find Buttermilk log files with bm_ prefix
+            log_files = glob.glob("/tmp/bm_*.jsonl")
+            if not log_files:
+                return {
+                    "error": "No Buttermilk log files found in /tmp/",
+                    "hint": "Log files must follow format: bm_{project_name}_{execution_context_id}.jsonl"
+                }
+
+            # Get the most recent log file
+            latest_log = max(log_files, key=os.path.getmtime)
 
         levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
         min_level_num = levels.get(min_level.upper(), 1)
@@ -608,11 +625,12 @@ def clear_session(ctx):
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
     help="Minimum log level to display.",
 )
+@click.option("--file", "-f", default=None, help="Specific log file to read (optional)")
 @click.pass_context
-def logs(ctx, lines: int, level: str):
+def logs(ctx, lines: int, level: str, file: str | None):
     """Show recent log lines from Buttermilk log files."""
     client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.get_logs(lines, min_level=level))
+    result = asyncio.run(client.get_logs(lines, min_level=level, log_file=file))
 
     if ctx.obj["JSON_OUTPUT"]:
         print(json.dumps(result, indent=2))
@@ -632,6 +650,45 @@ def logs(ctx, lines: int, level: str):
                     console.print(f"[green]{line}[/green]")
                 else:
                     console.print(f"[dim]{line}[/dim]")
+
+
+@cli.command()
+@click.option("--count", "-n", default=5, help="Number of recent log files to show")
+@click.pass_context
+def list_logs(ctx, count: int):
+    """List the most recent Buttermilk log files."""
+    log_files = glob.glob("/tmp/bm_*.jsonl")
+
+    if not log_files:
+        console = Console()
+        console.print("[yellow]No Buttermilk log files found in /tmp/[/yellow]")
+        console.print("[dim]Log files must follow format: bm_{project_name}_{execution_context_id}.jsonl[/dim]")
+        return
+
+    # Sort by modification time (most recent first)
+    sorted_logs = sorted(log_files, key=os.path.getmtime, reverse=True)
+    recent_logs = sorted_logs[:count]
+
+    if ctx.obj["JSON_OUTPUT"]:
+        result = {
+            "log_files": [
+                {
+                    "path": log,
+                    "modified": datetime.fromtimestamp(os.path.getmtime(log)).isoformat(),
+                    "size": os.path.getsize(log),
+                }
+                for log in recent_logs
+            ]
+        }
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        console.print(f"[green]Most recent {len(recent_logs)} Buttermilk log files:[/green]\n")
+        for log in recent_logs:
+            mtime = datetime.fromtimestamp(os.path.getmtime(log))
+            size = os.path.getsize(log)
+            console.print(f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]")
+        console.print(f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]")
 
 
 @cli.command()
