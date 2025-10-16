@@ -228,12 +228,15 @@ class LLMScorer(LLMAgent):
             logger.debug(
                 "Scorer received message that is not a suitable ExecutionTrace with JudgeReasons and inputs. Skipping.",
                 agent_id=self.agent_id,
-                message_agent_id=message.agent_info.get('agent_id'),
+                message_agent_id=message.agent_info.get("agent_id"),
             )
             return
 
         logger.debug(
-            "Scorer received potential scoring target", scorer_agent_id=self.agent_id, from_agent_id=message.agent_info.get('agent_id'), call_id=message.call_id
+            "Scorer received potential scoring target",
+            scorer_agent_id=self.agent_id,
+            from_agent_id=message.agent_info.get("agent_id"),
+            call_id=message.call_id,
         )
 
         # Extract data based on `self.inputs` mappings.
@@ -241,14 +244,19 @@ class LLMScorer(LLMAgent):
         # and 'criteria' (if the criteria template is dynamic).
         extracted_data = extract_message_data(
             message=message,  # The ExecutionTrace from the Judge
-            source=message.agent_info.get('agent_id'),  # The Judge agent's ID/name
+            source=message.agent_info.get("agent_id"),  # The Judge agent's ID/name
             input_mappings=self.inputs,  # Configured mappings for the Scorer
         )
 
         # Ignore messages that don't have ground truth in the input record
-        record = extracted_data.pop("records", [])
-        if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
-            logger.debug("Scorer received message without ground truth.", scorer_agent_name=self.agent_name, from_agent_id=message.agent_info.get('agent_id'))
+        record = message.record
+        if not record or not record.ground_truth:
+            logger.debug(
+                "Scorer received message without ground truth.",
+                record_id=record.record_id,
+                scorer_agent_name=self.agent_name,
+                from_agent_id=message.agent_info.get("agent_id"),
+            )
             return
 
         # `records` for scoring should come from the original input to the agent being judged.
@@ -257,27 +265,21 @@ class LLMScorer(LLMAgent):
         # The `scorer_agent_input` needs to be structured according to what the
         # scorer's prompt template expects.
 
-        # Ensure 'record' and 'answers' are present, as they are crucial for scoring.
-        # 'answers' would typically be mapped from message.outputs (the JudgeReasons).
-        # 'record' would typically be mapped from message.inputs.record (original record judged).
-        # Extract the first record
-        record = record[0]
-
-        # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(parent_call_id=message.call_id, record=record, inputs=extracted_data)
-
         # Construct the AgentInput for this Scorer's _process method.
         # parent_call_id links this scoring trace back to the Judge's trace.
         scorer_agent_input = AgentInput(
             parent_call_id=message.call_id,  # Link to the Judge's trace
-            record=extracted_data.pop("record", None),  # Original record that was judged
+            record=record,  # Original record that was judged
             inputs=extracted_data,  # Remaining extracted data (should include 'answers', 'criteria')
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )
 
         # Invoke the scoring process using the LLM
         logger.debug(
-            "Scorer scoring request", scorer_agent_name=self.agent_name, assessed_agent_id=message.agent_info.get('agent_id'), assessed_call_id=message.call_id
+            "Scorer scoring request",
+            scorer_agent_name=self.agent_name,
+            assessed_agent_id=message.agent_info.get("agent_id"),
+            assessed_call_id=message.call_id,
         )
         response = await self.invoke(message=scorer_agent_input)
 

@@ -610,7 +610,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             tool_definitions=tool_schemas,
             status="active",
             announcement_type="initial",
-            responding_to=message.message_id if hasattr(message, "message_id") else None,
             source=self.agent_id,
         )
 

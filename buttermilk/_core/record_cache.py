@@ -76,13 +76,13 @@ class RecordCache:
                     logger.debug("📁 RecordCache using default cache dir", base_dir=str(self._base_dir))
 
             # Log initialization
-            logger.info(
+            logger.debug(
                 "🗂️  RecordCache base_dir resolved",
                 base_dir=str(self._base_dir),
                 enabled=self.enabled,
                 working_dir=os.getcwd(),
                 cache_env_var=os.getenv("BM_RECORD_CACHE_DIR"),
-                disable_env_var=os.getenv("BM_DISABLE_RECORD_CACHE")
+                disable_env_var=os.getenv("BM_DISABLE_RECORD_CACHE"),
             )
 
             # Create directory if enabled

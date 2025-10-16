@@ -487,12 +487,12 @@ class WebScraperSelenium(WebScraperRequests):
         if self.driver:
             try:
                 self.driver.close()
-                logger.info(f"WebScraperSelenium ('{self.agent_id}'): Closed existing Selenium session.")
+                logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Closed existing Selenium session.")
                 time.sleep(1)
             except Exception as e:
-                logger.info(f"WebScraperSelenium ('{self.agent_id}'): Failed to close existing Selenium session: {e!s}")
+                logger.warning(f"WebScraperSelenium ('{self.agent_id}'): Failed to close existing Selenium session: {e!s}")
 
-        logger.info(f"WebScraperSelenium ('{self.agent_id}'): Starting new Selenium session.")
+        logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Starting new Selenium session.")
         try:
             # Assumes new_webdriver is available in the global scope or imported.
             if "new_webdriver" not in globals() or not callable(globals()["new_webdriver"]):
@@ -545,7 +545,7 @@ class WebScraperSelenium(WebScraperRequests):
             saved_png_uri = bm.save(data=screenshot_png_bytes, basename=f"{base_filename}_screenshot", extension=".png", mode="wb")
             if saved_png_uri: save_paths["png"] = str(saved_png_uri)
 
-            logger.info(
+            logger.debug(
                 f"WebScraperSelenium ('{self.agent_id}'): Fetched {page_url}. "
                 f"Saved HTML to: {save_paths.get('html')}, Screenshot to: {save_paths.get('png')}",
             )

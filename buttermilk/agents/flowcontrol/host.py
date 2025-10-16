@@ -200,7 +200,8 @@ class HostAgent(Agent):
             else:
                 logger.warning(
                     "Host received TaskComplete from agent but it was not in pending tasks.",
-                    agent_id_to_update,
+                    agent_id=agent_id_to_update,
+                    role=message.role,
                 )
 
     @message_handler
@@ -252,20 +253,20 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle UserResponseMessage for user confirmations and feedback."""
-        logger.info("Host received user input", agent_name=self.agent_name, message=message)
+        logger.debug("Host received user input", agent_name=self.agent_name, message=message)
         self._user_confirmation = message
         self._user_confirmation_received.set()
 
         # Handle halt request - user wants to stop the entire flow
         if message.halt:
-            logger.info("Host received halt request from user - terminating flow", agent_name=self.agent_name)
+            logger.debug("Host received halt request from user - terminating flow", agent_name=self.agent_name)
             # Send END message to signal flow termination
             end_step = StepRequest(role=END, content="Flow halted by user request")
             await self._publish(end_step)
             return
 
         if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
-            logger.info(
+            logger.debug(
                 "Host received user request to set human in the loop",
                 agent_name=self.agent_name,
                 new_value=message.human_in_loop,
@@ -427,7 +428,7 @@ class HostAgent(Agent):
         logger.info("Host waiting for user confirmation", agent_name=self.agent_name, step_role=step.role)
         max_tries = self._max_user_confirmation_time // 60
         for _ in range(max_tries):
-            logger.info("Host waiting for user confirmation", agent_name=self.agent_name, step_role=step.role)
+            logger.debug("Host waiting for user confirmation", agent_name=self.agent_name, step_role=step.role)
             try:
                 await self.request_user_confirmation(step)
                 await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
@@ -480,7 +481,7 @@ class HostAgent(Agent):
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
-                    logger.info("Waiting for pending tasks to complete", pending_from=list(self._pending_tasks_by_agent.keys()))
+                    logger.debug("Waiting for pending tasks to complete", pending_from=list(self._pending_tasks_by_agent.keys()))
 
                 # Calculate dynamic timeout based on number of tasks
                 # Base timeout + (120 seconds per task / 6 parallel capacity)
@@ -620,7 +621,6 @@ class HostAgent(Agent):
 
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
                     # If user rejected or timed out, stop the flow
-                    logger.info("User rejected step or timed out, stopping flow", agent_name=self.agent_name)
                     flow_stopped_early = True
                     early_stop_reason = "Flow stopped: user rejected or timed out"
                     break
@@ -642,7 +642,7 @@ class HostAgent(Agent):
 
             # Send END message if we stopped early
             if flow_stopped_early:
-                logger.info("Sending END message due to early termination", agent_name=self.agent_name, reason=early_stop_reason)
+                logger.warning("Sending END message due to early termination", agent_name=self.agent_name, reason=early_stop_reason)
                 await self._publish(StepRequest(role=END, content=early_stop_reason))
 
             # Send final progress update before any cleanup begins
@@ -653,7 +653,7 @@ class HostAgent(Agent):
                 waiting_on={},
                 message="Flow completed",
             )
-            logger.info("Host sending final progress update before cleanup.", agent_name=self.agent_name)
+            logger.debug("Host sending final progress update before cleanup.", agent_name=self.agent_name)
             await self._publish(final_progress_message)
 
         except KeyboardInterrupt:
@@ -757,10 +757,10 @@ class HostAgent(Agent):
         """Process a single step."""
         self._current_step = step.role
         if step.role == WAIT:
-            logger.info("Host waiting for 10 seconds as requested by WAIT step.")
+            logger.debug("Host waiting for 10 seconds as requested by WAIT step.")
             await asyncio.sleep(10)
         elif step.role == END:
-            logger.info("Flow completed and all tasks finished. Sending END signal", step=step)
+            logger.debug("Flow completed and all tasks finished. Sending END signal", step=step)
             await self._publish(step)
         else:
             if step.role in self._participants:
@@ -845,13 +845,13 @@ class HostAgent(Agent):
 
             # Create a more descriptive log message
             tool_desc = self._describe_tool_call(call.name, arguments)
-            logger.info("Host routing tool to agent", tool_name=call.name, agent_id=agent_id, role=role, tool_description=tool_desc)
+            logger.debug("Host routing tool to agent", tool_name=call.name, agent_id=agent_id, role=role, tool_description=tool_desc)
 
             if self.human_in_loop:
                 await self._proposed_step.put(step_request)
             else:
                 # If human_in_loop is False, we send the step request directly
-                logger.info("Host routing tool call to agent", agent_name=self.agent_name, agent_id=agent_id, step_request=step_request)
+                logger.debug("Host routing tool call to agent", agent_name=self.agent_name, agent_id=agent_id, step_request=step_request)
                 # Route to role-specific topic
                 role_topic = DefaultTopicId(type=role)
                 await self._publish(step_request, topic_id=role_topic)
