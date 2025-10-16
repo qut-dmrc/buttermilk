@@ -103,18 +103,18 @@ class QueryRunner(BaseModel):
             job_config.destination_uris = [gcs_results_uri]
             # For GCS, typically WRITE_TRUNCATE is used to ensure clean output directory
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-            logger.info(f"Query results will be saved to GCS: {gcs_results_uri}")
+            logger.debug(f"Query results will be saved to GCS: {gcs_results_uri}")
 
         elif destination:
             job_config.destination = destination
             job_config.write_disposition = (
                 bigquery.WriteDisposition.WRITE_TRUNCATE if overwrite else bigquery.WriteDisposition.WRITE_APPEND  # Or WRITE_EMPTY if preferred
             )
-            logger.info(f"Query results will be saved to BigQuery table: {destination} (Overwrite: {overwrite})")
+            logger.debug(f"Query results will be saved to BigQuery table: {destination} (Overwrite: {overwrite})")
 
         try:
             query_job = self.bq_client.query(sql, job_config=job_config)
-            logger.info(f"BigQuery job submitted: {query_job.job_id}")
+            logger.debug(f"BigQuery job submitted: {query_job.job_id}")
 
             # Wait for the job to complete to get statistics
             query_job.result()  # This blocks until the query completes
@@ -132,7 +132,7 @@ class QueryRunner(BaseModel):
         approx_cost_str = f"${approx_cost:.2f}"  # Format cost to 2 decimal places
 
         time_taken = datetime.datetime.now(datetime.UTC) - t_start
-        logger.info(
+        logger.debug(
             f"Query '{query_job.job_id}' stats: Execution time: {time_taken}, Cache hit: {cache_hit}, "
             f"Bytes billed: {bytes_billed_str}, Approx. cost: {approx_cost_str}.",
         )
@@ -191,7 +191,7 @@ class QueryRunner(BaseModel):
             bytes_processed_str = humanfriendly.format_size(bytes_processed)
             estimated_cost_str = f"${estimated_cost_usd:.2f}"  # Format cost
 
-            logger.info(
+            logger.debug(
                 f"Query cost estimation: Bytes to be processed: {bytes_processed_str}, Approximate cost: {estimated_cost_str}",
             )
             return bytes_processed, estimated_cost_usd

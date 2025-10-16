@@ -136,7 +136,7 @@ def save(
     if "schema" in parameters and "dataset" in parameters:
         try:
             destination_table = upload_rows(rows=data, **parameters)  # Pass all params
-            logger.info(f"Successfully uploaded data to BigQuery table: {destination_table}.")
+            logger.debug(f"Successfully uploaded data to BigQuery table: {destination_table}.")
             return destination_table
         except Exception as e:
             logger.error(f"Failed to upload data to BigQuery (schema/dataset provided). Error: {e!s}", exc_info=True)
@@ -293,7 +293,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         # Upload from an in-memory bytes buffer
         with io.BytesIO(json_data_bytes) as buffer:
             blob.upload_from_file(file_obj=buffer, content_type="application/jsonl")
-        logger.info(f"Successfully uploaded DataFrame as NDJSON to GCS: {uri}")
+        logger.debug(f"Successfully uploaded DataFrame as NDJSON to GCS: {uri}")
         return uri
     except Exception as e_bytesio:  # Fallback to pandas direct GCS upload if BytesIO fails
         logger.warning(
@@ -303,7 +303,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         try:
             # Pandas to_json can write directly to GCS if gcsfs is installed
             data.to_json(uri, orient="records", lines=True, compression="gzip" if uri.endswith(".gz") else None)
-            logger.info(f"Successfully uploaded DataFrame via pandas.to_json to GCS: {uri}")
+            logger.debug(f"Successfully uploaded DataFrame via pandas.to_json to GCS: {uri}")
             return uri
         except Exception as e_pandas:
             logger.error(f"Pandas to_json fallback also failed for {uri}: {e_pandas!s}", exc_info=True)
@@ -447,7 +447,7 @@ async def upload_rows_async(
     all_errors = [error for sublist_errors in insertion_results for error in sublist_errors if sublist_errors]  # Flatten and filter
 
     if not all_errors:
-        logger.info(f"Successfully pushed {len(bq_prepared_rows)} rows asynchronously to BigQuery table {final_dataset}.")
+        logger.debug(f"Successfully pushed {len(bq_prepared_rows)} rows asynchronously to BigQuery table {final_dataset}.")
     else:
         # Log detailed errors if possible, summarize for exception
         error_summary = str(all_errors)[:1000]  # Limit error string length
@@ -583,7 +583,7 @@ def upload_binary(data: bytes | io.BufferedIOBase, *, uri: str) -> str:
     else:
         raise TypeError(f"Unsupported data type for upload_binary: {type(data)}. Expected bytes or BufferedIOBase.")
 
-    logger.info(f"Successfully uploaded binary data to {uri}.")
+    logger.debug(f"Successfully uploaded binary data to {uri}.")
     return uri
 
 
@@ -654,7 +654,7 @@ def dump_pickle(data: Any, *, save_dir: str, extension: str = ".pickle", **kwarg
     ) as out_file:
         pickle.dump(data, out_file)
         saved_filepath = out_file.name
-    logger.info(f"Successfully dumped data to local disk (pickle): {saved_filepath}.")
+    logger.debug(f"Successfully dumped data to local disk (pickle): {saved_filepath}.")
     return saved_filepath
 
 

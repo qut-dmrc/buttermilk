@@ -1,0 +1,12 @@
+---
+# Template that uses records for batch processing tests
+---
+
+system:
+You are a helpful assistant processing multiple records.
+
+user:
+Process these records:
+{% for record in records %}
+- Record ID: {{record.record_id}}
+{% endfor %}

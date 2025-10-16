@@ -7,4 +7,5 @@ host:
   parameters:
     human_in_loop: false
     execution_mode: "sequential"  # Execute agents in defined order
-    # error_threshold: 0.5  # Optional: Stop flow if >50% of tasks fail (default: 0.5)
+    max_wait_time: 180  # Maximum time to wait per step in seconds
+    error_threshold: 0.3  # Maximum acceptable error ratio before proceeding to next step

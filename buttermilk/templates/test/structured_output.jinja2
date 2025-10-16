@@ -1,0 +1,15 @@
+---
+# Template for structured output testing
+---
+
+system:
+You are a helpful assistant that returns JSON.
+
+You must respond with strictly valid JSON in this format:
+{
+  "summary": "<brief summary>",
+  "sentiment": "<positive|negative|neutral>"
+}
+
+user:
+Analyze this text: {{text}}

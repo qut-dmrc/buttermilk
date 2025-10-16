@@ -658,8 +658,13 @@ class HostAgent(Agent):
 
         except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
+            # Send END message to terminate orchestrator
+            await self._publish(StepRequest(role=END, content="Flow terminated by user interrupt"))
         except (FatalError, Exception) as e:
             logger.exception("Unexpected and unhandled fatal error", error=e)
+            # Send END message to terminate orchestrator even when exceptions occur
+            error_message = f"Flow terminated due to error: {type(e).__name__}: {str(e)[:200]}"
+            await self._publish(StepRequest(role=END, content=error_message))
         finally:
             # Cancel the progress reporter task
             if self._progress_reporter_task:

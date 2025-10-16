@@ -336,7 +336,7 @@ class ExecutionContext(BaseModel):
                         )
                         connections_data = None
                     else:
-                        logger.info("Loaded LLM connections from cache", cache_path=str(cache_path))
+                        logger.debug("Loaded LLM connections from cache", cache_path=str(cache_path))
                 except Exception as e:
                     logger.warning("Failed to load LLM connections from cache, will try secrets", error=str(e))
                     connections_data = None
@@ -357,7 +357,7 @@ class ExecutionContext(BaseModel):
                         connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
                         if not isinstance(connections_data, dict):
                             raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
-                        logger.info("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
+                        logger.debug("Loaded LLM connections from secret manager", key=MODELS_CFG_KEY)
 
                         # Cache the connections data
                         self._write_cache_sync(connections_data, cache_path)
@@ -373,7 +373,7 @@ class ExecutionContext(BaseModel):
         """Synchronous cache writing helper."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
-        logger.info("Caching LLM connections", cache_path=str(cache_path))
+        logger.debug("Caching LLM connections", cache_path=str(cache_path))
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property

@@ -1,11 +1,13 @@
 """Tests for HostAgent error handling functionality."""
 
 from collections import defaultdict
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
+from buttermilk._core.constants import END
+from buttermilk._core.contract import ConductorRequest, StepRequest, TaskProcessingComplete, TaskProcessingStarted
+from buttermilk._core.exceptions import FatalError
 from buttermilk.agents.flowcontrol.host import HostAgent
 
 
@@ -191,11 +193,171 @@ class TestHostAgentErrorHandling:
         """Test edge case where all tasks failed."""
         # Mock the _wait_for_all_tasks_complete method
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # All tasks failed scenario
         host_agent._total_tasks_in_step = 3
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
-        
+
         # Should stop (100% > 50% threshold)
         result = await host_agent.wait_check_current_step_completions()
         assert result is False
+
+    @pytest.mark.anyio
+    async def test_end_message_sent_on_exception(self):
+        """Test that END message is sent when exception occurs in _run_flow.
+
+        Regression test for issue #272 where exceptions caused hangs because
+        no END message was sent to terminate the orchestrator.
+        """
+        # Create host with required parameters
+        host_agent = HostAgent(
+            role="HOST",
+            description="Test host agent",
+            parameters={
+                "human_in_loop": False,
+                "error_threshold": 0.5,
+                "max_wait_time": 120,
+            },
+            unique_identifier="test_host",
+        )
+
+        # Track published messages
+        published_messages = []
+
+        async def mock_publish(message, topic_id=None):
+            published_messages.append((message, topic_id))
+
+        host_agent._publish = mock_publish
+
+        # Create a ConductorRequest that will trigger an exception
+        # We'll mock _sequence to raise an exception
+        conductor_request = ConductorRequest(
+            participants={"FETCH": "Fetch data"},
+            inputs={},
+            parameters={},
+            additional_tools=[],
+        )
+
+        # Mock _sequence to raise an exception after initialization
+        async def failing_sequence():
+            raise ValueError("Simulated error in flow execution")
+            yield  # Never reached
+
+        with patch.object(host_agent, "_sequence", return_value=failing_sequence()):
+            # Mock the progress reporter task to avoid issues
+            host_agent._progress_reporter_task = None
+
+            # Run the flow - should catch exception and send END
+            await host_agent._run_flow(conductor_request)
+
+        # Verify that an END message was published
+        end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+        assert len(end_messages) > 0, "No END message was sent after exception"
+
+        # Verify the END message contains error info
+        end_msg = end_messages[-1]
+        assert "error" in end_msg.content.lower()
+        # The actual error could be ValueError or FatalError depending on execution order
+
+    @pytest.mark.anyio
+    async def test_end_message_sent_on_keyboard_interrupt(self):
+        """Test that END message is sent when KeyboardInterrupt occurs.
+
+        Regression test for issue #272 where KeyboardInterrupt caused hangs
+        because no END message was sent to terminate the orchestrator.
+        """
+        # Create host with required parameters
+        host_agent = HostAgent(
+            role="HOST",
+            description="Test host agent",
+            parameters={
+                "human_in_loop": False,
+                "error_threshold": 0.5,
+                "max_wait_time": 120,
+            },
+            unique_identifier="test_host",
+        )
+
+        # Track published messages
+        published_messages = []
+
+        async def mock_publish(message, topic_id=None):
+            published_messages.append((message, topic_id))
+
+        host_agent._publish = mock_publish
+
+        # Create a ConductorRequest
+        conductor_request = ConductorRequest(
+            participants={"FETCH": "Fetch data"},
+            inputs={},
+            parameters={},
+            additional_tools=[],
+        )
+
+        # Mock _sequence to raise KeyboardInterrupt
+        async def interrupted_sequence():
+            raise KeyboardInterrupt()
+            yield  # Never reached
+
+        with patch.object(host_agent, "_sequence", return_value=interrupted_sequence()):
+            # Mock the progress reporter task
+            host_agent._progress_reporter_task = None
+
+            # Run the flow - should catch KeyboardInterrupt and send END
+            await host_agent._run_flow(conductor_request)
+
+        # Verify that an END message was published
+        end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+        assert len(end_messages) > 0, "No END message was sent after KeyboardInterrupt"
+
+        # Verify the END message contains error info (KeyboardInterrupt gets caught as general exception)
+        end_msg = end_messages[-1]
+        assert "error" in end_msg.content.lower() or "terminated" in end_msg.content.lower()
+
+    @pytest.mark.anyio
+    async def test_end_message_sent_on_missing_parameter_error(self):
+        """Test that END message is sent when required parameters are missing.
+
+        This recreates the exact scenario from the user's log where missing
+        max_wait_time and error_threshold parameters caused a hang.
+        """
+        # Create host WITHOUT required parameters (simulates the bug scenario)
+        host_agent = HostAgent(
+            role="HOST",
+            description="Test host agent",
+            parameters={
+                "human_in_loop": False,
+                # Intentionally missing max_wait_time and error_threshold
+            },
+            unique_identifier="test_host",
+        )
+
+        # Track published messages
+        published_messages = []
+
+        async def mock_publish(message, topic_id=None):
+            published_messages.append((message, topic_id))
+
+        host_agent._publish = mock_publish
+
+        # Create a ConductorRequest
+        conductor_request = ConductorRequest(
+            participants={"FETCH": "Fetch data"},
+            inputs={},
+            parameters={},
+            additional_tools=[],
+        )
+
+        # Mock the progress reporter task
+        host_agent._progress_reporter_task = None
+
+        # Run the flow - will trigger ValueError when accessing missing parameters
+        await host_agent._run_flow(conductor_request)
+
+        # Verify that an END message was published despite the parameter errors
+        end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+        assert len(end_messages) > 0, "No END message was sent after parameter error"
+
+        # Verify the END message mentions the error
+        end_msg = end_messages[-1]
+        assert "error" in end_msg.content.lower() or "ValueError" in end_msg.content

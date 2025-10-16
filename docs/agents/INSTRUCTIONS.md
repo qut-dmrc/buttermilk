@@ -1,13 +1,6 @@
 # Agent Instructions for Buttermilk Project
 
-## Configuration Hierarchy
-This is the project-specific configuration for Buttermilk.
-
-1. **Project-Specific** (this file) - Overrides all other configurations
-2. **Global** (`/writing/docs/agent/INSTRUCTIONS.md`) - Repository-wide preferences
-3. **Base** (`/writing/bot/agents/*.md`) - Core agent definitions
-
-## Buttermilk-Specific Instructions
+## Buttermilk Mission
 
 Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 

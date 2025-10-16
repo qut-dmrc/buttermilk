@@ -138,7 +138,7 @@ class Describer(LLMAgent):
             and isinstance(record.metadata, dict)
             and record.metadata.get("alt_text")
         ):
-            logger.info("Record already has alt_text", alt_text=record.metadata["alt_text"][:50])
+            logger.debug("Record already has alt_text", alt_text=record.metadata["alt_text"][:50])
             # Return structured output even for existing alt text
             existing_description = MediaDescription(
                 description=record.metadata["alt_text"],
@@ -169,7 +169,7 @@ class Describer(LLMAgent):
 
     def _create_text_response(self, record: Any) -> AgentOutput:
         """Create a response for text-only records."""
-        logger.info("Creating text-only response", record_id=record.id)
+        logger.debug("Creating text-only response", record_id=record.id)
         raise NotImplementedError("Text-only response handling not implemented yet.")
 
     async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
@@ -177,7 +177,7 @@ class Describer(LLMAgent):
         # Check if we need to download from URI
         uri = record.metadata.get("uri") if hasattr(record, "metadata") else None
         if uri and not record.media:
-            logger.info("Downloading media from URI", uri=uri)
+            logger.debug("Downloading media from URI", uri=uri)
             try:
                 # Import here to avoid circular imports
                 from buttermilk.utils.media import download_and_convert

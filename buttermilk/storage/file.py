@@ -162,7 +162,7 @@ class FileStorage(Storage):
                         # JSON format - single JSON array
                         json.dump(data, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"Successfully saved {len(data)} records to {self.path}")
+            logger.debug(f"Successfully saved {len(data)} records to {self.path}")
 
         except Exception as e:
             logger.exception(

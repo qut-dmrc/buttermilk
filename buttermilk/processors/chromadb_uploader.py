@@ -272,7 +272,7 @@ class ChromaDBUploader(BaseModel):
             reason = f"time interval ({self.sync_interval_minutes} minutes)"
 
         if should_sync and self._original_remote_path:
-            logger.info("Syncing to remote storage", reason=reason, processed_count=self._processed_count)
+            logger.debug("Syncing to remote storage", reason=reason, processed_count=self._processed_count)
             try:
                 # Get the local cache path
                 local_cache_path = await self._get_local_cache_path()

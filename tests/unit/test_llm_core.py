@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core.models import SystemMessage, UserMessage
+from autogen_core.models import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
 from buttermilk._core.exceptions import ProcessingError
@@ -14,6 +14,7 @@ from buttermilk._core.types import BaseRecord
 
 class OutputModelForTesting(BaseModel):
     """Test Pydantic model for structured output."""
+
     summary: str
     sentiment: str
 
@@ -27,13 +28,13 @@ class TestLLMCore:
             "model": "gpt-4",
             "template": "test_template",
             "temperature": 0.7,
-            "fail_on_unfilled_parameters": False
+            "fail_on_unfilled_parameters": False,
         }
 
         core = LLMCore(
             model=params["model"],
             template=params["template"],
-            fail_on_unfilled_parameters=params["fail_on_unfilled_parameters"]
+            fail_on_unfilled_parameters=params["fail_on_unfilled_parameters"],
         )
 
         assert core.model == "gpt-4"
@@ -56,134 +57,85 @@ class TestLLMCore:
 
     def test_init_with_output_model(self):
         """Test LLMCore initialization with structured output model."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
+        params = {"model": "gpt-4", "template": "test_template"}
 
         core = LLMCore(
             model=params["model"],
             template=params["template"],
-            output_model=OutputModelForTesting
+            output_model=OutputModelForTesting,
         )
 
         assert core.output_model == OutputModelForTesting
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_fill_template_basic(self):
-        """Test template filling with basic inputs."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
+        """Test template filling with basic inputs using real template file."""
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        messages = await core._fill_template(
+            inputs={"var": "test value", "context": [], "records": []}
         )
 
-        # Mock the template loading
-        with patch("buttermilk._core.llm_core.load_template") as mock_load:
-            mock_load.return_value = (
-                "Template content with {{var}}",
-                set(),  # No unfilled vars
-                "template_hash_123"
-            )
+        # Should have system and user messages
+        assert len(messages) == 2
+        assert isinstance(messages[0], SystemMessage)
+        assert isinstance(messages[1], UserMessage)
+        # User message should contain the filled variable
+        assert "test value" in messages[1].content
 
-            with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = ([SystemMessage(content="System prompt"), UserMessage(content="User prompt", source="test")], set())
+        # Template metadata should be set
+        assert core.template_metadata["template_name"] == "test/simple"
+        assert "template_hash" in core.template_metadata
+        assert core.template_metadata["unfilled_vars"] == []
 
-                messages = await core._fill_template(
-                    inputs={"var": "value", "context": [], "records": []}
-                )
-
-                assert len(messages) == 2
-                assert isinstance(messages[0], SystemMessage)
-                assert isinstance(messages[1], UserMessage)
-                assert core.template_metadata["template_name"] == "test_template"
-                assert core.template_metadata["template_hash"] == "template_hash_123"
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_fill_template_with_unfilled_vars_strict(self):
-        """Test template filling fails with unfilled vars in strict mode."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template",
-            "fail_on_unfilled_parameters": True
-        }
+        """Test template filling fails with unfilled vars in strict mode using real template."""
         core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            fail_on_unfilled_parameters=True,
         )
 
-        with patch("buttermilk._core.llm_core.load_template") as mock_load:
-            mock_load.return_value = (
-                "Template with {{missing_var}}",
-                {"missing_var"},  # Unfilled var
-                "hash"
+        # Only provide required_var, leave missing_var undefined
+        with pytest.raises(ProcessingError, match="unfilled parameters"):
+            await core._fill_template(
+                inputs={"required_var": "value", "context": [], "records": []}
             )
 
-            with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = ([UserMessage(content="Test", source="test")], set())
-
-                with pytest.raises(ProcessingError, match="unfilled parameters: missing_var"):
-                    await core._fill_template(
-                        inputs={"context": [], "records": []}
-                    )
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_fill_template_with_unfilled_vars_lenient(self):
-        """Test template filling continues with unfilled vars in lenient mode."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template",
-            "fail_on_unfilled_parameters": False
-        }
+        """Test template filling continues with unfilled vars in lenient mode using real template."""
         core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", ""),
-            fail_on_unfilled_parameters=params.get("fail_on_unfilled_parameters", True)
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            fail_on_unfilled_parameters=False,
         )
 
-        with patch("buttermilk._core.llm_core.load_template") as mock_load:
-            mock_load.return_value = (
-                "Template with {{missing_var}}",
-                {"missing_var"},
-                "hash"
-            )
+        # Only provide required_var, leave missing_var undefined
+        messages = await core._fill_template(
+            inputs={"required_var": "value", "context": [], "records": []}
+        )
 
-            with patch("buttermilk._core.llm_core.make_messages") as mock_make:
-                mock_make.return_value = ([UserMessage(content="Test", source="test")], set())
+        # Should return messages even with unfilled vars
+        assert len(messages) >= 1
+        # Unfilled vars should be recorded in metadata
+        assert "missing_var" in core.template_metadata["unfilled_vars"]
 
-                messages = await core._fill_template(
-                    inputs={"context": [], "records": []}
-                )
-
-                assert len(messages) == 1
-                assert core.template_metadata["unfilled_vars"] == ["missing_var"]
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_call_llm_with_trace_success(self):
-        """Test successful LLM call with tracing."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
-        )
+        """Test successful LLM call with tracing - mocking only at boundary."""
+        core = LLMCore(model="gpt-4", template="test/simple")
 
-        # Mock the BM and LLM client
+        # Mock ONLY the external boundary (bm.llms)
         mock_bm = MagicMock()
         mock_client = AsyncMock()
-        from autogen_core.models import RequestUsage
         mock_result = CreateResult(
             content="LLM response",
             finish_reason="stop",
             usage=RequestUsage(prompt_tokens=50, completion_tokens=50),
-            cached=False
+            cached=False,
         )
-        # Set up the mock chain
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
         mock_client.call_chat.return_value = mock_result
 
@@ -191,24 +143,18 @@ class TestLLMCore:
             result = await core._call_llm_with_trace(
                 messages=[UserMessage(content="Test", source="test")],
                 cancellation_token=None,
-                parent_trace_id="parent_123"
+                parent_trace_id="parent_123",
             )
 
             assert result == mock_result
             mock_client.call_chat.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_call_llm_with_trace_failure(self):
-        """Test LLM call failure handling."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
-        )
+        """Test LLM call failure handling - mocking only at boundary."""
+        core = LLMCore(model="gpt-4", template="test/simple")
 
+        # Mock ONLY the external boundary
         mock_bm = MagicMock()
         mock_client = AsyncMock()
         mock_client.call_chat.side_effect = Exception("API error")
@@ -219,19 +165,12 @@ class TestLLMCore:
                 await core._call_llm_with_trace(
                     messages=[UserMessage(content="Test", source="test")],
                     cancellation_token=None,
-                    parent_trace_id=None
+                    parent_trace_id=None,
                 )
 
     def test_combine_inputs_with_dict_and_kwargs(self):
         """Test that _combine_inputs properly merges dict inputs with kwargs."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params["model"],
-            template=params["template"]
-        )
+        core = LLMCore(model="gpt-4", template="test_template")
 
         # Test dict inputs + kwargs
         dict_inputs = {"my_var": "from_dict", "context": []}
@@ -246,14 +185,7 @@ class TestLLMCore:
 
     def test_combine_inputs_with_none_and_kwargs(self):
         """Test that _combine_inputs handles None inputs with kwargs."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params["model"],
-            template=params["template"]
-        )
+        core = LLMCore(model="gpt-4", template="test_template")
 
         kwargs = {"my_var": "from_kwargs", "other_var": "kwargs_only"}
         combined = core._combine_inputs(None, kwargs)
@@ -266,19 +198,12 @@ class TestLLMCore:
         from buttermilk._core.contract import AgentInput
         from buttermilk._core.types import Record
 
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params["model"],
-            template=params["template"]
-        )
+        core = LLMCore(model="gpt-4", template="test_template")
 
         agent_input = AgentInput(
             inputs={"agent_var": "agent_value"},
             context=[],
-            record=Record(record_id="test", content="test")
+            record=Record(record_id="test", content="test"),
         )
 
         kwargs = {"kwargs_var": "kwargs_value"}
@@ -292,14 +217,7 @@ class TestLLMCore:
 
     def test_template_variable_treated_normally(self):
         """Test that 'template' input variable is treated like any other variable."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params["model"],
-            template=params["template"]
-        )
+        core = LLMCore(model="gpt-4", template="test_template")
 
         # Template variable in inputs should be preserved as normal variable
         inputs = {"template": "input_template_value", "other": "value"}
@@ -315,218 +233,170 @@ class TestLLMCore:
         # The LLMCore should still use its own template from init
         assert core.template == "test_template"  # From constructor, not inputs
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_process_with_llm_success(self):
-        """Test full LLM processing pipeline success."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
+        """Test full LLM processing pipeline - real template, boundary-only mocking."""
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response text",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=25, completion_tokens=25),
+            cached=False,
         )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        # Mock template filling
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.return_value = [SystemMessage(content="System"), UserMessage(content="User", source="test")]
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(
+                inputs={"var": "test input"},
+                context=None,
+                records=None,
+                parent_trace_id="trace_123",
+            )
 
-            # Mock LLM call
-            with patch.object(core, "_call_llm_with_trace") as mock_call:
-                from autogen_core.models import RequestUsage
-                mock_call.return_value = CreateResult(
-                    content="Response text",
-                    finish_reason="stop",
-                    usage=RequestUsage(prompt_tokens=25, completion_tokens=25),
-                    cached=False
-                )
+            # Verify observable outcomes
+            assert isinstance(result, LLMResult)
+            assert result.content == "Response text"
+            assert result.metadata["model"] == "gpt-4"
+            assert result.metadata["finish_reason"] == "stop"
+            # Usage is converted to dict in metadata
+            assert result.metadata["usage"]["prompt_tokens"] == 25
+            assert result.metadata["usage"]["completion_tokens"] == 25
+            assert result.error is None
 
-                result = await core.process_with_llm(
-                    inputs={"text": "input"},
-                    context=None,
-                    records=None,
-                    parent_trace_id="trace_123"
-                )
-
-                assert isinstance(result, LLMResult)
-                assert result.content == "Response text"
-                assert result.metadata["model"] == "gpt-4"
-                assert result.metadata["finish_reason"] == "stop"
-                # Usage is a RequestUsage object, not a dict
-                assert result.metadata["usage"].prompt_tokens == 25
-                assert result.metadata["usage"].completion_tokens == 25
-                assert result.error is None
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_process_with_llm_structured_output(self):
-        """Test LLM processing with structured output model."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
+        """Test LLM processing with structured output - real template, boundary-only mocking."""
         core = LLMCore(
-            model=params["model"],
-            template=params["template"],
-            output_model=OutputModelForTesting
+            model="gpt-4",
+            template="test/structured_output",
+            output_model=OutputModelForTesting,
         )
 
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.return_value = [UserMessage(content="Test", source="test")]
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        parsed_obj = OutputModelForTesting(summary="Test summary", sentiment="positive")
+        mock_client.call_chat.return_value = ModelOutput(
+            content='{"summary": "Test summary", "sentiment": "positive"}',
+            parsed_object=parsed_obj,
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=40, completion_tokens=35),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-            with patch.object(core, "_call_llm_with_trace") as mock_call:
-                parsed_obj = OutputModelForTesting(
-                    summary="Test summary",
-                    sentiment="positive"
-                )
-                from autogen_core.models import RequestUsage
-                mock_call.return_value = ModelOutput(
-                    content='{"summary": "Test summary", "sentiment": "positive"}',
-                    parsed_object=parsed_obj,
-                    finish_reason="stop",
-                    usage=RequestUsage(prompt_tokens=40, completion_tokens=35),
-                    cached=False
-                )
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(inputs={"text": "analyze this"})
 
-                result = await core.process_with_llm(
-                    inputs={"text": "analyze this"}
-                )
+            # Verify structured output was parsed correctly
+            assert isinstance(result.content, OutputModelForTesting)
+            assert result.content.summary == "Test summary"
+            assert result.content.sentiment == "positive"
 
-                assert isinstance(result.content, OutputModelForTesting)
-                assert result.content.summary == "Test summary"
-                assert result.content.sentiment == "positive"
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_process_with_llm_processing_error(self):
-        """Test LLM processing handles ProcessingError correctly."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
+        """Test LLM processing handles ProcessingError from real invalid template."""
+        # Use strict mode with template that has unfilled vars to trigger ProcessingError
         core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            fail_on_unfilled_parameters=True,
         )
 
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.side_effect = ProcessingError("Template error")
+        # Don't provide required variables - should trigger ProcessingError in _fill_template
+        with pytest.raises(ProcessingError, match="unfilled parameters"):
+            await core.process_with_llm(inputs={"context": [], "records": []})
 
-            with pytest.raises(ProcessingError, match="Template error"):
-                await core.process_with_llm(inputs={"text": "test"})
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_process_with_llm_unexpected_error(self):
-        """Test LLM processing wraps unexpected errors."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
-        )
+        """Test LLM processing wraps unexpected errors from real scenarios."""
+        # Use a non-existent template to trigger RuntimeError
+        core = LLMCore(model="gpt-4", template="nonexistent/template/path")
 
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.side_effect = RuntimeError("Unexpected error")
+        # Should wrap the error in ProcessingError
+        with pytest.raises(ProcessingError, match="LLMCore processing failed"):
+            await core.process_with_llm(inputs={"text": "test"})
 
-            with pytest.raises(ProcessingError, match="LLMCore processing failed"):
-                await core.process_with_llm(inputs={"text": "test"})
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_process_with_records(self):
-        """Test LLM processing with BaseRecord objects."""
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params.get("model", ""),
-            template=params.get("template", "")
-        )
+        """Test LLM processing with BaseRecord objects - real template, boundary-only mocking."""
+        core = LLMCore(model="gpt-4", template="test/with_records")
 
         # Create test records
-        record1 = BaseRecord(
-            record_id="rec1",
-            dataset_name="test",
-            split_type="train"
+        record1 = BaseRecord(record_id="rec1", dataset_name="test", split_type="train")
+        record2 = BaseRecord(record_id="rec2", dataset_name="test", split_type="train")
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Processed records",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
         )
-        record2 = BaseRecord(
-            record_id="rec2",
-            dataset_name="test",
-            split_type="train"
-        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.return_value = [UserMessage(content="Test", source="test")]
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(inputs={}, records=[record1, record2])
 
-            with patch.object(core, "_call_llm_with_trace") as mock_call:
-                from autogen_core.models import RequestUsage
-                mock_call.return_value = CreateResult(
-                    content="Processed records",
-                    finish_reason="stop",
-                    usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
-                    cached=False
-                )
+            # Verify records were processed
+            assert result.content == "Processed records"
+            # Verify the template actually received the records
+            # (The with_records template includes record IDs in the prompt)
+            assert mock_client.call_chat.called
+            call_args = mock_client.call_chat.call_args
+            # Check kwargs for messages
+            if call_args.kwargs:
+                messages_sent = call_args.kwargs.get("messages", [])
+            else:
+                messages_sent = call_args[0] if call_args[0] else []
+            # Convert messages to string to check if record IDs were included
+            messages_text = str(messages_sent)
+            assert "rec1" in messages_text or "rec2" in messages_text
 
-                result = await core.process_with_llm(
-                    inputs={},
-                    records=[record1, record2]
-                )
-
-                # Verify records were passed to template filling
-                mock_fill.assert_called_once()
-                call_args = mock_fill.call_args
-                # Records are now part of the combined inputs dict passed as first argument
-                inputs_dict = call_args[0][0]  # First positional argument (inputs)
-                assert inputs_dict["records"] == [record1, record2]
-
-                assert result.content == "Processed records"
-
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_template_metadata_preserved_in_result(self):
         """Test that template metadata (including template_hash) is preserved in LLMResult.
 
         Regression test for bug where template_hash was calculated but then
         overwritten when metadata dict was replaced instead of updated.
+
+        This test uses REAL template loading to verify the actual bug is fixed.
         """
-        params = {
-            "model": "gpt-4",
-            "template": "test_template"
-        }
-        core = LLMCore(
-            model=params["model"],
-            template=params["template"]
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="LLM response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
+            cached=False,
         )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        # Mock template filling to set template_metadata
-        with patch.object(core, "_fill_template") as mock_fill:
-            mock_fill.return_value = [UserMessage(content="Test", source="test")]
-            # Simulate what _fill_template does - sets core.template_metadata
-            core.template_metadata = {
-                "template_name": "test_template",
-                "template_hash": "abc123def456",
-                "unfilled_vars": []
-            }
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(inputs={"var": "test input"})
 
-            with patch.object(core, "_call_llm_with_trace") as mock_call:
-                from autogen_core.models import RequestUsage
-                mock_call.return_value = CreateResult(
-                    content="LLM response",
-                    finish_reason="stop",
-                    usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
-                    cached=False
-                )
+            # The bug: template metadata should be in result.metadata
+            # If the bug exists, template metadata would be overwritten
+            assert (
+                "template" in result.metadata
+            ), "Template metadata should be present in result"
+            assert (
+                result.metadata["template"]["template_name"]
+                == "test/simple"
+            )
+            assert "template_hash" in result.metadata["template"]
+            assert result.metadata["template"]["template_hash"] != ""  # Should have a hash
+            assert result.metadata["template"]["unfilled_vars"] == []
 
-                result = await core.process_with_llm(
-                    inputs={"text": "test input"}
-                )
-
-                # The bug: template metadata should be in result.metadata
-                # but was being overwritten when metadata dict was replaced
-                assert "template" in result.metadata, "Template metadata should be present in result"
-                assert result.metadata["template"]["template_name"] == "test_template"
-                assert result.metadata["template"]["template_hash"] == "abc123def456"
-                assert result.metadata["template"]["unfilled_vars"] == []
-
-                # Also verify other metadata is still there
-                assert result.metadata["model"] == "gpt-4"
-                assert result.metadata["finish_reason"] == "stop"
+            # Also verify other metadata is still there (wasn't overwritten)
+            assert result.metadata["model"] == "gpt-4"
+            assert result.metadata["finish_reason"] == "stop"

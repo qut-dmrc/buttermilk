@@ -117,7 +117,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Clear any pending steps since the manager has a new request
         self._clear_pending_steps()
 
-        logger.info(f"Manager interrupted with new request: {message.content}")
+        logger.debug(f"Manager interrupted with new request: {message.content}")
 
         # Use the LLM with structured tools to determine next step
         # The template should be configured to use tool calling
@@ -197,7 +197,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # Check if we got tool calls in the output
         if isinstance(chat_result.content, list) and all(isinstance(c, FunctionCall) for c in chat_result.content):
             tool_calls: list[FunctionCall] = chat_result.content
-            logger.info(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
+            logger.debug(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
 
             # Use the base class helper to route tool calls
             await self._route_tool_calls_to_agents(tool_calls)
@@ -290,5 +290,5 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             self._failed_tasks_by_agent.clear()
             self._total_tasks_in_step = 0
 
-        logger.info("Current step completed, clear to proceed.")
+        logger.debug("Current step completed, clear to proceed.")
         return True
