@@ -532,7 +532,7 @@ def upload_rows(
             all_errors.extend(chunk_errors)
 
     if not all_errors:
-        logger.info(
+        logger.debug(
             f"Successfully pushed {len(bq_prepared_rows)} rows to BigQuery table {final_dataset}.", n_rows=len(bq_prepared_rows), table=final_dataset
         )
     else:
