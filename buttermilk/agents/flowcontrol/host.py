@@ -82,7 +82,7 @@ class HostAgent(Agent):
     @property
     def human_in_loop(self) -> bool:
         """Whether to interact with the human/manager for step confirmation.
-        
+
         Must be explicitly configured in parameters - no defaults allowed.
         """
         if "human_in_loop" not in self.parameters:
@@ -102,9 +102,7 @@ class HostAgent(Agent):
         """
         if self._max_wait_time_value is None:
             if "max_wait_time" not in self.parameters:
-                raise ValueError(
-                    f"Host agent '{self.agent_name}': 'max_wait_time' must be explicitly set in parameters"
-                )
+                raise ValueError(f"Host agent '{self.agent_name}': 'max_wait_time' must be explicitly set in parameters")
             self._max_wait_time_value = self.parameters["max_wait_time"]
         return self._max_wait_time_value
 
@@ -116,9 +114,7 @@ class HostAgent(Agent):
         """
         if self._max_user_confirmation_time_value is None:
             if "max_user_confirmation_time" not in self.parameters:
-                raise ValueError(
-                    f"Host agent '{self.agent_name}': 'max_user_confirmation_time' must be explicitly set in parameters"
-                )
+                raise ValueError(f"Host agent '{self.agent_name}': 'max_user_confirmation_time' must be explicitly set in parameters")
             self._max_user_confirmation_time_value = self.parameters["max_user_confirmation_time"]
         return self._max_user_confirmation_time_value
 
@@ -130,9 +126,7 @@ class HostAgent(Agent):
         """
         if self._error_threshold_value is None:
             if "error_threshold" not in self.parameters:
-                raise ValueError(
-                    f"Host agent '{self.agent_name}': 'error_threshold' must be explicitly set in parameters"
-                )
+                raise ValueError(f"Host agent '{self.agent_name}': 'error_threshold' must be explicitly set in parameters")
             self._error_threshold_value = self.parameters["error_threshold"]
         return self._error_threshold_value
 
@@ -143,7 +137,7 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle ConductorRequest to start the flow."""
-        logger.info(
+        logger.debug(
             "Host received ConductorRequest",
             agent_name=self.agent_name,
             num_participants=len(message.participants),
@@ -293,9 +287,9 @@ class HostAgent(Agent):
         ctx: MessageContext = None,
     ) -> None:
         """Update registry with agent announcement.
-        
+
         Thread-safe update of agent registry.
-        
+
         Args:
             announcement: The agent announcement to process.
 
@@ -305,13 +299,15 @@ class HostAgent(Agent):
             role = message.agent_config.role.upper()  # Normalize to uppercase
 
             if message.status == "leaving":
-                logger.warning("Host received notification to remove agent, but functionality is not implemented.", agent_name=self.agent_name, agent_id=agent_id)
+                logger.warning(
+                    "Host received notification to remove agent, but functionality is not implemented.", agent_name=self.agent_name, agent_id=agent_id
+                )
             else:
                 # Add or update agent in registry
                 self._agent_registry[agent_id] = message
                 # Update tool registry
                 self._tools.extend(message.tool_definitions)
-                
+
                 # Build tool-to-agent mapping from the tools this agent provides
                 tool_names = []
                 for tool in message.tool_definitions:
@@ -338,9 +334,9 @@ class HostAgent(Agent):
 
     def create_registry_summary(self) -> dict[str, Any]:
         """Create a summary of the agent registry for UI display.
-        
+
         Uses caching to avoid redundant computation.
-        
+
         Returns:
             dict: Summary containing active agents, available tools, and counts.
 
@@ -377,12 +373,12 @@ class HostAgent(Agent):
         **kwargs: Any,
     ) -> SystemPromptMessage:
         """Create a UI message that includes the agent registry summary.
-        
+
         Args:
             content: The message content.
             options: Optional interaction options.
             **kwargs: Additional SystemPromptMessage fields.
-            
+
         Returns:
             SystemPromptMessage: UI message with registry summary.
 
@@ -501,9 +497,7 @@ class HostAgent(Agent):
                 # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
-                    self._tasks_condition.wait_for(
-                        lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent
-                    ),
+                    self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
                     timeout=dynamic_timeout,
                 )
                 return True
@@ -799,7 +793,7 @@ class HostAgent(Agent):
         **kwargs: Any,
     ) -> AgentOutput | None:
         """Process messages.
-        
+
         Base implementation returns an error since non-LLM hosts don't process direct inputs.
         Subclasses that support LLM-based processing should override this method.
         """
@@ -810,7 +804,7 @@ class HostAgent(Agent):
         tool_calls: list[Any],  # FunctionCall objects
     ) -> None:
         """Route tool calls to the appropriate agents as StepRequests.
-        
+
         This is a helper method that can be used by LLM-based host subclasses
         to convert tool calls into StepRequests for the appropriate agents.
         """
@@ -822,15 +816,15 @@ class HostAgent(Agent):
             if not agent_id:
                 logger.error("No agent found for tool", tool_name=call.name, available_tools=list(self._tool_to_agent_map.keys()))
                 continue
-                
+
             # Get the agent's role from the registry
             agent_announcement = self._agent_registry.get(agent_id)
             if not agent_announcement:
                 logger.error("Agent not found in registry for tool", agent_id=agent_id, tool_name=call.name)
                 continue
-                
+
             role = agent_announcement.agent_config.role.upper()
-            
+
             # Parse the arguments
             try:
                 arguments = json.loads(call.arguments)
@@ -858,11 +852,11 @@ class HostAgent(Agent):
 
     def _describe_tool_call(self, tool_name: str, arguments: dict) -> str:
         """Generate a concise description of a tool call.
-        
+
         Args:
             tool_name: Name of the tool being called
             arguments: Parsed arguments for the tool
-            
+
         Returns:
             str: A human-readable description
 

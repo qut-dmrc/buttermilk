@@ -12,11 +12,7 @@ from buttermilk import create_session_bm_async
 async def test_create_session_bm_async():
     """Test async BM session creation."""
     # Create a BM instance asynchronously
-    bm = await create_session_bm_async(
-        project_name="test_project",
-        job="test_job",
-        platform="test"
-    )
+    bm = await create_session_bm_async(project_name="test_project", job="test_job", platform="test")
 
     assert bm is not None
     assert bm.session_info.project_name == "test_project"
@@ -28,10 +24,7 @@ async def test_create_session_bm_async():
 @pytest.mark.asyncio
 async def test_bm_async_init_creates_save_dir():
     """Test that async init properly sets up save directory."""
-    bm = await create_session_bm_async(
-        project_name="test_project",
-        job="test_job"
-    )
+    bm = await create_session_bm_async(project_name="test_project", job="test_job")
 
     # Verify save_dir was set during async init
     assert bm.session_info.save_dir is not None
@@ -42,10 +35,7 @@ async def test_bm_async_init_creates_save_dir():
 @pytest.mark.asyncio
 async def test_bm_ensure_initialized():
     """Test BM ensure_initialized() waits for async init."""
-    bm = await create_session_bm_async(
-        project_name="test_project",
-        job="test_job"
-    )
+    bm = await create_session_bm_async(project_name="test_project", job="test_job")
 
     # Should complete immediately since we already awaited creation
     await bm.ensure_initialized()
@@ -53,4 +43,3 @@ async def test_bm_ensure_initialized():
     # Verify initialization is complete
     assert bm._initialization_complete.is_set()
     assert bm._initialization_error is None
-
