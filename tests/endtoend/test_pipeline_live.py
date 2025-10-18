@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 
 from buttermilk.pipeline import PipelineOrchestrator
-from buttermilk.tools.catalog_test import Observation
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation
+
+# Skip entire module if themoviedb is not installed
+pytestmark = pytest.mark.skipif(
+    not THEMOVIEDB_AVAILABLE,
+    reason="themoviedb package not installed - install with: pip install themoviedb.py"
+)
 
 
 # Create fake processors

@@ -14,7 +14,7 @@ import pytest
 from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
 
-from buttermilk.tools.catalog_test import Title, TMDBTool
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Title, TMDBTool
 
 
 async def run_function_tool(function_tool: FunctionTool, **kwargs) -> Any:
@@ -25,7 +25,13 @@ async def run_function_tool(function_tool: FunctionTool, **kwargs) -> Any:
 
 
 # Pytest markers for conditional test execution
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not THEMOVIEDB_AVAILABLE,
+        reason="themoviedb package not installed - install with: pip install themoviedb.py"
+    )
+]
 
 
 @pytest.fixture

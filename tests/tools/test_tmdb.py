@@ -6,7 +6,13 @@ from unittest.mock import AsyncMock, call, patch
 import pytest
 from autogen_core.tools import FunctionTool
 
-from buttermilk.tools.catalog_test import Observation, Title, TitleType, TMDBTool
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TitleType, TMDBTool
+
+# Skip entire module if themoviedb is not installed
+pytestmark = pytest.mark.skipif(
+    not THEMOVIEDB_AVAILABLE,
+    reason="themoviedb package not installed - install with: pip install themoviedb.py"
+)
 
 
 # Test Fixtures

@@ -3,7 +3,13 @@
 
 import pytest
 
-from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TMDBTool
+
+# Skip entire module if themoviedb is not installed
+pytestmark = pytest.mark.skipif(
+    not THEMOVIEDB_AVAILABLE,
+    reason="themoviedb package not installed - install with: pip install themoviedb.py"
+)
 
 
 class TestTMDBMultiProcessor:

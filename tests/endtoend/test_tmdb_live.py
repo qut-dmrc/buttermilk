@@ -22,10 +22,17 @@ import os
 import pytest
 
 from buttermilk import BM
-from buttermilk.tools.catalog_test import Observation, Title, TitleType, TMDBTool
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TitleType, TMDBTool
 
 # Pytest markers for conditional test execution
-pytestmark = [pytest.mark.integration, pytest.mark.endtoend]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.endtoend,
+    pytest.mark.skipif(
+        not THEMOVIEDB_AVAILABLE,
+        reason="themoviedb package not installed - install with: pip install themoviedb.py"
+    )
+]
 
 
 @pytest.fixture

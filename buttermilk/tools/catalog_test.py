@@ -11,8 +11,14 @@ from typing import Any, AsyncGenerator, Iterable, Optional
 import shortuuid
 from autogen_core.tools import FunctionTool
 from pydantic import ConfigDict, Field, field_validator
-from themoviedb import aioTMDb
 from tqdm.asyncio import tqdm
+
+try:
+    from themoviedb import aioTMDb
+    THEMOVIEDB_AVAILABLE = True
+except ImportError:
+    THEMOVIEDB_AVAILABLE = False
+    aioTMDb = None  # type: ignore
 
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
