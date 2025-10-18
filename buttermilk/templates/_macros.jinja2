@@ -1,20 +1,25 @@
 {% macro render_or_include(variable_value, template_suffix='.jinja2') %}
   {#- Check if the variable has a truthy value (not Undefined, None, False, empty, etc.) -#}
   {% if variable_value %}
-    {#- Attempt to include a template named after the variable's value. Capture output. -#}
-    {% set included_content %}
-      {% include variable_value + template_suffix ignore missing with context %}
-    {% endset %}
-
-    {#- Trim whitespace from captured content (custom function) -#}
-    {% set included_content = included_content | strip_all  %}
-
-    {#- Output included content if found, otherwise output the original variable value -#}
-    {% if included_content %}
-      {{- included_content -}}
-    {% else %}
-      {# If include failed (no template found), render the original value #}
+    {#- If variable_value is a list or dict, render it directly without trying to include as template -#}
+    {% if variable_value is iterable and variable_value is not string %}
       {{- variable_value -}}
+    {% else %}
+      {#- Attempt to include a template named after the variable's value. Capture output. -#}
+      {% set included_content %}
+        {% include variable_value + template_suffix ignore missing with context %}
+      {% endset %}
+
+      {#- Trim whitespace from captured content (custom function) -#}
+      {% set included_content = included_content | strip_all  %}
+
+      {#- Output included content if found, otherwise output the original variable value -#}
+      {% if included_content %}
+        {{- included_content -}}
+      {% else %}
+        {# If include failed (no template found), render the original value #}
+        {{- variable_value -}}
+      {% endif %}
     {% endif %}
   {% else %}
     {# If variable_value was initially falsey (e.g., Undefined, None, empty string),
