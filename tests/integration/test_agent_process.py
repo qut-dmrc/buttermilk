@@ -55,7 +55,7 @@ class TestScorerAgent:
                 "template": "score",
             },
         )
-        scorer = LLMScorer(**config)
+        scorer = LLMScorer(**config.model_dump())
 
         # Mock the _extract_vars method to return test data
         scorer._extract_vars = AsyncMock()
