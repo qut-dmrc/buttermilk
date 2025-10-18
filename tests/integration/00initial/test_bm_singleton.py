@@ -59,7 +59,7 @@ def test_singleton_between_modules(real_bm, second_module_access):
     assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multiple_sessions_same_project(real_bm):
     """Test that multiple sessions in same project share project name but have unique run IDs.
 
@@ -98,7 +98,7 @@ async def test_multiple_sessions_same_project(real_bm):
     assert "session-" not in save_dir2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_init_async_without_config_dir_uses_default():
     """Test that init_async() without config_dir uses the default resolution."""
     # Act: Initialize without config_dir
@@ -110,7 +110,7 @@ async def test_init_async_without_config_dir_uses_default():
     assert bm.session_info.project_name == "buttermilk"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_init_async_with_relative_config_dir(tmp_path, monkeypatch):
     """Test that init_async(config_dir='conf') resolves against CWD."""
     # Arrange: Create custom config in temp directory
@@ -137,7 +137,7 @@ async def test_init_async_with_relative_config_dir(tmp_path, monkeypatch):
     assert bm.session_info.job == "test_relative"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_init_async_with_absolute_config_dir(tmp_path):
     """Test that init_async(config_dir='/abs/path') uses absolute path."""
     # Arrange: Create custom config at absolute path
@@ -159,7 +159,7 @@ async def test_init_async_with_absolute_config_dir(tmp_path):
     assert bm.session_info.job == "test_absolute"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_multiple_sessions_different_config_dirs(tmp_path, monkeypatch):
     """Test that different sessions can use different config directories."""
     # Arrange: Create two config directories

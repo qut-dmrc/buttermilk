@@ -313,7 +313,12 @@ class LLMCore:
                     elif isinstance(inputs, dict):
                         context = inputs.get("context")
 
-                context = context or []
+                # Ensure context is always a list
+                if context is None:
+                    context = []
+                elif not isinstance(context, list):
+                    # If context is a single message or string, wrap it in a list
+                    context = [context]
 
                 # Combine inputs and kwargs (record/context already removed from kwargs)
                 combined_inputs = self._combine_inputs(inputs, kwargs)
@@ -394,7 +399,7 @@ class LLMCore:
 
         return result
 
-    async def _fill_template(self, inputs: Any, *, record: BaseRecord = None, context: list[LLMMessage] = []) -> list[LLMMessage]:
+    async def _fill_template(self, inputs: Any, *, record: BaseRecord = None, context: list[LLMMessage] | None = None) -> list[LLMMessage]:
         """Render the template with provided data.
 
         Args:

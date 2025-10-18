@@ -192,6 +192,7 @@
         "+flows=[trans]",
         "verbose=true",
         "+llms=${input:llms}",
+        "run.limit=2"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"

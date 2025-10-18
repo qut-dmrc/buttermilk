@@ -1,4 +1,3 @@
-import asyncio
 import tempfile
 from pathlib import Path
 
@@ -8,7 +7,7 @@ from buttermilk._core.config_bootstrap import bootstrap_session_with_config_asyn
 from buttermilk.utils.templating import load_template
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_external_template_loading_and_priority():
     """Tests that an external template path can be configured and is prioritized."""
     with tempfile.TemporaryDirectory() as temp_dir:

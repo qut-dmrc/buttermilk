@@ -495,7 +495,7 @@ def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) ->
 def make_messages(
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
-    context: list[LLMMessage] = [],  # Conversation history
+    context: list[LLMMessage] | None = None,  # Conversation history
     record: BaseRecord | None = None,  # Optional record
 ) -> tuple[list[LLMMessage], set[str]]:
     """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
@@ -535,6 +535,13 @@ def make_messages(
     """
     output_messages: list[LLMMessage] = []
     processed_placeholders: set[str] = set()
+
+    # Ensure context is a list (handle None or mutable default argument issues)
+    if context is None:
+        context = []
+    elif not isinstance(context, list):
+        # If context is not a list, wrap it
+        context = [context]
 
     try:
         # Parse main content from Prompty string (strips frontmatter)

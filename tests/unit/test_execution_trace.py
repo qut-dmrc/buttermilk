@@ -130,7 +130,7 @@ class TestExecutionTrace:
 class TestTraceWriter:
     """Test suite for TraceWriter functionality."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_trace_writer_singleton(self, real_bm):
         """Test TraceWriter is a singleton."""
         writer1 = TraceWriter()
@@ -140,7 +140,7 @@ class TestTraceWriter:
         assert writer1 is writer2
         assert writer2 is writer3
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_trace_writer_add(self, real_bm):
         """Test adding traces to TraceWriter."""
         with patch("buttermilk.utils.trace_writer.AsyncDataUploader") as mock_uploader_class:
@@ -162,7 +162,7 @@ class TestTraceWriter:
 
             mock_uploader.add.assert_called_once_with(trace)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_trace_writer_no_config(self, real_bm):
         """Test TraceWriter handles missing configuration gracefully."""
         # Reset the singleton

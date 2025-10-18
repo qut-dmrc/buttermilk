@@ -327,8 +327,6 @@ class HostAgent(Agent):
 
                 logger.debug("Host registered agent", agent_name=self.agent_name, agent_id=agent_id, tools=tool_names)
 
-            logger.debug("Tool-to-agent mapping", mapping=dict(self._tool_to_agent_map))
-
             # Invalidate cache
             self._registry_summary_cache = None
 

@@ -164,3 +164,9 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
     assert isinstance(correctness, float) or correctness is None, "'correctness' should be float or None."
     if isinstance(correctness, float):
         assert 0.0 <= correctness <= 1.0, "'correctness' score must be between 0.0 and 1.0."
+
+    # CRITICAL: Verify template does not contain "Undefined" (bug fix verification)
+    for assessment in result.outputs.assessments:
+        assert "Undefined" not in assessment.feedback, (
+            f"BUG: Assessment feedback contains 'Undefined': {assessment.feedback}"
+        )

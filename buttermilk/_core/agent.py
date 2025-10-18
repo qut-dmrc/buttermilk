@@ -482,18 +482,20 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
                 if weave_client is not None:
                     process_op = weave.op(self._process, call_display_name=self.agent_name)
-                parent_call = await get_parent_call_weave(message)
+                    parent_call = await get_parent_call_weave(message)
 
-                child_call = weave_client.create_call(
-                    process_op,
-                    inputs=scrub_serializable(message.model_dump()),
-                    parent=parent_call,
-                    display_name=self.agent_name,
-                    attributes=trace_params,
-                )
+                    child_call = weave_client.create_call(
+                        process_op,
+                        inputs=scrub_serializable(message.model_dump()),
+                        parent=parent_call,
+                        display_name=self.agent_name,
+                        attributes=trace_params,
+                    )
 
-                if parent_call is not None:
-                    parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
+                    if parent_call is not None:
+                        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
+                else:
+                    child_call = None
 
                 # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
                 result = await self._process(message=message)
@@ -645,8 +647,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         """
         if message.role != self.role:
-            # Only handle if the role matches this agent's role - create a "skipped" trace
-            logger.debug(f"Agent {self.agent_name} skipped StepRequest due to role mismatch: requested {message.role}, agent is {self.role}")
+            # Only handle if the role matches this agent's role
             return None
 
         return await self.invoke(message=message)

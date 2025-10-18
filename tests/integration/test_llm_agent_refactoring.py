@@ -64,7 +64,7 @@ class TestLLMAgentRefactoring:
         # LLMCore should receive the tools
         assert agent.llm_core.tools is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_process_basic_input(self):
         """Test LLMAgent processes basic AgentInput correctly."""
         agent = LLMAgent(agent_name="basic_agent", role="PROCESSOR", parameters={"model": "gpt-4", "template": "test"})
@@ -110,7 +110,7 @@ class TestLLMAgentRefactoring:
             assert call_args[1]["context"] == []
             assert call_args[1]["records"] == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_process_with_context(self):
         """Test LLMAgent processes context correctly."""
         agent = LLMAgent(agent_name="context_agent", role="CONTEXTUAL", parameters={"model": "gpt-4", "template": "chat"})
@@ -131,7 +131,7 @@ class TestLLMAgentRefactoring:
             call_args = mock_process.call_args
             assert call_args[1]["context"] == context
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_process_with_records(self):
         """Test LLMAgent processes records correctly."""
         agent = LLMAgent(agent_name="record_agent", role="RECORD_PROCESSOR", parameters={"model": "gpt-4", "template": "process_records"})
@@ -152,7 +152,7 @@ class TestLLMAgentRefactoring:
             call_args = mock_process.call_args
             assert call_args[1]["record"] == record
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_process_structured_output(self):
         """Test LLMAgent with structured output from LLMCore."""
         agent = LLMAgent(
@@ -175,7 +175,7 @@ class TestLLMAgentRefactoring:
             assert result.outputs.action == "proceed"
             assert result.outputs.reason == "All checks passed"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_parameter_merging(self):
         """Test that task parameters properly override agent parameters."""
         agent = LLMAgent(
@@ -204,7 +204,7 @@ class TestLLMAgentRefactoring:
             assert agent.llm_core.parameters["custom_param"] == "task_value"
             assert agent.llm_core.parameters["model"] == "gpt-4"  # Not overridden
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_handles_processing_error(self):
         """Test LLMAgent handles ProcessingError from LLMCore."""
         agent = LLMAgent(agent_name="error_agent", role="ERROR_HANDLER", parameters={"model": "gpt-4", "template": "test"})
@@ -217,7 +217,7 @@ class TestLLMAgentRefactoring:
             with pytest.raises(ProcessingError, match="Template not found"):
                 await agent._process(message=agent_input)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_handles_unexpected_error(self):
         """Test LLMAgent wraps unexpected errors from LLMCore."""
         agent = LLMAgent(agent_name="error_agent", role="ERROR_HANDLER", parameters={"model": "gpt-4", "template": "test"})
@@ -230,7 +230,7 @@ class TestLLMAgentRefactoring:
             with pytest.raises(ProcessingError, match="Unexpected error in agent"):
                 await agent._process(message=agent_input)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_preserves_parent_trace_id(self):
         """Test that parent trace ID is passed through to LLMCore."""
         agent = LLMAgent(agent_name="trace_agent", role="TRACER", parameters={"model": "gpt-4", "template": "test"})
@@ -248,7 +248,7 @@ class TestLLMAgentRefactoring:
             call_args = mock_process.call_args
             assert call_args[1]["parent_trace_id"] == "parent-trace-xyz"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_llmagent_template_metadata_preserved(self):
         """Test that template metadata is preserved for ExecutionTrace."""
         agent = LLMAgent(agent_name="metadata_agent", role="METADATA", parameters={"model": "gpt-4", "template": "test"})

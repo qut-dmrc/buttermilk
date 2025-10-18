@@ -1,5 +1,4 @@
 defaults:
-  - env: testing
   - flows:
     - trans
   - llms: debug

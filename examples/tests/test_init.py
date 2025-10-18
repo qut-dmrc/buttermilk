@@ -33,7 +33,7 @@ async def test_async():
     assert bm.session_info.job == "test_async"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_config():
     """Test async init_async() - the primary initialization path."""
     bm = await init_async(config_dir="../config", config_name="pipeline")

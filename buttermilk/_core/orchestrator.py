@@ -347,7 +347,16 @@ class Orchestrator(OrchestratorProtocol, ABC):
             },
         ) as otel_span:
             try:
-                logger.debug(f"Running orchestrator '{self.name}'", name=self.name, requested_flow=request.flow)
+                logger.debug(
+                    f"Running orchestrator '{self.name}'",
+                    flow_name=self.name,
+                    display_name=display_name,
+                    requested_flow=request.flow,
+                    inputs=inputs,
+                    tracing_attributes=request.tracing_attributes,
+                    parameters=request.parameters,
+                    batch_id=request.batch_id,
+                )
                 await self._run(request=request)
                 # Log success, attach trace URL if present
                 msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."

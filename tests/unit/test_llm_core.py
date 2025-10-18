@@ -400,3 +400,81 @@ class TestLLMCore:
             # Also verify other metadata is still there (wasn't overwritten)
             assert result.metadata["model"] == "gpt-4"
             assert result.metadata["finish_reason"] == "stop"
+
+    @pytest.mark.anyio
+    async def test_undefined_string_literal_vs_truly_undefined(self):
+        """Test that passing literal 'undefined' string is different from truly undefined var.
+
+        This tests the bug where a template expects a variable but receives the
+        literal string 'undefined' - which should NOT satisfy the requirement.
+
+        Scenario: If a variable is required by the template and receives the
+        literal string 'undefined', the system should either:
+        1. Fail because the variable is still considered unfilled (preferred)
+        2. Process but produce nonsensical output (current buggy behavior)
+
+        The test verifies both scenarios:
+        - Truly undefined variable (missing from inputs) MUST fail with strict mode
+        - Literal 'undefined' string is passed through (current behavior)
+        """
+        # Create core with strict parameter checking (default)
+        core = LLMCore(
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            fail_on_unfilled_parameters=True,
+        )
+
+        # Test 1: Truly undefined variable MUST fail
+        with pytest.raises(ProcessingError, match="unfilled parameters"):
+            await core._fill_template(
+                inputs={"required_var": "value", "context": [], "records": []}
+                # missing_var is NOT provided - truly undefined
+            )
+
+        # Test 2: Literal 'undefined' string is treated as a value (BUG!)
+        # This currently DOES NOT fail, but arguably should
+        messages = await core._fill_template(
+            inputs={
+                "required_var": "value",
+                "missing_var": "undefined",  # Literal string "undefined"
+                "context": [],
+                "records": []
+            }
+        )
+
+        # The template was filled, but with nonsensical "undefined" string
+        assert len(messages) >= 1
+        # Check that the literal "undefined" made it into the message
+        message_text = " ".join(msg.content for msg in messages if hasattr(msg, "content"))
+        assert "undefined" in message_text.lower()
+
+        # TODO: Consider if we should detect and fail on special values like:
+        # - "undefined"
+        # - "null"
+        # - "None"
+        # - "" (empty string)
+        # These might indicate configuration errors rather than valid inputs.
+
+    @pytest.mark.anyio
+    async def test_fail_on_unfilled_parameters_default_is_true(self):
+        """Test that fail_on_unfilled_parameters defaults to True (strict mode).
+
+        This ensures the system fails fast on configuration errors by default,
+        rather than silently proceeding with incomplete templates.
+        """
+        # Create core WITHOUT specifying fail_on_unfilled_parameters
+        core = LLMCore(
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            # fail_on_unfilled_parameters NOT specified - should default to True
+        )
+
+        # Should fail because default is strict mode
+        with pytest.raises(ProcessingError, match="unfilled parameters"):
+            await core._fill_template(
+                inputs={"required_var": "value", "context": [], "records": []}
+                # missing_var is NOT provided
+            )
+
+        # Verify the internal flag is set to True
+        assert core._fail_on_unfilled_parameters is True

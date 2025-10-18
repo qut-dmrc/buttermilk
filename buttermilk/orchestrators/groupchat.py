@@ -183,7 +183,12 @@ class AutogenOrchestrator(Orchestrator):
             inputs=request.inputs,
             participants={v.role: v.description for k, v in self.agents.items()},
         )
-        logger.debug(f"ConductorRequest details - participants: {conductor_request.participants}")
+        logger.debug(
+            f"ConductorRequest details - participants: {conductor_request.participants}",
+            agents=list(self.agents.keys()),
+            observers=list(self.observers.keys()),
+            **conductor_request.model_dump(),
+        )
         await self._runtime.publish_message(
             conductor_request,
             topic_id=self._topic,
