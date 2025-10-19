@@ -962,7 +962,7 @@ class TestMetadataUpdateBehavior:
         if "version" in original_attachment:
             original_attachment_version = original_attachment["version"]
 
-        print(f"\n📊 Original state:")
+        print("\n📊 Original state:")
         print(f"  Parent item version: {original_item_version}")
         print(f"  Attachment version: {original_attachment_version}")
         print(f"  Attachment href: {original_attachment_href[:100]}...")
@@ -1008,7 +1008,7 @@ class TestMetadataUpdateBehavior:
             f"Attachment version: {original_attachment_version} (unchanged)"
         )
 
-        print(f"\n✅ PDF not re-downloaded (attachment version unchanged)")
+        print("\n✅ PDF not re-downloaded (attachment version unchanged)")
 
         # Verify cache was updated with new parent metadata
         with json_file.open("r") as f:
@@ -1030,7 +1030,7 @@ class TestMetadataUpdateBehavior:
         assert updated_cache.get("content") == original_cache.get("content"), \
             "Content should be reused when attachment version unchanged"
 
-        print(f"✅ Cache updated with new parent metadata but same attachment/content")
+        print("✅ Cache updated with new parent metadata but same attachment/content")
 
     @pytest.mark.integration
     @pytest.mark.anyio

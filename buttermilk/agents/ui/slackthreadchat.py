@@ -37,7 +37,7 @@ def _fn_debug_blocks(message: ExecutionTrace):
         console.print(Markdown("## -----DEBUG BLOCKS------"))
         console.print_json(data=format_slack_message(message))
         console.print(Markdown("## -----DEBUG BLOCKS------"))
-    except:
+    except Exception:
         pass
 
 

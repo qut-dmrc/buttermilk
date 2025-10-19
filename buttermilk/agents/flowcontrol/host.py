@@ -24,7 +24,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserResponseMessage,
 )
-from buttermilk._core.exceptions import FatalError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 
 TRUNCATE_LEN = 1000  # characters per history message
 
