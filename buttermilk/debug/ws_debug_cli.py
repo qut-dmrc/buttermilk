@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Non-interactive WebSocket Debug CLI for Buttermilk flows.
+"""WebSocket Debug Infrastructure for Buttermilk flows.
 
-This provides a command-line interface for debugging flows that executes
-specific actions and returns results to stdout, suitable for LLM usage.
+Provides infrastructure commands for debugging (logs, test-connection)
+and the NonInteractiveDebugClient class for programmatic puppet mode usage.
 """
 
 import asyncio
@@ -300,7 +300,7 @@ class NonInteractiveDebugClient:
             if not log_files:
                 return {
                     "error": "No Buttermilk log files found in /tmp/",
-                    "hint": "Log files must follow format: bm_{project_name}_{execution_context_id}.jsonl"
+                    "hint": "Log files must start with 'bm_' and end with '.jsonl' (searched with pattern: /tmp/bm_*.jsonl)"
                 }
 
             # Get the most recent log file
@@ -379,244 +379,6 @@ def cli(ctx, host: str, port: int, json_output: bool):
 
 
 @cli.command()
-@click.argument("flow_name")
-@click.argument("query", default="")
-@click.option("--wait", default=60, help="Seconds to wait for responses")
-@click.option("--record", default="", help="Record ID to process")
-@click.option("--criteria", default="", help="Criteria to use")
-@click.pass_context
-def start(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str):
-    """Start a flow with an optional initial query."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    else:
-        console = Console()
-        if "error" in result:
-            console.print(f"[red]Error: {result['error']}[/red]")
-        else:
-            console.print(f"[green]Started flow '{flow_name}' with session: {result['session_id']}[/green]")
-            if query:
-                console.print(f"Query: {query}")
-            if record:
-                console.print(f"Record: {record}")
-            if criteria:
-                console.print(f"Criteria: {criteria}")
-            console.print(f"\nMessages ({len(result['messages'])}):")
-            for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
-                msg_type = msg["type"]
-                content = msg["content"] or "(no content)"
-                agent = msg["agent_role"] or "system"
-                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
-
-
-@cli.command()
-@click.argument("flow_name")
-@click.argument("query", default="")
-@click.option("--wait", default=60, help="Seconds to wait for responses")
-@click.option("--record", default="", help="Record ID to process")
-@click.option("--criteria", default="hrc", help="Single criteria to use for debugging (default: hrc)")
-@click.pass_context
-def start_debug(ctx, flow_name: str, query: str, wait: int, record: str, criteria: str):
-    """Start a flow with debug configuration (llms=debug, single criteria)."""
-    # Import the runner CLI to start with proper configuration
-
-    console = Console()
-
-    if flow_name == "trans":
-        # Start the API server with debug configuration in the background
-        console.print(f"[yellow]Starting debug session for {flow_name} flow with criteria={criteria}[/yellow]")
-
-        # Check if server is already running
-        try:
-            import requests
-
-            response = requests.get(f"http://{ctx.obj['HOST']}:{ctx.obj['PORT']}/health", timeout=1)
-            if response.status_code == 200:
-                console.print("[green]✓[/green] Server is already running")
-            else:
-                console.print("[red]✗[/red] Server responded with error")
-                return
-        except requests.RequestException:
-            console.print("[red]✗[/red] Server is not running. Please start it with:")
-            console.print(
-                f'[cyan]uv run python -m buttermilk.runner.cli "+flows=[{flow_name}]" run=api llms=debug trans.parameters.criteria="[{criteria}]"[/cyan]',
-            )
-            return
-
-    # Now use the regular start flow functionality with record and criteria
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    elif "error" in result:
-        console.print(f"[red]Error: {result['error']}[/red]")
-    else:
-        console.print(f"[green]Started debug session for '{flow_name}' with criteria='{criteria}'[/green]")
-        console.print(f"Session: {result['session_id']}")
-        console.print(f"Query: {query}")
-        if record:
-            console.print(f"Record: {record}")
-        console.print(f"Criteria: {criteria}")
-        console.print(f"\nMessages ({len(result['messages'])}):")
-        for msg in result["messages"]:
-            timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
-            msg_type = msg["type"]
-            content = msg["content"] or "(no content)"
-            agent = msg["agent_role"] or "system"
-            console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
-
-
-@cli.command()
-@click.argument("flow_name", default="trans")
-@click.option("--criteria", default="hrc", help="Single criteria to use for debugging")
-@click.option("--host", default="localhost", help="Server host")
-@click.option("--port", default=8000, help="Server port")
-def start_server(flow_name: str, criteria: str, host: str, port: int):
-    """Start the API server with debug configuration."""
-    import subprocess
-    import sys
-
-    console = Console()
-
-    # Build the command to start the server with debug configuration
-    if flow_name == "trans":
-        cmd = [
-            sys.executable,
-            "-m",
-            "buttermilk.runner.cli",
-            f"+flows=[{flow_name}]",
-            "run=api",
-            "llms=debug",
-            f"trans.parameters.criteria=[{criteria}]",
-        ]
-    else:
-        cmd = [
-            sys.executable,
-            "-m",
-            "buttermilk.runner.cli",
-            f"+flows=[{flow_name}]",
-            "run=api",
-            "llms=debug",
-        ]
-
-    console.print(f"[yellow]Starting debug server for {flow_name} flow...[/yellow]")
-    console.print(f"[dim]Command: {' '.join(cmd)}[/dim]")
-    console.print("[cyan]To start a flow, run:[/cyan]")
-    console.print(f"[cyan]uv run python -m buttermilk.debug.ws_debug_cli start-debug {flow_name}[/cyan]")
-
-    # Execute the command
-    try:
-        result = subprocess.run(cmd, check=True, cwd="/src/buttermilk")
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Error starting server: {e}[/red]")
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Server stopped by user[/yellow]")
-
-
-@cli.command()
-@click.argument("content")
-@click.option("--type", "msg_type", default="response", help="Message type (default: response)")
-@click.option("--wait", default=60, help="Seconds to wait for responses")
-@click.option("--session", help="Session ID (uses saved session if not provided)")
-@click.pass_context
-def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
-    """Send a message to the current session."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.send_message(msg_type, content, wait, session))
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    else:
-        console = Console()
-        if "error" in result:
-            console.print(f"[red]Error: {result['error']}[/red]")
-        else:
-            console.print(f"[green]Sent {msg_type} message to session {result['session_id']}[/green]")
-            console.print(f"Content: {content}")
-            console.print(f"\nNew messages ({len(result['messages'])}):")
-            for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
-                msg_type = msg["type"]
-                content = msg["content"] or "(no content)"
-                agent = msg["agent_role"] or "system"
-                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
-
-
-@cli.command()
-@click.option("--wait", default=60, help="Seconds to wait for messages")
-@click.option("--pattern", help="Regex pattern to filter messages")
-@click.option("--type", "msg_type", help="Filter by message type")
-@click.option("--session", help="Session ID (uses saved session if not provided)")
-@click.pass_context
-def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None):
-    """Wait for messages from the current session."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.wait_for_messages(session, wait, pattern, msg_type))
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    else:
-        console = Console()
-        if "error" in result:
-            console.print(f"[red]Error: {result['error']}[/red]")
-        else:
-            console.print(f"[green]Messages from session {result['session_id']}[/green]")
-            if pattern or msg_type:
-                console.print(f"Filters: pattern={pattern}, type={msg_type}")
-            console.print(f"\nMessages ({len(result['messages'])}):")
-            for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
-                msg_type = msg["type"]
-                content = msg["content"] or "(no content)"
-                agent = msg["agent_role"] or "system"
-                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
-
-
-@cli.command()
-@click.pass_context
-def session(ctx):
-    """Show current saved session information."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    session_id = client.load_session()
-
-    if ctx.obj["JSON_OUTPUT"]:
-        if session_id and client.session_file.exists():
-            data = json.loads(client.session_file.read_text())
-            print(json.dumps(data, indent=2))
-        else:
-            print(json.dumps({"error": "No saved session"}, indent=2))
-    else:
-        console = Console()
-        if session_id:
-            data = json.loads(client.session_file.read_text())
-            console.print("[green]Saved session:[/green]")
-            console.print(f"  Session ID: {data['session_id']}")
-            console.print(f"  Host: {data['host']}:{data['port']}")
-            console.print(f"  Created: {data['timestamp']}")
-        else:
-            console.print("[yellow]No saved session[/yellow]")
-
-
-@cli.command()
-@click.pass_context
-def clear_session(ctx):
-    """Clear the saved session."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = client.clear_session()
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    else:
-        console = Console()
-        console.print(f"[green]{result['status']}[/green]")
-
-
-@cli.command()
 @click.option("--lines", "-n", default=50, help="Number of log lines to show")
 @click.option(
     "--level",
@@ -662,7 +424,7 @@ def list_logs(ctx, count: int):
     if not log_files:
         console = Console()
         console.print("[yellow]No Buttermilk log files found in /tmp/[/yellow]")
-        console.print("[dim]Log files must follow format: bm_{project_name}_{execution_context_id}.jsonl[/dim]")
+        console.print("[dim]Searched for files matching pattern: /tmp/bm_*.jsonl[/dim]")
         return
 
     # Sort by modification time (most recent first)
@@ -689,28 +451,6 @@ def list_logs(ctx, count: int):
             size = os.path.getsize(log)
             console.print(f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]")
         console.print(f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]")
-
-
-@cli.command()
-@click.pass_context
-def list_flows(ctx):
-    """List available flows."""
-    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
-    result = asyncio.run(client.list_flows())
-
-    if ctx.obj["JSON_OUTPUT"]:
-        print(json.dumps(result, indent=2))
-    else:
-        console = Console()
-        if "error" in result:
-            console.print(f"[red]Error: {result['error']}[/red]")
-        else:
-            if "note" in result:
-                console.print(f"[yellow]Note: {result['note']}[/yellow]")
-            if "common_flows" in result:
-                console.print("\nCommon flows:")
-                for flow in result["common_flows"]:
-                    console.print(f"  - {flow}")
 
 
 @cli.command()
