@@ -1,8 +1,5 @@
 """Test ChromaDB remote sync fix."""
 
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -43,38 +40,9 @@ class TestChromaDBSyncFix:
         init_source = inspect.getsource(ChromaDBEmbeddings.ensure_cache_initialized)
         assert "_original_remote_path = self.persist_directory" in init_source
 
-    @patch("buttermilk.data.vector.TextEmbeddingModel")
-    @patch("buttermilk.data.vector.chromadb")
-    def test_path_preservation_logic(self, mock_chromadb, mock_embedding_func, mock_text_model):
-        """Test the path preservation logic without actual model loading."""
-        # Mock the model loading to avoid API calls
-        mock_text_model.from_pretrained.return_value = MagicMock()
-        mock_embedding_func.return_value = MagicMock()
-        mock_chromadb.PersistentClient.return_value = MagicMock()
-        
-        remote_path = "gs://test-bucket/chromadb"
-        
-        with patch("buttermilk.data.vector.ensure_chromadb_cache") as mock_ensure:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                mock_ensure.return_value = Path(temp_dir)
-                
-                # Create instance (this will trigger model loading validation)
-                embeddings = ChromaDBEmbeddings(
-                    persist_directory=remote_path,
-                    collection_name="test"
-                )
-                
-                # Before ensure_cache_initialized
-                assert embeddings.persist_directory == remote_path
-                assert embeddings._original_remote_path is None
-                
-                # This would normally be called, but we'll simulate the path changes
-                embeddings._original_remote_path = remote_path
-                embeddings.persist_directory = temp_dir
-                
-                # After the changes
-                assert embeddings._original_remote_path == remote_path
-                assert embeddings.persist_directory == temp_dir
+    # NOTE: Removed test_path_preservation_logic - it was testing implementation details
+    # by mocking internal model loading. The path preservation logic is already
+    # tested in test_sync_path_logic_simulation below.
 
     def test_sync_path_logic_simulation(self):
         """Test the sync path logic without actual ChromaDB instance."""

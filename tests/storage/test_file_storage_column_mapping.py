@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from buttermilk._core.storage_config import StorageConfig
+from buttermilk._core.storage_config import FileStorageConfig
 from buttermilk.storage.file import FileStorage
 
 
@@ -29,20 +29,20 @@ class TestFileStorageColumnMapping:
     
     def create_test_storage(self, config_dict: dict[str, Any]) -> FileStorage:
         """Create FileStorage instance with test configuration.
-        
+
         Args:
             config_dict: Storage configuration dictionary
-            
+
         Returns:
             FileStorage instance configured for testing
         """
         # Create temporary file for testing
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         config_dict["path"] = temp_file.name
-        
-        config = StorageConfig(**config_dict)
+
+        config = FileStorageConfig(**config_dict)
         storage = FileStorage(config)
-        
+
         return storage
     
     def create_test_data_file(self, data: list[dict], file_path: str) -> None:
@@ -418,10 +418,10 @@ class TestFileStorageRegressionTests:
         """Create FileStorage instance with test configuration."""
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         config_dict["path"] = temp_file.name
-        
-        config = StorageConfig(**config_dict)
+
+        config = FileStorageConfig(**config_dict)
         storage = FileStorage(config)
-        
+
         return storage
     
     def create_test_data_file(self, data: list[dict], file_path: str) -> None:
@@ -513,13 +513,13 @@ class TestFileStorageIntegration:
     
     def test_jsonl_format_with_column_mapping(self):
         """Test JSONL format with column mapping.
-        
+
         This test ensures that the column mapping fix works correctly
         with JSONL (JSON Lines) format files as well as regular JSON.
         """
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
-        
-        config = StorageConfig(**{
+
+        config = FileStorageConfig(**{
             "type": "file",
             "path": temp_file.name,
             "columns": {
@@ -530,7 +530,7 @@ class TestFileStorageIntegration:
                 }
             }
         })
-        
+
         storage = FileStorage(config)
         
         # Create JSONL test data (one JSON object per line)
@@ -555,17 +555,17 @@ class TestFileStorageIntegration:
     
     def test_cloud_path_simulation(self):
         """Test that cloud paths work with column mapping.
-        
+
         This test simulates cloud storage paths (GCS) to ensure that
         the column mapping works correctly regardless of storage location.
         """
         # Note: This is a simulation test since we can't easily test real GCS in unit tests
         # The actual cloud path handling is tested separately
-        
+
         # Create local file that simulates cloud data structure
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        
-        config = StorageConfig(**{
+
+        config = FileStorageConfig(**{
             "type": "file",  # FileStorage handles both local and cloud paths
             "path": temp_file.name,  # In real scenario this would be gs://...
             "columns": {
@@ -578,7 +578,7 @@ class TestFileStorageIntegration:
                 }
             }
         })
-        
+
         storage = FileStorage(config)
         
         # Simulate OSB-like cloud data

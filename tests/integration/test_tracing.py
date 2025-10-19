@@ -120,7 +120,9 @@ async def test_weave_collection_uses_project_name(real_bm):
     """
 
     try:
-        weave_client = real_bm.get_weave_client()
+        weave_client = await real_bm.get_weave_client()
+        if weave_client is None:
+            pytest.skip("Weave client not initialized (may be missing credentials or disabled)")
     except Exception as e:
         # If weave initialization fails (missing credentials, etc.),
         # that's okay for this test - we're just checking the config

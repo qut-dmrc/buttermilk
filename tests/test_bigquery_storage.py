@@ -142,15 +142,15 @@ class TestBigQueryStorage:
         create_call = storage.client.create_table.call_args[0][0]
         assert create_call.clustering_fields is None
 
-    def test_parse_record_with_json_strings(self):
-        """Test that _parse_record correctly handles JSON string fields."""
+    def test_parse_record_with_structured_types(self):
+        """Test that _parse_record correctly handles structured types from BigQuery."""
         mock_row = MagicMock()
         mock_row.items.return_value = [
             ("record_id", 123),  # Integer ID to test conversion
             ("title", "Test Movie"),
-            ("metadata", '{"director": "Test Director", "genre": ["Action", "Drama"]}'),
-            ("ground_truth", '{"rating": 8.5}'),
-            ("error", '[{"code": "E001"}]'),
+            ("metadata", {"director": "Test Director", "genre": ["Action", "Drama"]}),
+            ("ground_truth", {"rating": 8.5}),
+            ("error", [{"code": "E001"}]),
             ("content", "Test movie content"),
         ]
 

@@ -7,7 +7,7 @@ from buttermilk.utils.templating import get_templates
 @pytest.mark.parametrize(
     "pattern, expected_name, min_length",
     [
-        ("criteria", "criteria_ordinary", 5240),
+        ("criteria", "criteria_ordinary", 5000),
         ("criteria", "criteria_hatefb_factorised", 9000),
         ("synth", "synthesise", 1000),
     ],

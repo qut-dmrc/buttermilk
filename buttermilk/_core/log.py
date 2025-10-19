@@ -470,17 +470,21 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
             "should be DEBUG. This will prevent verbose logging from working."
         )
     
-    # Check for handler count anomalies
+    # Check for handler count anomalies on buttermilk logger (where handlers are actually added)
     root_handlers = len(logging.getLogger().handlers)
-    if root_handlers == 0:
+    buttermilk_handlers = len(logging.getLogger(_LOGGER_NAME).handlers)
+
+    # Check both root and buttermilk logger for handlers
+    if root_handlers == 0 and buttermilk_handlers == 0:
         validation_results["issues"].append("No logging handlers configured on root logger")
     elif root_handlers > 5:  # Arbitrary threshold for too many handlers
         validation_results["issues"].append(
             f"Unusually high number of handlers ({root_handlers}) on root logger, "
             "may indicate duplicate handler registration"
         )
-    
+
     validation_results["handler_count"] = root_handlers
+    validation_results["buttermilk_handler_count"] = buttermilk_handlers
     validation_results["valid"] = len(validation_results["issues"]) == 0
     
     # Log validation results

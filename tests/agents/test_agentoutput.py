@@ -32,10 +32,8 @@ def test_actual_judge_reasons_direct_dump():
         pytest.fail(f"JudgeReasons validation failed: {e}")
 
 
-def test_actual_agent_trace_full_dump_includes_nested_outputs():
-    """Test the ACTUAL ExecutionTrace full dump to see if it includes nested outputs.
-    This directly tests the problematic scenario with your real code.
-    """
+def test_actual_agent_trace_full_dump_includes_nested_outputs(real_bm):
+    """Test ExecutionTrace full dump includes nested outputs with real BM fixture."""
     try:
         reasons_obj = JudgeReasons(**SAMPLE_REASONS_DATA)
     except ValidationError as e:
@@ -70,8 +68,8 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs():
     assert full_dump["call_id"] == "actual_test_id"  # Verify other fields
 
 
-def test_actual_agent_trace_full_dump_with_default_outputs():
-    """Test dumping the actual ExecutionTrace when 'outputs' is the default."""
+def test_actual_agent_trace_full_dump_with_default_outputs(real_bm):
+    """Test dumping ExecutionTrace when 'outputs' is the default with real BM fixture."""
     # Create a minimal AgentConfig for testing
     minimal_agent_config = AgentConfig(role="TEST")
 
@@ -86,7 +84,7 @@ def test_actual_agent_trace_full_dump_with_default_outputs():
     # When outputs is default/None, it may be excluded from model_dump due to exclude_none/exclude_unset config
     # Check that we can access the outputs field directly even if it's not in the dump
     assert hasattr(output_obj, "outputs"), "ExecutionTrace should have outputs attribute"
-    
+
     # If outputs is excluded from dump, it should be because it's None or default
     if "outputs" in full_dump:
         assert full_dump["outputs"] in [None, {}], "Default outputs should be None or empty dict"

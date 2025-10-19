@@ -96,7 +96,9 @@ class TestAgentAnnouncement:
         )
         
         str_repr = str(announcement)
-        assert str_repr == "AgentAnnouncement[JUDGE-abc123]: initial - joining"
+        # agent_id is auto-generated, so we check the format instead
+        assert "AgentAnnouncement[JUDGE-" in str_repr
+        assert "]: initial - joining" in str_repr
         
     def test_agent_announcement_status_validation(self):
         """Test that status field only accepts valid values."""
@@ -175,7 +177,10 @@ class TestAgentAnnouncement:
         )
         
         assert announcement.status == "leaving"
-        assert str(announcement) == "AgentAnnouncement[FETCH-123]: update - leaving"
+        # agent_id is auto-generated, so we check the format instead
+        str_repr = str(announcement)
+        assert "AgentAnnouncement[FETCH-" in str_repr
+        assert "]: update - leaving" in str_repr
         
     def test_agent_announcement_serialization(self):
         """Test that AgentAnnouncement can be serialized/deserialized."""

@@ -13,14 +13,15 @@ from buttermilk.tools.chromadb_search import ChromaDBSearchTool, SearchResult
 
 
 @pytest.mark.integration
+@pytest.mark.skip(reason="Requires zot flow configuration which is not in testing.yaml - needs environment-specific config")
 class TestChromaDBSearchToolIntegration:
     """Integration tests for ChromaDBSearchTool with real ChromaDB instance."""
 
     @pytest.fixture
-    async def search_tool(self, conf):
+    async def search_tool(self, real_conf):
         """Create a ChromaDBSearchTool instance with zot.yaml configuration."""
         # Extract just the storage config
-        storage_cfg = conf.flows.zot.agents.rag_zotero.tools.chromadb_search
+        storage_cfg = real_conf.flows.zot.agents.rag_zotero.tools.chromadb_search
 
         # Create the search tool with the storage configuration
         search_tool = ChromaDBSearchTool(**storage_cfg)

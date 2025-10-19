@@ -61,6 +61,7 @@ class HostAgent(Agent):
         self._agent_registry: dict[str, AgentAnnouncement] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
         self._tool_to_agent_map: dict[str, str] = {}  # Maps tool names to agent IDs
+        self._registry_summary_cache: dict[str, Any] | None = None  # Cache for registry summaries
 
         # Tool schemas for LLM-based hosts
         self._tools: list[Tool] = []
@@ -296,7 +297,7 @@ class HostAgent(Agent):
         """
         async with self._registry_lock:
             agent_id = message.agent_config.agent_id
-            role = message.agent_config.role.upper()  # Normalize to uppercase
+            message.agent_config.role.upper()  # Normalize to uppercase
 
             if message.status == "leaving":
                 logger.warning(

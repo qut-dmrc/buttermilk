@@ -55,17 +55,20 @@ def test_format_response_string():
 def test_format_response_mapping():
     """Test formatting a dictionary."""
     result = format_response({"key1": "value1", "key2": "value2"})
-    assert len(result) == 2
+    # Result is wrapped into chunks - short content fits in one string
+    assert len(result) >= 1
     assert "*key1*: value1" in result[0]
-    assert "*key2*: value2" in result[1]
+    assert "*key2*: value2" in result[0]
 
 
 def test_format_response_sequence():
     """Test formatting a sequence."""
     result = format_response(["item1", "item2", ""])
-    assert len(result) == 2
-    assert "item1" in result
-    assert "item2" in result
+    # Result is wrapped into chunks - short content fits in one string
+    assert len(result) >= 1
+    combined_result = " ".join(result)
+    assert "item1" in combined_result
+    assert "item2" in combined_result
     # Empty items should be filtered out
 
 

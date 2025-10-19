@@ -42,11 +42,14 @@ class TestBMInjectionMechanism:
         """Test that FlowRunner falls back to global BM when no session BM is set."""
         runner = FlowRunner(flows={}, mode="test")
         assert runner.bm is None
-        
-        # get_effective_bm should return the global BM (mock from fixture)
+
+        # get_effective_bm should return the global BM (real from fixture)
         effective_bm = runner.get_effective_bm()
-        assert effective_bm is real_bm  # Should be the mock BM from fixture
-        assert effective_bm.session_info.session_id == "test-session-mock"
+        assert effective_bm is real_bm  # Should be the real BM from fixture
+        # The real BM has an actual session_id, just verify it exists
+        assert effective_bm.session_info.session_id
+        assert isinstance(effective_bm.session_info.session_id, str)
+        assert len(effective_bm.session_info.session_id) > 0
     
     def test_session_isolation_between_runners(self):
         """Test that different FlowRunner instances maintain separate BM sessions."""

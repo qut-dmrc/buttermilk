@@ -5,7 +5,7 @@ and scripts running outside of orchestrator contexts. They ensure
 the examples in our documentation remain accurate.
 """
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -17,8 +17,28 @@ from buttermilk._core.standalone_trace import StandaloneTraceContext, create_sta
 class TestStandaloneTraceExamples:
     """Examples for standalone tracing that also serve as tests."""
 
+    @pytest.fixture
+    def mock_weave_client(self, real_bm):
+        """Mock weave client for standalone trace tests."""
+        mock_call = Mock()
+        mock_call.trace_id = "mock-trace-id"
+        mock_call.id = "mock-call-id"
+        mock_call.ui_url = "https://wandb.ai/mock-trace"
+
+        mock_client = Mock()
+        mock_client.create_call = Mock(return_value=mock_call)
+
+        async def get_mock_client():
+            return mock_client
+
+        with patch('buttermilk._core.standalone_trace.bm') as mock_bm:
+            mock_bm.get_weave_client = AsyncMock(return_value=mock_client)
+            mock_bm.weave = Mock()
+            mock_bm.weave.finish_call = Mock()
+            yield mock_client
+
     @pytest.mark.anyio
-    async def test_basic_usage_example(self):
+    async def test_basic_usage_example(self, real_bm, mock_weave_client):
         """
         Basic usage of standalone tracing with context manager.
 
@@ -43,7 +63,7 @@ class TestStandaloneTraceExamples:
             logger.info("Processing batch", trace_id=trace_id)
 
     @pytest.mark.anyio
-    async def test_agent_integration_example(self):
+    async def test_agent_integration_example(self, real_bm, mock_weave_client):
         """
         Using standalone traces with agents.
 
@@ -66,7 +86,7 @@ class TestStandaloneTraceExamples:
             # result = await agent.invoke(agent_input)
 
     @pytest.mark.anyio
-    async def test_batch_processing_pattern(self):
+    async def test_batch_processing_pattern(self, real_bm, mock_weave_client):
         """
         Common pattern for batch processing with traces.
 
@@ -92,7 +112,7 @@ class TestStandaloneTraceExamples:
             assert len(processed_items) == len(items_to_process)
 
     @pytest.mark.anyio
-    async def test_inject_parent_trace_example(self):
+    async def test_inject_parent_trace_example(self, real_bm, mock_weave_client):
         """
         Using the inject_parent_trace helper function.
 
@@ -108,13 +128,13 @@ class TestStandaloneTraceExamples:
 
             # Object without parent_call_id (logs warning)
             regular_dict = {"data": "value"}
-            with patch("buttermilk._core.log.logger.warning") as mock_warning:
+            with patch("buttermilk._core.standalone_trace.logger.warning") as mock_warning:
                 result = inject_parent_trace(regular_dict, trace)
                 assert result == regular_dict  # Returns unchanged
                 mock_warning.assert_called_once()
 
     @pytest.mark.anyio
-    async def test_error_handling_example(self):
+    async def test_error_handling_example(self, real_bm, mock_weave_client):
         """
         Proper error handling with trace contexts.
 
@@ -135,7 +155,7 @@ class TestStandaloneTraceExamples:
         # The trace would show error status in Weave UI
 
     @pytest.mark.anyio
-    async def test_manual_context_management(self):
+    async def test_manual_context_management(self, real_bm, mock_weave_client):
         """
         Using StandaloneTraceContext directly for more control.
 
@@ -163,6 +183,36 @@ class TestStandaloneTraceExamples:
 class TestStandaloneTraceEdgeCases:
     """Edge cases and error scenarios for standalone tracing."""
 
+    @pytest.fixture
+    def mock_weave_client(self, real_bm):
+        """Mock weave client for standalone trace tests."""
+        mock_call = Mock()
+        mock_call.trace_id = "mock-trace-id"
+        mock_call.id = "mock-call-id"
+        mock_call.ui_url = "https://wandb.ai/mock-trace"
+
+        mock_client = Mock()
+        # Return different call IDs for nested traces
+        call_counter = [0]
+        def create_call_side_effect(*args, **kwargs):
+            call_counter[0] += 1
+            call = Mock()
+            call.trace_id = f"mock-trace-id-{call_counter[0]}"
+            call.id = f"mock-call-id-{call_counter[0]}"
+            call.ui_url = f"https://wandb.ai/mock-trace-{call_counter[0]}"
+            return call
+
+        mock_client.create_call = Mock(side_effect=create_call_side_effect)
+
+        async def get_mock_client():
+            return mock_client
+
+        with patch('buttermilk._core.standalone_trace.bm') as mock_bm:
+            mock_bm.get_weave_client = AsyncMock(return_value=mock_client)
+            mock_bm.weave = Mock()
+            mock_bm.weave.finish_call = Mock()
+            yield mock_client
+
     @pytest.mark.anyio
     async def test_trace_not_active_error(self):
         """Test error when accessing trace before activation."""
@@ -175,7 +225,7 @@ class TestStandaloneTraceEdgeCases:
             context.get_call_id()
 
     @pytest.mark.anyio
-    async def test_nested_traces(self):
+    async def test_nested_traces(self, real_bm, mock_weave_client):
         """Example of nested trace contexts."""
         async with create_standalone_trace("outer_trace") as outer:
             outer_id = outer.get_trace_id()

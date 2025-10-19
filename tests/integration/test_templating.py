@@ -330,11 +330,11 @@ Analyze this record
             def as_message(self):
                 return UserMessage(content=self.text, source="record")
 
-        records = [MockRecord()]
+        record = MockRecord()
 
         messages, placeholders = make_messages(
             template_str,
-            records=records,
+            record=record,
         )
 
         # Should have replaced record placeholder

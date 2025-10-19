@@ -84,7 +84,7 @@ uv run python -m buttermilk.debug.ws_debug_cli test-connection
 ### 🚨 Debugging Quick Reference
 **ALWAYS START HERE for debugging tasks:**
 1. Read `debugging.md` FIRST (no exceptions)
-2. Use WebSocket CLI to reproduce: `uv run python -m buttermilk.debug.ws_debug_cli start <flow>`
+2. Use DebugAgent puppet mode for flow debugging (see debugging.md)
 3. Check logs with focus: `python scripts/mcp_debug/buttermilk_logs.py search "pattern" 50`
 4. ONLY read source code after understanding actual behavior
 5. Keep outputs concise - extract relevant data only

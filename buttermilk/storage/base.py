@@ -8,11 +8,10 @@ from pydantic import BaseModel
 
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.types import BaseRecord, Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.validators import import_class_from_path
 from buttermilk import bm, logger
 if TYPE_CHECKING:
-    from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
 
@@ -124,7 +123,9 @@ class Storage(ABC):
     def __len__(self) -> int:
         """Return number of records if known, 0 if streaming/unknown."""
         try:
-            return self.count()
+            count = self.count()
+            # Return 0 if count is unknown (-1) or negative
+            return max(0, count)
         except Exception:
             return 0
 

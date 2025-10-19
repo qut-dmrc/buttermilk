@@ -12,7 +12,7 @@ class TestMessageServiceTokenExtraction:
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_output(self, mock_extract, mock_calculate):
+    def test_format_message_extracts_tokens_from_agent_output(self, mock_extract, mock_calculate, real_bm):
         """Test that tokens are extracted from AgentOutput metadata."""
         # Setup mocks
         mock_extract.return_value = {
@@ -66,20 +66,19 @@ class TestMessageServiceTokenExtraction:
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_trace(self, mock_extract, mock_calculate):
+    def test_format_message_extracts_tokens_from_agent_trace(self, mock_extract, mock_calculate, real_bm):
         """Test that tokens are extracted from ExecutionTrace metadata."""
         mock_extract.return_value = {"input_tokens": 200, "output_tokens": 75}
         mock_calculate.return_value = (200, 75, 0.005)
 
         agent_config = AgentConfig(name="test_agent", parameters={"model": "sonnet"})
 
-        agent_input = AgentInput(inputs={}, parameters={}, context=[], records=[])
+        agent_input = AgentInput(inputs={}, parameters={}, context=[])
 
         from buttermilk._core.types import AssistantMessage
 
         agent_trace = ExecutionTrace(
-            agent_id="test_agent",
-            agent_info=agent_config,
+            agent_info=agent_config.model_dump(),
             inputs=agent_input,
             outputs=AssistantMessage(content="Test response", source="test_agent"),
             metadata={"agent_model": "sonnet", "outputs": {"usage": {"input_tokens": 200, "output_tokens": 75}}},
@@ -92,7 +91,7 @@ class TestMessageServiceTokenExtraction:
         assert result.completion_tokens == 75
         assert result.cost_usd == 0.005
 
-    def test_format_message_no_usage_data(self):
+    def test_format_message_no_usage_data(self, real_bm):
         """Test handling when no usage data is available."""
         from buttermilk._core.types import AssistantMessage
 
@@ -109,7 +108,7 @@ class TestMessageServiceTokenExtraction:
         assert result.completion_tokens == 0
         assert result.cost_usd == 0.0
 
-    def test_format_message_with_error(self):
+    def test_format_message_with_error(self, real_bm):
         """Test handling of error messages with token data."""
         agent_config = AgentConfig(name="test_agent", parameters={})
 
@@ -135,7 +134,7 @@ class TestMessageServiceTokenExtraction:
             assert result.cost_usd == 0.0
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
-    def test_format_message_model_from_metadata(self, mock_calculate):
+    def test_format_message_model_from_metadata(self, mock_calculate, real_bm):
         """Test extracting model name from metadata when not in agent_info."""
         from buttermilk._core.types import AssistantMessage
         

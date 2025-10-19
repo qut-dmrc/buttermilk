@@ -8,12 +8,14 @@ import asyncio
 import sys
 from unittest.mock import MagicMock
 
+import pytest
 from autogen_core import MessageContext
 
 from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
 from buttermilk.agents.flowcontrol.host import HostAgent
 
 
+@pytest.mark.anyio
 async def test_error_handling():
     """Test that HostAgent stops flow when error threshold is exceeded."""
     print("Testing HostAgent error handling...")
@@ -22,9 +24,8 @@ async def test_error_handling():
     host = HostAgent(
         role="HOST",
         description="Test host agent",
-        parameters={"human_in_loop": False},
-        unique_identifier="test_host",
-        error_threshold=0.4  # 40% error threshold
+        parameters={"human_in_loop": False, "error_threshold": 0.4},  # 40% error threshold
+        unique_identifier="test_host"
     )
     
     # Mock message context
@@ -79,6 +80,7 @@ async def test_error_handling():
     return result
 
 
+@pytest.mark.anyio
 async def test_error_handling_below_threshold():
     """Test that HostAgent continues when error rate is below threshold."""
     print("\nTesting HostAgent with error rate below threshold...")
@@ -87,9 +89,8 @@ async def test_error_handling_below_threshold():
     host = HostAgent(
         role="HOST",
         description="Test host agent",
-        parameters={"human_in_loop": False},
-        unique_identifier="test_host2",
-        error_threshold=0.7  # 70% error threshold
+        parameters={"human_in_loop": False, "error_threshold": 0.7},  # 70% error threshold
+        unique_identifier="test_host2"
     )
     
     # Mock message context

@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.websockets import WebSocketState
 
+pytestmark = pytest.mark.skip(reason="TDD tests for future OSB WebSocket implementation")
+
 
 class TestOSBWebSocketIntegration:
     """Test OSB WebSocket message routing and query processing."""

@@ -16,8 +16,17 @@ pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
-def mock_host_agent():
+def mock_host_agent(monkeypatch):
     """Create a mocked HostAgent for testing."""
+    from autogen_core import AgentId
+    from autogen_core import RoutedAgent
+
+    # Create an AsyncMock for tracking publish_message calls
+    publish_mock = AsyncMock()
+
+    # Patch RoutedAgent.publish_message before creating the agent
+    monkeypatch.setattr(RoutedAgent, 'publish_message', publish_mock)
+
     agent = HostAgent(
         agent_id="test-host",
         agent_name="TestHost",
@@ -25,14 +34,28 @@ def mock_host_agent():
         description="Test host agent",
         parameters={"human_in_loop": False}
     )
-    # Mock the publish_message method to track calls
-    agent.publish_message = AsyncMock()
+
+    # Store the mock on the agent for test access
+    agent.publish_message = publish_mock
+
+    # Set _runtime to non-None so _publish doesn't early-return
+    agent._runtime = MagicMock()
+    # Set _id to prevent AttributeError when accessing agent metadata
+    agent._id = AgentId(key="test-host", type="host")
     agent._topic_id = DefaultTopicId(type="main-topic")
     agent._participants = {
         "RESEARCHER": "Research agent",
         "WRITER": "Writing agent",
-        "MANAGER": "Manager agent"
+        # Don't include MANAGER here - it should be handled specially by the elif block
     }
+
+    # Set up tool routing attributes for _route_tool_calls_to_agents
+    agent._tool_to_agent_map = {"researcher_call": "researcher-agent-id"}
+    agent._agent_registry = {
+        "researcher-agent-id": MagicMock(agent_config=MagicMock(role="researcher"))
+    }
+    agent.human_in_loop = False
+
     return agent
 
 
@@ -169,7 +192,8 @@ class TestHostTopicRouting:
         # Verify message was published to custom topic
         mock_host_agent.publish_message.assert_called_once_with(
             test_message,
-            topic_id=test_topic
+            topic_id=test_topic,
+            cancellation_token=None
         )
 
     @pytest.mark.anyio
@@ -183,5 +207,6 @@ class TestHostTopicRouting:
         # Verify message was published to agent's default topic
         mock_host_agent.publish_message.assert_called_once_with(
             test_message,
-            topic_id=mock_host_agent._topic_id
+            topic_id=mock_host_agent._topic_id,
+            cancellation_token=None
         )

@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field  # Pydantic components for data validation
 
 from buttermilk.utils.utils import load_json_flexi  # Flexible JSON loading utility
 
-from .._core.exceptions import ProcessingError
 from .._core.log import logger  # Centralized logger
 
 
@@ -119,10 +118,20 @@ class ChatParser(BaseModel):
             logger.debug(f"ChatParser: Successfully parsed. Type: {type(parsed_output)}")
 
         except JSONDecodeError as e:
-            raise ProcessingError(f"Failed to parse JSON. Error: {e}") from e
+            if self.on_error == "raise":
+                raise
+            elif self.on_error == "warn":
+                logger.warning(f"Failed to parse JSON: {e}")
+            # For both "warn" and "ignore", return error dict
+            return {"error": "Unable to decode JSON in result", "response": text}
 
         if not isinstance(parsed_output, dict):
-            raise ProcessingError(f"Unable to decode JSON in result type: {type(parsed_output)}")
+            if self.on_error == "raise":
+                raise JSONDecodeError(f"Unable to decode JSON in result type: {type(parsed_output)}", doc=text, pos=0)
+            elif self.on_error == "warn":
+                logger.warning(f"Parsed output is not a dict, got {type(parsed_output)}")
+            # For both "warn" and "ignore", return error dict
+            return {"error": "Unable to decode JSON in result", "response": text}
 
         # Recursively convert stringified bools/numbers to actual types
         return convert_dict_types(parsed_output)

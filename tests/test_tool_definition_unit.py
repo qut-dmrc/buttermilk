@@ -59,11 +59,10 @@ class TestAgentToolDefinition:
         )
         
         schema = tool_def.schema
-        assert schema["type"] == "function"
-        assert schema["function"]["name"] == "test_tool"
-        assert schema["function"]["description"] == "A test tool"
-        assert schema["function"]["parameters"] == tool_def.input_schema
-
+        schema = tool_def.schema
+        assert schema["name"] == "test_tool"
+        assert schema["description"] == "A test tool"
+        assert schema["parameters"] == tool_def.input_schema
 
 class TestSchemaValidation:
     """Test schema validation utilities."""

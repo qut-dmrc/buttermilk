@@ -1,7 +1,7 @@
 """Test ExecutionTrace serialization with new session_info structure."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -47,11 +47,10 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
     # Create ExecutionTrace which should pick up session_info from bm
     trace = ExecutionTrace(
         call_id="test-call-123",
-        agent_id="test-agent",
-        agent_info=agent_config,
+        agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"result": "test output"},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
     )
     
     # Test serialization
@@ -63,14 +62,14 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
     
     # Check all required fields are present
     session_info = serialized["session_info"]
-    assert "name" in session_info
+    assert "project_name" in session_info  # Changed from "name" to "project_name"
     assert "job" in session_info
     assert "session_id" in session_info
     assert "platform" in session_info
     assert "save_dir" in session_info
-    
+
     # Verify values match real configuration
-    assert session_info["name"] == "buttermilk"  # From real_bm fixture
+    assert session_info["project_name"] == "buttermilk"  # From real_bm fixture
     assert session_info["job"] == "testing"      # From testing.yaml
     assert session_info["platform"] == "local"
     # session_id should be dynamically generated
@@ -83,11 +82,10 @@ def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_in
     """Test that ExecutionTrace session_info can be serialized to JSON for BigQuery."""
     trace = ExecutionTrace(
         call_id="test-call-456",
-        agent_id="test-agent-2",
-        agent_info=agent_config,
+        agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"status": "success"},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
     )
     
     serialized = trace.model_dump(mode="json")
@@ -101,23 +99,20 @@ def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_in
     assert deserialized == serialized["session_info"]
 
 
-def test_agenttrace_handles_missing_bm_gracefully(monkeypatch, agent_config, agent_input):
+def test_agenttrace_handles_missing_bm_gracefully(agent_config, agent_input):
     """Test that ExecutionTrace handles missing BM instance gracefully."""
-    # Remove the global bm instance
-    import buttermilk
-    monkeypatch.delattr(buttermilk, "buttermilk", raising=False)
-
-    # Create ExecutionTrace without bm available
+    # Create ExecutionTrace with explicit session_info=None and session_id
     trace = ExecutionTrace(
         call_id="test-call-789",
-        agent_id="test-agent-3",
-        agent_info=agent_config,
+        session_id="test-session-789",  # Provide explicit session_id to avoid calling _get_session_id
+        agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"error": "no bm"},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
+        session_info=None,  # Explicitly set to None to test nullable behavior
     )
-    
-    serialized = trace.model_dump(mode="json")
+
+    serialized = trace.model_dump(mode="json", exclude_none=True)
 
     # When session_info is None, it's excluded from serialization due to exclude_none=True
     # Note: If the BigQuery schema marks session_info as REQUIRED, it must always be present and non-null.

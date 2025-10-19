@@ -12,14 +12,14 @@ class TestStorageConfigValidation:
 
     def test_bigquery_storage_config_valid(self):
         """Test valid BigQuery StorageConfig creation."""
-        from buttermilk._core.storage_config import StorageConfig
-        
-        config = StorageConfig(
-            type="bigquery",
-            project_id="test-project",
-            dataset_id="test_dataset",
-            table_id="test_table"
-        )
+        from buttermilk._core.storage_config import StorageFactory
+
+        config = StorageFactory.create_config({
+            "type": "bigquery",
+            "project_id": "test-project",
+            "dataset_id": "test_dataset",
+            "table_id": "test_table"
+        })
         
         assert config.type == "bigquery"
         assert config.project_id == "test-project"
@@ -29,13 +29,13 @@ class TestStorageConfigValidation:
 
     def test_file_storage_config_valid(self):
         """Test valid file StorageConfig creation."""
-        from buttermilk._core.storage_config import StorageConfig
-        
-        config = StorageConfig(
-            type="file",
-            path="/path/to/data.json",
-            glob="*.json"
-        )
+        from buttermilk._core.storage_config import StorageFactory
+
+        config = StorageFactory.create_config({
+            "type": "file",
+            "path": "/path/to/data.json",
+            "glob": "*.json"
+        })
         
         assert config.type == "file"
         assert config.path == "/path/to/data.json"
@@ -43,74 +43,77 @@ class TestStorageConfigValidation:
 
     def test_storage_config_full_table_id_computation(self):
         """Test full_table_id computed field logic."""
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         # Complete config - should compute full table ID
-        complete_config = StorageConfig(
-            type="bigquery",
-            project_id="proj",
-            dataset_id="dataset",
-            table_id="table"
-        )
+        complete_config = StorageFactory.create_config({
+            "type": "bigquery",
+            "project_id": "proj",
+            "dataset_id": "dataset",
+            "table_id": "table"
+        })
         assert complete_config.full_table_id == "proj.dataset.table"
-        
+
         # Incomplete config - should return None
-        incomplete_config = StorageConfig(
-            type="bigquery",
-            project_id="proj"
+        incomplete_config = StorageFactory.create_config({
+            "type": "bigquery",
+            "project_id": "proj"
             # Missing dataset_id and table_id
-        )
+        })
         assert incomplete_config.full_table_id is None
 
     def test_storage_config_with_columns_mapping(self):
         """Test StorageConfig with column mapping."""
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         columns = {
             "content": "text_field",
             "metadata": "meta_field",
             "record_id": "id_field"
         }
-        
-        config = StorageConfig(
-            type="bigquery",
-            columns=columns
-        )
+
+        config = StorageFactory.create_config({
+            "type": "bigquery",
+            "columns": columns
+        })
         
         assert config.columns == columns
         assert config.columns["content"] == "text_field"
 
     def test_storage_config_defaults(self):
         """Test StorageConfig default values."""
-        from buttermilk._core.storage_config import StorageConfig
-        
-        config = StorageConfig(type="bigquery")
-        
+        from buttermilk._core.storage_config import StorageFactory
+
+        config = StorageFactory.create_config({"type": "bigquery"})
+
         # Test default values
         assert config.randomize is True
         assert config.batch_size == 1000
         assert config.auto_create is True
-        assert config.clustering_fields == ["record_id", "dataset_name"]
+        assert config.clustering_fields == ["record_id", "dataset_name", "split_type"]
 
-    def test_storage_config_merge_defaults(self):
+    def test_storage_config_merge_defaults(self, monkeypatch):
         """Test merging StorageConfig with defaults."""
-        from buttermilk._core.storage_config import StorageConfig
-        
-        defaults = StorageConfig(
-            type="bigquery",
-            project_id="default-project",
-            batch_size=500,
-            randomize=False
-        )
-        
-        config = StorageConfig(
-            type="bigquery",
-            dataset_id="specific-dataset",
-            batch_size=1000  # Should override default
-        )
-        
+        from buttermilk._core.storage_config import StorageFactory
+
+        # Unset GOOGLE_CLOUD_PROJECT to prevent env var from interfering with test
+        monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+
+        defaults = StorageFactory.create_config({
+            "type": "bigquery",
+            "project_id": "default-project",
+            "batch_size": 500,
+            "randomize": False
+        })
+
+        config = StorageFactory.create_config({
+            "type": "bigquery",
+            "dataset_id": "specific-dataset",
+            "batch_size": 1000  # Should override default
+        })
+
         merged = config.merge_defaults(defaults)
-        
+
         assert merged.type == "bigquery"
         assert merged.dataset_id == "specific-dataset"
         assert merged.batch_size == 1000  # Config value overrides default
@@ -118,24 +121,24 @@ class TestStorageConfigValidation:
 
     def test_storage_config_serialization(self):
         """Test StorageConfig serialization."""
-        from buttermilk._core.storage_config import StorageConfig
-        
-        config = StorageConfig(
-            type="bigquery",
-            project_id="test-project",
-            dataset_id="test_dataset",
-            table_id="test_table",
-            columns={"content": "text"}
-        )
-        
+        from buttermilk._core.storage_config import StorageFactory
+
+        config = StorageFactory.create_config({
+            "type": "bigquery",
+            "project_id": "test-project",
+            "dataset_id": "test_dataset",
+            "table_id": "test_table",
+            "columns": {"content": "text"}
+        })
+
         # Test model_dump
         dumped = config.model_dump()
         assert dumped["type"] == "bigquery"
         assert dumped["project_id"] == "test-project"
-        
+
         # Exclude computed fields for reconstruction
         serializable_data = {k: v for k, v in dumped.items() if k != "full_table_id"}
-        new_config = StorageConfig(**serializable_data)
+        new_config = StorageFactory.create_config(serializable_data)
         
         assert new_config.type == config.type
         assert new_config.project_id == config.project_id
@@ -288,19 +291,19 @@ class TestValidationErrorHandling:
 
     def test_invalid_storage_type(self):
         """Test error handling for invalid storage type."""
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         with pytest.raises(ValidationError):
-            StorageConfig(type="invalid_type")
+            StorageFactory.create_config({"type": "invalid_type"})
 
     def test_missing_required_bigquery_fields(self):
         """Test validation of required BigQuery fields when needed."""
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         # This should work - minimal valid config
-        config = StorageConfig(type="bigquery")
+        config = StorageFactory.create_config({"type": "bigquery"})
         assert config.type == "bigquery"
-        
+
         # But full_table_id should be None without all fields
         assert config.full_table_id is None
 
@@ -319,19 +322,19 @@ class TestConfigurationCaching:
         """Test that config model creation is reasonably fast."""
         import time
 
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         start_time = time.time()
-        
+
         # Create many config instances
         configs = []
         for i in range(100):
-            config = StorageConfig(
-                type="bigquery",
-                project_id=f"project_{i}",
-                dataset_id=f"dataset_{i}",
-                table_id=f"table_{i}"
-            )
+            config = StorageFactory.create_config({
+                "type": "bigquery",
+                "project_id": f"project_{i}",
+                "dataset_id": f"dataset_{i}",
+                "table_id": f"table_{i}"
+            })
             configs.append(config)
         
         creation_time = time.time() - start_time
@@ -342,8 +345,8 @@ class TestConfigurationCaching:
 
     def test_config_validation_caching(self):
         """Test that Pydantic validation benefits from caching."""
-        from buttermilk._core.storage_config import StorageConfig
-        
+        from buttermilk._core.storage_config import StorageFactory
+
         # Create identical configs - Pydantic should optimize this
         config_data = {
             "type": "bigquery",
@@ -351,8 +354,8 @@ class TestConfigurationCaching:
             "dataset_id": "test_dataset",
             "table_id": "test_table"
         }
-        
-        configs = [StorageConfig(**config_data) for _ in range(10)]
+
+        configs = [StorageFactory.create_config(config_data) for _ in range(10)]
         
         # All should be valid and identical
         for config in configs:

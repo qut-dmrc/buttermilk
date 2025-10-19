@@ -8,7 +8,6 @@ from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.storage_config import (
     BigQueryStorageConfig,
     FileStorageConfig,
-    GeneratorStorageConfig,
     StorageFactory,
     VectorStorageConfig,
 )
@@ -100,20 +99,20 @@ class TestStorageConfigValidation:
             "name": "test_flow",
             "storage": {
                 "legacy": {
-                    "type": "outputs",  # Use a type that DataSourceConfig supports but StorageConfig might not have specific handling for
+                    "type": "file",  # Use file type with path
                     "path": "/data/legacy.json"
                 }
             }
         }
-        
+
         # Create orchestrator protocol with config
         orchestrator_config = OrchestratorProtocol(**config_dict)
-        
+
         # Verify storage was converted
         assert "legacy" in orchestrator_config.storage
         legacy_config = orchestrator_config.storage["legacy"]
-        # It will be converted to GeneratorStorageConfig for type="outputs"
-        assert isinstance(legacy_config, GeneratorStorageConfig)
+        # It will be converted to FileStorageConfig for type="file"
+        assert isinstance(legacy_config, FileStorageConfig)
     
     def test_mixed_storage_configs(self):
         """Test flow with mixed storage config types."""
@@ -146,26 +145,27 @@ class TestStorageConfigValidation:
         assert isinstance(orchestrator_config.storage["plain_data"], FileStorageConfig)  # plaintext uses FileStorageConfig
     
     def test_invalid_storage_type_fallback(self):
-        """Test that configs with storage type bq fall back to DataSourceConfig when not supported by StorageFactory."""
+        """Test that configs with storage type bigquery work correctly."""
         config_dict = {
             "orchestrator": "test",
             "name": "test_flow",
             "storage": {
                 "bq_legacy": {
-                    # Use 'bq' which DataSourceConfig supports but might not be in StorageFactory
-                    "type": "bq",
-                    "path": "/data/something"
+                    # Use 'bigquery' which is the correct type name
+                    "type": "bigquery",
+                    "dataset_id": "test_dataset",
+                    "table_id": "test_table"
                 }
             }
         }
-        
+
         # Create orchestrator protocol with config
         orchestrator_config = OrchestratorProtocol(**config_dict)
-        
+
         # Verify it created appropriate config (should be BigQueryStorageConfig if supported)
         assert "bq_legacy" in orchestrator_config.storage
         bq_config = orchestrator_config.storage["bq_legacy"]
-        # It should be converted to DataSourceConfig or BigQueryStorageConfig
+        # It should be converted to BigQueryStorageConfig
         assert isinstance(bq_config, BigQueryStorageConfig)
     
     def test_storage_factory_direct(self):

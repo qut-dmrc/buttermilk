@@ -14,14 +14,19 @@ class TestRecordContentValidation:
     """Test Record content validation requirements."""
 
     def test_record_requires_content(self):
-        """Test that Record requires non-empty content."""
-        # Should fail with no content
-        with pytest.raises(ValidationError, match="Field required"):
-            Record()
+        """Test that Record requires non-empty content when explicitly set."""
+        # Note: Record() with no args uses default=None which bypasses validation
+        # But explicitly setting content=None triggers validation
+        with pytest.raises(ValidationError, match="Content cannot be None"):
+            Record(content=None)
+
+        # Also test that empty string is rejected
+        with pytest.raises(ValidationError, match="Content cannot be empty string"):
+            Record(content="")
 
     def test_record_rejects_none_content(self):
         """Test that Record rejects None content."""
-        with pytest.raises(ValidationError, match="Input should be a valid string|Input should be an instance of Sequence"):
+        with pytest.raises(ValidationError, match="Content cannot be None"):
             Record(content=None)
 
     def test_record_rejects_empty_string_content(self):
@@ -59,24 +64,25 @@ class TestRecordContentValidation:
 
     def test_osb_field_mapping_scenario(self):
         """Test the specific scenario we encountered with OSB data mapping.
-        
+
         This reproduces the issue where content field was not mapped correctly,
         resulting in content being None or ending up in metadata instead.
         """
         # Simulate what happens when field mapping is incorrect
         # Case 1: Content mapped incorrectly, ends up as None
-        with pytest.raises(ValidationError, match="Field required"):
+        # With the validator, content=None is now explicitly rejected
+        with pytest.raises(ValidationError, match="Content cannot be None"):
             Record(
                 record_id="test-id",
+                content=None,  # This now gets validated properly
                 metadata={
                     "title": "Test Document",
                     "fulltext": "This should have been mapped to content field"
                 }
-                # Missing content field due to incorrect mapping
             )
-        
+
         # Case 2: Content field gets None due to wrong source field
-        with pytest.raises(ValidationError, match="Input should be a valid string|Input should be an instance of Sequence"):
+        with pytest.raises(ValidationError, match="Content cannot be None"):
             Record(
                 record_id="test-id",
                 content=None,  # Would happen if JSON field name is wrong
@@ -112,7 +118,7 @@ class TestRecordContentValidation:
                     "summary": "Document summary"
                 }
             )
-        
+
         # Valid case should work
         record = Record(
             record_id="OSB-123",
@@ -122,7 +128,7 @@ class TestRecordContentValidation:
                 "summary": "Document summary"
             }
         )
-        assert len(record.text_content) > 1200
+        assert len(record.as_text()) > 1200
         assert record.metadata["title"] == "Some Document"
 
 
@@ -132,32 +138,38 @@ class TestRecordFieldCounts:
     def test_record_has_reasonable_field_count(self):
         """Test that Record doesn't have too many fields."""
         Record(content="test")
-        
+
         # Get all actual fields (not computed properties)
         actual_fields = set(Record.model_fields.keys())
-        
+
         # Expected core fields for a data record
         expected_core_fields = {
-            "record_id", "content", "metadata", "alt_text", "ground_truth", "uri", "mime"
+            "record_id", "content", "metadata", "alt_text", "ground_truth", "mime"
         }
-        
+
+        # Expected BaseRecord fields
+        expected_base_fields = {
+            "dataset_name", "split_type", "error"
+        }
+
         # Expected vector processing fields (these were added for the vector workflow)
         expected_vector_fields = {
             "file_path", "chunks", "chunks_path"
         }
-        
-        expected_all_fields = expected_core_fields | expected_vector_fields
-        
+
+        expected_all_fields = expected_core_fields | expected_base_fields | expected_vector_fields
+
         # Check that we don't have unexpected extra fields
         unexpected_fields = actual_fields - expected_all_fields
         assert unexpected_fields == set(), f"Unexpected fields found: {unexpected_fields}"
-        
+
         # Check that we have the core fields
         missing_core_fields = expected_core_fields - actual_fields
         assert missing_core_fields == set(), f"Missing core fields: {missing_core_fields}"
-        
+
         print(f"✅ Record has {len(actual_fields)} fields (expected ~{len(expected_all_fields)})")
         print(f"   Core fields: {expected_core_fields}")
+        print(f"   Base fields: {expected_base_fields}")
         print(f"   Vector fields: {expected_vector_fields}")
 
 
@@ -199,7 +211,7 @@ class TestStructuredDataHandling:
         assert osb_like_record.metadata["timestamp"] == 1732052347313
         
         # Verify content is accessible for vector processing
-        assert len(osb_like_record.text_content) > 30  # Should be substantial enough
+        assert len(osb_like_record.as_text()) > 30  # Should be substantial enough
         assert osb_like_record.content == "This is the fulltext content for vector processing"
         
     def test_record_metadata_types_preserved(self):

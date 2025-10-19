@@ -67,23 +67,17 @@ class TestBatchCLI:
         mock_flow_runner.create_batch.assert_not_called()
         mock_flow_runner.run_batch_job.assert_called_once()
 
-    def test_batch_with_max_records(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm batch trans --max-records 100 - should pass max_records."""
-        result = cli_runner.invoke(app, ["batch", "trans", "--max-records", "100"])
+    def test_batch_with_limit(self, cli_runner, mock_flow_runner, mock_bm):
+        """Test: bm batch trans --limit 100 - should pass limit to both enqueue and process."""
+        result = cli_runner.invoke(app, ["batch", "trans", "--limit", "100"])
 
         assert result.exit_code == 0
-        # Verify max_records was passed to create_batch
-        call_args = mock_flow_runner.create_batch.call_args
-        assert call_args.kwargs.get("max_records") == 100
-
-    def test_batch_with_max_jobs(self, cli_runner, mock_flow_runner, mock_bm):
-        """Test: bm batch trans --max-jobs 10 - should pass max_jobs."""
-        result = cli_runner.invoke(app, ["batch", "trans", "--max-jobs", "10"])
-
-        assert result.exit_code == 0
-        # Verify max_jobs was passed to run_batch_job
-        call_args = mock_flow_runner.run_batch_job.call_args
-        assert call_args.kwargs.get("max_jobs") == 10
+        # Verify limit was passed to create_batch as max_records
+        create_batch_args = mock_flow_runner.create_batch.call_args
+        assert create_batch_args.kwargs.get("max_records") == 100
+        # Verify limit was passed to run_batch_job as max_jobs
+        run_batch_args = mock_flow_runner.run_batch_job.call_args
+        assert run_batch_args.kwargs.get("max_jobs") == 100
 
     def test_batch_auto_discovers_storage(self, cli_runner, mock_flow_runner, mock_bm):
         """Test: Storage should be auto-discovered from flow config."""

@@ -46,7 +46,7 @@ class TestVerboseLoggingPreservation:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_preserve_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
         
         # Verify verbose logging is configured
         validation_initial = validate_logging_state(verbose_expected=True)
@@ -68,7 +68,7 @@ class TestVerboseLoggingPreservation:
             setup_console_logging(verbose=False)  # Should fail fast
             
         with pytest.raises(RuntimeError):
-            setup_file_logging(execution_context_id="different", verbose=False)  # Should fail fast
+            setup_file_logging(execution_context_id="different", verbose=False, project_name="test")  # Should fail fast
         
         # Verify verbose logging is still intact
         validation_final = validate_logging_state(verbose_expected=True)
@@ -85,7 +85,7 @@ class TestVerboseLoggingPreservation:
         # Set up non-verbose logging
         setup_console_logging(verbose=False)
         execution_context_id = f"non_verbose_preserve_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test")
         
         # Verify non-verbose logging is configured
         validation_initial = validate_logging_state(verbose_expected=False)
@@ -104,7 +104,7 @@ class TestVerboseLoggingPreservation:
             setup_console_logging(verbose=True)  # Should fail fast
             
         with pytest.raises(RuntimeError):
-            setup_file_logging(execution_context_id="different", verbose=True)  # Should fail fast
+            setup_file_logging(execution_context_id="different", verbose=True, project_name="test")  # Should fail fast
         
         # Verify non-verbose logging is still intact
         validation_final = validate_logging_state(verbose_expected=False)
@@ -126,9 +126,11 @@ class TestCloudLoggingIntegration:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
+    @patch("buttermilk._core.log.structlog")
+    @patch("buttermilk._core.log.logging")  # Patch logging to avoid side effects
     @patch("buttermilk._core.log.gcp_logging")
     @patch("buttermilk._core.log.CloudLoggingHandler")
-    def test_cloud_logging_deduplication_across_sessions(self, mock_cloud_handler_cls, mock_gcp_logging):
+    def test_cloud_logging_deduplication_across_sessions(self, mock_cloud_handler_cls, mock_gcp_logging, mock_logging, mock_structlog):
         """Test that cloud logging is properly deduplicated across multiple sessions."""
         from buttermilk._core.log import _cloud_logging_sessions, setup_cloud_logging
         
@@ -138,20 +140,29 @@ class TestCloudLoggingIntegration:
         mock_logger_cfg.project_id = "test-project"
         mock_logger_cfg.location = "us-central1"
         
+        # Mock logging.getLogger to prevent actual handlers
+        mock_logger = MagicMock()
+        mock_logger.handlers = []
+        mock_logging.getLogger.return_value = mock_logger
+
         mock_cloud_manager = MagicMock()
+        mock_cloud_manager.gcs_log_client.return_value = MagicMock()  # Mock the client
         mock_cloud_handler = MagicMock()
         mock_cloud_handler_cls.return_value = mock_cloud_handler
+
+        # Mock gcp_logging.Resource
+        mock_gcp_logging.Resource.return_value = MagicMock()
         
         # Create first session with cloud logging
         mock_session_info_1 = MagicMock()
         mock_session_info_1.session_id = "session-123"
-        mock_session_info_1.name = "test-session-1"
+        mock_session_info_1.project_name = "test-project"
         mock_session_info_1.job = "test-job"
         mock_session_info_1.platform = "test"
         mock_session_info_1.batch_id = None
         mock_session_info_1.model_dump.return_value = {
             "session_id": "session-123",
-            "name": "test-session-1",
+            "project_name": "test-project",
             "job": "test-job",
             "platform": "test"
         }
@@ -167,13 +178,13 @@ class TestCloudLoggingIntegration:
         # Create second session with same session ID (should be deduplicated)
         mock_session_info_2 = MagicMock()
         mock_session_info_2.session_id = "session-123"  # Same session ID
-        mock_session_info_2.name = "test-session-1"     # Same name
+        mock_session_info_2.project_name = "test-project"     # Same project_name
         mock_session_info_2.job = "test-job"
         mock_session_info_2.platform = "test"
         mock_session_info_2.batch_id = None
         mock_session_info_2.model_dump.return_value = {
             "session_id": "session-123",
-            "name": "test-session-1",
+            "project_name": "test-project",
             "job": "test-job",
             "platform": "test"
         }
@@ -187,13 +198,13 @@ class TestCloudLoggingIntegration:
         # Create third session with different session ID (should create new handler)
         mock_session_info_3 = MagicMock()
         mock_session_info_3.session_id = "session-456"  # Different session ID
-        mock_session_info_3.name = "test-session-2"     # Different name
+        mock_session_info_3.project_name = "test-project-2"     # Different project_name
         mock_session_info_3.job = "test-job"
         mock_session_info_3.platform = "test"
         mock_session_info_3.batch_id = None
         mock_session_info_3.model_dump.return_value = {
             "session_id": "session-456",
-            "name": "test-session-2",
+            "project_name": "test-project-2",
             "job": "test-job",
             "platform": "test"
         }
@@ -256,7 +267,7 @@ class TestErrorRecoveryAndValidation:
         
         # Complete the setup
         execution_context_id = f"partial_setup_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
         
         # Now validation should pass
         validation_complete = validate_logging_state(verbose_expected=True)
@@ -273,7 +284,7 @@ class TestErrorRecoveryAndValidation:
         # Set up logging with verbose=False
         setup_console_logging(verbose=False)
         execution_context_id = f"level_mismatch_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test")
         
         # Validate expecting verbose=True (should detect mismatch)
         validation = validate_logging_state(verbose_expected=True)
@@ -293,7 +304,7 @@ class TestErrorRecoveryAndValidation:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"real_logging_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
         
         # Verify setup is valid
         validation = validate_logging_state(verbose_expected=True)
@@ -361,7 +372,7 @@ class TestFailFastIntegrationExamples:
         # Step 1: Set up verbose logging at application start
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_workflow_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
         
         # Step 2: Validate logging is properly configured
         validation = validate_logging_state(verbose_expected=True)
@@ -405,7 +416,7 @@ class TestFailFastIntegrationExamples:
         # Step 3: Fix the issues by proper setup
         setup_console_logging(verbose=True)
         execution_context_id = f"error_recovery_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
         
         # Step 4: Verify the fixes worked
         fixed_validation = validate_logging_state(verbose_expected=True)

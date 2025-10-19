@@ -132,10 +132,15 @@ class BaseStorageConfig(BaseModel):
     }
 
     def merge_defaults(self, defaults):
-        """Merge this config with default values, prioritizing this config's values."""
+        """Merge this config with default values, prioritizing this config's values.
+
+        None values in self do not override non-None values from defaults.
+        """
         exclude_fields = set()
         merged_data = defaults.model_dump(exclude=exclude_fields)
-        merged_data.update(self.model_dump(exclude=exclude_fields))
+        # Only update with non-None values from self
+        self_data = {k: v for k, v in self.model_dump(exclude=exclude_fields).items() if v is not None}
+        merged_data.update(self_data)
         # Return the same type as self
         return self.__class__(**merged_data)
 

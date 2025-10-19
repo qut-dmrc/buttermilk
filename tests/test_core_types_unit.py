@@ -110,16 +110,15 @@ def test_record_hash_uniqueness():
 
 def test_record_hash_changes_with_content():
     """Test that record hash changes when content changes."""
-    record = Record(content="Original content", record_id="test_change")
-    original_hash = record.record_hash
+    record1 = Record(content="Original content", record_id="test_change")
+    original_hash = record1.record_hash
     
-    # Change content
-    record.content = "Modified content"
-    new_hash = record.record_hash
+    # Create new record with different content
+    record2 = Record(content="Modified content", record_id="test_change")
+    new_hash = record2.record_hash
     
     assert original_hash != new_hash
-    assert record.metadata["record_hash"] == new_hash
-
+    assert record2.metadata["record_hash"] == new_hash
 
 def test_ground_truth_hash_none():
     """Test ground_truth_hash when ground_truth is None."""

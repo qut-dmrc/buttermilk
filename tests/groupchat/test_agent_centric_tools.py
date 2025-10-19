@@ -20,7 +20,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentAnnouncement, AgentInput, AgentOutput
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.skip(reason="Tests for future agent-centric tool calling functionality")]
 
 
 class MockSimpleAgent(Agent):

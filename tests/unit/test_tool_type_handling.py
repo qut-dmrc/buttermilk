@@ -17,11 +17,9 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from autogen_core import FunctionCall
 from autogen_core.models import CreateResult
 from autogen_core.tools import ToolSchema
 
-from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.llms import AutoGenWrapper
 from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
@@ -214,65 +212,11 @@ class TestToolTypeHandling:
             # Verify intercept_tools flag was set
             assert call_args.kwargs.get("intercept_tools") is True
 
-    @pytest.mark.anyio
-    async def test_toolschema_to_functioncall_flow(self, sample_tool_schema: ToolSchema, real_bm):
-        """Test the flow from ToolSchema → LLM → intercept → routing."""
-        host = StructuredLLMHostAgent(
-            agent_name="test_host",
-            role="HOST",
-            parameters={"model": "test-model", "template": "host", "human_in_loop": False}
-        )
-        
-        # Initialize host with tools
-        host._tools = [sample_tool_schema]
-        host._proposed_step = asyncio.Queue()
-        
-        # Mock the LLM client to return FunctionCall objects
-        mock_function_call = FunctionCall(id="call_123", name="test_search", arguments='{"query": "test query", "limit": 5}')
-        
-        mock_client = AsyncMock(spec=AutoGenWrapper)
-        from autogen_core.models import RequestUsage
-        mock_client.call_chat = AsyncMock(return_value=CreateResult(
-            content=[mock_function_call],  # Return FunctionCall in content
-            finish_reason="function_calls",
-            usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
-            cached=False
-        ))
-        
-        # Mock the agent registry for routing
-        host._agent_registry = {
-            "test_agent": {
-                "tools": ["test_search"],
-                "role": "SEARCH_AGENT"
-            }
-        }
-        
-        # Mock bm.llms.get_autogen_chat_client directly (used in _process -> _call_llm)
-        with patch("buttermilk.agents.flowcontrol.structured_llmhost.bm") as mock_bm:
-            mock_bm.llms.get_autogen_chat_client.return_value = mock_client
-            
-            # Mock the routing method and template filling
-            with patch.object(host, "_route_tool_calls_to_agents", new_callable=AsyncMock) as mock_route:
-                with patch.object(host, "_fill_template", new_callable=AsyncMock) as mock_fill:
-                    mock_fill.return_value = [Mock()]  # Return mock messages
-                    # Process a message
-                    result = await host._process(
-                        message=AgentInput(
-                            inputs={"prompt": "Search for test data"}
-                        ),
-                        cancellation_token=None
-                    )
-                    
-                    # Verify the flow worked
-                    assert result is not None
-                    assert isinstance(result, AgentOutput)
-                    
-                    # Verify tool calls were intercepted and routed
-                    mock_route.assert_called_once()
-                    routed_calls = mock_route.call_args[0][0]
-                    assert len(routed_calls) == 1
-                    assert routed_calls[0].name == "test_search"
-                    assert "test query" in routed_calls[0].arguments
+    # NOTE: test_toolschema_to_functioncall_flow DELETED per TEST-CLEANER philosophy
+    # This test was too complex with excessive mocking of our internal code.
+    # It tested implementation details rather than business behavior.
+    # The proper test for this flow should be an integration test that uses
+    # real StructuredLLMHostAgent with real tool registration and routing.
 
     @pytest.mark.anyio
     async def test_tool_object_schema_property_usage(self, sample_tool_object: AgentToolDefinition):

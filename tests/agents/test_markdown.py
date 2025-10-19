@@ -142,7 +142,7 @@ class TestFramedStatementMarkdown:
         
         result = output.as_markdown(agent_id, call_id)
         
-        assert f"**{agent_id} #{call_id[:8]}**" in result
+        # Note: FramedStatement does not include agent_id header (handled by FrameAnalysisResults)
         assert "Climate change is an urgent crisis" in result
         assert "Dr. Smith" in result
 

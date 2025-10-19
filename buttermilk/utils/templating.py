@@ -241,8 +241,8 @@ def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2
 
     templates_with_content = list_files_with_content(
         TEMPLATES_PATH,
-        filename_pattern=pattern,  # Assuming list_files_with_content takes filename_pattern
-        parent_dir=parent,
+        filename=pattern,  # Parameter is 'filename', not 'filename_pattern'
+        parent=parent,
         extension=effective_extension,
     )
     # Strip the .jinja2 (or any extension) part for the template name

@@ -13,7 +13,6 @@ from buttermilk.utils.utils import scrub_serializable
 from .base import Storage
 
 if TYPE_CHECKING:
-    from buttermilk._core.bm_init import BM
 
     from .._core.storage_config import StorageConfig
 
@@ -340,6 +339,27 @@ class FileStorage(Storage):
             # Map common alternative field names
             if "content" not in data and "text" in data:
                 data["content"] = data["text"]
+
+            # Move unmapped fields to metadata before creating record
+            # This ensures all non-standard fields go into metadata dict
+            # instead of being stored as direct attributes
+            known_record_fields = {
+                "record_id", "dataset_name", "split_type", "content",
+                "metadata", "error", "ground_truth", "response",
+                "record_hash", "record_class"
+            }
+
+            # Collect fields that should go into metadata
+            fields_for_metadata = {}
+            for key in list(data.keys()):
+                if key not in known_record_fields:
+                    fields_for_metadata[key] = data.pop(key)
+
+            # Merge collected fields into metadata
+            if fields_for_metadata:
+                if "metadata" not in data:
+                    data["metadata"] = {}
+                data["metadata"].update(fields_for_metadata)
 
             # Create a record using the configured class type
             try:

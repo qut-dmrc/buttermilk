@@ -170,14 +170,15 @@ class TestTraceWriter:
         TraceWriter._initialized = False
 
         with patch("buttermilk.utils.trace_writer.bm") as mock_bm:
-            mock_bm.config = {}  # No storage config
+            mock_bm.cfg = type('obj', (object,), {})()  # No storage config
 
             writer = TraceWriter()
 
-            assert writer.uploader is None
-
-            # Should not raise error when adding trace
+            # Should not raise error when adding trace without config
             trace = ExecutionTrace(
                 agent_info={"component_name": "TestComponent"}
             )
             await writer.add(trace)  # Should handle gracefully
+
+            # After initialization, uploader should be None
+            assert writer.uploader is None

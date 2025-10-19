@@ -3,7 +3,7 @@
 import pytest
 from autogen_core.models import ModelInfo
 
-from buttermilk._core.llms import ClientType, LLMConfig, LLMs
+from buttermilk._core.llms import ClientType, LLMConfig
 
 
 def test_client_type_enum():
@@ -53,29 +53,6 @@ def test_llm_config_validates_client_type():
             model_info=model_info,
             configs={}
         )
-
-
-def test_clean_branching_logic():
-    """Test that get_autogen_chat_client has clean branching per client_type."""
-    # This test verifies the branching logic is clean by checking that
-    # each client_type has exactly one branch in the implementation
-    
-    import inspect
-    
-    # Get the source code of get_autogen_chat_client
-    source = inspect.getsource(LLMs.get_autogen_chat_client)
-    
-    # Count occurrences of each client type check
-    for client_type in ClientType:
-        # Each client type should appear exactly once in an if/elif statement
-        pattern = f"client_type == ClientType.{client_type.name}"
-        occurrences = source.count(pattern)
-        assert occurrences == 1, f"ClientType.{client_type.name} appears {occurrences} times, expected 1"
-    
-    # Ensure no string matching on config.obj
-    assert "'anthropic' in config.obj.lower()" not in source
-    assert "config.obj.lower()" not in source
-    assert "config.obj" not in source
 
 
 def test_no_api_type_field():

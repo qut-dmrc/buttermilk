@@ -15,7 +15,7 @@ from buttermilk.utils.uploader import AsyncDataUploader
 class FakeTMDBProcessor:
     """Mock processor that transforms Title to Observations."""
 
-    async def process(self, record):
+    async def process(self, record, **kwargs):
         """Transform Title to Observations."""
         _ = self  # reference self to satisfy linter
         print(f"  TMDB processing: {record.title}")
@@ -41,7 +41,7 @@ class FakeUploader:
     def __init__(self):
         self.uploaded = []
 
-    async def process(self, record):
+    async def process(self, record, **kwargs):
         """Pass through and track."""
         print(f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
         self.uploaded.append(record)
@@ -54,6 +54,10 @@ class FakeUploader:
 @pytest.mark.anyio
 async def test_pipeline_tmdb_simple():
     """Test that TMDBTool yields observations and uploader passes them through."""
+    # Skip if themoviedb is not available
+    from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE
+    if not THEMOVIEDB_AVAILABLE:
+        pytest.skip("themoviedb library not available")
 
     # Create a test Title
     title = Title(record_id="123", title="Test Movie", year=2024)
@@ -121,12 +125,13 @@ async def test_multi_processor_pipeline(real_bm):
     tmdb = FakeTMDBProcessor()
     uploader = FakeUploader()
 
-    # Create orchestrator with multiple processors
+    # Create orchestrator with multiple processors, disable cache to ensure processors run
     orchestrator = PipelineOrchestrator(
-        stage_name="test_pipeline",
+        pipeline_name="test_pipeline",
         source=source(),
         processors=[tmdb, uploader],  # Chain of processors
         concurrency=2,
+        enable_record_cache=False,  # Disable cache to ensure processors actually run
     )
 
     # Run pipeline
@@ -163,7 +168,7 @@ class MetadataAddingProcessor:
         self.metadata_key = metadata_key
         self.metadata_value = metadata_value
 
-    async def process(self, record):
+    async def process(self, record, **kwargs):
         """Add metadata to record without changing record_id."""
         print(f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}")
 
@@ -182,7 +187,7 @@ class SplittingProcessor:
     def __init__(self, split_count: int = 3):
         self.split_count = split_count
 
-    async def process(self, record):
+    async def process(self, record, **kwargs):
         """Split one record into multiple, preserving record_id."""
 
         for i in range(self.split_count):
@@ -216,7 +221,7 @@ async def test_metadata_accumulation_and_record_id_preservation():
 
     # Create orchestrator
     orchestrator = PipelineOrchestrator(
-        stage_name="metadata_test",
+        pipeline_name="metadata_test",
         source=source(),
         processors=[stage1_processor, stage2_processor],
         concurrency=1,
@@ -275,7 +280,7 @@ async def test_one_to_n_transformation_with_output_indexing():
 
     # Create orchestrator
     orchestrator = PipelineOrchestrator(
-        stage_name="splitting_test",
+        pipeline_name="splitting_test",
         source=source(),
         processors=[splitter, passthrough],
         concurrency=1,
@@ -323,7 +328,7 @@ async def test_record_filtering_no_metadata_update():
     class FilteringProcessor:
         """Processor that filters out records with certain content."""
 
-        async def process(self, record: BaseRecord):
+        async def process(self, record: BaseRecord, **kwargs):
             if "skip" in record.content:
                 # Filter out this record by yielding nothing
                 return
@@ -345,7 +350,7 @@ async def test_record_filtering_no_metadata_update():
 
     # Create orchestrator
     orchestrator = PipelineOrchestrator(
-        stage_name="filtering_test",
+        pipeline_name="filtering_test",
         source=source(),
         processors=[filter_processor],
         concurrency=1,

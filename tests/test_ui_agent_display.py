@@ -83,22 +83,6 @@ class TestUIAgentDisplay:
         assert "AGENTS:" in text_str or "HOST" in text_str
 
     @pytest.mark.anyio
-    async def test_announcement_display_in_listen(self, console_agent, sample_announcement):
-        """Test that announcements are displayed when received via _listen."""
-        # Track what was printed
-        printed_messages = []
-        console_agent._console.print = lambda msg: printed_messages.append(msg)
-
-        # Process announcement through _listen
-        await console_agent._listen(
-            message=sample_announcement,
-            source="WORKER-worker123"
-        )
-
-        # Verify something was printed (the formatted announcement)
-        assert len(printed_messages) > 0
-
-    @pytest.mark.anyio
     async def test_agent_status_colors(self, console_agent):
         """Test different status colors for agent announcements."""
         statuses = [

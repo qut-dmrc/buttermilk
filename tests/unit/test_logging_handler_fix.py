@@ -34,7 +34,7 @@ class TestStructlogRichHandlerFix:
         # Set up logging
         setup_console_logging(verbose=False)
         execution_context_id = f"test_info_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False)
+        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=False)
 
         log_file_path = Path(log_files[0])
 
@@ -45,8 +45,8 @@ class TestStructlogRichHandlerFix:
         test_message = f"Test info message {uuid.uuid4()}"
         logger.info(test_message, flow="test_flow", record_id="test_record", job_id="test_job")
 
-        # Read the log file content
-        log_content = log_file_path.read_text().strip()
+        # Read the log file content and strip null bytes
+        log_content = log_file_path.read_text().replace('\x00', '').strip()
 
         # Verify it's valid JSON
         assert log_content, "Log file should not be empty"
@@ -81,7 +81,7 @@ class TestStructlogRichHandlerFix:
         # Set up logging with verbose to capture debug messages
         setup_console_logging(verbose=True)
         execution_context_id = f"test_debug_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=True)
 
         log_file_path = Path(log_files[0])
 
@@ -92,8 +92,8 @@ class TestStructlogRichHandlerFix:
         test_message = f"Test debug message {uuid.uuid4()}"
         logger.debug(test_message, flow="test_flow", record_id="test_record", job_id="test_job")
 
-        # Read the log file content
-        log_content = log_file_path.read_text().strip()
+        # Read the log file content and strip null bytes
+        log_content = log_file_path.read_text().replace('\x00', '').strip()
 
         # Verify it's valid JSON
         assert log_content, "Log file should not be empty"
@@ -128,7 +128,7 @@ class TestStructlogRichHandlerFix:
         # Set up logging with verbose to capture both levels
         setup_console_logging(verbose=True)
         execution_context_id = f"test_both_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True)
+        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=True)
 
         log_file_path = Path(log_files[0])
 
@@ -142,11 +142,11 @@ class TestStructlogRichHandlerFix:
         logger.info(info_message, flow="test_flow", type="info_test")
         logger.debug(debug_message, flow="test_flow", type="debug_test")
 
-        # Read the log file content
-        log_content = log_file_path.read_text().strip()
+        # Read the log file content and strip null bytes
+        log_content = log_file_path.read_text().replace('\x00', '').strip()
 
         # Parse all log entries
-        log_lines = [line for line in log_content.split("\n") if line.strip()]
+        log_lines = [line.strip() for line in log_content.split("\n") if line.strip()]
 
         info_entry = None
         debug_entry = None
