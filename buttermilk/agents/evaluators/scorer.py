@@ -248,17 +248,6 @@ class LLMScorer(LLMAgent):
             input_mappings=self.inputs,  # Configured mappings for the Scorer
         )
 
-        # Ignore messages that don't have ground truth in the input record
-        record = message.record
-        if not record or not record.ground_truth:
-            logger.debug(
-                "Scorer received message without ground truth.",
-                record_id=record.record_id,
-                scorer_agent_name=self.agent_name,
-                from_agent_id=message.agent_info.get("agent_id"),
-            )
-            return
-
         # `records` for scoring should come from the original input to the agent being judged.
         # `answers` for scoring are the `JudgeReasons` from the `message.outputs`.
         # `criteria` might be predefined in the scorer's prompt or passed dynamically.
@@ -269,7 +258,6 @@ class LLMScorer(LLMAgent):
         # parent_call_id links this scoring trace back to the Judge's trace.
         scorer_agent_input = AgentInput(
             parent_call_id=message.call_id,  # Link to the Judge's trace
-            record=record,  # Original record that was judged
             inputs=extracted_data,  # Remaining extracted data (should include 'answers', 'criteria')
             # Context might not be needed if the scorer's prompt is self-contained with inputs.
         )

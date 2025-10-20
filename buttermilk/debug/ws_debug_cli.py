@@ -1,8 +1,23 @@
 #!/usr/bin/env python3
-"""WebSocket Debug Infrastructure for Buttermilk flows.
+"""WebSocket Debug CLI for Buttermilk flows.
 
-Provides infrastructure commands for debugging (logs, test-connection)
-and the NonInteractiveDebugClient class for programmatic puppet mode usage.
+Provides both CLI commands and programmatic API for debugging Buttermilk flows:
+
+CLI Commands (optimized for LLM usage):
+- start: Start a flow and capture all messages (JSON by default)
+- send: Send messages to an active session
+- wait: Wait for and collect messages with optional filtering
+- session: Show current session info
+- clear-session: Clear saved session
+- logs: View structured log files
+- list-logs: List recent log files
+- test-connection: Test WebSocket connectivity
+
+Programmatic API:
+- NonInteractiveDebugClient: Python class for automation and testing
+
+By default, all commands output JSON for easy parsing by LLMs and automation tools.
+Use --pretty flag for human-readable console output.
 """
 
 import asyncio
@@ -368,14 +383,201 @@ class NonInteractiveDebugClient:
 @click.group()
 @click.option("--host", default="localhost", help="WebSocket server host")
 @click.option("--port", default=8000, type=int, help="WebSocket server port")
-@click.option("--json-output", is_flag=True, help="Output results as JSON")
+@click.option("--json-output", is_flag=True, help="Output results as JSON (default, optimized for LLMs)")
+@click.option("--pretty", is_flag=True, help="Pretty console output for humans (overrides --json-output)")
 @click.pass_context
-def cli(ctx, host: str, port: int, json_output: bool):
-    """Non-interactive WebSocket debug client for Buttermilk flows."""
+def cli(ctx, host: str, port: int, json_output: bool, pretty: bool):
+    """WebSocket debug client for Buttermilk flows.
+
+    By default, outputs JSON for easy parsing by LLMs and automation.
+    Use --pretty for human-readable console output.
+    """
     ctx.ensure_object(dict)
     ctx.obj["HOST"] = host
     ctx.obj["PORT"] = port
-    ctx.obj["JSON_OUTPUT"] = json_output
+    # Pretty overrides json-output (pretty takes precedence)
+    ctx.obj["JSON_OUTPUT"] = not pretty if pretty else (json_output or True)  # Default to JSON
+
+
+@cli.command()
+@click.argument("flow_name")
+@click.argument("query", default="")
+@click.option("--record", default="", help="Record ID to analyze")
+@click.option("--criteria", default="", help="Criteria template to use")
+@click.option("--wait", default=60, help="Seconds to wait for flow completion")
+@click.pass_context
+def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int):
+    """Start a flow and capture all messages.
+
+    Examples:
+        # Start trans flow with record and criteria (JSON output by default)
+        ws_debug_cli start trans --record betoota_snape_trans --criteria tja
+
+        # Human-readable output
+        ws_debug_cli --pretty start trans --record betoota_snape_trans --criteria tja
+
+        # With query text
+        ws_debug_cli start trans "analyze this" --record betoota_snape_trans
+    """
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    result = asyncio.run(client.start_flow(flow_name, query, wait, record, criteria))
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Started flow '{flow_name}' - Session: {result['session_id']}[/green]")
+            if query:
+                console.print(f"Query: {query}")
+            if record:
+                console.print(f"Record: {record}")
+            if criteria:
+                console.print(f"Criteria: {criteria}")
+            console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
+            for msg in result["messages"]:
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                msg_type = msg["type"]
+                content = msg["content"] or "(no content)"
+                # Truncate for console readability
+                if len(content) > 100:
+                    content = content[:100] + "..."
+                agent = msg["agent_role"] or "system"
+                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.argument("content")
+@click.option("--type", "msg_type", default="response", help="Message type (default: response)")
+@click.option("--wait", default=5, help="Seconds to wait for responses")
+@click.option("--session", help="Session ID (uses saved session if not provided)")
+@click.pass_context
+def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
+    """Send a message to the current session.
+
+    Examples:
+        # Send manager response to current session
+        ws_debug_cli send "approved"
+
+        # Send to specific session
+        ws_debug_cli send "approved" --session abc123
+    """
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    result = asyncio.run(client.send_message(msg_type, content, wait, session))
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Sent {msg_type} to session {result['session_id']}[/green]")
+            console.print(f"Content: {content}")
+            console.print(f"\n[dim]New messages ({len(result['messages'])})[/dim]:")
+            for msg in result["messages"]:
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                msg_type = msg["type"]
+                content = msg["content"] or "(no content)"
+                if len(content) > 100:
+                    content = content[:100] + "..."
+                agent = msg["agent_role"] or "system"
+                console.print(f"[dim]{timestamp}[/dim] [{msg_type}] {agent}: {content}")
+
+
+@cli.command()
+@click.option("--wait", default=5, help="Seconds to wait for messages")
+@click.option("--pattern", help="Regex pattern to filter messages")
+@click.option("--type", "msg_type", help="Filter by message type")
+@click.option("--session", help="Session ID (uses saved session if not provided)")
+@click.pass_context
+def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None):
+    """Wait for and collect messages from the current session.
+
+    Examples:
+        # Wait 10 seconds and get all messages
+        ws_debug_cli wait --wait 10
+
+        # Wait for messages containing "conclusion"
+        ws_debug_cli wait --pattern "conclusion" --wait 30
+
+        # Get only ui_message type messages
+        ws_debug_cli wait --type ui_message
+    """
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    result = asyncio.run(client.wait_for_messages(session, wait, pattern, msg_type))
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        if "error" in result:
+            console.print(f"[red]Error: {result['error']}[/red]")
+        else:
+            console.print(f"[green]Messages from session {result['session_id']}[/green]")
+            if pattern or msg_type:
+                console.print(f"[dim]Filters: pattern={pattern}, type={msg_type}[/dim]")
+            console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
+            for msg in result["messages"]:
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                content = msg["content"] or "(no content)"
+                if len(content) > 100:
+                    content = content[:100] + "..."
+                agent = msg["agent_role"] or "system"
+                console.print(f"[dim]{timestamp}[/dim] [{msg['type']}] {agent}: {content}")
+
+
+@cli.command()
+@click.pass_context
+def session(ctx):
+    """Show current saved session information.
+
+    Examples:
+        # Show session info as JSON
+        ws_debug_cli session
+
+        # Pretty format
+        ws_debug_cli --pretty session
+    """
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    session_id = client.load_session()
+
+    if ctx.obj["JSON_OUTPUT"]:
+        if session_id and client.session_file.exists():
+            data = json.loads(client.session_file.read_text())
+            print(json.dumps(data, indent=2))
+        else:
+            print(json.dumps({"error": "No saved session"}, indent=2))
+    else:
+        console = Console()
+        if session_id:
+            data = json.loads(client.session_file.read_text())
+            console.print("[green]Saved session:[/green]")
+            console.print(f"  Session ID: {data['session_id']}")
+            console.print(f"  Host: {data['host']}:{data['port']}")
+            console.print(f"  Created: {data['timestamp']}")
+        else:
+            console.print("[yellow]No saved session[/yellow]")
+
+
+@cli.command()
+@click.pass_context
+def clear_session(ctx):
+    """Clear the saved session.
+
+    Examples:
+        ws_debug_cli clear-session
+    """
+    client = NonInteractiveDebugClient(ctx.obj["HOST"], ctx.obj["PORT"])
+    result = client.clear_session()
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        console.print(f"[green]{result['status']}[/green]")
 
 
 @cli.command()

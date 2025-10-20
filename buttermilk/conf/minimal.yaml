@@ -10,7 +10,11 @@ job: local_test
 hydra.job.chdir: false
 
 verbose: false
-flows: {}
+run:
+  mode: default
+  human_in_loop: false
+  flows: {}
+  llms: {}
 
 session:
   template_paths: []
@@ -23,9 +27,6 @@ session:
 infrastructure:
   # No cloud configuration - purely local
   clouds: []
-
-  # No LLMs configured - add specific models as needed
-  llms: {}
 
   # Tracing disabled for minimal setup
   tracing:

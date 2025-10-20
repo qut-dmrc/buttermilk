@@ -14,6 +14,7 @@ from buttermilk._core.bm_init import SessionInfo
 from buttermilk._core.cloud_config import CloudProvider, LoggerConfig
 from buttermilk._core.run_config import RunConfig
 from buttermilk._core.storage_config import BaseStorageConfig
+from buttermilk import logger
 
 
 class TracingProviderConfig(BaseModel):
@@ -135,7 +136,8 @@ class ButtermilkConfig(BaseModel):
     )
 
     # Flow definitions (configuration, not execution)
-    flows: dict[str, Any] = Field(default_factory=dict, description="Flow definitions keyed by flow name")
+    # MOVED TO run.flows - kept for backward compatibility only via validators
+    #     flows: dict[str, Any] = Field(default_factory=dict, description="Flow definitions keyed by flow name")
 
     # Storage configurations
     storage: dict[str, BaseStorageConfig | dict[str, Any]] = Field(default_factory=dict, description="Named storage configurations")
@@ -157,6 +159,12 @@ class ButtermilkConfig(BaseModel):
             values["session"]["job"] = job
         if project_name is not None:
             values["session"]["project_name"] = project_name
+        # Migrate flows from root to run.flows for backward compatibility
+        if "flows" in values and values["flows"]:
+            if "run" not in values:
+                values["run"] = {}
+            if isinstance(values["run"], dict) and "flows" not in values["run"]:
+                values["run"]["flows"] = values.pop("flows")
         return values
 
     @field_validator("run", mode="before")

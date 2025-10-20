@@ -379,10 +379,24 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             return None
 
-        trace_object = await self.trace_and_execute(message=final_input)
+        try:
+            trace_object = await self.trace_and_execute(message=final_input)
 
-        # If the agent didn't run, just exit.
-        if not trace_object:
+            # If the agent didn't run, just exit.
+            if not trace_object:
+                return None
+        except Exception as e:
+            logger.error(f"Agent {self.agent_id} error during invoke: {e}")
+            # Create an ErrorEvent to capture the error
+            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
+
+            logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
+            # Create an ErrorEvent to capture the error
+            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
+            await self._publish(
+                TaskProcessingComplete(agent_id=self.agent_id, role=self.role, is_error=True, error=[err_result]),
+                topic_id=self._topic_id,
+            )
             return None
 
         # Store trace to BigQuery if configured
@@ -525,11 +539,20 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # Create ExecutionTrace from the result, overwriting call_id and parent_call_id with
         # values directly from Weave.
+        #
+        # For inputs: Use resolved_inputs from metadata if subclass provided it (e.g., LLM agents
+        # set this with template variables). Otherwise, extract just the input data from the message,
+        # not the entire message wrapper with metadata.
+        trace_inputs = result.metadata.get("resolved_inputs") if hasattr(result, "metadata") else None
+        if trace_inputs is None:
+            # Default: use message.inputs if available, otherwise fall back to whole message
+            trace_inputs = message.inputs if hasattr(message, "inputs") else message
+
         trace_object = ExecutionTrace.from_output(
             result,
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
-            inputs=final_input,
+            inputs=trace_inputs,
             agent_info={
                 "component_name": self.agent_name,
                 "execution_type": "agent",

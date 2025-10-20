@@ -1,7 +1,13 @@
 defaults:
-  - defaults
+  - run: default
   - _self_
 
+
+# reduce path-induced surprises
+hydra.job.chdir: false
+
+project_name: buttermilk
+verbose: false
 
 storage:
   traces:

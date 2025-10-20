@@ -6,7 +6,7 @@ host:
   description: "Intelligent coordinator that helps users with tasks by orchestrating other agents"
   agent_obj: StructuredLLMHostAgent
   parameters:
-    model: ${llms.host}
+    model: ${run.llms.host}
     human_in_loop: false
     template: lead_ra  # Configurable template
     task: "Assist the user by delegating tasks to appropriate agents. Continuously monitor progress and adapt the workflow based on results."

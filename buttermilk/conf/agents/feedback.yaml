@@ -5,7 +5,7 @@ feedback:
   num_runs: 1
   description: Checks for any concerns with the discussion so far.
   variants:
-    model: ${llms.general}
+    model: ${run.llms.general}
   parameters:
     template: feedback
   inputs:

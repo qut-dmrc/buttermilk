@@ -7,7 +7,7 @@ analyst:
   parameters:
     template: analyst
   variants:
-    model: ${llms.general}
+    model: ${run.llms.general}
   inputs:
     context: context
     prompt: user.content

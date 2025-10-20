@@ -21,10 +21,10 @@
       ],
       "justMyCode": false,
       "args": [
-        "+flows=[trans]",
-        "+run=api",
+        "+flows@run.flows.trans=trans",
+        "run=api",
         "verbose=true",
-        "+llms=${input:llms}",
+        "+llms@run.llms=${input:llms}",
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"

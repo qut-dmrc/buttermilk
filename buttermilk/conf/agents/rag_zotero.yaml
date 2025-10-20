@@ -8,7 +8,7 @@ rag_zotero:
   name_components: ["role", "model", "unique_identifier"]
   tools: {}
   variants:
-    model: ${llms.general}
+    model: ${run.llms.general}
   parameters:
     template: rag
     description: |

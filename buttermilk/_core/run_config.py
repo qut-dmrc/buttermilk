@@ -6,9 +6,12 @@ The RunMode enum defines valid execution modes.
 """
 
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from buttermilk._core.orchestrator import OrchestratorProtocol
 
 
 class RunMode(str, Enum):
@@ -84,6 +87,12 @@ class RunConfig(BaseModel):
     mode: RunMode = Field(
         default=RunMode.CONSOLE,
         description="Execution mode (set via run=api, run=batch, etc.)"
+    )
+
+    # Flow definitions (configuration, not execution)
+    flows: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Flow definitions keyed by flow name. Each flow must conform to OrchestratorProtocol"
     )
 
     # Flow execution parameters

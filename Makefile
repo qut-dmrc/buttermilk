@@ -32,7 +32,7 @@ kill_api:
 
 # For production API server ONLY.
 api:
-	uv run python -m buttermilk.runner.cli "+flows=[trans]" run=api llms=full
+	uv run python -m buttermilk.runner.cli run=api "+flows@run.flows.trans=trans" "+llms@run.llms=full" verbose=true
 
 # Run API server in debug mode. Use this one for development.
 debug: 
@@ -40,7 +40,7 @@ debug:
 	@echo "Structured logs are written to: /tmp/buttermilk_<run_id>.jsonl"
 	@echo "To view logs: uv run python -m buttermilk.debug.ws_debug_cli logs -n 50"
 	@echo "Starting server in background..."
-	@nohup uv run python -m buttermilk.runner.cli "+flows=[trans]" run=api llms=debug verbose=true > /dev/null 2>&1 &
+	@nohup uv run python -m buttermilk.runner.cli run=api "+flows@run.flows.trans=trans" "+llms@run.llms=debug" verbose=true > /dev/null 2>&1 &
 	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs." 
 
 build:

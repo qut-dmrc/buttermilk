@@ -7,7 +7,7 @@ judge:
   parameters:
     template: judge
   variants:
-    model: ${llms.judgers}
+    model: ${run.llms.judgers}
     criteria: ${....parameters.criteria}
   inputs:
     record: "[FETCH.outputs]||*.record"
