@@ -156,6 +156,7 @@ class LLMAgent(Agent):
             # Prepare metadata for AgentOutput
             output_metadata = {
                 "agent_name": self.agent_name,
+                "resolved_inputs": llm_result.resolved_inputs,
                 "agent_id": self.agent_id,
                 **llm_result.metadata,
             }

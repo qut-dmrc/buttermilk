@@ -529,7 +529,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             result,
             parent_call_id=parent_call.id if parent_call else message.parent_call_id,
             call_id=child_call.id if child_call else result.call_id,
-            inputs=message,
+            inputs=final_input,
             agent_info={
                 "component_name": self.agent_name,
                 "execution_type": "agent",

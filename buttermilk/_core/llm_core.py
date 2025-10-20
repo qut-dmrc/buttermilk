@@ -46,6 +46,7 @@ class LLMResult(BaseModel):
     template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
     messages: list[LLMMessage] = Field(default_factory=list, description="Messages exchanged with LLM")
     error: str | ErrorEvent | None = Field(None, description="Error message if processing failed")
+    resolved_inputs: dict[str, Any] = Field(default_factory=dict, description="All resolved inputs used for template rendering")
 
 
 class LLMCore:
@@ -203,7 +204,7 @@ class LLMCore:
                         "config": self.parameters,
                         "processor_stage": processor_stage,
                     },
-                    inputs={"record": record, **kwargs},
+                    inputs=result.resolved_inputs if result.resolved_inputs else {"record": record, **kwargs},
                     outputs=result.content,
                     messages=result.messages,
                     parameters=self.parameters,
@@ -325,6 +326,13 @@ class LLMCore:
                 # Remove record/context from combined_inputs if they were in inputs dict
                 combined_inputs.pop("record", None)
                 combined_inputs.pop("context", None)
+
+                # Store resolved inputs for complete traceability (observability requirement)
+                result.resolved_inputs = combined_inputs.copy()
+                if record is not None:
+                    result.resolved_inputs["record"] = record
+                if context:
+                    result.resolved_inputs["context"] = context
 
                 # Fill template
                 llm_messages = await self._fill_template(combined_inputs, record=record, context=context)
