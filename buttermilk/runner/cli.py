@@ -68,7 +68,7 @@ def main(conf: DictConfig) -> None:
     # Get the mode from config to determine if we need FlowRunner
     mode = conf.run.mode
 
-    flow_runner = FlowRunner(flows=conf.flows)
+    flow_runner = FlowRunner(flows=conf.run.flows)
 
     # Set the session-scoped BM for this FlowRunner
     flow_runner.set_session_bm(bm)

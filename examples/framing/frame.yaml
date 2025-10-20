@@ -12,33 +12,34 @@ defaults:
   - /storage@frame.storage:
       - tja
 
-flows:
-  frame:
-    # Core flow configuration
-    orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
-    name: "frame"
-    description: "Journalism quality assessment for frame issues reporting"
+run:
+  flows:
+    frame:
+      # Core flow configuration
+      orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+      name: "frame"
+      description: "Journalism quality assessment for frame issues reporting"
 
-    parameters:
-      human_in_loop: ${run.human_in_loop}
-      save: {}
+      parameters:
+        human_in_loop: ${run.human_in_loop}
+        save: {}
 
-    observers:
-      host: ${agents.llm_host}
+      observers:
+        host: ${agents.llm_host}
 
-    agents:
-      # loading agents here because sequence matters for sequence_host
-      fetch: ${/agents.fetch}
-      differences: ${/agents.differences}
-      framer:
-        role: FRAMES
-        name: "👓 Frames"
-        description: Expert analysts who will specifically (and only) identify the FRAMING of a piece of content.
-        agent_obj: LLMAgent
-        num_runs: 1
-        parameters:
-          template: frames
-        variants:
-          model: ${llms.general}
-        inputs:
-          record: "[FETCH.outputs]||*.record[]"
+      agents:
+        # loading agents here because sequence matters for sequence_host
+        fetch: ${/agents.fetch}
+        differences: ${/agents.differences}
+        framer:
+          role: FRAMES
+          name: "👓 Frames"
+          description: Expert analysts who will specifically (and only) identify the FRAMING of a piece of content.
+          agent_obj: LLMAgent
+          num_runs: 1
+          parameters:
+            template: frames
+          variants:
+            model: ${run.llms.general}
+          inputs:
+            record: "[FETCH.outputs]||*.record[]"

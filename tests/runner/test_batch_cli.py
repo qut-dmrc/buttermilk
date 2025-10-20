@@ -34,7 +34,7 @@ def mock_bm():
     """Mock BM initialization."""
     with patch("buttermilk.runner.batch_cli.init_async") as mock_init:
         mock_bm_instance = MagicMock()
-        mock_bm_instance.cfg.flows = {"trans": MagicMock()}
+        mock_bm_instance.cfg.run.flows = {"trans": MagicMock()}
         mock_bm_instance.graceful_shutdown = AsyncMock()
         mock_init.return_value = mock_bm_instance
         yield mock_bm_instance

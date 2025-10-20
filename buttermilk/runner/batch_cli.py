@@ -199,12 +199,12 @@ async def run_batch_async(
 
     try:
         # Create FlowRunner with flows from config
-        flow_runner = FlowRunner(flows=bm.cfg.flows)
+        flow_runner = FlowRunner(flows=bm.cfg.run.flows)
         flow_runner.set_session_bm(bm)
 
         # Validate flow exists
-        if flow_name not in bm.cfg.flows:
-            available = list(bm.cfg.flows.keys())
+        if flow_name not in bm.cfg.run.flows:
+            available = list(bm.cfg.run.flows.keys())
             raise ValueError(
                 f"Flow '{flow_name}' not found. Available flows: {available}"
             )
@@ -266,12 +266,12 @@ async def run_flow_console_async(
 
     try:
         # Create FlowRunner
-        flow_runner = FlowRunner(flows=bm.cfg.flows)
+        flow_runner = FlowRunner(flows=bm.cfg.run.flows)
         flow_runner.set_session_bm(bm)
 
         # Validate flow exists
-        if flow_name not in bm.cfg.flows:
-            available = list(bm.cfg.flows.keys())
+        if flow_name not in bm.cfg.run.flows:
+            available = list(bm.cfg.run.flows.keys())
             raise ValueError(
                 f"Flow '{flow_name}' not found. Available flows: {available}"
             )
@@ -334,7 +334,7 @@ async def run_api_async(
 
     try:
         # Create FlowRunner
-        flow_runner = FlowRunner(flows=bm.cfg.flows)
+        flow_runner = FlowRunner(flows=bm.cfg.run.flows)
         flow_runner.set_session_bm(bm)
 
         # Create FastAPI app

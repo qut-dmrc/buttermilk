@@ -50,7 +50,7 @@ def real_scorer_config(hydra_config):
     """Get the REAL scorer agent configuration from conf/agents/scorer.yaml."""
     # Scorer is in observers, not agents
     # Don't fully resolve - we only need the inputs mappings which don't have interpolations
-    scorer_cfg = hydra_config.flows.trans.observers.scorer
+    scorer_cfg = hydra_config.run.flows.trans.observers.scorer
     return {
         "inputs": OmegaConf.to_container(scorer_cfg.inputs, resolve=False),
         "parameters": OmegaConf.to_container(scorer_cfg.parameters, resolve=False),
@@ -60,14 +60,14 @@ def real_scorer_config(hydra_config):
 @pytest.fixture
 def real_judge_config(hydra_config):
     """Get the REAL judge agent configuration from conf/agents/judge.yaml."""
-    judge_cfg = hydra_config.flows.trans.agents.judge
+    judge_cfg = hydra_config.run.flows.trans.agents.judge
     return OmegaConf.to_container(judge_cfg, resolve=True)
 
 
 @pytest.fixture
 def real_fetch_config(hydra_config):
     """Get the REAL fetch agent configuration from conf/agents/fetch.yaml."""
-    fetch_cfg = hydra_config.flows.trans.agents.fetch
+    fetch_cfg = hydra_config.run.flows.trans.agents.fetch
     return OmegaConf.to_container(fetch_cfg, resolve=True)
 
 

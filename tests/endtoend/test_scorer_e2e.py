@@ -83,7 +83,7 @@ async def test_scorer_end_to_end_full_trans_flow(
     - No "Undefined" appears in any output (template bug check)
     """
     # Get the trans flow configuration from real_bm
-    trans_flow_config = real_bm.cfg.flows["trans"]
+    trans_flow_config = real_bm.cfg.run.flows["trans"]
 
     # Create FlowRunner with the trans flow
     flow_runner = FlowRunner(

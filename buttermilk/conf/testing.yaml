@@ -1,12 +1,15 @@
 defaults:
-  - flows:
+  - flows@run.flows:
     - trans
-  - llms: debug
+  - llms@run.llms: debug
   - _self_
 
 project_name: buttermilk
 job: testing
 verbose: true
+
+run:
+  mode: console
 
 #  Testing paths for bigquery datasets
 storage:
