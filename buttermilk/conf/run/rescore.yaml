@@ -15,8 +15,9 @@
 #   uv run python -m buttermilk.cli pipeline run --config-name rescore max_records=100
 
 defaults:
+  - /storage@run.pipeline.source: traces
+  - /storage@run.pipeline.output: traces
   - _self_
-  - /storage@pipeline.output: traces
 
 job: rescore
 project_name: tja  
@@ -29,36 +30,34 @@ run:
     pipeline_name: "rescore_unscored_predictions"
     description: "Re-score JUDGE/SYNTH predictions missing scores"
     concurrency: 5
-    max_records: 2  # null = process all, set to integer for testing
+    max_records: null  # null = process all, set to integer for testing
     enable_record_cache: true
     force_reprocess: false
 
     # SQL to find predictions that were never scored
     source:
-      # BigQuery configuration for processing traces
-      type: bigquery
-      project_id: prosocial-443205
-      dataset_id: testing
-      table_id: traces
-      dataset_name: traces
-      schema_path: traces.schema.json
 
       custom_query: |
         WITH unscored_predictions AS (
-          SELECT f.call_id
-          FROM `prosocial-443205.bmdev.stg_flows` f
-          LEFT JOIN `prosocial-443205.bmdev.judge_scores` js
-            ON f.call_id = js.call_id
-          WHERE f.agent_role IN ('JUDGE', 'SYNTHESISER')
-            AND f.predicted_violating IS NOT NULL  -- Has valid prediction
-            AND f.error_event IS NULL              -- No error occurred
-            AND js.call_id IS NULL                 -- No score exists
-            AND f.agent_model IN ('gemini25pro', 'claude45sonnet', 'gemini25flash')
+          SELECT DISTINCT t.call_id
+          FROM `prosocial-443205.testing.traces` t
+          LEFT JOIN `prosocial-443205.testing.traces` scorer
+            ON JSON_VALUE(t.inputs, '$.inputs.record_id') = JSON_VALUE(scorer.inputs, '$.inputs.record_id')
+            AND JSON_VALUE(scorer.agent_info, '$.role') = 'SCORER'
+            AND JSON_VALUE(scorer.agent_info, '$.config.parameters.model') = JSON_VALUE(t.agent_info, '$.config.parameters.model')
+          WHERE JSON_VALUE(t.agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER')
+            AND t.outputs.prediction IS NOT NULL
+            AND t.error IS NULL
+            AND scorer.call_id IS NULL
+            AND JSON_VALUE(t.agent_info, '$.config.parameters.model') IN ('gemini25pro', 'claude45sonnet', 'gemini25flash')
         )
-        SELECT t.*
-        FROM `{table}` t
+        SELECT
+          t.*,
+          r.ground_truth AS expected
+        FROM `prosocial-443205.testing.traces` t
         INNER JOIN unscored_predictions u ON t.call_id = u.call_id
-        LIMIT 1000  -- Safety limit, remove for full backfill
+        INNER JOIN `prosocial-443205.bmdev.tja_records` r
+          ON JSON_VALUE(t.inputs, '$.inputs.record_id') = r.record_id
         
     # PROCESSORS: Transform data then run scorer
     processors:
@@ -69,8 +68,6 @@ run:
           # These JMESPath expressions match what scorer.yaml expects
           answers: "[].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}"
           criteria: "parameters.criteria || `[]`"
-          expected: "inputs.record.ground_truth"
-          record: "inputs.record"
           parent_call_id: "call_id"  # Link scores back to original prediction
 
       # Step 2: Run scoring LLM (LLMCore already implements Processor protocol)

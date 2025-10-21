@@ -321,6 +321,13 @@ def main(conf: DictConfig) -> None:
             orchestrator = PipelineOrchestrator(**pipeline_conf)
 
             async def run_pipeline():
+                # Ensure tracing is initialized before running pipeline
+                # This is required because @weave.op decorators are evaluated at import time
+                # but weave.init() hasn't been called yet
+                from buttermilk._core.execution_context import get_execution_context
+                exec_ctx = get_execution_context()
+                await exec_ctx._ensure_tracing_initialized()
+
                 async for _ in orchestrator():
                     pass
                 await bm.graceful_shutdown()

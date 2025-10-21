@@ -110,7 +110,7 @@ class BigQueryStorage(Storage, StorageClient):
         try:
             # Use custom query if provided
             if self.config.custom_query:
-                query = self.config.custom_query.replace("{table}", f"`{self.get_table_ref()}`")
+                query = self.config.custom_query.replace("{table}", f"{self.get_table_ref()}")
                 job_config = None  # Custom query handles its own parameters
             else:
                 query = self._build_select_query()

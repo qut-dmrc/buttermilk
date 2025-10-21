@@ -51,11 +51,6 @@ class JMESPathTransform(BaseModel):
         for field_name, expression in self.mappings.items():
             try:
                 self._compiled_expressions[field_name] = jmespath.compile(expression)
-                logger.debug(
-                    "Compiled JMESPath expression",
-                    field_name=field_name,
-                    expression=expression
-                )
             except JMESPathError as e:
                 logger.error(
                     "Invalid JMESPath expression",
@@ -140,7 +135,7 @@ class JMESPathTransform(BaseModel):
             # This works because BaseRecord has extra="allow"
             updated_record = record.__class__(**record_data)
 
-            logger.info(
+            logger.debug(
                 "JMESPath transformation complete",
                 record_id=record.record_id,
                 fields_added=list(transformed_fields.keys()),

@@ -89,7 +89,7 @@ class LLMCore:
         # Resolve output_model if it's a string
         if isinstance(output_model, str):
             try:
-                return import_class_from_path(output_model, expected_base_class=pydantic.BaseModel)
+                self.output_model = import_class_from_path(output_model, expected_base_class=pydantic.BaseModel)
             except (ImportError, AttributeError, ValueError) as e:
                 raise ProcessingError(f"Failed to resolve output_model '{output_model}': {e}")
         else:
