@@ -1,0 +1,90 @@
+# Re-scoring Pipeline Configuration
+#
+# Purpose: Score existing JUDGE/SYNTH predictions that lack scores
+#
+# This pipeline demonstrates composable, config-driven data processing:
+# 1. SQL filter extracts unscored predictions from BigQuery
+# 2. JMESPath transform prepares data for scorer template
+# 3. LLMCore runs scoring LLM
+# 4. Results written back to BigQuery traces table
+#
+# Usage:
+#   uv run python -m buttermilk.cli pipeline run --config-name rescore
+#   uv run python -m buttermilk.cli pipeline run --config-name rescore max_records=100
+
+defaults:
+  - _self_
+
+# Pipeline execution parameters
+pipeline_name: "rescore_unscored_predictions"
+description: "Re-score JUDGE/SYNTH predictions missing scores"
+concurrency: 5
+max_records: null  # null = process all, set to integer for testing
+enable_record_cache: true
+force_reprocess: false
+
+# SOURCE: BigQuery with SQL filter for unscored predictions
+source:
+  _target_: buttermilk.storage.bigquery.BigQueryStorage
+  config:
+    type: bigquery
+    dataset_name: "unscored_predictions"
+    project_id: "prosocial-443205"
+    dataset_id: "bmdev"
+    table_id: "traces"
+    full_table_id: "prosocial-443205.bmdev.testing.traces"
+    schema_path: "buttermilk/schemas/traces.schema.json"
+    record_class: "buttermilk._core.contract.ExecutionTrace"
+
+    # SQL to find predictions that were never scored
+    custom_query: |
+      WITH unscored_predictions AS (
+        SELECT f.call_id
+        FROM `prosocial-443205.bmdev.stg_flows` f
+        LEFT JOIN `prosocial-443205.bmdev.judge_scores` js
+          ON f.call_id = js.call_id
+        WHERE f.agent_role IN ('JUDGE', 'SYNTHESISER')
+          AND f.predicted_violating IS NOT NULL  -- Has valid prediction
+          AND f.error_event IS NULL              -- No error occurred
+          AND js.call_id IS NULL                 -- No score exists
+          AND f.agent_model IN ('gemini25pro', 'claude45sonnet', 'gemini25flash')
+      )
+      SELECT t.*
+      FROM `{table}` t
+      INNER JOIN unscored_predictions u ON t.call_id = u.call_id
+      LIMIT 1000  -- Safety limit, remove for full backfill
+
+# PROCESSORS: Transform data then run scorer
+processors:
+  # Step 1: Transform ExecutionTrace → scorer template inputs
+  - _target_: buttermilk.processors.jmespath_transform.JMESPathTransform
+    mappings:
+      # Extract data from ExecutionTrace and map to scorer template variables
+      # These JMESPath expressions match what scorer.yaml expects
+      answers: "[].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}"
+      criteria: "parameters.criteria || `[]`"
+      expected: "inputs.record.ground_truth"
+      record: "inputs.record"
+      parent_call_id: "call_id"  # Link scores back to original prediction
+      session_id: "session_id"   # Preserve session context
+
+  # Step 2: Run scoring LLM (LLMCore already implements Processor protocol)
+  - _target_: buttermilk._core.llm_core.LLMCore
+    model: "gpt-4"  # Or use: ${run.llms.scorers[0]} to reference global config
+    template: "score"
+    output_model: "buttermilk.agents.evaluators.scorer.QualScore"
+    output_col: "score_results"
+    fail_on_unfilled_parameters: true
+
+# OUTPUT: Write ExecutionTrace with scores back to BigQuery
+output:
+  _target_: buttermilk.storage.bigquery.BigQueryStorage
+  config:
+    type: bigquery
+    dataset_name: "scores"
+    project_id: "prosocial-443205"
+    dataset_id: "bmdev"
+    table_id: "traces"
+    full_table_id: "prosocial-443205.bmdev.testing.traces"
+    schema_path: "buttermilk/schemas/traces.schema.json"
+    auto_create: false  # Table already exists
