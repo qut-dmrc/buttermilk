@@ -1,5 +1,5 @@
 defaults:
-  - run: default
+  - run: defaults
   - _self_
 
 

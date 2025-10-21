@@ -301,7 +301,9 @@ class TableWriter(BaseModel):
         """
         if isinstance(v, str):  # If schema is provided as a file path string
             try:
-                return bigquery.Client().schema_from_json(v)
+                # Use BM's cached BigQuery client instead of creating new one
+                from buttermilk import bm
+                return bm.bq.schema_from_json(v)
             except Exception as e:
                 raise TypeError(f"Failed to load BigQuery schema from JSON file path '{v}': {e!s}") from e
         return v  # Pass through if already list of SchemaField or None

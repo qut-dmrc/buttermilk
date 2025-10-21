@@ -11,8 +11,10 @@ This module provides functionalities for:
   `make_messages`).
 """
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from weakref import WeakValueDictionary
 
 import regex as re  # For regular expression operations, used in _parse_prompty
 from autogen_core.models import AssistantMessage, LLMMessage, SystemMessage, UserMessage  # Autogen message types
@@ -50,6 +52,68 @@ def _get_template_search_paths() -> list[str]:
             final_paths.extend([str(p) for p in Path(path).rglob("*") if p.is_dir()])
 
     return final_paths
+
+
+# Session-scoped cache for Jinja2 environments
+# Uses WeakValueDictionary so environments are garbage collected when session ends
+_session_jinja_envs: WeakValueDictionary[str, sandbox.SandboxedEnvironment] = WeakValueDictionary()
+
+
+def _get_cached_jinja_environment(search_paths_tuple: tuple[str, ...]) -> sandbox.SandboxedEnvironment:
+    """Get a session-scoped cached Jinja2 environment for the given search paths.
+
+    This prevents creating new FileSystemLoader and SandboxedEnvironment instances
+    for every template load, while allowing cleanup when sessions end.
+
+    Cache is session-scoped and automatically cleaned up when the session ends
+    (via WeakValueDictionary).
+
+    Args:
+        search_paths_tuple: Tuple of search paths (must be hashable for caching)
+
+    Returns:
+        Cached SandboxedEnvironment instance for this session
+    """
+    # Create cache key combining session_id and search paths
+    try:
+        session_id = bm.session_info.session_id
+    except Exception:
+        session_id = "global"  # Fallback for non-session contexts
+
+    cache_key = f"{session_id}:{','.join(search_paths_tuple)}"
+
+    # Return cached environment if it exists
+    if cache_key in _session_jinja_envs:
+        return _session_jinja_envs[cache_key]
+
+    # Create new environment
+    file_system_loader = FileSystemLoader(searchpath=list(search_paths_tuple))
+
+    # Note: We can't define KeepUndefinedAndCollect here because it needs to collect
+    # undefined variables per-render. We'll pass it during environment creation instead.
+    sandboxed_env = sandbox.SandboxedEnvironment(
+        loader=file_system_loader,
+        trim_blocks=True,
+        lstrip_blocks=True,
+        undefined=Undefined,  # Default undefined, will be overridden per-render
+        keep_trailing_newline=False,
+    )
+
+    # Custom filter to strip all leading/trailing whitespace from a string
+    def strip_all_whitespace(s: Any) -> Any:
+        """Jinja filter to strip whitespace if input is a string."""
+        if isinstance(s, str):
+            return s.strip()
+        return s
+
+    sandboxed_env.filters["strip_all"] = strip_all_whitespace
+
+    # Cache the environment (weak reference allows GC when session ends)
+    _session_jinja_envs[cache_key] = sandboxed_env
+
+    logger.debug("Created new Jinja2 environment for session", session_id=session_id, cache_key=cache_key)
+
+    return sandboxed_env
 
 
 class KeyValueCollector(BaseModel):
@@ -339,7 +403,10 @@ def load_template(
 
     # Define search paths for templates using the new helper
     search_paths = _get_template_search_paths()
-    file_system_loader = FileSystemLoader(searchpath=search_paths)
+
+    # Get cached environment to prevent file descriptor leaks
+    # Convert list to tuple for hashability in lru_cache
+    sandboxed_env = _get_cached_jinja_environment(tuple(search_paths))
 
     collected_undefined_vars: list[str] = []
 
@@ -354,23 +421,9 @@ def load_template(
             # Render as {{ variable_name }} to make it clear it was undefined
             return "{{" + str(self._undefined_name) + "}}"
 
-    # Create a sandboxed Jinja2 environment
-    sandboxed_env = sandbox.SandboxedEnvironment(
-        loader=file_system_loader,
-        trim_blocks=True,  # Removes first newline after a block
-        lstrip_blocks=True,  # Strips leading whitespace from line to block
-        undefined=KeepUndefinedAndCollect,  # Custom handler for undefined variables
-        keep_trailing_newline=False,  # Removes newline at the end of the template output
-    )
-
-    # Custom filter to strip all leading/trailing whitespace from a string
-    def strip_all_whitespace(s: Any) -> Any:
-        """Jinja filter to strip whitespace if input is a string."""
-        if isinstance(s, str):
-            return s.strip()
-        return s  # Return non-strings as is
-
-    sandboxed_env.filters["strip_all"] = strip_all_whitespace
+    # Override the undefined handler for this specific render
+    # (The cached environment has a default Undefined, we override per-use)
+    sandboxed_env.undefined = KeepUndefinedAndCollect
 
     template_filename = f"{template}.jinja2"
     try:

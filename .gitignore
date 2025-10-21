@@ -232,3 +232,4 @@ gs:/
 
 # academicOps deployment (symlinked scripts)
 .academicOps/
+.claude

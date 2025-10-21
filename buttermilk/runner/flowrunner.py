@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 
 import shortuuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from starlette.websockets import WebSocketDisconnect
 
 from buttermilk import ExecutionTrace, logger
@@ -24,7 +24,6 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
-from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
 from buttermilk.utils import scrub_serializable
@@ -425,6 +424,7 @@ class OrchestratorFactory:
             else:
                 # Convert OmegaConf objects to standard Python types recursively
                 from buttermilk.utils.validators import convert_omegaconf_objects
+
                 config = convert_omegaconf_objects(dict(flow_config))
 
             # Create and return a fresh instance
@@ -565,11 +565,11 @@ class SessionManager:
 
     async def _transition_session_status(self, session_id: str, new_status: SessionStatus) -> bool:
         """Safely transition a session to a new status.
-        
+
         Args:
             session_id: The session to transition
             new_status: The new status to transition to
-            
+
         Returns:
             True if transition was successful, False otherwise
 
@@ -584,7 +584,13 @@ class SessionManager:
         # Validate transition (enhanced validation for Phase 2)
         valid_transitions = {
             SessionStatus.INITIALIZING: [SessionStatus.ACTIVE, SessionStatus.ERROR],
-            SessionStatus.ACTIVE: [SessionStatus.TERMINATING, SessionStatus.RECONNECTING, SessionStatus.COMPLETED, SessionStatus.ERROR, SessionStatus.EXPIRED],
+            SessionStatus.ACTIVE: [
+                SessionStatus.TERMINATING,
+                SessionStatus.RECONNECTING,
+                SessionStatus.COMPLETED,
+                SessionStatus.ERROR,
+                SessionStatus.EXPIRED,
+            ],
             SessionStatus.RECONNECTING: [SessionStatus.ACTIVE, SessionStatus.TERMINATING, SessionStatus.ERROR],
             SessionStatus.TERMINATING: [SessionStatus.TERMINATED, SessionStatus.ERROR],
             SessionStatus.COMPLETED: [SessionStatus.TERMINATED],
@@ -609,11 +615,11 @@ class SessionManager:
                     span.set_attribute("buttermilk.session.status", new_status.value)
         except Exception:
             pass
-        
+
         # Update session storage flow status
         try:
             storage_service = SessionStorageService()
-            
+
             # Terminal states - finalize with archival
             if new_status in {SessionStatus.COMPLETED, SessionStatus.TERMINATED}:
                 storage_service.finalize_session(session_id, "completed")
@@ -622,10 +628,10 @@ class SessionManager:
             else:
                 # Non-terminal states - just update status
                 storage_service.update_flow_status(session_id, "running")
-                
+
         except Exception as e:
             logger.warning("Failed to update session storage", session_id=session_id, error=str(e))
-        
+
         return True
 
     async def cleanup_session(self, session_id: str) -> bool:
@@ -668,7 +674,7 @@ class SessionManager:
 
     async def register_shutdown_handler(self, session_id: str, handler: Callable) -> None:
         """Register a custom shutdown handler for a session.
-        
+
         Args:
             session_id: The session to register the handler for
             handler: An async callable that performs custom cleanup
@@ -679,10 +685,10 @@ class SessionManager:
 
     async def validate_session(self, session_id: str) -> bool:
         """Validate that a session is in a good state.
-        
+
         Args:
             session_id: The session to validate
-            
+
         Returns:
             True if session is valid, False otherwise
 
@@ -707,10 +713,10 @@ class SessionManager:
 
     async def get_session_health(self, session_id: str) -> dict[str, Any]:
         """Get health information for a session.
-        
+
         Args:
             session_id: The session to check
-            
+
         Returns:
             Dictionary containing health information
 
@@ -742,10 +748,10 @@ class SessionManager:
 
     async def handle_client_disconnect(self, session_id: str) -> bool:
         """Handle client disconnect by transitioning to RECONNECTING status instead of immediate cleanup.
-        
+
         Args:
             session_id: The session that disconnected
-            
+
         Returns:
             True if session was transitioned to RECONNECTING, False if session was cleaned up
 
@@ -783,11 +789,11 @@ class SessionManager:
 
     async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
         """Reconnect a client to an existing session in RECONNECTING status.
-        
+
         Args:
             session_id: The session to reconnect to
             websocket: The new WebSocket connection
-            
+
         Returns:
             The session if reconnection was successful, None otherwise
 
@@ -875,7 +881,7 @@ class FlowRunner(BaseModel):
 
     Handles orchestrator instantiation and execution in a consistent way, regardless
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
-    
+
     The FlowRunner can accept a BM instance for session-scoped operations,
     or fall back to the global singleton for backward compatibility.
     """
@@ -883,12 +889,9 @@ class FlowRunner(BaseModel):
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     flows: dict[str, OrchestratorProtocol]
-    
+
     # Session-scoped BM instance (optional)
-    bm: Any | None = Field(
-        default=None,
-        description="Optional session-scoped BM instance. If None, falls back to global singleton."
-    )
+    bm: Any | None = Field(default=None, description="Optional session-scoped BM instance. If None, falls back to global singleton.")
 
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
@@ -900,24 +903,25 @@ class FlowRunner(BaseModel):
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
 
+
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""
         if not self._session_manager_started:
             await self.session_manager.start()
             self._session_manager_started = True
-    
+
     def set_session_bm(self, bm: Any) -> None:
         """Set a session-scoped BM instance for this FlowRunner.
-        
+
         This enables session-level observability isolation by providing each flow execution
         with its own BM instance containing unique session context (session_id, job, platform).
         When set, all orchestrators and agents created by this FlowRunner will automatically
         receive the session-scoped BM instead of the global singleton.
-        
+
         Args:
             bm: Session-scoped BM instance containing unique session context for observability.
                 Must have session_info.session_id for proper isolation.
-                
+
         Example:
             >>> from buttermilk._core.config_bootstrap import create_configuration_bootstrapper
             >>> import asyncio
@@ -930,21 +934,21 @@ class FlowRunner(BaseModel):
         """
         self.bm = bm
         logger.debug("Set session-scoped BM", session_id=bm.session_info.session_id)
-    
+
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
-        
+
         This method implements the dependency injection pattern for BM access, providing
         session-scoped observability when available while maintaining backward compatibility
         with the global singleton pattern.
-        
+
         Returns:
             BM instance to use for operations. Session-scoped if set via set_session_bm(),
             otherwise the global singleton from get_bm().
-            
+
         Raises:
             RuntimeError: If no session-scoped BM is set and global singleton is not initialized.
-            
+
         Example:
             >>> bm = flow_runner.get_effective_bm()
             >>> # Gets session-scoped BM if available, otherwise global singleton
@@ -954,6 +958,7 @@ class FlowRunner(BaseModel):
             return self.bm
         else:
             from buttermilk._core.dmrc import get_bm
+
             return get_bm()
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
@@ -990,7 +995,7 @@ class FlowRunner(BaseModel):
                 if websocket:
                     # Cancel existing monitor_ui task to prevent WebSocket conflicts
                     existing_session.cancel_monitor_ui_task()
-                    
+
                     # Close existing websocket if any
                     if existing_session.websocket and existing_session.websocket != websocket:
                         try:
@@ -998,7 +1003,7 @@ class FlowRunner(BaseModel):
                             await existing_session.websocket.close()
                         except Exception as e:
                             logger.warning("Error closing previous WebSocket for session", session_id=session_id, error=str(e))
-                    
+
                     # Replace with new websocket
                     existing_session.websocket = websocket
                     existing_session.add_websocket(websocket)
@@ -1020,11 +1025,11 @@ class FlowRunner(BaseModel):
 
     async def reload_configurations(self) -> dict[str, Any]:
         """Reload flow configurations from the mounted GCS config directory.
-        
+
         This method re-reads the configuration files and updates the flows without
         disrupting active sessions. It uses Hydra to reload configurations from
         the current config directory (which may be GCS-mounted).
-        
+
         Returns:
             A dictionary containing reload status and details:
             - success: Whether the reload was successful
@@ -1042,7 +1047,7 @@ class FlowRunner(BaseModel):
         from omegaconf import OmegaConf
 
         old_flows = None
-        
+
         result = {
             "success": False,
             "flows_loaded": [],
@@ -1050,23 +1055,23 @@ class FlowRunner(BaseModel):
             "flows_removed": [],
             "errors": [],
             "timestamp": datetime.now(UTC).isoformat(),
-            "config_source": "unknown"
+            "config_source": "unknown",
         }
-        
+
         try:
             logger.info("Starting configuration reload...")
-            
+
             # Store current flows for comparison
             current_flows = set(self.flows.keys())
-            
+
             # Get the current config directory
             config_dir = Path("/src/buttermilk/buttermilk/conf").resolve()
             result["config_source"] = str(config_dir)
-            
+
             # Check if config directory exists and has required files
             if not config_dir.exists():
                 raise ValueError(f"Configuration directory not found: {config_dir}")
-            
+
             config_yaml = config_dir / "config.yaml"
             if not config_yaml.exists():
                 raise ValueError(f"Main config file not found: {config_yaml}")
@@ -1135,33 +1140,27 @@ class FlowRunner(BaseModel):
     def _save_config_snapshot(self, run_request: "RunRequest") -> None:
         """Save a snapshot of the current configuration for reproducibility.
 
-        Saves the current flow configuration to the run directory to ensure
-        experiment reproducibility. This captures the exact configuration
-        used for each flow execution.
+        Saves one config file per session (named by session_id) in the same location
+        as session message logs. File descriptors are properly closed after writing.
 
         Args:
             run_request: The run request containing flow and session information
         """
         try:
             import json
-            from datetime import UTC, datetime
             from pathlib import Path
 
             from omegaconf import OmegaConf
 
-            # Create run directory for config snapshots
-            if hasattr(run_request, "session_id") and run_request.session_id:
-                session_dir = Path(f"/tmp/runs/{run_request.session_id}")
-            else:
-                session_dir = Path("/tmp/runs/default")
+            # Get session ID, defaulting to "default" if not available
+            session_id = getattr(run_request, "session_id", "default") or "default"
 
-            config_snapshot_dir = session_dir / "config_snapshot"
-            config_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            # Use session_id as the base filename (same pattern as message logs)
+            # Store in /tmp/runs/{session_id}/ alongside message logs
+            session_dir = Path(f"/tmp/runs/{session_id}")
+            session_dir.mkdir(parents=True, exist_ok=True)
 
-            # Get current timestamp
-            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-
-            # Save flow configuration
+            # Save flow configuration with session_id as base name
             if run_request.flow in self.flows:
                 flow_config = self.flows[run_request.flow]
 
@@ -1173,45 +1172,35 @@ class FlowRunner(BaseModel):
                     # Regular dict or other object
                     config_dict = dict(flow_config) if hasattr(flow_config, "__dict__") else str(flow_config)
 
-                # Save flow-specific config
-                flow_config_file = config_snapshot_dir / f"{run_request.flow}_{timestamp}.json"
-                with open(flow_config_file, "w") as f:
+                # Config file named by session_id (e.g., /tmp/runs/abc123/abc123_config.json)
+                # This overwrites on each run, keeping only one config file per session
+                config_file = session_dir / f"{session_id}_config.json"
+
+                # Use 'with' statement to ensure file descriptor is closed
+                with open(config_file, "w") as f:
                     json.dump(
                         {
                             "flow_name": run_request.flow,
-                            "timestamp": timestamp,
-                            "session_id": run_request.session_id,
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "session_id": session_id,
                             "job_id": getattr(run_request, "job_id", None),
                             "flow_config": config_dict,
                             "run_parameters": getattr(run_request, "parameters", {}),
                             "run_inputs": getattr(run_request, "inputs", {}),
-                        },
-                        f,
-                        indent=2,
-                        default=str,
-                    )
-
-                logger.debug("Saved config snapshot for flow", flow=run_request.flow, config_file=flow_config_file)
-                
-                # Also save a latest.json for easy access
-                latest_file = config_snapshot_dir / "latest.json"
-                with open(latest_file, "w") as f:
-                    json.dump(
-                        {
-                            "flow_name": run_request.flow,
-                            "timestamp": timestamp,
-                            "session_id": run_request.session_id,
-                            "config_file": str(flow_config_file),
                             "flows_available": list(self.flows.keys()),
                             "total_flows": len(self.flows),
                         },
                         f,
                         indent=2,
+                        default=str,
                     )
-                
+                # File is automatically closed here when exiting 'with' block
+
+                logger.debug("Saved config snapshot for session", session_id=session_id, config_file=str(config_file))
+
         except Exception as e:
             # Don't fail the flow execution if config snapshot fails
-            logger.warning("Failed to save config snapshot for flow", flow=run_request.flow, error=str(e))
+            logger.warning("Failed to save config snapshot", session_id=getattr(run_request, "session_id", "unknown"), error=str(e))
 
     def _create_fresh_orchestrator(self, flow_name: str) -> Orchestrator:
         """Create a completely fresh orchestrator instance using the factory.
@@ -1231,7 +1220,7 @@ class FlowRunner(BaseModel):
 
         flow_config = self.flows[flow_name]
         orchestrator = OrchestratorFactory.create_orchestrator(flow_config, flow_name)
-        
+
         # Inject session-scoped BM for observability isolation
         # This ensures each flow execution gets its own observability context
         # (session_id, job, platform) instead of sharing global singleton state
@@ -1240,7 +1229,7 @@ class FlowRunner(BaseModel):
             logger.debug("Injected session-scoped BM into orchestrator for flow", flow_name=flow_name, session_id=self.bm.session_info.session_id)
         else:
             logger.debug("Using global singleton BM for orchestrator (legacy mode)", flow_name=flow_name)
-        
+
         return orchestrator
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
@@ -1253,10 +1242,7 @@ class FlowRunner(BaseModel):
         # Use the enhanced cleanup from FlowRunContext
         await context.cleanup()
 
-    async def run_flow(self,
-                      run_request: RunRequest,
-                      wait_for_completion: bool = False,
-                      **kwargs) -> None:
+    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:
         """Run a flow based on its configuration and a request.
 
         Args:
@@ -1289,6 +1275,7 @@ class FlowRunner(BaseModel):
 
         try:
             from buttermilk.monitoring import get_metrics_collector
+
             metrics_collector = get_metrics_collector()
         except Exception as e:
             logger.debug("Failed to initialize metrics collector", error=str(e))
@@ -1345,33 +1332,33 @@ class FlowRunner(BaseModel):
             f"Source: {', '.join(run_request.source) if run_request.source else 'direct'} | "
             f"New flow instance created",
         )
-        
+
         # Update session storage to mark flow as running
         try:
             storage_service = SessionStorageService()
             storage_service.update_flow_status(run_request.session_id, "running")
             logger.debug("Updated flow status to 'running' for session", session_id=run_request.session_id)
-            
+
             # Save flow parameters for demo mode functionality
             parameters = {
                 "flow": run_request.flow,
             }
-            
+
             # Extract record_id and dataset from inputs if available
             if hasattr(run_request, "inputs") and run_request.inputs:
                 if "record_id" in run_request.inputs:
                     parameters["record_id"] = run_request.inputs["record_id"]
                 if "dataset" in run_request.inputs:
                     parameters["dataset"] = run_request.inputs["dataset"]
-            
+
             # Extract criteria from parameters if available
             if hasattr(run_request, "parameters") and run_request.parameters:
                 if "criteria" in run_request.parameters:
                     parameters["criteria"] = run_request.parameters["criteria"]
-            
+
             storage_service.save_parameters(run_request.session_id, parameters)
             logger.debug("Saved flow parameters for session", parameters=parameters, session_id=run_request.session_id)
-            
+
         except Exception as e:
             logger.warning("Failed to update session storage flow status", session_id=run_request.session_id, error=str(e))
 
@@ -1427,9 +1414,9 @@ class FlowRunner(BaseModel):
 
         if storage_config is None:
             # Auto-discover: prefer 'initial' key, fallback to first available
-            if hasattr(flow, 'storage') and flow.storage:
-                if 'initial' in flow.storage:
-                    storage_cfg = flow.storage['initial']
+            if hasattr(flow, "storage") and flow.storage:
+                if "initial" in flow.storage:
+                    storage_cfg = flow.storage["initial"]
                     logger.debug("Auto-discovered storage using 'initial' key", flow_name=flow_name)
                 else:
                     storage_cfg = next(iter(flow.storage.values()))
@@ -1438,12 +1425,9 @@ class FlowRunner(BaseModel):
                 raise ValueError(f"Flow '{flow_name}' has no storage configuration and none was provided")
         elif isinstance(storage_config, str):
             # Legacy dataset_key behavior - lookup in flow.storage
-            if not hasattr(flow, 'storage') or storage_config not in flow.storage:
-                available = list(flow.storage.keys()) if hasattr(flow, 'storage') else []
-                raise ValueError(
-                    f"Storage key '{storage_config}' not found in flow '{flow_name}'. "
-                    f"Available: {available}"
-                )
+            if not hasattr(flow, "storage") or storage_config not in flow.storage:
+                available = list(flow.storage.keys()) if hasattr(flow, "storage") else []
+                raise ValueError(f"Storage key '{storage_config}' not found in flow '{flow_name}'. Available: {available}")
             storage_cfg = flow.storage[storage_config]
             logger.debug("Using storage from key", storage_key=storage_config, flow_name=flow_name)
         else:
@@ -1453,6 +1437,7 @@ class FlowRunner(BaseModel):
 
         # Create storage instance using BM
         from buttermilk._core.dmrc import get_bm
+
         bm = get_bm()
         storage = bm.get_storage(storage_cfg)
 

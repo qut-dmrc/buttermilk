@@ -132,7 +132,7 @@ class CloudManager:
 
     @cached_property
     def bq(self) -> Any | None:
-        """Get Google BigQuery client instance.
+        """Get Google BigQuery client instance (cached).
 
         Returns:
             Authenticated BigQuery client or None if Google Cloud not available
