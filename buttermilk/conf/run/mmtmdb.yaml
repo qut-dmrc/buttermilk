@@ -2,6 +2,7 @@
 
 defaults:
   - _self_
+  - pipeline: mmtmdb
   - /storage@pipeline.source: tmdbtitles
   - /storage@pipeline.output: observations
 
@@ -10,36 +11,49 @@ run:
   name: mediamarkets
   job: observations_tmdb
 
-pipeline:
-  # Storage config for input data with decade-based sampling
-  source:
-    # SQL query to sample n/14 random records from each decade
-    custom_query: |
-      WITH decade_samples AS (
-        SELECT *,
-          FLOOR(year / 10) * 10 AS decade,
-          ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
-        FROM {table}
-        WHERE year IS NOT NULL
-          AND year >= 1900
-          AND year < 2030
-      )
-      SELECT * EXCEPT(decade, rn)
-      FROM decade_samples
-      WHERE rn <= CEIL({n} / 14.0)
-      ORDER BY RAND()
-      LIMIT {n}
+  pipeline:
+    # Pipeline execution parameters
+    pipeline_name: "tmdb_observations"
+    description: "Enrich titles with TMDB streaming availability data"
+    concurrency: 20
+    max_records: null  # null = process all
+    enable_record_cache: true
+    force_reprocess: false
 
-  # Number of samples to collect from database (will be distributed across decades)
-  sample_size: 10000  # ~700 records per decade
+    # Number of samples to collect from database (will be distributed across decades)
+    sample_size: 10000  # ~700 records per decade
 
-  # TMDB processor configuration
-  tmdb: {}  
+    # Source: BigQuery with decade-based sampling
+    source:
+      type: bigquery
+      # Defaults from /storage@pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
+      custom_query: |
+        WITH decade_samples AS (
+          SELECT *,
+              FLOOR(year / 10) * 10 AS decade,
+              ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
+          FROM {table}
+          WHERE year IS NOT NULL
+              AND year >= 1900
+              AND year < 2030
+        )
+        SELECT * EXCEPT(decade, rn)
+        FROM decade_samples
+        WHERE rn <= CEIL({n} / 14.0)
+        ORDER BY RAND()
+        LIMIT {n}
 
-  # Storage config for output
-  output: {}
+    # Processors: TMDB enrichment + upload
+    processors:
+      # Step 1: TMDB processor to fetch streaming availability
+      - _target_: buttermilk.tools.catalog_test.TMDBTool
+        # TMDB config (empty = use defaults)
 
-  buffer_size: 500
-  flush_interval: 30
+      # Step 2: Upload results to output storage
+      - _target_: buttermilk.utils.uploader.AsyncDataUploader
+        storage: ${pipeline.output}
+        buffer_size: 500
+        flush_interval: 30
 
-  concurrency: 20
+    # Output: Storage for processed observations (filled by defaults)
+    output: {}

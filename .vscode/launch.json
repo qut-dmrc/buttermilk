@@ -135,7 +135,7 @@
       "remoteRoot": null
     },
     {
-      "name": "tmdb pipeline",
+      "name": "pipeline",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -146,7 +146,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "run=mmtmdb",
+        "run=rescore",
         "verbose=true",
       ],
       "envFile": "${userHome}/.env",

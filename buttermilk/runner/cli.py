@@ -297,84 +297,36 @@ def main(conf: DictConfig) -> None:
                 logger.info("Slackbot event loop closed.")
 
         case "pipeline":
-            # Run a series of processors in a simple pipeline.
+            # Run pipeline using Hydra instantiation
             logger.info("Starting pipeline mode...")
 
-            # Import pipeline components
-            from buttermilk.pipeline import PipelineOrchestrator
-            from buttermilk.tools.catalog_test import TMDBTool
-            from buttermilk.utils.uploader import AsyncDataUploader
+            pipeline_conf = conf.run.pipeline
 
-            # Get pipeline configuration
-            pipeline_conf = conf.get("pipeline", {})
+            # Instantiate source storage
+            pipeline_conf["source"] = bm.get_storage(pipeline_conf["source"])
 
-            # Set up data source
-            source_config = pipeline_conf.get("source")
-            if not source_config:
-                raise ValueError("Pipeline mode requires 'pipeline.source' configuration")
+            # Instantiate output storage
+            pipeline_conf["output"] = bm.get_storage(pipeline_conf["output"])
 
-            # Apply sampling parameters if configured
-            if (n := pipeline_conf.get("sample_size")) and source_config.get("custom_query"):
-                # Replace {n} placeholder in the custom query
-                source_config["custom_query"] = source_config["custom_query"].replace("{n}", str(n))
-                logger.info(f"Configured decade-based sampling: ~{n // 14} records per decade, {n} total")
-
-            # Get storage for source
-            source_storage = bm.get_storage(source_config)
-
-            # Set up processors based on configuration
+            # Instantiate processors
             processors = []
+            for proc_conf in pipeline_conf["processors"]:
+                processors.append(hydra.utils.instantiate(proc_conf))
 
-            # Add TMDB processor
-            tmdb_conf = pipeline_conf.get("tmdb", {})
-            # Handle case where tmdb is just True/False
-            if isinstance(tmdb_conf, bool):
-                tmdb_conf = {} if tmdb_conf else None
-            if tmdb_conf is not None:
-                tmdb_tool = TMDBTool(**tmdb_conf)
-                processors.append(tmdb_tool)
-                logger.info(f"Added TMDB processor with region={tmdb_tool.region}")
+            pipeline_conf["processors"] = processors
 
-            # Add uploader processor
-            output_storage = bm.get_storage(pipeline_conf.get("output"))
-            uploader = AsyncDataUploader(
-                storage=output_storage, buffer_size=pipeline_conf.get("buffer_size", 10), flush_interval=pipeline_conf.get("flush_interval", 30)
-            )
-            processors.append(uploader)
-            logger.info(f"Added uploader with buffer_size={uploader.buffer_size}")
+            # Instantiate pipeline orchestrator
+            from buttermilk.pipeline import PipelineOrchestrator
 
-            # Use PipelineOrchestrator for processing
-            concurrency = pipeline_conf.get("concurrency", 1)
-            limit = pipeline_conf.get("limit")
-
-            # Create single orchestrator with all processors
-            orchestrator = PipelineOrchestrator(
-                stage_name="pipeline",
-                concurrency=concurrency,
-                max_records=limit,
-                source=source_storage,
-                processors=processors,  # Pass all processors as a list
-            )
-
-            logger.info(f"Running pipeline with {len(processors)} processors (concurrency={concurrency})...")
+            orchestrator = PipelineOrchestrator(**pipeline_conf)
 
             async def run_pipeline():
-                # Simply iterate through the orchestrator - it handles all processors internally
                 async for _ in orchestrator():
-                    pass  # All processing happens inside the orchestrator
-
-                # Ensure uploader is flushed
-                if processors:
-                    for proc in processors:
-                        if hasattr(proc, "shutdown"):
-                            proc.shutdown()
-
-                # Graceful shutdown to wait for async operations
+                    pass
                 await bm.graceful_shutdown()
 
             asyncio.run(run_pipeline())
-
-            logger.info("Pipeline processing complete.")
+            logger.info("Pipeline complete.")
         case _:
             # Handles any unsupported modes specified in the configuration.
             raise ValueError(f"Unsupported run mode in configuration: '{mode}'. Check 'run.mode' in your Hydra config.")
