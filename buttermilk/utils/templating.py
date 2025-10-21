@@ -40,16 +40,18 @@ def _get_template_search_paths() -> list[str]:
     except Exception as e:
         logger.warning(f"Could not get template paths from session: {e}")
 
-    # Add default path if it's not already there
-    if TEMPLATES_PATH not in search_paths:
-        search_paths.append(TEMPLATES_PATH)
+    # Add default path if it's not already there (convert Path to str)
+    templates_path_str = str(TEMPLATES_PATH)
+    if templates_path_str not in search_paths:
+        search_paths.append(templates_path_str)
 
     # Deduplicate and expand subdirectories
     final_paths = []
     for path in search_paths:
-        if path not in final_paths:
-            final_paths.append(path)
-            final_paths.extend([str(p) for p in Path(path).rglob("*") if p.is_dir()])
+        path_str = str(path)  # Ensure it's a string
+        if path_str not in final_paths:
+            final_paths.append(path_str)
+            final_paths.extend([str(p) for p in Path(path_str).rglob("*") if p.is_dir()])
 
     return final_paths
 
