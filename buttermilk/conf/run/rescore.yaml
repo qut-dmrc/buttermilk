@@ -30,7 +30,7 @@ run:
     pipeline_name: "rescore_unscored_predictions"
     description: "Re-score JUDGE/SYNTH predictions missing scores"
     concurrency: 5
-    max_records: null  # null = process all, set to integer for testing
+    max_records: 2  # null = process all, set to integer for testing
     enable_record_cache: true
     force_reprocess: false
 
@@ -43,7 +43,7 @@ run:
           FROM `prosocial-443205.testing.traces` t
           LEFT JOIN `prosocial-443205.testing.traces` scorer
             ON JSON_VALUE(t.inputs, '$.inputs.record_id') = JSON_VALUE(scorer.inputs, '$.inputs.record_id')
-            AND JSON_VALUE(scorer.agent_info, '$.role') = 'SCORER'
+            AND JSON_VALUE(scorer.agent_info, '$.role') = 'SCORERS'
             AND JSON_VALUE(scorer.agent_info, '$.config.parameters.model') = JSON_VALUE(t.agent_info, '$.config.parameters.model')
           WHERE JSON_VALUE(t.agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER')
             AND t.outputs.prediction IS NOT NULL
@@ -52,8 +52,31 @@ run:
             AND JSON_VALUE(t.agent_info, '$.config.parameters.model') IN ('gemini25pro', 'claude45sonnet', 'gemini25flash')
         )
         SELECT
-          t.*,
-          r.ground_truth AS expected
+          -- answers: array of prediction results to score
+          ARRAY(
+            SELECT AS STRUCT
+              JSON_VALUE(t.agent_info, '$.agent_id') AS agent_id,
+              t.outputs AS result,
+              t.call_id AS answer_id,
+              t.error AS error
+          ) AS answers,
+
+          -- criteria: the judge/synth criteria used
+          COALESCE(
+            JSON_VALUE(t.parameters, '$.criteria'),
+            JSON_VALUE(t.agent_info, '$.config.parameters.criteria')
+          ) AS criteria,
+
+          -- parent_call_id: link scores back to original prediction
+          t.call_id AS parent_call_id,
+
+          -- expected: ground truth from tja_records
+          r.ground_truth AS expected,
+
+          -- Additional context (optional, for debugging)
+          JSON_VALUE(t.inputs, '$.inputs.record_id') AS record_id,
+          JSON_VALUE(t.agent_info, '$.config.parameters.model') AS model
+
         FROM `prosocial-443205.testing.traces` t
         INNER JOIN unscored_predictions u ON t.call_id = u.call_id
         INNER JOIN `prosocial-443205.bmdev.tja_records` r
@@ -64,11 +87,13 @@ run:
       # Step 1: Transform ExecutionTrace → scorer template inputs
       - _target_: buttermilk.processors.jmespath_transform.JMESPathTransform
         mappings:
-          # Extract data from ExecutionTrace and map to scorer template variables
-          # These JMESPath expressions match what scorer.yaml expects
-          answers: "[].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}"
-          criteria: "parameters.criteria || `[]`"
-          parent_call_id: "call_id"  # Link scores back to original prediction
+          # Extract data from SQL query results and map to scorer template variables
+          # The SQL query returns columns: answers, criteria, parent_call_id, expected
+          # JMESPath expressions reference these columns directly (no 'record.' prefix needed)
+          answers: answers
+          criteria: criteria
+          parent_call_id: parent_call_id # Link scores back to original prediction
+          expected: expected # Ground truth for scoring
 
       # Step 2: Run scoring LLM (LLMCore already implements Processor protocol)
       - _target_: buttermilk._core.llm_core.LLMCore

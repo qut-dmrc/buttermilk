@@ -2,6 +2,7 @@ defaults:
   - flows@run.flows:
     - trans
   - llms@run.llms: debug
+  - run@pipeline.rescore: rescore
   - _self_
 
 project_name: buttermilk

@@ -322,7 +322,24 @@ class LLMCore:
                     context = [context]
 
                 # Combine inputs and kwargs (record/context already removed from kwargs)
-                combined_inputs = self._combine_inputs(inputs, kwargs)
+                # LLMCore has TWO modes based on how it's called:
+                #
+                # 1. PROCESSOR MODE (used in pipelines):
+                #    - Called via process(record, ...) - NO inputs parameter
+                #    - Previous processors (like JMESPathTransform) enrich the record
+                #    - Template vars come FROM the enriched record
+                #    - Example: record has {answers, criteria, expected} from JMESPathTransform
+                #
+                # 2. AGENT MODE (used standalone):
+                #    - Called via process_with_llm(inputs={...}, record=..., context=...)
+                #    - Template vars come FROM inputs parameter
+                #    - record/context are separate (used for render_or_include placeholders)
+                #
+                # CRITICAL: If inputs is None, we're in Processor mode - extract from record
+                if inputs is None and record is not None:
+                    combined_inputs = self._combine_inputs(record, kwargs)
+                else:
+                    combined_inputs = self._combine_inputs(inputs, kwargs)
                 # Remove record/context from combined_inputs if they were in inputs dict
                 combined_inputs.pop("record", None)
                 combined_inputs.pop("context", None)

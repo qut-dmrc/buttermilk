@@ -375,7 +375,15 @@ class PipelineOrchestrator(BaseModel):
 
                             outputs = []
                             try:
-                                async for output_record in processor.process(current_record, processor_stage=processor_stage_name):
+                                # Extract parent_call_id from record for trace lineage
+                                # This links processor operations back to their source records
+                                parent_trace_id = getattr(current_record, 'parent_call_id', None)
+
+                                async for output_record in processor.process(
+                                    current_record,
+                                    processor_stage=processor_stage_name,
+                                    parent_trace_id=parent_trace_id
+                                ):
                                     outputs.append(output_record)
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging

@@ -19,7 +19,11 @@ You should not refer to the analyst or their response in your answer; just provi
 {%- endif -%}
 
 <BEGIN EXPECTED ANSWER>
-{%- if 'reasons' in expected -%}
+{%- if not expected -%}
+{{expected}}
+{%- elif expected is string -%}
+  {{ expected }}
+{%- elif 'reasons' in expected -%}
   {% for reason in expected['reasons'] %}
   {{ loop.index0 }}: {{ reason }}
   {% endfor %}
