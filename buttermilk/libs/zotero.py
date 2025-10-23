@@ -441,7 +441,16 @@ class ZoteroDownloadProcessor(BaseModel):
         zotero_links = record.metadata.get("zotero_links", {})
         citation_key = record.metadata.get("citation_key")
         key = record.record_id
-        title = zotero_item.get("title", "Unknown Title")
+        title = zotero_item.get("title")
+
+        # FAIL FAST: Title is required
+        if not title:
+            raise ValueError(
+                f"Zotero item {key} has no title. "
+                f"Item type: {zotero_item.get('itemType')}. "
+                f"This indicates incomplete/invalid Zotero data that must be fixed upstream."
+            )
+
         doi_or_url = zotero_item.get("DOI") or zotero_item.get("url")
 
         # Define file paths using centralized cache

@@ -84,3 +84,34 @@ class TestChromaDBBaseRecordTitle:
         title = base_record.metadata.get("title", "Untitled") if base_record.metadata else "Untitled"
         assert title == "Zotero Title"
 
+    @pytest.mark.anyio
+    async def test_zotero_processor_fails_without_title(self):
+        """Test that ZoteroDownloadProcessor FAILS FAST when Zotero item has no title.
+
+        Per fail-fast philosophy: titles are REQUIRED. Records without titles
+        indicate incomplete/invalid Zotero data that must be fixed upstream.
+        """
+        from buttermilk.libs.zotero import ZoteroDownloadProcessor
+
+        # Create BaseRecord with zotero_item that has NO title
+        record = BaseRecord(
+            record_id="BAD_ITEM",
+            dataset="zotero",
+            metadata={
+                "zotero_item": {
+                    "itemType": "journalArticle",
+                    # NO title field!
+                    "DOI": "10.1234/test"
+                },
+                "zotero_links": {},
+                "citation_key": "test2024"
+            }
+        )
+
+        processor = ZoteroDownloadProcessor(library_id="12345")
+
+        # Should raise ValueError with clear message
+        with pytest.raises(ValueError, match="has no title.*incomplete/invalid Zotero data"):
+            async for _ in processor.process(record, processor_stage="download"):
+                pass
+

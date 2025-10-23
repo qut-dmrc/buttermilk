@@ -179,7 +179,7 @@ class SemanticSplitter(BaseModel):
 
         return chunks, offsets
 
-    async def process(self, doc: BaseRecord, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[Record, None]:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
         if hasattr(doc, "content"):
@@ -642,7 +642,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"❌ Finalization failed: {e}")
             return False
 
-    async def process(self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
         """Process method for pipeline integration.
 
         Takes a chunked record and creates embeddings for it.
@@ -802,7 +802,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def process_record(
         self,
-        record: BaseRecord,
+        record: Record,
         *,
         skip_existing: bool = True,
         validate_before_process: bool = True,
