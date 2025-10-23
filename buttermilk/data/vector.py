@@ -109,6 +109,21 @@ async def _batch_iterator(
         yield batch
 
 
+def _get_chunk_embedding(chunk):
+    """Safely get embedding from chunk (handles both dict and object types)."""
+    if isinstance(chunk, dict):
+        return chunk.get('embedding')
+    return getattr(chunk, 'embedding', None)
+
+
+def _set_chunk_embedding(chunk, embedding):
+    """Safely set embedding on chunk (handles both dict and object types)."""
+    if isinstance(chunk, dict):
+        chunk['embedding'] = embedding
+    else:
+        chunk.embedding = embedding
+
+
 def _sanitize_metadata_for_chroma(
     metadata: dict[str, Any],
 ) -> dict[str, str | int | float | bool]:
@@ -862,7 +877,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
 
             # --- Check if chunks already have embeddings (from EmbeddingGenerator) ---
-            chunks_already_embedded = all(chunk.embedding is not None for chunk in record.chunks)
+            chunks_already_embedded = all(_get_chunk_embedding(chunk) is not None for chunk in record.chunks)
 
             if chunks_already_embedded:
                 # Embeddings already present from previous processor (EmbeddingGenerator)
@@ -1035,31 +1050,41 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             embeddings_list = []
             metadatas = []
 
-            chunks_to_upsert = [c for c in record.chunks if c.embedding is not None]
+            chunks_to_upsert = [c for c in record.chunks if _get_chunk_embedding(c) is not None]
 
             if not chunks_to_upsert:
                 logger.warning(f"No chunks with embeddings to store for record {record.record_id}")
                 return
 
             for chunk in chunks_to_upsert:
-                ids.append(chunk.chunk_id)
-                documents.append(chunk.chunk_text)
+                # Get chunk fields safely (handle both dict and object)
+                chunk_id = chunk.get('chunk_id') if isinstance(chunk, dict) else chunk.chunk_id
+                chunk_text = chunk.get('chunk_text') if isinstance(chunk, dict) else chunk.chunk_text
+                embedding = _get_chunk_embedding(chunk)
+
+                ids.append(chunk_id)
+                documents.append(chunk_text)
                 # Convert numpy array or list of numpy floats to regular Python floats
-                if hasattr(chunk.embedding, "tolist"):
+                if hasattr(embedding, "tolist"):
                     # It's a numpy array
-                    embeddings_list.append(chunk.embedding.tolist())
+                    embeddings_list.append(embedding.tolist())
                 else:
                     # Convert any numpy float32/float64 to regular Python floats
-                    embeddings_list.append([float(x) for x in chunk.embedding])  # type: ignore
+                    embeddings_list.append([float(x) for x in embedding])  # type: ignore
 
-                # Enhanced metadata with content type tagging
+                # Enhanced metadata with content type tagging (handle both dict and object)
+                document_title = chunk.get('document_title') if isinstance(chunk, dict) else chunk.document_title
+                chunk_index = chunk.get('chunk_index') if isinstance(chunk, dict) else chunk.chunk_index
+                document_id = chunk.get('document_id') if isinstance(chunk, dict) else chunk.document_id
+                chunk_metadata = chunk.get('metadata', {}) if isinstance(chunk, dict) else (chunk.metadata if hasattr(chunk, 'metadata') else {})
+
                 enhanced_metadata = {
-                    "document_title": chunk.document_title,
-                    "chunk_index": chunk.chunk_index,
-                    "document_id": chunk.document_id,
-                    "content_type": chunk.metadata.get("content_type", "unknown"),
-                    "chunk_type": chunk.metadata.get("chunk_type", "unknown"),
-                    **{k: v for k, v in chunk.metadata.items() if k not in ["content_type", "chunk_type"]},
+                    "document_title": document_title,
+                    "chunk_index": chunk_index,
+                    "document_id": document_id,
+                    "content_type": chunk_metadata.get("content_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
+                    "chunk_type": chunk_metadata.get("chunk_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
+                    **{k: v for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}).items() if k not in ["content_type", "chunk_type"]},
                 }
                 metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
 
@@ -1290,11 +1315,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             }
 
             for chunk in record.chunks:
-                if chunk.embedding is not None:
+                embedding = _get_chunk_embedding(chunk)
+                if embedding is not None:
+                    chunk_id = chunk.get('chunk_id') if isinstance(chunk, dict) else chunk.chunk_id
+                    chunk_index = chunk.get('chunk_index') if isinstance(chunk, dict) else chunk.chunk_index
                     chunk_data = {
-                        "chunk_id": chunk.chunk_id,
-                        "chunk_index": chunk.chunk_index,
-                        "embedding": scrub_serializable(chunk.embedding),  # Ensure it's serializable Python list
+                        "chunk_id": chunk_id,
+                        "chunk_index": chunk_index,
+                        "embedding": scrub_serializable(embedding),  # Ensure it's serializable Python list
                     }
                     embeddings_data["chunks"].append(chunk_data)
 
@@ -1333,14 +1361,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.debug(f"Chunk count mismatch for {record.record_id}: cached={len(cached_chunks)}, current={len(record.chunks)}")
                 return False
 
-            # Load embeddings into chunks
-            chunk_map = {chunk.chunk_id: chunk for chunk in record.chunks}
+            # Load embeddings into chunks (handle both dict and object)
+            chunk_map = {(chunk.get('chunk_id') if isinstance(chunk, dict) else chunk.chunk_id): chunk for chunk in record.chunks}
             loaded_count = 0
 
             for cached_chunk in cached_chunks:
                 chunk_id = cached_chunk.get("chunk_id")
                 if chunk_id in chunk_map:
-                    chunk_map[chunk_id].embedding = cached_chunk.get("embedding")
+                    _set_chunk_embedding(chunk_map[chunk_id], cached_chunk.get("embedding"))
                     loaded_count += 1
 
             if loaded_count == len(record.chunks):
@@ -1350,7 +1378,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 logger.warning(f"Only loaded {loaded_count}/{len(record.chunks)} embeddings from cache")
                 # Clear partial embeddings
                 for chunk in record.chunks:
-                    chunk.embedding = None
+                    _set_chunk_embedding(chunk, None)
                 return False
 
         except Exception as e:
@@ -1385,7 +1413,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         success_count = 0
         for idx, embedding in embedding_results:
             if embedding is not None and idx < len(chunks):
-                chunks[idx].embedding = embedding
+                _set_chunk_embedding(chunks[idx], embedding)
                 success_count += 1
 
         if success_count == 0:
@@ -1396,7 +1424,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.warning(f"Partial embedding: {success_count}/{len(chunks)} succeeded; failing record to retry later")
             # Clear embeddings so we don't upsert partials
             for c in chunks:
-                c.embedding = None
+                _set_chunk_embedding(c, None)
             return False
 
         logger.debug(f"Generated embeddings for {success_count} chunks")
@@ -1654,14 +1682,18 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             )
             return
 
+        # Handle both dict and object chunks
+        def get_field(chunk, field_name):
+            return chunk.get(field_name) if isinstance(chunk, dict) else getattr(chunk, field_name)
+
         data = {
-            "chunk_id": [c.chunk_id for c in record.chunks],
-            "document_id": [c.document_id for c in record.chunks],
-            "document_title": [c.document_title for c in record.chunks],
-            "chunk_index": [c.chunk_index for c in record.chunks],
-            "chunk_text": [c.chunk_text for c in record.chunks],
-            "embedding": [list(c.embedding) if c.embedding is not None else None for c in record.chunks],
-            "chunk_metadata": [json.dumps(c.metadata) if c.metadata else None for c in record.chunks],
+            "chunk_id": [get_field(c, 'chunk_id') for c in record.chunks],
+            "document_id": [get_field(c, 'document_id') for c in record.chunks],
+            "document_title": [get_field(c, 'document_title') for c in record.chunks],
+            "chunk_index": [get_field(c, 'chunk_index') for c in record.chunks],
+            "chunk_text": [get_field(c, 'chunk_text') for c in record.chunks],
+            "embedding": [list(emb) if (emb := _get_chunk_embedding(c)) is not None else None for c in record.chunks],
+            "chunk_metadata": [json.dumps(get_field(c, 'metadata')) if get_field(c, 'metadata') else None for c in record.chunks],
         }
 
         embedding_type = pa.list_(pa.float32())
@@ -1745,7 +1777,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
                 continue
 
-            chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
+            chunks_to_upsert = [c for c in doc.chunks if _get_chunk_embedding(c) is not None]
 
             if not chunks_to_upsert:
                 logger.warning(
@@ -1759,21 +1791,30 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             metadatas = []
 
             for rec in chunks_to_upsert:
-                ids.append(rec.chunk_id)
-                documents.append(rec.chunk_text)
+                # Get fields safely (handle both dict and object)
+                chunk_id = rec.get('chunk_id') if isinstance(rec, dict) else rec.chunk_id
+                chunk_text = rec.get('chunk_text') if isinstance(rec, dict) else rec.chunk_text
+                document_title = rec.get('document_title') if isinstance(rec, dict) else rec.document_title
+                chunk_index = rec.get('chunk_index') if isinstance(rec, dict) else rec.chunk_index
+                document_id = rec.get('document_id') if isinstance(rec, dict) else rec.document_id
+                rec_metadata = rec.get('metadata', {}) if isinstance(rec, dict) else (rec.metadata if hasattr(rec, 'metadata') else {})
+                embedding = _get_chunk_embedding(rec)
+
+                ids.append(chunk_id)
+                documents.append(chunk_text)
                 # Convert numpy array or list of numpy floats to regular Python floats
-                if hasattr(rec.embedding, "tolist"):
+                if hasattr(embedding, "tolist"):
                     # It's a numpy array
-                    embeddings_list.append(rec.embedding.tolist())
+                    embeddings_list.append(embedding.tolist())
                 else:
                     # Convert any numpy float32/float64 to regular Python floats
-                    embeddings_list.append([float(x) for x in rec.embedding])  # type: ignore
+                    embeddings_list.append([float(x) for x in embedding])  # type: ignore
                 base_meta = {
-                    "document_title": rec.document_title,
-                    "chunk_index": rec.chunk_index,
-                    "document_id": rec.document_id,
+                    "document_title": document_title,
+                    "chunk_index": chunk_index,
+                    "document_id": document_id,
                 }
-                combined_meta = {**rec.metadata, **base_meta}
+                combined_meta = {**rec_metadata, **base_meta}
                 metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
 
             chroma_embeddings: Embeddings = embeddings_list
