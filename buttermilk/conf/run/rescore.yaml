@@ -30,7 +30,7 @@ run:
     pipeline_name: "rescore_unscored_predictions"
     description: "Re-score JUDGE/SYNTH predictions missing scores"
     concurrency: 5
-    max_records: 2  # null = process all, set to integer for testing
+    max_records: 500  # null = process all, set to integer for testing
     enable_record_cache: true
     force_reprocess: false
 
@@ -73,9 +73,8 @@ run:
           -- expected: ground truth from tja_records
           r.ground_truth AS expected,
 
-          -- Additional context (optional, for debugging)
-          JSON_VALUE(t.inputs, '$.inputs.record_id') AS record_id,
-          JSON_VALUE(t.agent_info, '$.config.parameters.model') AS model
+          -- we are rescoring call_id records, so this is what we will cache on.
+          t.call_id AS record_id
 
         FROM `prosocial-443205.testing.traces` t
         INNER JOIN unscored_predictions u ON t.call_id = u.call_id

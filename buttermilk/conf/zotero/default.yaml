@@ -1,6 +1,0 @@
-# Default configuration for Zotero database operations
-library: ${env:ZOTERO_LIBRARY_ID}  # Can be overridden with environment variable
-save_dir: ".cache/zotero/pdfs"      # Local directory for PDF storage
-
-# API parameters for incremental updates
-# last_version: null  # Set this to resume from a specific Zotero API version
