@@ -15,6 +15,7 @@ __pycache__/
 .idea
 .env
 MagicMock/
+*MagicMock*
 .ipynb_checkpoints
 .ropeproject
 Untitled.ipynb

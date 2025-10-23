@@ -1107,7 +1107,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     "document_id": document_id,
                     "content_type": chunk_metadata.get("content_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
                     "chunk_type": chunk_metadata.get("chunk_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
-                    **{k: v for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}).items() if k not in ["content_type", "chunk_type"]},
+                    **{k: v for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items()) if k not in ["content_type", "chunk_type"]},
                 }
                 metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
 
