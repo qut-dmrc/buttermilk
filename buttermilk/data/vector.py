@@ -28,7 +28,7 @@ from buttermilk._core.constants import cache
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
+from buttermilk._core.types import BaseRecord, BatchProcessingResult, ProcessingResult, Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
 from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
@@ -179,7 +179,7 @@ class SemanticSplitter(BaseModel):
 
         return chunks, offsets
 
-    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, doc: BaseRecord, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
         if hasattr(doc, "content"):
@@ -642,7 +642,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"❌ Finalization failed: {e}")
             return False
 
-    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Process method for pipeline integration.
 
         Takes a chunked record and creates embeddings for it.
@@ -802,7 +802,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
     async def process_record(
         self,
-        record: Record,
+        record: BaseRecord,
         *,
         skip_existing: bool = True,
         validate_before_process: bool = True,
@@ -820,7 +820,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         start_time = time.time()
         effective_embedding_model = embedding_model_override or self._embedding_model
-        logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{record.title[:50] if record.title else 'Unknown'}'")
+        # Access title via metadata to work with both BaseRecord and Record
+        title = record.metadata.get("title", "Untitled") if record.metadata else "Untitled"
+        logger.info(f"🟣 [ChromaDB-{record.record_id}] Starting to process record '{title[:50]}'")
 
         try:
             # Ensure cache is initialized before processing (required for remote storage)
