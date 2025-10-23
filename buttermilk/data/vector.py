@@ -212,7 +212,7 @@ class SemanticSplitter(BaseModel):
                     continue
                 chunks.append(
                     ChunkedDocument(
-                        document_title=doc.metadata.get("title") if doc.metadata else None or doc.record_id,
+                        document_title=doc.metadata.get("title", doc.record_id) if doc.metadata else doc.record_id,
                         chunk_index=doc_chunk_count,
                         chunk_text=text_chunk.strip(),
                         offset=offset,
