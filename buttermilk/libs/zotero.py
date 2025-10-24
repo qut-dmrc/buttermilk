@@ -20,7 +20,6 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.storage.base import RecordFilter
-from buttermilk.utils.utils import get_pdf_text
 
 
 def extract_citation_key(extra_field: str | None) -> str | None:
@@ -48,11 +47,11 @@ def extract_citation_key(extra_field: str | None) -> str | None:
         return None
 
     # Split by newlines and check each line
-    for line in extra_field.split('\n'):
+    for line in extra_field.split("\n"):
         stripped = line.strip()
-        if stripped.startswith('Citation Key:'):
+        if stripped.startswith("Citation Key:"):
             # Extract everything after the colon and strip whitespace
-            key = stripped.split(':', 1)[1].strip()
+            key = stripped.split(":", 1)[1].strip()
             return key if key else None
 
     return None
@@ -255,11 +254,10 @@ class ZoteroSource(BaseModel):
         if not self.force_full_sync and last_version is not None:
             api_params["since"] = last_version
             logger.info(f"🔄 Incremental sync from version {last_version}")
+        elif self.start > 0:
+            logger.info(f"🔄 Full sync of Zotero library starting from item {self.start}")
         else:
-            if self.start > 0:
-                logger.info(f"🔄 Full sync of Zotero library starting from item {self.start}")
-            else:
-                logger.info("🔄 Full sync of Zotero library")
+            logger.info("🔄 Full sync of Zotero library")
 
         # Track stats
         fetched_count = 0
@@ -287,10 +285,7 @@ class ZoteroSource(BaseModel):
                 # Use RetryWrapper's _execute_with_retry with async wrapper for sync function
                 async def _fetch_items():
                     """Async wrapper for synchronous zot.items() call."""
-                    return await asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: list(self.zot.client.items(**page_params))
-                    )
+                    return await asyncio.get_event_loop().run_in_executor(None, lambda: list(self.zot.client.items(**page_params)))
 
                 items = await self.zot._execute_with_retry(_fetch_items)
                 page_size = len(items)
@@ -386,16 +381,12 @@ class ZoteroSource(BaseModel):
                 # Use second-highest version for safety
                 safe_version = unique_versions[1]
                 logger.debug(
-                    f"Saving second-highest version {safe_version} "
-                    f"(highest was {unique_versions[0]}, {len(unique_versions)} unique versions)"
+                    f"Saving second-highest version {safe_version} " f"(highest was {unique_versions[0]}, {len(unique_versions)} unique versions)"
                 )
             else:
                 # Only one unique version - use it but log warning
                 safe_version = unique_versions[0]
-                logger.warning(
-                    f"Only one unique version ({safe_version}) seen during sync. "
-                    f"Cannot use second-highest for safety."
-                )
+                logger.warning(f"Only one unique version ({safe_version}) seen during sync. " f"Cannot use second-highest for safety.")
         else:
             # No items processed - use library version from API
             safe_version = self.zot.last_modified_version()
@@ -626,13 +617,16 @@ class ZoteroDownloadProcessor(BaseModel):
                     pdf_file.unlink(missing_ok=True)  # Don't keep invalid PDFs
                     raise  # Re-raise to skip this record
 
-                try:
-                    content = get_pdf_text(pdf_file.as_posix())
-                except Exception as e:
-                    # PDF extraction failed - raise error
-                    error_msg = f"Failed to extract text from PDF for {key}: {e}"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
+                # Note: Text extraction now handled by PDFToTextProcessor in pipeline
+                # This allows using pdftotext instead of pdfminer
+                logger.debug(f"PDF downloaded successfully: {key}. Text extraction will be done by downstream processor.")
+
+                # Set meaningful PDF metadata as content to satisfy Record contract
+                # This will be replaced by PDFToTextProcessor with actual extracted text
+                if not content:
+                    pdf_size = pdf_file.stat().st_size
+                    content = f"[PDF Document: {pdf_file.name}, Size: {pdf_size:,} bytes, Path: {pdf_file.as_posix()}]"
+                    logger.debug(f"Set PDF metadata as content for {key}: {content}")
 
         else:
             # No PDF attachment found - skip this record (don't mark as failed)
