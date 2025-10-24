@@ -26,6 +26,16 @@ storage:
     table_id: traces
     dataset_name: traces
     schema_path: traces.schema.json
+    
+  zotero_vectors:
+    type: chromadb
+    collection_name: prosocial_zot
+    read_only: true
+
+    persist_directory:  /chromadb
+    
+    embedding_model: gemini-embedding-001
+    dimensionality: 3072
 
 
 session:
@@ -81,19 +91,58 @@ infrastructure:
     location: us-central1
 
 
-zotero:
-  _target_: buttermilk.libs.zotero.ZoteroSource
-  library_id: ${oc.env:ZOTERO_LIBRARY_ID}
-  save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/state
-  filter:
-    _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
-    vector_store: 
-      type: chromadb
-      collection_name: prosocial_zot
-      read_only: true
-      persist_directory: gs_prosocial-dev_data_zotero-prosocial-fulltext_files
-      embedding_model: gemini-embedding-001
-      dimensionality: 3072
+vectoriser:
+  _target_: buttermilk.data.vector.ChromaDBEmbeddings
+  persist_directory: ${storage.zotero_vectors.persist_directory}
+  collection_name: ${storage.zotero_vectors.collection_name}
+  embedding_model: ${storage.zotero_vectors.embedding_model}
+  dimensionality: ${storage.zotero_vectors.dimensionality}
+  concurrency: ${pipeline.concurrency}
+  sync_batch_size: 500
+  deduplication_strategy: record_id  # Skip existing records before downloading
+  enable_record_cache: true
 
-  force_full_sync: false
+pipeline:
+  _target_: buttermilk.pipeline.PipelineOrchestrator
+  pipeline_name: zotero_vectorization
+  concurrency: 1
+  max_records: 99
+
+  # Source: Zotero library with deduplication filter
+  source:
+    _target_: buttermilk.libs.zotero.ZoteroSource
+    library_id: ${oc.env:ZOTERO_LIBRARY_ID}
+    save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/state
+    filter:
+      _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
+      vector_store: ${vectoriser}
+    force_full_sync: false
+    max_records: ${pipeline.max_records}
+
+  processors:
+    # 0. Download PDFs and extract full text
+    - _target_: buttermilk.libs.zotero.ZoteroDownloadProcessor
+      library_id: ${oc.env:ZOTERO_LIBRARY_ID}
+      save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/items
+
+    # 1. Generate citations using LLM
+    - _target_: buttermilk.tools.citator.Citator
+      model: gemini25flash
+      template: citator
+
+    # 2. Chunk text semantically
+    - _target_: buttermilk.data.vector.SemanticSplitter
+      chunk_size: 500
+      chunk_overlap: 200
+
+    # 3. Generate embeddings (pure, no side effects)
+    - _target_: buttermilk.processors.embeddings.EmbeddingGenerator
+      embedding_model: ${storage.zotero_vectors.embedding_model}
+      dimensionality: ${storage.zotero_vectors.dimensionality}
+      embedding_batch_size: 100
+      embedding_max_retries: 5
+      embedding_cooldown_seconds: 0.1
+
+    # 4. Store in ChromaDB
+    - ${vectoriser}
 

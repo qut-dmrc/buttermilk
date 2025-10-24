@@ -41,4 +41,3 @@ infrastructure:
   logging:
     type: local
     verbose: ${verbose}
-

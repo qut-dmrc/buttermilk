@@ -101,4 +101,3 @@ run:
         output_model: "buttermilk.agents.evaluators.scorer.QualScore"
         output_col: "score_results"
         fail_on_unfilled_parameters: true
-
