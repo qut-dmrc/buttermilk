@@ -564,7 +564,7 @@ class Record(BaseRecord):
         from buttermilk._core.exceptions import ProcessingError
         from buttermilk.utils.media import download_and_convert  # Media utilities
 
-        record: Record | None = None  # uri case
+        record: BaseRecord | None = None  # uri case
         record = await download_and_convert(uri)
         if record:  # Check if download_and_convert succeeded
             # Ensure metadata exists and add provenance
@@ -745,7 +745,7 @@ class RunRequest(BaseModel):
 class ProcessingResult(BaseModel):
     """Comprehensive result from record processing."""
 
-    record: Record | None
+    record: BaseRecord | None
     status: Literal["processed", "skipped", "failed"]
     reason: str = Field(default="", description="Reason for skipping or failure")
     chunks_created: int = Field(default=0, description="Number of chunks created during processing")
