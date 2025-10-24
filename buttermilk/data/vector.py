@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import json
-import signal
 import time
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Sequence
@@ -9,16 +8,13 @@ from pathlib import Path
 from typing import Any, Literal, Self, TypeVar  # Corrected import for Tuple
 
 import chromadb
-import hydra
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pydantic
 import semchunk
-from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
+from chromadb import Collection, Embeddings
 from chromadb.api import ClientAPI
-from omegaconf import OmegaConf
 from pydantic import BaseModel, Field, PrivateAttr
-from tqdm.asyncio import tqdm
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
@@ -28,10 +24,10 @@ from buttermilk._core.constants import cache
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk._core.types import BaseRecord, BatchProcessingResult, ProcessingResult, Record
+from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import scrub_serializable, ensure_chromadb_cache
+from buttermilk.utils.utils import ensure_chromadb_cache, scrub_serializable
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -112,18 +108,16 @@ async def _batch_iterator(
 def _get_chunk_embedding(chunk):
     """Safely get embedding from chunk (handles both dict and object types)."""
     if isinstance(chunk, dict):
-        return chunk.get('embedding')
-    return getattr(chunk, 'embedding', None)
+        return chunk.get("embedding")
+    return getattr(chunk, "embedding", None)
 
 
 def _set_chunk_embedding(chunk, embedding):
     """Safely set embedding on chunk (handles both dict and object types)."""
     if isinstance(chunk, dict):
-        chunk['embedding'] = embedding
+        chunk["embedding"] = embedding
     else:
         chunk.embedding = embedding
-
-
 
 
 def _get_chunk_field(chunk, field_name, default=None):
@@ -929,13 +923,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             session_id = bm.session_info.session_id if bm and bm.session_info else None
 
             for chunk in record.chunks:
-
-
                 # Get metadata safely for both dict and object chunks
 
-
-                chunk_metadata = _get_chunk_field(chunk, 'metadata', {})
-
+                chunk_metadata = _get_chunk_field(chunk, "metadata", {})
 
                 chunk_metadata.update(
                     {
@@ -948,7 +938,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 )
                 # Update the chunk's metadata
                 if isinstance(chunk, dict):
-                    chunk['metadata'] = chunk_metadata
+                    chunk["metadata"] = chunk_metadata
                 else:
                     chunk.metadata = chunk_metadata
 
@@ -962,7 +952,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             chunk_types = {}
             for chunk in record.chunks:
-                chunk_metadata = _get_chunk_field(chunk, 'metadata', {})
+                chunk_metadata = _get_chunk_field(chunk, "metadata", {})
                 chunk_type = chunk_metadata.get("chunk_type", "content")
                 chunk_types[chunk_type] = chunk_types.get(chunk_type, 0) + 1
 
@@ -1081,8 +1071,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             for chunk in chunks_to_upsert:
                 # Get chunk fields safely (handle both dict and object)
-                chunk_id = _get_chunk_field(chunk, 'chunk_id')
-                chunk_text = _get_chunk_field(chunk, 'chunk_text')
+                chunk_id = _get_chunk_field(chunk, "chunk_id")
+                chunk_text = _get_chunk_field(chunk, "chunk_text")
                 embedding = _get_chunk_embedding(chunk)
 
                 ids.append(chunk_id)
@@ -1096,18 +1086,30 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     embeddings_list.append([float(x) for x in embedding])  # type: ignore
 
                 # Enhanced metadata with content type tagging (handle both dict and object)
-                document_title = _get_chunk_field(chunk, 'document_title')
-                chunk_index = _get_chunk_field(chunk, 'chunk_index')
-                document_id = _get_chunk_field(chunk, 'document_id')
-                chunk_metadata = _get_chunk_field(chunk, 'metadata', {})
+                document_title = _get_chunk_field(chunk, "document_title")
+                chunk_index = _get_chunk_field(chunk, "chunk_index")
+                document_id = _get_chunk_field(chunk, "document_id")
+                chunk_metadata = _get_chunk_field(chunk, "metadata", {})
+
+                # Ensure chunk_metadata is a plain dict (handle dict_items, dict-like objects, etc.)
+                if not isinstance(chunk_metadata, dict):
+                    if hasattr(chunk_metadata, "items"):
+                        # Convert dict-like objects (including dict_items) to dict
+                        try:
+                            chunk_metadata = dict(chunk_metadata)
+                        except (TypeError, ValueError):
+                            logger.warning(f"Could not convert chunk metadata to dict: {type(chunk_metadata)}")
+                            chunk_metadata = {}
+                    else:
+                        chunk_metadata = {}
 
                 enhanced_metadata = {
                     "document_title": document_title,
                     "chunk_index": chunk_index,
                     "document_id": document_id,
-                    "content_type": chunk_metadata.get("content_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
-                    "chunk_type": chunk_metadata.get("chunk_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
-                    **{k: v for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items()) if k not in ["content_type", "chunk_type"]},
+                    "content_type": chunk_metadata.get("content_type", "unknown"),
+                    "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
+                    **{k: v for k, v in chunk_metadata.items() if k not in ["content_type", "chunk_type"]},
                 }
                 metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
 
@@ -1340,8 +1342,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             for chunk in record.chunks:
                 embedding = _get_chunk_embedding(chunk)
                 if embedding is not None:
-                    chunk_id = _get_chunk_field(chunk, 'chunk_id')
-                    chunk_index = _get_chunk_field(chunk, 'chunk_index')
+                    chunk_id = _get_chunk_field(chunk, "chunk_id")
+                    chunk_index = _get_chunk_field(chunk, "chunk_index")
                     chunk_data = {
                         "chunk_id": chunk_id,
                         "chunk_index": chunk_index,
@@ -1385,7 +1387,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 return False
 
             # Load embeddings into chunks (handle both dict and object)
-            chunk_map = {_get_chunk_field(chunk, 'chunk_id'): chunk for chunk in record.chunks}
+            chunk_map = {_get_chunk_field(chunk, "chunk_id"): chunk for chunk in record.chunks}
             loaded_count = 0
 
             for cached_chunk in cached_chunks:
@@ -1424,9 +1426,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 (
                     i,
                     TextEmbeddingInput(
-                        text=_get_chunk_field(chunk, 'chunk_text', ''),
+                        text=_get_chunk_field(chunk, "chunk_text", ""),
                         task_type=self.task,
-                        title=_get_chunk_field(chunk, 'chunk_title', ''),
+                        title=_get_chunk_field(chunk, "chunk_title", ""),
                     ),
                 ),
             )
@@ -1710,13 +1712,13 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return chunk.get(field_name) if isinstance(chunk, dict) else getattr(chunk, field_name)
 
         data = {
-            "chunk_id": [get_field(c, 'chunk_id') for c in record.chunks],
-            "document_id": [get_field(c, 'document_id') for c in record.chunks],
-            "document_title": [get_field(c, 'document_title') for c in record.chunks],
-            "chunk_index": [get_field(c, 'chunk_index') for c in record.chunks],
-            "chunk_text": [get_field(c, 'chunk_text') for c in record.chunks],
+            "chunk_id": [get_field(c, "chunk_id") for c in record.chunks],
+            "document_id": [get_field(c, "document_id") for c in record.chunks],
+            "document_title": [get_field(c, "document_title") for c in record.chunks],
+            "chunk_index": [get_field(c, "chunk_index") for c in record.chunks],
+            "chunk_text": [get_field(c, "chunk_text") for c in record.chunks],
             "embedding": [list(emb) if (emb := _get_chunk_embedding(c)) is not None else None for c in record.chunks],
-            "chunk_metadata": [json.dumps(get_field(c, 'metadata')) if get_field(c, 'metadata') else None for c in record.chunks],
+            "chunk_metadata": [json.dumps(get_field(c, "metadata")) if get_field(c, "metadata") else None for c in record.chunks],
         }
 
         embedding_type = pa.list_(pa.float32())
@@ -1815,12 +1817,12 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             for rec in chunks_to_upsert:
                 # Get fields safely (handle both dict and object)
-                chunk_id = rec.get('chunk_id') if isinstance(rec, dict) else rec.chunk_id
-                chunk_text = rec.get('chunk_text') if isinstance(rec, dict) else rec.chunk_text
-                document_title = rec.get('document_title') if isinstance(rec, dict) else rec.document_title
-                chunk_index = rec.get('chunk_index') if isinstance(rec, dict) else rec.chunk_index
-                document_id = rec.get('document_id') if isinstance(rec, dict) else rec.document_id
-                rec_metadata = rec.get('metadata', {}) if isinstance(rec, dict) else (rec.metadata if hasattr(rec, 'metadata') else {})
+                chunk_id = rec.get("chunk_id") if isinstance(rec, dict) else rec.chunk_id
+                chunk_text = rec.get("chunk_text") if isinstance(rec, dict) else rec.chunk_text
+                document_title = rec.get("document_title") if isinstance(rec, dict) else rec.document_title
+                chunk_index = rec.get("chunk_index") if isinstance(rec, dict) else rec.chunk_index
+                document_id = rec.get("document_id") if isinstance(rec, dict) else rec.document_id
+                rec_metadata = rec.get("metadata", {}) if isinstance(rec, dict) else (rec.metadata if hasattr(rec, "metadata") else {})
                 embedding = _get_chunk_embedding(rec)
 
                 ids.append(chunk_id)
