@@ -21,6 +21,3 @@ def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
     #     output[k] = v.split('.')[-1]
 
     # return output
-
-
-

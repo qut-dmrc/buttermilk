@@ -399,4 +399,3 @@ When using debugging tools, agents must:
 - **Summarize patterns** rather than listing individual log entries
 - **Highlight specific errors** or success indicators only
 - **Use bullet points** for key findings rather than prose explanations
-

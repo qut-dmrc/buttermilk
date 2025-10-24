@@ -21,4 +21,3 @@ def set_bm(instance: BM) -> None:
     """Set the singleton BM instance."""
     global _bm_instance
     _bm_instance = instance
-

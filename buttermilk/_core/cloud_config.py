@@ -373,5 +373,3 @@ class TracingConfig(BaseModel):
 
 # Union type for all cloud providers
 CloudProvider = Union[GCPConfig, AWSConfig, AzureConfig]
-
-

@@ -61,7 +61,6 @@ repos:
       - id: check-json5
         name: Check JSON5 syntax
         files: '\.(json|json5|jsonc)$'
-
   # JSON Schema validation
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.30.0
@@ -76,7 +75,6 @@ repos:
       - id: check-dependabot
         name: Validate Dependabot config
         files: '^\.github/dependabot\.ya?ml$'
-
   # Python code quality - Ruff (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.5

@@ -24,6 +24,3 @@ class Test00Setup:
     def test_gcloud_no_json_key(self):
         """Check that the JSON key is not set."""
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
-
-
-

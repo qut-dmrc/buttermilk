@@ -81,6 +81,3 @@ jobs:
             us-central1-docker.pkg.dev/prosocial-443205/reg/bmdev:${{ steps.docker_tag.outputs.branch_tag }}-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-
-

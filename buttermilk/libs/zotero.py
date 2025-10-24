@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from pyzotero import zotero, zotero_errors
 
 from buttermilk import bm, logger
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.storage.base import RecordFilter
@@ -55,6 +56,46 @@ def extract_citation_key(extra_field: str | None) -> str | None:
             return key if key else None
 
     return None
+
+
+def validate_pdf_size(pdf_path: Path, min_size_kb: int = 50) -> None:
+    """Validate that a PDF meets minimum size requirements.
+
+    This prevents caching corrupt, placeholder, or incomplete PDF downloads.
+    PDFs smaller than the threshold are typically:
+    - Corrupted downloads (< 1KB)
+    - Placeholder files from Zotero (< 10KB)
+    - Incomplete downloads (variable size)
+
+    Args:
+        pdf_path: Path to the PDF file to validate
+        min_size_kb: Minimum acceptable size in kilobytes (default: 50KB)
+
+    Raises:
+        FileNotFoundError: If PDF file doesn't exist
+        ProcessingError: If PDF is smaller than minimum size
+
+    Examples:
+        >>> validate_pdf_size(Path("document.pdf"))  # 100KB file - passes
+        >>> validate_pdf_size(Path("tiny.pdf"))      # 10KB file - raises ProcessingError
+    """
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+    # Get file size in bytes
+    file_size_bytes = pdf_path.stat().st_size
+    file_size_kb = file_size_bytes / 1024
+
+    # Check minimum size
+    if file_size_kb < min_size_kb:
+        raise ProcessingError(
+            f"PDF {pdf_path.name} is too small ({file_size_kb:.1f} KB). "
+            f"Minimum size is {min_size_kb} KB. "
+            f"This likely indicates a corrupted or incomplete download. "
+            f"Skipping this PDF."
+        )
+
+    logger.debug(f"PDF size validation passed: {pdf_path.name} ({file_size_kb:.1f} KB)")
 
 
 class VectorStoreExistenceFilter(RecordFilter):
@@ -574,6 +615,16 @@ class ZoteroDownloadProcessor(BaseModel):
                     logger.debug(f"Downloading PDF for {key} to {pdf_file}")
                     # Zotero library is synchronous, don't try to async it
                     self.zot.dump(attachment_key, str(pdf_file))
+
+                # Validate PDF size before attempting extraction
+                # This fails fast on corrupt/placeholder downloads (< 50KB)
+                try:
+                    validate_pdf_size(pdf_file)
+                except ProcessingError as e:
+                    # PDF too small - delete it and raise error to skip this record
+                    logger.error(f"PDF validation failed for {key}: {e}")
+                    pdf_file.unlink(missing_ok=True)  # Don't keep invalid PDFs
+                    raise  # Re-raise to skip this record
 
                 try:
                     content = get_pdf_text(pdf_file.as_posix())

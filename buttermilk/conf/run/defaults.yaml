@@ -1,17 +1,12 @@
 #@package _global_
 defaults:
   - _self_
-
-
 run:
   mode: default
   flows: {}
   llms: {}
-
 project_name: buttermilk
 verbose: false
-
-
 session:
   template_paths: []
   # Session storage configuration
@@ -21,7 +16,6 @@ session:
   timeout_minutes: 60
   cleanup_interval_minutes: 15
   max_concurrent_sessions: 50
-
 infrastructure:
   # Default tracing configuration for non-cloud tracing providers
   tracing:

@@ -3,19 +3,16 @@
 
 defaults:
   - _self_
-
 project_name: buttermilk
 job: local_test
 # Reduce path-induced surprises
 hydra.job.chdir: false
-
 verbose: false
 run:
   mode: default
   human_in_loop: false
   flows: {}
   llms: {}
-
 session:
   template_paths: []
   sessions_dir: "data/sessions"
@@ -23,11 +20,9 @@ session:
   timeout_minutes: 60
   cleanup_interval_minutes: 15
   max_concurrent_sessions: 50
-
 infrastructure:
   # No cloud configuration - purely local
   clouds: []
-
   # Tracing disabled for minimal setup
   tracing:
     weave:
@@ -36,7 +31,6 @@ infrastructure:
       enabled: false
     otel:
       enabled: false
-
   # Local logging only
   logging:
     type: local

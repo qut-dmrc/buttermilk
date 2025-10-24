@@ -7,7 +7,7 @@ table_id: records
 randomize: true
 batch_size: 1000
 auto_create: true
-clustering_fields: 
+clustering_fields:
   - record_id
   - dataset_name
 max_records_per_group: -1

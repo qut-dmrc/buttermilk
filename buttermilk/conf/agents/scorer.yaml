@@ -1,6 +1,6 @@
 scorer:
   role: SCORERS
-  name_components: ["📊", "role", "model","unique_identifier"]
+  name_components: ["📊", "role", "model", "unique_identifier"]
   agent_obj: LLMScorer
   num_runs: 1
   description: Checks and scores answers against our expected ground truth.

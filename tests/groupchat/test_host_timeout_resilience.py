@@ -174,5 +174,3 @@ async def test_mixed_errors_and_timeouts(mock_host_agent):
     
     # Check that error ratio was at threshold (50%)
     assert captured_error_ratio == 0.5
-
-

@@ -7,4 +7,3 @@ import pytest
 
 # Apply markers to all tests in this directory
 pytestmark = pytest.mark.endtoend
-

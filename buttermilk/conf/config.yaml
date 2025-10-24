@@ -1,14 +1,10 @@
 defaults:
   - run: defaults
   - _self_
-
-
 # reduce path-induced surprises
 hydra.job.chdir: false
-
 project_name: buttermilk
 verbose: false
-
 storage:
   traces:
     type: bigquery
@@ -17,11 +13,10 @@ storage:
     table_id: traces
     dataset_name: traces
     schema_path: traces.schema.json
-
 infrastructure:
   clouds:
     - type: gcp
-      _target_: buttermilk._core.cloud_config.GCPConfig    
+      _target_: buttermilk._core.cloud_config.GCPConfig
       project_id: prosocial-443205
       region: us-central1
       location: us-central1
@@ -42,22 +37,20 @@ infrastructure:
         status_subscription: flow-sub
       vertex:
         enabled: true
-      
   # Unified tracing configuration for all tracing providers
   tracing:
-    weave: 
+    weave:
       enabled: false
       # project_id is WANDB_ENTITY for weave
       project_id: dmrc
     traceloop:
       enabled: false
-      api_key: 
+      api_key:
       endpoint: https://api.traceloop.com
     otel:
       enabled: true
       endpoint: https://telemetry.googleapis.com
       otlp_headers: {}
-      
   logging:
     type: gcp
     verbose: ${verbose}

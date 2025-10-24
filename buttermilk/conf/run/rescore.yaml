@@ -18,25 +18,20 @@ defaults:
   - /storage@run.pipeline.source: traces
   - /storage@run.pipeline.output: traces
   - _self_
-
 job: rescore
-project_name: tja  
-
+project_name: tja
 run:
   mode: pipeline
-
   pipeline:
     # Pipeline execution parameters
     pipeline_name: "rescore_unscored_predictions"
     description: "Re-score JUDGE/SYNTH predictions missing scores"
     concurrency: 5
-    max_records: 500  # null = process all, set to integer for testing
+    max_records: 500 # null = process all, set to integer for testing
     enable_record_cache: true
     force_reprocess: false
-
     # SQL to find predictions that were never scored
     source:
-
       custom_query: |
         WITH unscored_predictions AS (
           SELECT DISTINCT t.call_id
@@ -80,7 +75,6 @@ run:
         INNER JOIN unscored_predictions u ON t.call_id = u.call_id
         INNER JOIN `prosocial-443205.bmdev.tja_records` r
           ON JSON_VALUE(t.inputs, '$.inputs.record_id') = r.record_id
-        
     # PROCESSORS: Transform data then run scorer
     processors:
       # Step 1: Transform ExecutionTrace → scorer template inputs
@@ -93,10 +87,9 @@ run:
           criteria: criteria
           parent_call_id: parent_call_id # Link scores back to original prediction
           expected: expected # Ground truth for scoring
-
       # Step 2: Run scoring LLM (LLMCore already implements Processor protocol)
       - _target_: buttermilk._core.llm_core.LLMCore
-        model: "gemini25pro"  # Or use: ${run.llms.scorers[0]} to reference global config
+        model: "gemini25pro" # Or use: ${run.llms.scorers[0]} to reference global config
         template: "score"
         output_model: "buttermilk.agents.evaluators.scorer.QualScore"
         output_col: "score_results"

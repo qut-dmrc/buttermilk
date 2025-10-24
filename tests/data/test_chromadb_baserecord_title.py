@@ -114,4 +114,3 @@ class TestChromaDBBaseRecordTitle:
         with pytest.raises(ValueError, match="has no title.*incomplete/invalid Zotero data"):
             async for _ in processor.process(record, processor_stage="download"):
                 pass
-

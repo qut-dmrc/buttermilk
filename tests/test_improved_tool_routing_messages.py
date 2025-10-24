@@ -129,4 +129,3 @@ class TestImprovedToolRoutingMessages:
         ]
         summary = agent._create_tool_call_summary(tool_calls)
         assert summary == "Orchestrating 8 tool calls across 8 tools"
-

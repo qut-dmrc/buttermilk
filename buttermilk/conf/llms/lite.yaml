@@ -1,20 +1,16 @@
 host: gemini25flash
-
 cheap:
   - sonnet
   - gemini25flash
   - gpt5nano
-
 general:
   - gemini25flash
   - gpt5mini
   - sonnet
-
 judgers:
   - sonnet
   - gemini25flash
   - gpt5mini
-
 synthesisers:
   - gemini25flash
   - gpt5mini

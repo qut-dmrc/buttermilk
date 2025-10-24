@@ -12,4 +12,3 @@ def test_save(real_bm):
     # The data is saved as a JSON-serialized list, not a single string
     assert read_text == '["test data"]'
     uploaded.unlink(missing_ok=False)
-

@@ -157,4 +157,3 @@ class TestEmptyTraceFilter:
             "op_name": "Agent.MESSAGE_HANDLER",
             "output": None
         }
-

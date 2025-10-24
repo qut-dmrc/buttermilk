@@ -47,4 +47,3 @@ uv run ruff check --output-format=concise --fix tests/[category]/
 ```
 
 2. Use **uv run pytest** to test: `uv run pytest ...`
-

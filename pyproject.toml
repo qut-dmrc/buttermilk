@@ -96,6 +96,7 @@ dependencies = [
     "opentelemetry-resourcedetector-gcp>=1.8",
     "sentry-sdk>=2.24.0",
     "jmespath>=1.0.1",
+    "poppler-utils>=0.1.0",
 ]
 
 [project.optional-dependencies]

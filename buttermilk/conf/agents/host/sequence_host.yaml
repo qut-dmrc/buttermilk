@@ -6,6 +6,6 @@ host:
   agent_obj: HostAgent
   parameters:
     human_in_loop: false
-    execution_mode: "sequential"  # Execute agents in defined order
-    max_wait_time: 180  # Maximum time to wait per step in seconds
-    error_threshold: 0.3  # Maximum acceptable error ratio before proceeding to next step
+    execution_mode: "sequential" # Execute agents in defined order
+    max_wait_time: 180 # Maximum time to wait per step in seconds
+    error_threshold: 0.3 # Maximum acceptable error ratio before proceeding to next step

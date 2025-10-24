@@ -439,4 +439,3 @@ export function normalizeWebSocketMessage(data: any): Message {
 
 	return normalizedMessage;
 }
-

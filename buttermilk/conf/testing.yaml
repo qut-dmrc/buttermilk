@@ -1,17 +1,14 @@
 defaults:
   - flows@run.flows:
-    - trans
+      - trans
   - llms@run.llms: debug
   - run@pipeline.rescore: rescore
   - _self_
-
 project_name: buttermilk
 job: testing
 verbose: true
-
 run:
   mode: console
-
 #  Testing paths for bigquery datasets
 storage:
   observations:
@@ -26,27 +23,21 @@ storage:
     table_id: traces
     dataset_name: traces
     schema_path: traces.schema.json
-    
   zotero_vectors:
     type: chromadb
     collection_name: prosocial_zot
     read_only: true
-
-    persist_directory:  /chromadb
-    
+    persist_directory: /chromadb
     embedding_model: gemini-embedding-001
     dimensionality: 3072
-
-
 session:
   template_paths: []
   sessions_dir: "data/sessions"
   cache_dir: "~/.cache/buttermilk"
-
 infrastructure:
   clouds:
     - type: gcp
-      _target_: buttermilk._core.cloud_config.GCPConfig    
+      _target_: buttermilk._core.cloud_config.GCPConfig
       project_id: prosocial-443205
       region: us-central1
       location: us-central1
@@ -67,30 +58,26 @@ infrastructure:
         status_subscription: flow-sub
       vertex:
         enabled: true
-      
   # Unified tracing configuration for all tracing providers
   tracing:
-    weave: 
+    weave:
       enabled: false
       # project_id is WANDB_ENTITY for weave
       project_id: dmrc
-      api_key: 
+      api_key:
     traceloop:
       enabled: false
-      api_key: 
+      api_key:
       endpoint: https://api.traceloop.com
     otel:
       enabled: true
       endpoint: https://telemetry.googleapis.com
       otlp_headers: {}
-      
   logging:
     type: gcp
     verbose: ${verbose}
     project_id: prosocial-443205
     location: us-central1
-
-
 vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
   persist_directory: ${storage.zotero_vectors.persist_directory}
@@ -99,15 +86,13 @@ vectoriser:
   dimensionality: ${storage.zotero_vectors.dimensionality}
   concurrency: ${pipeline.concurrency}
   sync_batch_size: 500
-  deduplication_strategy: record_id  # Skip existing records before downloading
+  deduplication_strategy: record_id # Skip existing records before downloading
   enable_record_cache: true
-
 pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   pipeline_name: zotero_vectorization
   concurrency: 1
   max_records: 99
-
   # Source: Zotero library with deduplication filter
   source:
     _target_: buttermilk.libs.zotero.ZoteroSource
@@ -118,23 +103,21 @@ pipeline:
       vector_store: ${vectoriser}
     force_full_sync: false
     max_records: ${pipeline.max_records}
-
   processors:
     # 0. Download PDFs and extract full text
     - _target_: buttermilk.libs.zotero.ZoteroDownloadProcessor
       library_id: ${oc.env:ZOTERO_LIBRARY_ID}
       save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/items
-
+    # 0b. Extract text using pdftotext (replaces pdfminer extraction)
+    - _target_: buttermilk.processors.bash.PDFToTextProcessor
     # 1. Generate citations using LLM
     - _target_: buttermilk.tools.citator.Citator
       model: gemini25flash
       template: citator
-
     # 2. Chunk text semantically
     - _target_: buttermilk.data.vector.SemanticSplitter
       chunk_size: 500
       chunk_overlap: 200
-
     # 3. Generate embeddings (pure, no side effects)
     - _target_: buttermilk.processors.embeddings.EmbeddingGenerator
       embedding_model: ${storage.zotero_vectors.embedding_model}
@@ -142,7 +125,5 @@ pipeline:
       embedding_batch_size: 100
       embedding_max_retries: 5
       embedding_cooldown_seconds: 0.1
-
     # 4. Store in ChromaDB
     - ${vectoriser}
-

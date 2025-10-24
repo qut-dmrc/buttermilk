@@ -5,7 +5,6 @@ type: file
 path: ${oc.env:BUTTERMILK_DATA_PATH,./data/}
 glob: "**/*"
 max_records_per_group: -1
-
 # Common storage settings
 randomize: true
 batch_size: 100

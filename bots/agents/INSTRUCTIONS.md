@@ -579,6 +579,3 @@ We are CONTINUOSLY refining our workflow. Agents ONLY remember the information w
 - Include all GENERAL important information developers need to understand, but REMOVE minor details or information that is specific to a particular task or scenario.
 - Be CONCISE to save tokens.
 - If you find conflicting information, ask the user for clarification, and then update the documents.
-
-
-
