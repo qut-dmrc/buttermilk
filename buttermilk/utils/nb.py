@@ -17,6 +17,7 @@ from IPython.display import display
 from rich import print
 
 from buttermilk import BM, bm, logger  # noqa
+from buttermilk.utils.viz import init_viz, quick_figure, save_figure, get_palette  # noqa
 
 console = Console()
 print = console.print
@@ -28,13 +29,12 @@ import nest_asyncio
 # Apply nest_asyncio to handle potential event loop issues in notebooks
 nest_asyncio.apply()
 
-def graph_defaults():
-    plt.rcParams["figure.dpi"] = 300
-    plt.rcParams["figure.figsize"] = (10, 8)
-    sns.set_context("notebook")
-    sns.set_style("darkgrid")
-    plt.rcParams["font.size"] = 14
-    print("Notebook graphing defaults applied")
+
+def graph_defaults() -> None:
+    """Legacy function - use init_viz() instead for better control."""
+    print("[yellow]⚠️  graph_defaults() is deprecated - use init_viz() for better control[/yellow]")
+    init_viz(profile="notebook", theme="cyberpunk")
+    print("✨ Visualization defaults applied (cyberpunk theme)")
 
 
 def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None, config_name: str = "config") -> BM:
@@ -74,6 +74,8 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
 
     bm = init(job=job, project_name=project, config_dir=config_dir, config_name=config_name, overrides=nb_overrides)
 
-    graph_defaults()
+    # Initialize visualization with notebook-optimized defaults
+    init_viz(profile="notebook", theme="cyberpunk")
+    print("✨ Buttermilk initialized with cyberpunk visualization theme")
 
     return bm
