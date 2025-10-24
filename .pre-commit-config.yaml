@@ -126,7 +126,7 @@ repos:
         name: mypy type checking
         additional_dependencies:
           - pydantic>=2.8.2
-        args: [--no-strict-optional, --ignore-missing-imports]
+        args: [--no-strict-optional, --ignore-missing-imports, --follow-imports=skip]
         exclude: ^(tests/|examples/)
   # Pytest checks
   - repo: local

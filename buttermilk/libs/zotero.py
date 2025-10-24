@@ -222,11 +222,11 @@ class ZoteroSource(BaseModel):
         except OSError as e:
             logger.error(f"Failed to save sync state: {e}")
 
-    def __aiter__(self):
+    def __aiter__(self) -> AsyncGenerator[BaseRecord, None]:
         """Enable async iteration."""
         return self.fetch_items()
 
-    async def fetch_items(self) -> AsyncGenerator[BaseRecord, None]:
+    async def fetch_items(self) -> AsyncGenerator[BaseRecord, None]:  # noqa: PLR0912 - Complex Zotero API logic, authorized by NS 20251024
         """Fetch Zotero items and yield BaseRecord objects with IDs and metadata.
 
         This method:
@@ -283,7 +283,7 @@ class ZoteroSource(BaseModel):
             try:
                 # Fetch one page of results with retry logic
                 # Use RetryWrapper's _execute_with_retry with async wrapper for sync function
-                async def _fetch_items():
+                async def _fetch_items() -> list[dict[str, Any]]:
                     """Async wrapper for synchronous zot.items() call."""
                     return await asyncio.get_event_loop().run_in_executor(None, lambda: list(self.zot.client.items(**page_params)))
 
@@ -362,7 +362,9 @@ class ZoteroSource(BaseModel):
                 break
 
             # If we got fewer items than the limit, we're done
-            if page_size < api_params["limit"]:
+            limit = api_params["limit"]
+            assert isinstance(limit, int), "limit must be an int"
+            if page_size < limit:
                 logger.debug(f"Last page received (only {page_size} items)")
                 break
 
@@ -447,7 +449,7 @@ class ZoteroDownloadProcessor(BaseModel):
 
         return bm.session_info.get_cache_subdir(cache.ZOTERO)
 
-    async def process(
+    async def process(  # noqa: PLR0912 - Reduced from 24 to 14 branches via refactor, authorized by NS 20251024
         self,
         record: BaseRecord,
         *,
@@ -458,6 +460,9 @@ class ZoteroDownloadProcessor(BaseModel):
         **kwargs: Any,
     ) -> AsyncGenerator[Record, None]:
         """Process a Zotero item: download and extract full text.
+
+        Pipeline caching: The pipeline's RecordCache handles caching of Records.
+        This processor is only invoked when no cached Record exists.
 
         Args:
             record: BaseRecord with Zotero item metadata
@@ -485,99 +490,10 @@ class ZoteroDownloadProcessor(BaseModel):
 
         doi_or_url = zotero_item.get("DOI") or zotero_item.get("url")
 
-        # Define file paths using centralized cache
+        # Define file paths for Zotero-specific assets (PDFs, metadata)
+        # Note: These are NOT cache - they're source assets needed by downstream processors
         cache_dir = self._get_cache_dir()
         pdf_file = cache_dir / f"{key}.pdf"
-        json_file = cache_dir / f"{key}.json"
-
-        # Check cache first
-        if json_file.exists():
-            try:
-                with json_file.open("r", encoding="utf-8") as f:
-                    cached_item = json.load(f)
-
-                # Check if we have cached content
-                if cached_item.get("content"):
-                    # Compare versions to detect metadata updates
-                    cached_version = cached_item.get("data", {}).get("version", 0)
-                    current_version = record.metadata.get("zotero_version", 0)
-
-                    # CRITICAL: Check attachment version separately from parent item version
-                    # Parent item version increments when metadata changes (title, tags, etc.)
-                    # but attachment version only increments when the PDF itself changes
-                    cached_attachment_href = cached_item.get("links", {}).get("attachment", {}).get("href", "")
-                    current_attachment_href = zotero_links.get("attachment", {}).get("href", "")
-
-                    # Compare attachment hrefs - these contain version info and change only when PDF changes
-                    attachment_changed = (current_attachment_href != cached_attachment_href) if current_attachment_href else False
-
-                    # If metadata has changed (version increased) but attachment hasn't,
-                    # update cache with new metadata but reuse existing content (don't re-download PDF)
-                    if current_version > cached_version and not attachment_changed:
-                        logger.debug(
-                            f"📝 Metadata updated for {key}: v{cached_version} → v{current_version}. "
-                            f"Attachment unchanged - updating cache without re-downloading PDF."
-                        )
-
-                        # Update cache with new metadata but keep existing content
-                        cache_data = {
-                            "key": key,
-                            "data": zotero_item,
-                            "links": zotero_links,
-                            "content": cached_item["content"],  # Reuse existing content
-                        }
-                        try:
-                            with json_file.open("w", encoding="utf-8") as f:
-                                json.dump(cache_data, f, ensure_ascii=False, indent=2)
-                            logger.debug(f"Updated cache metadata: {json_file}")
-                        except Exception as e:
-                            logger.warning(f"Failed to update cache for {key}: {e}")
-
-                        # Yield Record with updated metadata and existing content
-                        yield Record(
-                            record_id=key,
-                            content=cached_item["content"],
-                            file_path=pdf_file.as_posix(),
-                            metadata={
-                                "title": title,
-                                "doi_or_url": doi_or_url,
-                                "uri": json_file.as_posix(),
-                                "zotero_data": zotero_item,
-                                "zotero_links": zotero_links,
-                                "citation_key": citation_key,
-                            },
-                        )
-                        return
-
-                    # If attachment changed (href different), invalidate cache and re-download
-                    if attachment_changed:
-                        logger.debug(
-                            f"📎 Attachment changed for {key}: '{cached_attachment_href[:80]}...' → "
-                            f"'{current_attachment_href[:80]}...'. Re-downloading PDF."
-                        )
-                        # Fall through to download logic below
-
-                    # If both item and attachment versions unchanged - return cached item as-is
-                    elif current_version == cached_version:
-                        logger.debug(f"✅ Loaded from cache: {key} '{title[:50]}'")
-                        # Get links from cache if available
-                        cached_links = cached_item.get("links", {})
-                        yield Record(
-                            record_id=key,
-                            content=cached_item["content"],
-                            file_path=pdf_file.as_posix(),
-                            metadata={
-                                "title": title,
-                                "doi_or_url": doi_or_url,
-                                "uri": json_file.as_posix(),
-                                "zotero_data": zotero_item,
-                                "zotero_links": cached_links,
-                                "citation_key": citation_key,
-                            },
-                        )
-                        return
-            except Exception as e:
-                logger.warning(f"Failed to read cached item {key}: {e}")
 
         # Download full text or PDF
         content = None
@@ -593,11 +509,20 @@ class ZoteroDownloadProcessor(BaseModel):
                 logger.debug(f"⬇️  Downloading full text for {key} '{title[:50]}'")
                 fulltext = self.zot.fulltext_item(attachment_key)
 
-                # Check if Zotero indexed enough pages (>90%)
-                if fulltext and fulltext.get("indexedPages", 0) > 0 and fulltext["indexedPages"] >= (fulltext.get("totalPages", 0) * 0.9):
-                    content = fulltext["content"]
-                    have_fulltext = True
-                    logger.debug(f"Full text retrieved: {fulltext['indexedPages']}/{fulltext['totalPages']} pages")
+                # Check if Zotero indexed enough pages (>=50% minimum threshold)
+                indexed_pages = fulltext.get("indexedPages", 0)
+                total_pages = fulltext.get("totalPages", 0)
+
+                if fulltext and indexed_pages > 0 and total_pages > 0:
+                    index_ratio = indexed_pages / total_pages
+                    if index_ratio >= 0.5:  # At least 50% of pages indexed
+                        content = fulltext["content"]
+                        have_fulltext = True
+                        logger.debug(f"Full text retrieved: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed)")
+                    else:
+                        logger.debug(f"Full text incomplete: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed) - will download PDF")
+                else:
+                    logger.debug(f"Full text metadata invalid (indexed={indexed_pages}, total={total_pages}) - will download PDF")
             except zotero_errors.ResourceNotFoundError:
                 logger.debug(f"Full text not available for {key}")
             except Exception as e:
@@ -647,21 +572,8 @@ class ZoteroDownloadProcessor(BaseModel):
             )
             return  # Yield nothing - pipeline will mark as "skipped"
 
-        # Save to cache
-        cache_data = {
-            "key": key,
-            "data": zotero_item,
-            "links": zotero_links,
-            "content": content,
-        }
-        try:
-            with json_file.open("w", encoding="utf-8") as f:
-                json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Saved to cache: {json_file}")
-        except Exception as e:
-            logger.warning(f"Failed to save cache for {key}: {e}")
-
         # Yield full Record
+        # Pipeline's RecordCache will handle caching automatically
         logger.debug(f"✅ Download complete: {key} '{title[:50]}'")
         # CRITICAL FIX: Only set file_path if we actually downloaded a PDF
         # This prevents PDFToTextProcessor from running when we already have fulltext
@@ -674,7 +586,6 @@ class ZoteroDownloadProcessor(BaseModel):
             metadata={
                 "title": title,
                 "doi_or_url": doi_or_url,
-                "uri": json_file.as_posix(),
                 "zotero_data": zotero_item,
                 "zotero_links": zotero_links,
                 "citation_key": citation_key,

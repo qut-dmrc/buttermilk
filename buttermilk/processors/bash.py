@@ -6,7 +6,6 @@ into the data processing pipeline.
 """
 
 import asyncio
-import subprocess
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -112,28 +111,16 @@ class BashProcessor(BaseModel):
             if result.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
                 raise ProcessingError(
-                    f"Bash command failed for {record.record_id}: {error_msg}\n"
-                    f"Command: {command}\n"
-                    f"Return code: {result.returncode}"
+                    f"Bash command failed for {record.record_id}: {error_msg}\n" f"Command: {command}\n" f"Return code: {result.returncode}"
                 )
 
         except asyncio.TimeoutError:
-            raise ProcessingError(
-                f"Bash command timed out after {self.timeout_seconds}s for {record.record_id}\n"
-                f"Command: {command}"
-            )
+            raise ProcessingError(f"Bash command timed out after {self.timeout_seconds}s for {record.record_id}\n" f"Command: {command}")
         except FileNotFoundError as e:
             # Command not found (e.g., pdftotext not installed)
-            raise ProcessingError(
-                f"Command not found: {str(e)}\n"
-                f"Command: {command}\n"
-                f"Make sure the required tool is installed."
-            )
+            raise ProcessingError(f"Command not found: {str(e)}\n" f"Command: {command}\n" f"Make sure the required tool is installed.")
         except Exception as e:
-            raise ProcessingError(
-                f"Error executing bash command for {record.record_id}: {e}\n"
-                f"Command: {command}"
-            )
+            raise ProcessingError(f"Error executing bash command for {record.record_id}: {e}\n" f"Command: {command}")
 
         # Get output
         if self.read_output_file:
@@ -142,10 +129,7 @@ class BashProcessor(BaseModel):
 
             output_path = Path(self.output_file)
             if not output_path.exists():
-                raise ProcessingError(
-                    f"Output file not created by command: {output_path}\n"
-                    f"Command: {command}"
-                )
+                raise ProcessingError(f"Output file not created by command: {output_path}\n" f"Command: {command}")
 
             output_content = output_path.read_text(encoding="utf-8", errors="replace")
         else:
@@ -187,7 +171,7 @@ class PDFToTextProcessor(BashProcessor):
             print(result.content)  # Extracted text
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize PDFToTextProcessor with pdftotext configuration.
 
         Args:
@@ -218,6 +202,9 @@ class PDFToTextProcessor(BashProcessor):
     ) -> AsyncGenerator[Record, None]:
         """Extract text from PDF using pdftotext.
 
+        Skips extraction if content doesn't look like PDF metadata placeholder
+        (meaning fulltext already exists from Zotero API).
+
         Args:
             record: Record with PDF file_path
 
@@ -227,6 +214,13 @@ class PDFToTextProcessor(BashProcessor):
         Raises:
             ProcessingError: If pdftotext not installed or extraction fails
         """
+        # Skip if content exists and is NOT a PDF placeholder
+        # PDF placeholders look like: "[PDF Document: filename.pdf, Size: 123 bytes, Path: /path]"
+        if record.content and not (isinstance(record.content, str) and record.content.startswith("[PDF Document:")):
+            logger.debug(f"Skipping PDF extraction for {record.record_id} - fulltext already exists ({len(record.content)} chars)")
+            yield record
+            return
+
         try:
             async for result in super().process(
                 record,
