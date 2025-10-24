@@ -581,10 +581,12 @@ class ZoteroDownloadProcessor(BaseModel):
 
         # Download full text or PDF
         content = None
+        pdf_downloaded = False  # Track if we actually downloaded a PDF
         attachment = zotero_links.get("attachment", {})
 
         if attachment.get("attachmentType") == "application/pdf" and (pdf_href := attachment.get("href")):
             attachment_key = pdf_href.split("/")[-1]
+            have_fulltext = False  # Track if we got fulltext from Zotero API
 
             # Try full text from Zotero API first
             try:
@@ -594,6 +596,7 @@ class ZoteroDownloadProcessor(BaseModel):
                 # Check if Zotero indexed enough pages (>90%)
                 if fulltext and fulltext.get("indexedPages", 0) > 0 and fulltext["indexedPages"] >= (fulltext.get("totalPages", 0) * 0.9):
                     content = fulltext["content"]
+                    have_fulltext = True
                     logger.debug(f"Full text retrieved: {fulltext['indexedPages']}/{fulltext['totalPages']} pages")
             except zotero_errors.ResourceNotFoundError:
                 logger.debug(f"Full text not available for {key}")
@@ -601,7 +604,10 @@ class ZoteroDownloadProcessor(BaseModel):
                 logger.warning(f"Error fetching full text for {key}: {e}")
 
             # Fall back to PDF download + extraction
-            if not content:
+            # CRITICAL FIX: Only download PDF if we DON'T have fulltext
+            # This prevents wasting bandwidth and prevents PDFToTextProcessor from overwriting good content
+            if not have_fulltext:
+                logger.debug(f"No fulltext from Zotero API, will download PDF for {key}")
                 if not pdf_file.exists():
                     logger.debug(f"Downloading PDF for {key} to {pdf_file}")
                     # Zotero library is synchronous, don't try to async it
@@ -617,6 +623,7 @@ class ZoteroDownloadProcessor(BaseModel):
                     pdf_file.unlink(missing_ok=True)  # Don't keep invalid PDFs
                     raise  # Re-raise to skip this record
 
+                pdf_downloaded = True  # We have a PDF file
                 # Note: Text extraction now handled by PDFToTextProcessor in pipeline
                 # This allows using pdftotext instead of pdfminer
                 logger.debug(f"PDF downloaded successfully: {key}. Text extraction will be done by downstream processor.")
@@ -627,6 +634,8 @@ class ZoteroDownloadProcessor(BaseModel):
                     pdf_size = pdf_file.stat().st_size
                     content = f"[PDF Document: {pdf_file.name}, Size: {pdf_size:,} bytes, Path: {pdf_file.as_posix()}]"
                     logger.debug(f"Set PDF metadata as content for {key}: {content}")
+            else:
+                logger.debug(f"Skipping PDF download for {key} - already have fulltext with {len(content)} chars")
 
         else:
             # No PDF attachment found - skip this record (don't mark as failed)
@@ -654,10 +663,14 @@ class ZoteroDownloadProcessor(BaseModel):
 
         # Yield full Record
         logger.debug(f"✅ Download complete: {key} '{title[:50]}'")
+        # CRITICAL FIX: Only set file_path if we actually downloaded a PDF
+        # This prevents PDFToTextProcessor from running when we already have fulltext
+        record_file_path = pdf_file.as_posix() if pdf_downloaded else None
+
         yield Record(
             record_id=key,
             content=content,
-            file_path=pdf_file.as_posix(),
+            file_path=record_file_path,  # Only set if PDF was downloaded
             metadata={
                 "title": title,
                 "doi_or_url": doi_or_url,
