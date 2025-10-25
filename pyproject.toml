@@ -97,6 +97,7 @@ dependencies = [
     "sentry-sdk>=2.24.0",
     "jmespath>=1.0.1",
     "poppler-utils>=0.1.0",
+    "aioconsole>=0.8.2",
 ]
 
 [project.optional-dependencies]
@@ -203,7 +204,7 @@ exclude = ["tests*", "*.tests*", "*.tests"]
 [tool.setuptools.package-data]
 buttermilk = [
     "conf/**/*.yaml",
-    "conf/**/*.yml", 
+    "conf/**/*.yml",
     "templates/**/*.jinja2",
     "templates/**/*.json",
     "templates/**/*.txt",
@@ -245,6 +246,9 @@ line-length = 150
 [project.scripts]
 bm = "buttermilk.runner.cli:main"
 
+[project.entry-points."hydra_plugins"]
+buttermilk_search_path_plugin = "buttermilk.hydra_plugins.buttermilk_search_path_plugin:ButtermilkSearchPathPlugin"
+
 [tool.pytest.ini_options]
 markers = [
   "integration: integration tests (slower, mocked and faked at the edges)",
@@ -261,12 +265,12 @@ norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir",
 timeout = 600
 asyncio_default_fixture_loop_scope = "package"
 asyncio_debug = true
-addopts = [ 
-    "--capture=fd", 
+addopts = [
+    "--capture=fd",
     "--continue-on-collection-errors",
-    "--durations=10", 
-    "-n 20", 
-    "-v", # show name of tests 
+    "--durations=10",
+    "-n 20",
+    "-v", # show name of tests
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",
     "--tb=short",
