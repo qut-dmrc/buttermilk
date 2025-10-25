@@ -4,7 +4,7 @@ from logging import DEBUG
 from typing import Any
 
 import aiohttp
-import requests
+import requests  # type: ignore[import-untyped]
 import urllib3
 from anthropic._exceptions import (
     APIConnectionError as AnthropicAPIConnectionError,
@@ -19,7 +19,15 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 from pydantic import BaseModel
-from pyzotero import zotero_errors
+
+try:
+    from pyzotero import zotero_errors
+
+    PYZOTERO_AVAILABLE = True
+except ImportError:
+    zotero_errors = None
+    PYZOTERO_AVAILABLE = False
+
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -57,34 +65,40 @@ class RetryWrapper(BaseModel):
 
     def _get_retry_config(self) -> dict:
         """Get the retry configuration for tenacity."""
-        return {
-            "retry": retry_if_exception_type(
-                (
-                    RateLimit,
-                    TimeoutError,
-                    requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    urllib3.exceptions.ProtocolError,
-                    urllib3.exceptions.TimeoutError,
-                    OpenAIAPIConnectionError,
-                    OpenAIRateLimitError,
-                    AnthropicAPIConnectionError,
-                    AnthropicRateLimitError,
-                    AnthropicOverloadedError,
-                    AnthropicInternalServerError,
-                    AnthropicServiceUnavailableError,
-                    # ModelError,
-                    # ReplicateError,
-                    TooManyRequests,
-                    ResourceExhausted,
-                    ConnectionResetError,
-                    ConnectionError,
-                    ConnectionAbortedError,
-                    aiohttp.ClientError,
+        # Base exception types that are always available
+        retry_exceptions = [
+            RateLimit,
+            TimeoutError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            urllib3.exceptions.ProtocolError,
+            urllib3.exceptions.TimeoutError,
+            OpenAIAPIConnectionError,
+            OpenAIRateLimitError,
+            AnthropicAPIConnectionError,
+            AnthropicRateLimitError,
+            AnthropicOverloadedError,
+            AnthropicInternalServerError,
+            AnthropicServiceUnavailableError,
+            TooManyRequests,
+            ResourceExhausted,
+            ConnectionResetError,
+            ConnectionError,
+            ConnectionAbortedError,
+            aiohttp.ClientError,
+        ]
+
+        # Add pyzotero exceptions if available
+        if PYZOTERO_AVAILABLE:
+            retry_exceptions.extend(
+                [
                     zotero_errors.HTTPError,
                     zotero_errors.TooManyRequestsError,
-                ),
-            ),
+                ]
+            )
+
+        return {
+            "retry": retry_if_exception_type(tuple(retry_exceptions)),
             "stop": stop_after_attempt(self.max_retries),
             "wait": wait_exponential_jitter(
                 initial=self.min_wait_seconds,
@@ -97,9 +111,9 @@ class RetryWrapper(BaseModel):
 
     async def _execute_with_retry(
         self,
-        func: Callable,
-        *args,
-        **kwargs,
+        func: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Execute a function with retry logic."""
         try:
