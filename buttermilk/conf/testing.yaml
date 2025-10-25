@@ -92,7 +92,7 @@ pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   pipeline_name: zotero_vectorization
   concurrency: 1
-  max_records: 99
+  limit: 99
   # Source: Zotero library with deduplication filter
   source:
     _target_: buttermilk.libs.zotero.ZoteroSource
@@ -102,7 +102,7 @@ pipeline:
       _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
       vector_store: ${vectoriser}
     force_full_sync: false
-    max_records: ${pipeline.max_records}
+    max_records: ${pipeline.limit}
   processors:
     # 0. Download PDFs and extract full text
     - _target_: buttermilk.libs.zotero.ZoteroDownloadProcessor

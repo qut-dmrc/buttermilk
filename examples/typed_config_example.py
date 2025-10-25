@@ -52,7 +52,7 @@ def example_run_modes():
         # NEW: Mode is inside run config (loaded from run=console)
         # Check mode with simple comparisons or match statement
         if typed_cfg.run.mode == RunMode.CONSOLE:
-            print(f"Console mode")
+            print("Console mode")
             print(f"  Flow: {typed_cfg.run.flow}")  # NEW: in run config
             print(f"  Record ID: {typed_cfg.run.record_id}")
 
@@ -68,7 +68,7 @@ def example_run_modes():
                 print(f"  Limit: {typed_cfg.run.limit}")
 
         elif typed_cfg.run.mode == RunMode.PIPELINE:
-            print(f"Pipeline mode")
+            print("Pipeline mode")
             # NEW: Pipeline config in run
             pipeline = typed_cfg.run.pipeline
             if pipeline:
@@ -87,7 +87,7 @@ def example_api_mode():
 
         # NEW: Check mode inside run, access params from run config
         if typed_cfg.run.mode == RunMode.API:
-            print(f"Starting API server...")
+            print("Starting API server...")
             print(f"  Host: {typed_cfg.run.host}")
             print(f"  Port: {typed_cfg.run.port}")
             print(f"  Workers: {typed_cfg.run.workers}")
@@ -112,9 +112,9 @@ def example_pipeline_mode():
         # NEW: Get pipeline configuration from run config
         pipeline = typed_cfg.run.pipeline
         if pipeline:
-            print(f"Pipeline Configuration:")
+            print("Pipeline Configuration:")
             print(f"  Concurrency: {pipeline.concurrency}")
-            print(f"  Max Records: {pipeline.max_records}")
+            print(f"  Limit: {pipeline.limit}")
             print(f"  Buffer Size: {pipeline.buffer_size}")
             print(f"  Flush Interval: {pipeline.flush_interval}s")
 
@@ -145,7 +145,7 @@ def example_storage_config():
         # Get specific storage configuration
         observations = typed_cfg.get_storage_config("observations")
         if observations:
-            print(f"Observations Storage:")
+            print("Observations Storage:")
             print(f"  Type: {observations.type}")
             print(f"  Dataset: {observations.dataset_name}")
             print(f"  Batch Size: {observations.batch_size}")
@@ -181,7 +181,7 @@ def example_infrastructure():
 
         # Logging configuration
         if infra.logging:
-            print(f"\nLogging:")
+            print("\nLogging:")
             print(f"  Type: {infra.logging.type}")
             print(f"  Verbose: {infra.logging.verbose}")
             print(f"  Console: {infra.logging.console}")
@@ -276,7 +276,7 @@ def example_backward_compatibility():
         cfg = compose(config_name="config", overrides=["run=batch"])
         typed_cfg = create_config_from_hydra(cfg)
 
-        print(f"\nUnified limit parameter:")
+        print("\nUnified limit parameter:")
         print(f"  Mode: {typed_cfg.run.mode}")
         print(f"  Limit: {typed_cfg.run.limit}")  # Works for both records and jobs
 

@@ -12,7 +12,7 @@
 #
 # Usage:
 #   uv run python -m buttermilk.cli pipeline run --config-name rescore
-#   uv run python -m buttermilk.cli pipeline run --config-name rescore max_records=100
+#   uv run python -m buttermilk.cli pipeline run --config-name rescore run.limit=100
 
 defaults:
   - /storage@run.pipeline.source: traces
@@ -27,9 +27,9 @@ run:
     pipeline_name: "rescore_unscored_predictions"
     description: "Re-score JUDGE/SYNTH predictions missing scores"
     concurrency: 5
-    max_records: 500 # null = process all, set to integer for testing
     enable_record_cache: true
     force_reprocess: false
+    # Note: Use run.limit from CLI to limit processing (e.g., run.limit=100)
     # SQL to find predictions that were never scored
     source:
       custom_query: |

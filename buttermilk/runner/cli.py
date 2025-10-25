@@ -105,11 +105,7 @@ def main(conf: DictConfig) -> None:
                 # Get storage config from run section
                 storage_config = conf.run.storage_config or None
 
-                await flow_runner.create_batch(
-                    flow_name=conf.run.flow,
-                    storage_config=storage_config,
-                    max_records=conf.run.limit
-                )
+                await flow_runner.create_batch(flow_name=conf.run.flow, storage_config=storage_config, max_records=conf.run.limit)
                 await bm.graceful_shutdown()
 
             asyncio.run(run_with_shutdown())
@@ -140,22 +136,14 @@ def main(conf: DictConfig) -> None:
                 # Enqueue phase
                 logger.info("Enqueueing batch jobs...")
                 storage_config = conf.run.storage_config or None
-                await flow_runner.create_batch(
-                    flow_name=conf.run.flow,
-                    storage_config=storage_config,
-                    max_records=conf.run.limit
-                )
+                await flow_runner.create_batch(flow_name=conf.run.flow, storage_config=storage_config, max_records=conf.run.limit)
                 logger.info("Batch jobs enqueued successfully")
 
                 # Process phase
                 limit = conf.run.limit or 999  # Process all by default
                 ui = CLIUserAgent()
                 logger.info(f"Processing batch jobs (limit: {limit})...")
-                await flow_runner.run_batch_job(
-                    max_jobs=limit,
-                    callback_to_ui=ui.make_callback(),
-                    wait_for_completion=True
-                )
+                await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
                 logger.info("Batch processing completed successfully")
 
                 await bm.graceful_shutdown()
@@ -315,6 +303,10 @@ def main(conf: DictConfig) -> None:
 
             pipeline_conf["processors"] = processors
 
+            # Use run.limit instead of pipeline.max_records for consistency with batch modes
+            if conf.run.limit is not None:
+                pipeline_conf["limit"] = conf.run.limit
+
             # Instantiate pipeline orchestrator
             from buttermilk.pipeline import PipelineOrchestrator
 
@@ -325,6 +317,7 @@ def main(conf: DictConfig) -> None:
                 # This is required because @weave.op decorators are evaluated at import time
                 # but weave.init() hasn't been called yet
                 from buttermilk._core.execution_context import get_execution_context
+
                 exec_ctx = get_execution_context()
                 await exec_ctx._ensure_tracing_initialized()
 

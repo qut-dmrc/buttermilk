@@ -7,6 +7,7 @@ This guide explains how to build a ChromaDB vector database from your Zotero lib
 ## Quick Start
 
 ### 1. Set up credentials
+
 ```bash
 export ZOTERO_API_KEY="your-zotero-api-key"
 export ZOTERO_LIBRARY_ID="your-library-id"
@@ -14,6 +15,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="path/to/gcs-credentials.json"  # If using
 ```
 
 ### 2. Build the vector database
+
 ```bash
 # Run from your application directory (e.g., zotmcp)
 cd /path/to/your/app
@@ -38,11 +40,13 @@ See `projects/zotmcp/scripts/run_vectorization.py` for a simple runner script ex
 You can override any setting from the command line when running from your application directory:
 
 ### Limit documents (for testing)
+
 ```bash
-uv run python scripts/run_vectorization.py pipeline.max_records=50
+uv run python scripts/run_vectorization.py run.limit=50
 ```
 
 ### Adjust batch processing
+
 ```bash
 uv run python scripts/run_vectorization.py \
   vectoriser.sync_batch_size=100 \
@@ -50,6 +54,7 @@ uv run python scripts/run_vectorization.py \
 ```
 
 ### Change deduplication strategy
+
 ```bash
 uv run python scripts/run_vectorization.py \
   vectoriser.deduplication_strategy=both
@@ -58,16 +63,20 @@ uv run python scripts/run_vectorization.py \
 ## Features
 
 ### Progress Tracking
+
 - Real-time progress bar showing documents processed
 - Detailed statistics including processing rate
 - Summary report at completion
 
 ### Graceful Interruption
+
 - Press Ctrl+C to stop processing after current batch
 - Automatically resumes where it left off on next run
 
 ### Multi-field Embeddings
+
 The system creates separate embeddings for:
+
 - **Full text**: Main document content (chunked)
 - **Abstract**: Paper abstract (if available)
 - **Annotations**: PDF annotations (when implemented)
@@ -75,6 +84,7 @@ The system creates separate embeddings for:
 - **Notes**: Zotero notes
 
 ### Deduplication
+
 Deduplication happens **early** by configuring `ZotDownloader` with a `vector_store` reference:
 
 ```yaml
@@ -84,25 +94,29 @@ input_docs:
 ```
 
 **How It Works**:
+
 1. **Source-level checking**: `ZotDownloader` queries ChromaDB **before** downloading PDFs
-2. **Early exit**: If record exists, `ZotDownloader` doesn't yield it to the pipeline
-3. **Cost savings**: Skips expensive operations for existing records:
+1. **Early exit**: If record exists, `ZotDownloader` doesn't yield it to the pipeline
+1. **Cost savings**: Skips expensive operations for existing records:
    - ❌ No PDF download from Zotero API
    - ❌ No text extraction from PDF
    - ❌ No chunking
    - ❌ No re-embedding
 
 **Deduplication Strategies** (configured via `deduplication_strategy` on `ChromaDBEmbeddings`):
+
 - `"record_id"`: Skip if Zotero item ID exists in ChromaDB (fastest, ideal for incremental sync)
 - `"content_hash"`: Skip if content hash matches (detects when documents are modified)
 - `"both"`: Skip only if BOTH record_id AND content_hash match (most thorough, re-processes modified documents)
 
 **Example**: With 6GB of existing embeddings and no pipeline cache:
+
 - Set `deduplication_strategy="record_id"` on ChromaDBEmbeddings
 - Set `vector_store: ${vectoriser}` on ZotDownloader
 - Only net-new Zotero records will be downloaded and vectorized
 
 ### Remote Storage Support
+
 - Automatic sync to Google Cloud Storage
 - Smart caching for remote ChromaDB
 - Configurable sync intervals
@@ -135,7 +149,7 @@ pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   pipeline_name: zotero_vectorization
   concurrency: 5
-  max_records: null  # Process all
+  limit: null  # Process all (or use run.limit from CLI)
 
   # Zotero source with deduplication
   source:
@@ -162,8 +176,8 @@ pipeline:
 The enhanced pipeline provides detailed progress information:
 
 1. **Startup Banner**: Shows configuration details
-2. **Progress Bar**: Real-time updates with documents processed
-3. **Summary Statistics**: 
+1. **Progress Bar**: Real-time updates with documents processed
+1. **Summary Statistics**:
    - Total documents found
    - Successfully processed
    - Failed documents
@@ -173,7 +187,9 @@ The enhanced pipeline provides detailed progress information:
 ## Troubleshooting
 
 ### Memory Issues
+
 Reduce batch size and concurrency:
+
 ```bash
 python -m buttermilk.data.vector run=vectorise_zotero \
   vectoriser.sync_batch_size=25 \
@@ -181,14 +197,18 @@ python -m buttermilk.data.vector run=vectorise_zotero \
 ```
 
 ### API Rate Limits
+
 Add delays between batches:
+
 ```bash
 python -m buttermilk.data.vector run=vectorise_zotero \
   vectoriser.embedding_cooldown_seconds=1.0
 ```
 
 ### Debug Mode
+
 Enable debug logging:
+
 ```bash
 export BUTTERMILK_LOG_LEVEL=DEBUG
 python -m buttermilk.data.vector run=vectorise_zotero
@@ -208,6 +228,7 @@ orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 ```
 
 Then start the chat:
+
 ```bash
 python -m buttermilk.runner.cli +flow=zotero_rag run=api
 ```
