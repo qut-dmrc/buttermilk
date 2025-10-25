@@ -62,7 +62,7 @@ class TestInitViz:
 
         # Check matplotlib rcParams were set
         assert plt.rcParams["figure.dpi"] == 300
-        assert plt.rcParams["figure.figsize"] == (16, 10)
+        assert list(plt.rcParams["figure.figsize"]) == [16, 10]
         assert plt.rcParams["figure.facecolor"] == PALETTES["cyberpunk"]["background"]
 
     def test_init_viz_print_profile(self):
@@ -98,7 +98,7 @@ class TestInitViz:
         # Should match cyberpunk categorical colors (within tolerance)
         assert len(palette) >= 6  # At least 6 colors
 
-    @pytest.mark.skipif(not hasattr(plt, "style"), reason="Style not available")
+    @pytest.mark.skipif(not VIZ_AVAILABLE, reason="Visualization dependencies not available")
     def test_init_viz_configures_all_rcparams(self):
         """Test that all important rcParams are set."""
         init_viz(profile="hidpi", theme="cyberpunk")
