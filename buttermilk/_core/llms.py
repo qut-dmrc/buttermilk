@@ -15,7 +15,6 @@ import inspect
 import json
 from collections.abc import Sequence
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable, TypeVar
 
 # Core LLM library imports - these are required dependencies
@@ -48,7 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic m
 from buttermilk import bm, logger
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import cache, CONFIG_CACHE_FILENAME, get_base_cache_dir  # Models cache constants
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -176,7 +175,7 @@ CHAT_MODELS = [
 CHEAP_CHAT_MODELS = [
     "gemini25flash",
     "gpt5nano",
-    "haiku",
+    "claude35haiku",
 ]
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
@@ -391,7 +390,7 @@ class AutoGenWrapper(BaseModel):
             raise ProcessingError(error_msg) from e
 
         # Calculate pricing from usage data (defensive check for None)
-        usage = getattr(create_result, 'usage', None)
+        usage = getattr(create_result, "usage", None)
         pricing_metadata = self._calculate_pricing(usage)
 
         # Now that we've made the LLM call and received a response, from
@@ -538,7 +537,7 @@ class AutoGenWrapper(BaseModel):
         aggregated_pricing = {
             "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
             "completion_tokens": initial_pricing.get("completion_tokens", 0),
-            "total_cost": initial_pricing.get("total_cost", 0.0)
+            "total_cost": initial_pricing.get("total_cost", 0.0),
         }
 
         # Step 2: Handle tool calls if present
@@ -574,7 +573,7 @@ class AutoGenWrapper(BaseModel):
                     cancellation_token=cancellation_token,
                     schema=schema,  # Apply schema for structured output
                 )
-                
+
                 # Aggregate pricing from synthesis call
                 if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
                     synthesis_pricing = synthesis_result.metadata["pricing"]
@@ -582,7 +581,7 @@ class AutoGenWrapper(BaseModel):
                     aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
                     aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
                     synthesis_result.metadata["pricing"] = aggregated_pricing
-                
+
                 return synthesis_result
             except Exception as e:
                 raise ProcessingError(f"Failed to synthesize after tool execution: {e!s}") from e
@@ -662,11 +661,7 @@ class AutoGenWrapper(BaseModel):
         """
         if usage is None:
             logger.warning("LLM response had no usage data - using 0 tokens for pricing")
-            return {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_cost": 0.0
-            }
+            return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
 
         # Extract tokens from usage object
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -674,16 +669,10 @@ class AutoGenWrapper(BaseModel):
 
         # Calculate cost using the utility function with resolved litellm model name
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens
+            model=self.litellm_model_name, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost
-        }
+        return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_cost": total_cost}
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912
@@ -873,7 +862,7 @@ class LLMs(BaseModel):
             "vertex_ai",
             "anthropic",
         }
-        
+
         if "/" not in model_name:
             return False
         first = model_name.split("/", 1)[0]
@@ -999,12 +988,14 @@ class LLMs(BaseModel):
             """Create a factory function that returns fresh clients with current credentials."""
 
             if config.client_type == ClientType.OPENAI:
+
                 def factory() -> ChatCompletionClient:
                     return OpenAIChatCompletionClient(
                         base_url=config.base_url or "",  # Provide default empty string if None
                         model_info=config.model_info,
                         **client_params,
                     )
+
                 return factory
 
             elif config.client_type == ClientType.AZURE:
@@ -1017,12 +1008,14 @@ class LLMs(BaseModel):
                         model_info=config.model_info,
                         **client_params,
                     )
+
                 return factory
 
             elif config.client_type == ClientType.ANTHROPIC:
                 # Direct Anthropic API
                 def factory() -> ChatCompletionClient:
                     return AnthropicChatCompletionClient(**client_params)
+
                 return factory
 
             elif config.client_type == ClientType.ANTHROPIC_VERTEX:
@@ -1050,6 +1043,7 @@ class LLMs(BaseModel):
                     except Exception as e:
                         logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
                         raise
+
                 return factory
 
             elif config.client_type == ClientType.GEMINI:
@@ -1062,6 +1056,7 @@ class LLMs(BaseModel):
                         model_info=config.model_info,
                         **client_params,
                     )
+
                 return factory
 
             elif config.client_type == ClientType.GEMINI_VERTEX:
@@ -1075,6 +1070,7 @@ class LLMs(BaseModel):
                         model_info=config.model_info,
                         **vertex_params,
                     )
+
                 return factory
 
             elif config.client_type == ClientType.VERTEX_OPENAI:
@@ -1103,6 +1099,7 @@ class LLMs(BaseModel):
                         model_info=config.model_info,
                         **vertex_params,
                     )
+
                 return factory
             else:
                 raise ProcessingError(f"Unsupported client_type: {config.client_type}")
@@ -1110,20 +1107,14 @@ class LLMs(BaseModel):
         client_factory = create_client_factory()
 
         # Wrap with AutoGenWrapper using client factory and cache
-        wrapped_client = AutoGenWrapper(
-            client_factory=client_factory,
-            model_info=config.model_info,
-            litellm_model_name=resolved_litellm
-        )
+        wrapped_client = AutoGenWrapper(client_factory=client_factory, model_info=config.model_info, litellm_model_name=resolved_litellm)
         self.autogen_models[name] = wrapped_client
         return wrapped_client
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
         if __name not in self.connections:
-            raise AttributeError(
-                f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}"
-            )
+            raise AttributeError(f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}")
         return self.get_autogen_chat_client(__name)
 
     def __getitem__(self, __name: str) -> AutoGenWrapper:

@@ -32,7 +32,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
-from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
 from buttermilk.agents.rag import ResearchResult
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
@@ -184,7 +183,6 @@ FormattableMessages = Union[
     ToolOutput,
     AgentInput,
     Record,
-    QualScore,
     JudgeReasons,
     FlowMessage,
     ResearchResult,
@@ -282,11 +280,9 @@ class CLIUserAgent(UIAgent):
             if isinstance(message, ExecutionTrace) or hasattr(message, "outputs"):
                 outputs = getattr(message, "outputs", None)
 
-                if isinstance(outputs, QualResults):
-                    result.append(f"Score: {outputs}", style="bright_white")
-                    content_added = True
+                # Note: QualResults removed - scorer moved to tja project
 
-                elif isinstance(outputs, JudgeReasons) or (hasattr(outputs, "prediction") and hasattr(outputs, "conclusion")):
+                if isinstance(outputs, JudgeReasons) or (hasattr(outputs, "prediction") and hasattr(outputs, "conclusion")):
                     # Detailed judge output with more information
                     prediction = getattr(outputs, "prediction", None)
                     conclusion = getattr(outputs, "conclusion", "")
@@ -314,8 +310,9 @@ class CLIUserAgent(UIAgent):
                             result.append(f"({len(reasons) - 2} more reasons...)", style="dim")
                     content_added = True
 
-                elif isinstance(outputs, QualResults) or (hasattr(outputs, "assessed_call_id") and hasattr(outputs, "correctness")):
-                    # Compact scorer output - show call_id and overall score only
+                # Note: QualResults handling removed - scorer moved to tja project
+                elif hasattr(outputs, "assessed_call_id") and hasattr(outputs, "correctness"):
+                    # Compact scorer-like output - show call_id and overall score only
                     call_id = getattr(outputs, "assessed_call_id", "unknown")
                     correctness = getattr(outputs, "correctness", 0) or 0
 

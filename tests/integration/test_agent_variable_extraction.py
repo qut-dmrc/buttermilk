@@ -14,20 +14,18 @@ remain undefined causing template rendering to fail (as it should with
 fail_on_unfilled_parameters=True).
 """
 
+from pathlib import Path
+
 import pytest
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
-from pathlib import Path
 
-from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.contract import AgentOutput
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import Record
-from buttermilk.agents.evaluators.scorer import LLMScorer
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.utils.templating import load_template
-
 
 # Get the actual config directory
 CONF_DIR = str(Path(__file__).parent.parent.parent / "buttermilk" / "conf")
@@ -94,17 +92,17 @@ def sample_record_with_ground_truth() -> Record:
             "title": "Children as young as three being referred to gender clinics in South Australia",
             "uri": "https://7news.com.au/news/children-as-young-as-three-being-referred-to-gender-clinics-in-south-australia--c-15153886",
             "record_hash": "8104037784b10b1ac03bfc3ec74f1ff355f79ee1232912aaf45b59ee6fff327b",
-            "ground_truth_hash": "6a346d16450441d303165b369fa41a65baf94afe675924f6c1e821312753131f"
+            "ground_truth_hash": "6a346d16450441d303165b369fa41a65baf94afe675924f6c1e821312753131f",
         },
         ground_truth={
             "reasons": [
                 "Violates by not centreing the voices of trans children and their families",
                 "Violates by over-relying on anecdotal evidence that runs contrary to broad scientific consensus",
                 "Violates by not contextualising the number of children receiving gender-affirming care",
-                "Violates by quoting non-experts on the technical topic of gender-affirming care"
+                "Violates by quoting non-experts on the technical topic of gender-affirming care",
             ],
-            "violating": True
-        }
+            "violating": True,
+        },
     )
 
 
@@ -138,11 +136,7 @@ class TestAgentVariableExtraction:
         # Note: The template now uses record.ground_truth, not a separate 'expected' field
         assert "answers" in inputs
 
-    def test_extract_record_from_real_fetch_output(
-        self,
-        real_scorer_config,
-        sample_record_with_ground_truth: Record
-    ):
+    def test_extract_record_from_real_fetch_output(self, real_scorer_config, sample_record_with_ground_truth: Record):
         """Test extraction using REAL JMESPath expressions from scorer config.
 
         The current config extracts 'record' (which contains ground_truth inside it).
@@ -155,7 +149,7 @@ class TestAgentVariableExtraction:
             outputs=sample_record_with_ground_truth,
             messages=[],
             metadata=sample_record_with_ground_truth.metadata.copy(),
-            error=[]
+            error=[],
         )
 
         # Use the REAL input mappings from the actual config
@@ -165,10 +159,10 @@ class TestAgentVariableExtraction:
         extracted_data = extract_message_data(
             message=fetch_output,
             source="FETCH-ABC123",  # Source agent ID
-            input_mappings=real_inputs
+            input_mappings=real_inputs,
         )
 
-        print(f"\n=== FETCH Output Extraction ===")
+        print("\n=== FETCH Output Extraction ===")
         print(f"JMESPath expression: {real_inputs['record']}")
         print(f"Extracted keys: {list(extracted_data.keys())}")
 
@@ -194,17 +188,11 @@ class TestAgentVariableExtraction:
             record_dict = record_data
 
         # Verify ground_truth is accessible
-        assert "ground_truth" in record_dict, (
-            f"ground_truth not found in extracted record. Keys: {record_dict.keys()}"
-        )
+        assert "ground_truth" in record_dict, f"ground_truth not found in extracted record. Keys: {record_dict.keys()}"
         assert "reasons" in record_dict["ground_truth"]
         assert len(record_dict["ground_truth"]["reasons"]) == 4
 
-    def test_jmespath_record_extraction_patterns(
-        self,
-        real_scorer_config,
-        sample_record_with_ground_truth: Record
-    ):
+    def test_jmespath_record_extraction_patterns(self, real_scorer_config, sample_record_with_ground_truth: Record):
         """Test the JMESPath expression for record extraction with different message structures.
 
         The config uses: "[FETCH.outputs]||*.record||*.inputs.record"
@@ -215,43 +203,30 @@ class TestAgentVariableExtraction:
         - *.inputs.record (when message has record in inputs)
         """
         import jmespath
+
         from buttermilk.utils import scrub_serializable
 
         record_expr = real_scorer_config["inputs"]["record"]
-        print(f"\n=== Testing JMESPath Expression ===")
+        print("\n=== Testing JMESPath Expression ===")
         print(f"Expression: {record_expr}")
 
         # Test 1: FETCH message structure
         print("\n[Test 1] FETCH message: {FETCH: {outputs: <record>}}")
-        fetch_data = {
-            "FETCH": {
-                "outputs": scrub_serializable(sample_record_with_ground_truth.model_dump())
-            }
-        }
+        fetch_data = {"FETCH": {"outputs": scrub_serializable(sample_record_with_ground_truth.model_dump())}}
         result1 = jmespath.search(record_expr, fetch_data)
         print(f"  Result: {type(result1)} with {len(result1) if result1 else 0} items")
         assert result1 is not None, "FETCH.outputs pattern failed"
 
         # Test 2: Message with record at top level
         print("\n[Test 2] Message with top-level record: {JUDGE: {record: <record>}}")
-        judge_data_toplevel = {
-            "JUDGE": {
-                "record": scrub_serializable(sample_record_with_ground_truth.model_dump())
-            }
-        }
+        judge_data_toplevel = {"JUDGE": {"record": scrub_serializable(sample_record_with_ground_truth.model_dump())}}
         result2 = jmespath.search(record_expr, judge_data_toplevel)
         print(f"  Result: {type(result2)} with {len(result2) if result2 else 0} items")
         assert result2 is not None, "*.record pattern failed"
 
         # Test 3: Message with record in inputs (REAL structure from JUDGE/SYNTH)
         print("\n[Test 3] Message with record in inputs: {JUDGE: {inputs: {record: <record>}}}")
-        judge_data_inputs = {
-            "JUDGE": {
-                "inputs": {
-                    "record": scrub_serializable(sample_record_with_ground_truth.model_dump())
-                }
-            }
-        }
+        judge_data_inputs = {"JUDGE": {"inputs": {"record": scrub_serializable(sample_record_with_ground_truth.model_dump())}}}
         result3 = jmespath.search(record_expr, judge_data_inputs)
         print(f"  Result: {type(result3)} with {len(result3) if result3 else 0} items")
 
@@ -274,11 +249,7 @@ class TestAgentVariableExtraction:
 
         assert result3 is not None, "*.inputs.record pattern failed for JUDGE structure"
 
-    def test_template_rendering_succeeds_with_proper_extraction(
-        self,
-        real_scorer_config,
-        sample_record_with_ground_truth: Record
-    ):
+    def test_template_rendering_succeeds_with_proper_extraction(self, real_scorer_config, sample_record_with_ground_truth: Record):
         """Test that template renders successfully when extraction works.
 
         Uses the REAL scorer template with properly extracted data.
@@ -291,35 +262,25 @@ class TestAgentVariableExtraction:
         # NOTE: Template expects 'expected' which contains the ground_truth data
         proper_inputs = {
             "expected": sample_record_with_ground_truth.ground_truth,
-            "answers": [{
-                "agent_id": "JUDGE-TEST",
-                "result": JudgeReasons(
-                    reasons=["Reason 1", "Reason 2"],
-                    prediction=True,
-                    conclusion="Test conclusion",
-                    uncertainty="medium"
-                ),
-                "answer_id": "call-123"
-            }],
+            "answers": [
+                {
+                    "agent_id": "JUDGE-TEST",
+                    "result": JudgeReasons(reasons=["Reason 1", "Reason 2"], prediction=True, conclusion="Test conclusion", uncertainty="medium"),
+                    "answer_id": "call-123",
+                }
+            ],
         }
 
         # Render the REAL template with proper data
-        rendered, undefined_vars, template_hash = load_template(
-            template=real_template,
-            parameters=proper_inputs
-        )
+        rendered, undefined_vars, template_hash = load_template(template=real_template, parameters=proper_inputs)
 
         # MUST render without undefined variables
-        assert len(undefined_vars) == 0, (
-            f"Template has undefined variables: {undefined_vars}"
-        )
+        assert len(undefined_vars) == 0, f"Template has undefined variables: {undefined_vars}"
 
         # Verify ground truth reasons appear in output
         for reason in sample_record_with_ground_truth.ground_truth["reasons"]:
             # Check if part of the reason appears
-            assert any(word in rendered for word in reason.split()[:3]), (
-                f"Ground truth reason not found in output: {reason[:50]}..."
-            )
+            assert any(word in rendered for word in reason.split()[:3]), f"Ground truth reason not found in output: {reason[:50]}..."
 
 
 if __name__ == "__main__":

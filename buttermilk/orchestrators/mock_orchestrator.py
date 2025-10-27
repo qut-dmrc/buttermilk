@@ -32,9 +32,7 @@ from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.agents.differences import Differences, Divergence, Expert, Position
-from buttermilk.agents.evaluators.scorer import QualScoreCRA
 from buttermilk.agents.judge import JudgeReasons
-from buttermilk.agents.ui.console import QualResults
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.orchestrators.groupchat import InterruptHandler, TerminationHandler
 
@@ -248,16 +246,9 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(progress)
             await asyncio.sleep(1.5)
 
-            # Use a QualResults instance in the analyst output
-            qual_results = QualResults(
-                assessments=[
-                    QualScoreCRA(correct=True, feedback="Document contains comprehensive research with strong methodological approach"),
-                    QualScoreCRA(correct=True, feedback="Data visualization effectively communicates key trends"),
-                    QualScoreCRA(correct=True, feedback="Statistical analysis is thorough and appropriate for the dataset"),
-                ],
-                assessed_agent_id=random.choice(self._agent_ids),  # Use agent_ids list
-                assessed_call_id=str(uuid.uuid4()),  # Keep mock call ID
-            )
+            # Note: QualResults removed - scorer moved to tja project
+            # Using simple string output instead of structured qual_results
+            qual_results = "Analysis complete: Document contains comprehensive research with strong methodological approach. Data visualization effectively communicates key trends. Statistical analysis is thorough and appropriate for the dataset."
 
             analysis_result = self._generate_agent_trace(
                 agent_id=random.choice(self._agent_ids),  # Use agent_ids list
@@ -376,10 +367,6 @@ class MockOrchestrator(Orchestrator):
             Divergence,
             Position,
         )
-        from buttermilk.agents.evaluators.scorer import (  # Corrected import and added QualScoreCRA
-            QualResults,
-            QualScoreCRA,
-        )
         from buttermilk.agents.judge import JudgeReasons  # Import JudgeReasons if used in outputs
 
         if agent_id is None:
@@ -400,17 +387,13 @@ class MockOrchestrator(Orchestrator):
                     ],
                 )
             elif agent_id == "ANALYST":
-                # QualResults requires assessed_agent_id, assessed_call_id, and assessments (list of QualScoreCRA)
-                outputs = QualResults(
-                    assessed_agent_id=random.choice(self._agent_ids),  # Use agent_ids list
-                    assessed_call_id=str(uuid.uuid4()),  # Mock the call ID being assessed
-                    assessments=[
-                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 1 assessment."),
-                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 2 assessment."),
-                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 3 assessment."),
-                    ],
-                    # score and summary are computed properties, no need to set here
-                )
+                # Note: QualResults removed - scorer moved to tja project
+                # Using simple dict output instead
+                outputs = {
+                    "assessed_agent_id": random.choice(self._agent_ids),
+                    "assessed_call_id": str(uuid.uuid4()),
+                    "summary": "Mock analyst assessment with 3 criteria evaluated",
+                }
             elif agent_id == "CRITIC":
                 # Differences requires conclusion and divergences (list of Divergence)
                 # Divergence requires topic and positions (list of Position)
@@ -491,7 +474,14 @@ class MockOrchestrator(Orchestrator):
         )
 
     def _generate_progress_update(
-        self, source=None, role=None, step_name=None, status=None, message=None, total_steps=None, current_step=None,
+        self,
+        source=None,
+        role=None,
+        step_name=None,
+        status=None,
+        message=None,
+        total_steps=None,
+        current_step=None,
     ) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (

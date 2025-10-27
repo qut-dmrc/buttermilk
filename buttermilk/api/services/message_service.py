@@ -25,7 +25,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
-from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag import ResearchResult
 from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
@@ -87,7 +86,7 @@ class MessageService:
                 action = "returning as-is" if isinstance(message, ChatMessage) else "not sending to UI"
                 logger.debug(f"[MessageService] {message_type} received, {action}")
                 return message if isinstance(message, ChatMessage) else None
-            
+
             # Convert UserResponseMessage to user_response for display
             if isinstance(message, UserResponseMessage):
                 logger.debug("UserResponseMessage received, converting to user_response for UI")
@@ -97,7 +96,7 @@ class MessageService:
                     outputs=message.content,
                     agent_info=None,
                     timestamp=datetime.datetime.now(),
-                    message_id=message.message_id  # Preserve the message_id
+                    message_id=message.message_id,  # Preserve the message_id
                 )
 
             agent_info = getattr(message, "agent_info", None)
@@ -143,7 +142,7 @@ class MessageService:
                         logger.debug(f"[MessageService] Pricing computed: {prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}")
                     except Exception as e:
                         logger.debug(f"[MessageService] Failed to calculate token cost: {e}")
-                
+
                 if message.outputs:
                     # Send the unwrapped message instead of the ExecutionTrace object
                     message = message.outputs
@@ -168,8 +167,7 @@ class MessageService:
                 return None
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
-            elif isinstance(message, QualResults):
-                message_type = "assessments"
+            # Note: QualResults removed - scorer moved to tja project
             elif isinstance(message, Differences):
                 message_type = "differences"
             elif isinstance(message, ResearchResult):

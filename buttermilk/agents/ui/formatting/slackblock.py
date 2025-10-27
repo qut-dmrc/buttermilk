@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk._core.contract import ExecutionTrace
-from buttermilk.agents.evaluators.scorer import QualScore
 
 
 def format_response(inputs) -> list[str]:
@@ -153,16 +152,7 @@ def format_slack_message(result: ExecutionTrace) -> dict:
             },
         )
 
-    elif isinstance(result_copy.outputs, QualScore):
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": str(result_copy.outputs),
-                },
-            },
-        )
+    # Note: QualScore removed - scorer moved to tja project
     else:
         icontext = blocks_with_icon(
             result_copy.parameters,
