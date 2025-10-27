@@ -14,6 +14,7 @@ from google.cloud import bigquery  # Google Cloud BigQuery client library
 from pydantic import BaseModel, ConfigDict, Field  # Pydantic for model validation
 
 from buttermilk._core.log import logger  # Centralized logger
+from buttermilk.utils.utils import unwrap_numpy_arrow_types  # Convert numpy arrays to Python lists
 
 # Pricing reference: https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / (10**12)  # $5 per Terabyte (1 TB = 10^12 bytes)
@@ -40,7 +41,7 @@ class QueryRunner(BaseModel):
 
     bq_client: bigquery.Client = Field(..., description="Authenticated BigQuery client instance.")
 
-    def run_query(
+    def run_query(  # noqa: PLR0913, PLR0911
         self,
         sql: str,
         destination: str | None = None,
@@ -97,6 +98,7 @@ class QueryRunner(BaseModel):
                 return None  # Indicate failure due to missing configuration
 
             import shortuuid  # For unique filenames
+
             # Ensure save_dir ends with a slash for proper GCS path construction
             gcs_path_prefix = save_dir if save_dir.endswith("/") else save_dir + "/"
             gcs_results_uri = f"{gcs_path_prefix}query_results_{shortuuid.uuid()}/results-*.json"
@@ -145,7 +147,15 @@ class QueryRunner(BaseModel):
                 # Get the result iterator first, which has total_rows attribute
                 result_iterator = query_job.result()
                 if hasattr(result_iterator, "total_rows") and result_iterator.total_rows and result_iterator.total_rows > 0:
-                    return query_job.to_dataframe()
+                    df = query_job.to_dataframe()
+
+                    # Convert numpy arrays from ARRAY/REPEATED fields to Python lists
+                    # BigQuery's to_dataframe() returns numpy.ndarray for ARRAY fields
+                    # We convert them to native Python lists for consistency
+                    for col in df.columns:
+                        df[col] = df[col].map(unwrap_numpy_arrow_types)
+
+                    return df
                 return pd.DataFrame()  # Return empty DataFrame for no rows
             return query_job  # Return the job object which contains RowIterator
         except Exception as e:

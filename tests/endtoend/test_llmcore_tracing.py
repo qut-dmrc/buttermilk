@@ -47,7 +47,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     # Step 2: Process the request
     test_start_time = datetime.datetime.now(datetime.timezone.utc)
-    trace_id = None
 
     logger.info("Processing LLMCore request...")
     results = []
@@ -169,11 +168,67 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
             import json
 
             outputs = json.loads(outputs)
-        except:
+        except (json.JSONDecodeError, TypeError):
             pass  # outputs is just a string
 
     output_str = str(outputs).lower()
     assert "paris" in output_str, f"Outputs should contain Paris, got: {outputs}"
+
+    # Validate messages field contains the exact API input/output
+    # Query for messages field from BigQuery
+    query_with_messages = f"""
+        SELECT
+            call_id,
+            messages
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE call_id = '{trace.call_id}'
+        LIMIT 1
+    """
+    df_messages = real_bm.run_query(query_with_messages)
+
+    assert df_messages.shape[0] == 1, "Should retrieve the trace with messages"
+    messages = df_messages.iloc[0].messages
+
+    # FAIL-FAST: Messages must already be a list, not a string or other type
+    assert messages is not None, "Messages field should not be None"
+    assert isinstance(messages, list), f"Messages should be a list, got {type(messages).__name__}. Data should be stored in correct format."
+    assert len(messages) > 0, "Messages list should not be empty"
+
+    # Parse JSON strings into dicts (BigQuery stores messages as JSON strings)
+    parsed_messages = []
+    for i, msg in enumerate(messages):
+        assert isinstance(
+            msg, str
+        ), f"Message {i} should be a JSON string, got {type(msg).__name__}. Messages are stored as JSON strings in BigQuery."
+        try:
+            parsed_msg = json.loads(msg)
+            parsed_messages.append(parsed_msg)
+        except json.JSONDecodeError as e:
+            pytest.fail(f"Message {i} is not valid JSON: {e}. Message content: {msg[:100]}...")
+
+    # FAIL-FAST: Each parsed message must be a dict with expected structure
+    for i, msg in enumerate(parsed_messages):
+        assert isinstance(msg, dict), f"Parsed message {i} should be a dict, got {type(msg).__name__}."
+        assert "role" in msg or "type" in msg, f"Message {i} missing role/type field. Expected message structure with role or type."
+        assert "content" in msg, f"Message {i} missing content field. Expected message structure with content."
+
+    # Validate messages contain both user/system input and assistant response
+    roles = [msg.get("role", msg.get("type", "")) for msg in parsed_messages]
+
+    # Check for user or system message (input)
+    has_input = any("user" in str(role).lower() or "system" in str(role).lower() for role in roles)
+    assert has_input, f"Messages should contain user or system message (input), got roles: {roles}"
+
+    # Check for assistant message (response)
+    has_assistant = any("assistant" in str(role).lower() for role in roles)
+    assert has_assistant, f"Messages should contain assistant message (response), got roles: {roles}"
+
+    # Validate message content includes expected terms
+    all_content = " ".join(msg.get("content", "") for msg in parsed_messages)
+    assert "capital" in all_content.lower() or "france" in all_content.lower(), "Messages should contain the original prompt about France's capital"
+    assert "paris" in all_content.lower(), "Messages should contain the LLM's response mentioning Paris"
+
+    logger.info(f"✅ Messages field validated: {len(messages)} messages with roles {roles}")
 
     logger.info("✅ All trace validations passed")
     logger.info(f"Trace metadata: {metadata}")
@@ -199,9 +254,9 @@ async def test_trace_writer_initialization(real_bm):
     trace_writer._ensure_initialized()
 
     assert trace_writer._initialized, "TraceWriter should be marked as initialized"
-    assert trace_writer.uploader is not None, (
-        "TraceWriter should have an uploader configured. Check that conf/storage/traces.yaml exists and is valid."
-    )
+    assert (
+        trace_writer.uploader is not None
+    ), "TraceWriter should have an uploader configured. Check that conf/storage/traces.yaml exists and is valid."
 
     logger.info("✅ TraceWriter initialized successfully")
     logger.info(f"Storage type: {type(trace_writer.uploader.storage).__name__}")
