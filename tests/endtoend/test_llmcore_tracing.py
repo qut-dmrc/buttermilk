@@ -22,8 +22,8 @@ from buttermilk.utils.trace_writer import get_trace_writer
 
 @pytest.fixture
 def sample_record() -> BaseRecord:
-    """Create a simple test record."""
-    return BaseRecord(text="What is the capital of France?", metadata={"test": "llmcore_tracing"})
+    """Create a simple test record with all key fields populated."""
+    return BaseRecord(text="What is the capital of France?", dataset_name="test_llmcore", split_type="test", metadata={"test": "llmcore_tracing"})
 
 
 @pytest.mark.anyio
@@ -159,6 +159,30 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     assert "record" in inputs, "Inputs should contain record"
     assert "prompt" in inputs, "Inputs should contain prompt"
+
+    # Validate record structure - ensure record_id, dataset_name, split_type are preserved
+    record_in_inputs = inputs["record"]
+    if isinstance(record_in_inputs, str):
+        import json
+
+        record_in_inputs = json.loads(record_in_inputs)
+
+    assert isinstance(record_in_inputs, dict), f"Record should be a dict, got {type(record_in_inputs).__name__}"
+    assert "record_id" in record_in_inputs, "Record should have record_id field"
+    assert record_in_inputs["record_id"] is not None, "Record record_id should not be None"
+    assert len(record_in_inputs["record_id"]) > 0, "Record record_id should not be empty"
+
+    # Note: clean_empty_values drops None fields, so these should be present with actual values
+    assert "dataset_name" in record_in_inputs, f"Record should have dataset_name field. Record keys: {record_in_inputs.keys()}"
+    assert "split_type" in record_in_inputs, f"Record should have split_type field. Record keys: {record_in_inputs.keys()}"
+    assert record_in_inputs["dataset_name"] == "test_llmcore", "Record should preserve dataset_name value"
+    assert record_in_inputs["split_type"] == "test", "Record should preserve split_type value"
+
+    logger.info(
+        f"✅ Record structure validated: record_id={record_in_inputs['record_id']}, "
+        f"dataset_name={record_in_inputs['dataset_name']}, "
+        f"split_type={record_in_inputs['split_type']}"
+    )
 
     # Validate outputs contain Paris
     outputs = trace.outputs
