@@ -175,7 +175,7 @@ CHAT_MODELS = [
 CHEAP_CHAT_MODELS = [
     "gemini25flash",
     "gpt5nano",
-    "claude35haiku",
+    "claude45haiku",
 ]
 
 MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
