@@ -1,5 +1,7 @@
 defaults:
   - llms@run.llms: debug
+  - flows:
+      - trans
   - _self_
 project_name: buttermilk
 job: testing
