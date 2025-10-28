@@ -66,6 +66,7 @@ from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
+from buttermilk._core.hashing import compute_processor_config_hash
 from buttermilk._core.types import BaseRecord
 
 
@@ -335,13 +336,40 @@ class PipelineOrchestrator(BaseModel):
                 for processor_index, processor in enumerate(self.processors):
                     # Create span for this processor
                     processor_class = type(processor).__name__
+
+                    # Extract processor configuration for cache key
+                    # This ensures cache invalidation when processor params change
+                    try:
+                        if hasattr(processor, "model_dump"):
+                            # Pydantic model - use model_dump()
+                            processor_config = processor.model_dump()
+                        elif hasattr(processor, "__dict__"):
+                            # Regular object - use __dict__
+                            processor_config = processor.__dict__.copy()
+                        else:
+                            # Fallback to empty dict
+                            processor_config = {}
+
+                        # Compute parameter hash for cache invalidation
+                        param_hash = compute_processor_config_hash(processor_config)
+                    except Exception as e:
+                        # If hashing fails, use a default hash to avoid breaking the pipeline
+                        logger.warning(
+                            f"Failed to compute processor config hash, using default",
+                            processor_class=processor_class,
+                            error=str(e)
+                        )
+                        param_hash = "00000000"
+
                     # Create unique processor ID for this processor (for caching and process() calls)
-                    # Format: {pipeline_name}/{index:02d}.{processor_class}
-                    processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}"  # TODO: rename to processor_id
+                    # Format: {pipeline_name}/{index:02d}.{processor_class}/{param_hash}
+                    # The param_hash ensures cache invalidation when processor configuration changes
+                    processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}/{param_hash}"  # TODO: rename to processor_id
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
                         "processor.id": processor_stage_name,  # Full processor identifier within pipeline
+                        "processor.param_hash": param_hash,
                         "inputs.count": len(processing_queue),
                     }
 
@@ -353,7 +381,7 @@ class PipelineOrchestrator(BaseModel):
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
                             # Trace record state BEFORE processor
-                            trace_before = self._trace_record_state(current_record, "before_processor", processor_class, processor_index)
+                            trace_before = self._trace_record_state(current_record, "before_processor", processor_stage_name)
                             logger.debug("📋 Record state before processor", **trace_before)
 
                             # Check processor-specific cache first (unless processor opts out)
@@ -373,7 +401,7 @@ class PipelineOrchestrator(BaseModel):
                                 )
                                 # Trace cached outputs
                                 for i, cached_output in enumerate(cached_outputs):
-                                    trace_cached = self._trace_record_state(cached_output, "cached_output", processor_class, processor_index)
+                                    trace_cached = self._trace_record_state(cached_output, "cached_output", processor_stage_name)
                                     logger.debug(f"📋 Cached output {i} state", **trace_cached)
                                 next_queue.extend(cached_outputs)
                                 continue
@@ -401,7 +429,7 @@ class PipelineOrchestrator(BaseModel):
                             else:
                                 # Trace record state AFTER processor
                                 for i, output_record in enumerate(outputs):
-                                    trace_after = self._trace_record_state(output_record, "after_processor", processor_class, processor_index)
+                                    trace_after = self._trace_record_state(output_record, "after_processor", processor_stage_name)
                                     logger.debug(f"📋 Record state after processor (output {i})", **trace_after)
 
                                 # Cache the processor outputs (unless processor opts out)
@@ -717,26 +745,30 @@ class PipelineOrchestrator(BaseModel):
 
         return cached_outputs if cached_outputs else None
 
-    def _trace_record_state(self, record: BaseRecord, stage: str, processor_class: str = "", processor_index: int = -1) -> dict:
-        """Trace the current state of a record for debugging."""
+    def _trace_record_state(self, record: BaseRecord, stage: str, processor_stage_name: str = "") -> dict:
+        """Trace the current state of a record for debugging.
+
+        Args:
+            record: The record to trace
+            stage: Stage description (e.g., "before_processor", "after_processor")
+            processor_stage_name: Full processor stage name including param hash
+                                 (e.g., "pipeline/00.LLMCore/a3f8b2c1")
+        """
         record_id = getattr(record, "record_id", "unknown")
 
         # Basic record info
         trace_info = {
             "record_id": record_id,
             "stage": stage,
-            "processor_class": processor_class,
-            "processor_index": processor_index,
+            "processor_stage_name": processor_stage_name,
         }
 
         # Add cache file paths for investigation
-        if self._record_cache and processor_class:
-            processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}"
+        if self._record_cache and processor_stage_name:
             cache_path = self._record_cache._record_path(processor_stage_name, record_id)
             trace_info["cache_file"] = str(cache_path)
             trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, "exists") else False
             trace_info["cache_base_dir"] = str(self._record_cache.base_dir)
-            trace_info["processor_stage_name"] = processor_stage_name
 
         # Get all non-private attributes of the record
         record_fields = {}

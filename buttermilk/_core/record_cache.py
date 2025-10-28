@@ -55,6 +55,10 @@ class RecordCache:
 
         If base_dir was not provided, tries to get it from bm.session_info.cache_dir.
         Falls back to default if bm is not available.
+
+        Includes project_name for project isolation:
+        - With bm: {cache_dir}/{project_name}/records
+        - Without bm: {default_cache_dir}/records
         """
         if self._base_dir is None:
             if self._base_dir_config:
@@ -65,11 +69,17 @@ class RecordCache:
                 else:
                     self._base_dir = Path(self._base_dir_config)
             else:
-                # Try to get from bm.session_info.cache_dir if available
+                # Try to get from bm.session_info.cache_dir and project_name if available
                 try:
                     from buttermilk import bm
-                    self._base_dir = Path(bm.session_info.cache_dir) / "records"
-                    logger.debug("📁 RecordCache using cache_dir from bm.session_info", base_dir=str(self._base_dir))
+                    # Include project_name for project isolation
+                    project_name = bm.session_info.project_name
+                    self._base_dir = Path(bm.session_info.cache_dir) / project_name / "records"
+                    logger.debug(
+                        "📁 RecordCache using cache_dir with project isolation",
+                        base_dir=str(self._base_dir),
+                        project_name=project_name
+                    )
                 except Exception:
                     # Fall back to default if bm not available
                     self._base_dir = _default_base_dir()

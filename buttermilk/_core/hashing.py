@@ -161,13 +161,13 @@ def normalize_flow_config(flow_config: dict[str, Any]) -> dict[str, Any]:
 
 def compute_template_hash_from_file(template_path: str | Path) -> str:
     """Compute template hash by reading file content.
-    
+
     Args:
         template_path: Path to template file
-        
+
     Returns:
         SHA256 hash of template file content
-        
+
     Raises:
         FileNotFoundError: If template file doesn't exist
         IOError: If template file cannot be read
@@ -175,3 +175,64 @@ def compute_template_hash_from_file(template_path: str | Path) -> str:
     template_path = Path(template_path)
     template_content = template_path.read_text(encoding="utf-8")
     return compute_template_hash(template_content)
+
+
+def compute_processor_config_hash(processor_config: dict[str, Any]) -> str:
+    """Compute hash of processor configuration for cache invalidation.
+
+    This function creates a stable, deterministic hash of processor configuration
+    parameters to enable cache invalidation when processor configs change.
+
+    Includes configuration that affects processor behavior:
+    - Model names, templates, mappings
+    - Processing parameters (batch sizes, thresholds, etc.)
+    - Any other parameters that affect output
+
+    Excludes runtime and internal state:
+    - Private attributes (starting with _)
+    - Semaphores, locks, clients
+    - Cached compiled objects (_compiled_expressions, etc.)
+
+    Args:
+        processor_config: Processor configuration dictionary
+
+    Returns:
+        First 8 characters of SHA256 hash for readability in cache paths
+
+    Example:
+        >>> config = {"model": "gpt-4", "template": "summarize", "temperature": 0.7}
+        >>> compute_processor_config_hash(config)
+        'a3f8b2c1'
+    """
+    # Extract only serializable configuration parameters
+    normalized = {}
+
+    for key, value in processor_config.items():
+        # Skip private attributes and internal state
+        if key.startswith("_"):
+            continue
+
+        # Skip non-serializable objects
+        if callable(value):
+            continue
+
+        # Skip None values for consistency
+        if value is None:
+            continue
+
+        # Include serializable configuration
+        try:
+            # Test if value is JSON-serializable
+            json.dumps(value)
+            normalized[key] = value
+        except (TypeError, ValueError):
+            # Skip non-serializable values (semaphores, locks, clients, etc.)
+            continue
+
+    # Convert to consistent JSON string for hashing
+    # Sort keys to ensure consistent hash for same config
+    config_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+
+    # Return first 8 characters for readability in cache paths
+    full_hash = compute_sha256_hash(config_json)
+    return full_hash[:8]
