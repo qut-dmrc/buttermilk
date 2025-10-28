@@ -1,5 +1,5 @@
 defaults:
-  - run: defaults
+  - run: cli
   - _self_
 # reduce path-induced surprises
 hydra.job.chdir: false
