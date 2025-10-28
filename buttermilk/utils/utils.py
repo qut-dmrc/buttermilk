@@ -35,6 +35,7 @@ from buttermilk._core.exceptions import ProcessingError
 try:
     from pdfminer.high_level import extract_text
     from pdfminer.layout import LAParams
+
     PDFMINER_AVAILABLE = True
 except ImportError:
     extract_text = None
@@ -340,6 +341,7 @@ def scrub_serializable(d) -> T:
     # Handle PIL Image objects - convert to base64 for JSON storage
     try:
         from PIL.Image import Image
+
         if isinstance(d, Image):
             d = image_to_base64(d)
     except ImportError:
@@ -736,7 +738,7 @@ def unwrap_numpy_arrow_types(obj):
 
 def clean_empty_values(data):
     """Recursively removes keys with empty values from a nested dictionary structure.
-    Empty values are: None, empty strings, empty lists, and empty dictionaries.
+    Empty values are: None, empty strings, whitespace-only strings, empty lists, and empty dictionaries.
 
     Args:
         data: Dictionary, list, or other value to clean
@@ -745,6 +747,17 @@ def clean_empty_values(data):
         A new cleaned data structure (does not modify the original)
 
     """
+
+    def is_empty(value):
+        """Check if a value is considered empty."""
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return value.strip() == ""  # Empty or whitespace-only
+        if isinstance(value, (dict, list)):
+            return not value  # Empty dict or list
+        return False
+
     if isinstance(data, dict):
         # Create a new dictionary with cleaned values
         cleaned_dict = {}
@@ -753,7 +766,7 @@ def clean_empty_values(data):
             cleaned_value = clean_empty_values(value)
 
             # Only include non-empty values
-            if not (cleaned_value is None or cleaned_value == "" or (isinstance(cleaned_value, (dict, list)) and not cleaned_value)):
+            if not is_empty(cleaned_value):
                 cleaned_dict[key] = cleaned_value
 
         return cleaned_dict
@@ -762,10 +775,8 @@ def clean_empty_values(data):
         # Clean each element in the list
         cleaned_list = [clean_empty_values(item) for item in data]
         # Filter out empty values
-        return [item for item in cleaned_list
-                if not (item is None or
-                       item == "" or
-                       (isinstance(item, (dict, list)) and not item))]
+        return [item for item in cleaned_list if not is_empty(item)]
+
     # Return primitive values unchanged
     return data
 
@@ -775,16 +786,12 @@ _download_locks: dict[str, threading.Lock] = {}
 _download_locks_lock = threading.Lock()
 
 
-
-
 def _get_download_lock(persist_directory: str) -> threading.Lock:
     """Get or create a download lock for a specific persist_directory to prevent concurrent downloads."""
     with _download_locks_lock:
         if persist_directory not in _download_locks:
             _download_locks[persist_directory] = threading.Lock()
         return _download_locks[persist_directory]
-
-
 
 
 async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:

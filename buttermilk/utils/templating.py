@@ -11,7 +11,6 @@ This module provides functionalities for:
   `make_messages`).
 """
 
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from weakref import WeakValueDictionary
@@ -29,7 +28,7 @@ from buttermilk import bm, logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.types import BaseRecord  # Core Buttermilk Record type
-from buttermilk.utils.utils import list_files, list_files_with_content  # Utilities for file listing
+from buttermilk.utils.utils import clean_empty_values, list_files, list_files_with_content  # Utilities for file listing
 
 
 def _get_template_search_paths() -> list[str]:
@@ -387,6 +386,8 @@ def load_template(
             user-provided inputs. These are also made available to the template
             but might be treated with more caution or subjected to stricter escaping
             if the sandbox environment were configured for autoescaping (currently not).
+            Empty values (None, "", [], {}) are automatically removed to enforce fail-fast -
+            variables with empty values will be treated as missing/unfilled.
             Defaults to an empty dictionary if None.
 
     Returns:
@@ -402,6 +403,11 @@ def load_template(
 
     """
     effective_untrusted_inputs = untrusted_inputs or {}
+
+    # Clean empty values from untrusted_inputs to enforce fail-fast
+    # Empty values (None, "", [], {}) are removed so they're treated as missing
+    # This prevents silent failures where empty data is rendered as valid input
+    effective_untrusted_inputs = clean_empty_values(effective_untrusted_inputs)
 
     # Define search paths for templates using the new helper
     search_paths = _get_template_search_paths()
